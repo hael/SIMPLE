@@ -19,7 +19,6 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
-use simple_strategy3D_cluster_snhc,  only: strategy3D_cluster_snhc
 use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
@@ -99,7 +98,7 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cluster_snhc', 'cont_single')
+            case('cluster', 'snhc', 'clustersym', 'cont_single')
                 npeaks = 1
             case('hard_single','hard_multi')
                 npeaks = MAXNPEAKS
@@ -158,7 +157,7 @@ contains
                     if(which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
                 endif
                 if( do_extr )then
-                    extr_thresh       = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
+                    extr_thresh       = params_glob%extr_init * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
                     extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then
@@ -173,26 +172,6 @@ contains
                 ! nothing to do
         end select
         if( L_BENCH ) rt_init = toc(t_init)
-
-        ! CLUSTER SNHC
-        select case(trim(params_glob%refine))
-        case('cluster_snhc')
-            do_extr           = .false.
-            extr_score_thresh = 0.
-            zero_pop          = count(.not.build_glob%spproj_field%included(consider_w=.false.))
-            if( params_glob%l_frac_update )then
-                iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
-                if(which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
-            else
-                iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
-                if(which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
-            endif
-            if( do_extr )then
-                extr_score_thresh = EXTRINITHRESH * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
-            endif
-        case DEFAULT
-            ! nothing to do
-        end select
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
@@ -292,14 +271,6 @@ contains
                         allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         if(alloc_stat.ne.0)&
                             &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
-                    endif
-                end do
-            case('cluster_snhc')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cluster_snhc  :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster_snhc",alloc_stat)
                     endif
                 end do
             case DEFAULT

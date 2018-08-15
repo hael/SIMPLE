@@ -75,6 +75,7 @@ contains
     procedure          :: get_ctfflag_type
     procedure          :: has_phaseplate
     procedure          :: get_ctfparams
+    procedure          :: get_sp_oris
     procedure          :: is_virgin_field
     ! modifiers
     procedure          :: split_stk
@@ -942,13 +943,12 @@ contains
         call simple_mkdir(trim(tmp_dir),errmsg="sp_project::split_stk")
         write(*,'(a)') '>>> SPLITTING STACK INTO PARTS'
         do istk = 1,nparts
-
             call progress(istk,nparts)
             stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
             cnt = 0
             do iptcl = parts(istk,1), parts(istk,2)
                 cnt = cnt + 1
-                call self%get_stkname_and_ind( 'ptcl2D', iptcl, stk, ind_in_stk )
+                call self%get_stkname_and_ind('ptcl2D', iptcl, stk, ind_in_stk)
                 call img%read(stk, ind_in_stk)
                 call img%write(stkpart, cnt)
             enddo
@@ -1746,6 +1746,36 @@ contains
             ctfvars%phshift = 0.
         endif
     end function get_ctfparams
+
+    subroutine get_sp_oris( self, which_imgkind, os )
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: which_imgkind
+        class(oris),       intent(out) :: os
+        select case(trim(which_imgkind))
+            case('mic')
+                os = self%os_mic
+            case('stk')
+                os = self%os_stk
+            case('ptcl2D')
+                os = self%os_ptcl2D
+            case('cls2D')
+                os = self%os_cls2D
+            case('cls3D')
+                os = self%os_cls3D
+            case('ptcl3D')
+                os = self%os_ptcl3D
+            case('out')
+                os = self%os_out
+            case('projinfo')
+                os = self%projinfo
+            case('jobproc')
+                os = self%jobproc
+            case('compenv')
+                os = self%compenv
+            case DEFAULT
+                stop 'unsupported which_imgkind flag; sp_project :: get_sp_oris'
+        end select
+    end subroutine get_sp_oris
 
     logical function is_virgin_field( self, oritype )
         class(sp_project), target, intent(inout) :: self

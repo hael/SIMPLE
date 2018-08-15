@@ -552,6 +552,8 @@ contains
             spproj%os_cls3D = work_proj2%os_ptcl3D
         endif
         call work_proj2%kill
+        ! revert splitting
+        call spproj%os_cls3D%set_all2single('stkind',1.)
         ! map the orientation parameters obtained for the clusters back to the particles
         call spproj%map2ptcls
         ! add rec_final to os_out
@@ -659,87 +661,97 @@ contains
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
-        integer,          parameter :: MAXITS1 = 50
-        integer,          parameter :: MAXITS2 = 40
-        character(len=*), parameter :: one     = '01'
+        integer,           parameter :: MAXITS1        = 50
+        integer,           parameter :: MAXITS2        = 40
+        character(len=*),  parameter :: one            = '01'
+        character(len=12), parameter :: cls3D_projfile = 'cls3D.simple'
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! command lines
-        type(cmdline) :: cline_refine3D1, cline_refine3D2
-        type(cmdline) :: cline_reconstruct3D_distr, cline_reconstruct3D_mixed_distr
+        type(cmdline)                       :: cline_refine3D1, cline_refine3D2
+        type(cmdline)                       :: cline_reconstruct3D_mixed_distr
         ! other variables
-        type(parameters)      :: params
-        type(sym)             :: symop
-        type(sp_project)      :: spproj
-        type(oris)            :: os
-        integer,  allocatable :: labels(:)
-        real                  :: trs
-        integer               :: iter, startit, rename_stat
-        logical               :: write_proj
+        type(parameters)              :: params
+        type(sym)                     :: symop
+        type(sp_project)              :: spproj, work_proj
+        type(oris)                    :: os
+        type(ctfparams)               :: ctfparms
+        character(len=:), allocatable :: cavg_stk
+        real,             allocatable :: corrs(:), x(:), z(:)
+        integer,          allocatable :: labels(:), states(:)
+        real     :: trs, extr_init
+        integer  :: iter, startit, rename_stat, ncls
+        logical  :: write_proj, fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
-        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )stop 'need lp input when eo .eq. no; cluster3D'
+        if(params%eo .eq. 'no' .and. .not.cline%defined('lp'))       stop 'need lp input when eo .eq. no; cluster3D'
+        if(params%oritype.eq.'cls3D' .and. .not.cline%defined('lp')) stop 'need lp for class-averages; cluster3D'
+        if(params%oritype.eq.'cls3D' .and. params%eo.ne.'no')        stop 'no EO=YES for class-averages, LP must be set; cluster3D'
         ! set mkdir to no
         call cline%set('mkdir', 'no')
-        ! prepare command lines from prototype
-        call cline%delete('refine')
-        if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
-        cline_refine3D1                 = cline ! first stage, extremal optimization
-        cline_refine3D2                 = cline ! second stage, stochastic refinement
-        cline_reconstruct3D_distr       = cline ! eo always eq yes, for resolution only
-        cline_reconstruct3D_mixed_distr = cline ! eo always eq yes, for resolution only
-        ! first stage
-        call cline_refine3D1%set('prg', 'refine3D')
-        call cline_refine3D1%set('maxits', real(MAXITS1))
-        call cline_refine3D1%delete('neigh')
-        select case(trim(params%refine))
-            case('sym')
-                call cline_refine3D1%set('refine', 'clustersym')
-            case('cluster_snhc')
-                call cline_refine3D1%set('refine', 'cluster_snhc')
-                call cline_refine3D1%set('neigh', 'yes')
-                call cline_refine3D1%set('nnn',   10.)
-            case DEFAULT
-                call cline_refine3D1%set('refine', trim(params%refine))
+        ! prep project
+        cavgs_import = .false.
+        fall_over    = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                call work_proj%read(params%projfile)
+                fall_over = work_proj%get_nptcls() == 0
+            case('cls3D')
+                call spproj%read(params%projfile)
+                fall_over = spproj%os_out%get_noris() == 0
+        case DEFAULT
+            write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D'
         end select
-        call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
-        ! second stage
-        call cline_refine3D2%set('prg',    'refine3D')
-        call cline_refine3D2%set('refine', 'multi')
-        if(.not.cline%defined('neigh'))then
-            call cline_refine3D2%set('neigh',  'yes')
-            call cline_refine3D2%set('nnn',    real(max(30,nint(0.05*real(params%nspace)))))
+        if( fall_over )then
+            write(*,*)'No particles found! simple_commander_hlev_wflows::exec_cluster3D'
+            stop 'No particles found! simple_commander_hlev_wflows::exec_cluster3D'
         endif
-        if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
-        ! reconstructions
-        call cline_reconstruct3D_distr%set('prg', 'reconstruct3D')
-        call cline_reconstruct3D_distr%delete('lp')
-        call cline_reconstruct3D_distr%set('eo','yes')
-        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
-        call cline_reconstruct3D_mixed_distr%delete('lp')
-        call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
-        if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
-        if( cline%defined('trs') )then
-            ! all good
+        if( params%oritype.eq.'ptcl3D' )then
+            ! just splitting
+            call work_proj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         else
-            ! works out shift limits for in-plane search
-            trs = MSK_FRAC*real(params%msk)
-            trs = min(MAXSHIFT, max(MINSHIFT, trs))
-            call cline_refine3D1%set('trs',trs)
-            call cline_refine3D2%set('trs',trs)
+            ! class-averages
+            params%projfile = trim(cls3d_projfile)
+            call cline%set('oritype', 'ptcl3D')
+            call spproj%get_cavgs_stk(cavg_stk, ncls, ctfparms%smpd)
+            cavgs_import = spproj%os_ptcl2D%get_noris() == 0
+            if( cavgs_import )then
+                ! start from import
+                allocate(states(ncls), source=1)
+            else
+                ! start from previous 2D
+                states = nint(spproj%os_cls2D%get_all('state'))
+            endif
+            if( count(states==0) .eq. ncls )then
+                write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
+                    '; simple_commander_hlev_wflows::initial_3Dmodel'
+                stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+            endif
+            work_proj%projinfo = spproj%projinfo
+            work_proj%compenv  = spproj%compenv
+            if(spproj%jobproc%get_noris()  > 0) work_proj%jobproc = spproj%jobproc
+            call work_proj%add_single_stk(trim(cavg_stk), ctfparms, spproj%os_cls3D)
+            ! takes care of states
+            call work_proj%os_ptcl3D%set_all('state', real(states))
+            ! name change
+            call work_proj%projinfo%delete_entry('projname')
+            call work_proj%projinfo%delete_entry('projfile')
+            call cline%set('projfile', trim(params%projfile))
+            call cline%set('projname', trim(get_fbody(trim(params%projfile),trim('simple'))))
+            call work_proj%update_projinfo(cline)
+            ! splitting in CURRENT directory
+            call work_proj%split_stk(params%nparts, .false., dir=PATH_HERE)
+            ! write
+            call work_proj%write
         endif
-
-        ! PREP
-        call spproj%read(params%projfile )
-        ! splitting
-        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        ! fetch project oris
+        call work_proj%get_sp_oris('ptcl3D', os)
         ! wipe previous states
-        os     = spproj%os_ptcl3D
-        labels = nint(os%get_all('states'))
+        labels = nint(os%get_all('state'))
         if( any(labels > 1) )then
             where(labels > 0) labels = 1
             call os%set_all('state', real(labels))
@@ -758,11 +770,51 @@ contains
             call symop%kill
         endif
 
+        ! prepare command lines from prototype
+        call cline%delete('refine')
+        if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
+        cline_refine3D1                 = cline ! first stage, extremal optimization
+        cline_refine3D2                 = cline ! second stage, stochastic refinement
+        cline_reconstruct3D_mixed_distr = cline
+        ! first stage
+        call cline_refine3D1%set('prg', 'refine3D')
+        call cline_refine3D1%set('maxits', real(MAXITS1))
+        call cline_refine3D1%delete('neigh')
+        select case(trim(params%refine))
+            case('sym')
+                call cline_refine3D1%set('refine', 'clustersym')
+            case DEFAULT
+                call cline_refine3D1%set('refine', params%refine)
+        end select
+        call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
+        ! second stage
+        call cline_refine3D2%set('prg',    'refine3D')
+        call cline_refine3D2%set('refine', 'multi')
+        if(.not.cline%defined('neigh'))then
+            call cline_refine3D2%set('neigh',  'yes')
+            call cline_refine3D2%set('nnn',    0.1*real(params%nspace))
+        endif
+        if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
+        ! reconstructions
+        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
+        call cline_reconstruct3D_mixed_distr%delete('lp')
+        call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
+        if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
+        if( cline%defined('trs') )then
+            ! all good
+        else
+            ! works out shift limits for in-plane search
+            trs = MSK_FRAC*real(params%msk)
+            trs = min(MAXSHIFT, max(MINSHIFT, trs))
+            call cline_refine3D1%set('trs',trs)
+            call cline_refine3D2%set('trs',trs)
+        endif
+
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
         if( params%eo .ne. 'no' )then
-            spproj%os_ptcl3D = os
-            call spproj%write
+            work_proj%os_ptcl3D = os
+            call work_proj%write
             call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
             rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
@@ -772,14 +824,30 @@ contains
             rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
 
+        ! calculate extremal initial ratio
+        if( os%isthere('corr') )then
+            labels    = nint(os%get_all('state'))
+            corrs     = os%get_all('corr')
+            x         = pack(corrs, mask=(labels>0))
+            z         = robust_z_scores(x)
+            extr_init = 2.*real(count(z<-1.)) / real(count(labels>0))
+            extr_init = max(0.1,extr_init)
+            extr_init = min(extr_init,EXTRINITHRESH)
+            deallocate(x,z,corrs,labels)
+        else
+            extr_init = EXTRINITHRESH
+        endif
+        call cline_refine3D1%set('extr_init', extr_init)
+        write(*,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
+
         ! randomize state labels
         write(*,'(A)') '>>>'
-        call gen_labelling(os, params%nstates, 'squared_uniform')
+        call gen_labelling(os, params%nstates, 'uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
-        spproj%os_ptcl3D = os
-        call spproj%write
-        call spproj%kill
+        work_proj%os_ptcl3D = os
+        call work_proj%write
+        call work_proj%kill
         call os%kill
 
         ! STAGE1: extremal optimization, frozen orientation parameters
@@ -789,18 +857,33 @@ contains
         call xrefine3D_distr%execute(cline_refine3D1)
         iter = nint(cline_refine3D1%get_rarg('endit'))
         ! for analysis purpose only
-        call spproj%read_segment(params%oritype, params%projfile)
-        call spproj%os_ptcl3D%write('cluster3D_stage1.txt')
-        call spproj%kill
+        call work_proj%read_segment('ptcl3D', params%projfile)
+        call work_proj%os_ptcl3D%write('cluster3D_stage1.txt')
+        call work_proj%kill
 
         ! STAGE2: soft multi-states refinement
         startit = iter + 1
         call cline_refine3D2%set('startit', real(startit))
-        call cline_refine3D2%set('maxits',  real(startit + MAXITS2))
+        call cline_refine3D2%set('maxits',  real(min(params%maxits,startit+MAXITS2)))
         write(*,'(A)')    '>>>'
         write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
         write(*,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D2)
+
+        ! class-averages mapping
+        if( params%oritype.eq.'cls3D' )then
+            call work_proj%read(params%projfile)
+            spproj%os_cls3D = work_proj%os_ptcl3D
+            if( cavgs_import )then
+                ! no mapping
+            else
+                ! map to ptcl3D
+                call spproj%map2ptcls
+            endif
+            call spproj%write
+            call spproj%kill
+            call del_file(cls3d_projfile)
+        endif
 
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D NORMAL STOP ****')

@@ -832,11 +832,26 @@ contains
         type(chash)                        :: job_descr
         integer                            :: state
         integer(timer_int_kind)            :: treconstruct3D, tsplit
+        logical                            :: fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         DebugPrint 'in exec_reconstruct3D_distr:'
         treconstruct3D = tic()
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case('cls3D')
+                fall_over = build%spproj%os_out%get_noris() == 0
+        case DEFAULT
+            write(*,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_reconstruct3D_distr'
+        end select
+        if( fall_over )then
+            write(*,*)'No images found! simple_commander_distr_wflows::exec_reconstruct3D_distr'
+            stop 'No images found! simple_commander_distr_wflows::exec_reconstruct3D_distr'
+        endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! setup the environment for distributed execution
@@ -845,7 +860,7 @@ contains
         ! splitting
         tsplit=tic()
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
-        DebugPrint ' splitting stack                 ',toc(tsplit)
+        DebugPrint ' splitting stack               ',toc(tsplit)
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
@@ -860,7 +875,6 @@ contains
         DebugPrint ' eo partitioning    accum secs   ',toc(treconstruct3D)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        !call qenv%gen_shm_scripts_and_schedule_jobs(job_descr)
         DebugPrint ' qenv scheduling   accum secs    ',toc(treconstruct3D)
         ! assemble volumes
         ! this is for parallel volassemble over states

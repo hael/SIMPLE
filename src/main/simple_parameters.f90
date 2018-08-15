@@ -312,6 +312,7 @@ type :: parameters
     real    :: eps=0.003           !< learning rate{0.003}
     real    :: eullims(3,2)=0.
     real    :: exp_time=2.0        !< exposure time(in s)
+    real    :: extr_init=EXTRINITHRESH !< initial extremal ratio (0-1)
     real    :: fny=0.
     real    :: focusmsk=0.         !< spherical msk for use with focused refinement
     real    :: frac=1.             !< fraction of ptcls(0-1){1}
@@ -692,6 +693,7 @@ contains
         call check_rarg('e3',             self%e3)
         call check_rarg('eps',            self%eps)
         call check_rarg('exp_time',       self%exp_time)
+        call check_rarg('extr_init',      self%extr_init)
         call check_rarg('focusmsk',       self%focusmsk)
         call check_rarg('frac',           self%frac)
         call check_rarg('fraca',          self%fraca)

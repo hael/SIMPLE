@@ -390,7 +390,6 @@ contains
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                 else
                     ! put the merged class average in both even and odd positions
-                    ! call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif
