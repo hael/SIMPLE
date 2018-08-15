@@ -107,7 +107,7 @@ contains
         self%nstates      = params_glob%nstates
         self%nprojs       = params_glob%nspace
         self%nrefs        = self%nprojs*self%nstates
-        self%nrefsmaxinpl = self%nrefs*MAXNINPLPEAKS
+        self%nrefsmaxinpl = self%nrefs*NINPLPEAKS2SORT
         self%nrots        = round2even(twopi*real(params_glob%ring2))
         self%npeaks       = npeaks
         self%nbetter      = 0
@@ -260,12 +260,12 @@ contains
 
     subroutine store_solution( self, ref, inpl_inds, corrs, searched )
         class(strategy3D_srch), intent(inout) :: self
-        integer,                intent(in)    :: ref, inpl_inds(MAXNINPLPEAKS)
-        real,                   intent(in)    :: corrs(MAXNINPLPEAKS)
+        integer,                intent(in)    :: ref, inpl_inds(NINPLPEAKS2SORT)
+        real,                   intent(in)    :: corrs(NINPLPEAKS2SORT)
         logical,                intent(in)    :: searched
         integer :: inpl
         s3D%proj_space_inplinds(self%ithr,ref,:) = inpl_inds
-        do inpl=1,MAXNINPLPEAKS
+        do inpl=1,NINPLPEAKS2SORT
             s3D%proj_space_euls(self%ithr,ref,inpl,3) = 360. - pftcc_glob%get_rot(inpl_inds(inpl))
         end do
         s3D%proj_space_corrs(self%ithr,ref,:) = corrs

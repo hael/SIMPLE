@@ -368,16 +368,16 @@ contains
 
     subroutine sort_corrs( s )
         class(strategy3D_srch), intent(inout) :: s
-        real                                  :: corrs(s%nrefs*MAXNINPLPEAKS), corrs_highest(s%nrefs)
-        real                                  :: proj_space_tmp(s%nrefs*MAXNINPLPEAKS)
+        real                                  :: corrs(s%nrefs*NINPLPEAKS2SORT), corrs_highest(s%nrefs)
+        real                                  :: proj_space_tmp(s%nrefs*NINPLPEAKS2SORT)
         real                                  :: areal
         integer                               :: i, j
         integer                               :: arange(2)
-        integer                               :: asequence(MAXNINPLPEAKS) = (/(j, j=1,MAXNINPLPEAKS)/)
-        integer                               :: idx_array(s%nrefs*MAXNINPLPEAKS)
+        integer                               :: asequence(NINPLPEAKS2SORT) = (/(j, j=1,NINPLPEAKS2SORT)/)
+        integer                               :: idx_array(s%nrefs*NINPLPEAKS2SORT)
         do i = 1,s%nrefs
-            arange(1) = (i-1)*MAXNINPLPEAKS+1
-            arange(2) = i*MAXNINPLPEAKS
+            arange(1) = (i-1)*NINPLPEAKS2SORT+1
+            arange(2) = i*NINPLPEAKS2SORT
             s3D%proj_space_refinds_sorted        (s%ithr,arange(1):arange(2)) = i
             s3D%proj_space_inplinds_sorted       (s%ithr,arange(1):arange(2)) = asequence(:)
             s3D%proj_space_refinds_sorted_highest(s%ithr,                  i) = i
@@ -389,16 +389,16 @@ contains
                 corrs_highest(i)           = s3D%proj_space_corrs(s%ithr,i,1)
             end if
         end do
-        do j = 1,s%nrefs*MAXNINPLPEAKS
+        do j = 1,s%nrefs*NINPLPEAKS2SORT
             idx_array(j) = j
         end do
         call hpsort(corrs, idx_array)
         proj_space_tmp(:) = s3D%proj_space_refinds_sorted(s%ithr,:)
-        do j = 1,s%nrefs*MAXNINPLPEAKS
+        do j = 1,s%nrefs*NINPLPEAKS2SORT
             s3D%proj_space_refinds_sorted(s%ithr,j) = proj_space_tmp(idx_array(j))
         end do
         proj_space_tmp(:) = s3D%proj_space_inplinds_sorted(s%ithr,:)
-        do j = 1,s%nrefs*MAXNINPLPEAKS
+        do j = 1,s%nrefs*NINPLPEAKS2SORT
             s3D%proj_space_inplinds_sorted(s%ithr,j) = proj_space_tmp(idx_array(j))
         end do
         call hpsort(corrs_highest, s3D%proj_space_refinds_sorted_highest(s%ithr, :))

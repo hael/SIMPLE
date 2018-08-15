@@ -64,11 +64,11 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(MAXNINPLPEAKS)
+                integer :: loc(NINPLPEAKS2SORT)
                 ! calculate in-plane correlations
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                ! identify the MAXNINPLPEAKS top scoring in-planes
-                loc = maxnloc(inpl_corrs, MAXNINPLPEAKS)
+                ! identify the NINPLPEAKS2SORT top scoring in-planes
+                loc = maxnloc(inpl_corrs, NINPLPEAKS2SORT)
                 ! stash
                 call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
             end subroutine per_ref_srch

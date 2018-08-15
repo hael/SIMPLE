@@ -35,10 +35,10 @@ real(sp), parameter :: SMALL        = 1e-6
 real(sp), parameter :: FTOL         = 1e-4
 real(dp), parameter :: DSMALL       = 1e-6
 real(dp), parameter :: PISQR        = DPI*DPI
-real(sp), parameter :: ATHRES_LIM   = 5.
 
 ! directory-based execution model
 character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
+
 ! other global variables
 integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
 logical                       :: l_distr_exec_glob !< global distributed execution flag
@@ -55,16 +55,6 @@ end type ctfplan
 type str4arr
     character(len=:), allocatable :: str
 end type str4arr
-! UNITS
-enum,bind(C)
-    enumerator :: UNITANGSTROMS=1
-end enum
-enum,bind(C)
-    enumerator :: UNITMM=1
-end enum
-enum,bind(C)
-    enumerator :: UNITHERTZKILO=1, UNITPERMM=2
-end enum
 
 ! CTF flag type
 enum, bind(c)
@@ -108,7 +98,6 @@ real, parameter :: RECWINSZ                = 1.5       !< half-window size for 3
 
 ! real constants that control search and convergence
 real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
-real, parameter    :: FRAC_INTERPOL        = 60.0      !< at what frac to turn on the gridding interpolation (2D)
 real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization threshold for extremal search
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
 real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
@@ -134,13 +123,11 @@ integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lpli
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
 integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
-integer, parameter :: NPEAKS2REFINE        = 200       !< maximum # peaks to be further optimised
-integer, parameter :: MAXNINPLPEAKS        = 5         !< maximum # in-plane peaks to be considered for sorting
-integer, parameter :: MAX_NSPACE           = 5000      !< maximum # of projection directions (PRIME3D)
+integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
+integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
-integer, parameter :: NPDIRS_SUBSPACE      = 800       !< # projection directions in subspace search refine=neigh
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D

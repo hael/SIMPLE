@@ -75,8 +75,8 @@ contains
 
         subroutine per_ref_srch
             real    :: best_inpl_corr
-            integer :: loc(MAXNINPLPEAKS)
-            integer :: loc_mir(MAXNINPLPEAKS)
+            integer :: loc(NINPLPEAKS2SORT)
+            integer :: loc_mir(NINPLPEAKS2SORT)
             integer :: iref_mir
             real    :: best_inpl_corr_mir
             if( s3D%state_exists( s3D%proj_space_state(iref) ) )then
@@ -86,9 +86,9 @@ contains
                         s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
                     else
                         call pftcc_glob%gencorrs_mir(iref, self%s%iptcl, inpl_corrs, inpl_corrs_mir)
-                        ! identify the MAXNINPLPEAKS top scoring in-planes
-                        loc                = maxnloc(inpl_corrs,     MAXNINPLPEAKS)
-                        loc_mir            = maxnloc(inpl_corrs_mir, MAXNINPLPEAKS)
+                        ! identify the NINPLPEAKS2SORT top scoring in-planes
+                        loc                = maxnloc(inpl_corrs,     NINPLPEAKS2SORT)
+                        loc_mir            = maxnloc(inpl_corrs_mir, NINPLPEAKS2SORT)
                         best_inpl_corr     = inpl_corrs(loc(1))
                         best_inpl_corr_mir = inpl_corrs_mir(loc_mir(1))
                         iref_mir           = s3D%proj_mirror_idx(iref)
@@ -96,9 +96,9 @@ contains
                         call self%s%store_solution(iref_mir, loc_mir, inpl_corrs_mir(loc_mir), .false.)
                     end if
                 else
-                    ! identify the MAXNINPLPEAKS top scoring in-planes
+                    ! identify the NINPLPEAKS2SORT top scoring in-planes
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc                = maxnloc(inpl_corrs, MAXNINPLPEAKS)
+                    loc                = maxnloc(inpl_corrs, NINPLPEAKS2SORT)
                     best_inpl_corr     = inpl_corrs(loc(1))
                     call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
                 end if

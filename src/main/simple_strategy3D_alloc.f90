@@ -54,14 +54,14 @@ contains
         ! parameters
         nrefs  = params_glob%nspace * params_glob%nstates
         ! shared-memory arrays
-        allocate(master_proj_space_euls(nrefs,MAXNINPLPEAKS,3), s3D%proj_space_euls(nthr_glob,nrefs,MAXNINPLPEAKS,3),&
-            &s3D%proj_space_shift(nthr_glob,nrefs,MAXNINPLPEAKS,2),s3D%proj_space_state(nrefs),&
-            &s3D%proj_space_corrs(nthr_glob,nrefs,MAXNINPLPEAKS),&
-            &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*MAXNINPLPEAKS),&
+        allocate(master_proj_space_euls(nrefs,NINPLPEAKS2SORT,3), s3D%proj_space_euls(nthr_glob,nrefs,NINPLPEAKS2SORT,3),&
+            &s3D%proj_space_shift(nthr_glob,nrefs,NINPLPEAKS2SORT,2),s3D%proj_space_state(nrefs),&
+            &s3D%proj_space_corrs(nthr_glob,nrefs,NINPLPEAKS2SORT),&
+            &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*NINPLPEAKS2SORT),&
             &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
-            &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*MAXNINPLPEAKS),&
+            &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*NINPLPEAKS2SORT),&
             &s3D%proj_space_corrs_srchd(nthr_glob,nrefs), s3D%proj_space_corrs_calcd(nthr_glob,nrefs),&
-            &s3D%proj_space_inplinds(nthr_glob,nrefs,MAXNINPLPEAKS),&
+            &s3D%proj_space_inplinds(nthr_glob,nrefs,NINPLPEAKS2SORT),&
             &s3D%proj_space_proj(nrefs),&
             &s3D%proj_mirror_idx(nrefs), stat=alloc_stat )
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
@@ -79,7 +79,7 @@ contains
                 s3D%proj_space_state(cnt) = istate
                 s3D%proj_space_proj(cnt)  = iproj
                 eul = build_glob%eulspace%get_euler(iproj)
-                do inpl=1,MAXNINPLPEAKS
+                do inpl=1,NINPLPEAKS2SORT
                     master_proj_space_euls(cnt,inpl,:) = eul
                 end do
                 ! mirror references indices
