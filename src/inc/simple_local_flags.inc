@@ -37,8 +37,14 @@
 
 ! HALTNOW must be used with and if/then statement dure to ";" otherwise it will break
 #ifndef HALT_NOW
-#define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') __FILENAME__,__LINE__, msg; \
+#if defined(INTEL)
+#define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') \
+__FILENAME__,__LINE__, msg; stop
+#else
+#define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') \
+__FILENAME__,__LINE__, msg; \
 call backtrace;stop
+#endif
 #endif
 #ifndef STOP_NOW
 #define STOP_NOW(msg) call simple_stop(msg, __FILENAME__ , __LINE__)

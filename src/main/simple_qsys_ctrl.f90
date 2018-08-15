@@ -366,8 +366,8 @@ contains
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '&
-                 //trim(script_name)//' ; '//trim(io_msg),ios )
+        call fileiochk('simple_qsys_ctrl :: generate_script_2; Error when opening file: '//&
+            &trim(script_name)//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
         if(.not. self%l_suppress_errors)  write(funit,'(a)') 'set -ev'
@@ -485,9 +485,12 @@ contains
         endif
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//filepath(trim(CWD_GLOB),trim(script_name))//' '//SUPPRESS_MSG//'&'
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                    &filepath(trim(CWD_GLOB),trim(script_name))//' '//&
+                    &SUPPRESS_MSG//'&'
             class DEFAULT
-                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//filepath(trim(CWD_GLOB),trim(script_name))
+                cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                    &filepath(trim(CWD_GLOB),trim(script_name))
         end select
         ! execute the command
         call exec_cmdline(trim(cmd))

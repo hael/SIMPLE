@@ -204,11 +204,20 @@ message(STATUS "CMAKE_Fortran_FLAGS_RELEASE_INIT: ${CMAKE_Fortran_FLAGS_RELEASE_
 ################################################################
 #add_definitions("-DJF_REAL32=4")
 #add_definitions("-DJF_INT32=4")
-if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4==1)
+if(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 EQUAL 1)
   add_definitions("-DUSE_USC4=1")
 endif()
 
+################################################################
+# fortran version
+################################################################
 
+if(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV EQUAL 1)
+  add_definitions("-DUSE_F08_ISOENV=1")
+endif()
+if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
+  add_definitions("-DUSE_F08=1")
+endif()
 ################################################################
 # Generic Flags
 ################################################################
@@ -349,7 +358,7 @@ if (USE_OPENMP)
   #    message(STATUS "leaving USE_OPENMP : ${CMAKE_Fortran_FLAGS_RELEASE}")
 #   endif()
 # endif()
-#if(USE_OPENMP)
+
 #  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -DOPENMP ")
   add_definitions("-DOPENMP")  ## FIXME above
 endif()
@@ -507,7 +516,7 @@ if (${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
 
     if(BUILD_SHARED_LIBS)
       set(EXTRA_LIBS ${EXTRA_LIBS} -L${MKLROOT}/lib/intel64 -limf -lmkl_intel_${INTEL_INTERFACE} -lmkl_intel_thread -lmkl_core -lmkl_rt -liomp5 -lpthread -lm -ldl )
-    else()
+    else() #STATIC
      set(EXTRA_LIBS ${EXTRA_LIBS} -Wl,--start-group  ${MKLROOT}/lib/intel64/libmkl_cdft_core.a  ${MKLROOT}/lib/intel64/libmkl_blas95_${INTEL_INTERFACE}.a ${MKLROOT}/lib/intel64/libmkl_intel_${INTEL_INTERFACE}.a ${MKLROOT}/lib/intel64/libmkl_gf_lp64.a  ${MKLROOT}/lib/intel64/libmkl_intel_thread.a ${MKLROOT}/lib/intel64/libmkl_core.a -Wl,--end-group ${INTEL_DIR}/lib/intel64/libiomp5.a  -lm -ldl)
     endif()
     set(BUILD_NAME "${BUILD_NAME}_MKL" )
@@ -627,10 +636,10 @@ endif()
   set(CMAKE_AR                           "xiar")
   set(CMAKE_CPP_COMPILER                 "fpp")
   set(CMAKE_CPP_COMPILER_FLAGS           " -noJ -B -C ")  #Recognize C,C++,F90 style comments.
-  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS_RELEASE_INIT}  ${CMAKE_Fortran_FLAGS} ${EXTRA_FLAGS} ")
-  set(CMAKE_Fortran_FLAGS_DEBUG          "${EXTRA_FLAGS} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS}")
+  set(CMAKE_Fortran_FLAGS                "${CMAKE_Fortran_FLAGS} ${EXTRA_FLAGS} ")
+  set(CMAKE_Fortran_FLAGS_DEBUG          "${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${CMAKE_Fortran_FLAGS_DEBUG}")
   # set(CMAKE_Fortran_FLAGS_MINSIZEREL    "-Os ${CMAKE_Fortran_FLAGS_RELEASE_INIT}")
-  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS} ${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE}  ${EXTRA_FLAGS}")
+  set(CMAKE_Fortran_FLAGS_RELEASE        "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_RELEASE} ")
   set(CMAKE_Fortran_FLAGS_RELWITHDEBINFO "${CMAKE_Fortran_FLAGS_RELEASE_INIT} ${CMAKE_Fortran_FLAGS_DEBUG_INIT} ${EXTRA_FLAGS}")
   # set(CMAKE_EXE_LINKER_FLAGS       "${CMAKE_EXE_LINKER_FLAGS_INIT}")
   # set(CMAKE_SHARED_LINKER_FLAGS    "${CMAKE_SHARED_LINKER_FLAGS_INIT} ${EXTRA_LIBS}")
@@ -644,7 +653,7 @@ endif()
   set(CMAKE_C_FLAGS_RELEASE   "${CMAKE_C_FLAGS_RELEASE_INIT}")
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE_INIT}")
   if(NOT BUILD_SHARED_LIBS)
-    set(CMAKE_EXE_LINKER_FLAGS         "${CMAKE_EXE_LINKER_FLAGS} -static")
+    set(CMAKE_EXE_LINKER_FLAGS         "${CMAKE_EXE_LINKER_FLAGS} ")
     if(Fortran_COMPILER_NAME MATCHES "mpiif*")
       set(CMAKE_EXE_LINKER_FLAGS       "${CMAKE_EXE_LINKER_FLAGS} -static_mpi")
     endif()

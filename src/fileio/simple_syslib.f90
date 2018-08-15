@@ -14,13 +14,14 @@
 module simple_syslib
 use simple_defs
 use simple_error
-use iso_c_binding
-use iso_fortran_env
+use, intrinsic :: iso_fortran_env
+use, intrinsic :: iso_c_binding
+
 #ifdef __INTEL_COMPILER
 use ifport, killpid=>kill, intel_ran=>ran
 use ifcore
 #endif
-use simple_error
+
 implicit none
 
 private :: raise_sys_error
@@ -348,9 +349,14 @@ contains
         else
             allocate(cmdstr, source=trim(adjustl(cmdline)))
         endif
+#ifdef USE_F08
         call execute_command_line(trim(adjustl(cmdstr)), wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=errmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmdstr, exec_stat, cstat, errmsg )
-        if( l_doprint )then
+#else
+        ! Fortran 2003
+        exec_stat = system(trim(adjustl(cmdstr)))
+#endif
+       if( l_doprint )then
             write(*,*) 'command            : ', cmdstr
             write(*,*) 'status of execution: ', exec_stat
         endif
@@ -500,17 +506,21 @@ contains
         bytepos = 1
         do ichunk=1,nchunks
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to read byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
+&"failed to read byte buffer ", __FILENAME__,__LINE__)
             write(out, pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to write byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
+&"failed to write byte buffer ", __FILENAME__,__LINE__)
             bytepos = bytepos + bufsz
         end do
         ! take care of leftover
         if( leftover > 0 )then
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to read byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file"//&
+&" failed to read byte buffer ", __FILENAME__,__LINE__)
             write(out, pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file failed to write byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
+&"failed to write byte buffer ", __FILENAME__,__LINE__)
         endif
         close(in)
         close(out)
@@ -716,11 +726,9 @@ contains
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
         call simple_abspath (trim(newd), targetdir, eemsg, check_exists)
-#ifdef INTEL
-        inquire(DIRECTORY=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
-#else
-        inquire(file=trim(targetdir), EXIST=dir_e)
-#endif
+
+        inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
+
         if(dir_e) then
             ! qq = changedirqq(trim(targetdir))
             ! if(qq)io_status = 0
@@ -1182,6 +1190,7 @@ contains
         integer, dimension(9) :: times
         cpu_usage=0.0
         sumtimes = 0
+        oldidle=0
         times = 0
         percent = 0.
         write(*,'(a)') 'CPU Usage'
@@ -1224,35 +1233,49 @@ contains
     end function get_login_id
 
     subroutine print_compiler_info(file_unit)
-        use simple_strings, only: int2str
         integer, intent (in), optional :: file_unit
         integer  :: file_unit_op
         integer  :: status
-#ifdef INTEL
-        character(len=56)  :: str
-#endif
-#ifdef GNU
-        character(len=*), parameter :: compilation_cmd = compiler_options()
-        character(len=*), parameter :: compiler_ver = compiler_version()
-#endif
-        if (present(file_unit)) then
-            file_unit_op = file_unit
-        else
-            file_unit_op = OUTPUT_UNIT
-        end if
-#if defined(GNU)
-        write( file_unit_op, '(A,A,A,A)' ) &
-            ' This file was compiled by ', trim(adjustl(compiler_ver)), &
-            ' using the options ', trim(adjustl(compilation_cmd))
-#endif
-#ifdef INTEL
-        status = for_ifcore_version( str )
+        character(len=:), allocatable :: compilation_cmd, compiler_ver
+        character(len=56)  :: str !! needed by intel
+
+#ifdef __INTEL_COMPILER
+#if __INTEL_COMPILER >= 1700
+        status = FOR_IFCORE_VERSION( str )
         write( file_unit_op, '(A,A)' ) &
             ' Intel IFCORE version ', trim(adjustl(str))
-        status = for_ifport_version( str )
+        deallocate ( compiler_ver)
+        status = FOR_IFPORT_VERSION( str )
         write( file_unit_op, '(A,A)' ) &
             ' Intel IFPORT version ', trim(adjustl(str))
+#else
+        write( file_unit_op, '(A,I0)' ) &
+            ' Intel Fortran version ', __INTEL_COMPILER 
 #endif
+#endif
+
+        write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
+            trim(FC_COMPILER_CMAKE_VERSION)
+
+
+#ifdef USE_F08_ISOENV
+        ! F2003 does not have compiler_version/OPTIONS in iso_fortran_env
+        compilation_cmd = COMPILER_OPTIONS()
+        compiler_ver = COMPILER_VERSION()
+#endif
+        if(allocated(compiler_ver))then
+            if(len(compiler_ver) <= 0) call simple_stop('simple_syslib compiler_version str le 0')
+            if (present(file_unit)) then
+                file_unit_op = file_unit
+            else
+                file_unit_op = OUTPUT_UNIT
+            end if
+
+            write( file_unit_op, '(A,A,A,A)' ) &
+                ' This file was compiled by ', trim(adjustl(compiler_ver)), &
+                ' using the options ', trim(adjustl(compilation_cmd))
+            deallocate (compilation_cmd, compiler_ver)
+        endif
     end subroutine print_compiler_info
 
     subroutine simple_sysinfo_usage(valueRSS,valuePeak,valueSize,valueHWM)

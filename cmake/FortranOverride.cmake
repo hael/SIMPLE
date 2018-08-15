@@ -115,6 +115,58 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_USC4)
   endif()
   unset(CMAKE_Fortran_COMPILER_SUPPORTS_USC4 CACHE)
 endif()
+# Test Fortran 2008 support for compiler_version and compiler_options.
+if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
+  message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 iso_fortran_env compiler_version and compiler_options")
+  file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90 "
+    program test_iso_support
+        use iso_fortran_env 
+        implicit none
+    character(len=:),allocatable :: str 
+!character(len=:),external :: compiler_version, compiler_options
+    str=compiler_version()
+        if ( .not. allocated(str) ) then
+            write(error_unit,'(A)') 'Your compiler does not support ISO_FORTRAN_ENV compiler_version()'
+            stop 2
+        endif
+    if (len (str) < 1) then
+           write(error_unit,'(A)') 'ISO_FORTRAN_ENV compiler_version() returned string has length zero'
+        stop 2
+    endif
+    write(error_unit,'(A)') 'Your compiler supports ISO_FORTRAN_ENV compiler_version() '
+    write(error_unit,'(A)') ' Compiler version: '// trim(str)
+    deallocate(str)
+    str=compiler_options()
+        if ( .not. allocated(str) ) then
+            write(error_unit,'(A)') 'Your compiler does not support ISO_FORTRAN_ENV compiler_options()'
+            stop 2
+        endif
+    if (len (str) < 1) then
+            write(error_unit,'(A)') 'ISO_FORTRAN_ENV compiler_options() returned string has length zero'
+        stop 2
+    endif
+    write(error_unit,'(A)') 'Your compiler supports ISO_FORTRAN_ENV compiler_options() '
+    write(error_unit,'(A)') ' Compiler options: '// trim(str)
+end program test_iso_support
+")
+  try_compile(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV ${CMAKE_BINARY_DIR}
+    ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90
+    OUTPUT_VARIABLE OUTPUT)
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
+    message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports ISO_FORTRAN_ENV compiler_version/options -- yes")
+    file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeOutput.log
+      "Determining if the Fortran compiler supports Fortran2008 ISO_FORTRAN_ENV compiler_version passed with "
+      "the following output:\n${OUTPUT}\n\n")
+    set(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV 1)
+  else()
+    message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports ISO_FORTRAN_ENV compiler_version/options -- no")
+    file(APPEND ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeError.log
+      "Determining if the Fortran compiler supports Fortran2008 ISO_FORTRAN_ENV compiler_version failed with "
+      "the following output:\n${OUTPUT}\n\n")
+    set(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV 0)
+  endif()
+  unset(CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV CACHE)
+endif()
 
 
 
@@ -231,7 +283,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                # optimisation
   set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
-  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08)
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
      set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
    else()
      set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
@@ -290,15 +342,16 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ifort
   # set(FC "ifort" CACHE PATH "Intel Fortran compiler")
   set(preproc  "-fpp")
-  set(dialect  "-free -implicitnone -std08  -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces  ")
-  set(checks   "-check bounds -check uninit -assume buffered_io -assume realloc_lhs ")
 
-  set(warn     "-warn all ")
+  set(dialect  "-free -implicitnone -list-line-len=264 -diag-disable 6477  -diag-disable 406 -gen-interfaces -assume no2underscore -assume buffered_io -assume realloc_lhs")
+  set(checks   "-check bounds -check uninit")
+
+  set(warn     "-warn all")
   set(fordebug "-g -debug -O0 -ftrapuv -debug all -check all ${warn} -assume byterecl -align sequence -traceback")
-  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port  ")
+  set(forspeed "-O3 -fp-model fast=2 -inline all -unroll-aggressive -no-fp-port")
   set(forpar   " ")
   set(target   "-no-prec-div -fPIC -xHost -traceback ")
-  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08)
+  if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
     set(target "${target} -std08")
   else()
     set(target "${target} -std03")
@@ -326,7 +379,7 @@ elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
       message( "I_MPI_ROOT must be set using INTEL mpivars ")
     endif()
   endif()
-
+  option(INTEL_OMP_OVERRIDE "Allow intel compiler to override limits when compiling OpenMP" OFF)
   set(cstd "-std=c11" )
   set(cppstd "-std=c++14" )
 endif ()

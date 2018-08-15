@@ -6,9 +6,7 @@ program simple_test_sort
     use simple_qsort_mt
     use simple_sort
     use simple_qsort_c, only: sortp_1r4
-#ifdef INTEL
-    use simple_intel_qsort
-#endif
+
     implicit none
     real(8) :: startt, stopt
     integer (8), parameter :: nmax =  10000000
@@ -79,16 +77,6 @@ program simple_test_sort
         ! write (*,*) real(count2-count1)/real(rate)
         !  t2=real(count2-count1)/real(rate)
         deallocate(A)
-#ifdef INTEL
-        allocate (A(nAsp))
-        call make_data4(A,nAsp)
-        !    write (*,*) "Qsort"
-        call system_clock(count1)
-        call qsort_intel_real(A)
-        call system_clock(count2)
-        t5 = real(count2-count1)/(real(rate))
-        deallocate(A)
-#endif
 
 
         allocate (A(nAsp))
@@ -112,11 +100,9 @@ program simple_test_sort
         t4 = real(count2-count1)/(real(rate))
         deallocate(A)
 
-#ifdef INTEL
-        call print_table(INT(nAsp,8), [ t1, t2, t2m, t3, t4, t5 ])
-#else
+
         call print_table(INT(nAsp,8), [ t1, t2, t2m, t3, t4 ])
-#endif
+
     end do
 
     ! !! ITERATIONS
@@ -486,18 +472,6 @@ program simple_test_sort
         !  t2=real(count2-count1)/real(rate)
         deallocate(A)
 
-#ifdef INTEL
-        allocate (A(nAsp))
-        call make_data4(A,nAsp)
-        !    write (*,*) "Qsort"
-        call system_clock(count1)
-        call qsort_intel_double(A)
-        call system_clock(count2)
-        t5 = real(count2-count1)/(real(rate))
-        deallocate(A)
-#endif
-
-
         allocate (A(nA))
         allocate(Aind(nA))
         call make_data8(A,nA)
@@ -519,11 +493,8 @@ program simple_test_sort
         t4 = real(count2-count1)/(real(rate))
         deallocate(A)
 
-#ifdef INTEL
-        call print_table(nA, [ t1, t2, t2m, t3, t4, t5 ])
-#else
+
         call print_table(nA, [ t1, t2, t2m, t3, t4 ])
-#endif
 
     end do
 

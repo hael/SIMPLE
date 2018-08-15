@@ -114,13 +114,13 @@ foreach(TESTNAME ${TESTDIRS})
     if(USE_MPI AND USE_OPENMP)
       target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
       set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS  "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS} -fno-range-check"
+        COMPILE_FLAGS  "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
         LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
         LANGUAGE Fortran)
     elseif(USE_MPI)
       target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
       set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS  "${MPI_Fortran_FLAGS} -fno-range-check"
+        COMPILE_FLAGS  "${MPI_Fortran_FLAGS}"
         LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
         LANGUAGE Fortran)
     elseif(USE_OPENMP)

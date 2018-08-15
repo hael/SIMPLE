@@ -1,17 +1,19 @@
 #ifdef BUILD_NAME
-    character(len=STDLEN) :: build_descr = BUILD_NAME                  !< compiler, build type and FFT backend - defined on commandline
+    character(len=STDLEN) :: build_descr = BUILD_NAME   !< compiler, build type and FFT backend - defined on commandline
 #else
     character(len=STDLEN) :: build_descr = "NONE"
 #endif
     character(len=STDLEN) :: BUILD_TYPE         = "@CMAKE_BUILD_TYPE@"
     character(len=STDLEN) :: SIMPLE_LIB_VERSION = "@SIMPLE_VERSION@"       !< simple version
-    character(len=STDLEN) :: SIMPLE_GIT_VERSION = "@SIMPLE_GIT_VERSION@"   !< git hash
+    character(len=STDLEN) :: SIMPLE_GIT_VERSION = "@SIMPLE_GIT_VERSION@"   !< git hash at buildtime
     character(len=STDLEN) :: SIMPLE_SOURCE_PATH = "@CMAKE_SOURCE_DIR@"     !< source dir
     character(len=STDLEN) :: SIMPLE_BUILD_PATH  = "@CMAKE_BINARY_DIR@"     !< where SIMPLE was built
     character(len=STDLEN) :: SIMPLE_PATH        = "@CMAKE_INSTALL_PREFIX@" !< installation dir
-    integer, parameter :: FC_INTEL_COMPILER = 2
-    integer, parameter :: FC_PGI_COMPILER = 1
-    integer, parameter :: FC_GNU_COMPILER = 0
+    enum,bind(C)  
+      enumerator :: FC_GNU_COMPILER = 0
+      enumerator :: FC_INTEL_COMPILER = 1
+      enumerator :: FC_PGI_COMPILER = 2
+    end enum
     integer, parameter :: OS_LINUX = 1
     integer, parameter :: OS_MACOSX = 0
     integer, parameter :: OS_WINDOWS = -1
@@ -20,7 +22,7 @@
 #else
     integer, parameter :: OS_PLATFORM =  OS_LINUX
 #endif
-
+    character(len = STDLEN) :: FC_COMPILER_CMAKE_VERSION= "@CMAKE_Fortran_COMPILER_VERSION@"
 #ifdef INTEL
     character(len = STDLEN) :: FC_COMPILER= "Intel ifort 64"
     integer :: FC_COMPILER_VERSION(3) = (/ __INTEL_COMPILER, INT(__INTEL_COMPILER_BUILD_DATE/1000), mod(__INTEL_COMPILER_BUILD_DATE,1000) /)
@@ -37,7 +39,7 @@
 # error 'Compiler must be GNU, Intel or PGI'
 #endif
 #ifdef WIN32
-character, parameter        :: PATH_SEPARATOR  = "\\"        ! double backslash generates only one character
+character, parameter        :: PATH_SEPARATOR  = "\\"        !! double backslash generates only one character
 character(len=2), parameter :: PATH_HERE       = ".\\"
 character(len=3), parameter :: PATH_PARENT     = "..\\"
 character(len = *), parameter :: system_type   = "windows"
