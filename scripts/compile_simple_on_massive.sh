@@ -21,7 +21,7 @@ mkdir tmpbuild
 cd tmpbuild
 cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG ..  -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
-make check
+ctest -V
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 EOF > buildsimple
@@ -46,7 +46,7 @@ mkdir tmpbuild-gcc8
 cd tmpbuild-gcc8
 cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG ..  -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
-make check  > log_check 2> log_check_err
+ctest -V  > log_check 2> log_check_err
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 EOF > buildsimplegcc8
@@ -78,7 +78,7 @@ cd tmpbuild-intel
 #FC=mpifort CC=mpicc CXX=mpicxx 
  FC=ifort CC=icc CXX=icpc LDFLAGS="" cmake -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=OFF -DUSE_MPI=OFF -DCMAKE_BUILD_TYPE=DEBUG -Wdev  --debug-trycompile .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
-make check > log_check 2> log_check_err
+ctest -V > log_check 2> log_check_err
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 simple_test_openacc
@@ -106,7 +106,7 @@ mkdir tmpbuildall
 cd tmpbuild
 FC=mpifort CC=mpicc CXX=mpicxx cmake  -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=DEBUG .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
-make check > log_check 2> log_check_err
+ctest -V > log_check 2> log_check_err
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 simple_test_openacc

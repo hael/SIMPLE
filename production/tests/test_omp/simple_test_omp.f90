@@ -1,16 +1,16 @@
 
-
 module list
+implicit none
     type node
         integer :: payload
         type (node), pointer :: next
         type(node), pointer :: left, right
     end type node
 contains
-    subroutine process(p)
+    subroutine processlist(p)
         type (node), pointer :: p
         ! do work here
-    end subroutine process
+    end subroutine processlist
     subroutine increment_list_items (head)
         type (node), pointer :: head
         type (node), pointer :: p
@@ -20,7 +20,7 @@ contains
         do
             !$omp task
             ! p is firstprivate by default
-            call process(p)
+            call processlist(p)
             !$omp end task
             p => p%next
             if ( .not. associated (p) ) exit
@@ -286,19 +286,21 @@ contains
     end subroutine
     !>Example 12.3f
     subroutine test_collapse_order
-        include 'omp_lib.h'
+        ! include 'omp_lib.h'
         integer j,k
         real :: a(100)
         !$omp parallel num_threads(2)
         !$omp do collapse(2) ordered private(j,k) schedule(static,3)
         do k = 1,3
             do j = 1,2
+#if OPENMP_VERSION >= 201511
                 !$omp ordered
                 print *, omp_get_thread_num(), k, j
                 !$omp end ordered
+#endif
                 call workcollapse_ordered(a,j,k)
-            enddo
-        enddo
+            end do
+        end do
         !$omp end do
         !$omp end parallel
     end subroutine test_collapse_order
@@ -320,7 +322,6 @@ contains
 
     END FUNCTION fib
 
-
     !>Example 16.2f
     RECURSIVE SUBROUTINE traverse ( P )
         use list
@@ -339,8 +340,9 @@ contains
             !$OMP END TASK
         ENDIF
         !$OMP TASKWAIT
-        CALL process ( P%next )
+        CALL processlist ( P%next )
     END SUBROUTINE traverse
+
     subroutine first_private(a)
         real(8) a
     end subroutine first_private
