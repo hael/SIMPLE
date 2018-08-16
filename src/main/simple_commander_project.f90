@@ -484,7 +484,6 @@ contains
         inputted_plaintexttab = cline%defined('plaintexttab')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
-        if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing stacks of particles (stk); commander_project :: exec_import_particles'
         if( n_ori_inputs > 1 )then
             write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
             stop 'commander_project :: exec_import_particles'
