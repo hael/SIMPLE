@@ -462,7 +462,7 @@ contains
         class(stardoc), intent(inout) :: self
         integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
         character(len=:),allocatable :: line,fname,tmp, projrootdir, experrootdir
-        character(len=:),allocatable :: sline
+        character(len=:),allocatable :: sline, datestr
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
         integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
@@ -659,6 +659,9 @@ contains
         if(nDataline /= self%num_data_lines)then
             HALT_NOW(" Num data lines mismatch in read_data_lines and read_header")
         endif
+        !! Leave some provenence information on temporary files
+        call date_and_time(date=datestr)
+        write(filetabunit, '(A,A,A,A)') "# SIMPLE IMPORTSTAR from file:",trim(self%current_file), " on Date: ", trim(datestr) 
         !! close all the opened files
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")

@@ -14,7 +14,7 @@ use simple_stardoc
 use simple_star_dict,  only:  star_dict
 implicit none
 #include "simple_local_flags.inc"
-character(len=STDLEN) :: oldCWDfolder,curDir,datestr
+character(len=STDLEN) :: oldCWDfolder,curDir,datestr,stars_from_matt
 character(len=STDLEN) :: simple_testbench,timestr,folder, fileref, filecompare
 character(len=:),allocatable:: tmpfile,line
 integer(8) :: count1
@@ -40,7 +40,7 @@ else
 !io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
 !tmpfile=filepath(trim(simple_testbench),"star_test/stars_from_matt/micrographs_all_gctf.star")
 endif
-
+stars_from_matt="/scratch/el85/stars_from_matt/"
 print *, trim(tmpfile)
 global_debug=.true.
 debug=.true.
@@ -107,6 +107,19 @@ endif
 !      &"simple_exec prg=print_project_info")
 
 
+
+call exec_cmdline("simple_exec prg=new_project projname=SimpleImport",exitstat=io_stat)
+if(.not.dir_exists('SimpleImport') .or. io_stat/=0)  call simple_stop("new proj SimpleImport failed")
+
+call simple_chdir( 'SimpleImport', , status=io_stat)
+if(io_stat/=0) call simple_stop("simple_chdir failed")
+call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)"/Extract/364Box_Extract_LocalCTF/particles.star" ,exitstat=io_stat)
+if(io_stat/=0)then
+  print *, " prg=importstar should fail without startype and smpd"
+else
+ print *, " prg=importstar should fail without startype and smpd"
+ stop
+endif
 
 
 ! call test_stardoc

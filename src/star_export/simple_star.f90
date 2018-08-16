@@ -264,15 +264,13 @@ contains
         class(parameters),   intent(inout) :: params
         class(cmdline),      intent(inout) :: cline
         character(len=*),    intent(inout) :: filename
-        integer i,nheaders, nlines
-        type(oris)       :: os
-        integer          :: ndatlines,noris,iseg, n_ori_inputs
-        class(oris),      pointer     :: os_ptr
-        type(ctfparams)  :: ctfvars
+        integer         :: i, nheaders, nlines
+        type(oris)      :: os
+        integer         :: ndatlines,noris,iseg, n_ori_inputs
+        type(ctfparams) :: ctfvars
+        logical         :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         character(len=:), allocatable ::  oritype
-        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-
-
+        class(oris),      pointer     :: os_ptr
         call cline%set('oritype','mic')
         !! make sure starfile has been parsed and temporary files are in current dir        
         call self%check_temp_files('import_ctf_estimation')
@@ -282,9 +280,7 @@ contains
             call cline%set('filetab', 'filetab-stardoc.txt')
         endif
 
-
-        if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when importing stacks of particles (stk); commander_project :: exec_import_particles'
-    
+  
         ! if( n_ori_inputs > 1 )then
         !     write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
         !     stop 'commander_project :: exec_import_particles'
@@ -298,9 +294,7 @@ contains
         endif
         call os%new(ndatlines)
         call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
-     !!       call spproj%kill ! for safety
-
-
+        !!       call spproj%kill ! for safety
 
          !! load ctf information into sp%os_stk
          noris = self%get_ndatalines()
@@ -802,10 +796,11 @@ contains
             'RandomSubset             ' /)
         call self%doc%write(filename, sp, labels)
     end subroutine export_init3Dmodel
-    subroutine import_init3Dmodel (self, spproj, params, filename)
+    subroutine import_init3Dmodel (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
         class(sp_project),   intent(inout) :: spproj
         class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
         character(len=*),    intent(inout) :: filename
     end subroutine import_init3Dmodel
 
@@ -999,6 +994,7 @@ contains
         class(parameters),   intent(inout) :: params
         class(cmdline),      intent(inout) :: cline
         character(len=*),    intent(inout) :: filename
+
     end subroutine import_all
 
 
