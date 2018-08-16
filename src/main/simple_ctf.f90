@@ -50,7 +50,7 @@ end interface
 
 contains
 
-    function constructor( smpd, kV, Cs, amp_contr ) result( self )
+    elemental function constructor( smpd, kV, Cs, amp_contr ) result( self )
         real, intent(in) :: smpd      !< sampling distance
         real, intent(in) :: kV        !< accelleration voltage
         real, intent(in) :: Cs        !< constant
@@ -68,7 +68,7 @@ contains
     end function constructor
 
     !>  \brief  initialise a CTF object with defocus/astigmatism params
-    subroutine init( self, dfx, dfy, angast )
+    elemental subroutine init( self, dfx, dfy, angast )
         class(ctf), intent(inout) :: self   !< instance
         real,       intent(in)    :: dfx    !< defocus x-axis (um)
         real,       intent(in)    :: dfy    !< defocus y-axis (um)

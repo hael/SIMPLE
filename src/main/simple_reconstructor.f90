@@ -574,7 +574,7 @@ contains
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys  = W_img%comp_addr_phys([h,k,m])
+                        phys  = W_img%comp_addr_phys(h,k,m )
                         call W_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         call Wprev_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
                     end do
@@ -590,7 +590,7 @@ contains
                 do h = self%lims(1,1),self%lims(1,2)
                     do k = self%lims(2,1),self%lims(2,2)
                         do m = self%lims(3,1),self%lims(3,2)
-                            phys  = W_img%comp_addr_phys([h,k,m])
+                            phys  = W_img%comp_addr_phys( h,k,m )
                             call W_img%mul_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
                         end do
                     end do
@@ -606,9 +606,9 @@ contains
                 do h = self%lims(1,1),self%lims(1,2)
                     do k = self%lims(2,1),self%lims(2,2)
                         do m = self%lims(3,1),self%lims(3,2)
-                            phys     = W_img%comp_addr_phys([h, k, m])
-                            val      = mycabs(W_img%get_cmat_at(phys))   !! ||C|| == ||C*||
-                            val_prev = real(Wprev_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
+                            phys     = W_img%comp_addr_phys(h, k, m)
+                            val      = mycabs(W_img%get_cmat_at(phys(1), phys(2), phys(3)))   !! ||C|| == ||C*||
+                            val_prev = real(Wprev_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
                             if( val > 1.0e38 )then
                                 val = 0.
                             else
@@ -627,8 +627,8 @@ contains
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys   = W_img%comp_addr_phys([h, k, m])
-                        invrho = real(W_img%get_cmat_at(phys)) !! Real(C) == Real(C*)
+                        phys   = W_img%comp_addr_phys(h, k, m)
+                        invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
                         call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho)
                     end do
                 end do
@@ -641,7 +641,7 @@ contains
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys = self%comp_addr_phys([h, k, m])
+                        phys = self%comp_addr_phys(h, k, m )
                         if( self%rho(phys(1),phys(2),phys(3)) < 1.e-20 )then
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
@@ -700,7 +700,7 @@ contains
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
                     logi = [h,k,m]
-                    phys = self%comp_addr_phys([h,k,m])
+                    phys = self%comp_addr_phys(h,k,m)
                     ! this should be safe even if there isn't a 1-to-1 correspondence
                     ! btw logi and phys since we are accessing shared data.
                     self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)

@@ -1220,15 +1220,15 @@ contains
 
     ! set comp to cmat at index phys
     subroutine set_cmat_at_1( self , phys , comp)
-        class(image), intent(in) :: self
-        integer, intent(in) :: phys(3)
-        complex, intent(in) :: comp
+        class(image), intent(inout) :: self
+        integer,      intent(in) :: phys(3)
+        complex,      intent(in) :: comp
         self%cmat(phys(1),phys(2),phys(3)) = comp
     end subroutine set_cmat_at_1
 
     !> add comp to cmat at index phys
-    subroutine set_cmat_at_2( self, h, k, l, comp)
-        class(image), intent(in) :: self
+    elemental subroutine set_cmat_at_2( self, h, k, l, comp)
+        class(image), intent(inout) :: self
         integer, intent(in) :: h,k,l
         complex, intent(in) :: comp
         self%cmat(h,k,l) =  comp
@@ -1236,15 +1236,15 @@ contains
 
     !> add comp to cmat at index phys
     subroutine add_cmat_at_1( self , phys , comp)
-        class(image), intent(in) :: self
-        integer, intent(in) :: phys(3)
-        complex, intent(in) :: comp
+        class(image), intent(inout) :: self
+        integer,      intent(in) :: phys(3)
+        complex,      intent(in) :: comp
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) + comp
     end subroutine add_cmat_at_1
 
     !> add comp to cmat at index (h,k,l)
-    subroutine add_cmat_at_2( self, h, k, l, comp)
-        class(image), intent(in) :: self
+    elemental subroutine add_cmat_at_2( self, h, k, l, comp)
+        class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         complex,      intent(in) :: comp
         self%cmat(h,k,l) = self%cmat(h,k,l) + comp
@@ -1313,8 +1313,8 @@ contains
         endif
     end subroutine div_cmat_at_1
 
-    subroutine div_cmat_at_2( self,h,k,l, rval)
-        class(image), intent(in) :: self
+    elemental subroutine div_cmat_at_2( self,h,k,l, rval)
+        class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         real,         intent(in) :: rval
         if( abs(rval) > 1.e-6 )then
@@ -1335,8 +1335,8 @@ contains
         endif
     end subroutine div_cmat_at_3
 
-    subroutine div_cmat_at_4( self,h,k,l, cval)
-        class(image), intent(in) :: self
+    elemental subroutine div_cmat_at_4( self,h,k,l, cval)
+        class(image), intent(inout) :: self
         integer,      intent(in) :: h,k,l
         complex,      intent(in) :: cval
         if( abs(cval) > 1.e-6 )then
@@ -1360,14 +1360,14 @@ contains
         self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * cval
     end subroutine mul_cmat_at_2
 
-    subroutine mul_cmat_at_3( self, h,k,l,rval )
+    elemental subroutine mul_cmat_at_3( self, h,k,l,rval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         real,         intent(in)    :: rval
         self%cmat(h,k,l) = self%cmat(h,k,l) * rval
     end subroutine mul_cmat_at_3
 
-    subroutine mul_cmat_at_4( self, h,k,l, cval )
+    elemental subroutine mul_cmat_at_4( self, h,k,l, cval )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: h,k,l
         complex,      intent(in)    :: cval
