@@ -15,8 +15,11 @@ implicit none
 public :: projector
 private
 
-logical, parameter :: MEMOIZEKB = .false.
-integer, parameter :: NKBPOINTS = 10
+logical, parameter :: MEMOIZEKB     = .false.
+integer, parameter :: NKBPOINTS     = 10
+logical, parameter :: USE_WEISZFELD = .false.
+logical, parameter :: USE_HYPERB    = .false.
+
 
 type, extends(image) :: projector
     private
@@ -27,8 +30,9 @@ type, extends(image) :: projector
     integer, allocatable  :: polcyc1_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     integer, allocatable  :: polcyc2_mat(:,:,:)      !< image cyclic adresses for the image to polar transformer
     logical, allocatable  :: is_in_mask(:,:,:)       !< neighbour matrix for the shape mask projector
-    integer               :: wdim   = 0              !< dimension of K-B window
-    integer               :: iwinsz = 0              !< integer half-window size
+    integer               :: wdim      = 0              !< dimension of K-B window
+    integer               :: wdim_cubd = 0              !< dimension of K-B window
+    integer               :: iwinsz    = 0              !< integer half-window size
     logical               :: expanded_exists=.false. !< indicates FT matrix existence
   contains
     ! CONSTRUCTORS
@@ -40,10 +44,14 @@ type, extends(image) :: projector
     procedure          :: fproject_serial
     procedure          :: fproject_polar
     procedure, private :: fproject_polar_memo
+    procedure, private :: fproject_polar_weiszfeld
     procedure          :: dfproject_polar
     procedure          :: fdf_project_polar
     procedure, private :: fdf_project_polar_memo
     procedure          :: interp_fcomp
+    procedure          :: interp_fcomp_hyperb
+    procedure          :: interp_fcomp_weiszfeld
+    procedure          :: interp_fcomp_weiszfeld_dp
     procedure, private :: interp_fcomp_memo
     procedure, private :: dinterp_fcomp
     procedure, private :: fdf_interp_fcomp
@@ -71,6 +79,7 @@ contains
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         if( MEMOIZEKB ) call self%kbwin%memoize(NKBPOINTS)
         self%wdim          = self%kbwin%get_wdim()
+        self%wdim_cubd     = self%wdim**3
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
@@ -144,7 +153,13 @@ contains
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
-                comp = self%interp_fcomp(loc)
+                if (USE_WEISZFELD) then
+                    comp = self%interp_fcomp_weiszfeld(loc)
+                else if (USE_HYPERB) then
+                    comp = self%interp_fcomp_hyperb(loc)
+                else
+                    comp = self%interp_fcomp(loc)
+                end if
                 if (h > 0) then
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
@@ -179,7 +194,13 @@ contains
                 sqarg = dot_product([h,k],[h,k])
                 if( sqarg > sqlp ) cycle
                 loc  = matmul(real([h,k,0]), e_rotmat)
-                comp = self%interp_fcomp(loc)
+                if (USE_WEISZFELD) then
+                    comp = self%interp_fcomp_weiszfeld(loc)
+                else if (USE_HYPERB) then
+                    comp = self%interp_fcomp_hyperb(loc)
+                else
+                    comp = self%interp_fcomp(loc)
+                end if
                 if (h > 0) then
                     phys(1) = h + 1
                     phys(2) = k + 1 + MERGE(ldim(2),0,k < 0)
@@ -209,6 +230,10 @@ contains
             call self%fproject_polar_memo(iref, e, pftcc, iseven)
             return
         endif
+        if ( USE_WEISZFELD )then
+            call self%fproject_polar_weiszfeld(iref, e, pftcc, iseven)
+            return
+        end if
         pdim = pftcc%get_pdim()
         e_rotmat = e%get_mat()
         do irot=1,pdim(1)
@@ -242,6 +267,28 @@ contains
             end do
         end do
     end subroutine fproject_polar_memo
+
+    !> \brief  extracts a polar FT from a volume's expanded FT (self)
+    subroutine fproject_polar_weiszfeld( self, iref, e, pftcc, iseven )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        class(projector),        intent(inout) :: self   !< projector object
+        integer,                 intent(in)    :: iref   !< which reference
+        class(ori),              intent(in)    :: e      !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
+        logical,                 intent(in)    :: iseven !< eo flag
+        integer :: irot, k, pdim(3)
+        real    :: vec(3), loc(3), e_rotmat(3,3)
+        pdim = pftcc%get_pdim()
+        e_rotmat = e%get_mat()
+        do irot=1,pdim(1)
+            do k=pdim(2),pdim(3)
+                vec(:2) = pftcc%get_coord(irot,k)
+                vec(3)  = 0.
+                loc     = matmul(vec,e_rotmat)
+                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp_weiszfeld(loc), iseven)
+            end do
+        end do
+    end subroutine fproject_polar_weiszfeld
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
     subroutine dfproject_polar( self, iref, euls, pftcc, iseven )
@@ -335,7 +382,7 @@ contains
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )            
             w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
             w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
         end do
@@ -343,6 +390,210 @@ contains
         comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum( w )
     end function interp_fcomp
 
+    function interp_fcomp_hyperb( self, loc )result( comp )
+        use ieee_arithmetic, only: ieee_is_nan
+        class(projector), intent(inout) :: self
+        real,             intent(in)    :: loc(3)
+        complex :: comp
+        integer, parameter :: maxits     = 30
+        real,    parameter :: relTol     = 1e-5
+        real,    parameter :: min_dists  = 1e-8
+        real,    parameter :: min_denom  = 5e-8
+        real,    parameter :: min_denom2 = 1e-11
+        integer :: i, j, k, win(2,3)            ! window boundary array in fortran contiguous format
+        complex :: pts(self%wdim_cubd)          ! points contrib to geometric median
+        real    :: dists(self%wdim_cubd)        ! distances
+        real    :: rec_dists(self%wdim_cubd)    ! reciprocal distances
+        real    :: denom(self%wdim_cubd)        ! denominator
+        complex :: zi,zii                       ! iterate
+        logical :: it_condition
+        real    :: eps
+        integer :: idx, cnt
+        complex :: R
+        real    :: gamma, eta, rr
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
+        ! setup problem
+        do i=1,self%wdim
+            do j = 1,self%wdim
+                do k = 1,self%wdim
+                    idx            = (i-1)*self%wdim**2 + (j-1)*self%wdim + k
+                    pts(idx)       = self%cmat_exp(win(1,1)+i-1, win(1,2)+i-1, win(1,3)+i-1)
+                    dists(idx)     = ( real(win(1,1)+i-1)-loc(1) )**2 + &
+                        &( real(win(1,2)+i-1)-loc(2) )**2 + ( real(win(1,3)+i-1)-loc(3) )**2
+                    rec_dists(idx) = 1. / sqrt( dists(idx) )
+                end do
+            end do
+        end do
+        ! if any distance(s) extremely small (weight approx. 1), then use that value(s)
+        if (any(dists(:) .le. min_dists)) then
+            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))            
+            return
+        end if
+        rec_dists = rec_dists / sum(rec_dists(:))
+        ! initialize with geometric mean
+        comp = sum(rec_dists(:)*pts(:))
+    end function interp_fcomp_hyperb
+
+    function interp_fcomp_weiszfeld( self, loc )result( comp )
+        use ieee_arithmetic, only: ieee_is_nan
+        class(projector), intent(inout) :: self
+        real,             intent(in)    :: loc(3)
+        complex :: comp
+        integer, parameter :: maxits     = 30
+        real,    parameter :: relTol     = 1e-5
+        real,    parameter :: min_dists  = 1e-8
+        real,    parameter :: min_denom  = 5e-8
+        real,    parameter :: min_denom2 = 1e-11
+        integer :: i, j, k, win(2,3)            ! window boundary array in fortran contiguous format
+        complex :: pts(self%wdim_cubd)          ! points contrib to geometric median
+        real    :: dists(self%wdim_cubd)        ! distances
+        real    :: rec_dists(self%wdim_cubd)    ! reciprocal distances
+        real    :: denom(self%wdim_cubd)        ! denominator
+        complex :: zi,zii                       ! iterate
+        logical :: it_condition
+        real    :: eps
+        integer :: idx, cnt
+        complex :: R
+        real    :: gamma, eta, rr
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
+        ! setup problem
+        do i=1,self%wdim
+            do j = 1,self%wdim
+                do k = 1,self%wdim
+                    idx            = (i-1)*self%wdim**2 + (j-1)*self%wdim + k
+                    pts(idx)       = self%cmat_exp(win(1,1)+i-1, win(1,2)+i-1, win(1,3)+i-1)
+                    dists(idx)     = ( real(win(1,1)+i-1)-loc(1) )**2 + &
+                        &( real(win(1,2)+i-1)-loc(2) )**2 + ( real(win(1,3)+i-1)-loc(3) )**2
+                    rec_dists(idx) = 1. / sqrt( dists(idx) )
+                end do
+            end do
+        end do
+        ! if any distance(s) extremely small (weight approx. 1), then use that value(s)
+        if (any(dists(:) .le. min_dists)) then
+            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))            
+            return
+        end if
+        rec_dists = rec_dists / sum(rec_dists(:))
+        ! initialize with geometric mean
+        zi = sum(rec_dists(:)*pts(:))
+        it_condition = .true.
+        cnt = 0
+        do while (it_condition)
+            denom = abs(pts(:)-zi)
+            if (any(denom(:) .le. min_denom)) then
+                ! if denominator too small (see Vardi, Zhang)
+                eta   = sum(rec_dists(:), mask=(denom(:) .le. min_denom))
+                zii   = sum(rec_dists(:)*pts(:)/denom(:), mask=(denom(:) .gt. min_denom))/&
+                    sum(rec_dists(:)/denom(:), mask=(denom(:) .gt. min_denom))
+                R     = sum(rec_dists(:)*(pts(:)-zi)/denom(:),mask=(denom(:) .gt. min_denom))
+                rr    = abs(R)
+                if ((eta .le. min_denom2).and.(rr .lt. min_denom2)) then
+                    eta = 0.
+                    rr  = 1.
+                end if
+                gamma = min(1., eta/rr)
+                zii   = (1. - eta/rr) * zii + gamma * zi
+            else
+                zii = sum(rec_dists(:)*pts(:)/denom(:))/sum(rec_dists(:)/denom(:))
+            end if
+            eps = abs(zii-zi)
+            zi  = zii
+            cnt = cnt + 1
+            it_condition = (eps > relTol).and.(cnt .lt. maxits)
+        end do
+        if ((cnt .gt. maxits).or.(ieee_is_nan(real(zi))).or.(ieee_is_nan(aimag(zi)))) then
+            ! if convergence has not been achieved, try double precision algorithm
+            comp = self%interp_fcomp_weiszfeld_dp( loc )
+            if ((ieee_is_nan(real(comp))).or.(ieee_is_nan(aimag(comp)))) then
+                ! if still not converged (due to NaN), then use KB kernel
+                comp = self%interp_fcomp( loc )
+            end if
+        else
+            comp = zi
+        end if
+    end function interp_fcomp_weiszfeld    
+
+    function interp_fcomp_weiszfeld_dp( self, loc ) result( comp )
+        use ieee_arithmetic, only: ieee_is_nan
+        class(projector), intent(inout) :: self
+        real,             intent(in)    :: loc(3)
+        complex :: comp
+        integer,  parameter :: maxits     = 30
+        real(dp), parameter :: relTol     = 1e-5_dp
+        real(dp), parameter :: min_dists  = 1e-8_dp
+        real(dp), parameter :: min_denom  = 5e-8_dp
+        real(dp), parameter :: min_denom2 = 1e-11_dp
+        integer     :: i, j, k, win(2,3)            ! window boundary array in fortran contiguous format
+        complex     :: pts(self%wdim_cubd)          ! points contrib to geometric median
+        real(dp)    :: dists(self%wdim_cubd)        ! distances
+        real(dp)    :: rec_dists(self%wdim_cubd)    ! reciprocal distances
+        real(dp)    :: denom(self%wdim_cubd)        ! denominator
+        complex(dp) :: zi,zii                       ! iterate
+        logical     :: it_condition
+        real(dp)    :: eps
+        integer     :: idx, cnt
+        complex(dp) :: R
+        real(dp)    :: gamma, eta, rr
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
+        ! setup problem
+        do i=1,self%wdim
+            do j = 1,self%wdim
+                do k = 1,self%wdim
+                    idx            = (i-1)*self%wdim**2 + (j-1)*self%wdim + k
+                    pts(idx)       = self%cmat_exp(win(1,1)+i-1, win(1,2)+i-1, win(1,3)+i-1)
+                    dists(idx)     = ( real(win(1,1)+i-1,dp)-real(loc(1),dp) )**2 + &
+                        &( real(win(1,2)+i-1,dp)-real(loc(2),dp) )**2 + ( real(win(1,3)+i-1,dp)-real(loc(3),dp) )**2
+                    rec_dists(idx) = 1._dp / sqrt( dists(idx) )
+                end do
+            end do
+        end do
+        ! if any distance(s) extremely small (weight approx. 1), then use that value(s)
+        if (any(dists(:) .le. min_dists)) then
+            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))
+            return
+        end if
+        rec_dists = rec_dists / sum(rec_dists(:))
+        ! initialize with geometric mean
+        zi = sum(rec_dists(:)*pts(:))
+        it_condition = .true.
+        cnt = 0
+        do while (it_condition)
+            denom = abs(pts(:)-zi)
+            if (any(denom(:) .le. min_denom)) then
+                ! if denominator too small (see Vardi, Zhang)
+                eta   = sum(rec_dists(:), mask=(denom(:) .le. min_denom))
+                zii   = sum(rec_dists(:)*pts(:)/denom(:), mask=(denom(:) .gt. min_denom))/&
+                    sum(rec_dists(:)/denom(:), mask=(denom(:) .gt. min_denom))
+                R     = sum(rec_dists(:)*(pts(:)-zi)/denom(:),mask=(denom(:) .gt. min_denom))
+                rr    = abs(R)
+                if ((eta .le. min_denom2).and.(rr .lt. min_denom2)) then
+                    eta = 0._dp
+                    rr  = 1._dp
+                end if
+                gamma = min(1._dp, eta/rr)
+                zii   = (1._dp - eta/rr) * zii + gamma * zi
+            else
+                zii = sum(rec_dists(:)*pts(:)/denom(:))/sum(rec_dists(:)/denom(:))
+            end if
+            eps = abs(zii-zi)
+            zi  = zii
+            cnt     = cnt + 1
+            it_condition = (eps > relTol).and.(cnt .lt. maxits)
+        end do
+        if ((cnt .gt. maxits).or.(ieee_is_nan(real(zi))).or.(ieee_is_nan(aimag(zi)))) then
+            ! if not converging or results in NaN, fall back to kernel interpolation
+            comp = self%interp_fcomp(loc)
+        else
+            comp = cmplx(zi,kind=sp)
+        end if
+    end function interp_fcomp_weiszfeld_dp
+    
     !>  \brief is to interpolate from the expanded complex matrix
     function interp_fcomp_memo( self, loc )result( comp )
         class(projector), intent(inout) :: self
