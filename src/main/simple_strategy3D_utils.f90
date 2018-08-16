@@ -67,7 +67,7 @@ contains
         integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
         write (*,*) 'prob_select_peak executed'
-        do ipeak = 1, s%npeaks 
+        do ipeak = 1, s%npeaks
             ! stash peak index
             inds(ipeak) = ipeak
             ! stash reference index
@@ -184,6 +184,8 @@ contains
             if( s%npeaks_eff > 0 )then
                 ! exclusion
                 where( .not. included ) ws = 0.
+                ! re-normalise to account for weight loss upon exclusion
+                ws = ws / sum(ws)
                 ! weighted corr
                 wcorr = sum(ws*corrs,mask=included)
             else
