@@ -111,15 +111,39 @@ endif
 call exec_cmdline("simple_exec prg=new_project projname=SimpleImport",exitstat=io_stat)
 if(.not.dir_exists('SimpleImport') .or. io_stat/=0)  call simple_stop("new proj SimpleImport failed")
 
-call simple_chdir( 'SimpleImport', , status=io_stat)
+call simple_chdir( 'SimpleImport', status=io_stat)
 if(io_stat/=0) call simple_stop("simple_chdir failed")
-call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)"/Extract/364Box_Extract_LocalCTF/particles.star" ,exitstat=io_stat)
+call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star" ,exitstat=io_stat)
 if(io_stat/=0)then
   print *, " prg=importstar should fail without startype and smpd"
 else
  print *, " prg=importstar should fail without startype and smpd"
  stop
 endif
+call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" ,exitstat=io_stat)
+if(io_stat/=0)then
+  print *, " prg=importstar should fail without startype and smpd"
+else
+ print *, " prg=importstar should fail without startype and smpd"
+ stop
+endif
+call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah" ,exitstat=io_stat)
+if(io_stat/=0)then
+  print *, " prg=importstar should fail without a valid startype "
+else
+ print *, " prg=importstar should fail without a valid startype"
+ stop
+endif
+call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract" ,exitstat=io_stat)
+if(io_stat==0)then
+  print *, " prg=importstar valid "
+else
+ print *, " prg=importstar should not fail with a valid startype and smpd"
+ stop
+endif
+
+
+
 
 
 ! call test_stardoc
