@@ -263,7 +263,7 @@ contains
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk
-        integer               :: icls, ncavgs, orig_box, box, istk, status
+        integer               :: icls, ncavgs, orig_box, box, istk, status, nptcls
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -678,9 +678,9 @@ contains
         type(oris)                    :: os
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: cavg_stk
-        real,             allocatable :: corrs(:), x(:), z(:)
+        real,             allocatable :: corrs(:), x(:), z(:), res(:)
         integer,          allocatable :: labels(:), states(:)
-        real     :: trs, extr_init
+        real     :: trs, extr_init, lp_cls3D
         integer  :: iter, startit, rename_stat, ncls
         logical  :: write_proj, fall_over, cavgs_import
         ! sanity check
@@ -688,9 +688,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
-        if(params%eo .eq. 'no' .and. .not.cline%defined('lp'))       stop 'need lp input when eo .eq. no; cluster3D'
-        if(params%oritype.eq.'cls3D' .and. .not.cline%defined('lp')) stop 'need lp for class-averages; cluster3D'
-        if(params%oritype.eq.'cls3D' .and. params%eo.ne.'no')        stop 'no EO=YES for class-averages, LP must be set; cluster3D'
+        if(params%eo .eq. 'no' .and. .not.cline%defined('lp'))stop 'need lp input when eo .eq. no; cluster3D'
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! prep project
@@ -721,10 +719,21 @@ contains
             cavgs_import = spproj%os_ptcl2D%get_noris() == 0
             if( cavgs_import )then
                 ! start from import
+                if(.not.cline%defined('lp')) stop 'need LP=XXX for inported class-averages; cluster3D'
+                lp_cls3D = params%lp
                 allocate(states(ncls), source=1)
             else
                 ! start from previous 2D
                 states = nint(spproj%os_cls2D%get_all('state'))
+                ! determines resolution limit
+                if(cline%defined('lp'))then
+                    lp_cls3D = params%lp
+                else
+                    res      = spproj%os_cls2D%get_all('res')
+                    lp_cls3D = median_nocopy(res)
+                    deallocate(res)
+                endif
+                if(cline%defined('lpstop')) lp_cls3D = max(lp_cls3D, params%lpstop)
             endif
             if( count(states==0) .eq. ncls )then
                 write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
@@ -772,7 +781,14 @@ contains
 
         ! prepare command lines from prototype
         call cline%delete('refine')
-        if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
+        ! resolution limits
+        if( trim(params%oritype).eq.'cls3D' )then
+            params%eo = 'no'
+            call cline%set('eo','no')
+            call cline%set('lp',lp_cls3D)
+        else
+            if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
+        endif
         cline_refine3D1                 = cline ! first stage, extremal optimization
         cline_refine3D2                 = cline ! second stage, stochastic refinement
         cline_reconstruct3D_mixed_distr = cline
@@ -898,6 +914,7 @@ contains
         class(cmdline),                    intent(inout) :: cline
         ! constants
         integer,                 parameter :: MAXITS = 40
+        character(len=12), parameter       :: cls3D_projfile = 'cls3D.simple'
         ! distributed commanders
         type(refine3D_distr_commander)     :: xrefine3D_distr
         ! command lines
@@ -905,48 +922,67 @@ contains
         ! other variables
         integer,               allocatable :: state_pops(:), states(:), master_states(:)
         character(len=STDLEN), allocatable :: dirs(:), projfiles(:)
-        character(len=:),      allocatable :: projname
+        character(len=:),      allocatable :: projname, cavg_stk, frcs_fname, orig_projfile
         type(parameters)         :: params
+        type(ctfparams)          :: ctfparms
         type(sp_project)         :: spproj, spproj_master
-        integer                  :: state, iptcl, cnt, nstates, single_state
-        logical                  :: l_singlestate, error
+        class(oris),     pointer :: pos => null()
+        integer                  :: state, iptcl, nstates, single_state, ncls
+        logical                  :: l_singlestate, cavgs_import, fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call params%new(cline)
+        ! set mkdir to no
+        call cline%set('mkdir', 'no')
+        ! sanity checks
+        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
+            &stop 'need lp input when eo .eq. no; cluster3D_refine'
+        if( .not.cline%defined('maxits') )call cline%set('maxits',real(MAXITS))
         l_singlestate = cline%defined('state')
         if( l_singlestate )then
             single_state = nint(cline%get_rarg('state'))
         else
             single_state = 0
         endif
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-
-        ! sanity checks
-        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .eq. no; cluster3D_refine'
-        if( .not.cline%defined('maxits') )call cline%set('maxits',real(MAXITS))
-
-        ! prep individual project files
-        call spproj_master%read(params%projfile)
-        master_states  = nint(spproj_master%os_ptcl3D%get_all('state'))
+        orig_projfile = trim(params%projfile)
+        cavgs_import  = .false.
+        fall_over     = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                call spproj_master%read(params%projfile)
+                fall_over = spproj_master%get_nptcls() == 0
+            case('cls3D')
+                call spproj%read(params%projfile)
+                fall_over = spproj%os_out%get_noris() == 0
+        case DEFAULT
+            write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D_refine'
+        end select
+        if( fall_over )then
+            write(*,*)'No particles found! simple_commander_hlev_wflows::exec_cluster3D_refine'
+            stop 'No particles found! simple_commander_hlev_wflows::exec_cluster3D_refine'
+        endif
+        ! stash states
+        if(params%oritype.eq.'cls3D')then
+            master_states  = nint(spproj%os_cls3D%get_all('state'))
+            call spproj%os_cls3D%get_pops(state_pops, 'state', consider_w=.false.)
+        else
+            master_states  = nint(spproj_master%os_ptcl3D%get_all('state'))
+            call spproj_master%os_ptcl3D%get_pops(state_pops, 'state', consider_w=.false.)
+        endif
         nstates        = maxval(master_states)
         params%nstates = nstates
         if( params%nstates==1 )then
             write(*,*) 'Non-sensical number of states for heterogeneity refinement: ',params%nstates
             stop 'Non-sensical number of states'
         endif
-        call spproj_master%os_ptcl3D%get_pops(state_pops, 'state', consider_w=.false.)
         if( state_pops(params%state) == 0 )then
             write(*,*) 'Empty state to refine: ', params%state
             stop 'Empty state to refine'
         endif
+        ! state dependent variables
         allocate(projfiles(params%nstates), dirs(params%nstates), cline_refine3D(params%nstates))
-        ! states are lost from the project after this loop and stored in master_states
-        cnt = 0
         do state = 1, params%nstates
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. single_state.ne.state )cycle
-            cnt = cnt + 1
             ! name & directory
             projname         = 'state_'//trim(int2str_pad(state,2))
             projfiles(state) = trim(projname)//trim(METADATA_EXT)
@@ -960,6 +996,56 @@ contains
             call cline_refine3D(state)%set('refine',  'single')
             call cline_refine3D(state)%delete('state')
             call cline_refine3D(state)%delete('nstates')
+            if(params%oritype.eq.'cls3D') call cline_refine3D(state)%set('oritype', 'ptcl3D')
+        enddo
+
+        ! transfer cavgs to ptcl3D
+        if(params%oritype.eq.'cls3D')then
+            call spproj%get_cavgs_stk(cavg_stk, ncls, ctfparms%smpd)
+            states       = nint(spproj%os_cls3D%get_all('state'))
+            cavgs_import = spproj%os_ptcl2D%get_noris() == 0
+            if( cavgs_import )then
+                ! start from import
+                if(.not.cline%defined('lp')) stop 'need LP=XXX for inported class-averages; cluster3D'
+            else
+                call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
+                if( .not.file_exists(frcs_fname) )then
+                    write(*,*)'The project file does not contain the required information for e/o alignment, use eo=no instead'
+                    stop 'The project file does not contain the required information for e/o alignment'
+                endif
+            endif
+            if( count(states==0) .eq. ncls )then
+                write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
+                    '; simple_commander_hlev_wflows::initial_3Dmodel'
+                stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+            endif
+            spproj_master%projinfo = spproj%projinfo
+            spproj_master%compenv  = spproj%compenv
+            if(spproj%jobproc%get_noris()  > 0) spproj_master%jobproc = spproj%jobproc
+            if( cavgs_import )then
+                call spproj_master%add_single_stk(trim(cavg_stk), ctfparms, spproj%os_cls3D)
+                call spproj_master%os_ptcl3D%set_all('state', real(states))
+            else
+                call prep_eo_stks
+                params_glob%eo     = 'yes'
+                params_glob%nptcls = spproj_master%get_nptcls()
+            endif
+            ! name & oritype change
+            call spproj_master%projinfo%delete_entry('projname')
+            call spproj_master%projinfo%delete_entry('projfile')
+            call cline%set('projfile', cls3D_projfile)
+            call cline%set('projname', trim(get_fbody(trim(cls3D_projfile),trim('simple'))))
+            call spproj_master%update_projinfo(cline)
+            ! splitting in CURRENT directory
+            call spproj_master%split_stk(params%nparts, .false., dir=PATH_HERE)
+            ! write
+            call spproj_master%write
+        endif
+
+        ! states are lost from the project after this loop and stored in master_states
+        do state = 1, params%nstates
+            if( state_pops(state) == 0 )cycle
+            if( l_singlestate .and. single_state.ne.state )cycle
             ! states
             states = master_states
             where(states /= state) states = 0
@@ -977,7 +1063,7 @@ contains
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.single_state )cycle
             write(*,'(A)')   '>>>'
-            write(*,'(A,I2,A,A)')'>>> REFINING STATE: ', state, ' IN DIRECTORY: ', trim(dirs(state))
+            write(*,'(A,I2,A,A)')'>>> REFINING STATE: ', state
             write(*,'(A)')   '>>>'
             params_glob%projname = 'state_'//trim(int2str_pad(state,2))
             params_glob%projfile = projfiles(state)
@@ -985,33 +1071,50 @@ contains
             params_glob%state   = 1
             call xrefine3D_distr%execute(cline_refine3D(state))
             call simple_chdir(PATH_PARENT,errmsg="commander_hlev_wflows :: exec_cluster3D_refine;")
-            ! renames volumes and updates in os_out
-            call stash_state(state)
         enddo
         ! restores original values
-        params_glob%projname = params%projname
-        params_glob%projfile = params%projfile
+        params_glob%projname = trim(get_fbody(trim(orig_projfile),trim('simple')))
+        params_glob%projfile = trim(orig_projfile)
         params_glob%nstates  = nstates
 
-        ! consolidates new orientations parameters
-        do state = 1, nstates
+        ! consolidates new orientations parameters & files
+        ! gets original project back
+        if(params%oritype.eq.'cls3D')then
+            params_glob%nptcls = ncls
+            call spproj_master%kill
+            call spproj_master%read(params%projfile)
+        endif
+        do state=1,params%nstates
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.single_state )cycle
-            ! transfer orientations
-            call spproj%read_segment(params%oritype, filepath(dirs(state),projfiles(state)))
+            ! renames volumes and updates in os_out
+            call stash_state(state)
+            ! updates orientations
+            call spproj%read_segment('ptcl3D',filepath(dirs(state),projfiles(state)))
+            call spproj_master%ptr2oritype(params%oritype, pos)
             do iptcl=1,params%nptcls
                 if( master_states(iptcl)==state )then
-                    call spproj_master%os_ptcl3D%set_ori(iptcl, spproj%os_ptcl3D%get_ori(iptcl))
+                    call pos%set_ori(iptcl, spproj%os_ptcl3D%get_ori(iptcl))
+                    ! reset original states
+                    call pos%set(iptcl,'state',real(state))
                 endif
             enddo
             call spproj%kill
         enddo
-        ! reset states
-        call spproj_master%os_ptcl3D%set_all('state', real(master_states)) ! restores original states
+        ! map to ptcls for non-imported class-averages
+        if(params%oritype.eq.'cls3D' .and. .not.cavgs_import) call spproj_master%map2ptcls
+        ! final write
         call spproj_master%write
-
         ! cleanup
+        call spproj%kill
         call spproj_master%kill
+        do state=1,params%nstates
+            if( state_pops(state) == 0 )cycle
+            if( l_singlestate .and. state.ne.single_state )cycle
+            call simple_rmdir(dirs(state))
+            call del_file(projfiles(state))
+        enddo
+        if(params%oritype.eq.'cls3D') call del_file(cls3D_projfile)
         deallocate(master_states, dirs, projfiles)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D_REFINE NORMAL STOP ****')
@@ -1022,53 +1125,102 @@ contains
             subroutine stash_state(s)
                 integer, intent(in)   :: s
                 character(len=2), parameter :: one = '01'
+                character(len=LONGSTRLEN), allocatable :: files(:)
                 character(len=STDLEN) :: src, dest
                 character(len=2)      :: str_state
                 character(len=8)      :: str_iter
-                integer               :: it, final_it, stat
+                integer               :: i, it, final_it, stat, pos, l
                 final_it  = nint(cline_refine3D(s)%get_rarg('endit'))
                 str_state = int2str_pad(s,2)
-                do it = 1,final_it
-                    str_iter = '_iter'//int2str_pad(it,3)
-                    ! volume
-                    src  = filepath( dirs(s),trim(VOL_FBODY)//one//str_iter//params%ext)
-                    dest = trim(VOL_FBODY)//str_state//str_iter//params%ext
+                ! moves all *state01* files
+                call simple_list_files(trim(dirs(state))//'/*state01*', files)
+                do i=1,size(files)
+                    src  = files(i)
+                    dest = basename(files(i))
+                    l    = len_trim(dest)
+                    pos  = index(dest(1:l),'_state01',back=.true.)
+                    dest(pos:pos+7) = '_state' // str_state
                     stat = simple_rename(src, dest)
-                    ! post_processed volume
-                    src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//trim(PPROC_SUFFIX)//params%ext)
-                    dest = trim(VOL_FBODY)//str_state//str_iter//trim(PPROC_SUFFIX)//params%ext
-                    stat = simple_rename(src, dest)
-                    ! e/o
-                    if( params%eo.ne.'no')then
-                        ! e/o
-                        src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//'_even'//params%ext)
-                        dest = trim(VOL_FBODY)//str_state//str_iter//'_even'//params%ext
-                        stat = simple_rename(src, dest)
-                        src  = filepath( dirs(s), trim(VOL_FBODY)//one//str_iter//'_odd'//params%ext)
-                        dest = trim(VOL_FBODY)//str_state//str_iter//'_odd'//params%ext
-                        stat = simple_rename(src, dest)
-                        ! FSC
+                enddo
+                deallocate(files)
+                ! FSC print outs
+                src  = filepath( dirs(s), 'RESOLUTION_STATE'//one)
+                dest = 'RESOLUTION_STATE'//str_state
+                stat = simple_rename(src, dest)
+                if( params%eo.ne.'no')then
+                    do it = 1,final_it
+                        str_iter = '_iter'//int2str_pad(it,3)
                         str_iter = '_ITER'//int2str_pad(it,3)
                         src  = filepath( dirs(s), 'RESOLUTION_STATE'//one//str_iter)
                         dest = 'RESOLUTION_STATE'//str_state//str_iter
                         stat = simple_rename(src, dest)
-                    endif
-                enddo
+                    enddo
+                endif
                 ! updates os_out
                 str_iter = '_iter'//int2str_pad(final_it,3)
-                src = trim(VOL_FBODY)//str_state//str_iter//params%ext
-                call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol')
-                if( params%eo.ne.'no')then
-                    src  = filepath( dirs(s), trim(FSC_FBODY)//one//BIN_EXT)
-                    dest = trim(FSC_FBODY)//str_state//BIN_EXT
-                    stat = simple_rename(src, dest)
-                    call spproj_master%add_fsc2os_out(trim(dest), s, params%box)
-                    src  = filepath( dirs(s), trim(ANISOLP_FBODY)//one//params%ext)
-                    dest = trim(ANISOLP_FBODY)//str_state//params%ext
-                    stat = simple_rename(src, dest)
-                    call  spproj_master%add_vol2os_out(trim(dest), params%smpd, s, 'vol_filt')
+                src      = trim(VOL_FBODY)//str_state//str_iter//params%ext
+                if(params%oritype.eq.'cls3D')then
+                    call spproj%add_vol2os_out(trim(src), params%smpd, s, 'vol_cavg')
+                else
+                    call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol')
+                    if( params%eo.ne.'no')then
+                        src = trim(FSC_FBODY)//str_state//BIN_EXT
+                        call spproj_master%add_fsc2os_out(trim(src), s, params%box)
+                        src  = trim(ANISOLP_FBODY)//str_state//params%ext
+                        call  spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol_filt')
+                        src  = trim(FRCS_FBODY)//str_state//params%ext
+                        call  spproj_master%add_frcs2os_out(trim(src),'frc3D')
+                    endif
                 endif
             end subroutine stash_state
+
+            subroutine prep_eo_stks
+                use simple_ori, only: ori
+                type(ori)                     :: o, o_even, o_odd
+                character(len=:), allocatable :: eostk, ext
+                integer :: even_ind, odd_ind, state, icls
+                do state=1,params%nstates
+                    call cline_refine3D(state)%delete('lp')
+                    call cline_refine3D(state)%set('frcs',trim(frcs_fname))
+                    call cline_refine3D(state)%set('eo',         'yes')
+                    call cline_refine3D(state)%set('lplim_crit', 0.5)
+                    call cline_refine3D(state)%set('clsfrcs',   'yes')
+                enddo
+                ! add stks
+                ext   = '.'//fname2ext( cavg_stk )
+                eostk = add2fbody(trim(cavg_stk), trim(ext), '_even')
+                call spproj_master%add_stk(eostk, ctfparms)
+                eostk = add2fbody(trim(cavg_stk), trim(ext), '_odd')
+                call spproj_master%add_stk(eostk, ctfparms)
+                ! update orientations parameters
+                if(allocated(master_states))deallocate(master_states)
+                allocate(master_states(2*ncls), source=0)
+                do icls=1,ncls
+                    even_ind = icls
+                    odd_ind  = ncls+icls
+                    o        = spproj%os_cls3D%get_ori(icls)
+                    state    = spproj%os_cls3D%get_state(icls)
+                    call o%set('class', real(icls)) ! for mapping frcs in 3D
+                    call o%set('state', real(state))
+                    ! even
+                    o_even = o
+                    call o_even%set('eo', 0.)
+                    call o_even%set('stkind', spproj_master%os_ptcl3D%get(even_ind,'stkind'))
+                    call spproj_master%os_ptcl3D%set_ori(even_ind, o_even)
+                    master_states(even_ind) = state
+                    ! odd
+                    o_odd = o
+                    call o_odd%set('eo', 1.)
+                    call o_odd%set('stkind', spproj_master%os_ptcl3D%get(odd_ind,'stkind'))
+                    call spproj_master%os_ptcl3D%set_ori(odd_ind, o_odd)
+                    master_states(odd_ind) = state
+                enddo
+                ! cleanup
+                deallocate(eostk, ext)
+                call o%kill
+                call o_even%kill
+                call o_odd%kill
+            end subroutine prep_eo_stks
 
     end subroutine exec_cluster3D_refine
 

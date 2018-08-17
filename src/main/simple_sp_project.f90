@@ -76,6 +76,7 @@ contains
     procedure          :: has_phaseplate
     procedure          :: get_ctfparams
     procedure          :: get_sp_oris
+    procedure          :: ptr2oritype
     procedure          :: is_virgin_field
     ! modifiers
     procedure          :: split_stk
@@ -98,8 +99,6 @@ contains
     procedure          :: write_segment_inside
     procedure, private :: segwriter
     procedure          :: segwriter_inside
-    ! private supporting subroutines / functions
-    procedure, private :: ptr2oritype
     ! destructor
     procedure          :: kill
 end type sp_project
@@ -1777,6 +1776,31 @@ contains
         end select
     end subroutine get_sp_oris
 
+    subroutine ptr2oritype( self, oritype, os_ptr )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        class(oris),      pointer, intent(inout) :: os_ptr
+        select case(trim(oritype))
+            case('mic')
+                os_ptr => self%os_mic
+            case('stk')
+                os_ptr => self%os_stk
+            case('ptcl2D')
+                os_ptr => self%os_ptcl2D
+            case('cls2D')
+                os_ptr => self%os_cls2D
+            case('cls3D')
+                os_ptr => self%os_cls3D
+            case('ptcl3D')
+                os_ptr => self%os_ptcl3D
+            case('out')
+                os_ptr => self%os_out
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(oritype)
+                stop 'unsupported oritype; sp_project :: ptr2segment'
+        end select
+    end subroutine ptr2oritype
+
     logical function is_virgin_field( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -1916,7 +1940,7 @@ contains
         integer,          allocatable :: parts(:,:)
         character(len=:), allocatable :: fname, projfile
         type(str4arr),    allocatable :: os_strings(:)
-        class(oris), pointer :: os => null()
+        class(oris),          pointer :: os => null()
         type(binoris) :: bos_doc
         integer       :: i, numlen, n_records, partsz, isegment
         integer       :: strlen, strlen_max
@@ -2548,30 +2572,5 @@ contains
                 stop 'unsupported oritype flag; sp_project :: oritype_flag2isgement'
         end select
     end function oritype2segment
-
-    subroutine ptr2oritype( self, oritype, os_ptr )
-        class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: oritype
-        class(oris),      pointer, intent(inout) :: os_ptr
-        select case(trim(oritype))
-            case('mic')
-                os_ptr => self%os_mic
-            case('stk')
-                os_ptr => self%os_stk
-            case('ptcl2D')
-                os_ptr => self%os_ptcl2D
-            case('cls2D')
-                os_ptr => self%os_cls2D
-            case('cls3D')
-                os_ptr => self%os_cls3D
-            case('ptcl3D')
-                os_ptr => self%os_ptcl3D
-            case('out')
-                os_ptr => self%os_out
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: ptr2segment'
-        end select
-    end subroutine ptr2oritype
 
 end module simple_sp_project

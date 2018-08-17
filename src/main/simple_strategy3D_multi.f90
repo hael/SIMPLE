@@ -40,7 +40,6 @@ contains
         integer,                 intent(in)    :: ithr
         integer :: iref,isample,nrefs
         real    :: inpl_corrs(self%s%nrots)
-        real    :: areal
         real    :: inpl_corrs_mir(self%s%nrots)
         ! execute search
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
