@@ -290,6 +290,7 @@ contains
 
     !> \brief return the number of lines in a textfile
     function nlines( fname ) result( n )
+        use simple_strings
         character(len=*), intent(in)  :: fname !< input filename
         character(len=:), allocatable :: tfile
         integer          :: n, funit, ios,io_status
@@ -304,7 +305,7 @@ contains
                 if(ios /= 0)then
                     exit
                 else
-                    n = n + 1
+                    if(.not. strIsComment(junk))  n = n + 1
                 endif
             end do
             call fclose_1( funit, io_status ,errmsg=" Error closing file in ::nlines "//trim(tfile))

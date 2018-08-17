@@ -35,6 +35,7 @@
 #include <dirent.h>      /* DIR and scandir,DT_DIR */
 #include <time.h>
 #include <glob.h>
+#include <regex.h>
 #include <limits.h>      /* PATH_MAX */
 #ifdef __linux__
 #include<linux/limits.h>
@@ -1571,4 +1572,38 @@ int touch(char* path, int*len)
         // use file descriptor
         close(fd2);
     }
+}
+
+
+/* POSIX regular expression */
+int regexp_match(const char* regstr, const char* srcstr){
+
+  regex_t regex;
+  int reti;
+  char msgbuf[100];
+
+  /* Compile regular expression */
+  reti = regcomp(&regex, regstr, 0);
+  if (reti) {
+    fprintf(stderr, "Could not compile regex\n");
+    return -1;
+  }
+
+  /* Execute regular expression */
+  reti = regexec(&regex, srcstr, 0, NULL, 0);
+  if (!reti) {
+    puts("Match");
+  }
+  else if (reti == REG_NOMATCH) {
+    puts("No match");
+  }
+  else {
+    regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+    fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+    return -1;
+  }
+
+  /* Free memory allocated to the pattern buffer by regcomp() */
+  regfree(&regex);
+  return reti;
 }

@@ -3,6 +3,9 @@
 MASSIVE=m3.massive.org.au
 MASSIVE_USERNAME=$1
 MASSIVE_ACCOUNT=el85
+
+## STANDARD BUILD: GCC 5, fftw, static, OpenMP
+
 cat >>EOF
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
@@ -13,13 +16,13 @@ cat >>EOF
 #SBATCH --cpus-per-task=12
 #SBATCH --qos=shortq
 
-module load  cuda/8.0.61 fftw/3.3.5-gcc5 cmake/3.5.2 git/2.8.1 gcc/5.4.0
+module load fftw/3.3.5-gcc5 cmake/3.5.2 git/2.8.1 gcc/5.4.0
 cd ~/${SLURM_JOB_ACCOUNT}_scratch/${MASSIVE_USERNAME}/SIMPLE3.0
 git pull --rebase
 [ -d tmpbuild ] && rm -rf tmpbuild
 mkdir tmpbuild
 cd tmpbuild
-cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG ..  -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
+cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG .. -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
 ctest -V
 source add2.bashrc
@@ -27,6 +30,9 @@ OMP_NUM_THREADS=4 simple_test_omp
 EOF > buildsimple
 scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
 scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple
+
+
+## LATEST GCC BUILD: GCC 8, fftw, static, OpenMP
 
 cat >>EOF
 #!/bin/bash
@@ -53,7 +59,7 @@ EOF > buildsimplegcc8
 scp buildsimplegcc8 ${MASSIVE_USERNAME}@${MASSIVE}:~
 scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplegcc8
 
-
+## INTEL BUILD: IFORT 17, MKL, static, OpenMP
 
 cat >>EOF
 #!/bin/bash
@@ -76,7 +82,7 @@ git pull --rebase
 mkdir tmpbuild-intel
 cd tmpbuild-intel
 #FC=mpifort CC=mpicc CXX=mpicxx 
- FC=ifort CC=icc CXX=icpc LDFLAGS="" cmake -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=OFF -DUSE_MPI=OFF -DCMAKE_BUILD_TYPE=DEBUG -Wdev  --debug-trycompile .. > log_cmake 2> log_cmake_err
+ FC=ifort CC=icc CXX=icpc LDFLAGS="" cmake -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=OFF -DUSE_MPI=OFF -DCMAKE_BUILD_TYPE=RELEASE -Wdev -DINTEL_OMP_OVERRIDE=ON -DUSE_AUTO_PARALLELISE=ON --debug-trycompile .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
 ctest -V > log_check 2> log_check_err
 source add2.bashrc
@@ -86,7 +92,7 @@ mpirun -np 10 simple_test_mpi
 simple_test_openacc
 EOF > buildsimpleintel
 
-
+## CUDA/MPI BUILD: GCC 5, CUDA 8, OpenMPI 1.10, OpenMP, FFTW, shared
 
 cat >>EOF
 #!/bin/bash
@@ -104,7 +110,7 @@ git pull --rebase
 [ -d tmpbuildall ] && rm -rf tmpbuildall
 mkdir tmpbuildall
 cd tmpbuild
-FC=mpifort CC=mpicc CXX=mpicxx cmake  -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=DEBUG .. > log_cmake 2> log_cmake_err
+FC=mpifort CC=mpicc CXX=mpicxx cmake  -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=DEBUG -BUILD_SHARED_LIBS=ON .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
 ctest -V > log_check 2> log_check_err
 source add2.bashrc

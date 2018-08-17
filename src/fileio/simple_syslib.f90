@@ -709,6 +709,9 @@ contains
     !> \brief  Change working directory
     !! return optional status 0=success
     subroutine simple_chdir( newd, oldd, status, errmsg )
+#if defined(INTEL)
+        use ifposix
+#endif
         character(len=*),           intent(in)  :: newd   !< target pathname
         character(len=*), optional, intent(out) :: oldd
         integer,          optional, intent(out) :: status
@@ -730,15 +733,18 @@ contains
         inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
 
         if(dir_e) then
+#if defined(INTEL)
+            call pxfchdir(trim(adjustl(targetdir)), len_trim(targetdir), io_status)
+
             ! qq = changedirqq(trim(targetdir))
             ! if(qq)io_status = 0
             ! if( .not. qq) then
             !     io_status=Ierrno()
             !     call simple_error_check(io_status, "syslib:: changedirqq failed  "//trim(newd))
             ! endif
-
+#else
             io_status = chdir(trim(targetdir))
-
+#endif
             if(io_status /= 0)then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 select case (io_status)
@@ -763,6 +769,9 @@ contains
     !> \brief  Make directory -- fail when ignore is false
     !! return optional status 0=success
     subroutine simple_mkdir( dir, ignore, status, errmsg)
+#if defined(INTEL)
+        use ifposix
+#endif
         character(len=*), intent(in)               :: dir
         logical,          intent(in), optional     :: ignore
         integer,          intent(out), optional    :: status
@@ -786,15 +795,16 @@ contains
         if(.not. dir_exists(trim(adjustl(tmpdir)))) then
             ! prepare path for C function
             allocate(path, source=trim(tmpdir)//c_null_char)
-!#ifdef INTEL
+#if defined(INTEL)
+            call pxfmkdir( trim(adjustl(path)), len_trim(path), INT(o'777'), io_status )
 !            io_status=1
 !             qq = makedirqq(trim(adjustl(path)))
 !             if(.not. qq) call simple_error_check(IERRNO(), &
 !                 "syslib:: makedirqq failed creating "//trim(path))
 !             io_status=0
-!#else
+#else
             io_status = makedir(trim(adjustl(path)))
-!#endif
+#endif
 !            inquire(file=trim(adjustl(path)), exist=dir_e)
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
@@ -858,6 +868,16 @@ contains
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir
+
+    !> ensure C-strings get converted to fortran-style strings
+    subroutine syslib_c2fortran_string(str, len)
+        character(len=*), intent(inout) :: str
+        integer, intent(out), optional :: len
+        integer :: l
+        l = index(str, char(0))
+        if(present(len)) len = l-1
+        if(l>0) str(l:)=' '
+    end subroutine syslib_c2fortran_string
 
     function simple_list_dirs(path, outfile, status) result(list)
         character(len=*),           intent(in)  :: path
@@ -1424,8 +1444,10 @@ contains
         cstring      = c_loc(fstr)
         infilename_c = trim(infile)//achar(0)
         status       = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
+        call syslib_c2fortran_string(outfilename_c)
         if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
         if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
+        
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))

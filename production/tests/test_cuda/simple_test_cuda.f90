@@ -135,10 +135,11 @@ contains
         subroutine test_precision(flag)
             logical, intent(inout):: flag
 
-            real :: x, y, dist
+            real, parameter :: x=REAL(Z'3F1DC57A'), y=REAL(Z'3F499AA3')
+            real :: dist
             double precision:: x_dp, y_dp, dist_dp
-            x=Z'3F1DC57A'
-            y=Z'3F499AA3'
+            
+
             dist= x**2 +y**2
 
             x_dp=real(x,8)
