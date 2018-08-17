@@ -206,8 +206,7 @@ contains
             case('single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. ran3() < GREEDY_FREQ )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
                             allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)

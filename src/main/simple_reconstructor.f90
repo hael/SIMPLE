@@ -269,10 +269,10 @@ contains
 
     !> insert Fourier plane, single orientation
     subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght, bfac )
-        use simple_ctf,        only: ctf
-        use simple_ori,        only: ori
-        use simple_oris,       only: oris
-        use simple_sym,        only: sym
+        use simple_ctf,  only: ctf
+        use simple_ori,  only: ori
+        use simple_oris, only: oris
+        use simple_sym,  only: sym
         class(reconstructor), intent(inout) :: self    !< instance
         class(sym),           intent(inout) :: se      !< symmetry elements
         class(ori),           intent(inout) :: o       !< orientation
@@ -381,9 +381,7 @@ contains
                     else
                         w = pwght
                     endif
-                    if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) then
-                        w = w / divide_by(sh)
-                    end if
+                    if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) w = w / divide_by(sh)
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
@@ -522,9 +520,7 @@ contains
                             endif
                         endif
                         w = ows(iori)
-                        if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) then
-                            w = w / divide_by(sh)
-                        end if
+                        if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) w = w / divide_by(sh)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))

@@ -125,6 +125,7 @@ contains
                 call s3D%o_peaks(iptcl)%new(npeaks)
                 ! transfer CTF params
                 if( params_glob%ctf.ne.'no' )then
+                    call s3D%o_peaks(iptcl)%set_all2single('iptcl',  real(iptcl))
                     call s3D%o_peaks(iptcl)%set_all2single('kv',     build_glob%spproj_field%get(iptcl,'kv')    )
                     call s3D%o_peaks(iptcl)%set_all2single('cs',     build_glob%spproj_field%get(iptcl,'cs')    )
                     call s3D%o_peaks(iptcl)%set_all2single('fraca',  build_glob%spproj_field%get(iptcl,'fraca') )

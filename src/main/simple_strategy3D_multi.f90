@@ -126,7 +126,7 @@ contains
         ! extract peak info
         call extract_peaks(self%s, corrs, multistates=.true.)
         ! stochastic weights
-        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, params_glob%tau, ws, included, best_loc, wcorr )
+        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr )
         ! state reweighting
         call states_reweight(self%s, self%s%npeaks, ws, included, state, best_loc, wcorr)
         ! angular standard deviation

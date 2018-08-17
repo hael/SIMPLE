@@ -1739,7 +1739,6 @@ contains
         real, intent(inout) :: arr(:)
         real    :: val, val1, val2
         integer :: n, pos1, pos2
-        integer, volatile :: idbg
         n = size(arr)
         if( is_even(n) )then
             pos1 = n/2
@@ -1760,7 +1759,6 @@ contains
     function stdev (a)
         real, intent(in) :: a(:)
         real    :: stdev, avg, SumSQR, var, n
-        integer, volatile :: idbg
         n= real(size(a))
         if(n < 2) return
         avg = sum(a)/n

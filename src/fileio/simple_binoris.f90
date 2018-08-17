@@ -6,7 +6,6 @@ use simple_strings
 use simple_error
 use simple_syslib
 use simple_fileio
-
 implicit none
 
 public :: binoris
@@ -39,14 +38,15 @@ type binoris
     procedure, private :: read_header
     procedure          :: write_header
     procedure          :: print_header
-    procedure, private :: write_segment_1
-    procedure, private :: write_segment_2
-    generic            :: write_segment => write_segment_1, write_segment_2
     procedure, private :: write_segment_inside_1
     procedure, private :: write_segment_inside_2
     generic            :: write_segment_inside => write_segment_inside_1, write_segment_inside_2
     procedure, private :: byte_manager4seg_inside_1
     procedure, private :: byte_manager4seg_inside_2
+    procedure, private :: write_segment_1
+    procedure, private :: write_segment_2
+    generic            :: write_segment => write_segment_1, write_segment_2
+    procedure          :: write_record
     procedure, private :: add_segment_1
     procedure, private :: add_segment_2
     procedure, private :: update_byte_ranges
@@ -422,6 +422,26 @@ contains
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
     end subroutine write_segment_2
+
+    ! assumes that segment has been added to stack
+    ! assumes that byte ranges have been updated
+    ! on startup, initialize ibytes to the first data byte of the segment
+    subroutine write_record( self, isegment, ibytes, strlen_max, str )
+        class(binoris),   intent(inout) :: self
+        integer,          intent(in)    :: isegment
+        integer(kind=8),  intent(inout) :: ibytes
+        integer,          intent(in)    :: strlen_max
+        character(len=*), intent(in)    :: str
+        integer :: nspaces
+        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_record'
+        nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str)
+        if( nspaces > 0 )then
+            write(unit=self%funit,pos=ibytes) str//spaces(nspaces)
+        else
+            write(unit=self%funit,pos=ibytes) str
+        endif
+        ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+    end subroutine write_record
 
     subroutine add_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris

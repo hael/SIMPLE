@@ -59,14 +59,17 @@ contains
     end subroutine extract_peaks
 
     ! assumes hard orientation assignment. Hence inpl=1
-    subroutine prob_select_peak( s, tau, updatecnt )
+    subroutine prob_select_peak( s, updatecnt )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: tau, updatecnt
+        real,                   intent(in)    :: updatecnt
         real    :: corrs(s%npeaks), shvecs(s%npeaks,2), euls(s%npeaks,3), pvec(s%npeaks)
         integer :: inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
         integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
+<<<<<<< 12a0d40f433bc6291356cffe0c469ac98656281d
         write (*,*) 'prob_select_peak executed'
+=======
+>>>>>>> fixed tau=0.01 as before, dynamic peak thresholding based on sdev of weights, prepwork fast I/O of o_peaks for convergence checking and improved neighbourhood refinement
         do ipeak = 1, s%npeaks
             ! stash peak index
             inds(ipeak) = ipeak
@@ -104,7 +107,7 @@ contains
                 ! convert correlations to distances
                 dists = 1.0 - corrs
                 ! scale distances with TAU
-                dists = dists / tau
+                dists = dists / params_glob%tau
             else
                 dists = - corrs / params_glob%sigma2_fudge
             end if
@@ -140,17 +143,17 @@ contains
         call s3D%o_peaks(s%iptcl)%set_shift(1,    shvecs(prob_peak,:))
     end subroutine prob_select_peak
 
-    subroutine corrs2softmax_weights( s, n, corrs, tau, ws, included, best_loc, wcorr )
+    subroutine corrs2softmax_weights( s, n, corrs, ws, included, best_loc, wcorr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: n
-        real,                   intent(in)    :: corrs(n), tau
+        real,                   intent(in)    :: corrs(n)
         real,                   intent(out)   :: ws(n), wcorr
         logical,                intent(out)   :: included(n)
         integer,                intent(out)   :: best_loc(1)
-        type(ori) :: o, o_best
-        real      :: dists(n), arg4softmax(n), ang_dist, inpl_dist
-        integer   :: ipeak
+        real    :: dists(n), arg4softmax(n), wsum
+        real    :: wavg, ep, var, dev, sig, wthresh
+        integer :: i, loc(MINNPEAKS)
         if( n == 1 )then
             best_loc(1)  = 1
             ws(1)        = 1.
@@ -158,12 +161,13 @@ contains
             s%npeaks_eff = 1
             wcorr        = corrs(1)
         else
+            ! find highest corr pos
             best_loc = maxloc(corrs)
-            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+            if( .not. pftcc_glob%is_euclid(s%iptcl) )then
                 ! convert correlations to distances
                 dists = 1.0 - corrs
                 ! scale distances with TAU
-                dists = dists / tau
+                dists = dists / params_glob%tau
             else
                 dists = - corrs / params_glob%sigma2_fudge
             end if
@@ -173,29 +177,47 @@ contains
             arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
             ws = exp(arg4softmax)
-            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+            if( .not. pftcc_glob%is_euclid(s%iptcl) )then
                 where( corrs <= TINY ) ws = 0.
             end if
             ! normalise
-            ws = ws / sum(ws)
+            wsum = sum(ws)
+            ws = ws / wsum
+            ! calculate standard deviation of weights
+            wavg = sum(ws) / real(n)
+            ep   = 0.
+            var  = 0.
+            do i=1,n
+                dev = ws(i) - wavg
+                ep  = ep + dev
+                var = var + dev * dev
+            end do
+            var = (var - ep * ep / real(n))/(real(n) - 1.) ! corrected two-pass formula
+            sig = 0.
+            if( var > 0. ) sig = sqrt(var)
+            wthresh = wavg + SOFTMAXW_THRESH * sig
             ! threshold weights
-            included = (ws >= SOFTMAXW_THRESH)
+            included = (ws >= wthresh)
             s%npeaks_eff = count(included)
-            if( s%npeaks_eff > 0 )then
-                ! exclusion
-                where( .not. included ) ws = 0.
-                ! re-normalise to account for weight loss upon exclusion
-                ws = ws / sum(ws)
-                ! weighted corr
-                wcorr = sum(ws*corrs,mask=included)
+            ! check that we don't fall below the minimum number of peaks
+            if( s%npeaks_eff < MINNPEAKS )then
+                loc = maxnloc(ws, MINNPEAKS)
+                do i=1,n
+                    if( any(loc == i) )then
+                        included(i) = .true.
+                    else
+                        ws(i)       = 0.
+                        included(i) = .false.
+                    endif
+                end do
             else
-                ! defaults to best when all fall below threshold
-                s%npeaks_eff          = 1
-                wcorr                 = corrs(best_loc(1))
-                ws                    = 0.
-                ws(best_loc(1))       = 1.
-                included(best_loc(1)) = .true.
+                where( .not. included ) ws = 0.
             endif
+            ! normalise again
+            wsum = sum(ws)
+            ws = ws / wsum
+            ! weighted corr
+            wcorr = sum(ws*corrs,mask=included)
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)

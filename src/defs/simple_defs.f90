@@ -102,6 +102,7 @@ real, parameter    :: EXTRINITHRESH        = 0.5       !< initial randomization 
 real, parameter    :: EXTRTHRESH_CONST     = 0.2       !< threshold for factorial decay in extremal search
 real, parameter    :: SNHC2D_INITFRAC      = 0.5       !< initial neighbourhood fraction for 2D SNHC
 real, parameter    :: SNHC2D_DECAY         = 0.2       !< factorial decay in 2D SNHC
+real, parameter    :: GREEDY_FREQ          = 0.2       !< frequency of greedy search in refine3D with refine=single
 real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling constant
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
@@ -109,7 +110,7 @@ real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht
 real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution
                                                        !! smaller number means sharper distribution
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
-real,    parameter :: SOFTMAXW_THRESH      = 0.01      !< threshold for orientations softmax weights
+real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
 real,    parameter :: BSC3D                = 20.       !< for shell-weighted 3D reconstruction (shellw), used in B-factor calculation
 real,    parameter :: BSC2D                = 15.       !< for shell-weighted 2D reconstruction (shellw), used in B-factor calculation
 real,    parameter :: HP_CORR_VALID        = 20.       !< high-pass limit for validation corr calculation
@@ -125,6 +126,7 @@ integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
 integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
 integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
+integer, parameter :: MINNPEAKS            = 6         !< minimum # of peaks in soft assignment
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch

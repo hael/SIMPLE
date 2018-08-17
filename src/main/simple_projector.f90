@@ -57,7 +57,7 @@ type, extends(image) :: projector
     procedure, private :: fdf_interp_fcomp
     procedure, private :: fdf_interp_fcomp_memo
     ! DESTRUCTOR
-    procedure :: kill_expanded
+    procedure          :: kill_expanded
 end type projector
 
 contains
@@ -382,7 +382,7 @@ contains
         ! interpolation kernel matrix
         w = 1.
         do i=1,self%wdim
-            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )            
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
             w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
             w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
         end do
@@ -428,7 +428,7 @@ contains
         end do
         ! if any distance(s) extremely small (weight approx. 1), then use that value(s)
         if (any(dists(:) .le. min_dists)) then
-            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))            
+            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))
             return
         end if
         rec_dists = rec_dists / sum(rec_dists(:))
@@ -474,7 +474,7 @@ contains
         end do
         ! if any distance(s) extremely small (weight approx. 1), then use that value(s)
         if (any(dists(:) .le. min_dists)) then
-            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))            
+            comp = sum(pts, mask=(dists(:) .le. min_dists)) / real(count(dists(:) .le. min_dists))
             return
         end if
         rec_dists = rec_dists / sum(rec_dists(:))
@@ -515,7 +515,7 @@ contains
         else
             comp = zi
         end if
-    end function interp_fcomp_weiszfeld    
+    end function interp_fcomp_weiszfeld
 
     function interp_fcomp_weiszfeld_dp( self, loc ) result( comp )
         use ieee_arithmetic, only: ieee_is_nan
@@ -593,7 +593,7 @@ contains
             comp = cmplx(zi,kind=sp)
         end if
     end function interp_fcomp_weiszfeld_dp
-    
+
     !>  \brief is to interpolate from the expanded complex matrix
     function interp_fcomp_memo( self, loc )result( comp )
         class(projector), intent(inout) :: self

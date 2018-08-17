@@ -32,7 +32,7 @@ contains
         ! extract peak info
         call extract_peaks(self%s, corrs)
         ! stochastic weights
-        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, params_glob%tau, ws, included, best_loc, wcorr)
+        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr)
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         ! angular distances
