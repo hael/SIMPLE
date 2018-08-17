@@ -66,10 +66,6 @@ contains
         integer :: inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
         integer :: prob_peak, ipeak, rank, loc(1)
         real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
-<<<<<<< 12a0d40f433bc6291356cffe0c469ac98656281d
-        write (*,*) 'prob_select_peak executed'
-=======
->>>>>>> fixed tau=0.01 as before, dynamic peak thresholding based on sdev of weights, prepwork fast I/O of o_peaks for convergence checking and improved neighbourhood refinement
         do ipeak = 1, s%npeaks
             ! stash peak index
             inds(ipeak) = ipeak
