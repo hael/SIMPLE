@@ -462,7 +462,8 @@ contains
         class(stardoc), intent(inout) :: self
         integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
         character(len=:),allocatable :: line,fname,tmp, projrootdir, experrootdir
-        character(len=:),allocatable :: sline, datestr
+        character(len=:),allocatable :: sline
+        character(len=STDLEN) :: datestr
         character(len=STDLEN),allocatable :: lineparts(:)
         logical, allocatable :: fnameselected(:)
         integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit

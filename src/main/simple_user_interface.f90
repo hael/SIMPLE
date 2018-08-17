@@ -1393,6 +1393,7 @@ contains
         call import_starproject%set_input('parm_ios', 5, cs)
         call import_starproject%set_input('parm_ios', 6, fraca)
         call import_starproject%set_input('parm_ios', 7, ctf)
+        import_starproject%parm_ios(7)%required = .false.
         call import_starproject%set_input('parm_ios', 8, phaseplate)
         call import_starproject%set_input('parm_ios', 9, oritab)
         call import_starproject%set_input('parm_ios', 10, deftab)
@@ -1401,7 +1402,7 @@ contains
             'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', &
             'e.g. params.txt', .false., ' params-star.txt')
         call import_starproject%set_input('parm_ios', 12, 'boxtab', 'file', 'List of box files', &
-            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .true., '')
+            'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
         call import_starproject%set_input('parm_ios', 13,  'dose_rate', 'num', 'Dose rate', &
             'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call import_starproject%set_input('parm_ios', 14,  'exp_time', 'num', 'Exposure time', &
