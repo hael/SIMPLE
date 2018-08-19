@@ -49,17 +49,20 @@ type binoris
     procedure          :: write_record
     procedure, private :: add_segment_1
     procedure, private :: add_segment_2
-    procedure, private :: update_byte_ranges
+    generic            :: add_segment => add_segment_1, add_segment_2
+    procedure          :: update_byte_ranges
     procedure          :: read_first_segment_record
     procedure          :: read_segment_1
     procedure          :: read_segment_2
     generic            :: read_segment => read_segment_1, read_segment_2
+    procedure          :: read_record
     ! getters
     procedure          :: get_n_segments
     procedure          :: get_fromto
     procedure          :: get_n_records
     procedure          :: get_n_bytes_per_record
     procedure          :: get_n_bytes_tot
+    procedure          :: get_first_data_byte
     procedure          :: is_opened
 end type binoris
 
@@ -426,14 +429,12 @@ contains
     ! assumes that segment has been added to stack
     ! assumes that byte ranges have been updated
     ! on startup, initialize ibytes to the first data byte of the segment
-    subroutine write_record( self, isegment, ibytes, strlen_max, str )
+    subroutine write_record( self, isegment, ibytes, str )
         class(binoris),   intent(inout) :: self
         integer,          intent(in)    :: isegment
         integer(kind=8),  intent(inout) :: ibytes
-        integer,          intent(in)    :: strlen_max
         character(len=*), intent(in)    :: str
         integer :: nspaces
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_record'
         nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str)
         if( nspaces > 0 )then
             write(unit=self%funit,pos=ibytes) str//spaces(nspaces)
@@ -598,6 +599,17 @@ contains
         endif
     end subroutine read_segment_2
 
+    subroutine read_record( self, isegment, ibytes, str )
+        class(binoris),                intent(inout) :: self
+        integer,                       intent(in)    :: isegment
+        integer(kind=8),               intent(inout) :: ibytes
+        character(len=:), allocatable, intent(out)   :: str
+        if( allocated(str) ) deallocate(str)
+        allocate(character(len=self%header(isegment)%n_bytes_per_record) :: str)
+        read(unit=self%funit,pos=ibytes) str
+        ibytes = ibytes + self%header(isegment)%n_bytes_per_record
+    end subroutine read_record
+
     ! getters
 
     pure integer function get_n_segments( self )
@@ -635,6 +647,12 @@ contains
             endif
         end do
     end function get_n_bytes_tot
+
+    pure integer(kind=8) function get_first_data_byte( self, isegment )
+        class(binoris), intent(in) :: self
+        integer,        intent(in) :: isegment
+        get_first_data_byte = self%header(isegment)%first_data_byte
+    end function get_first_data_byte
 
     logical function is_opened( self )
         class(binoris), intent(in) :: self
