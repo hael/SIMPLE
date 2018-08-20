@@ -552,7 +552,6 @@ contains
         use simple_vol_srch
         class(dock_volpair_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
-        logical, parameter :: SHIFT_ONLY = .true.
         type(parameters) :: params
         type(projector)  :: vol1, vol2
         type(image)      :: vol_out
@@ -568,8 +567,8 @@ contains
                 call vol_srch_init(vol1, vol2, params%hp, params%lpstart, params%trs)
                 cxyz = vol_shsrch_minimize()
                 print *, 'corr: ', cxyz(1), 'shift: ', cxyz(2:4)
+                call vol2%read(params%vols(2))
                 call vol2%shift(cxyz(2:4))
-                call vol2%ifft
                 call vol2%write(params%outvol)
             case('rot')
                 ! to be implemented

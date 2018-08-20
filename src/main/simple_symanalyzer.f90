@@ -190,6 +190,7 @@ contains
     end subroutine symmetry_tester
 
     subroutine eval_point_groups( vol_in, msk, hp, lp, pgrps )
+        use simple_vol_srch
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
         type(sym_stats),  intent(inout) :: pgrps(:)
@@ -197,7 +198,7 @@ contains
         type(image)     :: rovol_pad, rovol, vol_asym_aligned2axis, vol_sym
         type(ori)       :: symaxis
         type(sym)       :: symobj
-        real            :: rmat_symaxis(3,3), smpd
+        real            :: rmat_symaxis(3,3), smpd, cxyz(4)
         integer         :: filtsz, ldim(3), boxpd, igrp, ldim_pd(3), ngrps
         ! prepare for volume rotations
         ldim    = vol_in%get_ldim()
@@ -232,13 +233,22 @@ contains
             call symaverage
             call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             call vol_sym%mask(msk, 'soft')
+            ! correct for any small discrepancy in shift between the volumes
+            call vol_asym_aligned2axis%fft
+            call vol_sym%fft
+            call vol_srch_init(vol_asym_aligned2axis, vol_sym, hp, lp, 2.0)
+            cxyz = vol_shsrch_minimize()
+            ! read back in unmasked volume and shift it before re-applying the mask
+            call vol_sym%read('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
+            call vol_sym%shift(cxyz(2:4))
+            call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
+            call vol_sym%mask(msk, 'soft')
+            call vol_sym%fft
             ! calculate a correlation coefficient
             pgrps(igrp)%cc = vol_sym%corr(vol_asym_aligned2axis, lp_dyn=lp, hp_dyn=hp)
             ! calculate FSC
             if( allocated(pgrps(igrp)%fsc) ) deallocate(pgrps(igrp)%fsc)
             allocate(pgrps(igrp)%fsc(filtsz), source=0.)
-            call vol_sym%fft
-            call vol_asym_aligned2axis%fft
             call vol_sym%fsc(vol_asym_aligned2axis, pgrps(igrp)%fsc)
         end do
         ! destruct
