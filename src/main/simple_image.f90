@@ -4954,19 +4954,21 @@ contains
         endif
     end function real_corr_prenorm_2
 
-    !> \brief fsc is for calculation of Fourier ring/shell correlation
+    !> \brief fsc is for calculation of Fourier ring/shell correlation in double precision
     subroutine fsc( self1, self2, corrs )
         class(image), intent(inout) :: self1, self2
         real,         intent(out)   :: corrs(fdim(self1%ldim(1))-1)
-        real    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
-        integer :: n, lims(3,2), phys(3), sh, h, k, l
-        corrs  = 0.
-        sumasq = 0.
-        sumbsq = 0.
-        lims   = self1%fit%loop_lims(2)
-        n      = self1%get_filtsz()
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh)&
-        !$omp schedule(static) reduction(+:corrs,sumasq,sumbsq) proc_bind(close)
+        real(dp)    :: corrs_8(fdim(self1%ldim(1))-1)
+        real(dp)    :: sumasq(fdim(self1%ldim(1))-1), sumbsq(fdim(self1%ldim(1))-1)
+        complex(dp) :: comp1, comp2
+        integer     :: n, lims(3,2), phys(3), sh, h, k, l
+        corrs_8 = 0.d0
+        sumasq  = 0.d0
+        sumbsq  = 0.d0
+        lims    = self1%fit%loop_lims(2)
+        n       = self1%get_filtsz()
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,sh,comp1,comp2)&
+        !$omp schedule(static) reduction(+:corrs_8,sumasq,sumbsq) proc_bind(close)
         do k=lims(2,1),lims(2,2)
             do h=lims(1,1),lims(1,2)
                 do l=lims(3,1),lims(3,2)
@@ -4976,22 +4978,25 @@ contains
                     sh = nint(hyp(real(h),real(k),real(l)))
                     if( sh == 0 .or. sh > n ) cycle
                     ! real part of the complex mult btw self1 and targ*
-                    corrs(sh) = corrs(sh)+&
-                        real(self1%cmat(phys(1),phys(2),phys(3))*conjg(self2%cmat(phys(1),phys(2),phys(3))))
-                    sumasq(sh) = sumasq(sh) + csq(self2%cmat(phys(1),phys(2),phys(3)))
-                    sumbsq(sh) = sumbsq(sh) + csq(self1%cmat(phys(1),phys(2),phys(3)))
+                    comp1 = self1%cmat(phys(1),phys(2),phys(3))
+                    comp2 = self2%cmat(phys(1),phys(2),phys(3))
+                    corrs_8(sh) = corrs_8(sh)+ realpart(comp1 * conjg(comp2))
+                    sumasq(sh) = sumasq(sh) + csq(comp1)
+                    sumbsq(sh) = sumbsq(sh) + csq(comp2)
                 end do
             end do
         end do
         !$omp end parallel do
         ! normalize correlations and compute resolutions
         do k=1,n
-            if( sumasq(k) > 0. .and. sumbsq(k) > 0. )then
-                corrs(k) = corrs(k)/sqrt(sumasq(k) * sumbsq(k))
+            if( sumasq(k) > 0.d0 .and. sumbsq(k) > 0.d0 )then
+                corrs_8(k) = corrs_8(k)/sqrt(sumasq(k) * sumbsq(k))
             else
-                corrs(k) = 0.
+                corrs_8(k) = 0.
             endif
         end do
+        ! return single-precision corrs
+        corrs = corrs_8
     end subroutine fsc
 
     !>  \brief get array of resolution steps
