@@ -108,6 +108,7 @@ contains
         call chdict%push('frcs',          'binary file with per-class/proj Fourier Ring Correlations(.bin)')
         call chdict%push('fsc',           'binary file with FSC info{fsc_state01.bin}')
         call chdict%push('ft2img',        'convert Fourier transform to real image of power(yes|no){no}')
+        call chdict%push('gainref',       'gain reference')
         call chdict%push('grow',          '# binary layers to grow(in pixels)')
         call chdict%push('guinier',       'calculate Guinier plot(yes|no){no}')
         call chdict%push('hfun',          'function used for normalization(sigm|tanh|lin){sigm}')

@@ -56,14 +56,15 @@ real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed p
 contains
 
     !> motion_correct DDD movie
-    subroutine motion_correct_movie( movie_stack_fname, ctfvars, corr, shifts, err, nsig )
+    subroutine motion_correct_movie( movie_stack_fname, ctfvars, corr, shifts, err, gainref_fname, nsig )
         use simple_ftexp_shsrch
-        character(len=*),  intent(in)    :: movie_stack_fname !< filename
-        type(ctfparams),   intent(inout) :: ctfvars
-        real,              intent(out)   :: corr              !< ave correlation per frame
-        real, allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
-        logical,           intent(out)   :: err               !< error flag
-        real, optional,    intent(in)    :: nsig              !< # sigmas (for outlier removal)
+        character(len=*),            intent(in)    :: movie_stack_fname !< filename
+        type(ctfparams),             intent(inout) :: ctfvars
+        real,                        intent(out)   :: corr              !< ave correlation per frame
+        real,           allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
+        logical,                     intent(out)   :: err               !< error flag
+        character(len=*),  optional, intent(in)    :: gainref_fname     !< gain reference filename
+        real,              optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, updateres, i
@@ -71,7 +72,7 @@ contains
         ! initialise
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
-        call motion_correct_init(movie_stack_fname, ctfvars)
+        call motion_correct_init(movie_stack_fname, ctfvars, gainref_fname)
         err = .false.
         if( nframes < 2 )then
             err = .true.
@@ -205,16 +206,18 @@ contains
     end subroutine motion_correct_movie
 
     !> Initialise motion_correct
-    subroutine motion_correct_init( movie_stack_fname, ctfvars )
-        character(len=*), intent(in)    :: movie_stack_fname  !< input filename of stack
-        type(ctfparams),  intent(in)    :: ctfvars
-        type(image)          :: tmpmovsum
+    subroutine motion_correct_init( movie_stack_fname, ctfvars, gainref_fname )
+        character(len=*),           intent(in) :: movie_stack_fname  !< input filename of stack
+        type(ctfparams),            intent(in) :: ctfvars
+        character(len=*), optional, intent(in) :: gainref_fname     !< gain reference filename
+        type(image)          :: tmpmovsum, gainref
         real                 :: moldiam, dimo4
         integer              :: iframe, ncured, deadhot(2), i, j, winsz
         real                 :: time_per_frame, current_time
         integer, parameter   :: HWINSZ = 6
         real,    allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:)
         logical, allocatable :: outliers(:,:)
+        logical              :: l_gain
         call motion_correct_kill
         ! GET NUMBER OF FRAMES & DIM FROM STACK
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
@@ -253,6 +256,18 @@ contains
         corrmat = 0.
         corrs   = 0.
         call frame_tmp%new(ldim, smpd)
+        ! gain reference
+        l_gain = .false.
+        if( present(gainref_fname) )then
+            if(file_exists(gainref_fname))then
+                l_gain = .true.
+                call gainref%new(ldim, smpd)
+                call gainref%read(gainref_fname)
+            else
+                write(*,*)'Gain reference could not be found: ', trim(gainref_fname), '; simple_motion_correct::motion_correct_int'
+                stop 'Gain reference could not be found; simple_motion_correct::motion_correct_int'
+            endif
+        endif
         ! allocate padded matrix
         winsz   = 2*HWINSZ+1
         allocate(rmat_pad(1-hwinsz:ldim(1)+hwinsz, 1-hwinsz:ldim(2)+hwinsz), win(winsz,winsz), stat=alloc_stat )
@@ -262,6 +277,7 @@ contains
         call tmpmovsum%new(ldim, smpd)
         do iframe=1,nframes
             call frame_tmp%read(movie_stack_fname, iframe)
+            if(l_gain) call frame_tmp%mul(gainref) ! gain correction
             call tmpmovsum%add(frame_tmp)
         end do
         call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
@@ -271,6 +287,7 @@ contains
             do iframe=1,nframes
                 call progress(iframe, nframes)
                 call frame_tmp%read(movie_stack_fname, iframe)
+                if(l_gain) call frame_tmp%mul(gainref) ! gain correction
                 rmat = frame_tmp%get_rmat()
                 rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
                 rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
@@ -303,6 +320,7 @@ contains
             end do
         endif
         call frame_tmp%kill
+        if(l_gain) call gainref%kill
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             do_dose_weight = .true.

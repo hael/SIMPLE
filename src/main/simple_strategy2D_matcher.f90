@@ -55,9 +55,10 @@ contains
         !<---- hybrid or combined search strategies can then be implemented as extensions of the
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
+        real                  :: snhc_sz(params_glob%fromp:params_glob%top)
+        real                  :: extr_bound, frac_srch_space, extr_thresh
         integer               :: iptcl, i, fnr, cnt, update_cnt
-        real                  :: extr_bound, frac_srch_space, extr_thresh, snhc_sz
-        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
+        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc, l_stream
 
         if( L_BENCH )then
             t_init = tic()
@@ -72,25 +73,29 @@ contains
             ! greedy start
             l_partial_sums = .false.
             l_extr         = .false.
+            l_snhc         = .false.
             l_frac_update  = .false.
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! extremal opt without fractional update
             l_partial_sums = .false.
-            l_extr         = .true. ! extremal optimization and refine=snhc share the same cooling scheme
+            l_extr         = .true.
+            l_snhc         = .true.
             l_frac_update  = .false.
         else
             ! optional fractional update, no extremal opt
             l_partial_sums = params_glob%l_frac_update
             l_extr         = .false.
+            l_snhc         = .false.
             l_frac_update  = params_glob%l_frac_update
         endif
-        l_snhc = l_extr ! snhc & extremal optimizations follow the same iteration dependent rule
         ! refinement logic
+        l_stream = params_glob%stream.eq.'yes'
         select case(trim(params_glob%refine))
             case('extr')
                 l_snhc = .false.
+                if( l_stream ) l_extr=.false.
             case('snhc')
-                l_extr = .false.
+                l_extr   = .false.
             case DEFAULT
                 stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec'
         end select
@@ -114,16 +119,6 @@ contains
             extr_bound  = -huge(extr_bound)
         endif
 
-        ! SNHC LOGICS
-        if( l_snhc )then
-            ! factorial decay, -2 because first step is always greedy
-            snhc_sz = SNHC2D_INITFRAC * (1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)
-            snhc_sz = min(SNHC2D_INITFRAC, max(0., snhc_sz))
-            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):', 100.*(1.-snhc_sz)
-        else
-            snhc_sz = 0.
-        endif
-
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
         if( allocated(pinds) )     deallocate(pinds)
         if( allocated(ptcl_mask) ) deallocate(ptcl_mask)
@@ -139,6 +134,31 @@ contains
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
         DebugPrint ' cluster2D_exec;  INDEX SAMPLING                             ', toc(t_init)
+
+        ! SNHC LOGICS
+        if( l_snhc )then
+            ! factorial decay, -2 because first step is always greedy
+            if( l_stream )then
+                ! size is set per particle
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
+                        if( update_cnt<=1 .or. update_cnt>20 )then
+                            snhc_sz(iptcl) = 0. ! greedy
+                        else if( update_cnt < 21 )then
+                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(update_cnt-2)/40.))
+                        endif
+                    endif
+                enddo
+            else
+                snhc_sz = min(SNHC2D_INITFRAC,&
+                    &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
+                write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
+                    &100.*(1.-snhc_sz(params_glob%fromp))
+            endif
+        else
+            snhc_sz = 0.
+        endif
 
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
@@ -228,12 +248,12 @@ contains
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
-                strategy2Dspec%iptcl      = iptcl
-                strategy2Dspec%iptcl_map  = cnt
-                if( params_glob%refine.eq.'extr' )then
-                    strategy2Dspec%stoch_bound = extr_bound
+                strategy2Dspec%iptcl     = iptcl
+                strategy2Dspec%iptcl_map = cnt
+                if( params_glob%refine.eq.'snhc' )then
+                    strategy2Dspec%stoch_bound = snhc_sz(iptcl)
                 else
-                    strategy2Dspec%stoch_bound = snhc_sz
+                    strategy2Dspec%stoch_bound = extr_bound
                 endif
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)

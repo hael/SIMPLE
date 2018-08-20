@@ -29,14 +29,14 @@ end type motion_correct_iter
 
 contains
 
-    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out )
+    subroutine iterate( self, cline, ctfvars, orientation, fbody, frame_counter, moviename, dir_out, gainref_fname )
         class(motion_correct_iter), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(ctfparams),            intent(inout) :: ctfvars
         class(ori),                 intent(inout) :: orientation
         integer,                    intent(inout) :: frame_counter
-        character(len=*),           intent(in)    :: moviename, fbody
-        character(len=*),           intent(in)    :: dir_out
+        character(len=*),           intent(in)    :: moviename, fbody, dir_out
+        character(len=*), optional, intent(in)    :: gainref_fname
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:)
         type(image) :: img_jpg
@@ -72,7 +72,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err)
+        call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err, gainref_fname)
         if( err ) return
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then

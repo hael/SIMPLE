@@ -142,6 +142,7 @@ contains
             if( rnd <= bound )exit
         enddo
         which = inds(which)
+        deallocate(pvec_sorted,inds)
     end function multinomal
 
     !>  \brief  random number generator yielding normal distribution

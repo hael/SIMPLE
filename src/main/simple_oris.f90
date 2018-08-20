@@ -628,65 +628,74 @@ contains
         end do
     end subroutine expand_classes
 
-    !>  \brief  is for filling empty classes from the highest populated ones
+    !>  \brief  is for filling empty classes from a stochastically selected highly populated one
     subroutine fill_empty_classes( self, ncls, fromtocls )
-        class(oris),                    intent(inout) :: self
-        integer,                        intent(in)    :: ncls
-        integer, allocatable, optional, intent(out)   :: fromtocls(:,:)
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: ncls
+        integer, allocatable, intent(out)   :: fromtocls(:,:)
         integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
+        real,    allocatable :: probs(:)
         type(ran_tabu)       :: rt
-        integer              :: iptcl, cls2split(1)
-        integer              :: cnt, nempty, n_incl, maxpop, i, icls, ncls_here
+        integer              :: cnt, n_incl, pop, i, icls, ncls_here, iptcl, cls2split
         ncls_here = max(self%get_n('class'), ncls)
         call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
-        nempty    = count(pops == 0)
-        if(nempty == 0)return
-        if( present(fromtocls) )then
-            if(allocated(fromtocls))deallocate(fromtocls)
-            allocate(fromtoall(ncls,2), source=0, stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes fromtoall",alloc_stat)
+        if(count(pops==0) == 0)then
+            deallocate(pops)
+            return
         endif
+        if(allocated(fromtocls))deallocate(fromtocls)
+        allocate(fromtoall(ncls,2),source=0)
+        allocate(probs(ncls), source=0.)
         do icls = 1, ncls
-            deallocate(pops, stat=alloc_stat)
-            call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
             if( pops(icls) /= 0 )cycle
-            ! identify class to split
-            cls2split  = maxloc(pops)
-            maxpop     = pops(cls2split(1))
-            if( maxpop <= 2*MINCLSPOPLIM )exit
+            if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
+            ! split class with maximum population
+            ! cls2split = maxloc(pops, dim=1)
+            ! pop       = pops(cls2split)
+            ! if( pop <= 2*MINCLSPOPLIM )exit
+            ! split class preferentially with high population
+            probs = real(pops) - real(2*MINCLSPOPLIM)
+            where(probs<0.)probs=0.
+            probs     = probs/sum(probs)
+            probs     = probs**2. ! square skew
+            probs     = probs/sum(probs)
+            cls2split = multinomal(probs)
+            pop       = pops(cls2split)
+            if( pop <= 2*MINCLSPOPLIM )exit
             ! migration
-            call self%get_pinds(cls2split(1), 'class', inds2split, consider_w=.false.) ! needs to be false
-            rt = ran_tabu(maxpop)
-            allocate(membership(maxpop), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes membership",alloc_stat)
+            call self%get_pinds(cls2split, 'class', inds2split, consider_w=.false.) ! needs to be false
+            rt = ran_tabu(pop)
+            allocate(membership(pop))
             call rt%balanced(2, membership)
-            do i=1,maxpop
+            do i=1,pop
                 if(membership(i) == 2)cycle
                 iptcl = inds2split(i)
+                ! updates populations
                 call self%o(iptcl)%set('class', real(icls))
+                pops(icls)      = pops(icls) + 1
+                pops(cls2split) = pops(cls2split) - 1
             enddo
             ! updates populations and migration
-            if(present(fromtocls))then
-                fromtoall(icls,1) = cls2split(1)
-                fromtoall(icls,2) = icls
-            endif
-            deallocate(membership, inds2split)
+            fromtoall(icls,1) = cls2split
+            fromtoall(icls,2) = icls
+            ! cleanup
+            deallocate(membership,inds2split)
         enddo
-        if(present(fromtocls))then
-            ! updates classes migration
-            n_incl = count(fromtoall(:,1)>0)
-            if(n_incl>0)then
-                allocate(fromtocls(n_incl,2), stat=alloc_stat)
-                if(alloc_stat.ne.0)call allocchk("simple_oris:: fill_empty_classes fromtocls",alloc_stat)
-                cnt = 0
-                do icls = 1,ncls
-                    if( fromtoall(icls,1) > 0 )then
-                        cnt = cnt + 1
-                        fromtocls(cnt,:) = fromtoall(icls,:)
-                    endif
-                enddo
-            endif
+        ! updates classes migration
+        n_incl = count(fromtoall(:,1)>0)
+        if(n_incl>0)then
+            allocate(fromtocls(n_incl,2))
+            cnt = 0
+            do icls = 1,ncls
+                if( fromtoall(icls,1) > 0 )then
+                    cnt = cnt + 1
+                    fromtocls(cnt,:) = fromtoall(icls,:)
+                endif
+            enddo
         endif
+        ! cleanup
+        call rt%kill
+        deallocate(fromtoall,pops,probs)
     end subroutine fill_empty_classes
 
     !>  \brief  for remapping clusters after exclusion

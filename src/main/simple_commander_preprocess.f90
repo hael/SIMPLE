@@ -73,7 +73,7 @@ contains
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
-        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
+        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody, gainref_fname
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
@@ -154,8 +154,13 @@ contains
             if( .not.file_exists(moviename)) cycle
             ! motion_correct
             ctfvars = spproj%get_micparams(imovie)
-            call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
-                &output_dir_motion_correct)
+            if( cline%defined('gainref') )then
+                call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                    &output_dir_motion_correct, gainref_fname=params%gainref)
+            else
+                call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                    &output_dir_motion_correct)
+            endif
             ! ctf_estimate
             moviename_forctf = mciter%get_moviename('forctf')
             params_glob%hp   = params%hp_ctf_estimate
@@ -315,6 +320,13 @@ contains
                 stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
             endif
         endif
+        if( cline%defined('gainref') )then
+            if(.not.file_exists(params%gainref) )then
+                write(*,*)'Gain reference could not be found: ', trim(params%gainref), '; simple_commander_preprocess::motion_correct'
+                stop 'Gain reference could not be found; simple_commander_preprocess::motion_correct'
+
+            endif
+        endif
         ! output directory & names
         output_dir = PATH_HERE
         if( cline%defined('fbody') )then
@@ -354,7 +366,11 @@ contains
                 if( imgkind.ne.'movie' )cycle
                 call o%getter('movie', moviename)
                 ctfvars = spproj%get_micparams(imovie)
-                call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+                if( cline%defined('gainref') )then
+                    call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir), gainref_fname=params%gainref)
+                else
+                    call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
+                endif
                 call spproj%os_mic%set_ori(imovie, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
@@ -545,21 +561,22 @@ contains
         use simple_ctf,   only: ctf
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
-        type(builder)                 :: build
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(nrtxtfile)               :: boxfile
-        type(image)                   :: micrograph
-        type(ori)                     :: o_mic
-        type(ctf)                     :: tfun
-        type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: output_dir, mic_name, boxfile_name, imgkind!, ctfstr!, phplate
-        real,             allocatable :: boxdata(:,:)
-        logical,          allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN)     :: stack
-        integer                       :: nframes, imic, iptcl, ldim(3), nptcls, nmics, box, box_first
-        integer                       :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
-        real                          :: particle_position(2)
+        type(builder)                           :: build
+        type(parameters)                        :: params
+        type(sp_project)                        :: spproj
+        type(nrtxtfile)                         :: boxfile
+        type(image)                             :: micrograph
+        type(ori)                               :: o_mic
+        type(ctf)                               :: tfun
+        type(ctfparams)                         :: ctfparms
+        character(len=:),           allocatable :: output_dir, mic_name, boxfile_name, imgkind
+        character(len=LONGSTRLEN),  allocatable :: boxfiles(:)
+        real,                       allocatable :: boxdata(:,:)
+        logical,                    allocatable :: oris_mask(:), mics_mask(:)
+        character(len=LONGSTRLEN) :: stack
+        integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
+        integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
+        real                      :: particle_position(2)
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
@@ -571,6 +588,27 @@ contains
             stop 'No integrated micrograph to process!'
         endif
         ntot = spproj%os_mic%get_noris()
+        ! input directory
+        if( cline%defined('dir_box') )then
+            if( file_exists(params%dir_box) )then
+                call simple_list_files(params%dir_box//'/*.box', boxfiles)
+                if(.not.allocated(boxfiles))then
+                    write(*,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 1'
+                    stop 'No box file found ; simple_commander_preprocess::exec_extract 1'
+                endif
+                if(size(boxfiles)==0)then
+                    write(*,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 2'
+                    stop 'No box file found ; simple_commander_preprocess::exec_extract 2'
+                endif
+                do i=1,size(boxfiles)
+                    call simple_abspath(boxfiles(i),boxfile_name,check_exists=.false.)
+                    boxfiles(i) = trim(boxfile_name)
+                enddo
+            else
+                write(*,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
+                stop 'Box directory does not exist; simple_commander_preprocess::exec_extract'
+            endif
+        endif
         ! sanity checks
         allocate(mics_mask(ntot), source=.false.)
         nmics  = 0
@@ -582,13 +620,19 @@ contains
             if( state == 0 ) cycle
             if( .not. o_mic%isthere('imgkind') )cycle
             if( .not. o_mic%isthere('intg')    )cycle
-            if( .not. o_mic%isthere('boxfile') )cycle
             call o_mic%getter('imgkind', imgkind)
             if( trim(imgkind).ne.'mic') cycle
             call o_mic%getter('intg', mic_name)
             if( .not.file_exists(mic_name) )cycle
-            call o_mic%getter('boxfile', boxfile_name)
-            if( .not.file_exists(boxfile_name) )cycle
+            ! box input
+            if( cline%defined('dir_box') )then
+                boxfile_name = boxfile_from_mic(mic_name)
+                if(trim(boxfile_name).eq.NIL)cycle
+                call spproj%os_mic%set(imic, 'boxfile', trim(boxfile_name))
+            else
+                call o_mic%getter('boxfile', boxfile_name)
+                if( .not.file_exists(boxfile_name) )cycle
+            endif
             ! get number of frames from stack
             call find_ldim_nptcls(mic_name, lfoo, nframes )
             if( nframes > 1 ) stop 'multi-frame extraction no longer supported; commander_preproc :: exec_extract'
@@ -733,6 +777,20 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function box_inside
+
+            character(len=LONGSTRLEN) function boxfile_from_mic(mic)
+                character(len=*), intent(in) :: mic
+                character(len=LONGSTRLEN)    :: box_from_mic
+                integer :: ibox
+                box_from_mic     = fname_new_ext(mic,'box')
+                boxfile_from_mic = NIL
+                do ibox=1,size(boxfiles)
+                    if(trim(boxfiles(ibox)).eq.trim(box_from_mic))then
+                        boxfile_from_mic = trim(boxfiles(ibox))
+                        return
+                    endif
+                enddo
+            end function boxfile_from_mic
 
     end subroutine exec_extract
 

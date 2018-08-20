@@ -100,12 +100,14 @@ type :: parameters
     character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=LONGSTRLEN) :: dir_target=''        !< put output here
     character(len=LONGSTRLEN) :: dir_ptcls=''
+    character(len=LONGSTRLEN) :: dir_box=''
     character(len=LONGSTRLEN) :: doclist=''           !< list of oritabs for different states
     character(len=LONGSTRLEN) :: exec_dir='./'        !< auto-named execution directory
     character(len=LONGSTRLEN) :: filetab=''           !< list of files(.txt)
     character(len=LONGSTRLEN) :: fname=''             !< file name
     character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
+    character(len=LONGSTRLEN) :: gainref=''           !< gain reference for movie alignment
     character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt|.simple)
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
@@ -285,7 +287,7 @@ type :: parameters
     real    :: angerr=0.           !< angular error(in degrees){0}
     real    :: ares=7.
     real    :: astigerr=0.         !< astigmatism error(in microns)
-    real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.1}
+    real    :: astigtol=0.05       !< expected (tolerated) astigmatism(in microns){0.05}
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
@@ -462,6 +464,7 @@ contains
         call check_carg('cure',           self%cure)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
+        call check_carg('dir_box',        self%dir_box)
         call check_carg('dir_movies',     self%dir_movies)
         call check_carg('dir_ptcls',      self%dir_ptcls)
         call check_carg('dir_reject',     self%dir_reject)
@@ -560,6 +563,7 @@ contains
         call check_file('fname',          self%fname)
         call check_file('frcs',           self%frcs,         'B')
         call check_file('fsc',            self%fsc,          'B')
+        call check_file('gainref',        self%gainref)
         call check_file('infile',         self%infile)
         call check_file('mskfile',        self%mskfile,      notAllowed='T')
         call check_file('oritab',         self%oritab,       'T', 'O')

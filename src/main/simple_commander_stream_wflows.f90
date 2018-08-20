@@ -226,7 +226,7 @@ contains
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
-        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 900   ! 10mins, Frequency at which the original project file should be updated
+        integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 900   ! 15mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(make_cavgs_distr_commander)    :: xmake_cavgs
@@ -324,9 +324,7 @@ contains
         params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC2D)
         if( do_autoscale )then
             call autoscale(orig_box, orig_smpd, params%smpd_targets2D(1), box, smpd, scale_factor)
-            if( box == orig_box )then
-                do_autoscale = .false.
-            endif
+            if( box == orig_box ) do_autoscale = .false.
         endif
         if( do_autoscale )then
             msk = orig_msk * scale_factor
