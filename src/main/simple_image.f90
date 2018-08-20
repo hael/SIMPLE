@@ -4781,9 +4781,6 @@ contains
         endif
     end function corr
 
-    !> \brief is for highly optimized correlation between 2D images, particle is
-    !> shifted by shvec so remember to take care of this properly in the calling
-    !> module
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
         real,           intent(in)    :: shvec(3)

@@ -831,11 +831,8 @@ contains
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         type(chash)                        :: job_descr
         integer                            :: state
-        integer(timer_int_kind)            :: treconstruct3D, tsplit
         logical                            :: fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        DebugPrint 'in exec_reconstruct3D_distr:'
-        treconstruct3D = tic()
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -846,11 +843,12 @@ contains
             case('cls3D')
                 fall_over = build%spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(*,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_reconstruct3D_distr'
+            write(*,*)'Unsupported ORITYPE'
+            stop 'simple_commander_distr_wflows::exec_reconstruct3D_distr'
         end select
         if( fall_over )then
-            write(*,*)'No images found! simple_commander_distr_wflows::exec_reconstruct3D_distr'
-            stop 'No images found! simple_commander_distr_wflows::exec_reconstruct3D_distr'
+            write(*,*)'No images found!'
+            stop 'simple_commander_distr_wflows::exec_reconstruct3D_distr'
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -858,9 +856,7 @@ contains
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! splitting
-        tsplit=tic()
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
-        DebugPrint ' splitting stack               ',toc(tsplit)
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
@@ -872,10 +868,8 @@ contains
                 call build%spproj%write_segment_inside(params%oritype)
             endif
         endif
-        DebugPrint ' eo partitioning    accum secs   ',toc(treconstruct3D)
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        DebugPrint ' qenv scheduling   accum secs    ',toc(treconstruct3D)
         ! assemble volumes
         ! this is for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) )
@@ -889,7 +883,6 @@ contains
             call cline_volassemble%set('prg', 'volassemble')
         endif
         ! parallel assembly
-        DebugPrint ' parallel assembly accum secs    ',toc(treconstruct3D)
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
             if( params%eo .ne. 'no' )then
@@ -902,10 +895,9 @@ contains
             call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
                 &script_name='simple_script_state'//trim(str_state))
         end do
-        DebugPrint ' Completed in total time         ',toc(treconstruct3D), ' secs'
         call qsys_watcher(state_assemble_finished)
         ! termination
-        if(qenv%qscripts%l_suppress_errors) call qsys_cleanup
+        call qsys_cleanup
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 

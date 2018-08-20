@@ -8,7 +8,7 @@ implicit none
 public :: qsys_ctrl
 private
 
-integer, parameter          :: SHORTTIME = 1
+integer, parameter :: SHORTTIME = 1
 
 type qsys_ctrl
     private
@@ -32,7 +32,6 @@ type qsys_ctrl
     integer                        :: cline_stacksz          = 0 !< size of stack of command lines, for streaming only
     logical                        :: stream    = .false.        !< stream flag
     logical                        :: existence = .false.        !< indicates existence
-    logical,public                 :: l_suppress_errors = .true. !< generate output_<scriptname> log files set to false
   contains
     ! CONSTRUCTOR
     procedure          :: new
@@ -46,7 +45,6 @@ type qsys_ctrl
     procedure          :: set_jobs_status
     ! SCRIPT GENERATORS
     procedure          :: generate_scripts
-    procedure          :: generate_scripts_new
     procedure, private :: generate_script_1
     procedure, private :: generate_script_2
     generic            :: generate_script => generate_script_2
@@ -243,74 +241,6 @@ contains
         if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
     end subroutine generate_scripts
 
-
-        !>  \brief  public script generator
-    subroutine generate_scripts_new( self, job_descr, q_descr, part_params ) ! , outfile_body
-        class(qsys_ctrl) :: self
-        class(chash)     :: job_descr
-        class(chash)     :: q_descr
-        !character(len=*), optional, intent(inout) :: outfile_body
-        class(chash),     optional :: part_params(:)
-        character(len=:), allocatable :: outfile_body_local, key, val
-        integer :: ipart, iadd, kunit, ios !, nthr_master, nthr_new
-        logical :: part_params_present
-        character(len=512) :: io_msg
-!        if( present(outfile_body) )then
-!            allocate(outfile_body_local, source=trim(outfile_body))
-!        endif
-        part_params_present = present(part_params)
-        call fopen(kunit, file='distr_simple_sh', iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
-        call fileiochk('simple_qsys_ctrl :: generate_optimised_scripts; Error when opening file for writing: '//&
-            'distr_simple_sh ; '//trim(io_msg),ios )
-        write(kunit,'(a)') '#!/bin/bash'
-        if(.not. self%l_suppress_errors)  write(kunit,'(a)') 'set -ev'
-        do ipart=self%fromto_part(1),self%fromto_part(2)
-            call job_descr%set('fromp',   int2str(self%parts(ipart,1)))
-            call job_descr%set('top',     int2str(self%parts(ipart,2)))
-            call job_descr%set('part',    int2str(ipart))
-            call job_descr%set('nparts',  int2str(self%nparts_tot))
-!            if( allocated(outfile_body_local) )then
-!                call job_descr%set('outfile', trim(outfile_body_local)//int2str_pad(ipart,self%numlen)//trim(METADATA_EXT))
-!            endif
-            if( part_params_present  )then
-                do iadd=1,part_params(ipart)%size_of()
-                    key = part_params(ipart)%get_key(iadd)
-                    val = part_params(ipart)%get(iadd)
-                    call job_descr%set(key, val)
-                end do
-            endif
-
-            call self%generate_script_1(job_descr, ipart, q_descr)
-            write(kunit,'(a,a)') PATH_HERE// trim(adjustl(self%script_names(ipart))), ' &'
-            write(kunit,'(a)') 'ID=$!'
-        end do
-        write(kunit,'(a)', ADVANCE = "NO") 'wait '
-        do ipart=self%fromto_part(1),self%fromto_part(2)
-            write(kunit,'(a,I0)', ADVANCE = "NO") " $ID", ipart
-        end do
-        write(kunit,'(a)') ''
-        write(kunit,'(a)') 'exit '
-        call fclose(kunit,errmsg='simple_qsys_ctrl :: generate_optimised_scripts; Error when closing file')
-        ios =  simple_chmod('./distr_simple_sh', '+x')
-        if(ios/=0) call simple_stop("simple_qsys_ctrl :: generate_optimised_scripts; Error when chmodding file distr_simple_sh")
-        call job_descr%delete('fromp')
-        call job_descr%delete('top')
-        call job_descr%delete('part')
-        call job_descr%delete('nparts')
-!        if( allocated(outfile_body_local) )then
-!            call job_descr%delete('outfile')
-!            deallocate(outfile_body_local)
-!        endif
-        if( part_params_present  )then
-            do iadd=1,part_params(1)%size_of()
-                key = part_params(1)%get_key(iadd)
-                call job_descr%delete(key)
-            end do
-        endif
-        ! when we generate the scripts we also reset the number of available computing units
-        if( .not. self%stream ) self%ncomputing_units_avail = self%ncomputing_units
-    end subroutine generate_scripts_new
-
     !>  \brief  private part script generator
     subroutine generate_script_1( self, job_descr, ipart, q_descr )
         class(qsys_ctrl), intent(inout) :: self
@@ -324,23 +254,23 @@ contains
              //trim(self%script_names(ipart))//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
-        if(.not. self%l_suppress_errors)  write(funit,'(a)') 'set -ev'
         ! write (run-time polymorphic) instructions to the qsys
         if( q_descr%get('qsys_name').ne.'local' )then
             call self%myqsys%write_instr(q_descr, fhandle=funit)
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
-        write(funit,'(a)',advance='yes') 'echo $$ >> .pid'
+            ! write(funit,'(a)') 'echo $$ >> .pid'
         endif
-        write(funit,'(a)',advance='yes') 'cd '//trim(CWD_GLOB)
-        write(funit,'(a)',advance='yes') ''
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
+        write(funit,'(a)') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
         ! direct output
-        write(funit,'(a)',advance='yes') ' > OUT'//int2str_pad(ipart,self%numlen)
+        ! write(funit,'(a)') ' > OUT'//int2str_pad(ipart,self%numlen)
+        write(funit,'(a)') ' >> PARTS_OUTPUT'
         ! exit shell when done
-        write(funit,'(a)',advance='yes') ''
-        write(funit,'(a)',advance='yes') 'exit'
+        write(funit,'(a)') ''
+        write(funit,'(a)') 'exit'
         call fclose(funit, errmsg='simple_qsys_ctrl :: gen_qsys_script; Error when close file: '&
              //trim(self%script_names(ipart)) )
         if( q_descr%get('qsys_name').eq.'local' )then
@@ -370,26 +300,25 @@ contains
             &trim(script_name)//' ; '//trim(io_msg),ios )
         ! need to specify shell
         write(funit,'(a)') '#!/bin/bash'
-        if(.not. self%l_suppress_errors)  write(funit,'(a)') 'set -ev'
         ! write (run-time polymorphic) instructions to the qsys
         if( q_descr%get('qsys_name').ne.'local' )then
             call self%myqsys%write_instr(q_descr, fhandle=funit)
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)',advance='yes') 'cd '//trim(CWD_GLOB)
-        write(funit,'(a)',advance='yes') ''
+        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
+        write(funit,'(a)') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
         ! direct output
         if( outfile .ne. '' )then
-            write(funit,'(a)',advance='yes') ' > '//outfile
+            write(funit,'(a)') ' >> '//outfile
         else
-            write(funit,'(a)',advance='yes') ''
+            write(funit,'(a)') ''
         endif
         ! exit shell when done
-        write(funit,'(a)',advance='yes') ''
-        write(funit,'(a)',advance='yes') 'exit'
+        write(funit,'(a)') ''
+        write(funit,'(a)') 'exit'
         call fclose(funit, ios, &
             &errmsg='simple_qsys_ctrl :: generate_script_2; Error when closing file: '&
             &//trim(script_name))
@@ -435,43 +364,30 @@ contains
             endif
         end do
         if( .not. any(submit_or_not) ) return
-        ! on the fly submission
-
-        do ipart=self%fromto_part(1),self%fromto_part(2)
-            if( submit_or_not(ipart) )then
-                script_name = filepath(PATH_HERE, trim(adjustl(self%script_names(ipart))))
-                !!!!!!!!!!!
-                if( .not.file_exists(trim(script_name)))then
-                    write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
-                endif
-                !!!!!!!!!!!!
-                select type( pmyqsys => self%myqsys )
-                class is(qsys_local)
-                    if(self%l_suppress_errors)then
+            ! on the fly submission
+            do ipart=self%fromto_part(1),self%fromto_part(2)
+                if( submit_or_not(ipart) )then
+                    script_name = filepath(PATH_HERE, trim(adjustl(self%script_names(ipart))))
+                    if( .not.file_exists(trim(script_name)))then
+                        write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
+                    endif
+                    select type( pmyqsys => self%myqsys )
+                    class is(qsys_local)
                         qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
                             &trim(script_name)//' '//SUPPRESS_MSG//'&'
-                    else
-                       qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                            &trim(script_name)//&
-                            &' 2>&1 | tee output_'//trim(adjustl(script_name(3:)))//'.out  &'
-                    endif
-                class DEFAULT
-                    qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                        &trim(script_name)
-                end select
-                call exec_cmdline(trim(adjustl(qsys_cmd)))
-            endif
-        end do
+                    class DEFAULT
+                        qsys_cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
+                            &trim(script_name)
+                    end select
+                    call exec_cmdline(trim(adjustl(qsys_cmd)))
+                endif
+            end do
         else
             self%ncomputing_units_avail = 0
-
             self%jobs_submitted = .true.
-            self%jobs_done(2:) = .true.
-
+            self%jobs_done(2:)  = .true.
             print*, '>>> COMP UNITS AVAIL ', self%ncomputing_units_avail
-            !call exec_subprocess(trim(adjustl(CWD_GLOB))//'/distr_simple_sh  ', pid)
         endif
-
     end subroutine submit_scripts
 
     subroutine submit_script( self, script_name )
