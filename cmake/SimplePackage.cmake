@@ -34,7 +34,7 @@ The SIMPLE back-end consists of an object-oriented numerical library written in
 modern Fortran. The SIMPLE front-end consists of a few standalone, interoperable
 components developed according to the 'Unix toolkit philosophy'.
 
-HOMEPAGE: http://simplecryoem.com
+HOMEPAGE: https://simplecryoem.com
 LICENCE: GNU Public licence (version 3 or newer)
 AUTHORS: Hans Elmlund, Dominika Elmlund, Cyril Reboul, Michael Eager, Fred Bonnet
 
