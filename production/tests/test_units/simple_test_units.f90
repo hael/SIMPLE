@@ -13,6 +13,7 @@ use simple_imghead,      only: test_imghead
 use simple_ftexp_shsrch, only: test_ftexp_shsrch
 use simple_aff_prop,     only: test_aff_prop
 implicit none
+#include "simple_local_flags.inc"
 character(8)          :: datestr
 character(len=STDLEN) :: folder
 character(len=300)    :: command
@@ -122,7 +123,7 @@ contains
                 case(20)
                     if( abs(ptr(fun_self,[0.,1.25313],2)-gmin) < 1e-5 ) success = .true.
                 case DEFAULT
-                    stop 'Unknown function index; test_testfuns; simple_unit_test'
+                    THROW_HARD('Unknown function index; test_testfuns')
             end select
             if( success )then
                 cycle
@@ -152,7 +153,7 @@ contains
             if( euls_shifted(1) < 0. .or. euls_shifted(1) > 360. ) doshift = .true.
             if( euls_shifted(2) < 0. .or. euls_shifted(2) > 180. ) doshift = .true.
             if( euls_shifted(3) < 0. .or. euls_shifted(3) > 360. ) doshift = .true.
-            if( doshift ) stop 'euler shifting does not work!'
+            if( doshift ) THROW_HARD('euler shifting does not work!')
         end do
     end subroutine
 
@@ -179,7 +180,7 @@ contains
 !            write(*,*) 'Fitted Slope/Intercept:', slope, intercept
 !            write(*,*) 'Corr:', corr
             if( corr < 0.9999 )then
-                stop 'fit_straight_line; simple_math, failed!'
+                THROW_HARD('fit_straight_line failed!')
             endif
         end do
         write(*,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'

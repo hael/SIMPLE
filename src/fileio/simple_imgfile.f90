@@ -11,16 +11,17 @@
 ! Modifications by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_imgfile
 use simple_defs
-use simple_error,  only: allocchk, simple_stop
-use simple_math,   only: is_odd, is_even
-use simple_syslib, only: is_open, file_exists, del_file
-use simple_fileio, only: fname2format, fopen, fileiochk, fclose
+use simple_error
+use simple_math,    only: is_odd, is_even
+use simple_syslib,  only: is_open, file_exists, del_file
+use simple_fileio,  only: fname2format, fopen, fileiochk, fclose
 use simple_imghead, only: ImgHead, MrcImgHead, SpiImgHead
 use gnufor2
 implicit none
 
 public :: imgfile
 private
+#include "simple_local_flags.inc"
 
 type imgfile
     private
@@ -97,7 +98,7 @@ contains
                 call self%overall_head%new(ldim)
                 if( ldim(3) > 1 ) self%isvol = .true.
             case DEFAULT
-                stop 'Unsupported file format; new; simple_imgfile'
+                THROW_HARD('unsupported file format')
         end select
         ! open the file
         call self%open_local(del_if_exists, rwaction)
@@ -186,7 +187,7 @@ contains
         ptr => self%overall_head
         select type(ptr)
         type is (MrcImgHead)
-            stop 'Cannot translate an image index to record indices for MRC files; slice2recpos; simple_imgfile'
+            THROW_HARD('cannot translate an image index to record indices for MRC files')
         type is (SpiImgHead)
             cnt  = self%overall_head%getLabrec()
             dims = self%overall_head%getDims()
@@ -205,7 +206,7 @@ contains
                 end do
             endif
         class DEFAULT
-            stop 'Format not supported; slice2recpos; simle_imgfile'
+            THROW_HARD('format not supported')
         end select
     end subroutine slice2recpos
 
@@ -216,7 +217,7 @@ contains
         integer,         intent(in)    :: nr
         integer(kind=8), intent(inout) :: hedinds(2), iminds(2)
         if( nr < 0 )then
-            stop 'cannot have negative slice indices; slice2bytepos; simple_imgfile'
+            THROW_HARD('cannot have negative slice indices')
         else if( nr == 0 )then
             hedinds(1) = 1
             hedinds(2) = self%overall_head%getLabbyt()
@@ -244,7 +245,7 @@ contains
         logical                     :: arr_is_ready,alloc_tmparr
         class(ImgHead), pointer     :: ptr=>null()
         ! Check that the first and last slice numbers given make sense
-        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; rSlices; simple_imgfile'
+        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) THROW_HARD('last < first slice')
         ! Get the dims of the image file
         dims = self%overall_head%getDims()
         ! set pointer to overall header
@@ -258,7 +259,7 @@ contains
         if( .not. arr_is_ready )then
             write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-            call simple_stop( 'Array is not properly allocated; rSlices; simple_imgfile',__FILENAME__,__LINE__)
+            THROW_HARD('array not properly allocated')
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
@@ -276,7 +277,7 @@ contains
                     first_hedbyte = hedbyteinds(1) ! first header byte
                 endif
             case DEFAULT
-                call simple_stop( 'Format not supported; rSlices; simple_imgfile',__FILENAME__,__LINE__)
+                THROW_HARD('format not supported')
         end select
         rarr = 0. ! initialize to zero
         select case(byteperpix)
@@ -338,13 +339,13 @@ contains
             case DEFAULT
                 write(*,'(2a)') 'fname: ', trim(self%fname)
                 write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
-                call simple_stop( 'Unsupported bit-depth; rSlices; simple_imgfile',__FILENAME__,__LINE__)
+                THROW_HARD('unsupported bit-depth')
         end select
         ! Check the read was successful
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
             write(*,'(2a)') 'IO error message was: ', trim(io_message)
-            call simple_stop( 'I/O error; rSlices; simple_imgfile',__FILENAME__,__LINE__)
+            THROW_HARD('I/O')
         endif
     end subroutine rSlices
 
@@ -366,7 +367,7 @@ contains
         class(ImgHead), pointer     :: ptr=>null()
         class(ImgHead), allocatable :: imghed
         ! Check that the first and last slice numbers given make sense
-        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) stop 'Last < first slice; wSlices; simple_imgfile'
+        if( first_slice > 0 .and. (first_slice .gt. last_slice) ) THROW_HARD('last < first slice')
         ! Get the dims of the image file
         dims = self%overall_head%getDims()
         ! set pointer to overall header
@@ -389,7 +390,7 @@ contains
         if( .not. arr_is_ready )then
             write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
             write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
-            call simple_stop( 'Array is not properly allocated; wSlices; simple_imgfile',__FILENAME__,__LINE__)
+            THROW_HARD('array not properly allocated')
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
         ! Work out the position of the first byte
@@ -407,7 +408,7 @@ contains
                     first_hedbyte = hedbyteinds(1) ! first header byte
                 endif
             case DEFAULT
-                call simple_stop( 'Format not supported; wSlices; simple_imgfile',__FILENAME__,__LINE__)
+                THROW_HARD('format not supported')
         end select
         ! find minmax
         max_val = maxval(rarr)
@@ -435,7 +436,7 @@ contains
         ! Check the write was successful
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
-            call simple_stop( 'I/O error; wSlices; simple_imgfile',__FILENAME__,__LINE__)
+            THROW_HARD('I/O')
         endif
         ! May need to update file dims
         select case(self%head_format)
@@ -469,7 +470,7 @@ contains
                 else if( self%isvol .and. is_ft .and. is_even(dims(1:2)) )then
                     call self%overall_head%setIform(-22)
                 else
-                    call simple_stop( 'undefined file type, wSlices; simple_imgfile',__FILENAME__,__LINE__)
+                    THROW_HARD('undefined file type')
                 endif
         end select
         ! Remember that we wrote to the file

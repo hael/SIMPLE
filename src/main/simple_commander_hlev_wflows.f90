@@ -12,6 +12,7 @@ public :: initial_3Dmodel_commander
 public :: cluster3D_commander
 public :: cluster3D_refine_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
@@ -71,8 +72,7 @@ contains
         call spproj%read(params%projfile)
         ! sanity checks
         if( spproj%get_nptcls() == 0 )then
-            write(*,*)'No particles found in project file: ', trim(params%projfile), 'simple_commander_hlev_wflows::exec_cluster2D_autoscale'
-            stop 'No particles found in project file: simple_commander_hlev_wflows::exec_cluster2D_autoscale'
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
         endif
         ! delete any previous solution
         if( .not. spproj%is_virgin_field(params%oritype) )then
@@ -296,16 +296,13 @@ contains
             states = nint(spproj%os_cls2D%get_all('state'))
         endif
         if( count(states==0) .eq. ncavgs )then
-            write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
-                '; simple_commander_hlev_wflows::initial_3Dmodel'
-            stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+            THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; initial_3Dmodel')
         endif
         ! sanity check
         if( do_eo )then
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
             if( .not.file_exists(frcs_fname) )then
-                write(*,*)'The project file does not contain the required information for e/o alignment, use eo=no instead'
-                stop 'The project file does not contain the required information for e/o alignment'
+                THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
             endif
         endif
         ! init
@@ -684,11 +681,11 @@ contains
         integer  :: iter, startit, rename_stat, ncls
         logical  :: write_proj, fall_over, cavgs_import
         ! sanity check
-        if(nint(cline%get_rarg('nstates')) <= 1)stop 'Non-sensical NSTATES argument for heterogeneity analysis!'
+        if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
-        if(params%eo .eq. 'no' .and. .not.cline%defined('lp'))stop 'need lp input when eo .eq. no; cluster3D'
+        if(params%eo .eq. 'no' .and. .not.cline%defined('lp')) THROW_HARD('need lp input when eo .eq. no; cluster3D')
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! prep project
@@ -704,10 +701,7 @@ contains
         case DEFAULT
             write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D'
         end select
-        if( fall_over )then
-            write(*,*)'No particles found! simple_commander_hlev_wflows::exec_cluster3D'
-            stop 'No particles found! simple_commander_hlev_wflows::exec_cluster3D'
-        endif
+        if( fall_over ) THROW_HARD('no particles found! exec_cluster3D')
         if( params%oritype.eq.'ptcl3D' )then
             ! just splitting
             call work_proj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
@@ -719,7 +713,7 @@ contains
             cavgs_import = spproj%os_ptcl2D%get_noris() == 0
             if( cavgs_import )then
                 ! start from import
-                if(.not.cline%defined('lp')) stop 'need LP=XXX for inported class-averages; cluster3D'
+                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for inported class-averages; cluster3D')
                 lp_cls3D = params%lp
                 allocate(states(ncls), source=1)
             else
@@ -736,9 +730,7 @@ contains
                 if(cline%defined('lpstop')) lp_cls3D = max(lp_cls3D, params%lpstop)
             endif
             if( count(states==0) .eq. ncls )then
-                write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
-                    '; simple_commander_hlev_wflows::initial_3Dmodel'
-                stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+                THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; cluster3D')
             endif
             work_proj%projinfo = spproj%projinfo
             work_proj%compenv  = spproj%compenv
@@ -935,7 +927,7 @@ contains
         call cline%set('mkdir', 'no')
         ! sanity checks
         if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &stop 'need lp input when eo .eq. no; cluster3D_refine'
+            &THROW_HARD('need lp input when eo .eq. no; cluster3D_refine')
         if( .not.cline%defined('maxits') )call cline%set('maxits',real(MAXITS))
         l_singlestate = cline%defined('state')
         if( l_singlestate )then
@@ -956,10 +948,7 @@ contains
         case DEFAULT
             write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D_refine'
         end select
-        if( fall_over )then
-            write(*,*)'No particles found! simple_commander_hlev_wflows::exec_cluster3D_refine'
-            stop 'No particles found! simple_commander_hlev_wflows::exec_cluster3D_refine'
-        endif
+        if( fall_over ) THROW_HARD('no particles found! exec_cluster3D_refine')
         ! stash states
         if(params%oritype.eq.'cls3D')then
             master_states  = nint(spproj%os_cls3D%get_all('state'))
@@ -971,12 +960,10 @@ contains
         nstates        = maxval(master_states)
         params%nstates = nstates
         if( params%nstates==1 )then
-            write(*,*) 'Non-sensical number of states for heterogeneity refinement: ',params%nstates
-            stop 'Non-sensical number of states'
+            THROW_HARD('non-sensical # states: '//int2str(params%nstates)//' for multi-particle refinement')
         endif
         if( state_pops(params%state) == 0 )then
-            write(*,*) 'Empty state to refine: ', params%state
-            stop 'Empty state to refine'
+            THROW_HARD('state: '//int2str(params%state)//' is empty')
         endif
         ! state dependent variables
         allocate(projfiles(params%nstates), dirs(params%nstates), cline_refine3D(params%nstates))
@@ -1006,18 +993,15 @@ contains
             cavgs_import = spproj%os_ptcl2D%get_noris() == 0
             if( cavgs_import )then
                 ! start from import
-                if(.not.cline%defined('lp')) stop 'need LP=XXX for inported class-averages; cluster3D'
+                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for imported class-averages; cluster3D_refine')
             else
                 call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
                 if( .not.file_exists(frcs_fname) )then
-                    write(*,*)'The project file does not contain the required information for e/o alignment, use eo=no instead'
-                    stop 'The project file does not contain the required information for e/o alignment'
+                    THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
                 endif
             endif
             if( count(states==0) .eq. ncls )then
-                write(*,*) 'No class averages detected in project file: ',trim(params%projfile), &
-                    '; simple_commander_hlev_wflows::initial_3Dmodel'
-                stop 'No class averages detected in project file ; simple_commander_hlev_wflows::initial_3Dmodel'
+                THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; cluster3D_refine')
             endif
             spproj_master%projinfo = spproj%projinfo
             spproj_master%compenv  = spproj%compenv

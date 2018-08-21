@@ -2,7 +2,7 @@
 module simple_atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
-!include 'simple_lib.f08'
+include 'simple_lib.f08'
 use simple_error, only: allocchk
 use simple_strings
 use simple_fileio
@@ -10,6 +10,7 @@ implicit none
 
 public :: atoms
 private
+#include "simple_local_flags.inc"
 
 character(len=74) :: pdbfmt      = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
 character(len=74) :: pdbfmt_long = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
@@ -78,8 +79,7 @@ contains
         call self%kill
         nl = nlines(trim(fname))
         if(nl == 0 .or. .not.file_exists(fname))then
-            print *, 'IO problem with file:', trim(fname)
-            stop 'simple_atoms :: new_from_pdb'
+            THROW_HARD('I/O, file: '//trim(fname)//'; new_from_pdb')
         endif
         call fopen(filnum, status='OLD', action='READ', file=fname, iostat=io_stat)
         call fileiochk('new_from_pdb; simple_atoms opening '//trim(fname), io_stat)
@@ -96,8 +96,7 @@ contains
             n = n + 1
         enddo
         if( n == 0 )then
-            print *,'No atoms found in:'
-            stop 'simple_atoms :: new_from_pdb'
+            THROW_HARD('no atoms found; new_from_pdb')
         endif
         ! second pass
         call self%new_instance(n)
@@ -160,7 +159,7 @@ contains
         class(atoms), intent(inout) :: self
         class(atoms), intent(in)    :: self_in
         integer :: n
-        if(.not.self_in%exists)stop 'Unallocated input instance; simple_atoms%copy'
+        if(.not.self_in%exists) THROW_HARD('Unallocated input instance; copy')
         n = self_in%n
         call self%new_instance(n)
         self%name(:)    = self_in%name
@@ -195,14 +194,14 @@ contains
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
         real :: xyz(3)
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_coord')
         xyz = self%xyz(i,:)
     end function get_coord
 
     integer function get_num( self, i )
         class(atoms), intent(in) :: self
         integer,      intent(in) :: i
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%get_coord'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_coord')
         get_num = self%num(i)
     end function get_num
 
@@ -216,7 +215,7 @@ contains
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
         real,         intent(in)    :: xyz(3)
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_coord'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_coord')
         self%xyz(i,:) = xyz
     end subroutine set_coord
 
@@ -224,7 +223,7 @@ contains
         class(atoms),     intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=1), intent(in)    :: chain
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_coord'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_coord')
         self%chain(i) = chain
     end subroutine set_chain
 
@@ -232,7 +231,7 @@ contains
         class(atoms),     intent(inout) :: self
         integer,          intent(in)    :: i
         integer,          intent(in)    :: num
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_num'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_num')
         self%num(i) = num
     end subroutine set_num
 
@@ -240,7 +239,7 @@ contains
         class(atoms),     intent(inout) :: self
         integer,          intent(in)    :: i
         integer,          intent(in)    :: resnum
-        if(i.lt.1 .or. i.gt.self%n)stop 'index out of range; simple_atoms%set_resnum'
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_resnum')
         self%resnum(i) = resnum
     end subroutine set_resnum
 
@@ -274,7 +273,7 @@ contains
         logical               :: long
         fname = trim(adjustl(fbody)) // '.pdb'
         long  = self%n >= 99999
-        if(.not.self%exists)stop 'Cannot write non existent atoms type; simple_atoms :: writePDB'
+        if(.not.self%exists) THROW_HARD('Cannot write non existent atoms type; writePDB')
         call fopen(funit, status='REPLACE', action='WRITE', file=fname, iostat=io_stat)
         call fileiochk('writepdb; simple_atoms opening '//trim(fname), io_stat)
         do i = 1, self%n

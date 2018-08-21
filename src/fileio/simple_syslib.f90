@@ -1,12 +1,11 @@
 !!
 !! System library functions and error checking
 !!
-!! Error routines:   simple_stop, allocchk, simple_error_check, raise_sys_error
 !! System routines:  exec_cmdline, simple_sleep, simple_isenv simple_getcwd, simple_chdir simple_chmod
-!! File routines:    simple_file_stat, wait_for_closure is_io is_open file_exists is_file_open
+!! File routines:    simple_file_stat, wait_for_closure, is_io, is_open, file_exists, is_file_open
 !! Memory routines:  simple_mem_usage, simple_dump_mem_usage
 
-!! Function:  get_sys_error simple_getenv  get_lunit cpu_usage get_process_id
+!! Function:  get_sys_error, simple_getenv, get_lunit, cpu_usage, get_process_id
 
 !! New interface: get_file_list, list_dirs, subprocess, glob_list_tofile, show_dir_content_recursive
 !! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files, exec_subprocess
@@ -16,30 +15,32 @@ use simple_defs
 use simple_error
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
-
 #ifdef __INTEL_COMPILER
-use ifport, killpid=>kill, intel_ran=>ran
-use ifcore
+    use ifport, killpid=>kill, intel_ran=>ran
+    use ifcore
 #endif
-
 implicit none
 
-private :: raise_sys_error
-public
+public :: exec_cmdline, exec_subprocess, simple_isenv, simple_getenv, simple_sleep
+public :: simple_touch, syslib_symlink, syslib_copy_file, simple_rename, simple_chmod
+public :: simple_file_stat, is_io, is_open, dir_exists, file_exists, is_file_open
+public :: wait_for_closure, simple_getcwd, simple_chdir, simple_mkdir, simple_rmdir
+public :: simple_list_dirs, find_next_int_dir_prefix, simple_list_files, simple_glob_list_tofile
+public :: del_file, simple_del_files, syslib_rm_rf, simple_rm_force, simple_timestamp, cpu_usage
+public :: get_process_id, get_login_id, print_compiler_info, simple_sysinfo_usage, simple_mem_usage
+public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid
+private
+#include "simple_local_flags.inc"
+
 #ifdef GNU_STD2008
-! external :: stat
-! external :: chdir
-! external :: chmod
-! external :: rename, getcwd, getpid, getuid,
-integer , external :: sizeof, iand, ishft, loc
-   interface
+    integer , external :: sizeof, iand, ishft, loc
+    interface
         integer function chdir(path)
         character*(*), intent(in) :: path
         end function
 
         integer function chmod(nam, mode)
         character*(*), intent(in) :: nam, mode
-!        integer, intent(in) :: mode
         end function
 
         pure character*(24) function ctime(stime)
@@ -49,14 +50,6 @@ integer , external :: sizeof, iand, ishft, loc
         pure subroutine date(str)
         character*(*), intent(out) :: str
         end subroutine
-
-        ! pure real function etime(tarray)
-        ! real, intent(out) :: tarray(2)
-        ! end function
-
-        ! pure real function dtime(tarray)
-        ! real, intent(out) :: tarray(2)
-        ! end function
 
         subroutine flush(lu)
         integer, intent(in) :: lu
@@ -98,28 +91,6 @@ integer , external :: sizeof, iand, ishft, loc
             character*(*), intent(out) :: dir
         end function
 
-        ! subroutine getenv(en,ev)
-        !     character*(*), intent(in) :: en
-        !     character*(*), intent(out) :: ev
-        ! end subroutine
-
-        ! integer function getfd(lu)
-        !     integer, intent(in) :: lu
-        ! end function
-
-        ! integer function getgid()
-        ! end function
-
-        ! subroutine getlog(name)
-        !     character*(*), intent(out) :: name
-        ! end subroutine
-
-        ! integer function getpid()
-        ! end function
-
-        ! integer function getuid()
-        ! end function
-
         integer function rename(from,to)
         character*(*), intent(in) :: from, to
         end function
@@ -149,7 +120,6 @@ integer , external :: sizeof, iand, ishft, loc
         end function
 
       end interface
-
 #endif
 
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
@@ -377,9 +347,9 @@ contains
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exit_status, cmdstat, cmdmsg )
-        integer,               intent(in) :: exit_status, cmdstat
-        character(len=*),      intent(in) :: cmd
-        character(len=*),      intent(in) :: cmdmsg
+        integer,          intent(in) :: exit_status, cmdstat
+        character(len=*), intent(in) :: cmd
+        character(len=*), intent(in) :: cmdmsg
         logical :: err
         err = .false.
         if( exit_status /= 0 )then
@@ -506,21 +476,17 @@ contains
         bytepos = 1
         do ichunk=1,nchunks
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
-&"failed to read byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
             write(out, pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
-&"failed to write byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
             bytepos = bytepos + bufsz
         end do
         ! take care of leftover
         if( leftover > 0 )then
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file"//&
-&" failed to read byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
             write(out, pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) call simple_stop("simple_syslib::syslib_copy_file "//&
-&"failed to write byte buffer ", __FILENAME__,__LINE__)
+            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
         endif
         close(in)
         close(out)
@@ -553,8 +519,7 @@ contains
                 call simple_error_check(file_status,trim(msg))
             deallocate(f1,f2,msg)
         else
-            call simple_stop("simple_fileio::simple_rename, designated input filename doesn't exist "//&
-                trim(filein)//trim(errormsg),__FILENAME__,__LINE__)
+            THROW_HARD("designated input file doesn't exist "//trim(filein)//trim(errormsg))
         end if
         deallocate(errormsg)
     end function simple_rename
@@ -629,8 +594,8 @@ contains
         inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
         if(is_iostat_eor(io_status) .or. is_iostat_end(io_status)) return
         if (io_status .ne. 0) then
-            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            call simple_stop ('IO error; is_open; simple_fileio      ',__FILENAME__,__LINE__)
+            print *, 'is_open: I/O error ', io_status, ': ', trim(adjustl(io_message))
+            THROW_HARD('I/O')
         endif
     end function is_open
 
@@ -671,8 +636,7 @@ contains
         io_status = 0
         inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
         if (io_status .ne. 0) then
-            print *, 'is_open: IO error ', io_status, ': ', trim(adjustl(io_message))
-            stop 'IO error; is_file_open; simple_fileio      '
+            THROW_HARD('I/O '//trim(adjustl(io_message)))
         endif
     end function is_file_open
 
@@ -729,19 +693,10 @@ contains
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
         call simple_abspath (trim(newd), targetdir, eemsg, check_exists)
-
         inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
-
         if(dir_e) then
 #if defined(INTEL)
             call pxfchdir(trim(adjustl(targetdir)), len_trim(targetdir), io_status)
-
-            ! qq = changedirqq(trim(targetdir))
-            ! if(qq)io_status = 0
-            ! if( .not. qq) then
-            !     io_status=Ierrno()
-            !     call simple_error_check(io_status, "syslib:: changedirqq failed  "//trim(newd))
-            ! endif
 #else
             io_status = chdir(trim(targetdir))
 #endif
@@ -759,8 +714,8 @@ contains
                     "syslib:: simple_chdir failed to change path "//trim(targetdir))
             endif
         else
-            if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-            call simple_stop("syslib:: simple_chdir directory does not exist ",__FILENAME__,__LINE__)
+            if(present(errmsg))write (*,*) trim(errmsg)
+            THROW_HARD("directory does not exist")
         endif
         if(present(status)) status = io_status
         deallocate(targetdir)
@@ -789,7 +744,6 @@ contains
             ! ignore '/' '.' './' '..'
             print *,"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
-        !
         ignore_here = .false.
         io_status=0
         if(.not. dir_exists(trim(adjustl(tmpdir)))) then
@@ -797,15 +751,9 @@ contains
             allocate(path, source=trim(tmpdir)//c_null_char)
 #if defined(INTEL)
             call pxfmkdir( trim(adjustl(path)), len_trim(path), INT(o'777'), io_status )
-!            io_status=1
-!             qq = makedirqq(trim(adjustl(path)))
-!             if(.not. qq) call simple_error_check(IERRNO(), &
-!                 "syslib:: makedirqq failed creating "//trim(path))
-!             io_status=0
 #else
             io_status = makedir(trim(adjustl(path)))
 #endif
-!            inquire(file=trim(adjustl(path)), exist=dir_e)
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
                 print *," syslib:: simple_mkdir failed to create "//trim(path)
@@ -854,15 +802,12 @@ contains
 #endif
             if(io_status /= 0)then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-
                 err = int(IERRNO(), kind=4 ) !!  EXTERNAL;  no implicit type in INTEL
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
             endif
-
             if(global_debug) print *,' simple_rmdir removed ', count, ' items'
             deallocate(path)
-
         else
             print *," Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
@@ -888,8 +833,7 @@ contains
         integer :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
         stat = list_dirs(trim(pathhere), num_dirs)
-        if(stat/=0)call simple_stop("simple_syslib::simple_list_dirs failed to process list_dirs "//trim(pathhere),&
-            __FILENAME__,__LINE__)
+        if(stat/=0)THROW_HARD("failed to process list_dirs "//trim(pathhere))
         if(present(outfile)) call syslib_copy_file('__simple_filelist__', trim(outfile))
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(num_dirs) )
@@ -1002,13 +946,11 @@ contains
         end if
         if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
         status = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
-        if(status/=0)call simple_stop("simple_syslib::simple_glob_list_files failed to process file list "//&
-            &trim(thisglob),__FILENAME__,__LINE__)
+        if(status/=0)THROW_HARD("failed to process file list "//trim(thisglob))
         if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
         if(file_exists(trim(outfile))) call del_file(trim(outfile))
         call syslib_copy_file(trim('__simple_filelist__'), trim(outfile), status)
-        if(status/=0) call simple_stop("simple_syslib::simple_glob_list_files failed to copy tmpfile to "//&
-            &trim(outfile),__FILENAME__,__LINE__)
+        if(status/=0) THROW_HARD("failed to copy tmpfile to "//trim(outfile))
         deallocate(thisglob)
     end function simple_glob_list_tofile
 
@@ -1020,8 +962,7 @@ contains
             open(newunit=fnr,file=file,STATUS='OLD',IOSTAT=file_status)
             if( file_status == 0 )then
                 close(fnr, status='delete',IOSTAT=file_status)
-                if(file_status /=0) call simple_stop("simple_syslib::del_file failed to close file "//&
-                    &trim(file),__FILENAME__,__LINE__)
+                if(file_status /=0) THROW_HARD("failed to close file "//trim(file))
             end if
         endif
     end subroutine del_file
@@ -1041,7 +982,7 @@ contains
         endif
         !! glob must be protected by c_null char
         iostatus =  glob_file_list(trim(thisglob), glob_elems, 0)  ! simple_posix.c
-        if(status/=0) call simple_stop("simple_syslib::simple_del_files glob failed",__FILENAME__,__LINE__)
+        if(status/=0) THROW_HARD("glob failed")
         !! Read temp filelist
         open(newunit=luntmp, file='__simple_filelist__')
         allocate( list(glob_elems) )
@@ -1055,8 +996,7 @@ contains
                 call del_file(list(i))
             enddo
             do i=1,glob_elems
-                if(file_exists(list(i))) call simple_stop(" simple_del_files failed to delete "//&
-                    &trim(list(i)),__FILENAME__,__LINE__)
+                if(file_exists(list(i))) THROW_HARD("failed to delete "//trim(list(i)))
             enddo
         else
             print *,"simple_syslib::simple_del_files no files matching ", trim(thisglob)
@@ -1089,19 +1029,18 @@ contains
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
-        if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force glob failed")
+        if(iostatus/=0) THROW_HARD("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
             read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force reading temp file failed")
+            if(iostatus/=0) THROW_HARD("reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
-                    print *, " failed to delete "//trim(list(i))
-                    call simple_stop(" simple_syslib::simple_rm_force ",__FILENAME__,__LINE__)
+                    THROW_HARD("failed to delete "//trim(list(i)))
                 end if
             enddo
         else
@@ -1118,7 +1057,6 @@ contains
         character(len=:), allocatable, intent(out), optional    :: dlist(:)
         integer,          intent(out), optional    :: status
         character(kind=c_char,len=STDLEN), pointer :: list(:)
-        !character(len=STDLEN)                      :: cur
         character(kind=c_char,len=:), allocatable  :: thisglob
         integer                                    :: i, glob_elems,iostatus, luntmp
         if(present(glob))then
@@ -1129,19 +1067,18 @@ contains
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
-        if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force glob failed")
+        if(iostatus/=0) THROW_HARD("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
             read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) call simple_stop("simple_syslib::simple_rm_force reading temp file failed")
+            if(iostatus/=0) THROW_HARD("reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
-                    print *, " failed to delete "//trim(list(i))
-                    call simple_stop(" simple_syslib::simple_rm_force ",__FILENAME__,__LINE__)
+                    THROW_HARD("failed to delete "//trim(list(i)))
                 end if
             enddo
         else
@@ -1168,7 +1105,6 @@ contains
             'May      ', 'June     ', 'July     ', 'August   ', &
             'September', 'October  ', 'November ', 'December ' /)
         integer    :: n, s, y, values(8)
-
         call date_and_time(values=values)
         y = values(1)
         m = values(2)
@@ -1216,23 +1152,13 @@ contains
         write(*,'(a)') 'CPU Usage'
         open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
         if (ios /= 0) then
-            print *, 'Error opening /proc/stat'
-            stop
+            THROW_HARD('opening /proc/stat')
         else
             read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
-            if (ios /= 0) then
-                print *, 'Error reading /proc/stat'
-                stop
-            end if
+            if (ios /= 0)         THROW_HARD('reading /proc/stat')
             close(unit, iostat = ios)
-            if (ios /= 0) then
-                print *, 'Error closing /proc/stat'
-                stop
-            end if
-            if (lineID /= 'cpu ') then
-                print *, 'Error reading /proc/stat'
-                stop
-            end if
+            if (ios /= 0)         THROW_HARD('closing /proc/stat')
+            if (lineID /= 'cpu ') THROW_HARD('reading /proc/stat')
             sumtimes = sum(times)
             percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
             write(*, fmt = '(F6.2,A2)') percent, '%'
@@ -1258,7 +1184,6 @@ contains
         integer  :: status
         character(len=:), allocatable :: compilation_cmd, compiler_ver
         character(len=56)  :: str !! needed by intel
-
 #ifdef __INTEL_COMPILER
 #if __INTEL_COMPILER >= 1700
         status = FOR_IFCORE_VERSION( str )
@@ -1273,18 +1198,15 @@ contains
             ' Intel Fortran version ', __INTEL_COMPILER
 #endif
 #endif
-
         write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
-            trim(FC_COMPILER_CMAKE_VERSION)
-
-
+        trim(FC_COMPILER_CMAKE_VERSION)
 #ifdef USE_F08_ISOENV
         ! F2003 does not have compiler_version/OPTIONS in iso_fortran_env
         compilation_cmd = COMPILER_OPTIONS()
         compiler_ver = COMPILER_VERSION()
 #endif
         if(allocated(compiler_ver))then
-            if(len(compiler_ver) <= 0) call simple_stop('simple_syslib compiler_version str le 0')
+            if(len(compiler_ver) <= 0) THROW_HARD('simple_syslib compiler_version str le 0')
             if (present(file_unit)) then
                 file_unit_op = file_unit
             else
@@ -1306,7 +1228,7 @@ contains
         integer :: stat
         integer(c_long) :: HWM, totRAM, shRAM, bufRAM, peakBuf
         stat = get_sysinfo( HWM, totRAM, shRAM, bufRAM, peakBuf)
-        if (stat /= 0 ) call simple_stop("simple_sysinfo_usage failed")
+        if (stat /= 0 ) THROW_HARD("failed to get sysinfo")
         valueRSS = bufRAM
         valuePeak = totRAM
         valueSize = shRAM
@@ -1401,22 +1323,17 @@ contains
         character(len=200)    :: filename=' '
         character(len=8)      :: pid_char=' '
         character(len=STDLEN) :: command
-        integer               :: pid!,unit
-        !logical               :: ifxst
+        integer               :: pid
 #ifdef MACOSX
         print *," simple_dump_mem_usage cannot run on MacOSX"
         return
 #endif
-        !--- get process ID --  make thread safe
-        !  omp critical dump_mem
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
         command = 'grep -E "^(VmPeak|VmSize|VmHWM|VmRSS):"<'//trim(filename)//'|awk "{a[NR-1]=\$2}END{print a[0],a[1],a[2],a[3]}" '
-!!         | awk {a[NR-1]=$2} END{print a[0],a[1],a[2],a[3]}
         if(present(dump_file)) command = trim(command)//' >> '//trim(dump_file)
         call exec_cmdline(trim(command))
-        !  omp end critical
     end subroutine simple_dump_mem_usage
 
     subroutine simple_abspath (infile, absolute_name, errmsg, check_exists)
@@ -1428,16 +1345,13 @@ contains
         character(len=LINE_MAX_LEN), target  :: fstr
         character(kind=c_char,len=STDLEN)    :: infilename_c
         character(kind=c_char,len=LONGSTRLEN):: outfilename_c
-        !integer :: slen, i
         integer :: lengthin, status, lengthout
         logical :: check_exists_here
         check_exists_here = .true.
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
-                write(*,*)'File does not exist: ', trim(infile)
-                if(present(errmsg)) write(*,*)trim(errmsg)
-                stop
+                THROW_HARD('file: '//trim(infile)//' does not exist')
             endif
         endif
         lengthin     = len_trim(infile)
@@ -1447,7 +1361,6 @@ contains
         call syslib_c2fortran_string(outfilename_c)
         if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
         if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
-
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))

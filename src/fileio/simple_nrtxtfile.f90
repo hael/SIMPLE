@@ -1,13 +1,15 @@
 ! deals with text files of numbers
 module simple_nrtxtfile
 use simple_defs
+use simple_error
 use simple_strings, only: striscomment, cntrecsperline, strisblank
 use simple_fileio,  only: fopen, fclose, fileiochk
-use simple_syslib,  only: is_open, simple_stop
+use simple_syslib,  only: is_open
 implicit none
 
 public :: nrtxtfile
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: OPEN_TO_READ  = 1
 integer, parameter :: OPEN_TO_WRITE = 2
@@ -54,8 +56,6 @@ contains
         if( self%access_type .eq. OPEN_TO_READ )then
             call fopen(tmpunit, file=self%fname, iostat=ios, status='old')
             call fileiochk("simple_nrtxtfile::new; Error when opening file for reading "//trim(self%fname),ios)
-            !! removed fclose check since fileiochk will stop if ios not 0
-
             self%funit = tmpunit
             do
                 ! work out records per line, and number_of_lines
@@ -83,18 +83,12 @@ contains
                 rewind(self%funit)
             else
                 ! Something went wrong..
-                stop 'nrtxtfile::new; Not all lines contain the same number of records?'
+                THROW_HARD('Not all lines contain the same number of records?')
             endif
         else if (self%access_type .eq. OPEN_TO_WRITE) then
-
             call fopen(self%funit, file=self%fname, iostat=ios, status='replace',iomsg=io_msg)
             call fileiochk("nrtxt::new Error when opening file "&
                           //trim(self%fname)//' ; '//trim(io_msg),ios)
-            ! if( ios .ne. 0 )then
-            !     call fclose(self%funit,ios)
-            !     call fileiochk("nrtxt::new Error when closing file "&
-            !               //trim(self%fname)//' ; '//trim(io_msg),ios)
-            ! endif
             if (present(wanted_recs_per_line)) then
                 self%recs_per_line = wanted_recs_per_line
             else
@@ -112,11 +106,11 @@ contains
         character(len=256)          :: io_message
         ! Check we are open to read
         if( self%access_type .ne. OPEN_TO_READ )then
-            stop 'simple_nrtxtfile::readNextDataLine; File is not OPEN_TO_READ'
+            THROW_HARD('File is not OPEN_TO_READ')
         endif
         ! Check the passed array is big enough
         if( size(read_data) .lt. self%recs_per_line )then
-            stop 'simple_nrtxtfile::readNextDataLine; Supplied array is smaller than records per line'
+            THROW_HARD('Supplied array is smaller than records per line')
         endif
         ! read the next line data line
         do
@@ -138,11 +132,10 @@ contains
         real, intent(in)                :: data_to_write(:) !< input data
         integer                         :: record_counter, ios
         if( self%access_type .ne. OPEN_TO_WRITE )then
-            stop 'simple_nrtxtfile::writeDataLineReal; File is not OPEN_TO_WRITE'
+            THROW_HARD('File is not OPEN_TO_WRITE')
         endif
         if( size(data_to_write) .lt. self%recs_per_line )then
-            call simple_stop('simple_nrtxtfile::writeDataLineReal; Supplied array is smaller than records per line',&
-                __FILENAME__,__LINE__)
+            THROW_HARD('supplied array is smaller than records per line')
         endif
         do record_counter = 1, self%recs_per_line
             write(self%funit, '(g14.7,a)', advance='no',iostat=ios) data_to_write(record_counter), ' '
@@ -161,12 +154,12 @@ contains
         integer, intent(inout)          :: data_to_write(:) !< input data
         integer                         :: record_counter, ios
         ! Check we are open to write
-        if (self%access_type .ne. OPEN_TO_WRITE) then
-            call simple_stop('simple_nrtxtfile::writeDataLineInt; File is not OPEN_TO_WRITE',__FILENAME__,__LINE__)
+        if( self%access_type .ne. OPEN_TO_WRITE )then
+            THROW_HARD('File is not OPEN_TO_WRITE')
         endif
         ! Check size
         if( size(data_to_write) .lt. self%recs_per_line )then
-            stop 'simple_nrtxtfile::writeDataLineInt; Supplied array is smaller than records per line'
+            THROW_HARD('Supplied array is smaller than records per line')
         endif
         ! write out the line..
         do record_counter = 1,self%recs_per_line
@@ -174,7 +167,6 @@ contains
             if( ios .ne. 0 )then
                 call fileiochk('simple_nrtxtfile::writeNextDataLine; Encountered error',ios)
             endif
-
         enddo
         ! finish the line
         write(self%funit,*)
@@ -188,7 +180,7 @@ contains
         integer                         :: ios
         ! Check we are open to write
         if (self%access_type .ne. OPEN_TO_WRITE) then
-            stop 'simple_nrtxtfile::writeCommentLine; File is not OPEN_TO_WRITE'
+            THROW_HARD('File is not OPEN_TO_WRITE')
         endif
         ! write out the line..
         write(self%funit, '(2a)', iostat=ios) '# ', trim(adjustl(comment_to_write))

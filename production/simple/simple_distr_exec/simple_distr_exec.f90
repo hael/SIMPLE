@@ -9,6 +9,7 @@ use simple_commander_distr_wflows
 use simple_commander_stream_wflows
 use simple_commander_hlev_wflows
 implicit none
+#include "simple_local_flags.inc"
 
 ! PRE-PROCESSING
 type(preprocess_distr_commander)          :: xpreprocess
@@ -166,8 +167,7 @@ select case(prg)
         if( .not. cline%defined('eo')     ) call cline%set('eo',         'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',     'yes')
         if( cline%get_carg('eo').eq.'no' .and. .not.cline%defined('lp') )then
-            write(*,*)'The resolution limit to the alignement should be set with LP=XX or EO=YES'
-            stop 'The resolution limit to the alignement should be set with LP=XX or EO=YES'
+            THROW_HARD('The resolution limit should be set with LP=XX or EO=YES')
         endif
         call execute_commander(xprime3D_distr, cline)
     case( 'reconstruct3D' )
@@ -216,8 +216,7 @@ select case(prg)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xscale_project%execute(cline )
     case DEFAULT
-        write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
-        stop 'unsupported program'
+        THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
 
 call update_job_descriptions_in_project( cline )

@@ -21,10 +21,10 @@ call date_and_time(date=datestr)
 folder = trim('./SIMPLE_TEST_SYSLIB_'//datestr)
 
 call simple_mkdir( trim(folder) , status=io_stat)
-if(io_stat/=0) call simple_stop("simple_mkdir failed")
+if(io_stat/=0) THROW_HARD("simple_mkdir failed")
 print *," Changing directory to ", folder
 call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
-if(io_stat/=0) call simple_stop("simple_chdir failed")
+if(io_stat/=0) THROW_HARD("simple_chdir failed")
 call simple_getcwd(curDir)
 print *," Current working directory ", curDir
 print *," Previous working directory ", oldCWDfolder
@@ -95,15 +95,15 @@ if( simple_isenv('SIMPLE_PATH') )then
     print *, '     simple_isenv found SIMPLE_PATH'
 else
     print *, '     simple_isenv failed to find SIMPLE_PATH'
-    call simple_stop("simple_isenv failed",__FILENAME__,__LINE__)
+    THROW_HARD("simple_isenv failed")
 end if
 
 print *, '>>> Syslib function Test 1b: simple_getenv/getenv '
 
 io_stat = simple_getenv('SIMPLE_PATH',simple_path_str)
-if (io_stat /= 0) call simple_stop("simple_getenv failed",__FILENAME__,__LINE__)
+if (io_stat /= 0) THROW_HARD("simple_getenv failed")
 if(len_trim(simple_path_str)==0) then
-    call simple_stop("simple_getenv   SIMPLE_PATH str len zero")
+    THROW_HARD("simple_getenv SIMPLE_PATH str len zero")
 else
     print *, '     simple_getenv found SIMPLE_PATH: ', trim(simple_path_str)
 end if
@@ -126,7 +126,7 @@ print *, '>>> Syslib function Test 2a: simple_touch '
 call simple_touch(trim('test_syslib.file'))
 !call exec_cmdline("if [ ! -f test_syslib.file ];then  echo ' simple_touch FAILED!!!!';else echo 'simple_touch WORKED';fi " )
 if  (.not. file_exists('test_syslib.file'))then
-    call simple_stop("simple_touch failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_touch failed ")
 else
     print *, '      simple_touch success'
 endif
@@ -137,7 +137,7 @@ io_stat = simple_rename(trim('test_syslib.file'), trim('test_syslib.file2'))
 !call exec_cmdline("if [ -f test_syslib.file ] && [ ! -f test_syslib.file2 ];&
 !    &then  echo ' simple_rename FAILED!!!!';else echo 'simple_rename WORKED';fi " )
 if (io_stat /= 0 .or. (.not. file_exists('test_syslib.file2')).or. (file_exists('test_syslib.file'))) then
-    call simple_stop("simple_rename failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_rename failed ")
 else
     print *, '      simple_rename success'
 endif
@@ -146,27 +146,6 @@ call exec_cmdline("rm  -f test_syslib.file* " )
 
 print *, '>>> Syslib function Test 2c: simple_copy_file '
 call exec_cmdline("rm -rf testcopy*.mrc SIMPLE_TEST_FILEIO_*; simple_test_fileio 2>/dev/null >/dev/null")
-! TBLOCK()
-! call simple_copy_file(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy.mrc'), status=io_stat)
-! TSTOP()
-! if (io_stat /= 0 .or. (.not. file_exists('testcopy.mrc'))) then
-!     call simple_stop("simple_copy_file failed ",__FILENAME__,__LINE__)
-! else
-!     call exec_cmdline("diff -q testcopy.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
-! endif
-! print *, '>>> Syslib function Test 2d: syslib_copy_file '
-! TBLOCK()
-! call syslib_copy_file(trim('SIMPLE_TEST_FILEIO_'//datestr//'/cubes.mrc'), trim('testcopy1.mrc'), status=io_stat)
-! TSTOP()
-! if (io_stat /= 0 .or. (.not. file_exists('testcopy1.mrc'))) then
-!     call simple_stop("simple_copy_file failed ",__FILENAME__,__LINE__)
-! else
-!     call exec_cmdline("diff -q testcopy1.mrc SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc" )
-! endif
-! print *, '>>> Syslib function Test 2d: system cp '
-! TBLOCK()
-! call exec_cmdline(trim("cp SIMPLE_TEST_FILEIO_"//datestr//"/cubes.mrc testcopy0.mrc"))
-! TSTOP()
 call exec_cmdline("rm  -f testcopy*.mrc; rm -rf SIMPLE_TEST_FILEIO* ")
 
 
@@ -186,7 +165,7 @@ print *, '     dir_exists (expecting false) ', dir_e
 print *, '>>> Syslib function Test 3c: simple_mkdir / mkdir'
 call simple_mkdir(trim('test_syslib'), ignore=.false., status=io_stat)
 if (io_stat /= 0 .or. (.not. dir_exists('test_syslib'))) then
-    call simple_stop("simple_mkdir failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_mkdir failed ")
 else
     print *, '      simple_mkdir success ✓'
 endif
@@ -196,7 +175,7 @@ print *, '>>> Syslib function Test 3d: simple_rmdir '
 
 call simple_rmdir('test_syslib', status=io_stat)
 if (io_stat /= 0 .or. (dir_exists('test_syslib'))) then
-    call simple_stop("simple_rmdir failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_rmdir failed ")
 else
     print *, '    simple_rmdir test_syslib removal success'
 endif
@@ -206,7 +185,7 @@ call exec_cmdline("[ -d test_syslib ] && echo ' simple_rmdir FAILED!!!!' " )
 print *, '>>> Syslib function Test 3e: simple_mkdir / mkdir  test_syslib/temp1/temp2'
 call simple_mkdir('test_syslib/temp1/temp2', ignore=.false., status=io_stat)
 if (io_stat /= 0 .or. (.not. dir_exists('test_syslib/temp1/temp2'))) then
-    call simple_stop("simple_mkdir failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_mkdir failed ")
 else
     print *, '    simple_mkdir test_syslib/temp1/temp2 success'
 endif
@@ -215,13 +194,13 @@ print *, '>>> Syslib function Test 3f: simple_rmdir Recursive'
 
 call simple_rmdir('test_syslib/temp1/temp2', status=io_stat)
 if (io_stat /= 0 .or. (dir_exists('test_syslib/temp1/temp2'))) then
-    call simple_stop("simple_rmdir failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_rmdir failed ")
 else
     print *, '    simple_rmdir test_syslib/temp1/temp2 removal success'
 endif
 call simple_rmdir('./test_syslib', status=io_stat)
 if (io_stat /= 0 .or. (dir_exists('test_syslib'))) then
-    call simple_stop("simple_rmdir non-empty failed ",__FILENAME__,__LINE__)
+    THROW_HARD("simple_rmdir non-empty failed ")
 else
     print *, '    simple_rmdir test_syslib non-empty removal success'
 endif
@@ -242,94 +221,13 @@ print *, '>>>'
 print *, '>>> Syslib function Test 4: FILE LISTING FUNCITONS '
 print *, '>>>'
 print *, '>>> Syslib function Test 4a: simple_list_files / get_file_list -- Root directory'
-! res = simple_list_files ("/", status=io_stat)
-! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-!     print *, '      simple_list_files or get_file_list failed '
-!     call simple_stop("simple_list_files '/' failed ",__FILENAME__,__LINE__)
-!     passed=.false.
-! else
-!     print *, '      simple_list_files: args("/")                  :success'
-!     if(debug)then
-!         print *,"    file list num files:  size ", size(res)
-!         print *,"    files: "
-!         do i=1, size(res)
-!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-!             !       print *, res(i)
-!         enddo
-!     endif
-! endif
-! if(allocated(res))deallocate(res)
-
-
-! print *, '>>> Syslib function Test 4b: simple_list_files / get_file_list -- Current directory Empty '
-! res = simple_list_files ("", status=io_stat)
-! if  (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-!     print *, '<<<  simple_list_files or get_file_list failed '
-!     call simple_stop("simple_list_files '' failed ",__FILENAME__,__LINE__)
-!     passed=.false.
-! else
-!     print *, '      simple_list_files: args("")                   :success'
-!     if(debug)then
-!         print *,"    file list num files: ", n, " size ", size(res)
-!         print *,"    files: "
-!         do i=1, size(res)
-!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-!             !       print *, res(i)
-!         enddo
-!     endif
-! endif
-! if(allocated(res))deallocate(res)
-
-
-! print *, '>>> Syslib function Test 4c: simple_list_files / get_file_list -- Current directory with slash '
-! call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null ")
-! res = simple_list_files ("./", status=io_stat)
-! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-!     print *, '<<<  simple_list_files or get_file_list failed '
-!     call simple_stop("simple_list_files './' failed ",__FILENAME__,__LINE__)
-!     passed=.false.
-! else
-!     print *, '      simple_list_files: args("./")                 :success'
-!
-!     if(debug)then
-!         print *,"    num files: ", n, " size ", size(res)
-!         print *,"    files: "
-!         do i=1, size(res)
-!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-!             !       print *, res(i)
-!         enddo
-!     endif
-! endif
-! if(allocated(res))deallocate(res)
-
-! print *, '>>> Syslib function Test 4d: simple_list_files / glob_file_list -- single glob (this will emulate "ls *" ) '
-! call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null")
-! res = simple_list_files (glob="SIMPLE_TEST_FILEIO*/*.txt", status=io_stat)
-! if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
-!     print *, '<<<  simple_list_files or glob_file_list failed '
-!     call simple_stop("simple_list_files glob='*' failed ",__FILENAME__,__LINE__)
-!     passed=.false.
-! else
-!     print *, '      simple_list_files: args(glob="*")             :success'
-!
-!     if(debug)then
-!         print *,"    num files: ", size(res)
-!         print *,"    files: "
-!         do i=1, size(res)
-!             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-!             !       print *, res(i)
-!         enddo
-!     endif
-! endif
-! if(allocated(res))deallocate(res)
-
 
 print *, '>>> Syslib function Test 4e: simple_glob_list_tofile / glob_file_list -- advanced glob  '
 call del_file('tmp_file_list.txt')
 io_stat = simple_glob_list_tofile(glob="SIMPLE_TEST_FILEIO*/*.txt", outfile='tmp_file_list.txt')
 if  (io_stat /= 0 .or. (.not.file_exists('tmp_file_list.txt')))then
     print *, '<<<  simple_glob_list_tofile or glob_file_list failed '
-    call simple_stop("simple_glob_list_tofile failed",__FILENAME__,__LINE__)
+    THROW_HARD("simple_glob_list_tofile failed")
     passed=.false.
 else
     print *, '      simple_glob_list_tofile: args("SIMPLE_TEST_FILEIO*/*.txt", outfile="tmp_file_list.txt")    :success'
@@ -339,7 +237,6 @@ else
         print *,"    files: "
         do i=1, size(res)
             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
         enddo
         call exec_cmdline('cat tmp_file_list.txt')
     endif
@@ -352,7 +249,7 @@ print *, '>>> Syslib function Test 4f:   simple_list_dirs / list_dirs '
 res = simple_list_dirs(".", status=io_stat)
 if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
     print *, '<<<   simple_list_dirs/get_file_list "." failed '
-    call simple_stop('simple_list_dirs failed ',__FILENAME__,__LINE__)
+    THROW_HARD('simple_list_dirs failed')
     passed=.false.
 else
     if(debug)then
@@ -360,7 +257,6 @@ else
         print *,"    dirs: "
         do i=1, size(res)
             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
         enddo
     endif
 endif
@@ -375,7 +271,7 @@ call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null ")
 n = simple_del_files (glob="SIMPLE_TEST_FILEIO*/tmp*.txt", dlist=res, status=io_stat)
 if  (io_stat /= 0 .or. (.not.allocated(res)) .or. (file_exists('__simple_filelist__'))) then
     print *, '<<<  simple_del_files / glob_file_list rm -f SIMPLE_TEST_FILEIO*/tmp*.txt FAILED'
-    call simple_stop('simple_del_files  FAILED',__FILENAME__,__LINE__)
+    THROW_HARD('simple_del_files FAILED')
     passed=.false.
 else
     if(debug)then
@@ -383,7 +279,6 @@ else
         print *,"   deleted files: "
         do i=1, size(res)
             if(file_exists(trim(res(i)))) write(*,'(a,": File still exists")')  trim(adjustl(res(i)))
-            !       print *, res(i)
         enddo
     endif
 endif
@@ -397,7 +292,7 @@ call exec_cmdline("simple_test_fileio 2> /dev/null > /dev/null")
 n = simple_rm_force (glob="SIMPLE_TEST_FILEIO*", dlist=res, status=io_stat)
 if  (io_stat /= 0 .or. (.not.allocated(res)) .or. (file_exists('__simple_filelist__'))) then
     print *, '<<<  simple_rm_force or glob_rm_rf failed '
-    call simple_stop( ' simple_rm_force failed ',__FILENAME__,__LINE__)
+    THROW_HARD( ' simple_rm_force failed ')
     passed=.false.
 else
     if(debug)then
@@ -405,7 +300,6 @@ else
         print *,"   deleted files and dirs: "
         do i=1, size(res)
             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
         enddo
     endif
 endif
@@ -417,7 +311,7 @@ print *, '>>> Syslib function Test 5c: simple_rm_force / glob_rm_all -- (emulate
 n = simple_rm_force (glob="./dir*", dlist=res, status=io_stat)
 if  (io_stat /= 0 .or. (.not.allocated(res)) .or. (file_exists('__simple_filelist__'))) then
     print *, '<<<  simple_rm_force or glob_rm_rf failed '
-    call simple_stop( ' simple_rm_force failed ',__FILENAME__,__LINE__)
+    THROW_HARD( ' simple_rm_force failed ')
     passed=.false.
 else
     if(debug)then
@@ -425,7 +319,6 @@ else
         print *,"   deleted files and dirs: "
         do i=1, size(res)
             write(*,'(i30,":",a)') len_trim(res(i)), trim(adjustl(res(i)))
-            !       print *, res(i)
         enddo
     endif
 endif
@@ -469,43 +362,8 @@ print *, '>>>  Syslib function Test 7b: wait_pid'
 io_stat = wait_pid(pid)
 print *, '      wait_pid status', io_stat
 
-! print *, '>>> Syslib function print_fftw_version  '
-! call print_fftw_version()
-
-#if defined(INTEL)
-! print *,"  Is  High Bandwidth Memory  available? ", hbw_availability()
-! hbwsize= get_hbw_size()
-! print *,"  What is the High Bandwidth Memory size? ", hbwsize
-! print *," Check Fast memory policy.."
-! policy = fastmem_policy()
-#endif
-
 print *, '>>>'
 print *, '>>> Syslib tests completed successfully'
 print *, '>>>'
-
-! contains
-!     function fftw3_lib_version() result(result_str)
-!         use iso_c_binding
-!         implicit none
-!         character(len=STDLEN) :: result_str
-!         character,pointer,dimension(:) :: fftw_version_str
-!         integer :: i,sz
-!         CALL C_F_POINTER(get_fftw_version(), fftw_version_str, [ 255 ])
-!         sz=len_trim(fft_version_str)
-!         do i=1,sz
-!             result_str(i:i+1)=fftw_version_str(i)
-!             endif
-!         write(*,'(a,a)') 'FFTW library version ', trim(fftw_version_str)
-!     end
-
-!   use iso_c_binding, only: C_CHAR, C_NULL_CHAR
-!   interface
-!     subroutine print_c(string) bind(C, name="print_C")
-!       use iso_c_binding, only: c_char
-!       character(kind=c_char) :: string(*)
-!     end subroutine print_c
-!   end interface
-!   call print_c(C_CHAR_"Hello World"//C_NULL_CHAR)
 
 end program simple_test_syslib

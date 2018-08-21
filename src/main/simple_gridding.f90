@@ -89,7 +89,7 @@ contains
         real    :: arg
         ! get the limits
         ldim = vol%get_ldim()
-        if( vol%is_ft() ) call simple_stop('Volume must not be FTed')
+        if( vol%is_ft() ) THROW_HARD('Volume must not be FTed')
         lims(:,1) = 1
         lims(:,2) = ldim
         ! make the window

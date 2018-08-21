@@ -44,7 +44,7 @@ contains
         if( params%starfile == 'NONE')then
             ppos = scan(trim(params%projfile),".", BACK= .true.)
             if ( ppos <= 0 )then
-                call simple_stop( " exportstar_project must be within a valid SIMPLE project. Projfile failed.")
+                THROW_HARD("exportstar_project must be within a valid SIMPLE project. Projfile failed.")
             end if
             allocate(this_starfile, source=params%projfile(1:ppos)//'star')
         else
@@ -72,8 +72,7 @@ contains
            write (*,*) "    extract:        for extract dose-weighted particles"
            write (*,*) "    refine3d:       for refined 3D particles"
            write (*,*) "    post:           for post-processing"
-
-           call simple_stop( " exportstar_project failed due to incorrect startype arg")
+           THROW_HARD("exportstar_project failed due to incorrect startype arg")
         end if
         !! Prepare project
 !        call starproj%prepare(spproj,  params, this_starfile)
@@ -103,7 +102,7 @@ contains
         case('all')
            call starproj%export_all(spproj,  params%starfile)
         case default
-           call simple_stop( " exportstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+           THROW_HARD("exportstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos|all.")
        end select
 
 
@@ -145,8 +144,7 @@ contains
        ! parameter input management
        l_starfile = cline%defined('starfile')
        if( .not. l_starfile)then
-           write(*,*) 'Star project file argument empty or not set, e.g. starfile=<filename> or <directory>'
-           call simple_stop( "ERROR! simple_commander_star :: exec_import_starproject ")
+           THROW_HARD('Star project file argument empty or not set, e.g. starfile=<filename> or <directory>')
        end if
        if(dir_exists(params%starfile))then
            call simple_list_files(trim(params%starfile)//'*.star', starfiles)
@@ -157,8 +155,8 @@ contains
            starfiles(1)=trim(params%starfile)
            nStarfiles=1
        else
-           write(*,*) " Importing star project must have a valid input file, starfile=<filename|directory>"
-           call simple_stop('ERROR! simple_commander_star :: exec_import_starproject')
+           write(*,*) " "
+           THROW_HARD('Importing star project must have a valid input file, starfile=<filename|directory>')
        endif
        inputted_boxtab = cline%defined('boxtab')
 
@@ -175,7 +173,7 @@ contains
        ndatlines = starproj%get_ndatalines()
        nrecs     = starproj%get_nrecs_per_line()
 
-       !! Check number of records on data line to validate starfile 
+       !! Check number of records on data line to validate starfile
        if(nrecs == 0)then
            HALT_NOW("exec_import_starproject; Unable to read header records in STAR file.")
        end if
@@ -229,7 +227,7 @@ contains
        case('all')
            call starproj%import_all(spproj, params, cline, params%starfile)
        case default
-           call simple_stop( " import_starproject must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos or all.")
+           THROW_HARD("import_starproject must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|post|all")
        end select
        call starproj%check_temp_files("importstar commander")
        call starproj%print_info

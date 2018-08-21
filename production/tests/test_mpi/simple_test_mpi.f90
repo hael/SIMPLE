@@ -13,6 +13,7 @@ program simple_test_mpi
 #endif
 
     implicit none
+    #include "simple_local_flags.inc"
     integer ierr, rank
 
     call MPI_INIT ( ierr )
@@ -281,7 +282,7 @@ contains
         elapsed = real(time2-time1,8)/real(crate,8)
         print *, a(1000000)
         if(abs(1000577.3502691896_dp -  a(1000000)) > 1e-6 )&
-            stop 'Error in Serial block distribution'
+            THROW_HARD('Error in Serial block distribution')
 
         print *, 'Elapsed real time = ', elapsed, 'second(s)'
           print *, ' sum(a)', sum(a)

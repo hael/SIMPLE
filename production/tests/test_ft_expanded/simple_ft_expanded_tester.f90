@@ -6,6 +6,7 @@ implicit none
 
 public :: exec_ft_expanded_test
 private
+#include "simple_local_flags.inc"
 
 ! module global constants
 integer, parameter :: LDIM(3)=[240,240,1], SQRAD=60, NTST=50, NNOISY=20
@@ -71,7 +72,7 @@ contains
         if( corravg > 0.999 .and. distavg < 0.0001 )then
             ! test passed
         else
-            stop '****ft_expanded_tester FAILURE :: test_shifted_correlator'
+            THROW_HARD('****ft_expanded_tester FAILURE :: test_shifted_correlator')
         endif
 
         contains

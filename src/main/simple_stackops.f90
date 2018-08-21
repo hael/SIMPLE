@@ -22,7 +22,7 @@ contains
             write(*,*) 'The input stack is corrupt!'
             write(*,*) 'Number of images: ', n
             write(*,*) 'Logical dimensions: ', ldim
-            call simple_stop ('procimgfile exception')
+            THROW_HARD('procimgfile exception')
         endif
     end subroutine raise_exception
 

@@ -11,24 +11,25 @@ implicit none
 public :: jpg_img, test_jpg_export
 private
 #include "simple_local_flags.inc"
-    !*** cptr should be have the same size as a c pointer
-    !*** It doesn't matter whether it is an integer or a real
+
+!*** cptr should be have the same size as a c pointer
+!*** It doesn't matter whether it is an integer or a real
 integer, parameter         :: cptr          = kind(5)
 integer, parameter         :: numComponents = 3
-integer, parameter, public :: max_colors =  256
-integer, parameter         :: GREYSCALE  =  1
+integer, parameter, public :: max_colors    =  256
+integer, parameter         :: GREYSCALE     =  1
 integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
 integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
 type jpg_img
     private
-    integer                           :: width      =  0
-    integer                           :: height     =  0
-    integer                           :: quality    =  90
-    integer                           :: colorspace =  1
-    integer(cptr)                     :: ptr        =  0
-    logical                           :: fmode      = .false.
-    real                              :: gamma      = 0.707    ! 1./sqrt(2.)
-    logical                           :: normalised = .false.
+    integer       :: width      =  0
+    integer       :: height     =  0
+    integer       :: quality    =  90
+    integer       :: colorspace =  1
+    integer(cptr) :: ptr        =  0
+    logical       :: fmode      = .false.
+    real          :: gamma      = 0.707    ! 1./sqrt(2.)
+    logical       :: normalised = .false.
 contains
     procedure          :: destructor
     procedure          :: constructor
@@ -303,7 +304,7 @@ contains
         VerbosePrint '>>> Calling stbi_write_jpg quality ', self%quality
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
         VerbosePrint '>>> stbi_write_jpg returned status ', status
-        if(status == 0 ) call simple_stop('save_jpeg_r4 call to write_jpeg failed' )
+        if(status == 0 ) THROW_HARD('call to write_jpeg failed')
         status = 0
         deallocate(fstr,img_buffer)
         VerbosePrint '>>> Done  save_jpeg_r4 '
@@ -319,7 +320,6 @@ contains
         integer(c_int)                :: pixel
         character(len=:), allocatable :: fstr
         integer(1),       pointer     :: img_buffer(:) => NULL()
-
         VerbosePrint '>>>  In save_jpeg_i4 '
         status       = 0
         w            = size(in_buffer,1)
@@ -352,7 +352,7 @@ contains
         img=c_loc(img_buffer)
         allocate(fstr, source=trim(fname)//c_null_char)
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
-        if( status == 0 ) call simple_stop('save_jpeg_i4 call to write_jpeg returned status ==1' )
+        if( status == 0 ) THROW_HARD('call to write_jpeg returned status == 0')
         status = 0
         if(allocated(fstr)) deallocate(fstr)
         deallocate(img_buffer)
@@ -371,7 +371,7 @@ contains
         verbose =.true.
         allocate(fstr, source=trim(fname)//c_null_char)
         status = stbi_read_jpg(fstr, img, w, h, c )
-        if(status ==0) call simple_stop ("simple_jpg::load_jpeg_r4 stbi_read_jpeg failed ")
+        if(status ==0) THROW_HARD ("stbi_read_jpeg failed")
         status=0
         if(associated(imgbuffer)) nullify(imgbuffer)
         bshape = (/ w * h /)
@@ -418,7 +418,7 @@ contains
         allocate(fstr, source=trim(fname)//c_null_char)
         VerbosePrint 'load_jpeg_i4 ', fstr
         status = stbi_read_jpg (fstr, img, w, h, c )
-        if(status==0) call simple_stop ("simple_jpg::load_jpeg_i4 read_jpeg failed ")
+        if(status==0) THROW_HARD ("read_jpeg failed")
         status=0
         VerbosePrint 'load_jpeg_i4 return values width, height, components', w, h, c
         if(associated(imgbuffer)) nullify(imgbuffer)
@@ -450,31 +450,31 @@ contains
     end subroutine destructor
 
     subroutine test_jpg_export()
-        use,intrinsic                                        :: iso_c_binding
+        use,intrinsic :: iso_c_binding
         implicit none
-        character                          :: buf(1024)
-        integer, allocatable               :: int32_buffer(:,:)
-        real, allocatable                  :: real32_buffer(:,:)
+        character            :: buf(1024)
+        integer, allocatable :: int32_buffer(:,:)
+        real,    allocatable :: real32_buffer(:,:)
         character(len=:), allocatable :: simple_path_str
         character(len=:), allocatable :: testimg
-        integer status, bmp_size , width , height , pixel_size
-        character(len=:), allocatable              :: cmd, fstr
-        type(jpg_img)                      :: jpg
-        logical passed
-        debug           = .true.
-        passed = .true.
-        pixel_size      = 3
-        width           = 227
-        height          = 149
-        status          = 1
-        bmp_size        = width * height * pixel_size
+        integer :: status, bmp_size , width , height , pixel_size
+        character(len=:), allocatable :: cmd, fstr
+        type(jpg_img)                 :: jpg
+        logical :: passed
+        debug      = .true.
+        passed     = .true.
+        pixel_size = 3
+        width      = 227
+        height     = 149
+        status     = 1
+        bmp_size   = width * height * pixel_size
         status = simple_getenv('SIMPLE_PATH', simple_path_str)
-        if(status/=0) call simple_stop(" SIMPLE_PATH not found in environment ")
+        if(status/=0) THROW_HARD("SIMPLE_PATH not found in environment")
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
         allocate(cmd, source="cp "//trim(adjustl(testimg))//" ./; convert testimg.jpg -colorspace Gray  test.jpg")
         if(.not. file_exists("test.jpg")) then
-            if(.not. file_exists(testimg)) call simple_stop("test_jpg_export needs the jpeglib testimg to run test")
+            if(.not. file_exists(testimg)) THROW_HARD("the jpeglib testimg needed to run test")
             print *," Executing ", cmd
             call exec_cmdline(cmd)
         end if
@@ -500,7 +500,7 @@ contains
                 status=1
             end if
         end if
-        if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg int32 failed")
+        if(status==1) THROW_HARD("load_jpeg int32 failed")
         print *,"test_jpg_export: Testing load_jpeg_r4 "
         status = jpg%loadJpg(fstr, real32_buffer)
         if(status == 0) then
@@ -519,7 +519,7 @@ contains
                 status=1
             end if
         end if
-        if(status==1) call simple_stop("test_jpg_export: FAILED: load_jpeg real32 failed")
+        if(status==1) THROW_HARD("load_jpeg real32 failed")
         deallocate(fstr)
         allocate(fstr, source="test-i4.jpg")
         call del_file(fstr)
@@ -532,7 +532,7 @@ contains
                 status=1
             end if
         end if
-        if(status==1) call simple_stop("test_jpg_export: FAILED: save_jpeg int32 failed")
+        if(status==1) THROW_HARD("save_jpeg int32 failed")
         deallocate(fstr)
         allocate(fstr, source="test-r4.jpg")
         call del_file(fstr)
@@ -546,7 +546,7 @@ contains
                 status=1
             end if
         end if
-        if(status==1) call simple_stop("test_jpg_export: FAILED: save_jpeg real32 failed")
+        if(status==1) THROW_HARD("save_jpeg real32 failed")
         if (allocated(int32_buffer)) deallocate(int32_buffer)
         if (allocated(real32_buffer)) deallocate(real32_buffer)
         if (allocated(simple_path_str)) deallocate( simple_path_str)

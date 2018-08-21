@@ -13,13 +13,15 @@
 
 module simple_imghead
 use simple_defs
-use simple_error,  only: allocchk
-use simple_fileio, only: fopen, fileiochk, fclose, fname2format, file_exists
+use simple_error,   only: allocchk, simple_exception
+use simple_fileio,  only: fopen, fileiochk, fclose, fname2format
 use simple_strings, only: int2str
+use simple_syslib,  only: file_exists
 implicit none
 
 public :: ImgHead, MrcImgHead, SpiImgHead, test_imghead, find_ldim_nptcls, has_ldim_nptcls
 private
+#include "simple_local_flags.inc"
 
 integer, parameter         :: NREALS          = 104
 integer, parameter, public :: dataRbytes      = 1
@@ -224,10 +226,10 @@ contains
                     ! set minimal header
                     call self%setMinimal(ldim, .false., 1.)
                 else
-                    stop 'Need logical dimension (ldim) to create SPIDER header; new; simple_imghead'
+                    THROW_HARD('need logical dimension (ldim) to create SPIDER header')
                 end if
             class DEFAULT
-                stop 'Unsupported header type; initImgHead; simple_imghead'
+                THROW_HARD('unsupported header type')
         end select
         self%exists = .true.
     end subroutine new
@@ -291,7 +293,7 @@ contains
                 write(*,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
                 write(*,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
             class DEFAULT
-                stop 'Format not supported; print; simple_imghead'
+                THROW_HARD('format not supported')
         end select
     end subroutine print_imghead
 
@@ -364,7 +366,7 @@ contains
                     //trim(io_message),io_status)
                 call self%transfer_byte_array2obj
             class DEFAULT
-                stop 'Format not supported; print; simle_imghead'
+                THROW_HARD('format not supported')
         end select
     end subroutine read
 
@@ -380,7 +382,7 @@ contains
         if( self%exists )then
             ! all good
         else
-            stop 'The header that you are trying to write to disk does not exist! write; simple_imghead'
+            THROW_HARD('the header that you are trying to write to disk does not exist!')
         endif
         ppos = 1
         if( present(pos) ) ppos = pos
@@ -440,7 +442,7 @@ contains
             write(unit=lun,pos=ppos,iostat=io_status) self%byte_array
             call fileiochk(" simple_imghead::write  writing header bytes to disk , unit "//int2str(lun),io_status)
         class DEFAULT
-            stop 'Format not supported; print; simle_imghead'
+            THROW_HARD('format not supported')
         end select
     end subroutine write
 
@@ -615,7 +617,7 @@ contains
                 self%num      = 0.
                 self%glonum   = 0.
             class DEFAULT
-                stop 'Format not supported; reset2default; simle_imghead'
+                THROW_HARD('format not supported')
         end select
     end subroutine reset2default
 
@@ -663,7 +665,7 @@ contains
                 else if( is_3d .and. is_ft .and. even_dims )then
                     self%iform = -22.
                 else
-                    stop 'undefined file type, setMinimal; simple_imghead'
+                    THROW_HARD('undefined file type')
                 endif
                 self%irec = real(ldim(2), kind=4)+self%labrec ! Total number of records (including header records)
                 ! in each image of a simple image or stacked image file
@@ -682,7 +684,7 @@ contains
                 endif
                 self%imgnum = 0.   ! only used in a stacked image header, the number of the current image or zero if this image is unused
             class DEFAULT
-                stop 'Format not supported; setMinimal; simle_imghead'
+                THROW_HARD('format not supported')
         end select
 
     contains
@@ -769,12 +771,12 @@ contains
     integer function firstDataByte( self )
         class(ImgHead), intent(in) :: self
         select type(self)
-        type is( MrcImgHead )
-            firstDataByte = MRCHEADSZ+1+self%nsymbt
-        type is( SpiImgHead )
-            firstDataByte = int(self%labbyt)+1
+            type is( MrcImgHead )
+                firstDataByte = MRCHEADSZ+1+self%nsymbt
+            type is( SpiImgHead )
+                firstDataByte = int(self%labbyt)+1
             class DEFAULT
-            stop 'Unsupported header type; firstDataByte; simple_imghead'
+                THROW_HARD('unsupported header type')
         end select
     end function firstDataByte
 
@@ -895,7 +897,7 @@ contains
                     case (3)
                         dim = self%nz
                     case DEFAULT
-                        stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
+                        THROW_HARD('dimension should be 1, 2 or 3')
                 end select
             type is( SpiImgHead )
                 select case( which_dim )
@@ -906,7 +908,7 @@ contains
                     case (3)
                         dim = int(self%nz)
                     case DEFAULT
-                        stop 'Dimension should be 1, 2 or 3; getDim; simle_imghead'
+                        THROW_HARD('dimension should be 1, 2 or 3')
                 end select
         end select
     end function getDim
@@ -933,38 +935,37 @@ contains
     !>  \brief  set the dims in the header
     subroutine setDim( self, which_dim, d )
         class(ImgHead), intent(inout) :: self
-        integer,        intent(inout)    :: which_dim, d
+        integer,        intent(inout) :: which_dim, d
         if( d < 1 )then
             write(*,'(a,1x,f7.0)') 'Dimension: ', real(d)
-            write(*,*) 'Trying to set image dimension that is nonconforming; setDim; simple_imghead'
-            stop
+            THROW_HARD('trying to set image dimension that is nonconforming')
         endif
         select type( self )
-        class is( MrcImgHead )
-            select case( which_dim )
-            case(1)
-                self%nx = d
-                self%mx = d
-            case(2)
-                self%ny = d
-                self%my = d
-            case(3)
-                self%nz = d
-                self%mz = d
-            case DEFAULT
-                stop 'not a valid dimension; setDim; simple_imghead'
-            end select
-        class is( SpiImgHead )
-            select case( which_dim )
-            case(1)
-                self%nx = d
-            case(2)
-                self%ny = d
-            case(3)
-                self%nz = d
-            case DEFAULT
-                stop 'not a valid dimension; setDim; simple_imghead'
-            end select
+            class is( MrcImgHead )
+                select case( which_dim )
+                    case(1)
+                        self%nx = d
+                        self%mx = d
+                    case(2)
+                        self%ny = d
+                        self%my = d
+                    case(3)
+                        self%nz = d
+                        self%mz = d
+                    case DEFAULT
+                        THROW_HARD('not a valid dimension')
+                end select
+            class is( SpiImgHead )
+                select case( which_dim )
+                    case(1)
+                        self%nx = d
+                    case(2)
+                        self%ny = d
+                    case(3)
+                        self%nz = d
+                    case DEFAULT
+                        THROW_HARD('not a valid dimension')
+                end select
         end select
     end subroutine setDim
 
@@ -1112,14 +1113,11 @@ contains
                     call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
                     if( doprint ) call hed%print_imghead
                 case DEFAULT
-                    write(*,*) 'The inputted file is not an MRC file; get_mrcfile_info; simple_jiffys'
-                    write(*,*) fname
-                    stop
+                    write(*,*) 'file: ', trim(fname)
+                    THROW_HARD('the inputted file is not an MRC file')
             end select
         else
-            write(*,*) 'The below file does not exists; get_mrcfile_info; simple_jiffys'
-            write(*,*) fname
-            stop
+            THROW_HARD('file: '//trim(fname)//' does not exists')
         endif
     end subroutine get_mrcfile_info
 
@@ -1164,14 +1162,10 @@ contains
                     return
                 endif
             else
-                write(*,*) 'The inputted file is not a SPIDER file; get_spifile_info; simple_jiffys'
-                write(*,*) fname
-                stop
+                THROW_HARD(trim(fname)//' is not a SPIDER file')
             endif
         else
-            write(*,*) 'The below file does not exists; get_spifile_info; simple_jiffys'
-            write(*,*) fname
-            stop
+            THROW_HARD('file: '//trim(fname)//' does not exist')
         endif
 
         contains
@@ -1229,9 +1223,7 @@ contains
                 call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
                 nptcls = maxim
             case DEFAULT
-                write(*,*) 'fname: ', trim(fname)
-                write(*,*) 'format descriptor: ', fname2format(fname)
-                stop 'File format not supported; find_ldim_nptcls; simple_imghead'
+                THROW_HARD('format of file: '//trim(fname)//' not supported')
         end select
     end subroutine find_ldim_nptcls
 
@@ -1266,7 +1258,7 @@ contains
                 type is (SpiImgHead)
                     return
                 class DEFAULT
-                    stop 'Unsupported header type; kill; simple_imghead'
+                    THROW_HARD('unsupported header type')
             end select
             self%exists = .false.
         endif
@@ -1296,7 +1288,7 @@ contains
         if( all(hed%getDims() == hed2%getDims()) )then
             ! all good
         else
-            stop 'test_imghedfailed; simple_imghed'
+            THROW_HARD('test_imghed failed')
         endif
         write(*,'(a)') 'SIMPLE_IMGHEAD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_imghead

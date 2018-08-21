@@ -88,7 +88,7 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        if( str_has_substr(arg(pos+1:), 'simple_') ) stop 'giving program names with simple_* prefix is depreciated'
+        if( str_has_substr(arg(pos+1:), 'simple_') ) THROW_HARD('giving program names with simple_* prefix is depreciated')
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(arg(pos+1:), ptr2prg)
         ! list programs if so instructed
@@ -274,7 +274,7 @@ contains
             if( self%argcnt > MAX_CMDARGS )then
                 write(*,*) 'self%argcnt: ', self%argcnt
                 write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                stop 'ERROR! stack overflow; simple_cmdline :: set_1'
+                THROW_HARD('stack overflow; set_1')
             endif
             self%cmds(self%argcnt)%key = trim(key)
             self%cmds(self%argcnt)%rarg = rarg
@@ -296,7 +296,7 @@ contains
             if( self%argcnt > MAX_CMDARGS )then
                 write(*,*) 'self%argcnt: ', self%argcnt
                 write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                stop 'ERROR! stack overflow; simple_cmdline :: set_2'
+                THROW_HARD('stack overflow; set_2')
             endif
             self%cmds(self%argcnt)%key = trim(key)
             self%cmds(self%argcnt)%carg = trim(carg)
@@ -306,35 +306,33 @@ contains
         endif
     end subroutine set_2
 
-   !> \brief  for setting a command line argument with cmdarg object
+    !> \brief  for setting a command line argument with cmdarg object
     subroutine set_3( self, cmarg )
         class(cmdline),   intent(inout) :: self
         type(cmdarg), intent(in)    :: cmarg
         integer :: which
-     !   do n=1,size(cmarg)
-            which = self%lookup(cmarg%key)
-            if( which == 0 )then
-                self%argcnt = self%argcnt + 1
-                if( self%argcnt > MAX_CMDARGS )then
-                    write(*,*) 'self%argcnt: ', self%argcnt
-                    write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                    stop 'ERROR! stack overflow; simple_cmdline :: set_3'
-                endif
-                self%cmds(self%argcnt)%key = trim(cmarg%key)
-                if(allocated(cmarg%carg))then
-                    self%cmds(self%argcnt)%carg = trim(cmarg%carg)
-                else
-                    self%cmds(self%argcnt)%rarg = cmarg%rarg
-                endif
-                self%cmds(self%argcnt)%defined = .true.
-            else
-                if(allocated(cmarg%carg))then
-                    self%cmds(which)%carg = trim(cmarg%carg)
-                else
-                    self%cmds(self%argcnt)%rarg = cmarg%rarg
-                endif
+        which = self%lookup(cmarg%key)
+        if( which == 0 )then
+            self%argcnt = self%argcnt + 1
+            if( self%argcnt > MAX_CMDARGS )then
+                write(*,*) 'self%argcnt: ', self%argcnt
+                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                THROW_HARD('stack overflow; set_3')
             endif
-      !  end do
+            self%cmds(self%argcnt)%key = trim(cmarg%key)
+            if(allocated(cmarg%carg))then
+                self%cmds(self%argcnt)%carg = trim(cmarg%carg)
+            else
+                self%cmds(self%argcnt)%rarg = cmarg%rarg
+            endif
+            self%cmds(self%argcnt)%defined = .true.
+        else
+            if(allocated(cmarg%carg))then
+                self%cmds(which)%carg = trim(cmarg%carg)
+            else
+                self%cmds(self%argcnt)%rarg = cmarg%rarg
+            endif
+        endif
     end subroutine set_3
 
     !> \brief  for setting a command line argument with a list of cmdarg objects
@@ -349,7 +347,7 @@ contains
                 if( self%argcnt > MAX_CMDARGS )then
                     write(*,*) 'self%argcnt: ', self%argcnt
                     write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
-                    stop 'ERROR! stack overflow; simple_cmdline :: set_3'
+                    THROW_HARD('stack overflow; set_4')
                 endif
                 self%cmds(self%argcnt)%key = trim(cmarg(n)%key)
                 if(allocated(cmarg(n)%carg))then

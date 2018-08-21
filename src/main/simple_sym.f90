@@ -7,6 +7,7 @@ implicit none
 
 public :: sym, sym_tester
 private
+#include "simple_local_flags.inc"
 
 type sym
     private
@@ -899,7 +900,7 @@ contains
             newmat(2,1) = sin(inrad)
             newmat(1,2) = -sin(inrad)
         else
-            call simple_stop('Unsupported matrix spec; matcreate; simple_ori')
+            THROW_HARD('Unsupported matrix spec; matcreate')
         endif
     end function matcreate
 

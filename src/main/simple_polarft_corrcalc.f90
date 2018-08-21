@@ -235,11 +235,11 @@ contains
         ! error check
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
             write(*,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
-            call simple_stop ('nptcls (# of particles) must be > 0; new; simple_polarft_corrcalc')
+            THROW_HARD ('nptcls (# of particles) must be > 0; new')
         endif
         if( nrefs < 1 )then
             write(*,*) 'nrefs: ', nrefs
-            call simple_stop ('nrefs (# of reference sections) must be > 0; new; simple_polarft_corrcalc')
+            THROW_HARD ('nrefs (# of reference sections) must be > 0; new')
         endif
         self%ldim = [params_glob%boxmatch,params_glob%boxmatch,1] !< logical dimensions of original cartesian image
         test      = .false.
@@ -248,7 +248,7 @@ contains
         even_dims = all(test)
         if( .not. even_dims )then
             write(*,*) 'self%ldim: ', self%ldim
-            call simple_stop ('only even logical dims supported; new; simple_polarft_corrcalc')
+            THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
         if( present(ptcl_mask) )then

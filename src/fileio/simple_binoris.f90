@@ -1,7 +1,7 @@
 ! for manging orientation data using binary files
 module simple_binoris
 use, intrinsic :: ISO_C_BINDING
-use simple_defs     ! use all in there
+use simple_defs
 use simple_strings
 use simple_error
 use simple_syslib
@@ -90,12 +90,11 @@ contains
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then
-            stop 'file_size cannot be inquired; binoris :: open'
+            THROW_HARD('file_size cannot be inquired')
         else if( filesz >= N_BYTES_HEADER )then
             ! ok
         else
-            write(*,*) 'file: ', trim(fname)
-            stop 'file_size too small to contain a header; binoris :: open'
+            THROW_HARD('size of file: '//trim(fname)//' too small to contain a header')
         endif
         ! clear segments before reading header
         call self%clear_segments
@@ -147,7 +146,7 @@ contains
     subroutine read_header( self )
         class(binoris), intent(inout) :: self  !< instance
         integer :: io_status
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_header'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         read(unit=self%funit,pos=1,iostat=io_status) self%header
         if( io_status .ne. 0 ) call fileiochk('binoris ::read_header, ERROR reading header bytes ', io_status)
     end subroutine read_header
@@ -155,10 +154,9 @@ contains
     subroutine write_header( self )
         class(binoris), intent(inout) :: self  !< instance
         integer :: io_status
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_header'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         write(unit=self%funit,pos=1,iostat=io_status) self%header
         if( io_status .ne. 0 ) call fileiochk('binoris :: write_header, ERROR writing header bytes ', io_status)
-        DebugPrint  'wrote: ', sizeof(self%header), ' header bytes'
     end subroutine write_header
 
     subroutine print_header( self )
@@ -191,10 +189,10 @@ contains
             if( fromto(1) < 1 .or. fromto(2) > noris )then
                 write(*,*) 'noris : ', noris
                 write(*,*) 'fromto: ', fromto
-                stop 'fromto out of range; binoris :: write_segment_inside'
+                THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_inside'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -227,8 +225,7 @@ contains
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
                 write(*,*) 'first_data_byte: ', first_data_byte
-                write(*,*) 'ERROR! first_data_byte must be > 0 for non-empty 3d segment'
-                stop 'simple_binoris :: write_segment_inside'
+                THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
         endif
         ! write updated header
@@ -249,7 +246,7 @@ contains
         character(len=1), allocatable :: bytearr_part3(:)
         noris = size(os_strings)
         if( noris == 0 ) return
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_inside'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         ! ranges and raw bytes
         call self%byte_manager4seg_inside_1(isegment, end_part1, start_part3, end_part3, bytearr_part3)
         ! add segment to stack, this sets all the information needed for allocation
@@ -282,8 +279,7 @@ contains
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
                 write(*,*) 'first_data_byte: ', first_data_byte
-                write(*,*) 'ERROR! first_data_byte must be > 0 for non-empty 3d segment'
-                stop 'simple_binoris :: write_segment_inside'
+                THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
         endif
         ! write updated header
@@ -338,8 +334,7 @@ contains
         if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
             write(*,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
             write(*,*) 'end of part 1 (bytes)     : ', end_part1
-            write(*,*) 'ERROR! end of part 1 of file does not match first data byte of segment'
-            stop 'simple_binoris :: byte_manager4seg_inside_2'
+            THROW_HARD('end of part 1 of file does not match first data byte of segment')
         endif
         if( allocated(bytearr_part3) )then
             ! calculate byte size of second part of file, given the updated header
@@ -354,8 +349,7 @@ contains
             if( n_bytes_part3_orig /= n_bytes_part3 )then
                 write(*,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
                 write(*,*) '# bytes of part 3 in updated : ', n_bytes_part3
-                write(*,*) 'ERROR! byte sizes of part3 in original and updated do not match'
-                stop 'simple_binoris :: byte_manager4seg_inside_2'
+                THROW_HARD('byte sizes of part3 in original and updated do not match')
             endif
         endif
     end subroutine byte_manager4seg_inside_2
@@ -375,10 +369,10 @@ contains
             if( fromto(1) < 1 .or. fromto(2) > noris )then
                 write(*,*) 'noris : ', noris
                 write(*,*) 'fromto: ', fromto
-                stop 'fromto out of range; binoris :: write_segment_1'
+                THROW_HARD('fromto out of range')
             endif
         endif
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_1'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         ! add segment to stack, this sets all the information needed for allocation
         call self%add_segment_1(isegment, os, fromto)
         ! update byte ranges in header
@@ -404,7 +398,7 @@ contains
         type(str4arr),  intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: write_segment_2'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         ! add segment to stack
         call self%add_segment_2(isegment, fromto, strlen_max)
         ! update byte ranges in header
@@ -454,7 +448,7 @@ contains
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
             write(*,*) 'isegment: ', isegment
-            stop 'ERROR, isegment out of range; binoris :: add_segment_1'
+            THROW_HARD('isegment out of range')
         endif
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
@@ -469,7 +463,7 @@ contains
         self%header(isegment)%n_bytes_per_record = strlen_max
         ! set n_records
         self%header(isegment)%n_records = self%header(isegment)%fromto(2) - self%header(isegment)%fromto(1) + 1
-        if( self%header(isegment)%n_records < 1 ) stop 'ERROR, input oritab (os) empty; binoris :: add_segment_1'
+        if( self%header(isegment)%n_records < 1 ) THROW_HARD('input oritab (os) empty')
     end subroutine add_segment_1
 
     subroutine add_segment_2( self, isegment, fromto, strlen_max )
@@ -480,7 +474,7 @@ contains
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
             write(*,*) 'isegment: ', isegment
-            stop 'ERROR, isegment out of range; binoris :: add_segment_2'
+            THROW_HARD('isegment out of range')
         endif
         if( isegment > self%n_segments ) self%n_segments = isegment
         ! set range in segment
@@ -511,11 +505,11 @@ contains
         integer,        intent(in)    :: isegment
         class(ori),     intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_first_segment_record'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
             write(*,*) 'n_segments: ', self%n_segments
-            stop 'isegment out of bound; binoris :: read_first_segment_record'
+            THROW_HARD('isegment out of range')
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             read(unit=self%funit,pos=self%header(isegment)%first_data_byte) str_os_line
@@ -536,15 +530,16 @@ contains
         integer :: i, irec
         integer(kind=8) :: ibytes
         logical :: present_fromto, oonly_ctfparams_state_eo
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_1'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
-            stop 'isegment out of bound; binoris :: read_segment_1'
+            THROW_HARD('isegment out of range')
         endif
         present_fromto = present(fromto)
         if( present_fromto )then
-            if( .not. all(fromto .eq. self%header(isegment)%fromto) )&
-                &stop 'passed dummy fromto not consistent with self%header; binoris :: read_segment_1'
+            if( .not. all(fromto .eq. self%header(isegment)%fromto) )then
+                THROW_HARD('passed dummy fromto not consistent with self%header')
+            endif
         endif
         oonly_ctfparams_state_eo = .false.
         if( present(only_ctfparams_state_eo) ) oonly_ctfparams_state_eo = only_ctfparams_state_eo
@@ -581,10 +576,10 @@ contains
         type(str4arr),  intent(inout) :: sarr(:)
         integer :: i
         integer(kind=8) :: ibytes
-        if( .not. self%l_open ) stop 'file needs to be open; binoris :: read_segment_2'
+        if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
-            stop 'isegment out of bound; binoris :: read_segment_2'
+            THROW_HARD('isegment out of range')
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
             ! read orientation data into array of allocatable strings

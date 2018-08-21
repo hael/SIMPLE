@@ -46,8 +46,8 @@ __FILENAME__,__LINE__, msg; \
 call backtrace;stop
 #endif
 #endif
-#ifndef STOP_NOW
-#define STOP_NOW(msg) call simple_stop(msg, __FILENAME__ , __LINE__)
+#ifndef THROW_HARD
+#define THROW_HARD(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
 #endif
 #ifdef USING_CUDA
 #define CheckLaunchError(CudaErrorMsg) if(cudaDeviceSynchronize().ge.0)then;\

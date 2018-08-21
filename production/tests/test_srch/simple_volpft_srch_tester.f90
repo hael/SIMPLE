@@ -98,7 +98,7 @@ contains
         ! corr = sumcorr/real(NTESTS)
         ! write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
         ! write(*,'(a,1x,f7.4)') 'CORR: ', corr
-        ! if( .not. test_passed() ) stop '****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch'
+        ! if( .not. test_passed() ) THROW_HARD('****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch')
         !
         ! contains
         !

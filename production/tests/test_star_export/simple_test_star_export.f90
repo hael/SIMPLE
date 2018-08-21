@@ -48,10 +48,10 @@ isopened=.false.
 call date_and_time(date=datestr)
 folder = 'SIMPLE_TEST_STAR_'//trim(datestr)
 call simple_mkdir( trim(folder) , status=io_stat)
-if(io_stat/=0) call simple_stop("simple_mkdir failed")
+if(io_stat/=0) THROW_HARD("simple_mkdir failed")
 print *," Changing directory to ", folder
 call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
-if(io_stat/=0) call simple_stop("simple_chdir failed")
+if(io_stat/=0) THROW_HARD("simple_chdir failed")
 call simple_getcwd(curDir)
 print *," Current working directory ", curDir
 count1=tic()
@@ -106,40 +106,34 @@ endif
 !      &"fraca=0.1 kv=300 smpd=14 deftab=../oritab-stardoc.txt && "//&
 !      &"simple_exec prg=print_project_info")
 
-
-
 call exec_cmdline("simple_exec prg=new_project projname=SimpleImport",exitstat=io_stat)
-if(.not.dir_exists('SimpleImport') .or. io_stat/=0)  call simple_stop("new proj SimpleImport failed")
-
+if(.not.dir_exists('SimpleImport') .or. io_stat/=0)&
+&THROW_HARD("new proj SimpleImport failed")
 call simple_chdir( 'SimpleImport', status=io_stat)
-if(io_stat/=0) call simple_stop("simple_chdir failed")
+if(io_stat/=0) THROW_HARD("simple_chdir failed")
 call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star" ,exitstat=io_stat)
 if(io_stat/=0)then
-  print *, " prg=importstar should fail without startype and smpd"
+    print *, " prg=importstar should fail without startype and smpd"
 else
- print *, " prg=importstar should fail without startype and smpd"
- stop
+    THROW_HARD(" prg=importstar should fail without startype and smpd")
 endif
 call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" ,exitstat=io_stat)
 if(io_stat/=0)then
-  print *, " prg=importstar should fail without startype and smpd"
+    print *, " prg=importstar should fail without startype and smpd"
 else
- print *, " prg=importstar should fail without startype and smpd"
- stop
+    THROW_HARD( " prg=importstar should fail without startype and smpd")
 endif
 call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah" ,exitstat=io_stat)
 if(io_stat/=0)then
-  print *, " prg=importstar should fail without a valid startype "
+    print *, " prg=importstar should fail without a valid startype "
 else
- print *, " prg=importstar should fail without a valid startype"
- stop
+    THROW_HARD(" prg=importstar should fail without a valid startype")
 endif
 call exec_cmdline("simple_exec prg=importstar starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract" ,exitstat=io_stat)
 if(io_stat==0)then
-  print *, " prg=importstar valid "
+    print *, " prg=importstar valid "
 else
- print *, " prg=importstar should not fail with a valid startype and smpd"
- stop
+    THROW_HARD(" prg=importstar should not fail with a valid startype and smpd")
 endif
 
 
@@ -271,7 +265,7 @@ contains
         integer :: io_stat, tmpunit
         integer(8):: filesz
         if(.not. file_exists(trim(filename) ))&
-            call simple_stop("simple_stardoc::open ERROR file does not exist "//trim(filename) )
+            THROW_HARD(trim(filename)//" does not exist ")
         call fopen(tmpunit, file=trim(filename), action='READ',&
             & iostat=io_stat)
         if(io_stat/=0)call fileiochk('star_doc ; open '//trim(filename), io_stat)
@@ -280,10 +274,10 @@ contains
         ! check size
         filesz = funit_size(funit)
         if( filesz == -1 )then
-            stop 'file_size cannot be inquired; stardoc :: open'
+            THROW_HARD('file_size cannot be inquired; openstar')
         else if (filesz < 10) then
             write(*,*) 'file: ', trim(filename)
-            stop 'file size too small to contain a header; stardoc :: open'
+            THROW_HARD('file size too small to contain a header; openstar')
         endif
     end subroutine openstar
 
@@ -403,7 +397,7 @@ contains
                 if(nargsline /=  num_data_elements)then
                     print *, " Records on line mismatch ", nargsline,  num_data_elements
                     print *, "Line number ",num_data_lines, ":: ", line
-                    stop " line has insufficient elements "
+                    THROW_HARD("line has insufficient elements")
                 endif
                 cycle
             end if
@@ -481,7 +475,7 @@ contains
                 if(nargsOnDataline /=  num_data_elements) then
                     print *, " Records on line mismatch ", nargsOnDataline,  num_data_elements
                     print *, line
-                    stop " line has insufficient elements "
+                    THROW_HARD(" line has insufficient elements")
                 endif
                 cycle
             endif
@@ -494,8 +488,7 @@ contains
             endif
         end do
         if(nDatalines /= num_data_lines)then
-            print *," Num data lines mismatch in read_data_lines and read_header"
-            stop
+            THROW_HARD(" Num data lines mismatch in read_data_lines and read_header")
         endif
 
         rewind( funit,IOSTAT=ios)

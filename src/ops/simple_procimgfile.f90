@@ -5,8 +5,6 @@ use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
 
-private
-
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
@@ -20,9 +18,9 @@ public :: mask_imgfile, taper_edges_imgfile
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile
 public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile
-
-
+private
 #include "simple_local_flags.inc"
+
 contains
 
     !>  \brief  is for raising exception
@@ -35,7 +33,7 @@ contains
             write(*,*) 'The input stack is corrupt!'
             write(*,*) 'Number of images: ', n
             write(*,*) 'Logical dimensions: ', ldim
-            call simple_stop ('procimgfile exception')
+            THROW_HARD('procimgfile exception')
         endif
     end subroutine raise_exception_imgfile
 
@@ -73,7 +71,7 @@ contains
         ldim(3) = 1; ldim2(3)=1
         call raise_exception_imgfile(n, ldim, 'diff_imgfiles')
         if ( n /= n2 .or. ldim(1) /=ldim2(1)  .or. ldim(2) /= ldim2(2)) &
-            call simple_stop ('procimgfile exception ; diff_imgfiles mismatch')
+            THROW_HARD ('procimgfile exception; diff_imgfiles mismatch')
         call diffimg%new(ldim,smpd)
         call img2%new(ldim,smpd)
         if( n >= 1 )then

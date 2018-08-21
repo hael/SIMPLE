@@ -2,8 +2,9 @@
 module simple_chash
 use simple_defs
 use simple_error,   only: allocchk
-use simple_fileio,  only: fopen, fileiochk, fclose, is_open
+use simple_fileio,  only: fopen, fileiochk, fclose
 use simple_strings, only: strisblank, striscomment, lexsort
+use simple_syslib,  only: is_open
 use simple_ansi_ctrls
 implicit none
 

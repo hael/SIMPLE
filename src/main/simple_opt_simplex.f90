@@ -7,6 +7,7 @@ implicit none
 
 public :: opt_simplex
 private
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: opt_simplex
     private
@@ -48,7 +49,7 @@ contains
         integer           :: niters(spec%nrestarts)
         logical           :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-           call simple_stop ('cost function not associated in opt_spec; simplex_minimize; simple_opt_simplex')
+           THROW_HARD('cost function not associated in opt_spec; simplex_minimize')
         end if
         ! initialise nevals counter
         spec%nevals = 0

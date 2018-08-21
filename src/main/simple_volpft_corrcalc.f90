@@ -9,6 +9,10 @@ use simple_ori,       only: ori
 use simple_oris,      only: oris
 implicit none
 
+public :: volpft_corrcalc
+private
+#include "simple_local_flags.inc"
+
 type :: volpft_corrcalc
     private
     class(projector), pointer :: vol_ref    => null() !< pointer to reference volume
@@ -55,7 +59,7 @@ contains
         if( vol_ref.eqdims.vol_target )then
             ! all good
         else
-            call simple_stop('The volumes to be matched are not of the same dimension; simple_volpft_corrcalc :: new')
+            THROW_HARD('The volumes to be matched are not of the same dimension; new_1')
         endif
         ! set pointers, we assume that the volumes have been masked and prepared
         self%vol_ref    => vol_ref

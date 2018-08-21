@@ -24,6 +24,7 @@ public :: reconstruct3D_distr_commander
 public :: tseries_track_distr_commander
 public :: scale_project_distr_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preprocess_distr_commander
   contains
@@ -78,7 +79,6 @@ type, extends(commander_base) :: scale_project_distr_commander
     procedure :: execute      => exec_scale_project_distr
 end type scale_project_distr_commander
 
-#include "simple_local_flags.inc"
 contains
 
     subroutine exec_preprocess_distr( self, cline )
@@ -105,10 +105,9 @@ contains
         ! DISTRIBUTED EXECUTION
         params%nptcls = spproj%get_nmovies()
         if( params%nptcls == 0 )then
-            write(*,*)'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
-            stop 'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+            THROW_HARD('no movie to process! exec_preprocess_distr')
         endif
-        if( params%nparts > params%nptcls ) stop 'nr of partitions (nparts) must be < number of entries in filetable'
+        if( params%nparts > params%nptcls ) THROW_HARD('# partitions (nparts) must be < number of entries in filetable')
         ! deal with numlen so that length matches JOB_FINISHED indicator files
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
@@ -142,8 +141,7 @@ contains
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nmovies() ==0 )then
-            write(*,*)'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
-            stop 'No movie to process! simple_commander_distr_wflows::exec_preprocess_distr'
+            THROW_HARD('no movie to process! exec_preprocess_distr')
         endif
         call spproj%kill
         ! setup the environment for distributed execution
@@ -182,7 +180,7 @@ contains
         if( cline%defined('tomoseries') )then
             call read_filetable(params%tomoseries, tomonames)
         else
-            stop 'need tomoseries (filetable of filetables) to be part of the command line when tomo=yes'
+            THROW_HARD('need tomoseries (filetable of filetables) to be part of the command line when tomo=yes')
         endif
         nseries = size(tomonames)
         call exp_doc%new(nseries)
@@ -190,11 +188,10 @@ contains
             if( file_exists(params%exp_doc) )then
                 call exp_doc%read(params%exp_doc)
             else
-                write(*,*) 'the required parameter file (flag exp_doc): ', trim(params%exp_doc)
-                stop 'not in cwd'
+                THROW_HARD('the required parameter file (flag exp_doc): '//trim(params%exp_doc)//' not in cwd')
             endif
         else
-            stop 'need exp_doc (line: exp_time=X dose_rate=Y) to be part of the command line when tomo=yes'
+            THROW_HARD('need exp_doc (line: exp_time=X dose_rate=Y) to be part of the command line when tomo=yes')
         endif
         params%nparts = nseries
         params%nptcls = nseries
@@ -231,7 +228,7 @@ contains
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         params%nptcls = nlines(params%filetab)
-        if( params%nparts > params%nptcls ) stop 'nr of partitions (nparts) mjust be < number of entries in filetable'
+        if( params%nparts > params%nptcls ) THROW_HARD('nr of partitions (nparts) mjust be < number of entries in filetable')
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepare job description
@@ -256,8 +253,7 @@ contains
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nintgs() ==0 )then
-            write(*,*)'No micrograph to process! simple_commander_distr_wflows::exec_ctf_estimate_distr'
-            stop 'No micrograph to process! simple_commander_distr_wflows::exec_ctf_estimate_distr'
+            THROW_HARD('no micrograph to process! exec_ctf_estimate_distr')
         endif
         call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
@@ -291,8 +287,7 @@ contains
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nintgs() ==0 )then
-            write(*,*)'No micrograph to process! simple_commander_distr_wflows::exec_pick_distr'
-            stop 'No micrograph to process! simple_commander_distr_wflows::exec_pick_distr'
+            THROW_HARD('No micrograph to process! exec_pick_distr')
         endif
         call spproj%kill
         ! set mkdir to no (to avoid nested directory structure)
@@ -365,8 +360,7 @@ contains
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
         if( build%spproj%get_nptcls() == 0 )then
-            write(*,*)'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
-            stop 'No particles found! simple_commander_distr_wflows::exec_cluster2D_distr'
+            THROW_HARD('no particles found! exec_cluster2D_distr')
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -550,8 +544,7 @@ contains
             write(*,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
         end select
         if( fall_over )then
-            write(*,*)'No particles found! simple_commander_distr_wflows::exec_refine3D_distr'
-            stop 'No particles found! simple_commander_distr_wflows::exec_refine3D_distr'
+            THROW_HARD('no particles found! :exec_refine3D_distr')
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -614,8 +607,7 @@ contains
                         if( params%nparts * 4 /= nfiles ) err = .true.
                 end select
                 if( err )then
-                    write(*,*) 'ERROR! # partitions not consistent with previous refinement round'
-                    stop 'simple_commander_distr_wflows ::  exec_refine3D_distr'
+                    THROW_HARD('# partitions not consistent with previous refinement round')
                 endif
                 do i=1,nfiles
                     target_name = PATH_HERE//basename(trim(list(i)))
@@ -657,7 +649,7 @@ contains
             ! projection matching
             select case( params%neigh )
                 case( 'yes' )
-                    stop 'refinement method requires input orientation document'
+                    THROW_HARD('refinement method requires input orientations')
                 case DEFAULT
                     ! all good
             end select
@@ -843,12 +835,10 @@ contains
             case('cls3D')
                 fall_over = build%spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(*,*)'Unsupported ORITYPE'
-            stop 'simple_commander_distr_wflows::exec_reconstruct3D_distr'
+            THROW_HARD('unsupported ORITYPE')
         end select
         if( fall_over )then
-            write(*,*)'No images found!'
-            stop 'simple_commander_distr_wflows::exec_reconstruct3D_distr'
+            THROW_HARD('No images found!')
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -915,7 +905,7 @@ contains
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        if( .not. file_exists(params%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+        if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
         if( nlines(params%boxfile) > 0 )then
             call boxfile%new(params%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()
@@ -926,18 +916,18 @@ contains
                 call boxfile%readNextDataLine(boxdata(j,:))
                 orig_box = nint(boxdata(j,3))
                 if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
-                    stop 'Only square windows are currently allowed!'
+                    THROW_HARD('Only square windows allowed!')
                 endif
             end do
         else
-            stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
+            THROW_HARD('inputted boxfile is empty; exec_tseries_track')
         endif
         call boxfile%kill
         call cline%delete('boxfile')
         params%nptcls = ndatlines
         params%nparts = params%nptcls
         if( params%ncunits > params%nparts )&
-        &stop 'nr of computational units (ncunits) mjust be <= number of entries in boxfiles'
+        &THROW_HARD('# computational units (ncunits) mjust be <= number of entries in boxfiles')
         ! box and numlen need to be part of command line
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )
@@ -987,7 +977,7 @@ contains
         cline_scale = cline
         ! prepare part-dependent parameters
         nstks = build%spproj%os_stk%get_noris()
-        if( nstks == 0 ) stop 'os_stk field of spproj empty; commander_distr_wflows :: exec_scale_distr'
+        if( nstks == 0 ) THROW_HARD('os_stk field of spproj empty; exec_scale_distr')
         if( cline%defined('nparts') )then
             nparts = min(params%nparts, nstks)
             call cline_scale%set('nparts', real(nparts))
@@ -1007,7 +997,7 @@ contains
             newbox = nint(cline_scale%get_rarg('newbox'))
             if( newbox == box )then
                 write(*,*)'Inconsistent input dimensions: from ',box,' to ',newbox
-                stop 'Inconsistent input dimensions; simple_commander_distr_wflows::exec_scale_project_distr'
+                THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
             endif
             call cline_scale%set('newbox', real(newbox))
             call xscale_distr%execute( cline_scale )

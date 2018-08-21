@@ -166,7 +166,7 @@ contains
                 params_glob%kstop = params_glob%kfromto(2)
                 call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
-                call simple_stop( 'Unsupported eo flag; simple_strategy2D3D_common')
+                THROW_HARD('Unsupported eo flag')
         end select
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range

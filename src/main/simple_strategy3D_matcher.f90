@@ -35,8 +35,9 @@ implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc
 private
+#include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH = .false., DEBUG = .false.
+logical, parameter              :: L_BENCH = .false., DEBUG_HERE = .false.
 type(polarft_corrcalc),  target :: pftcc
 type(polarizer),    allocatable :: match_imgs(:)
 integer,            allocatable :: pinds(:)
@@ -88,7 +89,7 @@ contains
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( params_glob%eo .ne. 'no' )then
             if( build_glob%spproj_field%get_nevenodd() == 0 ) &
-                call simple_stop('ERROR! no eo partitioning available; strategy3D_matcher :: refine3D_exec')
+                THROW_HARD('no eo partitioning available; refine3D_exec')
         else
             call build_glob%spproj_field%set_all2single('eo', -1.)
         endif
@@ -109,7 +110,7 @@ contains
                 ! command line overrides
                 if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
         end select
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
+        if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: determined the number of peaks'
 
         ! SET FRACTION OF SEARCH SPACE
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
@@ -187,9 +188,9 @@ contains
         call build_glob%vol2%kill
 
         ! array allocation for strategy3D
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D'
+        if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D( ptcl_mask, npeaks )  ! allocate s3D singleton
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
+        if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         ! switch for per-particle polymorphic strategy3D construction
         allocate(strategy3Dsrch(params_glob%fromp:params_glob%top), stat=alloc_stat)
@@ -289,7 +290,7 @@ contains
                 call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
             endif
         end do
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
+        if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
             if( build_glob%spproj%get_ctfflag('ptcl3D').ne.'no' )&
@@ -544,7 +545,7 @@ contains
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
         call build_pftcc_particles(pftcc, MAXIMGBATCHSZ, match_imgs, .true., ptcl_mask)
-        if( DEBUG ) print *, '*** strategy3D_matcher ***: finished preppftcc4align'
+        if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
     !> Prepare alignment search using polar projection Fourier cross correlation

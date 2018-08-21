@@ -104,20 +104,20 @@ contains
         self%chtab = chash()
         self%existence = .true.
     end subroutine new_frame
-     
+
     subroutine new( self, n )
         class(stardoc), intent(inout) :: self
         integer,        intent(in)    :: n
         integer :: i
         call self%kill()
         if(.not. self%sdict%exists() ) call self%sdict%new()
-     
+
         if(allocated(self%param_starlabels)) call self%kill_stored_params
         if(allocated(self%param_labels)) call self%kill_stored_params
         if(allocated(self%param_isstr)) call self%kill_stored_params
         if(allocated(self%param_scale)) call self%kill_stored_params
         if(allocated(self%param_converted)) call self%kill_stored_params
-     
+
         ! if(allocated(self%frames))then
         !     if(self%num_frames > 1) then
         !     do i=1,self%num_frames
@@ -138,16 +138,16 @@ contains
         class(stardoc), intent(inout):: self
         self%doprint=.true.
     end subroutine setdoprint
-     
+
     subroutine open4import(self, filename)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
         integer :: io_stat, tmpunit
         integer(8) :: filesz
         if(self%l_open) call self%close
-     
+
         if(.not. file_exists(trim(filename) ))&
-            call simple_stop("simple_stardoc::open ERROR file does not exist "//trim(filename) )
+            THROW_HARD("file does not exist "//trim(filename) )
         call fopen(tmpunit, file=trim(filename), action='READ', iostat=io_stat)
         if(io_stat/=0)call fileiochk('star_doc ; open '//trim(filename), io_stat)
         self%funit  = tmpunit
@@ -164,14 +164,14 @@ contains
             write(*,*) 'file: ', trim(filename)
             stop 'file size too small to contain a header; stardoc :: open'
         endif
-     
+
         call self%read_header()
         if(self%num_data_elements > 0 )then
             call self%read_data_lines()
         end if
     end subroutine open4import
-     
-     
+
+
     subroutine close( self )
         class(stardoc), intent(inout) :: self !< instance
         integer :: io_stat
@@ -181,8 +181,8 @@ contains
             if(allocated(self%current_file)) deallocate(self%current_file)
         end if
     end subroutine close
-     
-     
+
+
     subroutine readline(funit, line, ier)
         use iso_fortran_env
         implicit none
@@ -230,12 +230,12 @@ contains
                 exit
             endif
         enddo
-     
+
         line=trim(line)
-     
+
     end subroutine readline
-     
-     
+
+
     !> Parse the STAR file header
     subroutine read_header(self)
         class(stardoc), intent(inout) :: self
@@ -255,7 +255,7 @@ contains
         cnt=1
         !! Make sure str4arr params are not allocated
         call self%kill_stored_params
-     
+
         !! First Pass
         !! Make sure we are at the start of the file
         rewind( self%funit,IOSTAT=ios)
@@ -269,7 +269,7 @@ contains
             !! Parse the start of the STAR file
             lenstr=len_trim(line)
             if (lenstr == 0 )cycle ! empty line
-     
+
             !! Count number of fields in header
             if(inHeader)then
                 if (.not. (index(trim(line),"_rln") == 0) )then
@@ -286,7 +286,7 @@ contains
                     else
                         print *," STAR field: ", trim(starlabel), " star field not in dictionary"
                     end if
-     
+
                     cycle
                 else
                     inHeader=.false.
@@ -299,7 +299,7 @@ contains
                 self%num_data_lines = self%num_data_lines + 1
                 cycle
             end if
-     
+
             ! !! does line contain ''data_''
             ! if ( .not. (index(trim(line),"data_") == 0))then
             !     DebugPrint " Found STAR 'data_*' in header ", line
@@ -327,9 +327,9 @@ contains
                 inHeader=.true.
                 DebugPrint "Begin STAR field lines ", line
             endif
-     
+
         end do
-     
+
         !! End of first pass
         DebugPrint " STAR fields: ", self%num_data_elements, " detected with ", self%num_valid_elements, " in dictionary "
         DebugPrint " STAR data lines : ", self%num_data_lines
@@ -358,7 +358,7 @@ contains
             !! Parse the start of the STAR file
             lenstr=len_trim(line)
             if (lenstr == 0 )cycle ! empty line
-     
+
             !! Process fields in header
             if(inHeader)then
                 if (.not. (index(trim(line),"_rln") == 0) )then
@@ -371,7 +371,7 @@ contains
                     if( self%sdict%isthere(starlabel) )then
                         ivalid=ivalid+1
                         DebugPrint " STAR field found in dictionary ", ivalid, " of ", self%num_valid_elements
-     
+
                         simplelabel = self%sdict%star2simple(starlabel)
                         allocate(self%param_labels(ielem)%str,source=trim(adjustl(simplelabel)))
                         self%param_converted(ielem) = 1
@@ -393,7 +393,7 @@ contains
                     inData=.true.
                 endif
             endif
-     
+
             !! Count number of elements in data lines
             if(inData)then   !! continue through to end of file
                 idata=idata+1
@@ -407,17 +407,17 @@ contains
                 endif
                 cycle
             end if
-     
+
             if (.not. (index(trim(line), "loop_") == 0) )then
                 inHeader=.true.
                 DebugPrint "Begin STAR field lines ", line
             endif
-     
+
         end do
         DebugPrint " End of second pass "
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
-     
+
         if(ielem /= self%num_data_elements .or. ivalid /= self%num_valid_elements)then
             print *, " Second pass incorrectly counted  detected parameters "
             HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 1")
@@ -439,7 +439,7 @@ contains
             print *, " Second pass do not allocate correctly "
             HALT_NOW( "simple_stardoc:: read_header allocation unsuccessful")
         endif
-     
+
         print *, ">>>  STAR IMPORT HEADER INFO "
         do i=1, self%num_data_elements
             if(allocated(self%param_labels(i)%str)) then
@@ -454,10 +454,10 @@ contains
                 HALT_NOW( "simple_stardoc:: read_header invalid label ")
             endif
         end do
-     
+
         DebugPrint " End of read_header "
     end subroutine read_header
-     
+
     subroutine read_data_lines(self)
         class(stardoc), intent(inout) :: self
         integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
@@ -472,7 +472,7 @@ contains
         inHeader=.false.;inData=.false.
         n=0;cnt=1;ios=0
         nDataline=0; nargsOnDataline=0
-     
+
         if(.not.self%l_open)then
             print *, " stardoc module read_header file not opened"
             stop " simple_stardoc::read_header "
@@ -483,7 +483,7 @@ contains
         if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
         call fopen(filetabunit,file="filetab-stardoc.txt")
         if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
-        call fopen(oritabunit,file="oritab-stardoc.txt") 
+        call fopen(oritabunit,file="oritab-stardoc.txt")
         if(file_exists('filetab-stardoc2.txt')) call del_file("filetab-stardoc2.txt")
         call fopen(filetabunit2,file="filetab-stardoc2.txt")
         if(file_exists('imagename-stardoc.txt')) call del_file("imagename-stardoc.txt")
@@ -498,7 +498,7 @@ contains
             lenstr=len_trim(line)
             !! Skip empty lines
             if (lenstr == 0 )cycle ! empty line
-     
+
             !! Ignore header lines
             if(inHeader)then
                 if ( .not. (index(trim(line),"_rln") ==0) )then
@@ -510,7 +510,7 @@ contains
                     inData = .true.
                 endif
             endif
-     
+
             !! Process Data line
             if(inData)then
                 nDataline=nDataline+1
@@ -525,7 +525,7 @@ contains
                 if(allocated(lineparts))deallocate(lineparts)
                 allocate(lineparts(nargsOnDataline))
                 call parsestr(line,' ',lineparts,nargsParsed)
-     
+
                 if(nargsParsed == nargsOnDataline )then
                     DebugPrint " Line Parsing : ", trim(self%data(nDataline)%str)
                     !write(*,'(A)', advance='no') " data values ["
@@ -543,7 +543,7 @@ contains
                         if ( self%param_isstr(i) ) then
                             if(allocated(fname))deallocate(fname)
                             allocate(fname,source=trim(adjustl(lineparts(i))))
-     
+
                             !! check filename for irregular STAR behaviour
                             pos1 = index(trim(fname),"@")
                             if( pos1 /= 0 )then
@@ -575,7 +575,7 @@ contains
                                 call simple_abspath(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT), projrootdir)
                                 DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
                             end if
-     
+
                             DebugPrint " Parsing file param : ", trim(fname)
                             if( file_exists (trim(fname)) )then
                                 print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
@@ -640,16 +640,16 @@ contains
                     end do
                     DebugPrint " Processed Data Line #",nDataline,":", trim(sline)
                     write(oritabunit,'(A)') trim(sline)
-     
+
                 else
                     print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
                     print *, line
                     stop " line has insufficient elements "
                 endif
-     
+
                 cycle
             endif  !! inData
-     
+
             !! Parse the start of the STAR file
             if ( .not. (index(trim(line), "data_") == 0)) cycle
             if ( .not. (index(trim(line), "loop_") == 0))then
@@ -662,28 +662,28 @@ contains
         endif
         !! Leave some provenence information on temporary files
         call date_and_time(date=datestr)
-        write(filetabunit, '(A,A,A,A)') "# SIMPLE IMPORTSTAR from file:",trim(self%current_file), " on Date: ", trim(datestr) 
+        write(filetabunit, '(A,A,A,A)') "# SIMPLE IMPORTSTAR from file:",trim(self%current_file), " on Date: ", trim(datestr)
         !! close all the opened files
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")
         if(is_open(oritabunit))  call fclose(oritabunit,  errmsg="star_doc ; read_header oritab")
         if(is_open(imagenamefunit)) call fclose(imagenamefunit, errmsg="star_doc ; read_header imagename")
         if(is_open(ctfimagefunit)) call fclose(ctfimagefunit, errmsg="star_doc ; read_header ctfimage")
-     
+
         !! Delete empty files
         if(nlines("filetab-stardoc2.txt")==0) call del_file("filetab-stardoc2.txt")
         if(nlines("ctfimage-stardoc.txt")==0) call del_file("ctfimage-stardoc.txt")
         if(nlines("imagename-stardoc.txt")==0) call del_file("imagename-stardoc.txt")
-     
+
         !! rewind file
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
-     
+
         print *, ">>>  STAR IMPORT DATA INFO "
         print *, ">>>  number of data lines imported: ",self%num_data_lines
-     
+
     end subroutine read_data_lines
-     
+
     subroutine  write(self, filename, sp, vars)
         use simple_sp_project
         class(stardoc), intent(inout) :: self
@@ -695,7 +695,7 @@ contains
         character(len=:), allocatable ::  val,stackfile,state
         integer  :: i, io_stat, iframe, ielem
         real     :: statef, defocus
-     
+
         if(self%l_open)call self%close
         call fopen(self%funit, trim(filename) ,iostat=io_stat)
         if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))
@@ -704,23 +704,23 @@ contains
         write(self%funit,'(A)') "data_"
         write(self%funit,'(A)') ""
         write(self%funit,'(A)') "loop_"
-     
+
         do i=1, self%num_data_elements
             write(self%funit,'("_rln",A,3x,"#",I0)') trim(self%param_labels(i)%str), i
         end do
-     
+
         do iframe=1, self%num_frames
             statef = self%frames(iframe)%state
             if (statef .ne. 0)then
-     
+
                 !! create zero-padded frame number and stackfile
                 imagename=int2str_pad(self%get_i4(i,"frameid"),5)//'@'//&
                     self%get_str(iframe,"stackfile")//'s'
-     
+
                 stackfile = self%get_str(i,"stackfile")
                 call syslib_symlink(trim(stackfile), trim(stackfile)//'s',status=io_stat)
-                if(io_stat/=0)call simple_stop("simple_stardoc::write symlink failed")
-     
+                if(io_stat/=0)THROW_HARD("write symlink failed")
+
                 ! starline =imagename//&
                 !     &" "//real2str(self%get_r4(i,"kv"))//&
                 !     &" "//real2str(self%get_r4(i,"dfx")*1000)//&
@@ -730,16 +730,16 @@ contains
                 !     &" "//real2str(self%get_r4(i,"fraca"))//&
                 !     &" 10000"//&
                 !     &" "//real2str(self%get_r4(i,"smpd"))
-     
+
                 ! do ielem = 2,  self%num_data_elements
                 !     write(starline,'(a," ",F13.6)')  starline, self%get(iframe,
                 ! end do
-     
+
                 write(self%funit,'(A)') starline
             end if
         end do
     end subroutine write
-     
+
     subroutine read(self, filename)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
@@ -779,9 +779,9 @@ contains
             print*, "STAR>> Number of frames: ",  self%num_frames
             print*, "STAR>> Number of data elements: ", self%num_data_elements
         end if
-     
+
         if(self%num_frames < 1 .or.  num_labels < 1 .or. self%num_data_elements < 1)&
-            call simple_stop(" Star file error -- no frames ")
+            THROW_HARD("Star file -- no frames")
         call self%new(self%num_frames)
         self%num_frame_elements = num_labels
         inData=.false.
@@ -795,15 +795,14 @@ contains
                 inData=.true.
             else if (line(1:4) == "_rln")then
                 endPos = firstBlank(line)
-                if(endPos <= 5) call simple_stop(" Star file error "//trim(line))
+                if(endPos <= 5) THROW_HARD("star file "//trim(line))
                 !call self%datatab%push(line(5:endPos), "#"//int2str(n))
                 n = n + 1
             else
                 ! Data line
                 elems = cntRecsPerLine(line)
                 if(elems /= num_labels ) &
-                    call simple_stop(" Star file error: num elements in line "//int2str(elems)//&
-                    " does not match data req "//int2str(num_labels)//" line:"//trim(line))
+                    THROW_HARD('# elements in line: '//int2str(elems)//'does not match data req'//int2str(num_labels)//' line:'//trim(line))
                 call parsestr(line,' ',args,elems)
                 if(self%doprint) then
                     print*, "STAR>> Parsing line: num of elems ", elems
@@ -813,12 +812,12 @@ contains
                     call self%frames(iframe)%chtab%push(trim(args(i)),int2str(idata))
                 end do
                 idata = idata + 1
-     
+
             endif
         end do
         call fclose(starfd)
     end subroutine read
-     
+
     subroutine print (self)
         class(stardoc), intent(inout) :: self
         integer :: i
@@ -827,23 +826,23 @@ contains
         write(*,*) " # header parameters:     ", self%num_data_elements
         write(*,*) " # compatible parameters: ", self%num_valid_elements
         write(*,*) " # data lines:            ", self%num_data_lines
-     
+
         if(self%num_valid_elements>0 .and. allocated(self%param_labels))then
             do i=1, self%num_data_elements
                 if(self%param_converted(i)==1)then
                     if(self%param_isstr(i))then
-                        write(*,'(A30,1x,A30)') self%param_starlabels(i)%str,self%param_labels(i)%str 
+                        write(*,'(A30,1x,A30)') self%param_starlabels(i)%str,self%param_labels(i)%str
                     else
                         write(*,'(A30,1x,A30,2x,F15.8)') self%param_starlabels(i)%str,self%param_labels(i)%str, self%param_scale(i)
                     end if
                 else
-                    write(*,'(A30,1x,A30)') self%param_starlabels(i)%str, "N/A" 
+                    write(*,'(A30,1x,A30)') self%param_starlabels(i)%str, "N/A"
                 end if
             end do
         end if
     end subroutine print
-     
-     
+
+
     subroutine putdata(self, strarr)
         class(stardoc), intent(inout) :: self
         character(len=*), intent(in) :: strarr(:)
@@ -857,8 +856,8 @@ contains
         !    allocate(self%data(i)%str, source=strarr(i))
         ! end do
     end subroutine putdata
-     
-     
+
+
     subroutine put_r4 (self, iframe, key, val)
         class(stardoc), intent(inout) :: self
         integer, intent(in) :: iframe
@@ -866,8 +865,8 @@ contains
         real, intent(in) :: val
         call self%frames(iframe)%htab%set(key, val)
     end subroutine put_r4
-     
-     
+
+
     subroutine put_i4 (self, iframe, key, val)
         class(stardoc), intent(inout) :: self
         integer, intent(in) :: iframe
@@ -875,7 +874,7 @@ contains
         integer, intent(in) :: val
         call self%frames(iframe)%htab%set(key, REAL(val))
     end subroutine put_i4
-     
+
     subroutine put_str (self, iframe, key, val)
         class(stardoc), intent(inout) :: self
         integer, intent(in) :: iframe
@@ -883,21 +882,21 @@ contains
         character(len=LONGSTRLEN) , intent(in) :: val
         call self%frames(iframe)%chtab%set(key, val)
     end subroutine put_str
-     
+
     function get_header(self,i) result(val)
         class(stardoc), intent(inout) :: self
         integer, intent(in) :: i
         character(len=:),allocatable :: val
         allocate(val,source=trim(self%param_labels(i)%str))
     end function get_header
-     
+
     function get_data(self,i) result(val)
         class(stardoc), intent(inout) :: self
         integer, intent(in) :: i
         character(len=:),allocatable :: val
         allocate(val,source=trim(self%data(i)%str))
     end function get_data
-     
+
     function get_r4 (self, iframe, key) result(val)
         class(stardoc), intent(inout) :: self
         character(len=*), intent(in) :: key
@@ -905,7 +904,7 @@ contains
         real :: val
         val = self%frames(iframe)%htab%get(key)
     end function get_r4
-     
+
     function get_i4 (self, iframe, key) result(val)
         class(stardoc), intent(inout) :: self
         character(len=*), intent(in) :: key
@@ -913,7 +912,7 @@ contains
         integer :: val
         val = INT(self%frames(iframe)%htab%get(key))
     end function get_i4
-     
+
     function get_str (self, iframe, key) result(val)
         class(stardoc), intent(inout) :: self
         character(len=*), intent(in) :: key
@@ -921,7 +920,7 @@ contains
         character(len=LONGSTRLEN) :: val
         val = self%frames(iframe)%chtab%get(key)
     end function get_str
-     
+
     subroutine kill_frame( self )
         class(starframes), intent(inout) :: self
         if( self%existence )then
@@ -930,8 +929,8 @@ contains
             self%existence = .false.
         endif
     end subroutine kill_frame
-     
-     
+
+
     subroutine kill_stored_params(self)
         class(stardoc), intent(inout) :: self
         integer :: i
@@ -957,8 +956,8 @@ contains
         if(allocated(self%param_converted)) deallocate(self%param_converted)
         if(allocated(self%param_scale)) deallocate(self%param_scale)
     end subroutine kill_stored_params
-     
-     
+
+
     !>  \brief  is a destructor
     subroutine kill( self,keeptabs)
         class(stardoc), intent(inout) :: self
@@ -983,7 +982,7 @@ contains
             if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
             if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
         endif
-     
+
     end subroutine kill
 
 end module simple_stardoc

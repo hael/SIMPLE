@@ -3,6 +3,8 @@ include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_imgfile, only: imgfile
 use simple_imghead
+implicit none
+#include "simple_local_flags.inc"
 integer       :: ldim(3), i, j, cnt
 real          :: smpd=2., corr, corrs(20)
 type(image)   :: img, img_2
@@ -54,7 +56,7 @@ do i=1,3
     do j=i+1,4
         corr = imgs(i)%corr(imgs(j))
         if( corr < 0.99999 )then
-            stop 'SPIDER vs. MRC & converted vs. nonconverted test failed'
+            THROW_HARD('SPIDER vs. MRC & converted vs. nonconverted test failed')
         endif
     end do
 end do

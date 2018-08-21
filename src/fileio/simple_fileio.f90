@@ -2,10 +2,17 @@
 module simple_fileio
 use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
-use simple_error,   only: allocchk, simple_stop, simple_error_check
+use simple_error,   only: allocchk, simple_exception, simple_error_check
 use simple_syslib,  only: file_exists, is_open, is_file_open, is_io,simple_abspath,&
 &exec_cmdline, del_file, simple_list_files, simple_glob_list_tofile, syslib_copy_file
 implicit none
+
+public :: fileiochk, fopen, fclose, nlines,  filelength, funit_size, is_funit_open, get_open_funits
+public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename,  get_fpath
+public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
+public :: arr2file, file2rarr, simple_copy_file
+private
+#include "simple_local_flags.inc"
 
 interface fclose
     module procedure fclose_1
@@ -32,14 +39,13 @@ contains
         iostat_this=2
         if( present(die) ) die_this=die
         if( present(iostat) ) iostat_this=iostat
-        if( iostat_this /= 0 ) write(ERROR_UNIT,'(a)') message
+        if( iostat_this /= 0 ) write(OUTPUT_UNIT,'(a)') message
         if (iostat_this == -1)then
-            write(ERROR_UNIT,'(a)') "fileio: EOF reached "
+            write(OUTPUT_UNIT,'(a)') "fileio: EOF reached "
         else if (iostat_this == -2) then
-            write(ERROR_UNIT,'(a)') "fileio: End-of-record reached "
+            write(OUTPUT_UNIT,'(a)') "fileio: End-of-record reached "
         else if( iostat_this /= 0 ) then
-            call simple_error_check(iostat_this,'File I/O Error#'//int2str(iostat_this))
-            if(die_this)call simple_stop('File I/O stop ',__FILENAME__,__LINE__)
+            if( die_this ) THROW_HARD('I/O')
         endif
     end subroutine fileiochk
 
@@ -77,28 +83,25 @@ contains
         present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
-            if(is_io(funit)) call simple_stop( "simple_fileio::fopen newunit returned "//int2str(funit) ,&
-                __FILENAME__,__LINE__)
+            if(is_io(funit)) THROW_HARD( "newunit returned "//int2str(funit))
             return ! if ok
         end if
         ! Optional args
-        if(present(convert)) then
-            ! print *, 'CONVERT ignored in file open argument list'
-        end if
+        ! CONVERT ignored in file open argument list
         if(present(iostat))iostat_this=iostat
         !! Default
         write(action_this,'(A)') 'READWRITE'
         write(status_this,'(A)') 'UNKNOWN'
         write(position_this,'(A)') 'APPEND'
         if (present(status))then
-            if (stringsAreEqual(status, 'OLD',.false.))  write(status_this,'(A)')  upperCase(status)
+            if (stringsAreEqual(status, 'OLD',.false.))     write(status_this,'(A)')  upperCase(status)
             if (stringsAreEqual(status, 'SCRATCH',.false.)) write(status_this,'(A)')  upperCase(status)
             if (stringsAreEqual(status, 'REPLACE',.false.)) write(status_this ,'(A)') upperCase(status)
-            if (stringsAreEqual(status, 'NEW',.false.)) write( status_this,'(A)')  upperCase(status)
+            if (stringsAreEqual(status, 'NEW',.false.))     write( status_this,'(A)')  upperCase(status)
         end if
         ! ACTION: READ, WRITE, or READWRITE (default).
         if (present(action))then
-            if (stringsAreEqual(action, 'WRITE',.false.))  write(action_this ,'(A)') upperCase(action)
+            if (stringsAreEqual(action, 'WRITE',.false.)) write(action_this ,'(A)') upperCase(action)
             if (stringsAreEqual(action, 'READ',.false.))  write(action_this ,'(A)') upperCase(action)
         end if
         if ( (stringsAreEqual(status_this, 'NEW',.false.))  .and. &
@@ -173,8 +176,7 @@ contains
             end if
             call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
-            if(funit/=0 .and. is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit),&
-                __FILENAME__,__LINE__)
+            if(funit/=0 .and. is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
             return
         end if
         recl_this=-1
@@ -239,7 +241,7 @@ contains
             end if
         end if
         call fileiochk(trim(adjustl(errmsg_this))//" fopen opening "//trim(filename), iostat_this, .false.)
-        if(is_io(funit)) call simple_stop( "::fopen newunit returned "//int2str(funit) ,__FILENAME__,__LINE__)
+        if(is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
         if(present(iostat))iostat=iostat_this
         if(present(recl))recl=recl_this
     end subroutine fopen
@@ -280,12 +282,8 @@ contains
             if (stringsAreEqual(status, 'DELETE',.false.))  write(status_this ,'(A)') upperCase(status)
         end if
         msg_this=" no message"
-        if(present(errmsg)) write(msg_this,'(A)') errmsg
-        if (is_open(funit)) then
-            CLOSE (funit,IOSTAT=iostat,STATUS=status_this)
-            call simple_error_check(iostat, "SIMPLE_FILEIO::fclose_1 failed closing unit "//int2str(funit)//&
-                &" ; "//trim(msg_this))
-        end if
+        if( present(errmsg) ) write(msg_this,'(A)') errmsg
+        if( is_open(funit) ) close(funit,IOSTAT=iostat,STATUS=status_this)
     end subroutine fclose_2
 
     !> \brief return the number of lines in a textfile
@@ -536,7 +534,7 @@ contains
     !! input args are restricted to STDLEN after trimming
     !! for allocatable character results
     !! e.g. fname = filepath('dir1',trim(dirfixed), diralloc, file//ext )
-    function filepath_1(p1, p2,p3, p4) result( fname )! , arg3, arg4) result( fname )
+    function filepath_1(p1, p2, p3, p4) result( fname )
         character(len=*),  intent(in)           :: p1
         character(len=*),  intent(in)           :: p2
         character(len=*),  intent(in), optional :: p3
@@ -547,35 +545,33 @@ contains
         startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))
         endpos1 = len_trim(s1)
-        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg too small")
+        if(endpos1<1) THROW_HARD("first arg too small")
         if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
-        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg cannot be / ")
+        if(endpos1<1) THROW_HARD("first arg cannot be /")
         s2 = trim(adjustl(p2))
         endpos2 = len_trim(s2)
-        if(endpos2<1) call simple_stop("simple_fileio::filepath_1 second arg too small")
+        if(endpos2<1) THROW_HARD("second arg too small")
         if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
-        if(endpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be / ")
+        if(endpos2==0) THROW_HARD("second arg cannot be / ")
         if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
-        if(endpos2-startpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be "//trim(s2))
-
+        if(endpos2-startpos2==0) THROW_HARD("second arg cannot be "//trim(s2))
         if(present(p3))then
             s3 = trim(adjustl(p3))
             endpos3 = len_trim(s3)
-            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg too small")
+            if(endpos3<1) THROW_HARD("third arg too small")
             if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg cannot be /")
+            if(endpos3<1) THROW_HARD("third arg cannot be /")
             if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
-            if(endpos3-startpos3==0) call simple_stop("simple_fileio::filepath_1 third arg cannot be "//trim(s3))
-
-        end if
+            if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
+        endif
         if(present(p4))then
             s4 = trim(adjustl(p4))
             endpos4 = len_trim(s4)
-            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg too small")
+            if(endpos4==0) THROW_HARD("fourth arg too small")
             if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg  cannot be /")
+            if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
             if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-            if(endpos4-startpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg cannot be "//trim(s4))
+            if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
             allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
                 &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4))
         else if(present(p3))then
@@ -588,7 +584,7 @@ contains
 
     !> concatenate strings together to create a filename similar to filepath_1 above
     !! for non-allocatable character results
-    function filepath_2(p1, p2, p3, p4, nonalloc ) result(fname) ! , arg3, arg4) result( fname )
+    function filepath_2(p1, p2, p3, p4, nonalloc ) result(fname)
         character(len=*),  intent(in)           :: p1
         character(len=*),  intent(in)           :: p2
         character(len=*),  intent(in), optional :: p3
@@ -600,33 +596,33 @@ contains
         startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))
         endpos1 = len_trim(s1)
-        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg too small")
+        if(endpos1<1) THROW_HARD("first arg too small")
         if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
-        if(endpos1<1) call simple_stop("simple_fileio::filepath_1 first arg cannot be / ")
+        if(endpos1<1) THROW_HARD("first arg cannot be / ")
         s2 = trim(adjustl(p2))
         endpos2 = len_trim(s2)
-        if(endpos2<1) call simple_stop("simple_fileio::filepath_1 second arg too small")
+        if(endpos2<1) THROW_HARD("second arg too small")
         if(s2(endpos2:endpos2)==PATH_SEPARATOR) endpos2 = endpos2-1
-        if(endpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be / ")
+        if(endpos2==0) THROW_HARD("second arg cannot be / ")
         if(s2(1:1)==PATH_SEPARATOR) startpos2 = 2
-        if(endpos2-startpos2==0) call simple_stop("simple_fileio::filepath_1 second arg cannot be "//trim(s2))
+        if(endpos2-startpos2==0) THROW_HARD("second arg cannot be "//trim(s2))
         if(present(p3))then
             s3 = trim(adjustl(p3))
             endpos3 = len_trim(s3)
-            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg too small")
+            if(endpos3<1) THROW_HARD("third arg too small")
             if(s3(endpos3:endpos3)==PATH_SEPARATOR) endpos3 = endpos3-1
-            if(endpos3<1) call simple_stop("simple_fileio::filepath_1 third arg cannot be /")
+            if(endpos3<1) THROW_HARD("third arg cannot be /")
             if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
-            if(endpos3-startpos3==0) call simple_stop("simple_fileio::filepath_1 third arg cannot be "//trim(s3))
+            if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
         end if
         if(present(p4))then
             s4 = trim(adjustl(p4))
             endpos4 = len_trim(s4)
-            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg too small")
+            if(endpos4==0) THROW_HARD("fourth arg too small")
             if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            if(endpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg  cannot be /")
+            if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
             if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-            if(endpos4-startpos4==0) call simple_stop("simple_fileio::filepath_1 fourth arg cannot be "//trim(s4))
+            if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
             !! concatenate four pathnames
             fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
                 &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4)
@@ -637,10 +633,8 @@ contains
         else
            !! concatenate two pathnames
            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos4:endpos2)
-
         endif
     end function filepath_2
-
 
     !> \brief  is for deleting consecutively numbered files with padded number strings
     subroutine del_files( body, n, ext, numlen, suffix )
@@ -765,7 +759,7 @@ contains
             end do
             call fclose_1(funit,io_stat,errmsg="file2rarr fclose_1 failed "//trim(fnam))
         else
-            call simple_stop(trim(fnam)//' does not exist; file2rarr; simple_fileio ', __FILENAME__,__LINE__)
+            THROW_HARD(trim(fnam)//' does not exist')
         endif
     end function file2rarr
 

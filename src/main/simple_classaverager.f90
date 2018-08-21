@@ -10,6 +10,7 @@ public :: cavger_new, cavger_transf_oridat, cavger_assemble_sums,&
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged
 private
+#include "simple_local_flags.inc"
 
 type ptcl_record
     type(ctf)            :: tfun                                !< transfer function
@@ -85,7 +86,7 @@ contains
                 ! for the class average representation
                 ncls = min(NSPACE_REDUCED,params_glob%nspace)
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: new')
+                THROW_HARD('unsupported which flag')
         end select
         ! work out range and partsz
         if( params_glob%l_distr_exec )then
@@ -638,7 +639,7 @@ contains
                     call cavgs_merged(icls)%write(fname, icls)
                 end do
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: get_write')
+                THROW_HARD('unsupported which flag')
         end select
     end subroutine cavger_write
 
@@ -647,8 +648,7 @@ contains
         character(len=*),  intent(in) :: fname, which
         integer :: icls
         if( .not. file_exists(fname) )then
-            write(*,*) 'file does not exist in cwd: ', trim(fname)
-            call simple_stop('simple_classaverager :: read')
+            THROW_HARD(trim(fname)//' not in cwd')
         endif
         select case(which)
             case('even')
@@ -667,7 +667,7 @@ contains
                     call cavgs_merged(icls)%read(fname, icls)
                 end do
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_classaverager :: get_read')
+                THROW_HARD('unsupported which flag')
         end select
     end subroutine cavger_read
 
@@ -683,12 +683,10 @@ contains
         select case(trim(which))
             case('read')
                 if( .not. file_exists(cae) )then
-                    write(*,*) 'File does not exist: ', trim(cae)
-                    call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
+                    THROW_HARD(trim(cae)//' does not exist')
                 endif
                 if( .not. file_exists(cao) )then
-                    write(*,*) 'File does not exist: ', trim(cao)
-                    call simple_stop('In: simple_classaverager :: assemble_sums_from_parts')
+                    THROW_HARD(trim(cao)//' does not exist')
                 endif
                 do icls=1,ncls
                     call cavgs_even( icls)%read(cae, icls)
@@ -704,7 +702,7 @@ contains
                     call ctfsqsums_odd( icls)%write(cto, icls)
                 end do
             case DEFAULT
-                stop 'uknown which flag; only read & write supported; classaverager :: cavger_readwrite_partial_sums'
+                THROW_HARD('unknown which flag; only read & write supported; cavger_readwrite_partial_sums')
         end select
         deallocate(cae, cao, cte, cto)
     end subroutine cavger_readwrite_partial_sums
@@ -741,20 +739,16 @@ contains
             allocate(cte, source='ctfsqsums_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             allocate(cto, source='ctfsqsums_odd_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)
             if( .not. file_exists(cae) )then
-                write(*,*) 'File does not exist: ', trim(cae)
-                stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
+                THROW_HARD('file: '//trim(cae)//' does not exist; cavger_assemble_sums_from_parts')
             endif
             if( .not. file_exists(cao) )then
-                write(*,*) 'File does not exist: ', trim(cao)
-                stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
+                THROW_HARD('file: '//trim(cao)//' does not exist; cavger_assemble_sums_from_parts')
             endif
             if( .not. file_exists(cte) )then
-                write(*,*) 'File does not exist: ', trim(cte)
-                stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
+                THROW_HARD('file: '//trim(cte)//' does not exist; cavger_assemble_sums_from_parts')
             endif
             if( .not. file_exists(cto) )then
-                write(*,*) 'File does not exist: ', trim(cto)
-                stop 'In: simple_classaverager :: cavger_assemble_sums_from_parts'
+                THROW_HARD('file: '//trim(cto)//' does not exist; cavger_assemble_sums_from_parts')
             endif
             do icls=1,ncls
                 call imgs4read(1)%read(cae, icls)

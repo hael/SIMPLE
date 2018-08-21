@@ -11,6 +11,7 @@ public :: merge_similarities_commander
 public :: split_pairs_commander
 public :: split_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: merge_nnmat_commander
   contains
@@ -46,7 +47,7 @@ contains
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
-            stop 'I/O error; simple_merge_nnmat'
+            THROW_HARD('I/O; exec_merge_nnmat')
         endif
         call fclose(filnum,errmsg='simple_merge_nnmat ;error when closing nnmat.bin  ')
         ! end gracefully
@@ -67,7 +68,7 @@ contains
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
-            stop 'I/O error; simple_merge_similarities'
+            THROW_HARD('I/O; exec_merge_similarities')
         endif
         call fclose(filnum,errmsg='simple_merge_nnmat ; error when closing smat.bin ')
         ! end gracefully
@@ -101,7 +102,7 @@ contains
         ldim(3) = 1
         call img%new(ldim,p%smpd)
         parts = split_nobjs_even(nimgs, p%nparts)
-        if( size(parts,1) /= p%nparts ) stop 'ERROR! generated number of parts not same as inputted nparts'
+        if( size(parts,1) /= p%nparts ) THROW_HARD('generated number of parts not same as inputted nparts')
         do ipart=1,p%nparts
             call progress(ipart,p%nparts)
             cnt = 0

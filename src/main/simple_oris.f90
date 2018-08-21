@@ -254,10 +254,10 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
         type(ori) :: o
-        if( self%n == 0 ) call simple_stop('oris object does not exist; get_ori; simple_oris')
+        if( self%n == 0 ) THROW_HARD('oris object does not exist; get_ori')
         if( i > self%n .or. i < 1 )then
             write(*,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
-            call simple_stop('i out of range; get_ori; simple_oris')
+            THROW_HARD('i out of range; get_ori')
         endif
         o = self%o(i)
     end function get_ori
@@ -424,7 +424,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pop with optional consider_w assumes w set')
+            if( .not. self%isthere('w') ) THROW_HARD('get_pop with optional consider_w assumes w set')
         endif
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
@@ -471,7 +471,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pops with optional consider_w assumes w set')
+            if( .not. self%isthere('w') ) THROW_HARD('get_pops with optional consider_w assumes w set')
         endif
         consider_eo = .false.
         if( present(eo) ) consider_eo = .true.
@@ -527,7 +527,7 @@ contains
         if( size(mask) /= self%n )then
             print *, 'self%n:     ', self%n
             print *, 'size(mask): ', size(mask)
-            call simple_stop('nonconforming mask size; oris :: compress')
+            THROW_HARD('nonconforming mask size; compress')
         endif
         call os_tmp%new(count(mask))
         cnt = 0
@@ -552,7 +552,7 @@ contains
         integer              ::  n, nstates, iptcl
         nstates = self%get_n('state')
         if( which < 1 .or. which > nstates )then
-            call simple_stop('which (state) is out of range; simple_oris::split_state')
+            THROW_HARD('which (state) is out of range; split_state')
         endif
         call self%get_pinds(which, 'state', ptcls_in_which)
         n = size(ptcls_in_which)
@@ -581,7 +581,7 @@ contains
         integer              ::  n, nmembers, iptcl
         nmembers = self%get_n('class')
         if( which < 1 .or. which > nmembers )then
-            call simple_stop('which member is out of range; simple_oris :: split_class')
+            THROW_HARD('which member is out of range; split_class')
         endif
         call self%get_pinds(which, 'class', ptcls_in_which)
         n = size(ptcls_in_which)
@@ -607,7 +607,7 @@ contains
         integer, allocatable       :: pops(:)
         integer :: ncls, loc(1), myncls, icls
         ncls = self%get_n('class')
-        if( ncls_target <= ncls ) call simple_stop('Number of target classes cannot be <= original number')
+        if( ncls_target <= ncls ) THROW_HARD('nr of target classes cannot be <= original number')
         ! calculate class populations
         allocate(pops(ncls_target),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: expand_classes, module: simple_oris',alloc_stat)
@@ -750,7 +750,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: get_pinds with optional consider_w assumes w set')
+            if( .not. self%isthere('w') ) THROW_HARD('get_pinds with optional consider_w assumes w set')
         endif
         if( allocated(indices) )deallocate(indices)
         pop = self%get_pop(ind, label, cconsider_w )
@@ -951,7 +951,7 @@ contains
         cconsider_w = .false.
         if( present(consider_w) ) cconsider_w = consider_w
         if( cconsider_w )then
-            if( .not. self%isthere('w') ) call simple_stop('ERROR, oris :: included with optional consider_w assumes w set')
+            if( .not. self%isthere('w') ) THROW_HARD('included with optional consider_w assumes w set')
         endif
         if(.not.allocated(incl))allocate(incl(self%n), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('In: included, module: simple_oris',alloc_stat)
@@ -1371,9 +1371,9 @@ contains
         integer   :: i
         logical   :: within_lims, found
         if( present(o_prev) .and. .not.present(thres) ) &
-            & call simple_stop('Missing angular threshold in simple_oris::rnd_proj_space')
+            & THROW_HARD('missing angular threshold in rnd_proj_space')
         if( .not.present(o_prev) .and. present(thres) ) &
-            & call simple_stop('Missing orientation in simple_oris::rnd_proj_space')
+            & THROW_HARD('missing orientation in rnd_proj_space')
         within_lims = .false.
         if( present(eullims) )within_lims = .true.
         call self%new(nsample)
@@ -1529,7 +1529,7 @@ contains
             call rt%kill
             deallocate(states)
         else if( nstates<=0)then
-            call simple_stop('Invalid value for nstates; simple_oris :: rnd_states')
+            THROW_HARD('invalid value for nstates; rnd_states')
         else
             ! nstates = 1; zero-preserving
             do i=1,self%n
@@ -1709,10 +1709,10 @@ contains
         character(len=100) :: io_message
         integer :: file_stat, i, fnr, state, istart, iend
         if( .not. file_exists(orifile) )then
-            call simple_stop("oris ; read; The file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
+            THROW_HARD("the file you are trying to read: "//trim(orifile)//' does not exist in cwd' )
         endif
         if( str_has_substr(orifile,'.bin') )then
-            call simple_stop('this method does not support binary files; simple_oris :: read')
+            THROW_HARD('this method does not support binary files;  read')
         endif
         io_message='No error'
         call fopen(fnr, FILE=orifile, STATUS='OLD', action='READ', iostat=file_stat,iomsg=io_message)
@@ -1745,11 +1745,10 @@ contains
         integer    :: i
         type(oris) :: os_tmp
         if( .not. file_exists(ctfparamfile) )then
-            call simple_stop ("oris ; read_ctfparams_state_eo; The file you are trying to read: "&
-                &//trim(ctfparamfile)//' does not exist in cwd' )
+            THROW_HARD ("read_ctfparams_state_eo; The file you are trying to read: "//trim(ctfparamfile)//' does not exist')
         endif
         if( str_has_substr(ctfparamfile,'.bin') )then
-            call simple_stop('this method does not support binary files; simple_oris :: read_ctfparams_state_eo')
+            THROW_HARD('this method does not support binary files; read_ctfparams_state_eo')
         endif
         call os_tmp%new(self%n)
         call os_tmp%read(ctfparamfile)
@@ -2035,7 +2034,7 @@ contains
                 call self%o(k)%set_euler([rad2deg(psi),rad2deg(theta),0.])
             end do
         else
-            call simple_stop('object nonexistent; spiral_1; simple_oris')
+            THROW_HARD('object nonexistent; spiral_1')
         endif
     end subroutine spiral_1
 
@@ -2148,7 +2147,7 @@ contains
         integer, allocatable :: inds(:)
         real    :: classpops(ncls)
         integer :: i
-        if(ncls <= 0) call simple_stop('invalid number of classes; simple_oris%order_cls')
+        if(ncls <= 0) THROW_HARD('invalid number of classes; order_cls')
         allocate(inds(ncls), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('order_cls; simple_oris',alloc_stat)
         classpops = 0.0
@@ -2278,7 +2277,7 @@ contains
                 call self%o(i)%set('class', real(closest))
             end do
         else
-            call simple_stop('the number of discrete oris is too large; discretize; simple_oris')
+            THROW_HARD('the number of discrete oris is too large; discretize')
         endif
     end subroutine discretize
 
@@ -2290,7 +2289,7 @@ contains
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j
         type(ori) :: o
-        if( k >= self%n ) call simple_stop('need to identify fewer nearest_proj_neighbors; simple_oris')
+        if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
         if( allocated(nnmat) ) deallocate(nnmat)
         allocate( nnmat(self%n,k), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_oris",alloc_stat)
@@ -2504,7 +2503,7 @@ contains
         integer :: i
         logical :: err
         if( self1%n /= self2%n )then
-            call simple_stop('cannot calculate distance between sets of different size; euldist_2; simple_oris')
+            THROW_HARD('cannot calculate distance between sets of different size; euldist_2')
         endif
         mind = huge(x)
         maxd = -mind
@@ -2561,12 +2560,12 @@ contains
         os2 = oris(100)
         passed = .false.
         if( os%get_noris() == 100 ) passed = .true.
-        if( .not. passed ) call simple_stop('get_noris failed!')
+        if( .not. passed ) THROW_HARD('get_noris failed!')
         passed = .false.
         call os%set_euler(1, [1.,2.,3.])
         euls = os%get_euler(1)
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
-        if( .not. passed ) call simple_stop('get/set eulers failed!')
+        if( .not. passed ) THROW_HARD('get/set eulers failed!')
         passed = .false.
         call os%e1set(1,4.)
         call os%e2set(1,5.)
@@ -2615,7 +2614,7 @@ contains
                 exit
             endif
         end do
-        if( .not. passed ) call simple_stop('assignment test failed!')
+        if( .not. passed ) THROW_HARD('assignment test failed!')
         write(*,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
         passed = .false.
         os = oris(100)
@@ -2626,12 +2625,12 @@ contains
         call os2%write('test_oris_rndoris_copy.txt')
         corr = os%corr_oris(os2)
         if( corr > 0.99 ) passed = .true.
-        if( .not. passed ) call simple_stop('read/write failed')
+        if( .not. passed ) THROW_HARD('read/write failed')
         passed = .false.
         call os%rnd_states(5)
         call os%write('test_oris_rndoris_rndstates.txt')
         if( os%corr_oris(os2) > 0.99 ) passed = .true.
-        if( .not. passed ) call simple_stop('statedoc read/write failed!')
+        if( .not. passed ) THROW_HARD('statedoc read/write failed!')
         write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()

@@ -152,7 +152,7 @@ contains
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
-                call simple_stop('unsupported which flag; simple_motion_correct_iter :: get_moviename')
+                THROW_HARD('unsupported which flag; get_moviename')
         end select
     end function get_moviename
 

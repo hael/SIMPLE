@@ -165,8 +165,8 @@ contains
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
         endif
-        if( .not. cline%defined('refs') )call simple_stop('need refs to be part of command line for cluster2D execution')
-        if( .not. file_exists(params_glob%refs) ) call simple_stop('input references (refs) does not exist in cwd')
+        if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
+        if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')
         call cavger_read(params_glob%refs, 'merged')
         if( file_exists(params_glob%refs_even) )then
             call cavger_read(params_glob%refs_even, 'even')

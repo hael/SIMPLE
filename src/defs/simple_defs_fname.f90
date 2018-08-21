@@ -3,7 +3,7 @@ use, intrinsic :: iso_c_binding, only: c_int, c_char, c_null_char
 ! command line
 integer, parameter :: MAXNKEYS=100, KEYLEN=32
 ! GLOBAL STRINGS CONSTANTS
-integer, parameter :: SHORTSTRLEN = 12  !< shorter string length
+integer, parameter :: SHORTSTRLEN = 12   !< shorter string length
 integer, parameter :: STDLEN      = 256  !< standard string length
 integer, parameter :: LONGSTRLEN  = 1024 !< longer string length
 ! EXTENSIONS

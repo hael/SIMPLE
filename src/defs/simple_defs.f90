@@ -1,8 +1,6 @@
 module simple_defs
 use, intrinsic :: iso_c_binding
 use, intrinsic :: iso_fortran_env
-!USE, INTRINSIC :: IEEE_ARITHMETIC
-!USE, INTRINSIC :: IEEE_EXCEPTIONS
 use simple_defs_fname
 implicit none
 integer,  parameter :: ascii        = selected_char_kind ("ascii")

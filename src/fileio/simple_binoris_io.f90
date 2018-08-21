@@ -2,9 +2,16 @@ module simple_binoris_io
 use simple_defs
 use simple_strings
 use simple_fileio
+use simple_error
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
+use simple_syslib,     only: file_exists
 implicit none
+
+public :: binread_oritab, binread_ctfparams_state_eo, binread_nlines, binwrite_oritab
+! public :: binwrite_o_peaks, binread_o_peaks
+private
+#include "simple_local_flags.inc"
 
 contains
 
@@ -14,8 +21,7 @@ contains
         class(oris),       intent(inout) :: a
         integer,           intent(in)    :: fromto(2)
         if( .not. file_exists(fname) )then
-            write(*,*) 'file: ', trim(fname)
-            stop 'does not exist in cwd; binoris_io :: binread_oritab_1'
+            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
             case('O')
@@ -23,8 +29,7 @@ contains
             case('T')
                 call a%read(fname, fromto=fromto)
             case DEFAULT
-                write(*,*) 'file: ', trim(fname)
-                stop 'format unsupported; simple_binoris_io :: binread_oritab'
+                THROW_HARD('format: '//fname2format(fname)//' unsupported')
         end select
     end subroutine binread_oritab
 
@@ -34,8 +39,7 @@ contains
         class(oris),       intent(inout) :: a
         integer,           intent(in), optional    :: fromto(2)
         if( .not. file_exists(fname) )then
-            write(*,*) 'file: ', trim(fname)
-            stop 'does not exist in cwd; binoris_io :: binread_ctfparams_and_state'
+            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
             case('O')
@@ -43,8 +47,7 @@ contains
             case('T')
                 call a%read_ctfparams_state_eo(fname)
             case DEFAULT
-                write(*,*) 'file: ', trim(fname)
-                stop 'format unsupported; simple_binoris_io :: binread_ctfparams_state_eo'
+                THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end subroutine binread_ctfparams_state_eo
 
@@ -55,8 +58,7 @@ contains
         integer       :: nl
         type(binoris) :: bos
         if( .not. file_exists(fname) )then
-            write(*,*) 'file: ', trim(fname)
-            stop 'does not exist in cwd; binoris_io :: binread_nlines'
+            THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
             case('O')
@@ -66,8 +68,7 @@ contains
             case('T')
                 nl = nlines(fname)
             case DEFAULT
-                write(*,*) 'file: ', trim(fname)
-                stop 'format unsupported; simple_binoris_io :: binread_nlines'
+                THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end function binread_nlines
 
@@ -83,12 +84,11 @@ contains
             case('T')
                 call a%write(fname, fromto)
             case DEFAULT
-                write(*,*) 'file: ', trim(fname)
-                stop 'format unsupported; simple_binoris_io :: binwrite_oritab'
+                THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end subroutine binwrite_oritab
 
-    ! DOES NOT COMPILE ON OSX
+    ! NEED TO SORT COMPILATION ON OSX
     ! subroutine binwrite_o_peaks( fname, fromto, o_peaks, isegment )
     !     use simple_binoris, only: binoris
     !     character(len=*), intent(in)    :: fname
@@ -194,8 +194,7 @@ contains
     !         ! it is assumed that all entries have an iptcl index
     !         iptcl = nint(o%get('iptcl'))
     !         if( iptcl == 0 )then
-    !             write(*,*) 'ERROR! iptcl index == 0 not allowed, index probably not set'
-    !             stop 'simple_binoris_io :: binread_o_peaks'
+    !             THROW_HARD('ERROR! iptcl index == 0 not allowed, index probably not set')
     !         endif
     !         if( iptcl_prev == 0 .or. iptcl == iptcl_prev )then
     !             cnt = cnt + 1

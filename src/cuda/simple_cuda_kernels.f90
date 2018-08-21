@@ -218,7 +218,7 @@ contains
          else
             write(*,*) 'self1%ldim:', self1%get_ldim()
             write(*,*) 'self2%ldim:', self2%get_ldim()
-            call simple_stop('images to be correlated need to have same dimensions; corr; simple_image')
+            THROW_HARD('images to be correlated need to have same dimensions')
          endif
          if(allocated(cmat1)) deallocate(cmat1)
          if(allocated(cmat2)) deallocate(cmat2)

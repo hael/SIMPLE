@@ -8,6 +8,7 @@ implicit none
 
 public :: init_tracker, track_particle, write_tracked_series, kill_tracker
 private
+#include "simple_local_flags.inc"
 
 integer,                   allocatable :: particle_locations(:,:)
 character(len=LONGSTRLEN), allocatable :: framenames(:)
@@ -20,7 +21,6 @@ integer               :: ldim(3), nframes, box, nx, ny, offset
 real                  :: smpd, sxx, lp, cenlp, sumw
 character(len=3)      :: neg
 logical               :: l_neg
-
 
 contains
 
@@ -44,7 +44,7 @@ contains
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', n
-            call simple_stop('simple_tseries_tracker :: init_tracker; assumes one frame per file')
+            THROW_HARD('init_tracker; assumes one frame per file')
         endif
         nx = ldim(1) - box
         ny = ldim(2) - box

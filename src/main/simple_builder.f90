@@ -343,7 +343,7 @@ contains
             if( self%spproj%os_cls3D%get_noris() == params%ncls )then
                 call self%spproj%os_cls3D%nearest_proj_neighbors(params%nnn, self%nnmat)
             else
-               call simple_stop('simple_builder::build_strategy2D_tbox size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
+               THROW_HARD('size of os_cls3D segment of spproj does not conform with # clusters (ncls)')
             endif
         endif
         call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)

@@ -20,7 +20,7 @@ contains
             case( 'no' )
                 call exec_rec( fbody_in )
             case DEFAULT
-                call simple_stop('unknonw eo flag; simple_rec_master :: exec_rec_master')
+                THROW_HARD('unknonw eo flag; exec_rec_master')
         end select
     end subroutine exec_rec_master
 

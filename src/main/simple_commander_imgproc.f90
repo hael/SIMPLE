@@ -202,8 +202,7 @@ contains
                     call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0., width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
-                    if( .not. cline%defined('winsz') )&
-                    call simple_stop('need winsz input for real-space filtering; commander_imgproc :: exec_filter')
+                    if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
                     call real_filter_imgfile(params%stk, params%outstk, params%smpd, trim(params%real_filter), nint(params%winsz))
                 else
                     stop 'Nothing to do!'
@@ -232,8 +231,7 @@ contains
                     call build%vol%bp(0., params%lp, width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
-                    if( .not. cline%defined('winsz') )&
-                        call simple_stop('need winsz input for real-space filtering; commander_imgproc :: exec_filter')
+                    if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
                     call build%vol%real_space_filter(nint(params%winsz), params%real_filter)
                 else if( cline%defined('vol_filt') )then
                     if( .not.file_exists(params%vol_filt)) stop 'Cannot find volume filter (vol_filt)'

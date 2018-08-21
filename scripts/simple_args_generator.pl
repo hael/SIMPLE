@@ -78,6 +78,7 @@ implicit none
 
 public :: args, test_args
 private
+#include \"simple_local_flags.inc\"
 
 integer, parameter :: NARGMAX=500
 
@@ -155,7 +156,7 @@ subroutine test_args()
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
     status = simple_getenv(\"SIMPLE_PATH\",spath)
-    if (status /= 0) call simple_stop(\"In simple_args::test_args SIMPLE_PATH env variable not found\")
+    if (status /= 0) THROW_HARD(\"test_args SIMPLE_PATH env variable not found\")
     spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH ', trim(adjustl(spath))
     write(*,'(a)') '**info(simple_args_unit_test): getting current working directory'
@@ -165,7 +166,7 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test): getting directory that contains varlist'
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. &
     (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
-    call simple_stop(\"In simple_args::test_args SIMPLE_BUILD_PATH  not found\")
+    THROW_HARD(\"test_args SIMPLE_BUILD_PATH  not found\")
     else
         bpath= filepath( trim(adjustl(SIMPLE_BUILD_PATH)),'lib/simple')
     endif

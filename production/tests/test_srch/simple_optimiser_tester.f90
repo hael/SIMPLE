@@ -3,11 +3,11 @@ include 'simple_lib.f08'
 use simple_optimizer,   only: optimizer
 use simple_opt_factory, only: opt_factory
 use simple_opt_spec,    only: opt_spec
-
 implicit none
 
 public :: exec_optimiser_test
 private
+#include "simple_local_flags.inc"
 
 ! module global constants
 integer, parameter        :: NOPTS=5         ! nr of optimizers
@@ -19,21 +19,21 @@ integer, parameter        :: NRDIMS=2        ! number of dimensions
 real, parameter           :: TOL=0.001       ! tolerance for success
 
 ! module global variables
-character(len=8)          :: str_opts(NOPTS) ! string descriptors for the NOPTS optimizers
-type(opt_factory)         :: ofac            ! the optimization factory object
-type(opt_spec)            :: spec            ! the optimizer specification object
-class(optimizer), pointer :: opt_ptr=>null() ! the generic optimizer object
-integer, allocatable      :: success(:,:)    ! sucess counter
-integer, allocatable      :: nevals(:,:)     ! number of function evaluations required
-integer                   :: totfails(NOPTS) ! number of total failures
-logical                   :: verbose=.false. ! verbose output or not
+character(len=8)          :: str_opts(NOPTS)      ! string descriptors for the NOPTS optimizers
+type(opt_factory)         :: ofac                 ! the optimization factory object
+type(opt_spec)            :: spec                 ! the optimizer specification object
+class(optimizer), pointer :: opt_ptr=>null()      ! the generic optimizer object
+integer, allocatable      :: success(:,:)         ! sucess counter
+integer, allocatable      :: nevals(:,:)          ! number of function evaluations required
+integer                   :: totfails(NOPTS)      ! number of total failures
+logical                   :: verbose_here=.false. ! verbose output or not
 
 contains
 
-    subroutine exec_optimiser_test( be_verbose )
-        logical, optional, intent(in)    :: be_verbose
-        verbose = .false.
-        if( present(be_verbose) ) verbose = be_verbose
+    subroutine exec_optimiser_test( be_verbose_here )
+        logical, optional, intent(in)    :: be_verbose_here
+        verbose_here = .false.
+        if( present(be_verbose_here) ) verbose_here = be_verbose_here
         write(*,*) '****optimiser_test, init'
         call test_bound_routine
         call test_all_optimizers
@@ -43,7 +43,7 @@ contains
     subroutine test_bound_routine
         real           :: lims(2,2), vec(2)
         integer        :: i
-        if( verbose ) write(*,*) 'testing the bound routine'
+        if( verbose_here ) write(*,*) 'testing the bound routine'
         lims = 0.
         lims(1,2) = 360.
         lims(2,2) = 180.
@@ -53,28 +53,28 @@ contains
         call check_and_correct_vec(spec, vec)
         if( (abs(vec(1)-1.)+abs(vec(2)-1.))/2. < 1e-6 )then
         else
-            stop '****optimiser_tester bound test1 failed!'
+            THROW_HARD('****optimiser_tester bound test1 failed!')
         endif
         vec(1) = -1.
         vec(2) = -1.
         call check_and_correct_vec(spec, vec)
         if( (abs(vec(1)-359.)+abs(vec(2)-179.))/2. < 1e-6 )then
         else
-            stop '****optimiser_tester bound test2 failed!'
+            THROW_HARD('****optimiser_tester bound test2 failed!')
         endif
         vec(1) = 361.
         vec(2) = -1.
         call check_and_correct_vec(spec, vec)
         if( (abs(vec(1)-1.)+abs(vec(2)-179.))/2. < 1e-6 )then
         else
-            stop '****optimiser_tester bound test3 failed!'
+            THROW_HARD('****optimiser_tester bound test3 failed!')
         endif
         vec(1) = -1
         vec(2) = 181.
         call check_and_correct_vec(spec, vec)
         if( (abs(vec(1)-359.)+abs(vec(2)-1.))/2. < 1e-6 )then
         else
-            stop '****optimiser_tester bound test4 failed!'
+            THROW_HARD('****optimiser_tester bound test4 failed!')
         endif
         call spec%specify('simplex', 2, limits=lims)
         do i=1,1000
@@ -83,14 +83,14 @@ contains
             call check_and_correct_vec(spec, vec)
             if( vec(1) >= 180. .and. vec(1) <= 360. .and. vec(2) >= 90. .and. vec(2) <= 180. )then
             else
-                stop '****optimiser_tester bound test5 failed!'
+                THROW_HARD('****optimiser_tester bound test5 failed!')
             endif
             vec(1) = -1.
             vec(2) = -1.
             call check_and_correct_vec(spec, vec)
             if( vec(1) >= 0. .and. vec(1) <= 180. .and. vec(2) >= 0. .and. vec(2) <= 90. )then
             else
-                stop '****optimiser_testerbound test6 failed!'
+                THROW_HARD('****optimiser_testerbound test6 failed!')
             endif
         end do
 
@@ -248,7 +248,7 @@ contains
         else
             write(*,*) 'dist from global opt (0,0): ', dist
             write(*,*) 'cost obtained (lowest=0):   ', lowest_cost
-            stop '****optimiser_test FAILURE opt_bforce'
+            THROW_HARD('****optimiser_test FAILURE opt_bforce')
         endif
     end subroutine simple_test_opt_bforce
 

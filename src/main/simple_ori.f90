@@ -5,6 +5,7 @@ implicit none
 
 public :: ori, test_ori, euler2m, m2euler
 private
+#include "simple_local_flags.inc"
 
 !>  orientation parameter stuct and operations
 type :: ori
@@ -1147,19 +1148,19 @@ contains
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.001 )then
             passed = .true.
         endif
-        if( .not. passed ) call simple_stop('Euler assignment/getters corrupt!')
+        if( .not. passed ) THROW_HARD('Euler assignment/getters corrupt!')
         passed = .false.
         call e1%e1set(99.)
         call e1%e2set(98.)
         call e1%e3set(97.)
         euls = e1%get_euler()
         if( abs(euls(1)-99.+euls(2)-98.+euls(3)-97.) < 0.001 ) passed = .true.
-        if( .not. passed ) call simple_stop('Euler e-setters corrupt!')
+        if( .not. passed ) THROW_HARD('Euler e-setters corrupt!')
         passed = .false.
         call e1%set_euler([0.,0.,0.])
         normal = e1%get_normal()
         if( abs(normal(1))+abs(normal(2))+abs(normal(3)-1.)<3.*TINY ) passed = .true.
-        if( .not. passed ) call simple_stop('Euler normal derivation corrupt!')
+        if( .not. passed ) THROW_HARD('Euler normal derivation corrupt!')
         passed = .false.
         mat = e1%get_mat()
         if( abs(mat(1,1)-1.)+abs(mat(2,2)-1.)+abs(mat(3,3)-1.)<3.*TINY )then
@@ -1168,7 +1169,7 @@ contains
             mat(3,3) = 0.
             if( abs(sum(mat)) < TINY ) passed = .true.
         endif
-        if( .not. passed ) call simple_stop('Euler rotation matrix derivation corrupt!')
+        if( .not. passed ) THROW_HARD('Euler rotation matrix derivation corrupt!')
         passed = .false.
         call e2%set_euler([20.,20.,20.])
         e3 = e2
@@ -1184,7 +1185,7 @@ contains
         if( euls(1) < 20.0001 .and. euls(1) > 19.9999 .and.&
             euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
             euls(3) < 20.0001 .and. euls(3) > 19.9999 ) passed = .true.
-        if( .not. passed ) call simple_stop('Euler composer corrupt!')
+        if( .not. passed ) THROW_HARD('Euler composer corrupt!')
         write(*,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ori
 

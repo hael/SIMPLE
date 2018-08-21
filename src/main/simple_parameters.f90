@@ -1123,7 +1123,7 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
                 write(*,*) 'file: ', trim(self%mskfile)
-                call simple_stop('input mask file not in cwd')
+                THROW_HARD('input mask file not in cwd')
             endif
         endif
         ! focused masking
@@ -1164,7 +1164,7 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         ! box on the command line overrides all other ldim setters
         if( cline%defined('box')  ) self%ldim = [self%box,self%box,1]
         ! if CTF refinement
-        if( self%ctf .eq. 'refine' ) call simple_stop('CTF refinement not yet implemented')
+        if( self%ctf .eq. 'refine' ) THROW_HARD('CTF refinement not yet implemented')
         ! set eullims
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
@@ -1186,8 +1186,7 @@ DebugPrint 'found ncls from refs: ', ncls
                 if( ncls /= self%ncls )then
                     write(*,*)'ncls in ',trim(self%refs),' : ',ncls
                     write(*,*)'self%ncls : ',self%ncls
-                    call simple_stop('input number of clusters (ncls) not&
-                        &consistent with the number of references in stack (p%refs)')
+                    THROW_HARD('input number of clusters (ncls) not consistent with the number of references in stack (p%refs)')
                 endif
             else
                 self%ncls = ncls
@@ -1239,10 +1238,10 @@ DebugPrint 'found ncls from refs: ', ncls
         self%l_dose_weight = .false.
         if( cline%defined('exp_time') .or. cline%defined('dose_rate') )then
             if( cline%defined('exp_time') .and. .not. cline%defined('dose_rate') )then
-                call simple_stop('need dose_rate to be part of the command line! simple_parameters :: new')
+                THROW_HARD('need dose_rate to be part of the command line!')
             endif
             if( .not. cline%defined('exp_time') .and. cline%defined('dose_rate') )then
-                call simple_stop('need exp_time to be part of the command line! simple_parameters :: new')
+                THROW_HARD('need exp_time to be part of the command line!')
             endif
             self%l_dose_weight = .true.
         endif
@@ -1410,7 +1409,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     endif
                     select case(file_descr)
                         case ('I')
-                            call simple_stop('Support for IMAGIC files is not yet implemented!')
+                            THROW_HARD('Support for IMAGIC files is not yet implemented!')
                         case ('M')
                             ! MRC files are supported
                             cntfile = cntfile+1
@@ -1421,7 +1420,7 @@ DebugPrint 'found ncls from refs: ', ncls
                             checkupfile(cntfile) = 'S'
                         case ('N')
                             write(*,*) 'file: ', trim(var)
-                            call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
+                            THROW_HARD('This file format is not supported by SIMPLE')
                         case ('T','B','P','O', 'R')
                             ! text files are supported
                             ! binary files are supported
@@ -1430,7 +1429,7 @@ DebugPrint 'found ncls from refs: ', ncls
                             ! R=*.star format -- in testing
                         case DEFAULT
                             write(*,*) 'file: ', trim(var)
-                            call simple_stop('This file format is not supported by SIMPLE; simple_parameters::check_file')
+                            THROW_HARD('This file format is not supported by SIMPLE')
                     end select
                     if( file_exists(var) )then
                         ! updates name to include absolute path
@@ -1523,7 +1522,7 @@ DebugPrint 'found logical dimension of stack: ', self%ldim
                     else
                         write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
                         write(*,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
-                        call simple_stop(" In simple_parameters set_ldim_box_from_stk")
+                        THROW_HARD("set_ldim_box_from_stk")
                     endif
                 endif
             end subroutine set_ldim_box_from_stk
@@ -1540,7 +1539,7 @@ DebugPrint 'found logical dimension of stack: ', self%ldim
                 self%ext = '.spi'
             case DEFAULT
                 write(*,*)'format: ', trim(ext)
-                call simple_stop('This file format is not supported by SIMPLE; set_img_format; simple_parameters')
+                THROW_HARD('This file format is not supported by SIMPLE')
         end select
     end subroutine set_img_format
 

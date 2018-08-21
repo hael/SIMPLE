@@ -11,6 +11,7 @@ public :: check_nptcls_commander
 public :: info_image_commander
 public :: info_stktab_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: check_box_commander
   contains
@@ -39,7 +40,7 @@ contains
         if( cline%defined('stk') .or. cline%defined('vol1') )then
             ! all ok
         else
-            stop 'Either stack (stk) or volume (vol1) needs to be defined on command line!'
+            THROW_HARD('Either stack (stk) or volume (vol1) needs to be defined on command line!')
         endif
         call params%new(cline)
         call cline%set('box', real(params%box))
@@ -105,8 +106,7 @@ contains
         type(parameters) :: params
         call params%new(cline)
         if( .not. file_exists(params%stktab) )then
-            write(*,*) 'file: ', trim(params%stktab), ' not in cwd'
-            stop 'commander_checks :: exec_info_stktab'
+            THROW_HARD('file: '//trim(params%stktab)//' not in cwd; exec_info_stktab')
         endif
         write(*,*) '# micrograps: ', params%nmics
         write(*,*) '# particles : ', params%nptcls

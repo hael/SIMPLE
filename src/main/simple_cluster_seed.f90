@@ -6,6 +6,7 @@ implicit none
 
 public :: gen_labelling
 private
+#include "simple_local_flags.inc"
 
 integer              :: nptcls      = 0 !< total # of particles
 integer              :: nincl_ptcls = 0 !< # of particles with nonzero state
@@ -19,7 +20,7 @@ contains
         integer,          intent(in)    :: nclasses
         character(len=*), intent(in)    :: method
         character(len=STDLEN) :: method_here
-        if(nclasses<=1)stop 'Inconstsistent number of classes; simple_cluster_seed::gen_labelling'
+        if(nclasses<=1) THROW_HARD('Inconstsistent number of classes; gen_labelling')
         ! init
         call seed_rnd
         nlabels = nclasses
@@ -48,7 +49,7 @@ contains
             case('ranked_uniform')
                 call draw_ranked_uniform(os)
             case DEFAULT
-                stop 'Unsupported method; simple_cluster_seed::gen_labelling'
+                THROW_HARD('Unsupported method; gen_labelling')
         end select
         ! updates labelling
         call os%set_all('state',real(states))

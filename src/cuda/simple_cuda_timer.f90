@@ -125,7 +125,7 @@ contains
         integer(KIND(cudaSuccess)) :: istat
         type(cudaDeviceProp)       :: prop
         istat=cudaGetDeviceProperties(prop,0)
-        if (istat .ne. cudaSuccess) call simple_stop('  GetDeviceProperties for device 0: Failed')
+        if (istat .ne. cudaSuccess) THROW_HARD('GetDeviceProperties for device 0: Failed')
        ! ilen=verify(prop%name,' ',.true.)
         write (*,*) prop%name, &
             real(prop%clockRate)/1000.0, &
@@ -147,11 +147,11 @@ contains
         type(timer_cuda), intent(inout) :: this
         integer(KIND(cudaSuccess))      :: istat
         istat= cudaStreamDestroy(this%tStream)
-        if (istat .ne. cudaSuccess) call simple_stop(' cudaStreamCreate for device 0: Failed')
+        if (istat .ne. cudaSuccess) THROW_HARD('cudaStreamCreate for device 0: Failed')
         istat=cudaEventDestroy(this%start_point)
-        if (istat .ne. cudaSuccess) call simple_stop(' cudaEventDestroyfor device 0: Failed')
+        if (istat .ne. cudaSuccess) THROW_HARD('cudaEventDestroyfor device 0: Failed')
         istat=cudaEventDestroy(this%end_point)
-        if (istat .ne. cudaSuccess) call simple_stop(' cudaEventDestroyfor device 0: Failed')
+        if (istat .ne. cudaSuccess) THROW_HARD('cudaEventDestroyfor device 0: Failed')
         this%exists = .false.
     end subroutine destroy_cuda_timer
 

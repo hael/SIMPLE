@@ -7,6 +7,7 @@ implicit none
 
 public :: sp_project, oritype2segment
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: MAXN_OS_SEG = 13
 
@@ -1049,7 +1050,7 @@ contains
                     ext_out = '.spi'
                 case DEFAULT
                     write(*,*)'format: ', trim(ext)
-                    call simple_stop('This file format is not supported by SIMPLE; simple_sp_project::add_scale_tag')
+                    THROW_HARD('This file format is not supported by SIMPLE; add_scale_tag')
             end select
             if(present(dir))then
                 call simple_mkdir(trim(dir),errmsg="sp_project::add_scale_tag")

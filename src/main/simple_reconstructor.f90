@@ -7,12 +7,13 @@ include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image
 use simple_parameters, only: params_glob
-use simple_fftw3
 use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
+use simple_fftw3
 implicit none
 
 public :: reconstructor
 private
+#include "simple_local_flags.inc"
 
 type, extends(image) :: reconstructor
     private
@@ -68,8 +69,8 @@ type, extends(image) :: reconstructor
     procedure          :: dealloc_rho
 end type reconstructor
 
-#include "simple_local_flags.inc"
 integer(timer_int_kind) :: trec
+
 contains
 
     ! CONSTRUCTORS
@@ -83,8 +84,8 @@ contains
         integer :: dim, h, k, sh
         logical :: l_expand
         l_expand = .true.
-        if(.not. self%exists() ) call simple_stop('construct image before allocating rho; alloc_rho; simple_reconstructor')
-        if(      self%is_2d()  ) call simple_stop('only for volumes; alloc_rho; simple_reconstructor')
+        if(.not. self%exists() ) THROW_HARD('construct image before allocating rho; alloc_rho')
+        if(      self%is_2d()  ) THROW_HARD('only for volumes; alloc_rho')
         if( present(expand) )l_expand = expand
         call self%dealloc_rho
         l_expand = .true.
@@ -734,8 +735,6 @@ contains
         integer          :: statecnt(params_glob%nstates), i, cnt, state_here, state_glob
         ! stash global state index
         state_glob = state
-        trec=tic()
-        DebugPrint ' In reconstructor;rec '
         ! make the images
         call img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
@@ -743,7 +742,6 @@ contains
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
-        DebugPrint ' In reconstructor;rec prep done                              ', toc(trec)
         write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION '
         statecnt = 0
         cnt      = 0
@@ -758,15 +756,12 @@ contains
                 endif
             endif
         end do
-        DebugPrint ' In reconstructor;rec KB done                                ', toc(trec)
         if( present(part) )then
             return
         else
             write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
-            DebugPrint ' In reconstructor;rec compress_exp done                  ', toc(trec)
             call self%sampl_dens_correct
-            DebugPrint ' In reconstructor;rec sampl_dens_correct done            ', toc(trec)
         endif
         call self%ifft()
         call img%kill
@@ -776,7 +771,6 @@ contains
         if( params_glob%nstates > 1 )then
             write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
-         DebugPrint ' In reconstructor;rec Completed in                          ', toc(trec) , ' secs'
         contains
 
             !> \brief  the density reconstruction functionality

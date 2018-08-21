@@ -21,6 +21,7 @@ use simple_commander_volops
 use simple_commander_tseries
 use simple_projection_frcs
 implicit none
+#include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT
 type(new_project_commander)          :: xnew_project
@@ -150,7 +151,7 @@ select case(prg)
         if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
-                stop 'Only CTF=NO/FLIP are allowed'
+                THROW_HARD('Only CTF=NO/FLIP are allowed')
             endif
         endif
         call cline%set('mkdir','yes')
@@ -288,8 +289,7 @@ select case(prg)
         call cline%parse()
         call xsimulate_subtomogram%execute(cline)
     case DEFAULT
-        write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
-        stop 'unsupported program'
+        THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
 
 call update_job_descriptions_in_project( cline )

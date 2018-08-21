@@ -1,10 +1,12 @@
 ! cluster validation
-
 module simple_cluster_valid
 include 'simple_lib.f08'
-
-use simple_oris,   only: oris
+use simple_oris, only: oris
+use simple_error
 implicit none
+
+public :: cluster_valid
+private
 #include "simple_local_flags.inc"
 
 !>  \brief is the type definition for the validation class, driven by pointers
@@ -29,7 +31,7 @@ type cluster_valid
     logical              :: exists = .false. !< to indicate existence
   contains
     ! CONSTRUCTOR
-    procedure :: new
+    procedure          :: new
     ! GETTERS
     procedure, private :: get_clspop
     procedure, private :: get_clsarr
@@ -40,9 +42,9 @@ type cluster_valid
     ! CLUSTER VALIDITY INDICES
     procedure, private :: cohesion
     procedure, private :: separation
-    procedure :: ratio_index
+    procedure          :: ratio_index
     ! DESTRUCTOR
-    procedure :: kill
+    procedure          :: kill
 end type cluster_valid
 
 contains
@@ -66,14 +68,14 @@ contains
         self%ncls   = ncls
         self%ninds  = 2
         ! error check
-        if( self%nptcls < 2 ) call simple_stop('number of objects (nptcls) has to be > 1; simple_cluster_valid::new')
-        if( self%ncls  < 2 )  call simple_stop('number of classes (ncls) has to be > 1; simple_cluster_valid::new')
+        if( self%nptcls < 2 ) THROW_HARD('number of objects (nptcls) has to be > 1')
+        if( self%ncls  < 2  ) THROW_HARD('number of classes (ncls) has to be > 1')
         select case(which)
             case('state')
             case('class')
             case('subclass')
             case DEFAULT
-                call simple_stop('unknown which tag, which=<state|class|subclass>; simple_cluster_valid::new')
+                THROW_HARD('unknown which tag, which=<state|class|subclass>')
         end select
         ! allocate
         allocate( self%labels(self%nptcls), self%centers(self%ncls), self%maxdists(self%ncls),&
@@ -98,13 +100,11 @@ contains
         endif
         ! check presence or absence of S and D
         if( spresen .and. dpresen )then
-            call simple_stop('Cannot use both similarity matrix (S) and distance marix (D)&
-            &for validation; simple_cluster_valid::new')
+            THROW_HARD('cannot use both similarity matrix (S) and distance marix (D)for validation')
         else if( spresen .or. dpresen )then
             ! all fine
         else
-            call simple_stop('Must have either similarity matrix (S) or distance marix (D)&
-            &for validation; simple_cluster_valid::new')
+            THROW_HARD('Must have either similarity matrix (S) or distance marix (D) for validation')
         endif
         self%exists = .true.
     end subroutine new
@@ -281,7 +281,6 @@ contains
                 deallocate(karr)
             endif
         end do
-        DebugPrint  'finished gen_cohesion_metrics'
     end subroutine gen_cohesion_metrics
 
     !>  \brief  calculates cohesion of the clusters in terms of distance
@@ -296,7 +295,6 @@ contains
             coh = coh+self%maxdists(k)+self%avgdists(k)
         end do
         coh = coh/real(2*self%ncls)
-        DebugPrint  'calculated cohesion'
     end function cohesion
 
     !>  \brief  calculates separation of the clusters in terms of distance
@@ -314,7 +312,6 @@ contains
             end do
         end do
         sep = sep/real(2*npairs)
-        DebugPrint  'calculated separation'
     end function separation
 
     !>  \brief  calculates the ratio index for cluster validation

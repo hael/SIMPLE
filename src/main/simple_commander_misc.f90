@@ -92,7 +92,7 @@ contains
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
             write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', params%fname
-            call simple_stop ( 'I/O error; simple_cluster_smat')
+            THROW_HARD('I/O')
         endif
         call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
         allocate(validinds(2:params%ncls), stat=alloc_stat)

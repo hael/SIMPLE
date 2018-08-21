@@ -16,6 +16,7 @@ use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
 implicit none
+#include "simple_local_flags.inc"
 
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)           :: xpreprocess
@@ -434,7 +435,7 @@ select case(prg)
             call cline%set('refine',  'single')
         else
             if( cline%get_carg('refine').eq.'multi' .and. .not. cline%defined('nstates') )then
-                stop 'refine=MULTI requires specification of NSTATES'
+                THROW_HARD('refine=MULTI requires specification of NSTATES')
             endif
         endif
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
@@ -841,8 +842,7 @@ select case(prg)
         call cline%parse_oldschool(keys_required=keys_required(:3))
         call xsplit%execute(cline)
     case DEFAULT
-        write(*,'(a,a)') 'program key (prg) is: ', trim(prg)
-        stop 'unsupported program'
+        THROW_HARD('prg='//trim(prg)//' is unsupported')
     end select
 
 end program simple_private_exec
