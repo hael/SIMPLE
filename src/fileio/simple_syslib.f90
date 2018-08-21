@@ -1270,7 +1270,7 @@ contains
             ' Intel IFPORT version ', trim(adjustl(str))
 #else
         write( file_unit_op, '(A,I0)' ) &
-            ' Intel Fortran version ', __INTEL_COMPILER 
+            ' Intel Fortran version ', __INTEL_COMPILER
 #endif
 #endif
 
@@ -1447,7 +1447,7 @@ contains
         call syslib_c2fortran_string(outfilename_c)
         if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
         if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
-        
+
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))

@@ -73,11 +73,11 @@ contains
         type(cmdline)                 :: cline_extract
         type(sp_project)              :: spproj
         type(ctfparams)               :: ctfvars
-        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody, gainref_fname
+        character(len=:), allocatable :: imgkind, moviename, output_dir_picker, fbody
         character(len=:), allocatable :: moviename_forctf, moviename_intg, output_dir_motion_correct
         character(len=:), allocatable :: output_dir_ctf_estimate, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out, iostatus
+        integer :: nmovies, fromto(2), imovie, ntot, frame_counter, nptcls_out
         logical :: l_pick
         call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -573,7 +573,7 @@ contains
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:)
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN) :: stack
+        character(len=LONGSTRLEN) :: stack, dir_box
         integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
         integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
         real                      :: particle_position(2)
@@ -590,14 +590,16 @@ contains
         ntot = spproj%os_mic%get_noris()
         ! input directory
         if( cline%defined('dir_box') )then
-            if( file_exists(params%dir_box) )then
-                call simple_list_files(params%dir_box//'/*.box', boxfiles)
+            dir_box = trim(params%dir_box)
+            if( params%mkdir.eq.'yes' ) dir_box= trim(filepath(PATH_PARENT,dir_box))
+            if( file_exists(dir_box) )then
+                call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
                 if(.not.allocated(boxfiles))then
-                    write(*,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 1'
+                    write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 1'
                     stop 'No box file found ; simple_commander_preprocess::exec_extract 1'
                 endif
                 if(size(boxfiles)==0)then
-                    write(*,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 2'
+                    write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 2'
                     stop 'No box file found ; simple_commander_preprocess::exec_extract 2'
                 endif
                 do i=1,size(boxfiles)
@@ -605,7 +607,7 @@ contains
                     boxfiles(i) = trim(boxfile_name)
                 enddo
             else
-                write(*,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
+                write(*,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
                 stop 'Box directory does not exist; simple_commander_preprocess::exec_extract'
             endif
         endif
@@ -809,7 +811,7 @@ contains
         type(sp_project)              :: spproj
         character(len=:), allocatable :: micname, output_dir_picker, fbody, output_dir_extract
         character(len=LONGSTRLEN)     :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out, state, iostatus
+        integer :: fromto(2), imic, ntot, nptcls_out, state
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
