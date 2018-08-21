@@ -4980,7 +4980,7 @@ contains
                     ! real part of the complex mult btw self1 and targ*
                     comp1 = self1%cmat(phys(1),phys(2),phys(3))
                     comp2 = self2%cmat(phys(1),phys(2),phys(3))
-                    corrs_8(sh) = corrs_8(sh)+ realpart(comp1 * conjg(comp2))
+                    corrs_8(sh) = corrs_8(sh)+ real(comp1 * conjg(comp2))
                     sumasq(sh) = sumasq(sh) + csq(comp1)
                     sumbsq(sh) = sumbsq(sh) + csq(comp2)
                 end do
