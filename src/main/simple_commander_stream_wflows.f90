@@ -320,7 +320,7 @@ contains
         orig_box  = stream_proj%get_box()
         orig_smpd = stream_proj%get_smpd()
         orig_msk  = params%msk
-        params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC2D)
+        params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC*0.9)
         if( do_autoscale )then
             call autoscale(orig_box, orig_smpd, params%smpd_targets2D(1), box, smpd, scale_factor)
             if( box == orig_box ) do_autoscale = .false.
@@ -377,11 +377,12 @@ contains
             call cline_cluster2D%set('maxits',  real(iter))
             call cline_cluster2D%set('ncls',    real(ncls_glob))
             call cline_cluster2D%set('nparts',  real(min(ncls_glob,params%nparts)))
+            call cline_cluster2D%set('stream',  'yes') ! has to be updated at each iteration
             if( iter > 1 ) call cline_cluster2D%set('refs', trim(refs_glob))
-            if( nptcls_glob > SHIFTSRCH_PTCLSLIM .and. iter > SHIFTSRCH_ITERLIM )then
+            if( nptcls_glob>SHIFTSRCH_PTCLSLIM .and. iter>SHIFTSRCH_ITERLIM )then
                  call cline_cluster2D%set('trs', MINSHIFT)
             endif
-            if( nptcls_glob > CCRES_NPTCLS_LIM )then
+            if( nptcls_glob>CCRES_NPTCLS_LIM .and. iter>5 )then
                  call cline_cluster2D%set('objfun', 'ccres')
             endif
             ! execute
@@ -560,6 +561,7 @@ contains
                     ! updates classes
                     call img_cavg%new([box, box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
+                        print *,'remap_empty_classes', icls,fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
@@ -602,6 +604,7 @@ contains
                     smpd = work_proj%get_smpd()
                     call img_cavg%new([box,box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
+                        print *,'map_new_ptcls',icls,fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))

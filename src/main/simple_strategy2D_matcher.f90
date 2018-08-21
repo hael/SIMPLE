@@ -32,7 +32,7 @@ character(len=STDLEN)   :: benchfname
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( cline, which_iter )
+    subroutine cluster2D_exec( cline, which_iter, l_stream )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d
@@ -45,6 +45,7 @@ contains
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
+        logical,               intent(in)    :: l_stream
         integer, allocatable :: pinds(:)
         logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
@@ -57,8 +58,8 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         real                  :: extr_bound, frac_srch_space, extr_thresh
-        integer               :: iptcl, i, fnr, cnt, update_cnt
-        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc, l_stream
+        integer               :: iptcl, i, fnr, cnt, updatecnt, ngreedy, nsnhc
+        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
             t_init = tic()
@@ -69,36 +70,51 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        if( params_glob%extr_iter == 1 )then
-            ! greedy start
+        if( l_stream )then
+            ! streaming: no fractional update
+            l_frac_update  = .false.
             l_partial_sums = .false.
             l_extr         = .false.
             l_snhc         = .false.
-            l_frac_update  = .false.
-        else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
-            ! extremal opt without fractional update
-            l_partial_sums = .false.
-            l_extr         = .true.
-            l_snhc         = .true.
-            l_frac_update  = .false.
+            select case(trim(params_glob%refine))
+                case('snhc')
+                    l_snhc = .true.
+                case('extr')
+                    ! new particles are the randomization
+                case DEFAULT
+                    stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec 1'
+            end select
         else
-            ! optional fractional update, no extremal opt
-            l_partial_sums = params_glob%l_frac_update
-            l_extr         = .false.
-            l_snhc         = .false.
-            l_frac_update  = params_glob%l_frac_update
+            ! default
+            if( params_glob%extr_iter == 1 )then
+                ! greedy start
+                l_partial_sums = .false.
+                l_extr         = .false.
+                l_snhc         = .false.
+                l_frac_update  = .false.
+            else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
+                ! extremal opt without fractional update
+                l_partial_sums = .false.
+                l_extr         = .true.
+                l_snhc         = .true.
+                l_frac_update  = .false.
+            else
+                ! optional fractional update, no extremal opt
+                l_partial_sums = params_glob%l_frac_update
+                l_extr         = .false.
+                l_snhc         = .false.
+                l_frac_update  = params_glob%l_frac_update
+            endif
+            ! refinement logic
+            select case(trim(params_glob%refine))
+                case('extr')
+                    l_snhc = .false.
+                case('snhc')
+                    l_extr = .false.
+                case DEFAULT
+                    stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec 2'
+            end select
         endif
-        ! refinement logic
-        l_stream = params_glob%stream.eq.'yes'
-        select case(trim(params_glob%refine))
-            case('extr')
-                l_snhc = .false.
-                if( l_stream ) l_extr=.false.
-            case('snhc')
-                l_extr   = .false.
-            case DEFAULT
-                stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec'
-        end select
 
         ! EXTREMAL LOGICS
         if( l_extr )then
@@ -140,16 +156,22 @@ contains
             ! factorial decay, -2 because first step is always greedy
             if( l_stream )then
                 ! size is set per particle
+                ngreedy = 0
+                nsnhc   = 0
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
-                        if( update_cnt<=1 .or. update_cnt>20 )then
-                            snhc_sz(iptcl) = 0. ! greedy
-                        else if( update_cnt < 21 )then
-                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(update_cnt-2)/40.))
+                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                        if( updatecnt<=1 .or. updatecnt>20 )then
+                            snhc_sz(iptcl) = 0. ! greedy or semi-exhaustive
+                            ngreedy = ngreedy + 1
+                        else if( updatecnt < 21 )then
+                            nsnhc = nsnhc + 1
+                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/40.)) ! snhc
                         endif
                     endif
                 enddo
+                print *,'ngreedy:', ngreedy
+                print *,'nsnhc: ', nsnhc
             else
                 snhc_sz = min(SNHC2D_INITFRAC,&
                     &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
@@ -227,8 +249,8 @@ contains
             case DEFAULT
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        update_cnt = nint(build_glob%spproj_field%get(iptcl,'update_cnt'))
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. update_cnt == 1 )then
+                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
                             if(params_glob%refine.eq.'extr')then
@@ -250,10 +272,10 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl     = iptcl
                 strategy2Dspec%iptcl_map = cnt
-                if( params_glob%refine.eq.'snhc' )then
-                    strategy2Dspec%stoch_bound = snhc_sz(iptcl)
-                else
+                if( trim(params_glob%refine).eq.'extr' )then
                     strategy2Dspec%stoch_bound = extr_bound
+                else
+                    strategy2Dspec%stoch_bound = snhc_sz(iptcl)
                 endif
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)

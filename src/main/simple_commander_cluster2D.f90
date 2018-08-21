@@ -107,7 +107,13 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: startit, ncls_from_refs, lfoo(3)
+        logical :: l_stream
         call cline%set('oritype', 'ptcl2D')
+        l_stream = .false.
+        if( cline%defined('stream') )then
+            l_stream = cline%get_carg('stream').eq.'yes'
+            call cline%set('stream','no')
+        endif
         call build%init_params_and_build_strategy2D_tbox(cline, params)
         if( cline%defined('refs') )then
             call find_ldim_nptcls(params%refs, lfoo, ncls_from_refs)
@@ -119,7 +125,7 @@ contains
         if( startit == 1 )call build%spproj_field%clean_updatecnt
         ! execute
         if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
-        call cluster2D_exec( cline, startit) ! partition or not, depending on 'part'
+        call cluster2D_exec( cline, startit, l_stream ) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
         call qsys_job_finished('simple_commander_cluster2D :: exec_cluster2D')

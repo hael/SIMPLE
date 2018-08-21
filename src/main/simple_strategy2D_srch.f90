@@ -91,7 +91,6 @@ contains
         self%best_class = self%prev_class
         self%best_rot   = self%prev_rot
         ! calculate previous best corr (treshold for better) & b-factor
-        self%prev_bfac = 0.
         if( self%prev_class > 0 )then
             self%prev_bfac = pftcc_glob%fit_bfac(self%prev_class, self%iptcl, self%prev_rot, [0.,0.])
             if(params_glob%cc_objfun == OBJFUN_RES)then

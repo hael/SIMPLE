@@ -31,7 +31,7 @@ logical :: isopened
 CHARACTER(len=STDLEN) :: argtmp
 !stars_from_matt="/scratch/el85/stars_from_matt/"
 io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
-if(io_stat/=0)call simple_stop('Cannot run this test without SIMPLE_TESTBENCH_DATA')
+if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
 
 stars_from_matt=filepath(trim(simple_testbench),"star_test/stars_from_matt/")
 if( command_argument_count() == 1 )then
@@ -137,7 +137,7 @@ else
     THROW_HARD(" prg=importstar should not fail with a valid startype and smpd")
 endif
 call simple_chdir( '..', status=io_stat)
-if(io_stat/=0) call simple_stop("simple_chdir failed")
+if(io_stat/=0) THROW_HARD("simple_chdir failed")
 call simple_rmdir('SimpleImport')
 
 
@@ -168,10 +168,10 @@ contains
         call exec_cmdline("[ -d SimpleImport ] && rm -rf SimpleImport; "//&
             "simple_exec prg=new_project projname=SimpleImport;",exitstat=io_stat)
         call simple_chdir( 'SimpleImport', status=io_stat)
-        if(io_stat/=0) call simple_stop("simple_chdir failed")
+        if(io_stat/=0) THROW_HARD("simple_chdir failed")
         call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(starfile)//" "//trim(extraargs),exitstat=io_stat)
         call simple_chdir( '..', status=io_stat)
-        if(io_stat/=0) call simple_stop("simple_chdir failed")
+        if(io_stat/=0) THROW_HARD("simple_chdir failed")
     end subroutine runimport
 
     subroutine create_relion_starfile
