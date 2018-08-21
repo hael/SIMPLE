@@ -7,11 +7,11 @@ use simple_opt_lbfgsb,  only: opt_lbfgsb
 use simple_opt_simplex, only: opt_simplex
 use simple_opt_bforce,  only: opt_bforce
 use simple_opt_de,      only: opt_de
-
 implicit none
 
 public :: opt_factory
 private
+#include "simple_local_flags.inc"
 
 !> abstract optimisation factory type
 type :: opt_factory
@@ -38,8 +38,7 @@ contains
             case('lbfgsb')
                 allocate(opt_lbfgsb         :: self%optimizer_type)
             case DEFAULT
-                write(*,*) 'class:', spec%str_opt
-                stop 'unsupported in opt_factory constructor'
+                THROW_HARD('class: '//trim(spec%str_opt)//' unsupported in opt_factory constructor')
         end select
         call self%optimizer_type%new(spec)
         ptr => self%optimizer_type

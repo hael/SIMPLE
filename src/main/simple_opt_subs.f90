@@ -4,6 +4,10 @@ include 'simple_lib.f08'
 use simple_opt_spec, only:  opt_spec, costfun
 implicit none
 
+public :: linmin, lnsrch, amoeba, shc_selector, check_and_correct_vec
+private
+#include "simple_local_flags.inc"
+
 logical :: warn=.false.
 
 contains
@@ -23,10 +27,10 @@ contains
         integer :: j
         real    :: ax,bx,fa,fb,fx,xmin,xx
         if( spec%str_opt .ne. 'linmin' )then
-            stop 'this optimzer specification object not 4 linmin; simple_opt_subs'
+            THROW_HARD('this optimzer specification object not 4 linmin')
         endif
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; linmin; simple_opt_subs'
+            THROW_HARD('cost function not associated in opt_spec; linmin')
         endif
         ax=0. ! initial guess for brackets
         xx=1.

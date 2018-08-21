@@ -28,8 +28,6 @@ type, extends(commander_base) :: volassemble_commander
     procedure :: execute      => exec_volassemble
 end type volassemble_commander
 
-
-integer(timer_int_kind) :: tcommrec
 contains
 
     !> for reconstructing volumes from image stacks and their estimated orientations
@@ -39,23 +37,16 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        tcommrec=tic()
-        DebugPrint ' In exec_reconstruct3D'
         call build%init_params_and_build_general_tbox(cline, params)
-        DebugPrint ' In exec_reconstruct3D init and build'
-
         select case(params%eo)
             case( 'yes', 'aniso' )
                 call build%build_rec_eo_tbox(params) ! eo_reconstruction objs built
             case( 'no' )
                 call build%build_rec_tbox(params)    ! reconstruction objects built
             case DEFAULT
-                stop 'unknown eo flag; simple_commander_rec :: exec_reconstruct3D'
+                THROW_HARD('unknown eo flag; exec_reconstruct3D')
         end select
-        DebugPrint ' In exec_reconstruct3D; built rec tboxes'
         call exec_rec_master
-        DebugPrint ' In exec_reconstructor; done                                 ', toc(tcommrec), ' secs'
-
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
@@ -85,9 +76,7 @@ contains
             t_init = tic()
             t_tot  = t_init
         endif
-        DebugPrint ' In exec_volassemble_eo; build_general_tbox'
         call build%init_params_and_build_general_tbox(cline,params)
-        DebugPrint ' In exec_volassemble_eo; build rec eo'
         call build%build_rec_eo_tbox(params) ! reconstruction toolbox built
         call build%eorecvol%kill_exp         ! reduced meory usage
         allocate(res05s(params%nstates), res0143s(params%nstates), stat=alloc_stat)
@@ -225,7 +214,6 @@ contains
 
     !> for assembling a volume generated with distributed execution
     subroutine exec_volassemble( self, cline )
-        !$ use omp_lib
         use simple_reconstructor, only: reconstructor
         class(volassemble_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
@@ -233,32 +221,15 @@ contains
         type(parameters)              :: params
         type(builder)                 :: build
         character(len=STDLEN)         :: recvolname, rho_name
-        integer                       :: part, s, ss, state, num_threads, max_threads
+        integer                       :: part, s, ss, state
         type(reconstructor)           :: recvol_read
-        tcommrec = tic()
-        DebugPrint ' In exec_volassemble; '
-        max_threads = omp_get_max_threads()
         call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
         call build%build_rec_tbox(params) ! reconstruction toolbox built
-        DebugPrint ' In exec_volassemble; tbox done                              ', toc()
-        DebugPrint ' In exec_volassemble; NTHR ', params%nthr, ' NPARTS ', params%nparts
-
-        !$omp parallel
-        num_threads =  omp_get_num_threads()
-        !$omp end parallel
-        DebugPrint ' CURRENT THREADS ', num_threads, ' MAX THREADS ', max_threads
-        !$ call omp_set_num_threads(max_threads)
-        !$omp parallel
-        num_threads =  omp_get_num_threads()
-        !$omp end parallel
-        DebugPrint ' NEW CURRENT THREADS ', num_threads
-
         call recvol_read%new([params%boxpd,params%boxpd,params%boxpd], params%smpd)
         call recvol_read%alloc_rho( build%spproj)
-         DebugPrint ' In exec_volassemble; read done                             ', toc()
         do ss=1,params%nstates
             if( cline%defined('state') )then
-                s     = 1        ! index in reconstruct3D
+                s     = 1             ! index in reconstruct3D
                 state = params%state  ! actual state
             else
                 s     = ss
@@ -272,7 +243,6 @@ contains
                 call assemble(params%vols(s), trim(rho_name))
                 deallocate(fbody)
             end do
-            DebugPrint ' In exec_volassemble; assemble done                     ', toc()
             if( params%nstates == 1 .and. cline%defined('outvol') )then
                 recvolname = trim(params%outvol)
             else
@@ -281,7 +251,6 @@ contains
             call correct_for_sampling_density(trim(recvolname))
             if( cline%defined('state') )exit
         end do
-        DebugPrint ' In exec_volassemble; sample correction done                 ', toc()
         call recvol_read%dealloc_rho
         call recvol_read%kill
         ! end gracefully
@@ -293,7 +262,7 @@ contains
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
         call simple_touch( finished_fname, errmsg='In: commander_rec :: volassemble')
-        DebugPrint ' In exec_volassemble; Completed in                           ', toc(tcommrec), ' secs'
+
         contains
 
             subroutine assemble( recnam, kernam )

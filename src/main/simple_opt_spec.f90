@@ -5,6 +5,7 @@ implicit none
 
 public :: opt_spec, costfun
 private
+#include "simple_local_flags.inc"
 
 !> struct for all opt specifications
 type :: opt_spec
@@ -194,7 +195,7 @@ contains
             case('powell')
                 self%maxits   = ndim*1000
             case('simplex')
-                if( .not. present(limits) ) stop 'need limits (variable bounds) for simplex opt; specify; simple_opt_spec'
+                if( .not. present(limits) ) THROW_HARD('need limits (variable bounds) for simplex opt; specify')
                 self%maxits   = ndim*1000
             case('pso')
                 self%npop     = 150
@@ -205,8 +206,8 @@ contains
             case('linmin')
                 ! do nothing
             case('bforce')
-                if( .not. present(limits) ) stop 'need limits (variable bounds) for brute force search; specify; simple_opt_spec'
-                if( .not. present(stepsz) ) stop 'need step sizes (stepsz) for brute force search; simple_opt_spec'
+                if( .not. present(limits) ) THROW_HARD('need limits (variable bounds) for brute force search; specify')
+                if( .not. present(stepsz) ) THROW_HARD('need step sizes (stepsz) for brute force search; specify')
             case DEFAULT
                 write(*,*) 'Unsupported optimizer string descriptor:', str_opt
                 write(*,*) 'specify; simple_opt_spec'
@@ -314,9 +315,9 @@ contains
     subroutine set_inipop( self, pop )
         class(opt_spec), intent(inout) :: self              !< instance
         real,            intent(in)    :: pop(:,:)
-        if(self%str_opt.ne.'de')stop 'Only for use with DE; simple_opt_spec%set_inipop'
-        if(size(pop,dim=1) > self%npop)stop 'non-congruent initial population 1; simple_opt_spec%set_inipop'
-        if(size(pop,dim=2) .ne. self%ndim)stop 'non-congruent initial population 2; simple_opt_spec%set_inipop'
+        if(self%str_opt.ne.'de')THROW_HARD('only for use with DE; set_inipop')
+        if(size(pop,dim=1) > self%npop)THROW_HARD('non-congruent initial population 1; set_inipop')
+        if(size(pop,dim=2) .ne. self%ndim)THROW_HARD('non-congruent initial population 2; set_inipop')
         if(allocated(self%inipopulation))deallocate(self%inipopulation)
         self%inipopulation = pop
     end subroutine set_inipop

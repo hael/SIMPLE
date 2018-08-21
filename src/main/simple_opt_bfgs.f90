@@ -7,6 +7,7 @@ implicit none
 
 public :: opt_bfgs
 private
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: opt_bfgs
     private
@@ -44,14 +45,14 @@ contains
         use simple_opt_subs, only: lnsrch
         class(opt_bfgs), intent(inout) :: self        !< instance
         class(opt_spec), intent(inout) :: spec        !< specification
-        class(*),        intent(inout) :: fun_self    !< self-pointer for cost function        
+        class(*),        intent(inout) :: fun_self    !< self-pointer for cost function
         real, intent(out)              :: lowest_cost !< minimum function value
         integer                        :: avgniter,i
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; bfgs_minimize; simple_opt_bfgs'
+            THROW_HARD('cost function not associated in opt_spec; bfgs_minimize')
         endif
         if( .not. associated(spec%gcostfun) )then
-            stop 'gradient of cost function not associated in opt_spec; bfgs_minimize; simple_opt_bfgs'
+            THROW_HARD('gradient of cost function not associated in opt_spec; bfgs_minimize')
         endif
         ! initialise nevals counters
         spec%nevals  = 0

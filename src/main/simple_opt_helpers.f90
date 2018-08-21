@@ -2,9 +2,12 @@
 module simple_opt_helpers
 include 'simple_lib.f08'
 implicit none
+
 !< constants for return values
 integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
+
 contains
+    
     subroutine take_step (x, p, step, lambda, x1)
         real(dp), intent(in) :: x(:), p(:), step, lambda
         real(dp), intent(out) :: x1(:)

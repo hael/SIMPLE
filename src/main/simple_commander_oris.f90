@@ -18,6 +18,7 @@ public :: rotmats2oris_commander
 public :: vizoris_commander
 public :: multivariate_zscore_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: make_oris_commander
   contains
@@ -140,8 +141,7 @@ contains
                 case('no')
                     ! nothing to do
                 case DEFAULT
-                    write(*,*) 'mirr flag: ', trim(params%mirr)
-                    stop 'unsupported mirr flag; commander_oris :: exec_orisops'
+                    THROW_HARD('mirr flag: '//trim(params%mirr)//' is unsupported; exec_orisops')
             end select
         endif
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
@@ -171,9 +171,9 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( cline%defined('oritab2') )then
             ! Comparison
-            if( .not. cline%defined('oritab') ) stop 'need oritab for comparison'
+            if( .not. cline%defined('oritab') ) THROW_HARD('need oritab for comparison')
             if( binread_nlines( params%oritab) .ne. binread_nlines( params%oritab2) )then
-                stop 'inconsistent number of lines in the two oritabs!'
+                THROW_HARD('inconsistent number of lines in the two oritabs!')
             endif
             call spproj%new_seg_with_ptr(params%nptcls, params%oritype, o)
             call binread_oritab(params%oritab2, spproj, o, [1,params%nptcls])
@@ -228,7 +228,7 @@ contains
                 end do
             endif
             if( params%projstats .eq. 'yes' )then
-                if( .not. cline%defined('nspace') ) stop 'need nspace command line arg to provide projstats'
+                if( .not. cline%defined('nspace') ) THROW_HARD('need nspace command line arg to provide projstats')
                 noris = build%spproj_field%get_noris()
                 ! setup weights
                 call build%spproj_field%calc_hard_weights(params%frac)
@@ -320,15 +320,13 @@ contains
             call rotmats%new(params%infile, 1)
             ndatlines = rotmats%get_ndatalines()
         else
-            stop 'Need infile defined on command line: text file with 9 &
-            &records per line defining a rotation matrix (11) (12) (13) (21) etc.'
+            THROW_HARD('Need infile defined on command line: text file with 9 records per line defining a rotation matrix (11) (12) (13) (21) etc.')
         endif
         if( fname2format(trim(params%outfile)) .eq. '.simple' )then
-            stop '*.simple outfile not supported; commander_oris :: rotmats2oris'
+            THROW_HARD('*.simple outfile not supported; rotmats2oris')
         endif
         nrecs_per_line = rotmats%get_nrecs_per_line()
-        if( nrecs_per_line /= 9 ) stop 'need 9 records (real nrs) per&
-        &line of file (infile) describing rotation matrices'
+        if( nrecs_per_line /= 9 ) THROW_HARD('need 9 records (real nrs) per line of file (infile) describing rotation matrices')
         call os_out%new(ndatlines)
         do iline=1,ndatlines
             call rotmats%readNextDataLine(rline)
@@ -519,8 +517,7 @@ contains
             case('ptcl3D')
                 os_ptr => spproj%os_ptcl3D
             case DEFAULT
-                write(*,*) 'ERROR! oritype: ', trim(params%oritype), ' not currently supported!'
-                stop 'simple_commander_oris :: exec_multivariate_zscore'
+                THROW_HARD('oritype: '//trim(params%oritype)//' not supported! exec_multivariate_zscore')
         end select
         nptcls = os_ptr%get_noris()
         allocate(vals(nargs,nptcls), zscores(nptcls), source=0.)
@@ -530,8 +527,7 @@ contains
                 vals(iarg,:) = os_ptr%get_all(trim(args(iarg)))
                 call robust_normalization(vals(iarg,:))
             else
-                write(*,*) 'ERROR! inputted keys argument: ', trim(args(iarg)), ' not present in spproj field: ', trim(params%oritype)
-                stop 'simple_commander_oris :: exec_multivariate_zscore'
+                THROW_HARD('inputted keys argument: '//trim(args(iarg))//' not present in spproj field: '//trim(params%oritype))
             endif
         end do
         ! calculate the multivariate Z-score

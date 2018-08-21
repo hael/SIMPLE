@@ -49,8 +49,7 @@ contains
             nfiles = size(filenames)
             numlen = len(int2str(nfiles))
         else
-            stop 'need filetab input, listing all the individual frames of&
-            &the time series; simple_commander_tseries :: exec_tseries_extract'
+            THROW_HARD('need filetab input, listing all the individual frames of the time series; exec_tseries_extract')
         endif
         call find_ldim_nptcls(filenames(1),ldim,nframes)
         if( nframes == 1 .and. ldim(3) == 1 )then
@@ -59,16 +58,14 @@ contains
         else
             write(*,*) 'ldim(3): ', ldim(3)
             write(*,*) 'nframes: ', nframes
-            stop 'simple_commander_imgproc :: exec_tseries_extract assumes one frame per file'
+            THROW_HARD('exec_tseries_extract assumes one frame per file')
         endif
         if( cline%defined('nframesgrp') )then
             if( params%nframesgrp < 3 )then
-                stop 'nframesgrp integer (nr of frames to average) needs to be >= 3; &
-                &simple_commander_imgproc :: exec_tseries_extract'
+                THROW_HARD('nframesgrp integer (nr of frames to average) needs to be >= 3; exec_tseries_extract')
             endif
         else
-            stop 'need nframesgrp integer input = nr of frames to average; &
-            &simple_commander_imgproc :: exec_tseries_extract'
+            THROW_HARD('need nframesgrp integer input = nr of frames to average; exec_tseries_extract')
         endif
         endit = nfiles - params%nframesgrp + 1
         do iframe=1,endit
@@ -105,9 +102,9 @@ contains
         numlen = 5 ! default value
         orig_box = params%box
         ! check file inout existence and read filetables
-        if( .not. file_exists(params%filetab)  ) stop 'inputted filetab does not exist in cwd'
+        if( .not. file_exists(params%filetab) ) THROW_HARD('inputted filetab does not exist in cwd')
         if( cline%defined('boxfile') )then
-            if( .not. file_exists(params%boxfile)  ) stop 'inputted boxfile does not exist in cwd'
+            if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
             if( nlines(params%boxfile) > 0 )then
                 call boxfile%new(params%boxfile, 1)
                 ndatlines = boxfile%get_ndatalines()
@@ -118,29 +115,26 @@ contains
                     call boxfile%readNextDataLine(boxdata(j,:))
                     orig_box = nint(boxdata(j,3))
                     if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
-                        stop 'Only square windows are currently allowed!'
+                        THROW_HARD('Only square windows allowed!')
                     endif
                 end do
             else
-                stop 'inputted boxfile is empty; simple_commander_tseries :: exec_tseries_track'
+                THROW_HARD('inputted boxfile is empty; exec_tseries_track')
             endif
         else if( cline%defined('xcoord') .and. cline%defined('ycoord') )then
-            if( .not. cline%defined('box') ) stop 'need box to be part of command linefor this mode of&
-            &execution; simple_commander_tseries :: exec_tseries_track'
+            if( .not. cline%defined('box') ) THROW_HARD('need box to be part of command line for this mode of execution; exec_tseries_track')
             allocate( boxdata(1,2) )
             boxdata(1,1) = real(params%xcoord)
             boxdata(1,2) = real(params%ycoord)
             ndatlines = 1
         else
-            stop 'need either boxfile or xcoord/ycoord to be part of command line&
-            &; simple_commander_tseries :: exec_tseries_track'
+            THROW_HARD('need either boxfile or xcoord/ycoord to be part of command line; exec_tseries_track')
         endif
         do j=1,ndatlines
             call init_tracker( nint(boxdata(j,1:2)))
             call track_particle
             if( cline%defined('ind') )then
-                if( .not. cline%defined('numlen') ) stop 'need numlen to be part of command line if ind is&
-                &; simple_commander_tseries :: exec_tseries_track'
+                if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
                 call write_tracked_series(trim(params%fbody)//int2str_pad(params%ind,params%numlen))
             else
                 call write_tracked_series(trim(params%fbody)//int2str_pad(j,numlen))

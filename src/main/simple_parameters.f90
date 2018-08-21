@@ -760,7 +760,7 @@ contains
         self%pid = get_process_id()
         ! get name of executable
         call get_command_argument(0,self%executable)
-        if(len_trim(self%executable) == 0) stop 'ERROR! get_command_argument failed; simple_parameters :: new'
+        if(len_trim(self%executable) == 0) THROW_HARD('get_command_argument failed; new')
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for a project file
@@ -782,7 +782,7 @@ contains
                     do i=1,nsp_files
                         write(*,*) trim(sp_files(i))
                     end do
-                    stop 'ERROR! a unique *.simple project could NOT be identified; simple_parameters :: new'
+                    THROW_HARD('a unique *.simple project could NOT be identified; new')
                 endif
             endif
         else
@@ -791,7 +791,7 @@ contains
         if( nsp_files == 0 .and. self%sp_required .and. .not. cline%defined('projfile') )then
             write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
             write(*,*) 'cwd:     ', trim(self%cwd)
-            stop 'ERROR! no *.simple project file identified; simple_parameters :: new'
+            THROW_HARD('no *.simple project file identified; new')
         endif
         if( nsp_files == 1 .and. self%sp_required )then
             ! good, we found a single monolithic project file
@@ -906,7 +906,7 @@ contains
                     self%spproj_iseg = COMPENV_SEG
                 case DEFAULT
                     write(*,*) 'oritype: ', trim(self%oritype)
-                    stop 'unsupported oritype; simple_parameters :: new'
+                    THROW_HARD('unsupported oritype; new')
             end select
         else
             self%oritype     = 'ptcl3D'
@@ -1016,7 +1016,7 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         ! make file names
         call mkfnames
         ! check box
-        if( self%box > 0 .and. self%box < 26 ) stop 'box size need to be larger than 26; simple_parameters'
+        if( self%box > 0 .and. self%box < 26 ) THROW_HARD('box size need to be larger than 26')
         ! set refs_even and refs_odd
         if( cline%defined('refs') )then
             self%refs_even = add2fbody(self%refs, self%ext, '_even')
@@ -1129,11 +1129,11 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         ! focused masking
         self%l_focusmsk = .false.
         if( cline%defined('focusmsk') )then
-            if( .not.cline%defined('mskfile') )stop 'mskfile must be provided together with focusmsk'
+            if( .not.cline%defined('mskfile') )THROW_HARD('mskfile must be provided together with focusmsk')
             if( .not.cline%defined('msk') )then
-                stop 'msk must be provided together with focusmsk'
+                THROW_HARD('msk must be provided together with focusmsk')
             else
-                if(self%focusmsk >= self%msk)stop 'focusmsk should be smaller than msk'
+                if(self%focusmsk >= self%msk)THROW_HARD('focusmsk should be smaller than msk')
             endif
             self%l_focusmsk = .true.
         else
@@ -1265,7 +1265,7 @@ DebugPrint 'found ncls from refs: ', ncls
                 if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
             case DEFAULT
                 write(*,*) 'objfun flag: ', trim(self%objfun)
-                stop 'unsupported objective function; parameters :: new'
+                THROW_HARD('unsupported objective function; new')
         end select
         self%l_needs_sigma = (( self%recvol_sigma .eq. 'yes' ).or.&
             ( self%cc_objfun .eq. OBJFUN_EUCLID ))
@@ -1281,7 +1281,7 @@ DebugPrint 'found ncls from refs: ', ncls
                 ! alles gut!
             case DEFAULT
                 write(*,*) 'imgkind: ', trim(self%imgkind)
-                stop 'unsupported imgkind; parameters :: new'
+                THROW_HARD('unsupported imgkind; new')
         end select
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
@@ -1320,8 +1320,7 @@ DebugPrint 'found ncls from refs: ', ncls
                         else
                             call simple_abspath(self%vols(i),abs_fname,'parameters :: check_vol', check_exists=.false.)
                             if( len_trim( abs_fname) > LONGSTRLEN )then
-                                write(*,*)'Argument too long: ',trim( abs_fname)
-                                stop 'simple_parameters :: new :: check_vol'
+                                THROW_HARD('argument too long: '//trim( abs_fname)//' new :: check_vol')
                             endif
                             self%vols(i) = trim(abs_fname)
                             call cline%set(key, trim(self%vols(i)))
@@ -1409,7 +1408,7 @@ DebugPrint 'found ncls from refs: ', ncls
                     endif
                     select case(file_descr)
                         case ('I')
-                            THROW_HARD('Support for IMAGIC files is not yet implemented!')
+                            THROW_HARD('Support for IMAGIC files is not implemented!')
                         case ('M')
                             ! MRC files are supported
                             cntfile = cntfile+1
@@ -1435,8 +1434,7 @@ DebugPrint 'found ncls from refs: ', ncls
                         ! updates name to include absolute path
                         call simple_abspath(var,abspath_file,'parameters :: check_file', check_exists=.false.)
                         if( len_trim(abspath_file) > LONGSTRLEN )then
-                            write(*,*)'Argument too long: ',trim(abspath_file)
-                            stop 'simple_parameters :: new :: checkfile'
+                            THROW_HARD('argument too long: '//trim(abspath_file)//' new :: checkfile')
                         endif
                         var = trim(abspath_file)
                         call cline%set(file,trim(var))

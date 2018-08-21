@@ -33,8 +33,7 @@ contains
         if(alloc_stat.ne.0)call allocchk("In: new_opt_bforce", alloc_stat)
         self%pb = spec%limits(:,1)
         self%pc = spec%limits(:,1)
-        if( all(spec%stepsz == 0.) ) stop 'step size (stepsz) not set in&
-        &specification (opt_spec); new_opt_bforce; simple_opt_bforce'
+        if( all(spec%stepsz == 0.) ) THROW_HARD('step size (stepsz) not set in specification (opt_spec); new_opt_bforce')
         ! initialize best cost to huge number
         self%yb = huge(x)
         self%exists = .true. ! indicates existence
@@ -50,7 +49,7 @@ contains
         real, intent(out)                :: lowest_cost !< lowest cost
         real :: y
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; bforce_minimize; simple_opt_bforce'
+            THROW_HARD('cost function not associated in opt_spec; bforce_minimize')
         endif
         ! init nevals counter
         spec%nevals = 0

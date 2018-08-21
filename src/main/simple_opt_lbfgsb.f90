@@ -7,6 +7,7 @@ implicit none
 
 public :: opt_lbfgsb
 private
+#include "simple_local_flags.inc"
 
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
 real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
@@ -58,19 +59,18 @@ contains
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real,              intent(out)   :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
-            stop 'cost function not associated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
+            THROW_HARD('cost function not associated in opt_spec; lbfgsb_minimize')
         endif
         if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
-            stop 'gradient of cost function not associated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
+            THROW_HARD('gradient of cost function not associated in opt_spec; lbfgsb_minimize')
         endif
         if ( .not. allocated(spec%limits) ) then
-            stop 'limits not allocated in opt_spec; lbfgsb_minimize; simple_opt_lbfgsb'
+            THROW_HARD('limits not allocated in opt_spec; lbfgsb_minimize')
         end if
         spec%x_8 = spec%x
         ! initialise nevals counters
         spec%nevals  = 0
         spec%ngevals = 0
-
         self%l = spec%limits(:,1)
         self%u = spec%limits(:,2)
         call lbfgsbmin

@@ -85,7 +85,7 @@ contains
   end subroutine sobel
 
 
-  subroutine scale_img(self, new_min, new_max)
+  subroutine scale_pixels(self, new_min, new_max)
         type(image), intent(inout) :: self
         real, intent(in) :: new_min, new_max
         real :: old_min, old_max, sc
@@ -100,7 +100,7 @@ contains
         sc = (new_max - new_min)/(old_max - old_min)
         rmat = sc*rmat+new_min-sc*old_min
         call self%set_rmat(rmat)
-  end subroutine scale_img
+  end subroutine scale_pixels
 
   subroutine print_mat(matrix)
       real, intent(in) :: matrix(:,:,:)
@@ -143,7 +143,7 @@ call img2%set_rmat(rmat_out)
 cc   = img_ctf%ccf(img2)
 call cc%vis
 rmat = img_ctf%get_rmat()
-call scale_img(cc, 10.,20.)
+call scale_pixels(cc, 10.,20.)
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
 print *, "mean window:", (sum(w_mat)/size(w_mat))
@@ -166,7 +166,7 @@ call img2%set_rmat(rmat_out)
 cc   = img_ctf%ccf(img2)
 call cc%vis
 rmat = img_ctf%get_rmat()
-call scale_img(cc, 10.,20.)
+call scale_pixels(cc, 10.,20.)
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
 print *, "mean window:", (sum(w_mat)/size(w_mat))
@@ -189,7 +189,7 @@ call img2%set_rmat(rmat_out)
 cc   = img_ctf%ccf(img2)
 call cc%vis
 rmat = img_ctf%get_rmat()
-call scale_img(cc, 10.,20.)
+call scale_pixels(cc, 10.,20.)
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
 print *, "mean window:", (sum(w_mat)/size(w_mat))

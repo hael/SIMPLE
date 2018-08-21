@@ -14,6 +14,7 @@ implicit none
 
 public :: ctf
 private
+#include "simple_local_flags.inc"
 
 type ctf
     private
@@ -200,7 +201,7 @@ contains
         ldim = img%get_ldim()
         if( img%is_3d() )then
             print *, 'ldim: ', ldim
-            stop 'Only 4 2D images; apply; simple_ctf'
+            THROW_HARD('Only 4 2D images; apply')
         endif
         ctfvars%smpd = self%smpd
         ctfvars%dfx  = dfx
@@ -346,7 +347,7 @@ contains
                 end do
             case DEFAULT
                 write(*,*) 'mode:', mode
-                stop 'unsupported in ctf2img; simple_ctf'
+                THROW_HARD('unsupported mode in ctf2img')
         end select
     end subroutine apply_serial
 

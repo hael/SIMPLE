@@ -24,9 +24,7 @@ type, extends(image) :: masker
   contains
     procedure          :: automask3D
     procedure          :: resmask
-    ! procedure          :: apply_2Denvmask22Dref
     procedure          :: mask_from_pdb
-    ! procedure, private :: bin_cavg
     procedure, private :: bin_vol_thres
     procedure, private :: env_rproject
 end type masker
@@ -39,7 +37,7 @@ contains
         class(masker), intent(inout) :: self
         class(image),  intent(inout) :: vol_inout
         logical :: was_ft
-        if( vol_inout%is_2d() )stop 'automask3D is intended for volumes only, simple_masker::automask3D'
+        if( vol_inout%is_2d() )THROW_HARD('automask3D is intended for volumes only; automask3D')
         self%msk       = params_glob%msk
         self%amsklp    = params_glob%amsklp
         self%mw        = params_glob%mw
@@ -85,21 +83,6 @@ contains
         call self%mask(params_glob%msk, 'soft')
     end subroutine resmask
 
-    !>  \brief  is for envelope masking of the reference in prime2D
-    ! subroutine apply_2Denvmask22Dref( self, ref )
-    !     class(masker), intent(inout) :: self
-    !     class(image),  intent(inout) :: ref
-    !     type(image) :: img
-    !     ! binarize image
-    !     img = ref
-    !     call self%bin_cavg(img)
-    !     ! soft edge mask
-    !     call img%cos_edge(self%edge)
-    !     ! apply envelope mask to reference
-    !     call ref%mul(img)
-    !     DebugPrint 'simple_masker::update_cls done'
-    ! end subroutine apply_2Denvmask22Dref
-
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)
         use simple_oris,  only: oris
         use simple_atoms, only: atoms
@@ -113,7 +96,7 @@ contains
         real        :: centre(3), shift(3), pdb_center(3), minmax(2), radius, smpd
         integer     :: i
         logical     :: was_ft
-        if( vol_inout%is_2d() )stop 'sphere_mask is intended for volumes only, simple_masker::sphere_mask'
+        if( vol_inout%is_2d() )THROW_HARD('intended for volumes only; mask_from_pdb')
         was_ft = vol_inout%is_ft()
         smpd   = vol_inout%get_smpd()
         call self%new(vol_inout%get_ldim(), smpd)
@@ -159,24 +142,6 @@ contains
     end subroutine mask_from_pdb
 
     ! BINARISATION ROUTINES
-
-    !>  \brief  is for binarizing the 2D image
-    ! subroutine bin_cavg( self, img )
-    !     class(masker), intent(inout) :: self
-    !     class(image),  intent(inout) :: img
-    !     ! normalize
-    !     call img%norm()
-    !     ! soft masking
-    !     call img%mask(self%msk, 'soft')
-    !     ! low-pass
-    !     call img%bp(0., self%amsklp)
-    !     ! binarize within mask
-    !     call img%mask(self%msk, 'hard')
-    !     call img%bin_kmeans
-    !     ! add one layer
-    !     call img%grow_bins(self%binwidth)
-    !     DebugPrint 'simple_masker::bin_cavg done'
-    ! end subroutine bin_cavg
 
     !>  \brief  is for binarizing the 3D image using thresholding
     subroutine bin_vol_thres( self )

@@ -27,6 +27,7 @@ public :: update_boxes_commander
 public :: update_particles_commander
 public :: update_cavgs_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: project2txt_commander
   contains
@@ -315,7 +316,7 @@ contains
         if( file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
             write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
-            stop 'ABORTING... commander_project :: new_project'
+            THROW_HARD('ABORTING... exec_new_project')
         endif
         ! make project directory
         call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
@@ -342,7 +343,7 @@ contains
         if( .not. file_exists(PATH_HERE//trim(params%projname)) )then
             write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
             write(*,*) 'Use program new_project to create a new project from scratch'
-            stop 'ABORTING... commander_project :: update_project'
+            THROW_HARD('ABORTING... exec_update_project')
         endif
         ! change to project directory
         call simple_chdir(filepath(PATH_HERE,trim(params%projname)),errmsg="commander_project :: update_project;")
@@ -374,8 +375,7 @@ contains
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
-            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
-            stop 'ERROR! simple_commander_project :: exec_import_movies'
+            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
         endif
         call spproj%read(params%projfile)
         ! CTF
@@ -396,8 +396,7 @@ contains
             case('flip')
                 ctfvars%ctfflag = 2
             case DEFAULT
-                write(*,*) 'ctf flag params%ctf: ', params%ctf
-                stop 'ERROR! ctf flag not supported; commander_project :: import_movies'
+                THROW_HARD('ctf flag: '//trim(params%ctf)//' not supported; exec_import_movies')
         end select
         ctfvars%l_phaseplate = .false.
         if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
@@ -413,7 +412,7 @@ contains
             if( nboxf /= nmovf )then
                 write(*,*) '# boxfiles: ', nboxf
                 write(*,*) '# movies  : ', nmovf
-                stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
+                THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
                 call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
@@ -437,8 +436,7 @@ contains
         call params%new(cline)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
-            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
-            stop 'ERROR! simple_commander_project :: exec_import_boxes'
+            THROW_HARD('project file: '//trim(params%projfile)//' does not exist! exec_import_boxes')
         endif
         call spproj%read(params%projfile)
         ! get boxfiles into os_mic
@@ -448,7 +446,7 @@ contains
         if( nboxf /= nos_mic )then
             write(*,*) '# boxfiles       : ', nboxf
             write(*,*) '# os_mic entries : ', nos_mic
-            stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_import_boxes'
+            THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
         endif
         do i=1,nos_mic
             call simple_abspath(trim(boxfnames(i)),boxf_abspath,errmsg='commander_project :: exec_import_movies')
@@ -485,23 +483,20 @@ contains
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
         if( n_ori_inputs > 1 )then
-            write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
-            stop 'commander_project :: exec_import_particles'
+            THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_import_particles')
         endif
         if( cline%defined('stk') .and. cline%defined('stktab') )then
-            write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
-            stop 'commander_project :: exec_import_particles'
+            THROW_HARD('stk and stktab are both defined on command line, use either or; exec_import_particles')
         endif
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             if( trim(params%ctf) .ne. 'no' )then
                 ! there needs to be associated parameters of some form
                 if( n_ori_inputs < 1 )then
-                    write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
-                    stop 'commander_project :: exec_import_particles'
+                    THROW_HARD('stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)')
                 endif
             endif
         else
-            stop 'ERROR, either stk or stktab needed on command line; commander_project :: import_particles'
+            THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
         endif
         ! oris input
         if( inputted_oritab )then
@@ -521,8 +516,7 @@ contains
             ndatlines = paramfile%get_ndatalines()
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'commander_project :: exec_extract_ptcls'
+                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_extract_ptcls')
             endif
             call os%new(ndatlines)
             allocate( line(nrecs) )
@@ -535,7 +529,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported dfunit; exec_extract_ptcls')
                 end select
                 select case(params%angastunit)
                     case( 'radians' )
@@ -543,7 +537,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported angastunit; exec_extract_ptcls')
                 end select
                 select case(params%phshiftunit)
                     case( 'radians' )
@@ -551,7 +545,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported phshiftunit; exec_extract_ptcls')
                 end select
                 call os%set(i, 'dfx', line(1))
                 if( nrecs > 1 )then
@@ -573,14 +567,14 @@ contains
                 case('flip')
                     ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
-                    write(*,*) 'unsupported ctf flag: ', trim(params%ctf)
-                    stop 'ABORTING... commander_project :: exec_extract_ptcls'
+                    write(*,*)
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_extract_ptcls')
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
                 ! if importing single stack of extracted particles, these are hard requirements
-                if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when importing movies; commander_project :: exec_import_particles'
-                if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when importing movies; commander_project :: exec_import_particles'
-                if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when importing movies; commander_project :: exec_import_particles'
+                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')
                 if( cline%defined('phaseplate') )then
                     phaseplate = cline%get_carg('phaseplate')
                 else
@@ -603,8 +597,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'kv') )then
                             write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
-                            write(*,*) 'Please, provide kv on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -615,8 +608,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'cs') )then
                             write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
-                            write(*,*) 'Please, provide cs on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -627,8 +619,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'fraca') )then
                             write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
-                            write(*,*) 'Please, provide fraca on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -645,7 +636,7 @@ contains
                 call os%getter(1, 'phaseplate', phaseplate)
                 if( trim(phaseplate) .eq. 'yes' )then
                     if( .not. os%isthere(1,'phshift') )then
-                        stop 'ERROR! phaseplate .eq. yes requires phshift input, currently lacking; commander_project :: exec_import_particles'
+                        THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_import_particles')
                     endif
                 endif
                 ! ctf flag
@@ -661,7 +652,7 @@ contains
                 call os%getter(1, 'ctf', ctfstr)
                 if( trim(ctfstr) .ne. 'no' )then
                     if( .not. os%isthere(1,'dfx') )then
-                        stop 'ERROR! ctf .ne. no requires dfx input, currently lacking; commander_project :: exec_import_particles'
+                        THROW_HARD('ctf .ne. no requires dfx input, currently lacking; exec_import_particles')
                     endif
                 endif
             endif
@@ -707,7 +698,6 @@ contains
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
 
-
     !> for importing movies/integrated movies(micrographs)
     subroutine exec_update_movies( self, cline )
         class(update_movies_commander), intent(inout) :: self
@@ -724,8 +714,7 @@ contains
         inputted_boxtab = cline%defined('boxtab')
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
-            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
-            stop 'ERROR! simple_commander_project :: exec_update_movies'
+            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_update_movies')
         endif
         call spproj%read(params%projfile)
         ! CTF
@@ -747,8 +736,7 @@ contains
             case('flip')
                 ctfvars%ctfflag = 2
             case DEFAULT
-                write(*,*) 'ctf flag params%ctf: ', params%ctf
-                stop 'ERROR! ctf flag not supported; commander_project :: update_movies'
+                THROW_HARD('ctf flag: '//trim(params%ctf)//' not supported; update_movies')
         end select
         ctfvars%l_phaseplate = .false.
         if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
@@ -764,7 +752,7 @@ contains
             if( nboxf /= nmovf )then
                 write(*,*) '# boxfiles: ', nboxf
                 write(*,*) '# movies  : ', nmovf
-                stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_update_movies'
+                THROW_HARD('# boxfiles .ne. # movies; exec_update_movies')
             endif
             do i=1,nmovf
                 call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_update_movies')
@@ -788,8 +776,7 @@ contains
         call params%new(cline)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
-            write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
-            stop 'ERROR! simple_commander_project :: exec_update_boxes'
+            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_update_boxes')
         endif
         call spproj%read(params%projfile)
         ! get boxfiles into os_mic
@@ -799,7 +786,7 @@ contains
         if( nboxf /= nos_mic )then
             write(*,*) '# boxfiles       : ', nboxf
             write(*,*) '# os_mic entries : ', nos_mic
-            stop 'ERROR! # boxfiles .ne. # os_mic entries; commander_project :: exec_update_boxes'
+            THROW_HARD('# boxfiles .ne. # os_mic entries; exec_update_boxes')
         endif
         do i=1,nos_mic
             call simple_abspath(boxfnames(i), boxf_abspath, errmsg='commander_project :: exec_update_movies')
@@ -835,25 +822,23 @@ contains
         inputted_plaintexttab = cline%defined('plaintexttab')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
         ! exceptions
-        if( .not. cline%defined('smpd')  ) stop 'smpd (sampling distance in A) input required when updating stacks of particles (stk); commander_project :: exec_update_particles'
+        if( .not. cline%defined('smpd')  ) THROW_HARD('smpd (sampling distance in A) input required when updating stacks of particles (stk); exec_update_particles')
         if( n_ori_inputs > 1 )then
-            write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
-            stop 'commander_project :: exec_update_particles'
+            write(*,*) 'ERROR, '
+            THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_update_particles')
         endif
         if( cline%defined('stk') .and. cline%defined('stktab') )then
-            write(*,*) 'ERROR, stk and stktab are both defined on command line, use either or'
-            stop 'commander_project :: exec_update_particles'
+            THROW_HARD('stk and stktab are both defined on command line, use either or; exec_update_particles')
         endif
         if( cline%defined('stk') .or. cline%defined('stktab') )then
             if( trim(params%ctf) .ne. 'no' )then
                 ! there needs to be associated parameters of some form
                 if( n_ori_inputs < 1 )then
-                    write(*,*) 'ERROR, stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)'
-                    stop 'commander_project :: exec_update_particles'
+                    THROW_HARD('stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)')
                 endif
             endif
         else
-            stop 'ERROR, either stk or stktab needed on command line; commander_project :: update_particles'
+            THROW_HARD('either stk or stktab needed on command line; update_particles')
         endif
         ! oris input
         if( inputted_oritab )then
@@ -873,8 +858,8 @@ contains
             ndatlines = paramfile%get_ndatalines()
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                write(*,*) 'unsupported nr of rec:s in plaintexttab'
-                stop 'commander_project :: exec_extract_ptcls'
+                write(*,*) ''
+                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_update_ptcls')
             endif
             call os%new(ndatlines)
             allocate( line(nrecs) )
@@ -887,7 +872,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported dfunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported dfunit; exec_update_ptcls')
                 end select
                 select case(params%angastunit)
                     case( 'radians' )
@@ -895,7 +880,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        stop 'unsupported angastunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported angastunit; exec_update_ptcls')
                 end select
                 select case(params%phshiftunit)
                     case( 'radians' )
@@ -903,7 +888,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        stop 'unsupported phshiftunit; commander_project :: exec_extract_ptcls'
+                        THROW_HARD('unsupported phshiftunit; exec_update_ptcls')
                 end select
                 call os%set(i, 'dfx', line(1))
                 if( nrecs > 1 )then
@@ -925,14 +910,13 @@ contains
                 case('flip')
                     ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
-                    write(*,*) 'unsupported ctf flag: ', trim(params%ctf)
-                    stop 'ABORTING... commander_project :: exec_extract_ptcls'
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_update_ptcls')
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
                 ! if updating single stack of extracted particles, these are hard requirements
-                if( .not. cline%defined('kv')    ) stop 'kv (acceleration voltage in kV{300}) input required when updating movies; commander_project :: exec_update_particles'
-                if( .not. cline%defined('cs')    ) stop 'cs (spherical aberration constant in mm{2.7}) input required when updating movies; commander_project :: exec_update_particles'
-                if( .not. cline%defined('fraca') ) stop 'fraca (fraction of amplitude contrast{0.1}) input required when updating movies; commander_project :: exec_update_particles'
+                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when updating movies; exec_update_particles')
+                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when updating movies; exec_update_particles')
+                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when updating movies; exec_update_particles')
                 if( cline%defined('phaseplate') )then
                     phaseplate = cline%get_carg('phaseplate')
                 else
@@ -955,8 +939,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'kv') )then
                             write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
-                            write(*,*) 'Please, provide kv on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -967,8 +950,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'cs') )then
                             write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
-                            write(*,*) 'Please, provide cs on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -979,8 +961,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'fraca') )then
                             write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
-                            write(*,*) 'Please, provide fraca on command line or update input document'
-                            stop 'ERROR! commander_project :: exec_extract_ptcls'
+                            THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
                 endif
@@ -997,7 +978,7 @@ contains
                 call os%getter(1, 'phaseplate', phaseplate)
                 if( trim(phaseplate) .eq. 'yes' )then
                     if( .not. os%isthere(1,'phshift') )then
-                        stop 'ERROR! phaseplate .eq. yes requires phshift input, currently lacking; commander_project :: exec_update_particles'
+                        THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_update_particles')
                     endif
                 endif
                 ! ctf flag
@@ -1013,7 +994,7 @@ contains
                 call os%getter(1, 'ctf', ctfstr)
                 if( trim(ctfstr) .ne. 'no' )then
                     if( .not. os%isthere(1,'dfx') )then
-                        stop 'ERROR! ctf .ne. no requires dfx input, currently lacking; commander_project :: exec_update_particles'
+                        THROW_HARD('ctf .ne. no requires dfx input, currently lacking; exec_update_particles')
                     endif
                 endif
             endif
@@ -1058,6 +1039,5 @@ contains
         call spproj%write
         call simple_end('**** UPDATE_CAVGS NORMAL STOP ****')
     end subroutine exec_update_cavgs
-
 
 end module simple_commander_project

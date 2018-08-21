@@ -8,6 +8,7 @@ implicit none
 
 public :: ctf_estimate_init, ctf_estimate_x_validated_fit, ctf_estimate_kill
 private
+#include "simple_local_flags.inc"
 
 class(image), pointer :: ppspec_all              ! all micrograph powerspec
 class(image), pointer :: ppspec_lower            ! lower half of micrograph powerspec
@@ -66,13 +67,13 @@ contains
             df_min = dfrange(1)
             df_max = dfrange(2)
         else
-            stop 'invalid defocus range; simple_ctf_estimate :: new'
+            THROW_HARD('invalid defocus range; ctf_estimate_init')
         endif
         if( resrange(1) > resrange(2) )then
             hp = resrange(1)
             lp = resrange(2)
         else
-            stop 'invalid resolution range; simple_ctf_estimate :: new'
+            THROW_HARD('invalid resolution range; ctf_estimate_init')
         endif
         astigtol = astigtol_in
         if(l_phaseplate)then

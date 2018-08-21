@@ -8,6 +8,7 @@ implicit none
 
 public :: opt_stde
 private
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: opt_stde
     private
@@ -43,10 +44,10 @@ contains
         class(*),        intent(inout)  :: fun_self    !< self-pointer for cost function
         real, intent(out)               :: lowest_cost !< minimum function value
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
-            stop 'cost function not associated in opt_spec; stde_minimize; simple_opt_stde'
+            THROW_HARD('cost function not associated in opt_spec; stde_minimize')
         endif
         if ( (.not. associated(spec%gcostfun) ).and.(.not. associated(spec%gcostfun_8)) ) then
-            stop 'gradient of cost function not associated in opt_spec; stde_minimize; simple_opt_stde'
+            THROW_HARD('gradient of cost function not associated in opt_spec; stde_minimize')
         endif
         spec%x_8     = spec%x
         ! initialise nevals counters

@@ -10,6 +10,7 @@ implicit none
 public :: mask_commander
 public :: resmask_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: mask_commander
  contains
@@ -37,7 +38,7 @@ contains
         type(masker)               :: msker
         character(len=STDLEN)      :: pdbout_fname
         integer                    :: ldim(3)
-        if( cline%defined('stk') .and. cline%defined('vol1')   ) stop 'Cannot operate on images AND volume at once'
+        if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
@@ -55,16 +56,16 @@ contains
             else if( params%taper_edges.eq.'yes' )then
                 call taper_edges_imgfile(params%stk, params%outstk, params%smpd)
             else
-                stop 'Nothing to do!'
+                THROW_HARD('Nothing to do!')
             endif
         else if( cline%defined('vol1') )then
             ! 3D
             call build%init_params_and_build_general_tbox(cline,params,do3d=.true.,boxmatch_off=.true.)
-            if( .not. file_exists(params%vols(1)) ) stop 'Cannot find input volume'
+            if( .not. file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
             if( cline%defined('mskfile') )then
                 ! from file
-                if( .not. file_exists(params%mskfile) ) stop 'Cannot find input mskfile'
+                if( .not. file_exists(params%mskfile) ) THROW_HARD('Cannot find input mskfile')
                 ldim = build%vol%get_ldim()
                 call mskvol%new(ldim, params%smpd)
                 call mskvol%read(params%mskfile)
@@ -96,10 +97,10 @@ contains
                 call build%vol%write(params%outvol)
                 call msker%write('maskfile'//params%ext)
             else
-                stop 'Nothing to do!'
+                THROW_HARD('Nothing to do!')
             endif
         else
-            stop 'No input images(s) or volume provided'
+            THROW_HARD('No input images(s) or volume provided')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_MASK NORMAL STOP ****')
@@ -121,8 +122,8 @@ contains
             call mskvol%write('resmask'//params%ext)
             call mskvol%kill
         else
-            write(*,*) 'the inputted mskfile: ', trim(params%mskfile)
-            stop 'does not exists in cwd; commander_mask :: exec_resmask'
+            write(*,*)
+            THROW_HARD('inputted mskfile: '//trim(params%mskfile)//'does not exists in cwd; exec_resmask')
         endif
          ! end gracefully
         call simple_end('**** SIMPLE_RESMASK NORMAL STOP ****')

@@ -9,6 +9,7 @@ implicit none
 public :: opt_particle_swarm
 private
 #include "simple_local_flags.inc"
+
 type, extends(optimizer) :: opt_particle_swarm
     private
     real, allocatable :: swarm(:,:)       !< particle positions
@@ -52,7 +53,7 @@ contains
         real    :: costs(spec%npop) !< particle costs
         integer :: loc(1), nworse
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; particle_swarm_minimize; simple_opt_particle_swarm'
+            THROW_HARD('cost function not associated in opt_spec; particle_swarm_minimize')
         endif
         ! initialize
         call init

@@ -63,13 +63,13 @@ contains
         integer :: igrow, iptcl
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
-            stop 'ERROR! stk or vol1 needs to be present; simple_binarise'
+            THROW_HARD('ERROR! stk or vol1 needs to be present; simple_binarise')
         endif
         if( cline%defined('stk') .and. cline%defined('vol1') )then
-            stop 'ERROR! either stk or vol1 key can be present, not both; simple_binarise'
+            THROW_HARD('either stk or vol1 key can be present, not both; simple_binarise')
         endif
         if( cline%defined('thres') .and. cline%defined('npix') )then
-            stop 'ERROR! either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise'
+            THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise')
         endif
         if( cline%defined('stk') )then
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -130,7 +130,7 @@ contains
             call build%vol%read(params%vols(1))
             call build%img%write(params%outvol)
         else
-            stop 'either vol1 or stk argument required to execute simple_convert'
+            THROW_HARD('either vol1 or stk argument required to execute simple_convert')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
@@ -148,7 +148,7 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
         else
-            stop 'oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation'
+            THROW_HARD('oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation')
         endif
         if( params%ctf .ne. 'no' )then
             select case( params%ctf )
@@ -165,10 +165,10 @@ contains
                         call apply_ctf_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, 'ctf')
                     endif
                 case DEFAULT
-                    stop 'Unknown ctf argument'
+                    THROW_HARD('Unknown ctf argument')
             end select
         else
-            stop 'Nothing to do!'
+            THROW_HARD('Nothing to do!')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CTFOPS NORMAL STOP ****')
@@ -188,7 +188,7 @@ contains
             ! 2D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
             if( cline%defined('width') ) width = params%width
-            if( .not.file_exists(params%stk) )stop 'Cannot find input stack (stk)'
+            if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
             if( params%phrand .eq. 'no')then
                 ! projection_frcs filtering
                 if( cline%defined('frcs') )then
@@ -205,18 +205,18 @@ contains
                     if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
                     call real_filter_imgfile(params%stk, params%outstk, params%smpd, trim(params%real_filter), nint(params%winsz))
                 else
-                    stop 'Nothing to do!'
+                    THROW_HARD('Nothing to do!')
                 endif
             else if ( params%phrand.eq.'yes' )then
                 ! Phase randomization
-                if( .not. cline%defined('lp') )stop 'low-pass limit needed 4 phase randomization'
+                if( .not. cline%defined('lp') ) THROW_HARD('low-pass limit needed 4 phase randomization')
                 call phase_rand_imgfile(params%stk, params%outstk, params%smpd, params%lp)
             endif
         else
             ! 3D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
             if( cline%defined('width') ) width = params%width
-            if( .not.file_exists(params%vols(1)) )stop 'Cannot find input volume (vol1)'
+            if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume (vol1)')
             call build%vol%read(params%vols(1))
             if( params%phrand.eq.'no')then
                 if( cline%defined('bfac') )then
@@ -234,14 +234,14 @@ contains
                     if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
                     call build%vol%real_space_filter(nint(params%winsz), params%real_filter)
                 else if( cline%defined('vol_filt') )then
-                    if( .not.file_exists(params%vol_filt)) stop 'Cannot find volume filter (vol_filt)'
+                    if( .not.file_exists(params%vol_filt)) THROW_HARD('cannot find volume filter (vol_filt)')
                     call build%vol2%read(params%vol_filt)
                     call build%vol%fft
                     call build%vol%apply_filter(build%vol2)
                     call build%vol2%kill
                     call build%vol%ifft
                 else if( cline%defined('fsc') )then
-                    if( .not.file_exists(params%fsc)) stop 'Cannot find FSC filter (vol_filt)'
+                    if( .not.file_exists(params%fsc)) THROW_HARD('Cannot find FSC filter (vol_filt)')
                     ! resolution & optimal low-pass filter from FSC
                     fsc   = file2rarr(params%fsc)
                     optlp = fsc2optlp(fsc)
@@ -250,10 +250,10 @@ contains
                     where(res < TINY) optlp = 0.
                     call build%vol%apply_filter(optlp)
                 else
-                    stop 'Nothing to do!'
+                    THROW_HARD('Nothing to do!')
                 endif
             else
-                if( .not. cline%defined('lp') )stop 'low-pass limit needed 4 phase randomization'
+                if( .not. cline%defined('lp') )THROW_HARD('low-pass limit needed 4 phase randomization')
                 call build%vol%phase_rand(params%lp)
             endif
             if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
@@ -276,7 +276,7 @@ contains
         type(builder)     :: build
         real, allocatable :: spec(:)
         integer           :: k
-        if( cline%defined('stk')  .and. cline%defined('vol1') )stop 'Cannot operate on images AND volume at once'
+        if( cline%defined('stk')  .and. cline%defined('vol1') )THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -288,7 +288,7 @@ contains
                 if( cline%defined('msk') )then
                     call noise_norm_imgfile(params%stk, params%msk, params%outstk, params%smpd)
                 else
-                    stop 'need msk parameter for noise normalization'
+                    THROW_HARD('need msk parameter for noise normalization')
                 endif
             else if( params%shellnorm.eq.'yes' )then
                 ! shell normalization
@@ -297,7 +297,7 @@ contains
         else if( cline%defined('vol1') )then
             ! 3D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
-            if( .not.file_exists(params%vols(1)) )stop 'Cannot find input volume'
+            if( .not.file_exists(params%vols(1)) )THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
             if( params%norm.eq.'yes' )then
                 call build%vol%norm()
@@ -308,10 +308,10 @@ contains
                 call build%vol%spectrum('power', spec)
                 call build%vol%write(params%outvol, del_if_exists=.true.)
             else
-                stop 'Normalization type not implemented yet'
+                THROW_HARD('Normalization type not implemented yet')
             endif
         else
-            stop 'No input images(s) or volume provided'
+            THROW_HARD('No input images(s) or volume provided')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_NORMALIZE NORMAL STOP ****')
@@ -332,7 +332,7 @@ contains
         !integer          :: ldims_scaled(2,3)
         character(len=:), allocatable :: fname
         character(len=LONGSTRLEN), allocatable :: filenames(:)
-        if( cline%defined('stk') .and. cline%defined('vol1') ) stop 'Cannot operate on images AND volume at once'
+        if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -362,7 +362,7 @@ contains
         else if( cline%defined('vol1') )then
             ! 3D
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
-            if( .not.file_exists(params%vols(1)) ) stop 'Cannot find input volume'
+            if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
             call build%vol%read(params%vols(1))
             if( cline%defined('scale') .or. cline%defined('newbox') )then
                 ! Rescaling
@@ -411,7 +411,7 @@ contains
                 ldim_scaled(2) = round2even(real(ldim(2))*params%scale)
                 ldim_scaled(3)   = 1
             else
-                stop 'filetab key only in combination with scale or newbox!'
+                THROW_HARD('filetab key only in combination with scale or newbox!')
             endif
             call img%new(ldim,params%smpd)
             call img2%new(ldim_scaled,params%smpd/params%scale)
@@ -438,7 +438,7 @@ contains
                 deallocate(fname)
             end do
         else
-            stop 'SIMPLE_SCALE needs input image(s) or volume or filetable!'
+            THROW_HARD('SIMPLE_SCALE needs input image(s) or volume or filetable!')
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
@@ -458,7 +458,7 @@ contains
         type(image)      :: tmp
         real             :: mm(2)
         if( cline%defined('lp') )then
-            if( .not. cline%defined('smpd') ) stop 'smpd (sampling distance) needs to be defined if lp is'
+            if( .not. cline%defined('smpd') ) THROW_HARD('smpd (sampling distance) needs to be defined if lp is')
         endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call read_filetable(params%filetab, filenames)
@@ -538,7 +538,7 @@ contains
         ! fishing expeditions
         ! frac only
         if( cline%defined('frac') )then
-            if( params%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'
+            if( params%oritab == '' ) THROW_HARD('need input orientation doc for fishing expedition; simple_stackops')
             ! determine how many particles to include
             if( params%frac < 0.99 )then
                 nincl = nint(real(params%nptcls)*params%frac)
@@ -613,7 +613,7 @@ contains
         endif
         ! state/class + frac
         if( (cline%defined('state').or.cline%defined('class')) .and. .not.cline%defined('frac') )then
-            if( params%oritab == '' ) stop 'need input orientation doc for fishing expedition; simple_stackops'
+            if( params%oritab == '' ) THROW_HARD('need input orientation doc for fishing expedition; simple_stackops')
             if( cline%defined('state') )then
                 cnt = 0
                 do i=1,params%nptcls

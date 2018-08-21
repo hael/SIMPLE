@@ -306,7 +306,7 @@ contains
     procedure          :: pad_mirr
     procedure          :: clip
     procedure          :: clip_inplace
-    procedure          :: scale_img         !!!!!!!ADDED BY CHIARA
+    procedure          :: scale_pixels         !!!!!!!ADDED BY CHIARA
     procedure          :: negative_image    !!!!!!ADDED BY CHIARA
     procedure          :: mirror
     procedure          :: norm
@@ -551,9 +551,9 @@ contains
         type(image) :: tmp, tmp2
         integer     :: xind, yind, cnt, neven_lim, nodd_lim, neven, nodd
         logical     :: didft, outside
-        if( self%ldim(3) /= 1 ) stop 'only for 2D images; mic2eoimgs; simple_image'
+        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images; mic2eoimgs')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            stop 'cannot use a box larger than the image; mic2eoimgs; simple_image'
+            THROW_HARD('cannot use a box larger than the image; mic2eoimgs')
         endif
         didft = .false.
         if( self%ft )then
@@ -843,7 +843,7 @@ contains
             call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
         case DEFAULT
             write(*,*) 'Trying to read from file: ', trim(fname)
-            stop 'ERROR, unsupported file format; read; simple_image'
+            THROW_HARD('unsupported file format; read')
         end select
         call exception_handler(ioimg)
         call read_local(ioimg)
@@ -857,7 +857,7 @@ contains
             class(imgfile) :: ioimg
             ! work out the slice range
             if( isvol )then
-                if( ii .gt. 1 ) stop 'ERROR, stacks of volumes not supported; read; simple_image'
+                if( ii .gt. 1 ) THROW_HARD('stacks of volumes not supported; read')
                 first_slice = 1
                 last_slice = ldim(3)
             else
@@ -1573,11 +1573,10 @@ contains
                 write(*,*) 'ERROR! Nonconforming sizes'
                 write(*,*) 'sizeof(pcavec): ', sz
                 write(*,*) 'sizeof(l_msk) : ', sz_msk
-                stop 'simple_image :: unserialize'
+                THROW_HARD('unserialize')
             endif
         else
-            write(*,*) 'ERROR! pcavec unallocated'
-            stop 'simple_image :: unserialize'
+            THROW_HARD('pcavec unallocated; unserialize')
         endif
         if( self%ft ) self%ft = .false.
         self%rmat = 0.
@@ -2488,7 +2487,7 @@ contains
         real    :: foreground_cen, background_cen
         integer :: cnt1, cnt2,  l, npix
         integer, parameter :: MAXITS=100
-        if( self%ft ) stop 'only for real images; bin_kmeans; simple image'
+        if( self%ft ) THROW_HARD('only for real images; bin_kmeans')
         ! estimate background value around the edges of the box
         cen1 = 0.
         if( self%ldim(3) == 1 )then
@@ -3067,10 +3066,10 @@ contains
         real, parameter :: background = 128. ! taken as centre of [0.255] for jpegs
         type(image)     :: img_pad
         integer         :: ldim(3), ldim_col(3), border
-        if( .not.self1%is_2d() )stop '2D only; simple_mage::collage'
-        if( self1%is_ft() )stop 'Real space only; simple_mage::collage'
-        if( .not.self2%is_2d() )stop '2D only; simple_mage::collage'
-        if( self2%is_ft() )stop 'Real space only; simple_mage::collage'
+        if( .not.self1%is_2d() ) THROW_HARD('2D only; collage')
+        if( self1%is_ft() )      THROW_HARD('Real space only; collage')
+        if( .not.self2%is_2d() ) THROW_HARD('2D only; collage')
+        if( self2%is_ft() )      THROW_HARD('Real space only; collage')
         border   = 1
         ldim(1)  = max(self1%ldim(1),self2%ldim(1))
         ldim(2)  = max(self1%ldim(2),self2%ldim(2))
@@ -3126,7 +3125,7 @@ contains
         real    :: tmp
         if(self_out%existence) call self_out%kill    !Reset if present
         call self_out%new(self_in%ldim,self_in%smpd)
-        if(self_in%ldim(3) /= 1) stop 'simple_image :: enumerate_connected_comps. This procedure is for 2D images!'
+        if(self_in%ldim(3) /= 1) THROW_HARD('enumerate_connected_comps. Only for 2D images!')
         cnt = 0   !it is going to be the new label of the connected component
         do i = 1, self_in%ldim(1)
            do j = 1, self_in%ldim(2)
@@ -4135,7 +4134,7 @@ contains
             t(1) = tthresh(1) + r
             t(2) = 3./2.*tthresh(1) + r
             t(3) = 3./4.*tthresh(1) + r
-            if(t(2) > maxval(grad) .or. t(3) < minval(grad)) stop 'Error in finding the threshold! simple_image :: automatic_thresh_sobel'
+            if(t(2) > maxval(grad) .or. t(3) < minval(grad)) THROW_HARD('cannot find the threshold! automatic_thresh_sobel')
             call self%sobel(bin_img, t(1))
             if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
                 ratio(1) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(1)
@@ -4175,9 +4174,9 @@ contains
     !     integer,      intent(in) :: px(3)
     !     integer, parameter  :: DIM_SW = 7
     !     real                :: sw_mat(DIM_SW,DIM_SW,1), sw(DIM_SW*DIM_SW)
-    !     if(px(3) /= 1) stop 'simple_image :: similarity window. Image has to be 2D!'
+    !     if(px(3) /= 1) THROW_HARD('similarity window. Image has to be 2D!')
     !     if(px(1) < 1 .or. px(1)+DIM_SW-1 > self%ldim(1) .or. &
-    !     &  px(2) < 1 .or. px(2)+DIM_SW-1 > self%ldim(2)) stop 'simple_image :: similarity window. Padding error!'
+    !     &  px(2) < 1 .or. px(2)+DIM_SW-1 > self%ldim(2)) THROW_HARD('similarity window. Padding error!')
     !     sw_mat(:DIM_SW,:DIM_SW,1) = self%rmat(px(1):px(1)+DIM_SW-1, px(2):px(2)+DIM_SW-1,1)  !self is meant to be pad
     !     sw = reshape(sw_mat,[DIM_SW*DIM_SW])
     ! end function similarity_window
@@ -4195,7 +4194,7 @@ contains
     !   real               :: w
     !   pad = (DIM_SW-1)/2
     !   call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.) !you can also insert a control so that you pad only if necessary
-    !   call self%scale_img([1.,500.])
+    !   call self%scale_pixels([1.,500.])
     !   call self%pad(img_p)
     !   allocate(Z(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2),1), source = 0.)
     !   do m = 1,self%ldim(1)             !fix pixel (m,n)
@@ -4355,7 +4354,7 @@ contains
         logical           :: err
         real, allocatable :: pixels(:)
         ! FT
-        if( self%ft ) stop 'not for FTed imgs; simple_image :: stats_2'
+        if( self%ft ) THROW_HARD('not for FTed imgs; stats_2')
         pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
             &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.95 )
         maxv = maxval(pixels)
@@ -4566,8 +4565,7 @@ contains
         real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
         ldim = self%ldim
         if(ldim(3) /= 1) then
-            print *, "The image has to be 2D!"
-            stop 'simple_image :: calc_gradient'
+            THROW_HARD('image has to be 2D! calc_gradient')
         endif
         allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
                & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
@@ -4604,19 +4602,16 @@ contains
         integer, allocatable :: neigh_8(:)
         integer              :: i, j
         if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
-            print *, "The image has to be 2D!"
-            stop 'simple_image :: calc_neigh_8'
+            THROW_HARD('image has to be 2D; calc_neigh_8')
         endif
         i = px(1)
         j = px(2) ! Assumes to have a 2-dim matrix
         ! sanity check
         if( i < 1 .or. i > self%ldim(1) )then
-            print *, 'x-coordinate out of bound'
-            stop 'simple_image :: calc_neigh_8'
+            THROW_HARD('x-coordinate out of bound; calc_neigh_8')
         endif
         if( j < 1 .or. j > self%ldim(2) )then
-            print *, 'y-coordinate out of bound'
-            stop 'simple_image :: calc_neigh_8'
+            THROW_HARD('y-coordinate out of bound; calc_neigh_8')
         endif
         ! identify neighborhood
         if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
@@ -4790,8 +4785,8 @@ contains
         complex                       :: shcomp
         integer                       :: h, k, l, phys(3), lims(3,2), sqarg, sqlp, sqhp
         ! this is for highly optimised code, so we assume that images are always Fourier transformed beforehand
-        if( .not. self_ref%ft  ) stop 'self_ref not FTed;  corr_shifted; simple_image'
-        if( .not. self_ptcl%ft ) stop 'self_ptcl not FTed; corr_shifted; simple_image'
+        if( .not. self_ref%ft  ) THROW_HARD('self_ref not FTed;  corr_shifted')
+        if( .not. self_ptcl%ft ) THROW_HARD('self_ptcl not FTed; corr_shifted')
         r = 0.
         sumasq = 0.
         sumbsq = 0.
@@ -4981,7 +4976,7 @@ contains
                     ! real part of the complex mult btw self1 and targ*
                     comp1 = self1%cmat(phys(1),phys(2),phys(3))
                     comp2 = self2%cmat(phys(1),phys(2),phys(3))
-                    corrs_8(sh) = corrs_8(sh)+ real(comp1 * conjg(comp2))
+                    corrs_8(sh) = corrs_8(sh)+ real(comp1 * conjg(comp2), kind=dp)
                     sumasq(sh) = sumasq(sh) + csq(comp1)
                     sumbsq(sh) = sumbsq(sh) + csq(comp2)
                 end do
@@ -5145,8 +5140,8 @@ contains
         integer,      intent(in)    :: find
         integer :: lims(3,2), phys(3), h, k, l, sh
         complex :: comp
-        if( .not. self%ft        ) stop 'image to be modified assumed to be FTed; image :: insert_lowres'
-        if( .not. self2insert%ft ) stop 'image to insert assumed to be FTed; image :: insert_lowres'
+        if( .not. self%ft        ) THROW_HARD('image to be modified assumed to be FTed; insert_lowres')
+        if( .not. self2insert%ft ) THROW_HARD('image to insert assumed to be FTed; insert_lowres')
         lims = self%fit%loop_lims(2)
         !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys,comp)&
         !$omp schedule(static) proc_bind(close)
@@ -5174,8 +5169,8 @@ contains
         integer,      intent(in)    :: find
         integer :: lims(3,2), phys(3), h, k, l, sh
         complex :: comp
-        if( .not. self%ft        ) stop 'image to be modified assumed to be FTed; image :: insert_lowres'
-        if( .not. self2insert%ft ) stop 'image to insert assumed to be FTed; image :: insert_lowres'
+        if( .not. self%ft        ) THROW_HARD('image to be modified assumed to be FTed; insert_lowres')
+        if( .not. self2insert%ft ) THROW_HARD('image to insert assumed to be FTed; insert_lowres')
         lims = self%fit%loop_lims(2)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -5581,7 +5576,7 @@ contains
         class(image), intent(inout) :: self
         logical, intent(in)         :: pos(:,:)
         integer :: ipix, jpix
-        if( .not. self%is_2d() ) stop 'only for 2D images; salt_n_pepper; simple_image'
+        if( .not. self%is_2d() ) THROW_HARD('only for 2D images; salt_n_pepper')
         call self%norm_bin
         do ipix=1,self%ldim(1)
             do jpix=1,self%ldim(2)
@@ -5641,7 +5636,7 @@ contains
       value = maxval(self%rmat(:,:,:))
       wide = 4*part_radius
       length = int(part_radius/2)
-      if( .not. self%is_2d() ) stop 'only for 2D images; draw_picked; simple_image'
+      if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
       if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
       &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
         print *, 'The window is put of the bborder of the image!'
@@ -5846,7 +5841,7 @@ contains
         if( .not.(self.eqdims.img) )then
             print *, 'self%ldim: ', self%ldim
             print *, 'img%ldim:  ', img%ldim
-            stop 'non-equal dims; simple_image :: ft2img'
+            THROW_HARD('non-equal dims; ft2img')
         endif
         didft = .false.
         if( .not. self%ft )then
@@ -5878,8 +5873,7 @@ contains
                     case('phase')
                         call img%set(inds,phase_angle(comp))
                     case DEFAULT
-                        write(*,*) 'Usupported mode: ', trim(which)
-                        stop 'simple_image :: ft2img'
+                        THROW_HARD('unsupported mode: '//trim(which)//'; ft2img')
                     end select
                 end do
             end do
@@ -5895,7 +5889,7 @@ contains
         if( .not.(self.eqdims.img) )then
             print *, 'self%ldim: ', self%ldim
             print *, 'img%ldim:  ', img%ldim
-            stop 'non-equal dims; simple_image :: img2ft'
+            THROW_HARD('non-equal dims; img2ft')
         endif
         call img%zero_and_flag_ft
         xcnt = 0
@@ -5927,8 +5921,8 @@ contains
         integer            :: h,mh,k,mk,lims(3,2),inds(3)
         integer, parameter :: XDAMPWINSZ=2
         real, allocatable  :: pixels(:)
-        if( self%ft )          stop 'not intended for FTs; simple_image :: dampen_central_cross'
-        if( self%ldim(3) > 1 ) stop 'not intended for 3D imgs; simple_image :: dampen_central_cross'
+        if( self%ft )          THROW_HARD('not intended for FTs; dampen_central_cross')
+        if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_central_cross')
         lims = self%loop_lims(3)
         mh = maxval(lims(1,:))
         mk = maxval(lims(2,:))
@@ -6467,16 +6461,16 @@ contains
 
     !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
     ! This subroutine rescales the pixel intensities to a new input range.
-    subroutine scale_img(self, new_range)
+    subroutine scale_pixels(self, new_range)
           class(image), intent(inout) :: self
           real,         intent(in)    :: new_range(2)
           real :: old_range(2), sc
-          if( .not. self%is_2d() ) stop 'only for 2D images; scale_img; simple_image'
+          if( .not. self%is_2d() ) THROW_HARD('only for 2D images; scale_pixels')
           old_range(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
           old_range(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
           sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
           self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sc*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+new_range(1)-sc*old_range(1)
-    end subroutine scale_img
+    end subroutine scale_pixels
 
     !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
    ! This subroutine takes in input the image self and trasforms it in its negative image.
@@ -6539,7 +6533,7 @@ contains
 
     subroutine norm4viz( self  )
         class(image), intent(inout) :: self
-        if(self%is_ft())stop 'Real space only; simple_image::norm4viz'
+        if(self%is_ft())THROW_HARD('real space only; norm4viz')
         call self%norm
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 128. + 10.5 *& ! magic numbers from Joe
             &self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
@@ -6612,8 +6606,8 @@ contains
     subroutine edges_norm( self )
         class(image), intent(inout) :: self
         real :: edges_sum, edges_ave
-        if( self%ft ) stop 'not for Fted images; simple_image :: edge_norm'
-        if( .not.self%is_2d() ) stop 'only for 2d images; simple_image :: edge_norm'
+        if( self%ft )           THROW_HARD('not for Fted images; edge_norm')
+        if( .not.self%is_2d() ) THROW_HARD('only for 2d images; edge_norm')
         edges_sum = sum(self%rmat(1:self%ldim(1),1,1))
         edges_sum = edges_sum + sum(self%rmat(1:self%ldim(1),self%ldim(2),1))
         edges_sum = edges_sum + sum(self%rmat(1,1:self%ldim(2),1))
@@ -6691,8 +6685,8 @@ contains
         real    :: mat_in(self_in%ldim(1),self_in%ldim(2))
         real    :: mat_out(self_in%ldim(1),self_in%ldim(2))
         logical :: didft
-        if( self_in%ldim(3) > 1 )         stop 'only for 2D images; rtsq; simple_image'
-        if( .not. self_in%square_dims() ) stop 'only for square dims (need to sort shifts out); rtsq; simple_image'
+        if( self_in%ldim(3) > 1 )         THROW_HARD('only for 2D images; rtsq')
+        if( .not. self_in%square_dims() ) THROW_HARD('only for square dims; rtsq;')
         call self_here%new(self_in%ldim, self_in%smpd)
         didft = .false.
         if( self_in%ft )then
@@ -6875,9 +6869,9 @@ contains
         real    :: ave, sdev, var, lthresh, uthresh
         integer :: i, j, hwinsz, winsz
         logical :: was_fted, err, present_outliers
-        if( self%ldim(3)>1 )stop 'for images only; simple_image::cure_outliers'
+        if( self%ldim(3)>1 )THROW_HARD('for 2D images only; cure_outliers')
         was_fted = self%is_ft()
-        if( was_fted )stop 'for real space images only; simple_image::cure_outliers'
+        if( was_fted )THROW_HARD('for real space images only; cure_outliers')
         present_outliers = present(outliers)
         ncured   = 0
         hwinsz   = 6
@@ -6954,8 +6948,8 @@ contains
             call img%new([ld1,ld2,1], 1.)
             call img_3%new([ld1,ld2,1], 1.)
             call img3d%new([ld1,ld2,ld3], 1.)
-            if( .not. img%exists() ) stop 'ERROR, in constructor or in exists function, 1'
-            if( .not. img3d%exists() ) stop 'ERROR, in constructor or in exists function, 2'
+            if( .not. img%exists() )   THROW_HARD('ERROR, in constructor or in exists function, 1')
+            if( .not. img3d%exists() ) THROW_HARD('ERROR, in constructor or in exists function, 2')
 
             write(*,'(a)') '**info(simple_image_unit_test, part 2): testing getters/setters'
             passed = .true.
@@ -6973,7 +6967,7 @@ contains
                     end do
                 end do
             end do
-            if( .not. passed )  stop 'getters/setters test failed'
+            if( .not. passed )  THROW_HARD('getters/setters test failed')
 
             write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
             img_2 = img
@@ -6992,7 +6986,7 @@ contains
                 write(*,*) ""
                 print *, ' checkups ', test
                 write(*,*) ""
-                stop 'checkups test failed'
+                THROW_HARD('checkups test failed')
             endif
             write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
             passed = .false.
@@ -7000,7 +6994,7 @@ contains
             call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
             if( ave >= 4. .and. ave <= 6. .and. sdev >= 14. .and.&
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
-            if( .not. passed )  stop 'stats test failed'
+            if( .not. passed )  THROW_HARD('stats test failed')
 
             write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
             call img%square( 10 )
@@ -7073,7 +7067,7 @@ contains
             corr = img%corr(img_2)
             corr_lp = img%corr(img_2,20.)
             if( corr > 0.96 .and. corr < 0.98 .and. corr_lp > 0.96 .and. corr_lp < 0.98 ) passed = .true.
-            if( .not. passed ) stop 'corr test failed'
+            if( .not. passed ) THROW_HARD('corr test failed')
 
             write(*,'(a)') '**info(simple_image_unit_test, part 17): testing downscaling'
             if( ld1 == ld2 )then
@@ -7176,7 +7170,7 @@ contains
             test(1) = .not. img%exists()
             test(2) = .not. img3d%exists()
             passed = all(test)
-            if( .not. passed )  stop 'destructor test failed'
+            if( .not. passed )  THROW_HARD('destructor test failed')
         end subroutine test_image_local
 
     end subroutine test_image

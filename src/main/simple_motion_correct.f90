@@ -264,8 +264,7 @@ contains
                 call gainref%new(ldim, smpd)
                 call gainref%read(gainref_fname)
             else
-                write(*,*)'Gain reference could not be found: ', trim(gainref_fname), '; simple_motion_correct::motion_correct_int'
-                stop 'Gain reference could not be found; simple_motion_correct::motion_correct_int'
+                THROW_HARD('gain reference: '//trim(gainref_fname)//' not found; motion_correct_init')
             endif
         endif
         ! allocate padded matrix

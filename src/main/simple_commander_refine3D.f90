@@ -139,15 +139,15 @@ contains
         integer :: startit
         logical :: converged
         call build%init_params_and_build_strategy3D_tbox(cline,params)
-        if( cline%defined('lp') .or. cline%defined('find').or. params%eo .ne. 'no')then
+        if( cline%defined('lp') .or. params%eo .ne. 'no')then
             ! alles ok!
         else
-           stop 'need a starting low-pass limit (set lp or find)!'
+           THROW_HARD('need a starting low-pass limit (set lp or find)!')
         endif
         startit = 1
         if( cline%defined('startit') )startit = params%startit
         if( startit == 1 ) call build%spproj_field%clean_updatecnt
-        if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
+        if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
         call refine3D_exec( cline, startit, converged) ! partition or not, depending on 'part'
         ! end gracefully
         call simple_end('**** SIMPLE_REFINE3D NORMAL STOP ****')
@@ -177,20 +177,14 @@ contains
                     build%fsc(istate,:) = file2rarr(params%fsc)
                     maplp(istate)   = max(build%img%get_lp(get_lplim_at_corr(build%fsc(istate,:),params%lplim_crit)),2.*params%smpd)
                 else
-                    write(*,*) 'Tried to check the fsc file: ', trim(params%fsc)
-                    stop 'but it does not exist!'
+                    THROW_HARD('tried to check the fsc file: '//trim(params%fsc)//' but it does not exist!')
                 endif
             enddo
             loc     = maxloc( maplp )
-            params%state = loc(1)            ! state with worst low-pass
-            params%lp    = maplp( params%state )  ! worst lp
+            params%state = loc(1)                ! state with worst low-pass
+            params%lp    = maplp( params%state ) ! worst lp
             params%fsc   = 'fsc_state'//int2str_pad(params%state,2)//'.bin'
             deallocate(maplp)
-            limset = .true.
-        endif
-        ! Let find override the command line input lp (if given)
-        if( .not. limset .and. cline%defined('find') )then
-            params%lp = build%img%get_lp(params%find)
             limset = .true.
         endif
         ! Method for setting lp with lowest priority is lp on the command line
@@ -200,7 +194,7 @@ contains
             ! we are happy
         else
             ! we fall over
-            stop 'No method available to set low-pass limit! ABORTING...'
+            THROW_HARD('no method available to set low-pass limit! ABORTING...')
         endif
         ! check convergence
         if( cline%defined('update_res') )then

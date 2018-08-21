@@ -201,8 +201,8 @@ contains
         integer,     intent(in)    :: new_n
         type(oris) :: tmp
         integer    :: old_n, i
-        if( self%n == 0 )     stop 'ERROR! cannot reallocate non-existing oris; oris :: reallocate'
-        if( new_n <= self%n ) stop 'ERROR! reallocation to smaller size not supported; oris :: reallocate'
+        if( self%n == 0 )     THROW_HARD('cannot reallocate non-existing oris; reallocate')
+        if( new_n <= self%n ) THROW_HARD('reallocation to smaller size not supported; reallocate')
         ! make a copies
         old_n = self%n
         tmp   = self
@@ -1721,8 +1721,8 @@ contains
         if( present(fromto) )then
             istart = fromto(1)
             iend   = fromto(2)
-            if(istart < 1) stop 'Invalid index; simple_oris%read'
-            if(iend > self%n) stop 'Invalid index; simple_oris%read'
+            if(istart < 1) THROW_HARD('Invalid index; read')
+            if(iend > self%n) THROW_HARD('Invalid index; read')
         else
             istart = 1
             iend   = self%n
@@ -2357,11 +2357,10 @@ contains
                 ! to be tested, should be amenable to any objective function
             case DEFAULT
                 write(*,*)'Invalid metric: ', trim(which_here)
-                stop 'simple_oris :: extremal_bound'
+                THROW_HARD('extremal_bound')
         end select
         if( .not.self%isthere(which_here) )then
-            write(*,*)'Metric is unpopulated; simple_oris :: extremal_bound:', trim(which_here)
-            stop 'Metric is unpopulated; simple_oris :: extremal_bound:'
+            THROW_HARD('Metric: '//trim(which_here)//' is unpopulated; extremal_bound')
         endif
         ! fetch scores
         scores      = self%get_all(which_here)

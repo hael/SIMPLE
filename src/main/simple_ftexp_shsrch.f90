@@ -10,6 +10,7 @@ implicit none
 
 public :: ftexp_shsrch_init, ftexp_shsrch_set_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
 private
+#include "simple_local_flags.inc"
 
 type(opt_factory)             :: ofac              !< optimizer factory
 type(opt_spec)                :: ospec             !< optimizer specification object
@@ -139,7 +140,7 @@ contains
             call ftexp_ptcl%new(img_ptcl, hp, lp)
             cxy = ftexp_shsrch_minimize()
             if( cxy(1) < 0.995 )then
-                stop 'shift alignment failed; test_ftexp_shsrch; simple_ftexp_shsrch'
+                THROW_HARD('shift alignment failed; test_ftexp_shsrch')
             endif
         end do
         write(*,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'

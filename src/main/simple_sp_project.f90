@@ -136,8 +136,7 @@ contains
                 call self%os_out%new(n)
                 os_ptr => self%os_out
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: new_seg_with_ptr'
+                THROW_HARD('unsupported oritype: '//trim(oritype)//'; new_seg_with_ptr')
         end select
     end subroutine new_seg_with_ptr
 
@@ -163,7 +162,7 @@ contains
             endif
         else
             if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then
-                stop 'ERROR, the project needs a name, inputted via projname or projfile!'
+                THROW_HARD('the project needs a name, inputted via projname or projfile!')
             endif
             if( cline%defined('projfile') )then
                 projfile = cline%get_carg('projfile')
@@ -171,8 +170,7 @@ contains
                     case('O')
                         call self%projinfo%set(1, 'projfile', trim(projfile) )
                     case DEFAULT
-                        write(*,*) 'Inputted projfile: ', trim(projfile)
-                        stop 'has unsupported format'
+                        THROW_HARD('unsupported format of projfile: '//trim(projfile))
                 end select
                 projname = get_fbody(projfile, 'simple')
                 call self%projinfo%set(1, 'projname', trim(projname))
@@ -212,7 +210,7 @@ contains
         endif
         iostat  = simple_getenv('SIMPLE_QSYS', env_var)
         if( iostat /= 0 )then
-            stop 'SIMPLE_QSYS is not defined in your environment.'
+            THROW_HARD('SIMPLE_QSYS is not defined in your environment')
         else
             iostat  = simple_getenv('SIMPLE_QSYS', env_var)
             call self%compenv%set(1, 'qsys_name', trim(env_var))
@@ -279,8 +277,7 @@ contains
                 os_ptr => self%os_stk
                 os_append_ptr => proj%os_stk
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype for this purpose; sp_project :: append_project'
+                THROW_HARD('oritype: '//trim(oritype)//' unsupported for this purpose; append_project')
         end select
         n2append = os_append_ptr%get_noris()
         if( n2append == 0 )return
@@ -293,7 +290,7 @@ contains
             if( abs(smpd-smpd_self) > 0.001 )then
                 write(*,*) 'smpd self', smpd_self
                 write(*,*) 'smpd 2 append', smpd
-                stop ' Only a project with the same smpd can be appended to the project; simple_sp_project :: append_project'
+                THROW_HARD('only a project with the same smpd can be appended to the project; append_project')
             endif
         endif
         select case(trim(oritype))
@@ -382,21 +379,19 @@ contains
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: map_ptcl_ind2stk_ind'
+                THROW_HARD('oritype: '//trim(oritype)//' not supported by map_ptcl_ind2stk_ind')
         end select
         nptcls = ptcl_field%get_noris()
         ! first sanity check, range
         if( iptcl < 1 .or. iptcl > nptcls )then
             print *, 'iptcl : ', iptcl
             print *, 'nptcls: ', nptcls
-            stop 'iptcl index out of range; sp_project :: map_ptcl_ind2stk_ind'
+            THROW_HARD('iptcl index out of range; map_ptcl_ind2stk_ind')
         endif
         ! second sanity check, stack index present in ptcl_field
         if( .not. ptcl_field%isthere(iptcl, 'stkind') )then
             print *, 'iptcl: ', iptcl
-            print *, 'ERROR, stkind not present in field: ', trim(oritype)
-            stop 'sp_project :: map_ptcl_ind2stk_ind'
+            THROW_HARD('stkind not present in field: '//trim(oritype)//'; map_ptcl_ind2stk_ind')
         endif
         stkind = nint(ptcl_field%get(iptcl, 'stkind'))
         ! third sanity check, particle index in range
@@ -405,7 +400,7 @@ contains
         if( iptcl < fromp .or. iptcl > top )then
             print *, 'iptcl            : ', iptcl
             print *, 'prange for micstk: ', fromp, top
-            stop 'iptcl index out of micstk range; sp_project :: map_ptcl_ind2stk_ind'
+            THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
         endif
         ! output index in stack
         ind_in_stk = iptcl - fromp + 1
@@ -422,8 +417,7 @@ contains
         if( sz_cls2D /= sz_states )then
             write(*,*) 'size(cls2D): ', sz_cls2D
             write(*,*) 'sz_states  : ', sz_states
-            write(*,*) 'ERROR! size(cls2D) not consistent with size(states), aborting...'
-            stop 'simple_sp_project :: map_cavgs_selection'
+            THROW_HARD('size(cls2D) not consistent with size(states) in map_cavgs_selection, aborting...')
         endif
         ! map selection to self%os_cls2D
         do icls=1,sz_cls2D
@@ -467,7 +461,7 @@ contains
         n_os_mic = os_ptr%get_noris()
         if( n_os_mic > 0 )then
             write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
-            stop 'ABORTING! sp_project :: add_single_movie'
+            THROW_HARD('add_single_movie')
         endif
         ! update ori
         call os_ptr%new(1)
@@ -503,8 +497,7 @@ contains
             case(2)
                 call os_ptr%set(1, 'ctf', 'flip')
             case DEFAULT
-                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-                stop 'ERROR, unsupported ctfflag; sp_project :: add_single_movie'
+                THROW_HARD('ctfflag: '//int2str(ctfvars%ctfflag)//' unsupported; add_single_movie')
         end select
     end subroutine add_single_movie
 
@@ -519,8 +512,7 @@ contains
         logical               :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
-            write(*,*) 'Inputted movie list (filetab): ', trim(filetab)
-            stop 'does not exist in cwd; sp_project :: add_movies'
+            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_movie')
         endif
         is_movie = .true.
         ! oris object pointer
@@ -575,8 +567,7 @@ contains
                 case(2)
                     call os_ptr%set(imic, 'ctf', 'flip')
                 case DEFAULT
-                    write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-                    stop 'ERROR, unsupported ctfflag; sp_project :: add_movies'
+                    THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_movies')
             end select
             deallocate(moviename)
         enddo
@@ -635,7 +626,7 @@ contains
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stk'
+            THROW_HARD('nonsquare particle images not supported; add_stk')
         endif
         ! updates_fields
         n_os_stk    = self%os_stk%get_noris() + 1
@@ -650,7 +641,7 @@ contains
         else
             ! stk
             if( .not.self%os_stk%isthere(n_os_stk-1,'top') )then
-                stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
+                THROW_HARD('FROMP/TOP keys should always be informed; add_stk')
             endif
             call self%os_stk%reallocate(n_os_stk)
             ! 2d
@@ -677,8 +668,7 @@ contains
             case(CTFFLAG_FLIP)
                 call self%os_stk%set(n_os_stk, 'ctf', 'flip')
             case DEFAULT
-                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-                stop 'ERROR, unsupported ctfflag; sp_project :: add_stk'
+                THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_stk')
         end select
         call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
         call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
@@ -719,18 +709,18 @@ contains
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
             write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
-            stop 'ABORTING! sp_project :: add_single_stk'
+            THROW_HARD('add_single_stk')
         endif
         ! check that particle fields are empty
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         if( n_os_ptcl2D > 0 )then
             write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
+            THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_ptcl3D > 0 )then
             write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
-            stop 'ABORTING! empty particle fields in project file assumed; sp_project :: add_single_stk'
+            THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
         self%os_ptcl2D = os
         self%os_ptcl3D = os
@@ -745,7 +735,7 @@ contains
         if( ldim(1) /= ldim(2) )then
             write(*,*) 'xdim: ', ldim(1)
             write(*,*) 'ydim: ', ldim(2)
-            stop 'ERROR! nonsquare particle images not supported; sp_project :: add_single_stk'
+            THROW_HARD('nonsquare particle images not supported; add_single_stk')
         endif
         call self%os_stk%new(1)
         call self%os_stk%set(1, 'stk',     trim(stk_abspath))
@@ -761,7 +751,7 @@ contains
         call self%os_stk%set(1, 'fraca',   ctfvars%fraca)
         call self%os_stk%set(1, 'state',   1.0) ! default on import
         if( ctfvars%l_phaseplate )then
-            if( .not. os%isthere('phshift') ) stop 'ERROR! phaseplate=yes & input oris lack phshift; sp_project :: add_single_stk'
+            if( .not. os%isthere('phshift') ) THROW_HARD('phaseplate=yes & input oris lack phshift; add_single_stk')
             call self%os_stk%set(1, 'phaseplate', 'yes')
         else
             call self%os_stk%set(1, 'phaseplate', 'no')
@@ -774,8 +764,7 @@ contains
             case(CTFFLAG_FLIP)
                 call self%os_stk%set(1, 'ctf', 'flip')
             case DEFAULT
-                write(*,*) 'ctfvars%ctfflag: ', ctfvars%ctfflag
-                stop 'ERROR, unsupported ctfflag; sp_project :: add_single_stk'
+                THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_single_stk')
         end select
     end subroutine add_single_stk
 
@@ -791,8 +780,7 @@ contains
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
         ! file exists?
         if( .not. file_exists(stktab) )then
-            write(*,*) 'Inputted stack list (stktab): ', trim(stktab)
-            stop 'does not exist in cwd; sp_project :: add_stktab'
+            THROW_HARD('stack list (stktab): '//trim(stktab)//' not in cwd; add_stktab')
         endif
         ! read micrograph stack names
         call read_filetable(stktab, stknames)
@@ -802,7 +790,7 @@ contains
         if( n_os /= nstks )then
             write(*,*) '# input oris      : ', n_os
             write(*,*) '# stacks in stktab: ', nstks
-            stop 'ERROR! nonconforming sizes of inputs; sp_project :: add_stktab'
+            THROW_HARD('nonconforming sizes of inputs; add_stktab')
         endif
         ! first pass for sanity check and determining dimensions
         allocate(nptcls_arr(nstks),source=0)
@@ -822,24 +810,24 @@ contains
                     write(*,*) 'stk name            : ', trim(stknames(istk))
                     write(*,*) 'ldim in object      : ', ldim_here
                     write(*,*) 'ldim read from stack: ', ldim
-                    stop 'inconsistent logical dimensions; sp_project :: add_stktab'
+                    THROW_HARD('inconsistent logical dimensions; add_stktab')
                 endif
             endif
             if( ldim(1) /= ldim(2) )then
                 write(*,*) 'stk name: ', trim(stknames(istk))
                 write(*,*) 'xdim:     ', ldim(1)
                 write(*,*) 'ydim:     ', ldim(2)
-                stop 'ERROR! nonsquare particle images not supported; sp_project :: add_stktab'
+                THROW_HARD('nonsquare particle images not supported; add_stktab')
             endif
             ! check variable presence
-            if( .not. o_stk%isthere('ctf') )    stop 'ERROR! ctf flag missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('smpd') )   stop 'ERROR! smpd missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('kv') )     stop 'ERROR! kv missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('cs') )     stop 'ERROR! cs missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('fraca') )  stop 'ERROR! fraca missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('dfx') )    stop 'ERROR! dfx missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('dfy') )    stop 'ERROR! dfy missing in os input; sp_project :: add_stktab'
-            if( .not. o_stk%isthere('angast') ) stop 'ERROR! angast missing in os input; sp_project :: add_stktab'
+            if( .not. o_stk%isthere('ctf') )    THROW_HARD('ERROR! ctf flag missing in os input; add_stktab')
+            if( .not. o_stk%isthere('smpd') )   THROW_HARD('ERROR! smpd missing in os input; add_stktab')
+            if( .not. o_stk%isthere('kv') )     THROW_HARD('ERROR! kv missing in os input; add_stktab')
+            if( .not. o_stk%isthere('cs') )     THROW_HARD('ERROR! cs missing in os input; add_stktab')
+            if( .not. o_stk%isthere('fraca') )  THROW_HARD('ERROR! fraca missing in os input; add_stktab')
+            if( .not. o_stk%isthere('dfx') )    THROW_HARD('ERROR! dfx missing in os input; add_stktab')
+            if( .not. o_stk%isthere('dfy') )    THROW_HARD('ERROR! dfy missing in os input; add_stktab')
+            if( .not. o_stk%isthere('angast') ) THROW_HARD('ERROR! angast missing in os input; add_stktab')
             ! stash number of images
             nptcls_arr(istk) = nptcls
         enddo
@@ -855,7 +843,7 @@ contains
             fromp = 1
         else
             if( .not.self%os_stk%isthere(n_os_stk,'top') )then
-                stop 'FROMP/TOP keys should always be informed; simple_sp_project :: add_stk'
+                THROW_HARD('FROMP/TOP keys should always be informed; add_stk')
             endif
             call self%os_stk%reallocate(n_os_stk + nstks)
             call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls_tot)
@@ -920,7 +908,7 @@ contains
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'No stack to split! sp_project :: split_single_stk'
+            THROW_HARD('No stack to split! split_single_stk')
         else if( n_os_stk > 1 )then ! re-splitting not supported
             return
         endif
@@ -1014,7 +1002,7 @@ contains
         if( imic < 1 .or. imic > nmics )then
             print *, 'imic : ', imic
             print *, 'nmics: ', nmics
-            stop 'imic index out of range; sp_project :: get_stkname'
+            THROW_HARD('imic index out of range; get_stkname')
         endif
         stkname = trim(self%os_stk%get_static(imic, 'stk'))
     end function get_stkname
@@ -1103,8 +1091,7 @@ contains
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid FRC kind: ', trim(which_imgkind)
-                stop 'sp_project :: add_frcs2os_out'
+                THROW_HARD('invalid FRC kind: '//trim(which_imgkind)//'; add_frcs2os_out')
         end select
         ! full path and existence check
         call simple_abspath(frc,frc_abspath,'sp_project :: add_frcs2os_out')
@@ -1167,8 +1154,7 @@ contains
             case('vol_cavg','vol','vol_filt','vol_msk')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid VOL kind: ', trim(which_imgkind), '; sp_project :: add_vol2os_out'
-                stop 'sp_project :: add_vol2os_out'
+                THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out')
         end select
         ! full path and existence check
         call simple_abspath(vol,vol_abspath ,'sp_project :: add_vol2os_out')
@@ -1272,7 +1258,7 @@ contains
         if( present(fail) )fail_here = fail
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_cavgs_stk'
+        if( n_os_out == 0 ) THROW_HARD('trying to fetch from empty os_out field; get_cavgs_stk')
         ! look for cavgs
         ind = 0
         cnt = 0
@@ -1286,8 +1272,8 @@ contains
             endif
         end do
         if( fail_here )then
-            if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=cavg, aborting...; sp_project :: get_cavgs_stk'
-            if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=cavg identified, aborting...; sp_project :: get_cavgs_stk'
+            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=cavg, aborting... get_cavgs_stk')
+            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind=cavg identified, aborting... get_cavgs_stk')
             ! set return values
             if( allocated(stkname) ) deallocate(stkname)
             stkname = trim(self%os_out%get_static(ind,'stk'))
@@ -1313,8 +1299,7 @@ contains
             case('vol_cavg','vol','vol_filt','vol_msk')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid VOL kind: ', trim(imgkind), '; sp_project :: get_vol'
-                stop 'sp_project :: get_vol'
+                THROW_HARD('invalid VOL kind: '//trim(imgkind)//'; get_vol')
         end select
         ! defaults
         if( allocated(vol_fname) ) deallocate(vol_fname)
@@ -1353,10 +1338,10 @@ contains
                 ! we do not fall over if the volume mask is absent
                 return
             else
-                stop 'ERROR! no os_out entry with imgkind=volXXX identified, aborting...; sp_project :: get_vol'
+                THROW_HARD('no os_out entry with imgkind=volXXX identified, aborting...; get_vol')
             endif
         endif
-        if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=volXXX, aborting...; sp_project :: get_vol'
+        if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=volXXX, aborting...; get_vol')
         ! set output
         deallocate(vol_fname)
         call self%os_out%getter(ind, 'vol', vol_fname)
@@ -1388,8 +1373,8 @@ contains
                 endif
             endif
         enddo
-        if( cnt == 0 )stop 'ERROR! no os_out entry with imgkind=fsc identified, aborting...; sp_project :: get_fsc'
-        if( cnt > 1 ) stop 'ERROR! multiple os_out entries with imgkind=fsc, aborting...; sp_project :: get_fsc'
+        if( cnt == 0 )THROW_HARD('no os_out entry with imgkind=fsc identified, aborting...; get_fsc')
+        if( cnt > 1 ) THROW_HARD('multiple os_out entries with imgkind=fsc, aborting...; get_fsc')
         ! set output
         deallocate(fsc_fname)
         call self%os_out%getter(ind, 'fsc', fsc_fname)
@@ -1408,14 +1393,13 @@ contains
             case('frc2D','frc3D')
                 ! all good
             case DEFAULT
-                write(*,*)'Invalid FRC kind: ', trim(which_imgkind)
-                stop 'sp_project :: get_frcs'
+                THROW_HARD('invalid FRC kind: '//trim(which_imgkind)//'; get_frcs')
         end select
         fail_here = .true.
         if( present(fail) )fail_here = fail
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
-        if( n_os_out == 0 ) stop 'ERROR! trying to fetch from empty os_out field; sp_project :: get_frcs'
+        if( n_os_out == 0 ) THROW_HARD('trying to fetch from empty os_out field; get_frcs')
         ! look for cavgs
         ind   = 0
         cnt   = 0
@@ -1432,8 +1416,8 @@ contains
         end do
         if( allocated(frcs) ) deallocate(frcs)
         if( fail_here )then
-            if( cnt > 1 )  stop 'ERROR! multiple os_out entries with imgkind=frcXD, aborting...; sp_project :: get_frcs'
-            if( cnt == 0 ) stop 'ERROR! no os_out entry with imgkind=frcsXD identified, aborting...; sp_project :: get_frcs'
+            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=frcXD, aborting...; get_frcs')
+            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind=frcsXD identified, aborting...; get_frcs')
         endif
         ! set return values
         if( found )then
@@ -1462,8 +1446,7 @@ contains
                     if( self%os_out%isthere(i,'fromp').and.self%os_out%isthere(i,'top') )then
                         nptcls = nptcls + nint(self%os_out%get(i,'top')) - nint(self%os_out%get(i,'fromp')) + 1
                     else
-                        write(*,*) 'Missing fromp and top entries in cavg ', i
-                        stop 'Missing fromp and top entries in cavg ; sp_project :: get_imginfo_from_osout'
+                        THROW_HARD('Missing fromp and top entries in cavg; get_imginfo_from_osout')
                     endif
                 endif
             endif
@@ -1494,7 +1477,7 @@ contains
             if( nint(self%os_stk%get(nos,'top')) /=  get_nptcls )then
                 write(*,*) 'nptcls from ptcls', get_nptcls
                 write(*,*) 'nptcls from top', nint(self%os_stk%get(nos,'top'))
-                stop 'ERROR! total # particles .ne. last top index; sp_project :: get_nptcls'
+                THROW_HARD('total # particles .ne. last top index; get_nptcls')
             endif
         endif
     end function get_nptcls
@@ -1505,7 +1488,7 @@ contains
         get_box  = 0
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'ERROR! empty os_stk field! sp_project :: get_box'
+            THROW_HARD('empty os_stk field! get_box')
         endif
         get_box = nint( self%os_stk%get(1,'box') )
     end function get_box
@@ -1516,7 +1499,7 @@ contains
         get_smpd  = 0.
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            stop 'ERROR! empty os_stk field! sp_project :: get_smpd'
+            THROW_HARD('empty os_stk field! get_smpd')
         endif
         get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
@@ -1569,8 +1552,7 @@ contains
                 get_ctfflag = 'no'
                 return
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_ctfflag'
+                THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfflag')
         end select
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
@@ -1596,12 +1578,11 @@ contains
             case('yes')
                 get_ctfflag_type = CTFFLAG_YES
             case('mul')
-                stop 'ERROR ctf=mul deprecated; simple_sp_project :: get_ctfflag_type'
+                THROW_HARD('ctf=mul depreciated; get_ctfflag_type')
             case('flip')
                 get_ctfflag_type = CTFFLAG_FLIP
             case DEFAULT
-                print *, 'ctf flag:', trim(ctfflag)
-                stop 'Unsupported ctf flag; simple_sp_project :: get_ctfflag_type'
+                THROW_HARD('unsupported ctf flag: '//trim(ctfflag)//'; get_ctfflag_type')
         end select
     end function get_ctfflag_type
 
@@ -1640,8 +1621,7 @@ contains
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: get_ctfparams'
+                THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfparams')
         end select
         ! extract the CTF parameters
         ! do the index mapping
@@ -1650,8 +1630,7 @@ contains
         if( self%os_stk%isthere(stkind, 'smpd') )then
             ctfvars%smpd = self%os_stk%get(stkind, 'smpd')
         else
-            write(*,*) 'ERROR! smpd (sampling distance) lacking in os_stk and ptcl fields'
-            stop 'sp_project :: get_ctfparams'
+            THROW_HARD('smpd (sampling distance) lacking in os_stk and ptcl fields; get_ctfparams')
         endif
         ! CTF flag
         if( self%os_stk%isthere(stkind, 'ctf') )then
@@ -1662,41 +1641,37 @@ contains
         l_noctf = .false.
         select case(trim(ctfflag))
             case(NIL)
-                write(*,*) 'ERROR! ctf key lacking in os_stk_field & ptcl fields'
-                stop 'sp_project :: get_ctfparams'
+                THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
             case('no')
                 ctfvars%ctfflag = CTFFLAG_NO
                 l_noctf = .true.
             case('yes')
                 ctfvars%ctfflag = CTFFLAG_YES
             case('mul')
-                stop 'ERROR ctf=mul deprecated; simple_sp_project :: get_ctfparams'
+                THROW_HARD('ctf=mul depreciated; sget_ctfparams')
             case('flip')
                 ctfvars%ctfflag = CTFFLAG_FLIP
             case DEFAULT
-                write(*,*)'unsupported ctf flag:', trim(ctfflag), stkind, iptcl
-                stop 'unsupported ctf flag; simple_sp_project :: get_ctfparams'
+                write(*,*) 'stkind/iptcl: ', stkind, iptcl
+                THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
         end select
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')
         else
-            write(*,*) 'ERROR! kv (acceleration voltage) lacking in os_stk_field'
-            stop 'sp_project :: get_ctfparams'
+            THROW_HARD('kv (acceleration voltage) lacking in os_stk_field; get_ctfparams')
         endif
         ! spherical aberration constant
         if( self%os_stk%isthere(stkind, 'cs') )then
             ctfvars%cs = self%os_stk%get(stkind, 'cs')
         else
-            write(*,*) 'ERROR! cs (spherical aberration constant) lacking in os_stk_field'
-            stop 'sp_project :: get_ctfparams'
+            THROW_HARD('cs (spherical aberration constant) lacking in os_stk_field; get_ctfparams')
         endif
         ! fraction of amplitude contrast
         if( self%os_stk%isthere(stkind, 'fraca') )then
             ctfvars%fraca = self%os_stk%get(stkind, 'fraca')
         else
-            write(*,*) 'ERROR! fraca (fraction of amplitude contrast) lacking in os_stk_field'
-            stop 'sp_project :: get_ctfparams'
+            THROW_HARD('fraca (fraction of amplitude contrast) lacking in os_stk_field; get_ctfparams')
         endif
         if( l_noctf )then
             ctfvars%dfx     = 0.
@@ -1709,9 +1684,8 @@ contains
         if( ptcl_field%isthere(iptcl, 'dfx') )then
             ctfvars%dfx = ptcl_field%get(iptcl, 'dfx')
         else
-            write(*,*) 'ERROR! dfx (defocus in x) lacking in ptcl_field'
             call ptcl_field%print_(iptcl)
-            stop 'sp_project :: get_ctfparams'
+            THROW_HARD('dfx (defocus in x) lacking in ptcl_field; get_ctfparams')
         endif
         ! defocus in y
         dfy_was_there = .false.
@@ -1726,8 +1700,7 @@ contains
             ctfvars%angast = ptcl_field%get(iptcl, 'angast')
         else
             if( dfy_was_there )then
-                write(*,*) 'ERROR! astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field'
-                stop 'sp_project :: get_ctfparams'
+                THROW_HARD('astigmatic CTF model requires angast (angle of astigmatism) lacking in os_stk field; get_ctfparams')
             else
                 ctfvars%angast = 0.
             endif
@@ -1773,7 +1746,7 @@ contains
             case('compenv')
                 os = self%compenv
             case DEFAULT
-                stop 'unsupported which_imgkind flag; sp_project :: get_sp_oris'
+                THROW_HARD('unsupported which_imgkind flag; get_sp_oris')
         end select
     end subroutine get_sp_oris
 
@@ -1797,8 +1770,7 @@ contains
             case('out')
                 os_ptr => self%os_out
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype)
-                stop 'unsupported oritype; sp_project :: ptr2segment'
+                THROW_HARD('unsupported oritype: '//trim(oritype)//'; ptr2segment')
         end select
     end subroutine ptr2oritype
 
@@ -1818,8 +1790,7 @@ contains
             case('cls3D')
                 os => self%os_cls3D
             case DEFAULT
-                write(*,*) 'oritype: ', trim(oritype), ' is not supported by this method'
-                stop 'sp_project :: is_virgin_field'
+                THROW_HARD('oritype: '//trim(oritype)//' not supported by is_virgin_field')
         end select
         n = os%get_noris()
         if( n == 0 )then
@@ -1861,7 +1832,7 @@ contains
             case('compenv')
                 self%compenv   = os
             case DEFAULT
-                stop 'unsupported which_imgkind flag; sp_project :: set_sp_oris'
+                THROW_HARD('unsupported which_imgkind flag; set_sp_oris')
         end select
     end subroutine set_sp_oris
 
@@ -1878,9 +1849,7 @@ contains
         real    :: scale_factor, smpd_sc, msk_sc, smpd, msk
         integer :: box, box_sc, istk, n_os_stk
         n_os_stk = self%os_stk%get_noris()
-        if( n_os_stk == 0 )then
-            stop 'Empty stack object! simple_sp_project :: scale_projfile'
-        endif
+        if( n_os_stk == 0 ) THROW_HARD('Empty stack object! scale_projfile')
         call self%projinfo%getter(1, 'projfile', projfile)
         call self%projinfo%getter(1, 'projname', projname)
         if( trim(projname).eq.'' )then
@@ -2004,8 +1973,7 @@ contains
         integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
         real      :: corr, rproj, rstate
         if( self%is_virgin_field('cls3D') )then
-            write(*,*) 'ERROR! os_cls3D is virgin field; nothing to map back'
-            stop 'sp_project :: map2ptcls'
+            THROW_HARD('os_cls3D is virgin field; nothing to map back; map2ptcls')
         endif
         if( self%is_virgin_field('ptcl2D') )then
             ! 2D was not done with SIMPLE but class averages imported from elsewhere
@@ -2095,16 +2063,14 @@ contains
         integer :: isegment
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: read'
+                THROW_HARD('format of: '//trim(fname)//' not supported; read')
             endif
             projfile = trim(fname)
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         if( .not. file_exists(trim(projfile)) )then
-            write(*,*) 'fname: ', trim(projfile)
-            stop 'inputted file does not exist; sp_project :: read'
+            THROW_HARD('inputted file: '// trim(projfile)//' does not exist; read')
         endif
         call self%bos%open(projfile)
         do isegment=1,self%bos%get_n_segments()
@@ -2118,12 +2084,10 @@ contains
         character(len=*),  intent(in)    :: fname
         integer :: isegment
         if( .not. file_exists(trim(fname)) )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'inputted file does not exist; sp_project :: read'
+            THROW_HARD('inputted file: '//trim(fname)//' does not exist; read_ctfparams_state_eo')
         endif
         if( fname2format(fname) .ne. 'O' )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'file format not supported; sp_project :: read'
+            THROW_HARD('file format of: '//trim(fname)//' not supported; read_ctfparams_state_eo')
         endif
         call self%bos%open(fname)
         do isegment=1,self%bos%get_n_segments()
@@ -2139,8 +2103,7 @@ contains
         integer, optional, intent(in)    :: fromto(2)
         integer :: isegment
         if( .not. file_exists(trim(fname)) )then
-            write(*,*) 'fname: ', trim(fname)
-            stop 'inputted file does not exist; sp_project :: read_segment'
+            THROW_HARD('inputted file: '//trim(fname)//' does not exist; read_segment')
         endif
         select case(fname2format(fname))
             case('O')
@@ -2173,11 +2136,10 @@ contains
                     case('compenv')
                         call self%compenv%read(fname)
                     case DEFAULT
-                        stop 'unsupported oritype flag; sp_project :: read_segment'
+                        THROW_HARD('unsupported oritype flag; read_segment')
                 end select
             case DEFAULT
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: read_segment'
+                THROW_HARD('file format of: '//trim(fname)//' not supported; read_segment')
         end select
     end subroutine read_segment
 
@@ -2232,8 +2194,7 @@ contains
         integer :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: write'
+                THROW_HARD('file format of: '//trim(fname)//' not supported; write')
             endif
             projfile = trim(fname)
         else
@@ -2261,8 +2222,7 @@ contains
         integer :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: write'
+                THROW_HARD('file format of: '//trim(fname)//'not supported; sp_project :: write')
             endif
             projfile = trim(fname)
         else
@@ -2286,7 +2246,7 @@ contains
         integer, optional, intent(in)    :: fromto(2)
         select case(fname2format(fname))
             case('O')
-                stop 'write_segment2txt is not supported for *.simple project files; sp_project :: write_segment2txt'
+                THROW_HARD('write_segment2txt is not supported for *.simple project files; write_segment2txt')
             case('T')
                 ! *.txt plain text ori file
                 select case(trim(oritype))
@@ -2351,11 +2311,10 @@ contains
                             write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment2txt'
                         endif
                     case DEFAULT
-                        stop 'unsupported oritype flag; sp_project :: write_segment2txt'
+                        THROW_HARD('unsupported oritype flag; write_segment2txt')
                 end select
             case DEFAULT
-                write(*,*) 'fname: ', trim(fname)
-                stop 'file format not supported; sp_project :: write_segment2txt'
+                THROW_HARD('file format of: '//trim(fname)//'not supported; write_segment2txt')
         end select
     end subroutine write_segment2txt
 
@@ -2469,7 +2428,7 @@ contains
                     write(*,*) 'No compenv-type oris available to print; sp_project :: print_segment'
                 endif
             case DEFAULT
-                stop 'unsupported oritype flag; sp_project :: print_segment'
+                THROW_HARD('unsupported oritype flag; print_segment')
         end select
     end subroutine print_segment
 
@@ -2570,7 +2529,7 @@ contains
             case('compenv')
                 oritype2segment = COMPENV_SEG
             case DEFAULT
-                stop 'unsupported oritype flag; sp_project :: oritype_flag2isgement'
+                THROW_HARD('unsupported oritype flag; oritype_flag2isgement')
         end select
     end function oritype2segment
 

@@ -6,6 +6,7 @@ implicit none
 
 public :: ctf_estimate_iter
 private
+#include "simple_local_flags.inc"
 
 type :: ctf_estimate_iter
   contains
@@ -32,7 +33,7 @@ contains
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
         if( nframes /= 1 )then
             print *, 'nframes: ', nframes
-            stop 'single frame input to ctf_estimate assumed; simple_ctf_estimate_iter :: iterate'
+            THROW_HARD('single frame input to ctf_estimate assumed; iterate')
         endif
         ldim(3) = 1
         call micrograph%new(ldim, ctfvars%smpd)

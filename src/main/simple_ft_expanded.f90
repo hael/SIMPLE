@@ -1,9 +1,4 @@
 ! expanded Fourier transform class for improved cache utilisation
-
-! Strategy:
-! working version first -> hack
-! then on Monday we can unscramble the classes
-
 module simple_ft_expanded
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -13,6 +8,7 @@ implicit none
 
 public :: ft_expanded, ft_exp_reset_tmp_pointers
 private
+#include "simple_local_flags.inc"
 
 complex(dp), parameter     :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter     :: denom = 0.00075_dp ! denominator for rescaling of cost function
@@ -83,7 +79,7 @@ contains
         call self%kill
         ! set constants
         self%ldim = img%get_ldim()
-        if( self%ldim(3) > 1 ) stop 'only 4 2D images; simple_ft_expanded::new_1'
+        if( self%ldim(3) > 1 ) THROW_HARD('only 4 2D images; new_1')
         self%smpd = img%get_smpd()
         self%hp   = hp
         self%lp   = lp
@@ -173,7 +169,7 @@ contains
             call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
             self%cmat = cmplx(0.,0.)
         else
-            stop 'self_in does not exists; simple_ft_expanded::new_3'
+            THROW_HARD('self_in does not exists; new_3')
         endif
     end subroutine new_3
 
@@ -185,7 +181,7 @@ contains
             call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
             self%cmat = self_in%cmat
         else
-            stop 'self_in does not exists; simple_ft_expanded::copy'
+            THROW_HARD('self_in does not exists; copy')
         endif
     end subroutine copy
 
@@ -251,7 +247,7 @@ contains
                 self%cmat = self%cmat + self2add%cmat*ww
                 !$omp end parallel workshare
             else
-                stop 'cannot sum ft_expanded objects of different dims; add; simple_ft_expanded'
+                THROW_HARD('cannot sum ft_expanded objects of different dims; add')
             endif
         else
             self = self2add
@@ -273,10 +269,10 @@ contains
                 self%cmat = self%cmat-ww*self2subtr%cmat
                 !$omp end parallel workshare
             else
-                stop 'cannot subtract ft_expanded objects of different dims; subtr; simple_ft_expanded'
+                THROW_HARD('cannot subtract ft_expanded objects of different dims; subtr')
             endif
         else
-            stop 'the object to subtract from does not exist; subtr; simple_ft_expanded'
+            THROW_HARD('the object to subtract from does not exist; subtr')
         endif
     end subroutine subtr
 
@@ -331,13 +327,13 @@ contains
                 else
                     write(*,*) 'self     lims: ', self%lims
                     write(*,*) 'self_out lims: ', self_out%lims
-                    stop 'input/output objects have nonconforming dims; simple_ft_expanded::shift'
+                    THROW_HARD('input/output objects have nonconforming dims; shift')
                 endif
             else
-                stop 'output object does not exist; simple_ft_expanded::shift'
+                THROW_HARD('output object does not exist; shift')
             endif
         else
-            stop 'cannot shift non-existent object; simple_ft_expanded::shift'
+            THROW_HARD('cannot shift non-existent object; shift')
         endif
     end subroutine shift
 
@@ -383,7 +379,7 @@ contains
             self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+            THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_shifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end function corr_shifted_8
 
@@ -415,7 +411,7 @@ contains
             self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+            THROW_HARD('cannot correlate expanded_ft:s with different dims; :corr_gshifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_gshifted_8
 
@@ -451,7 +447,7 @@ contains
             self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
             self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            stop 'cannot correlate expanded_ft:s with different dims; ft_expanded::corr_shifted'
+            THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_fdfshifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_fdfshifted_8
 

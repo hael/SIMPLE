@@ -9,6 +9,7 @@ implicit none
 
 public :: opt_powell
 private
+#include "simple_local_flags.inc"
 
 type, extends(optimizer) :: opt_powell
     private
@@ -21,8 +22,6 @@ type, extends(optimizer) :: opt_powell
     procedure :: minimize     => powell_minimize
     procedure :: kill         => kill_opt_powell
 end type opt_powell
-
-! #include "simple_local_flags.inc"
 
 contains
 
@@ -53,7 +52,7 @@ contains
         integer :: i, j
         logical :: arezero(spec%ndim)
         if( .not. associated(spec%costfun) )then
-            stop 'cost function not associated in opt_spec; powell_minimize; simple_opt_powell'
+            THROW_HARD('cost function not associated in opt_spec; powell_minimize; simple_opt_powell')
         endif
         ! initialise nevals counters
         spec%nevals  = 0

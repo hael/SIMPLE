@@ -106,8 +106,7 @@ contains
                 call even%mul(mskvol)
                 call odd%mul(mskvol)
             else
-                write(*,*) 'the inputted mskfile: ', trim(params%mskfile)
-                stop 'does not exists in cwd; commander_volops :: exec_fsc'
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_fsc')
             endif
         else
             ! spherical masking
@@ -193,8 +192,7 @@ contains
         ! check volume, gets correct smpd & box
         call spproj%get_vol('vol', state, vol_fname, smpd, box)
         if( .not.file_exists(vol_fname) )then
-            write(*,*)'Volume does not exist; simple_commander_volops :: exec_postprocess:', trim(vol_fname)
-            stop 'Volume does not exist; simple_commander_volops :: exec_postprocess'
+            THROW_HARD('volume: '//trim(vol_fname)//' does not exist; exec_postprocess')
         endif
         ! check fsc filter
         has_fsc = .false.
@@ -204,8 +202,7 @@ contains
             call spproj%get_fsc(state, fsc_fname, fsc_box)
             params%fsc = trim(fsc_fname)
             if( .not.file_exists(params%fsc) )then
-                write(*,*) 'FSC file: ', trim(params%fsc), ' not found'
-                stop 'FSC file: not found'
+                THROW_HARD('FSC file: '//trim(params%fsc)//' not found')
             else
                 has_fsc = .true.
             endif
@@ -218,8 +215,7 @@ contains
             call spproj%get_vol('vol_filt', state, vol_filt_fname, smpd, box)
             params%vol_filt = trim(vol_filt_fname)
             if( .not.file_exists(params%vol_filt) )then
-                write(*,*) 'Volume filter: ', trim(params%vol_filt), ' not found'
-                stop 'Volume filter file: not found'
+                THROW_HARD('volume filter: '//trim(params%vol_filt)//' not found')
             else
                 has_vol_filt = .true.
             endif
@@ -228,8 +224,7 @@ contains
         has_mskfile = .false.
         if( cline%defined('mskfile') )then
             if( .not.file_exists(params%mskfile) )then
-                write(*,*) 'Volume mask file: ', trim(params%vol_filt), ' not found'
-                stop 'Volume mask file: not found'
+                THROW_HARD('volume mask file: '//trim(params%vol_filt)//' not found')
             else
                 has_mskfile = .true.
             endif
@@ -265,8 +260,7 @@ contains
             ! optimal low-pass filter from FSC
             call vol%apply_filter(optlp)
         else
-            write(*,*) 'no method for low-pass filtering defined; give fsc|lp|vol_filt on command line'
-            stop 'simple_commander_volops :: exec_postprocess'
+            THROW_HARD('no method for low-pass filtering defined; give fsc|lp|vol_filt on command line; exec_postprocess')
         endif
         call vol_copy%copy(vol)
         ! B-factor
@@ -287,11 +281,10 @@ contains
                 write(*,*) '(1) postproc vol without bfac or automsk'
                 write(*,*) '(2) Use UCSF Chimera to look at the volume'
                 write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
-                stop 'commander_volops :: postprocess'
+                THROW_HARD('postprocess')
             endif
             if( .not. cline%defined('mw') )then
-                write(*,*) 'Molecular weight must be provided for auto-masking (MW)'
-                stop 'commander_volops :: postprocess'
+                THROW_HARD('molecular weight must be provided for auto-masking (MW); postprocess')
             endif
             call vol_copy%ifft
             call mskvol%automask3D(vol_copy)
@@ -345,7 +338,7 @@ contains
         type(image), allocatable :: imgs(:)
         integer                  :: i, loop_end
         if( .not. cline%defined('oritab') )then
-            if( .not. cline%defined('nspace') ) stop 'need nspace (for number of projections)!'
+            if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif
         call params%new(cline)
         if( cline%defined('oritab') )then
@@ -387,7 +380,7 @@ contains
         if( here )then
             call build%vol%read(params%vols(1))
         else
-            stop 'vol1 does not exists in cwd'
+            THROW_HARD('vol1 does not exists in cwd')
         endif
         if( params%stats .eq. 'yes' )then
             call build%vol%stats('foreground', ave, sdev, maxv, minv)
@@ -398,9 +391,9 @@ contains
             return
         endif
         if( params%guinier .eq. 'yes' )then
-            if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for Guinier plot'
-            if( .not. cline%defined('hp')   ) stop 'need hp (high-pass limit) input for Guinier plot'
-            if( .not. cline%defined('lp')   ) stop 'need lp (low-pass limit) input for Guinier plot'
+            if( .not. cline%defined('smpd') ) THROW_HARD('need smpd (sampling distance) input for Guinier plot')
+            if( .not. cline%defined('hp')   ) THROW_HARD('need hp (high-pass limit) input for Guinier plot')
+            if( .not. cline%defined('lp')   ) THROW_HARD('need lp (low-pass limit) input for Guinier plot')
             params%bfac = build%vol%guinier_bfac(params%hp, params%lp)
             write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         else
@@ -417,8 +410,8 @@ contains
                 call build%vol%apply_bfac(params%bfac)
             end if
             if( cline%defined('e1') .or. cline%defined('e2') .or. cline%defined('e3') )then
-                if( .not. cline%defined('smpd') ) stop 'need smpd (sampling distance) input for volume rotation'
-                if( .not. cline%defined('msk')  ) stop 'need msk (mask radius) input for volume rotation'
+                if( .not. cline%defined('smpd') ) THROW_HARD('need smpd (sampling distance) input for volume rotation')
+                if( .not. cline%defined('msk')  ) THROW_HARD('need msk (mask radius) input for volume rotation')
                 call o%new
                 call o%set_euler([params%e1,params%e2,params%e3])
                 shvec     = [params%xsh,params%ysh,params%zsh]
@@ -462,7 +455,7 @@ contains
             if(alloc_stat.ne.0)call allocchk('In: simple_volume_smat, 1',alloc_stat)
             ! read the pairs
             allocate(fname, source='pairs_part'//int2str_pad(params%part,params%numlen)//'.bin')
-            if( .not. file_exists(fname) ) stop 'I/O error; simple_volume_smat'
+            if( .not. file_exists(fname) ) THROW_HARD('I/O; simple_volume_smat')
             call fopen(funit, status='OLD', action='READ', file=fname, access='STREAM', iostat=io_stat)
             if(io_stat/=0) call fileiochk('volops; vol_smat opening ', io_stat)
             read(unit=funit,pos=1,iostat=io_stat) pairs(params%fromp:params%top,:)
@@ -777,7 +770,7 @@ contains
                 status= simple_rename('rotated_from_make_pickrefs'//params%ext, 'pickrefs'//params%ext)
             endif
         else
-            stop 'need input volume (vol1) or class averages (stk) to generate picking references'
+            THROW_HARD('need input volume (vol1) or class averages (stk) to generate picking references')
         endif
         call del_file('rotated_from_make_pickrefs'//params%ext)
         ! end gracefully

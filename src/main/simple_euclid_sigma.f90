@@ -1,50 +1,48 @@
 module simple_euclid_sigma
 include 'simple_lib.f08'
-use simple_parameters,               only: params_glob
-use simple_polarft_corrcalc,         only: polarft_corrcalc, pftcc_glob
-!use simple_strategy3D_alloc,         only: s3D              !cannot use here bc of cyclical dependencies
-use simple_oris, only: oris
+use simple_parameters,       only: params_glob
+use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
+use simple_oris,             only: oris
 implicit none
 
 public :: euclid_sigma, eucl_sigma_glob
 private
+#include "simple_local_flags.inc"
 
 type euclid_sigma
     private
-    integer                         :: file_header(4)
-    integer                         :: nptcls      = 0
-    logical                         :: exists      = .false.
-    integer                         :: headsz      = 0
-    integer                         :: sigmassz    = 0
-    character(len=STDLEN)           :: fname
-    logical                         :: do_divide   = .false.
-    real,    allocatable            :: divide_by(:)
-    real,    allocatable            :: sigma2_noise(:,:)
-    logical, allocatable            :: sigma2_exists_msk(:)
-    integer, allocatable            :: pinds(:)
+    integer               :: file_header(4)
+    integer               :: nptcls      = 0
+    logical               :: exists      = .false.
+    integer               :: headsz      = 0
+    integer               :: sigmassz    = 0
+    character(len=STDLEN) :: fname
+    logical               :: do_divide   = .false.
+    real,    allocatable  :: divide_by(:)
+    real,    allocatable  :: sigma2_noise(:,:)
+    logical, allocatable  :: sigma2_exists_msk(:)
+    integer, allocatable  :: pinds(:)
 contains
     ! constructor
-    procedure                       :: new
+    procedure          :: new
     ! I/O
-    procedure                       :: read
-    procedure                       :: create_empty
-    procedure                       :: calc_and_write_sigmas
-    procedure, private              :: open_and_check_header
+    procedure          :: read
+    procedure          :: create_empty
+    procedure          :: calc_and_write_sigmas
+    procedure, private :: open_and_check_header
     ! getters / setters
-    procedure                       :: sigma2_exists
-    procedure                       :: set_do_divide
-    procedure                       :: get_do_divide
-    procedure                       :: set_divide_by
-    procedure                       :: get_divide_by
+    procedure          :: sigma2_exists
+    procedure          :: set_do_divide
+    procedure          :: get_do_divide
+    procedure          :: set_divide_by
+    procedure          :: get_divide_by
     ! destructor
-    procedure                       :: kill
+    procedure          :: kill
 end type euclid_sigma
 
 class(euclid_sigma), pointer :: eucl_sigma_glob => null()
 
 contains
-
-    ! constructor
 
     subroutine new( self, fname )
         class(euclid_sigma), target, intent(inout) :: self
@@ -124,8 +122,7 @@ contains
             success = self%open_and_check_header(funit)
             call fclose(funit, errmsg='euclid_sigma; write ')
             if (.not. success) then
-                write (*,*) 'ERROR: sigmas file has wrong dimensions. stop'
-                stop 1
+                THROW_HARD('sigmas file has wrong dimensions')
             end if
         end if
         self%sigma2_noise = 0.
@@ -209,8 +206,8 @@ contains
         integer,             intent(in) :: iptcl
         logical                         :: res
         if (self%pinds(iptcl) .eq. 0) then
-            write (*,*) 'error in simple_euclid_sigma: sigma2_exists. iptcl = ', iptcl
-            stop 'error in simple_euclid_sigma: sigma2_exists. iptcl wrong! '
+            write (*,*) 'iptcl = ', iptcl
+            THROW_HARD('sigma2_exists. iptcl index wrong!')
         else
             res = self%sigma2_exists_msk(self%pinds(iptcl))
         end if
@@ -236,8 +233,8 @@ contains
         class(euclid_sigma), intent(inout) :: self
         integer,             intent(in)    :: iptcl
         if (self%pinds(iptcl) .eq. 0) then
-            write (*,*) 'error in simple_euclid_sigma: set_divide_by. iptcl = ', iptcl
-            stop 'error in simple_euclid_sigma: set_divide_by. iptcl wrong! '
+            write (*,*) ' iptcl = ', iptcl
+            THROW_HARD('set_divide_by. iptcl index wrong!')
         else
             self%divide_by(:) = self%sigma2_noise(:,self%pinds(iptcl))
         end if

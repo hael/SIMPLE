@@ -82,10 +82,10 @@ contains
         call cline%set('oritype', 'mic')
         call params%new(cline)
         if( params%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
+            THROW_HARD('scale cannot be > 1; exec_preprocess')
         endif
         if( params%tomo .eq. 'yes' )then
-            stop 'tomography mode (tomo=yes) not yet supported!'
+            THROW_HARD('tomography mode (tomo=yes) not yet supported!')
         endif
         if( cline%defined('refs') )then
             l_pick = .true.
@@ -94,9 +94,7 @@ contains
         endif
         ! read in movies
         call spproj%read( params%projfile )
-        if( spproj%get_nmovies() == 0 )then
-            stop 'No movie to process!'
-        endif
+        if( spproj%get_nmovies() == 0 ) THROW_HARD('No movie to process!')
         ! output directories & naming
         output_dir_ctf_estimate   = PATH_HERE
         output_dir_motion_correct = PATH_HERE
@@ -130,7 +128,7 @@ contains
                 fromto(1) = params%fromp
                 fromto(2) = params%top
             else
-                stop 'fromp & top args need to be defined in parallel execution; exec_preprocess'
+                THROW_HARD('fromp & top args need to be defined in parallel execution; exec_preprocess')
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -210,10 +208,10 @@ contains
         type(image)      :: powspec, tmp, mask
         integer          :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
         if( cline%defined('stk') .and. cline%defined('filetab') )then
-            stop 'stk and filetab cannot both be defined; input either or!'
+            THROW_HARD('stk and filetab cannot both be defined; input either or!')
         endif
         if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
-            stop 'either stk or filetab need to be defined!'
+            THROW_HARD('either stk or filetab need to be defined!')
         endif
         call cline%set('oritype', 'stk')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
@@ -231,7 +229,7 @@ contains
         ! do the work
         if( cline%defined('stk') )then
             if( params%l_distr_exec )then
-                stop 'stk input incompatible with distributed exection; commander_preprocess :: powerspecs'
+                THROW_HARD('stk input incompatible with distributed exection; powerspecs')
             endif
             call build%img%new(params%ldim, params%smpd) ! img re-generated (to account for possible non-square)
             tmp = 0.0
@@ -309,22 +307,20 @@ contains
         ! sanity check
         nmovies = spproj%get_nmovies()
         if( nmovies == 0 )then
-            stop 'No movie to process!'
+            THROW_HARD('No movie to process!')
         endif
         if( params%scale > 1.05 )then
-            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_motion_correct'
+            THROW_HARD('scale cannot be > 1; exec_motion_correct')
         endif
         if( params%tomo .eq. 'yes' )then
             if( .not. params%l_dose_weight )then
                 write(*,*) 'tomo=yes only supported with dose weighting!'
-                stop 'give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)'
+                THROW_HARD('give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)')
             endif
         endif
         if( cline%defined('gainref') )then
             if(.not.file_exists(params%gainref) )then
-                write(*,*)'Gain reference could not be found: ', trim(params%gainref), '; simple_commander_preprocess::motion_correct'
-                stop 'Gain reference could not be found; simple_commander_preprocess::motion_correct'
-
+                THROW_HARD('gain reference: '//trim(params%gainref)//' not found; motion_correct')
             endif
         endif
         ! output directory & names
@@ -339,7 +335,7 @@ contains
             if( cline%defined('fromp') .and. cline%defined('top') )then
                 fromto = [params%fromp, params%top]
             else
-                stop 'fromp & top args need to be defined in parallel execution; simple_motion_correct'
+                THROW_HARD('fromp & top args need to be defined in parallel execution; motion_correct')
             endif
         else
             ! all movies
@@ -400,9 +396,7 @@ contains
         call params%new(cline)
         call spproj%read(params%projfile)
         ! read in integrated movies
-        if( spproj%get_nintgs() == 0 )then
-            stop 'No integrated micrograph to process!'
-        endif
+        if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
@@ -414,7 +408,7 @@ contains
                 fromto(1) = params%fromp
                 fromto(2) = params%top
             else
-                stop 'fromp & top args need to be defined in parallel execution; simple_ctf_estimate'
+                THROW_HARD('fromp & top args need to be defined in parallel execution; exec_ctf_estimate')
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
@@ -434,8 +428,7 @@ contains
                 else if( o%isthere('intg') )then
                     call o%getter('intg', intg_forctf)
                 else
-                    write(*,*) 'ERROR! No image available (forctf|intg) for CTF fitting'
-                    stop 'commander_preprocess :: exec_ctf_estimate'
+                    THROW_HARD('no image available (forctf|intg) for CTF fittings :: exec_ctf_estimate')
                 endif
                 ctfvars = o%get_ctfvars()
                 call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir))
@@ -519,14 +512,14 @@ contains
                 fromto(1) = params%fromp
                 fromto(2) = params%top
             else
-                stop 'fromp & top args need to be defined in parallel execution; simple_pick'
+                THROW_HARD('fromp & top args need to be defined in parallel execution; exec_pick')
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
         ! read in integrated movies
         call spproj%read_segment('mic', params%projfile, fromto)
         if( spproj%get_nintgs() == 0 )then
-            stop 'No integrated micrograph to process!'
+            THROW_HARD('No integrated micrograph to process!')
         endif
         ! main loop
         cnt = 0
@@ -584,9 +577,7 @@ contains
         if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
         call spproj%read_segment(params%oritype, params_glob%projfile)
-        if( spproj%get_nintgs() == 0 )then
-            stop 'No integrated micrograph to process!'
-        endif
+        if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         ntot = spproj%os_mic%get_noris()
         ! input directory
         if( cline%defined('dir_box') )then
@@ -596,11 +587,11 @@ contains
                 call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
                 if(.not.allocated(boxfiles))then
                     write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 1'
-                    stop 'No box file found ; simple_commander_preprocess::exec_extract 1'
+                    THROW_HARD('No box file found; exec_extract, 1')
                 endif
                 if(size(boxfiles)==0)then
                     write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 2'
-                    stop 'No box file found ; simple_commander_preprocess::exec_extract 2'
+                    THROW_HARD('No box file found; exec_extract 2')
                 endif
                 do i=1,size(boxfiles)
                     call simple_abspath(boxfiles(i),boxfile_name,check_exists=.false.)
@@ -608,7 +599,7 @@ contains
                 enddo
             else
                 write(*,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
-                stop 'Box directory does not exist; simple_commander_preprocess::exec_extract'
+                THROW_HARD('box directory does not exist; exec_extract')
             endif
         endif
         ! sanity checks
@@ -637,7 +628,7 @@ contains
             endif
             ! get number of frames from stack
             call find_ldim_nptcls(mic_name, lfoo, nframes )
-            if( nframes > 1 ) stop 'multi-frame extraction no longer supported; commander_preproc :: exec_extract'
+            if( nframes > 1 ) THROW_HARD('multi-frame extraction not supported; exec_extract')
             ! update mask
             mics_mask(imic) = .true.
             nmics = nmics + 1
@@ -656,8 +647,8 @@ contains
             endif
         enddo
         call spproj%kill
-        if( nmics == 0 ) stop 'No particles to extract! commander_preproc :: exec_extract'
-        if( params%box == 0 )stop 'ERROR! box cannot be zero; commander_preproc :: exec_extract'
+        if( nmics == 0 )     THROW_HARD('No particles to extract! exec_extract')
+        if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
         ! init
         call build%build_general_tbox(params, cline, do3d=.false.)
         call micrograph%new([ldim(1),ldim(2),1], params%smpd)
@@ -694,13 +685,13 @@ contains
                 call boxfile%readNextDataLine(boxdata(iptcl,:))
                 box = nint(boxdata(iptcl,3))
                 if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
-                    stop 'ERROR! Only square windows are currently allowed; commander_preproc :: exec_extract'
+                    THROW_HARD('only square windows allowed; exec_extract')
                 endif
                 ! modify coordinates if change in box (shift by half the difference)
                 if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
                 if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
                     write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
-                    stop 'ERROR! inconsistent box sizes in box files; commander_preproc :: exec_extract'
+                    THROW_HARD('inconsistent box sizes in box files; exec_extract')
                 endif
                 ! update particle mask & movie index
                 if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
@@ -711,7 +702,7 @@ contains
             ctfparms%smpd = params%smpd
             if( o_mic%isthere('dfx') )then
                 if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
-                    stop 'ERROR! Input lacks at least cs, kv or fraca field; commander_preproc :: exec_extract'
+                    THROW_HARD('input lacks at least cs, kv or fraca; exec_extract')
                 endif
                 ! clean micrograph stats before transfer to particles
                 call o_mic%delete_entry('xdim')
@@ -817,14 +808,12 @@ contains
         ! parse parameters
         call params%new(cline)
         if( params%scale > 1.01 )then
-            stop 'scale cannot be > 1; simple_commander_preprocess :: exec_preprocess'
+            THROW_HARD('scale cannot be > 1; exec_preprocess')
         endif
-        if( params%stream.ne.'yes' ) stop 'Streaming only application'
+        if( params%stream.ne.'yes' ) THROW_HARD('streaming only application')
         ! read in movies
         call spproj%read( params%projfile )
-        if( spproj%get_nintgs() == 0 )then
-            stop 'No micrograph to process!'
-        endif
+        if( spproj%get_nintgs() == 0 ) THROW_HARD('no micrograph to process!')
         ! output directories
         if( params%stream.eq.'yes' )then
             output_dir_picker  = trim(DIR_PICKER)

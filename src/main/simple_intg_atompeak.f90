@@ -7,15 +7,14 @@ implicit none
 
 public :: set_intgvol, intg_nn, intg_shell, find_peaks
 public :: test_intg_atompeak
-
 private
 #include "simple_local_flags.inc"
 
-real,     allocatable :: rmat(:,:,:)
-real                  :: smpd        = 0.
-real                  :: msk         = 0.
-integer               :: rmat_dim(3) = 0
-logical               :: vol_set     = .false.
+real, allocatable :: rmat(:,:,:)
+real              :: smpd        = 0.
+real              :: msk         = 0.
+integer           :: rmat_dim(3) = 0
+logical           :: vol_set     = .false.
 
 contains
 
@@ -24,8 +23,8 @@ contains
         real, optional, intent(in)    :: rmsk
         type(image) :: tmpvol
         call reset_vol
-        if(.not.vol%is_3d())stop 'volume only! simple_intg_atom_peak%set_vol'
-        if(vol%is_ft())stop 'Real space volume only! simple_intg_atom_peak%set_vol'
+        if(.not.vol%is_3d()) THROW_HARD('volume only! set_intgvol')
+        if(vol%is_ft())      THROW_HARD('Real space volume only! set_intgvol')
         rmat_dim = vol%get_ldim()
         smpd     = vol%get_smpd()
         if( present(rmsk) )then
@@ -43,7 +42,7 @@ contains
         real, intent(in) :: xyz_in(3)
         real    :: xyz(3), dists_sq(8), vec(3), vals(8)
         integer :: cnt, i,j,k, loc(1), fxyz(3)
-        if(.not.vol_set)stop 'no volume to interpolate; simple_intg_atom_peak%set_vol'
+        if(.not.vol_set) THROW_HARD('no volume to interpolate; intg_nn')
         xyz  = xyz_in / smpd
         fxyz = floor(xyz) + 1
         cnt  = 0

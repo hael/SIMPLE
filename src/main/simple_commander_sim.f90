@@ -78,11 +78,11 @@ contains
         tfun  = ctf(params%smpd, params%kv, params%cs, params%fraca)
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
-            if( .not. cline%defined('outfile') ) stop 'need unique output file for parallel jobs'
+            if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
         else
             if( .not. cline%defined('outfile') ) params%outfile = 'simulated_oris'//trim(TXT_EXT)
         endif
-        if( params%box == 0 ) stop 'box=0, something is fishy! Perhaps forgotten to input volume or stack?'
+        if( params%box == 0 ) THROW_HARD('box=0, something is fishy! Perhaps forgotten to input volume or stack?')
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then

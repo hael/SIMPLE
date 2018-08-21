@@ -13,6 +13,7 @@ public :: preprocess_stream_commander
 public :: cluster2D_stream_distr_commander
 public :: pick_extract_stream_distr_commander
 private
+#include "simple_local_flags.inc"
 
 type, extends(commander_base) :: preprocess_stream_commander
   contains
@@ -253,12 +254,10 @@ contains
         call params%new(cline)
         ! sanity
         if( .not.file_exists(params%projfile) )then
-            write(*,*) 'Project does not exist:', trim(params%projfile)
-            stop 'Project does not exist'
+            THROW_HARD('project file: '//trim(params%projfile)//' does not exist!')
         endif
         if( .not.file_exists(params%dir_target) )then
-            write(*,*) 'Folder does not exist:', trim(params%dir_target)
-            stop 'Folder does not exist!'
+            THROW_HARD('folder: '//trim(params%dir_target)//' does not exist!')
         endif
         call cline%set('stream','no') ! was only for parameters determination
         call cline%set('mkdir','no')
@@ -668,7 +667,7 @@ contains
         params_glob%split_mode = 'stream'
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
-        if( .not.file_exists(params%projfile) )stop 'Project does not exist!'
+        if( .not.file_exists(params%projfile) )THROW_HARD('project file: '//trim(params%projfile)//' does not exist!')
         spproj_list_fname = filepath(trim(params%dir_target),trim(STREAM_SPPROJFILES))
         ! read project info
         call orig_proj%read(params%projfile)

@@ -318,7 +318,7 @@ module canny_no_thresh_mod
           real, allocatable  :: rmat(:,:,:)
           ssigma = 0.33              !empirical experiments (papers advices)
           if(present(sigma)) ssigma = sigma
-          call img_in%scale_img([0.,255.])
+          call img_in%scale_pixels([0.,255.])
           call img_out%new(img_in%get_ldim(),1.)     !reset if not empty
           img_out = 0.
           rmat = img_out%get_rmat()
@@ -396,7 +396,7 @@ module canny_no_thresh_mod
             integer                    :: ldim(3)
             ssigma = 0.33              !empirical experiments (papers advices)
             if(present(sigma)) ssigma = sigma
-            call img_in%scale_img([0.,255.])
+            call img_in%scale_pixels([0.,255.])
             ldim = img_in%get_ldim()
             call calc_gradient(img_in, grad)
             m = median_img(grad) !I used the gradient, the source talks about the image itself
