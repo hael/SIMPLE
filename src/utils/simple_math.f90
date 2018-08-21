@@ -1,8 +1,7 @@
 ! various mathematical subroutines and functions
-
 module simple_math
 use simple_defs
-use simple_error, only: allocchk
+use simple_error, only: allocchk, simple_exception
 implicit none
 
 interface is_a_number
@@ -1006,7 +1005,7 @@ contains
         integer          :: n, k, h
         n = size(fsc)
         if( n < 3 )then
-            stop 'nonconforming size of fsc array; get_lplim_at_corr; simple_math'
+            call simple_exception('nonconforming size of fsc array; get_lplim_at_corr', __FILENAME__ , __LINE__)
         endif
         k = n-1
         do h=3,n-1
@@ -1327,7 +1326,8 @@ contains
         integer :: i, ir, j, l, ia, n
         real    :: ra
         n = size(rarr)
-        if( n /= size(iarr) ) stop 'nonconforming array sizes; math :: hpsort_1'
+        if( n /= size(iarr) )&
+        &call simple_exception('nonconforming array sizes; hpsort_1', __FILENAME__ , __LINE__)
         if( n < 2 ) return
         l  = n/2+1
         ir = n
@@ -1498,7 +1498,8 @@ contains
         integer :: i, ir, j, l, n
         real    :: ra, ra2
         n = size(rarr)
-        if( n /= size(rarr2) ) stop 'nonconforming array sizes; math :: hpsort_5'
+        if( n /= size(rarr2) )&
+        &call simple_exception('nonconforming array sizes; hpsort_5', __FILENAME__ , __LINE__)
         if( n < 2) return
         l  = n/2+1
         ir = n
@@ -1586,10 +1587,8 @@ contains
         integer :: loc(n), i, j, sz
         logical :: val_lt(n)
         sz = size(rarr)
-        if( sz < n )then
-            write(*,*) 'ERROR! cannot identify more maxima than elements in the array'
-            stop 'simple_math :: maxnloc_2'
-        endif
+        if( sz < n )&
+        &call simple_exception('cannot identify more maxima than elements in the array; maxnloc_2', __FILENAME__ , __LINE__)
         loc = (/(i,i=1,n)/)
         arr = rarr(:n)
         call hpsort(arr, loc)

@@ -52,6 +52,7 @@ contains
 end type cmdline
 
 contains
+    
     function constructor( key, carg, rarg ) result( self )
         character(len=*),  intent(in) :: key
         character(len=*),  intent(in), optional :: carg

@@ -280,7 +280,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(1) = trim(adjustl(v(1)))
                num_profile_vars = 1
             else
-               stop 'Error: Timer profile token 1 too long'
+               THROW_HARD('Timer profile token 1 too long')
             end if
          end if
          if (nVars .ge. 2 .and. v(2) .ne. "") then
@@ -288,7 +288,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(2) = trim(adjustl(v(2)))
                num_profile_vars = 2
             else
-               stop 'Error: Timer profile token 2 too long'
+               THROW_HARD('Timer profile token 2 too long')
             end if
          end if
          if (nVars .ge. 3 .and. v(3) .ne. "") then
@@ -296,7 +296,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(3) = trim(adjustl(v(3)))
                num_profile_vars = 3
             else
-               stop 'Error: Timer profile token 3 too long'
+               THROW_HARD('Timer profile token 3 too long')
             end if
          end if
          if (nVars .ge. 4 .and. v(4) .ne. "") then
@@ -304,7 +304,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(4) = trim(adjustl(v(4)))
                num_profile_vars = 4
             else
-               stop 'Error: Timer profile token 4 too long'
+               THROW_HARD('Timer profile token 4 too long')
             end if
          end if
          if (nVars .ge. 5 .and. v(5) .ne. "") then
@@ -312,7 +312,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(5) = trim(adjustl(v(5)))
                num_profile_vars = 5
             else
-               stop 'Error: Timer profile token 5 too long'
+               THROW_HARD('Timer profile token 5 too long')
             end if
         end if
         if (nVars .ge. 6 .and. v(6) .ne. "") then
@@ -320,7 +320,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(6) = trim(adjustl(v(6)))
                num_profile_vars = 6
             else
-               stop 'Error: Timer profile token 6 too long'
+               THROW_HARD('Timer profile token 6 too long')
             end if
          end if
          if (nVars .ge. 7 .and. v(7) .ne. "") then
@@ -328,7 +328,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(7) = trim(adjustl(v(7)))
                num_profile_vars = 7
             else
-               stop 'Error: Timer profile token 7 too long'
+               THROW_HARD('Timer profile token 7 too long')
             end if
          end if
          if (nVars .ge. 8 .and. v(8) .ne. "") then
@@ -336,7 +336,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(8) = trim(adjustl(v(8)))
                num_profile_vars = 8
             else
-               stop 'Error: Timer profile token 8 too long'
+               THROW_HARD('Timer profile token 8 too long')
             end if
          end if
          if (nVars .ge. 9 .and. v(9) .ne. "") then
@@ -344,7 +344,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(9) = trim(adjustl(v(9)))
                num_profile_vars = 9
             else
-               stop 'Error: Timer profile token 9 too long'
+               THROW_HARD('Timer profile token 9 too long')
             end if
          end if
          if (nVars .ge. 10 .and. v(10) .ne. "") then
@@ -352,12 +352,12 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
                profile_labels(10) = trim(adjustl(v(10)))
                num_profile_vars = 10
             else
-               stop 'Error: Timer profile token 10 too long'
+               THROW_HARD('Timer profile token 10 too long')
             end if
          end if
       end if
       if (nVars .ne. num_profile_vars) then
-         stop 'timer profile setup error: vars input > internal num_profile_vars'
+         THROW_HARD('timer profile setup error: vars input > internal num_profile_vars')
       end if
       num_profile_loops = nLoops
       if (allocated(profile_matrix)) deallocate (profile_matrix)

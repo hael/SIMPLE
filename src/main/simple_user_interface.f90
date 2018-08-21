@@ -4,7 +4,6 @@ implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui, write_ui_json
 private
-
 #include "simple_local_flags.inc"
 
 type simple_input_param
@@ -3048,8 +3047,7 @@ contains
             case('comp_ctrls')
                 call set(self%comp_ctrls, i)
             case DEFAULT
-                write(*,*) 'which field selector: ', trim(which)
-                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_1'
+                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_1')
         end select
 
         contains
@@ -3091,8 +3089,7 @@ contains
             case('comp_ctrls')
                 call set(self%comp_ctrls, i)
             case DEFAULT
-                write(*,*) 'which field selector: ', trim(which)
-                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_2'
+                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_2')
         end select
 
         contains
@@ -3132,8 +3129,7 @@ contains
             case('comp_ctrls')
                 call set(self%comp_ctrls, i)
             case DEFAULT
-                write(*,*) 'which field selector: ', trim(which)
-                stop 'unsupported parameter field; simple_user_interface :: simple_program :: set_input_2'
+                THROW_HARD('which field selector: '//trim(which)//' is unsupported; simple_program :: set_input_3')
         end select
 
         contains

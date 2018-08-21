@@ -327,7 +327,11 @@ contains
             subroutine amoeba_private
                 integer :: i,ilo,inhi,loc(1)
                 real :: rtol,ysave,ytry,ytmp
-                ndim=assert_eq(size(p,2),size(p,1)-1,size(y)-1,size(pb),'amoeba; simple_opt_subs')
+                if(size(p,2) == size(p,1)-1 .and. size(p,1)-1 == size(y)-1 .and. size(y)-1 == size(pb)) then
+                    ndim = size(p,2)
+                else
+                    THROW_HARD('assert eq failed; amoeba private')
+                end if
                 iter=0
                 psum(:)=sum(p(:,:),dim=1)
                 do

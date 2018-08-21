@@ -272,8 +272,7 @@ contains
                 self%ptcl_bfac_weights = 1.0
                 self%ptcl_bfac_norms   = real(params_glob%kstop - params_glob%kfromto(1) + 1) !< # resolution elements in the band-pass limited PFTs
             case DEFAULT
-                write(*,*) 'unsupported objective function: ', trim(params_glob%objfun)
-                stop 'ABORTING, simple_polarft_corrcalc :: new'
+                THROW_HARD('unsupported objective function: '//trim(params_glob%objfun)//'; new')
         end select
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
@@ -574,7 +573,7 @@ contains
         if( roind < 1 .or. roind > self%nrots )then
             print *, 'roind: ', roind
             print *, 'nrots: ', self%nrots
-            stop 'roind is out of range; get_rot; simple_polarft_corrcalc'
+            THROW_HARD('roind is out of range; get_rot')
         endif
         rot = self%angtab(roind)
     end function get_rot
@@ -667,8 +666,8 @@ contains
             res = .false.
         else
             if (self%pinds(iptcl) .eq. 0) then
-                write (*,*) 'error in simple_polarft_corrcalc: sigma2_exists. iptcl = ', iptcl
-                stop 'error in simple_polarft_corrcalc: is_euclid. iptcl wrong! '
+                write (*,*) 'sigma2_exists. iptcl = ', iptcl
+                THROW_HARD('is_euclid. iptcl index wrong!')
             else
                 res = self%sigma2_exists_msk(self%pinds(iptcl))
             end if
@@ -2435,7 +2434,7 @@ contains
         real, allocatable   :: corrmat(:,:)
         real    :: corrs(self%nrots)
         integer :: iref, iptcl, loc(1)
-        if( self%nptcls /= self%nrefs ) stop 'nptcls == nrefs in pftcc required; simple_corrmat :: calc_roinv_corrmat'
+        if( self%nptcls /= self%nrefs ) THROW_HARD('nptcls == nrefs in pftcc required; calc_roinv_corrmat')
         if( allocated(corrmat) ) deallocate(corrmat)
         allocate(corrmat(self%nptcls,self%nptcls), stat=alloc_stat)
         if(alloc_stat/=0)call allocchk('In: calc_roinv_corrmat; simple_corrmat')

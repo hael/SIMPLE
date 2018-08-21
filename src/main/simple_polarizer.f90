@@ -4,13 +4,12 @@ module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-
-use simple_image,      only: image
-
+use simple_image, only: image
 implicit none
 
 public :: polarizer
 private
+#include "simple_local_flags.inc"
 
 type, extends(image) :: polarizer
     private
@@ -46,7 +45,7 @@ contains
         real              :: loc(2)
         integer           :: win(2,2), lims(3,2)
         integer           :: i, k, l, cnt
-        if( .not. pftcc%exists() ) stop 'polarft_corrcalc object needs to be created; init_imgpolarizer; simple_projector'
+        if( .not. pftcc%exists() ) THROW_HARD('polarft_corrcalc object needs to be created; init_polarizer')
         call self%kill_polarizer
         self%pdim  = pftcc%get_pdim()
         kbwin      = kbinterpol(KBWINSZ, alpha)

@@ -2,10 +2,11 @@
 module simple_stardoc
 include 'simple_lib.f08'
 use simple_star_dict, only: star_dict
-
 implicit none
-private
+
 public :: stardoc
+private
+#include "simple_local_flags.inc"
 
 type starframes
     type(hash)  :: htab               !< hash table for the parameters
@@ -78,7 +79,6 @@ enumerator :: STAR_CAVGS=3
 enumerator :: STAR_PTCLS=4
 end enum
 
-#include "simple_local_flags.inc"
 integer, parameter :: MAX_STAR_ARGS_PER_LINE=16
 integer, parameter :: MIN_STAR_NBYTES = 10
 
@@ -159,10 +159,10 @@ contains
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then
-            stop 'file_size cannot be inquired; stardoc :: open'
+            THROW_HARD('file_size cannot be inquired; open')
         else if (filesz < MIN_STAR_NBYTES) then
             write(*,*) 'file: ', trim(filename)
-            stop 'file size too small to contain a header; stardoc :: open'
+            THROW_HARD('file size too small to contain a header; open')
         endif
 
         call self%read_header()
@@ -248,8 +248,7 @@ contains
         self%num_data_lines=0
         inData=.false.;inHeader=.false.
         if(.not.self%l_open)then
-            print *, " stardoc module read_header file not opened"
-            stop " simple_stardoc::read_header "
+            THROW_HARD("stardoc module read_header file not opened; read_header")
         endif
         ios=0
         cnt=1
@@ -333,7 +332,7 @@ contains
         !! End of first pass
         DebugPrint " STAR fields: ", self%num_data_elements, " detected with ", self%num_valid_elements, " in dictionary "
         DebugPrint " STAR data lines : ", self%num_data_lines
-        if(inHeader) stop "stardoc:: read_header parsing failed"
+        if(inHeader) THROW_HARD("read_header parsing failed")
         inData=.false.; inHeader=.false.
         cnt=1;
         allocate(self%param_starlabels(self%num_data_elements))
@@ -403,7 +402,7 @@ contains
                 if(nargsline /=  self%num_data_elements)then
                     print *, " Records on line mismatch ", nargsline,  self%num_data_elements
                     print *, "Line number ",idata, ":: ", line
-                    stop " line has insufficient elements "
+                    THROW_HARD("line has insufficient elements")
                 endif
                 cycle
             end if
@@ -474,8 +473,7 @@ contains
         nDataline=0; nargsOnDataline=0
 
         if(.not.self%l_open)then
-            print *, " stardoc module read_header file not opened"
-            stop " simple_stardoc::read_header "
+            THROW_HARD('stardoc module read_header file not opened')
         endif
         if(.not.allocated(experrootdir)) experrootdir= get_fpath(trim(self%current_file))
         if(allocated(self%data)) deallocate(self%data)
@@ -519,7 +517,7 @@ contains
                 if(nargsOnDataline /=  self%num_data_elements) then
                     print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
                     print *, line
-                    stop " line has insufficient elements "
+                    THROW_HARD("line has insufficient elements")
                 endif
                 self%data(nDataline)%str = trim(line)
                 if(allocated(lineparts))deallocate(lineparts)
@@ -644,7 +642,7 @@ contains
                 else
                     print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
                     print *, line
-                    stop " line has insufficient elements "
+                    THROW_HARD("line has insufficient elements")
                 endif
 
                 cycle

@@ -471,14 +471,14 @@ contains
         if( frcs%get_nprojs().ne.n )then
             write(*,*) '# imgs: ',n
             write(*,*) '# projection_frcs: ',frcs%get_nprojs()
-            stop 'Inconsistent dimensions in simple_procimgfile :: matchfilt_imgfile'
+            THROW_HARD('inconsistent dimensions; matchfilt_imgfile')
         endif
         call raise_exception_imgfile( n, ldim, 'matchfilt_imgfile' )
         call img%new(ldim,smpd)
         if( frcs%get_filtsz().ne.img%get_filtsz() )then
             write(*,*) 'img filtsz: ',img%get_filtsz()
             write(*,*) 'frcs filtsz: ',frcs%get_filtsz()
-            stop 'Inconsistent filter dimensions in simple_procimgfile :: matchfilt_imgfile'
+            THROW_HARD('Inconsistent filter dimensions; matchfilt_imgfile')
         endif
         write(*,'(a)') '>>> SHELL NORMALIZING AND FILTERING IMAGES'
         do i=1,n
@@ -651,7 +651,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'shift_imgfile' )
         rround = .false.
         if( present(round) ) rround = round
-        if( n /= o%get_noris() ) stop 'inconsistent nr entries; shift; simple_procimgfile'
+        if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; shift_imgfile')
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> SHIFTING IMAGES'
         do i=1,n
@@ -782,7 +782,7 @@ contains
         ldim(3)    = 1
         call raise_exception_imgfile( n, ldim, 'apply_ctf_imgfile' )
         ! do the work
-        if( n /= o%get_noris() ) stop 'inconsistent nr entries; apply_ctf; simple_procimgfile'
+        if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; apply_ctf_imgfile')
         call img%new(ldim,smpd)
         write(*,'(a)') '>>> APPLYING CTF TO IMAGES'
         do i=1,n
@@ -821,7 +821,7 @@ contains
         if( n /= o%get_noris() )then
             write(*,*) 'nr of entries in stack: ', n
             write(*,*) 'nr of entries in oris object: ', o%get_noris()
-            stop 'inconsistent nr entries; shrot; simple_procimgfile'
+            THROW_HARD('inconsistent nr entries; shrot_imgfile')
         endif
         call img%new(ldim,smpd)
         call img_rot%new(ldim,smpd)
@@ -974,7 +974,7 @@ contains
         else
             allocate(mask(nptcls), source=.true.)
         endif
-        if( count(mask) < nran )stop 'Insufficient images; simple_procimgfile%random_selection_from_imgfile'
+        if( count(mask) < nran )THROW_HARD('Insufficient images; random_selection_from_imgfile')
         rt = ran_tabu(nptcls)
         do i=1,nptcls
             if( .not. mask(i) ) call rt%insert(i)

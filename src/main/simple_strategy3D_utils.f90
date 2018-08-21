@@ -7,6 +7,11 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
+public :: extract_peaks, prob_select_peak, corrs2softmax_weights, states_reweight
+public :: estimate_ang_spread, convergence_stats_single, convergence_stats_multi, sort_corrs
+private
+#include "simple_local_flags.inc"
+
 contains
 
     subroutine extract_peaks( s, corrs, multistates )
@@ -25,14 +30,12 @@ contains
         do ipeak = 1, s%npeaks
             ref = s3D%proj_space_refinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
             if( ref < 1 .or. ref > s%nrefs )then
-                print *, 'ref: ', ref
-                stop 'ref index out of bound; strategy3D_utils :: extract_peaks'
+                THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peaks')
             endif
             if( l_multistates )then
                 state = s3D%proj_space_state(ref)
                 if( .not. s3D%state_exists(state) )then
-                    print *, 'empty state: ', state
-                    stop 'strategy3D_utils :: extract_peak'
+                    THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
                 endif
             endif
             inpl = s3D%proj_space_inplinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
@@ -72,15 +75,13 @@ contains
             ! stash reference index
             refs(ipeak) = s3D%proj_space_refinds_sorted_highest(s%ithr, s%nrefs - s%npeaks + ipeak)
             if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
-                print *, 'refs(ipeak): ', refs(ipeak)
-                stop 'refs(ipeak) index out of bound; strategy3D_utils :: prob_select_peak'
+                THROW_HARD('refs(ipeak) index: '//int2str(refs(ipeak))//' out of bound; prob_select_peak')
             endif
             ! stash state index
             if( params_glob%nstates > 1 )then
                 states(ipeak) = s3D%proj_space_state(refs(ipeak))
                 if( .not. s3D%state_exists(states(ipeak)) )then
-                    print *, 'empty states(ipeak): ', states(ipeak)
-                    stop 'strategy3D_utils :: prob_select_peak'
+                    THROW_HARD('empty states(ipeak): '//int2str(states(ipeak))//' prob_select_peak')
                 endif
             else
                 states(ipeak) = 1
@@ -371,8 +372,7 @@ contains
         mi_state = 0.
         state = nint( s3D%o_peaks(s%iptcl)%get(best_loc(1), 'state') )
         if( .not. s3D%state_exists(state) )then
-            print *, 'empty state: ', state
-            stop 'strategy3D_utils; convergence_stats_multi'
+            THROW_HARD('empty state: '//int2str(state)//' convergence_stats_multi')
         endif
         if( s%prev_state == state )then
             mi_state = 1.

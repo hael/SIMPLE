@@ -2,10 +2,12 @@
 module simple_hash
 use simple_defs
 use simple_strings, only: real2str, parsestr, int2str
+use simple_error,   only: simple_exception
 implicit none
 
 public :: hash
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: BUFFSZ_DEFAULT = 10
 
@@ -126,7 +128,7 @@ contains
                 self%values(i) = values_copy(i)
             enddo
         else
-            stop 'cannot reallocate non-existent hash; simple_hash :: realloc_hash'
+            THROW_HARD('cannot reallocate non-existent hash; realloc_hash')
         endif
     end subroutine realloc_hash
 

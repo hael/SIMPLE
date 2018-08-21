@@ -10,6 +10,7 @@ implicit none
 
 public :: reconstructor_eo
 private
+#include "simple_local_flags.inc"
 
 type :: reconstructor_eo
     private
@@ -67,7 +68,6 @@ type :: reconstructor_eo
     procedure          :: kill
 end type reconstructor_eo
 
-#include "simple_local_flags.inc"
 contains
 
     ! CONSTRUCTOR
@@ -278,7 +278,7 @@ contains
             case(1)
                 call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght, bfac=bfac)
             case DEFAULT
-                stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
+                THROW_HARD('unsupported eo flag; grid_fplane_1')
         end select
     end subroutine grid_fplane_1
 
@@ -300,7 +300,7 @@ contains
             case(1)
                 call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, bfac=bfac, state=state)
             case DEFAULT
-                stop 'unsupported eo flag; reconstructor_eo :: grid_fplane'
+                THROW_HARD('unsupported eo flag; grid_fplane_2')
         end select
     end subroutine grid_fplane_2
 

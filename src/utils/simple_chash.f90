@@ -1,7 +1,7 @@
 ! character hash
 module simple_chash
 use simple_defs
-use simple_error,   only: allocchk
+use simple_error,   only: allocchk, simple_exception
 use simple_fileio,  only: fopen, fileiochk, fclose
 use simple_strings, only: strisblank, striscomment, lexsort
 use simple_syslib,  only: is_open
@@ -10,6 +10,7 @@ implicit none
 
 public :: chash
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: BUFFSZ_DEFAULT = 5
 
@@ -141,7 +142,7 @@ contains
                 if( allocated(values_copy(i)%str) ) allocate(self%values(i)%str, source=values_copy(i)%str)
             enddo
         else
-            stop 'cannot reallocate non-existent chash; simple_chash :: realloc_chash'
+            THROW_HARD('cannot reallocate non-existent chash; realloc_chash')
         endif
     end subroutine realloc_chash
 
@@ -297,7 +298,6 @@ contains
             endif
         end do
     end function lookup
-
 
     !>  \brief  looks up the index of a value in the chash
     !!* Warning* this will get the first occurance of the value
@@ -477,8 +477,7 @@ contains
                 endif
             endif
         else
-            write(*,*) 'key: ', trim(key), ' does not exist in the chash'
-            stop 'simple_chash :: print_key_val_pair_1'
+            THROW_HARD('key: '//trim(key)//' does not exist in the chash; print_key_val_pair_1')
         endif
     end subroutine print_key_val_pair_1
 
@@ -527,7 +526,7 @@ contains
         if( present(keys2print) )then
             sz = size(keys2print)
             if( present_mask )then
-                if( size(mask) /= sz ) stop 'Nonconforming sizes keys2print / mask; chash :: print_key_val_pairs'
+                if( size(mask) /= sz ) THROW_HARD('Nonconforming sizes keys2print / mask; print_key_val_pairs')
                 allocate(mmask(sz), source=mask)
             else
                 allocate(mmask(sz), source=.false.)
@@ -560,7 +559,7 @@ contains
         else
             if( self%chash_index > 0 )then
                 if( present_mask )then
-                    if( size(mask) /= self%chash_index ) stop 'Nonconforming sizes self%chash_index / size(mask); chash :: print_key_val_pairs'
+                    if( size(mask) /= self%chash_index ) THROW_HARD('Nonconforming sizes self%chash_index / size(mask); print_key_val_pairs')
                     allocate(mmask(self%chash_index), source=mask)
                 else
                     allocate(mmask(self%chash_index), source=.false.)

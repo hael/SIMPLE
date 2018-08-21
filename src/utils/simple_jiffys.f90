@@ -3,10 +3,6 @@ module simple_jiffys
 use simple_defs         ! singleton
 implicit none
 
-interface assert_eq
-    module procedure assert_eq_2,assert_eq_3,assert_eq_4,assert_eq_n
-end interface assert_eq
-
 interface swap
     module procedure swap_i,swap_r,swap_rv,swap_c, swap_cv,swap_cm,&
     &masked_swap_rs,masked_swap_rv,masked_swap_rm
@@ -133,135 +129,85 @@ contains
         write(*,'(A)') str
     end subroutine haloween_end
 
-    ! ASSERTIONS AND SWAPS FROM NR
-
-    function assert_eq_2(n1,n2,string)
-        character(len=*), intent(in) :: string
-        integer, intent(in) :: n1,n2
-        integer :: assert_eq_2
-        if (n1 == n2) then
-            assert_eq_2=n1
-        else
-            write (*,*) 'nrerror: an assert_eq failed with this tag: ', string
-            stop 'program terminated by assert_eq_2; simple_jiffys'
-        end if
-    end function assert_eq_2
-
-    function assert_eq_3(n1,n2,n3,string)
-        character(len=*), intent(in) :: string
-        integer, intent(in) :: n1,n2,n3
-        integer :: assert_eq_3
-        if (n1 == n2 .and. n2 == n3) then
-            assert_eq_3=n1
-        else
-            write (*,*) 'nrerror: an assert_eq failed with this tag: ', string
-            stop 'program terminated by assert_eq_3; simple_jiffys'
-        end if
-    end function assert_eq_3
-
-    function assert_eq_4(n1,n2,n3,n4,string)
-        character(len=*), intent(in) :: string
-        integer, intent(in) :: n1,n2,n3,n4
-        integer :: assert_eq_4
-        if (n1 == n2 .and. n2 == n3 .and. n3 == n4) then
-            assert_eq_4=n1
-        else
-            write (*,*) 'nrerror: an assert_eq failed with this tag: ', string
-            stop 'program terminated by assert_eq_4; simple_jiffys'
-        end if
-    end function assert_eq_4
-
-    function assert_eq_n(nn,string)
-        character(len=*), intent(in) :: string
-        integer, dimension(:), intent(in) :: nn
-        integer :: assert_eq_n
-        if (all(nn(2:) == nn(1))) then
-            assert_eq_n=nn(1)
-        else
-            write (*,*) 'nrerror: an assert_eq failed with this tag: ', string
-            stop 'program terminated by assert_eq_n; simple_jiffys'
-        end if
-    end function assert_eq_n
-
     subroutine swap_i(a,b)
-          integer, intent(inout) :: a,b
-          integer :: dum
-          dum=a
-          a=b
-          b=dum
+        integer, intent(inout) :: a,b
+        integer :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_i
 
     subroutine swap_r(a,b)
-          real, intent(inout) :: a,b
-          real :: dum
-          dum=a
-          a=b
-          b=dum
+        real, intent(inout) :: a,b
+        real :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_r
 
     subroutine swap_rv(a,b)
-          real, dimension(:), intent(inout) :: a,b
-          real, dimension(size(a)) :: dum
-          dum=a
-          a=b
-          b=dum
+        real, dimension(:), intent(inout) :: a,b
+        real, dimension(size(a)) :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_rv
 
     subroutine swap_c(a,b)
-          complex, intent(inout) :: a,b
-          complex :: dum
-          dum=a
-          a=b
-          b=dum
+        complex, intent(inout) :: a,b
+        complex :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_c
 
     subroutine swap_cv(a,b)
-          complex, dimension(:), intent(inout) :: a,b
-          complex, dimension(size(a)) :: dum
-          dum=a
-          a=b
-          b=dum
+        complex, dimension(:), intent(inout) :: a,b
+        complex, dimension(size(a)) :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_cv
 
     subroutine swap_cm(a,b)
-          complex, dimension(:,:), intent(inout)  :: a,b
-          complex, dimension(size(a,1),size(a,2)) :: dum
-          dum=a
-          a=b
-          b=dum
+        complex, dimension(:,:), intent(inout)  :: a,b
+        complex, dimension(size(a,1),size(a,2)) :: dum
+        dum=a
+        a=b
+        b=dum
     end subroutine swap_cm
 
     subroutine masked_swap_rs(a,b,mask)
-          real,         intent(inout) :: a,b
-          logical(lgt), intent(in)    :: mask
-          real :: swp
-          if (mask) then
-              swp=a
-              a=b
-              b=swp
-          end if
+        real,         intent(inout) :: a,b
+        logical(lgt), intent(in)    :: mask
+        real :: swp
+        if(mask)then
+            swp=a
+            a=b
+            b=swp
+        end if
     end subroutine masked_swap_rs
 
     subroutine masked_swap_rv(a,b,mask)
-          real,         dimension(:), intent(inout) :: a,b
-          logical(lgt), dimension(:), intent(in)    :: mask
-          real, dimension(size(a)) :: swp
-          where (mask)
-              swp=a
-              a=b
-              b=swp
-          end where
+        real,         dimension(:), intent(inout) :: a,b
+        logical(lgt), dimension(:), intent(in)    :: mask
+        real, dimension(size(a)) :: swp
+        where (mask)
+            swp=a
+            a=b
+            b=swp
+        end where
     end subroutine masked_swap_rv
 
     subroutine masked_swap_rm(a,b,mask)
-          real,         dimension(:,:), intent(inout) :: a,b
-          logical(lgt), dimension(:,:), intent(in)    :: mask
-          real, dimension(size(a,1),size(a,2)) :: swp
-          where (mask)
-              swp=a
-              a=b
-              b=swp
-          end where
+        real,         dimension(:,:), intent(inout) :: a,b
+        logical(lgt), dimension(:,:), intent(in)    :: mask
+        real, dimension(size(a,1),size(a,2)) :: swp
+        where (mask)
+            swp=a
+            a=b
+            b=swp
+        end where
     end subroutine masked_swap_rm
 
 end module simple_jiffys

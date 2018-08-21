@@ -274,8 +274,7 @@ contains
                     endif
                 end do
             case DEFAULT
-                write(*,*) 'refine flag: ', trim(params_glob%refine)
-                stop 'Refinement mode unsupported'
+                THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
         end select
         ! construct search objects
         do iptcl=params_glob%fromp,params_glob%top
@@ -347,8 +346,7 @@ contains
                 call binwrite_oritab(params_glob%outfile, build_glob%spproj, &
                     &build_glob%spproj_field, [params_glob%fromp,params_glob%top], isegment=CLS3D_SEG)
             case DEFAULT
-                write(*,*) 'oritype: ', trim(params_glob%oritype)
-                stop 'Unsupported oritype; strategy3D_matcher :: refine3D_exec'
+                THROW_HARD('unsupported oritype: '//trim(params_glob%oritype)//'; refine3D_exec')
         end select
         params_glob%oritab = params_glob%outfile
 

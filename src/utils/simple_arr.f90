@@ -1,11 +1,12 @@
 ! array class (container class for the singly linked list)
 module simple_arr
 use simple_defs
-use simple_error, only: allocchk
+use simple_error, only: allocchk, simple_exception
 implicit none
 
 public :: arr
 private
+#include "simple_local_flags.inc"
 
 type :: arr
     private
@@ -20,8 +21,6 @@ type :: arr
     procedure :: display
     procedure :: kill
 end type arr
-
-#include "simple_local_flags.inc"
 
 contains
     subroutine new_1( self, iarr )
@@ -53,7 +52,7 @@ contains
             allocate( iarr(size(self%iarr)), source=self%iarr ,stat=alloc_stat)
             if(alloc_stat /= 0) call allocchk(" In simple_arr::iget  iarr dealloc ", alloc_stat )
         else
-            stop 'no info in iarr; get_1; simple_arr'
+            THROW_HARD('no info in iarr; iget')
         endif
     end function
 
@@ -64,7 +63,7 @@ contains
             allocate( rarr(size(self%rarr)), source=self%rarr,STAT=alloc_stat)
             if(alloc_stat /= 0) call allocchk(" In simple_arr::rget  allocation fault ", alloc_stat )
         else
-            stop 'no info in rarr; get_2; simple_arr'
+            THROW_HARD('no info in rarr; rget')
         endif
     end function
 

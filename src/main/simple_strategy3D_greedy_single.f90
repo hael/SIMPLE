@@ -9,7 +9,6 @@ implicit none
 
 public :: strategy3D_greedy_single
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D_greedy_multi) :: strategy3D_greedy_single
@@ -64,7 +63,6 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
-        DebugPrint   '>>> STRATEGY3D_GREEDY_SINGLE :: EXECUTED ORIS_ASSIGN_GREEDY_SINGLE'
     end subroutine oris_assign_greedy_single
 
 end module simple_strategy3D_greedy_single

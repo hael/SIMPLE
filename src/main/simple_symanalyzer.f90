@@ -10,6 +10,7 @@ implicit none
 
 public :: symmetrize_map, symmetry_tester
 private
+#include "simple_local_flags.inc"
 
 type sym_stats
     character(len=:), allocatable :: str
@@ -83,10 +84,11 @@ contains
         integer,          intent(in)    :: cn_start, cn_stop
         logical,          intent(in)    :: dihedral, platonic
         type(sym_stats), allocatable    :: pgrps(:)
-        logical, allocatable :: scoring_groups(:)
-        integer, allocatable :: inds(:)
-        real,    allocatable :: scores(:), res(:), zscores(:)
-        character(len=3)     :: subgrp
+        logical, allocatable  :: scoring_groups(:)
+        integer, allocatable  :: inds(:)
+        real,    allocatable  :: scores(:), res(:), zscores(:)
+        character(len=3)      :: subgrp
+        character(len=STDLEN) :: errmsg
         type(sym) :: symobj
         integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j, ldim(3), ccn_start
         integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
@@ -110,9 +112,9 @@ contains
         endif
         if( platonic )then
             if( ccn_start > 2 .or. cn_stop < 5 )then
-                write(*,*) 'ERROR! cn range must include rotational symmetries from orders 2-5 when searching for Platonic groups'
-                write(*,*) 'Set cn_start = 2 and cn_stop > 5 on command line'
-                stop 'simple_symanalyzer :: eval_point_groups'
+                errmsg = 'cn range must include rotational symmetries from orders 2-5 when searching for Platonic groups. '//&
+                &'Set cn_start = 2 and cn_stop > 5 on command line; eval_point_groups'
+                THROW_HARD(trim(errmsg))
             endif
             nsyms = nsyms + 3
         endif

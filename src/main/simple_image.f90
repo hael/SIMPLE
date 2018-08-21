@@ -12,7 +12,6 @@ use gnufor2
 implicit none
 
 public :: image, test_image
-
 private
 #include "simple_local_flags.inc"
 
@@ -714,7 +713,7 @@ contains
           return
         endif
         if(present(offset)) then  !no sovrapposition
-            if(offset == int(box/2)) stop "invalid offset choice"   !box is supposet to be even
+            if(offset == int(box/2)) THROW_HARD("invalid offset choice; add_window") ! box is supposet to be even
             if (offset > int(box/2)) then
                 self%rmat(fromc(1)+box-offset-1:offset,fromc(2)+box-offset-1:offset,1) = imgwin%rmat(box-offset:offset,box-offset:offset,1)
             else

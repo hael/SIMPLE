@@ -8,6 +8,10 @@ use simple_qsys_ctrl,    only: qsys_ctrl
 use simple_parameters,   only: params_glob
 implicit none
 
+public :: qsys_env
+private
+#include "simple_local_flags.inc"
+
 type :: qsys_env
     integer, allocatable,      public  :: parts(:,:)
     type(qsys_ctrl),           public  :: qscripts
@@ -21,12 +25,11 @@ type :: qsys_env
     procedure :: new
     procedure :: exists
     procedure :: gen_scripts_and_schedule_jobs
-    ! procedure :: gen_shm_scripts_and_schedule_jobs
     procedure :: exec_simple_prg_in_queue
     procedure :: get_qsys
     procedure :: kill
 end type qsys_env
-#include "simple_local_flags.inc"
+
 contains
 
     subroutine new( self, nparts, stream, numlen, exec_bin )
@@ -62,8 +65,7 @@ contains
                 self%parts(:,:) = 1              ! unused
                 partsz          = 1              ! unused
             case DEFAULT
-                write(*,*) 'split_mode: ', trim(params_glob%split_mode)
-                stop 'Unsupported split_mode'
+                THROW_HARD('split_mode: '//trim(params_glob%split_mode)//' is unsupported; new')
         end select
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)

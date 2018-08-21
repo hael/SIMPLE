@@ -140,7 +140,7 @@ contains
         real      :: corrs(self%nrots), corr, bfac, corr_valid
         if( self%neigh )then
             if( .not. present(nnmat) )&
-            &stop 'need optional nnmat to be present for refine=neigh modes :: prep4srch (strategy3D_srch)'
+            &THROW_HARD('need optional nnmat to be present for refine=neigh modes; prep4srch')
         endif
         ! previous parameters
         o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
@@ -164,8 +164,8 @@ contains
         call put_last(self%prev_ref, s3D%srch_order(self%ithr,:))
         ! sanity check
         if( self%prev_state > 0 )then
-            if( self%prev_state > self%nstates ) stop 'previous best state outside boundary; prep4srch; simple_strategy3D_srch'
-            if( .not. s3D%state_exists(self%prev_state) ) stop 'empty previous state; prep4srch; simple_strategy3D_srch'
+            if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
+            if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
         ! B-factor memoization
         bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])

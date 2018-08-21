@@ -2,7 +2,8 @@
 ! adapted from George Benthien's string module http://gbenthien.net/strings/str-index.html
 ! modification and additions by Cyril Reboul, Michael Eager & Hans Elmlund
 module simple_strings
-use simple_defs ! singleton
+use simple_defs   ! singleton
+use simple_error, only: simple_exception
 use, intrinsic :: iso_c_binding
 implicit none
 
@@ -26,8 +27,7 @@ contains
         integer, intent(in) :: n
         character(len=:), allocatable :: str,  str_copy
         character(len=1) :: space = ' '
-        if( n <  0 ) stop 'negative string lenght; simple_strings :: spaces'
-        if( n == 0 ) return
+        if( n <= 0 ) return
         allocate(str, source=space)
         do while( len(str) < n )
             allocate( str_copy, source=str )
@@ -271,8 +271,7 @@ contains
         character(len=100) :: io_msg
         read(str, *, iostat=io_stat, iomsg=io_msg) rval
         if( io_stat .ne. 0 )then
-            write(*,*) 'iomsg: ', trim(io_msg)
-            stop 'ERROR(I/O); simple_strings :: str2real'
+            call simple_exception('I/O: '//trim(io_msg)//'; str2real', __FILENAME__ , __LINE__)
         endif
     end function str2real
 

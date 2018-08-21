@@ -14,6 +14,7 @@ implicit none
 
 public :: projector
 private
+#include "simple_local_flags.inc"
 
 logical, parameter :: MEMOIZEKB     = .false.
 integer, parameter :: NKBPOINTS     = 10
@@ -73,8 +74,8 @@ contains
         !real    :: winsz
         call self%kill_expanded
         ldim = self%get_ldim()
-        if( .not.self%is_ft() ) stop 'volume needs to be FTed before call; expand_cmat; simple_projector'
-        if( ldim(3) == 1      ) stop 'only for volumes; expand_cmat; simple_projector'
+        if( .not.self%is_ft() ) THROW_HARD('volume needs to be FTed before call; expand_cmat')
+        if( ldim(3) == 1      ) THROW_HARD('only for volumes; expand_cmat')
         self%kbwin         = kbinterpol(KBWINSZ, alpha)
         self%iwinsz        = ceiling(self%kbwin%get_winsz() - 0.5)
         if( MEMOIZEKB ) call self%kbwin%memoize(NKBPOINTS)
@@ -127,7 +128,7 @@ contains
     subroutine reset_expanded( self )
         class(projector), intent(inout) :: self
         if( .not.self%expanded_exists )&
-            &stop 'expanded fourier matrix does not exist; simple_projector::reset_expanded'
+            &THROW_HARD('expanded Fourier matrix does not exist; reset_expanded')
         self%cmat_exp = cmplx(0.,0.)
     end subroutine reset_expanded
 

@@ -138,8 +138,7 @@ contains
                 else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
                     params_glob%kfromto(2) = calc_fourier_index(build_glob%spproj_field%get(params_glob%fromp,'lp'), params_glob%boxmatch, params_glob%smpd)
                 else
-                    write(*,*) 'no method available for setting the low-pass limit'
-                    stop 'need fsc file, lp, or find; set_bp_range; simple_strategy2D3D_common'
+                    THROW_HARD('no method available for setting the low-pass limit. Need fsc file or lp find; set_bp_range')
                 endif
                 ! lpstop overrides any other method for setting the low-pass limit
                 if( cline%defined('lpstop') )then
@@ -431,8 +430,7 @@ contains
                     call tfun%apply_serial(img_in, 'flip', ctfparms)
                 endif
             case DEFAULT
-                write(*,*)'Unsupported CTF flag: ', ctfparms%ctfflag
-                stop 'simple_strategy2D3D_common :: prepimg4align'
+                THROW_HARD('unsupported CTF flag: '//int2str(ctfparms%ctfflag)//' prepimg4align')
         end select
         ! back to real-space
         call img_in%ifft()

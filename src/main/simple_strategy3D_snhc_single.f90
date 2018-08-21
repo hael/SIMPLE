@@ -4,6 +4,7 @@ include 'simple_lib.f08'
 use simple_strategy3D_alloc
 use simple_strategy3D_utils
 use simple_builder,          only: build_glob
+use simple_parameters,       only: params_glob
 use simple_strategy3D,       only: strategy3D
 use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_polarft_corrcalc, only: pftcc_glob
@@ -11,7 +12,6 @@ implicit none
 
 public :: strategy3D_snhc_single
 private
-
 #include "simple_local_flags.inc"
 
 type, extends(strategy3D) :: strategy3D_snhc_single
@@ -84,9 +84,7 @@ contains
         ! orientation parameters
         ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
         if( ref < 1 .or. ref > self%s%nrefs )then
-            print *, 'ref: ', ref
-            write(*,*)'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
-            stop 'ref index out of bound; strategy3d_snhc_single :: oris_assign_snhc_single'
+            THROW_HARD('ref index: '//int2str(ref)//' out of bound; oris_assign_snhc_single')
         endif
         roind = pftcc_glob%get_roind(360. - s3D%proj_space_euls(self%s%ithr,ref,1,3))
         ! transfer to solution set

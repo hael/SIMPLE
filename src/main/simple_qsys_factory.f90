@@ -5,10 +5,12 @@ use simple_qsys_local, only: qsys_local
 use simple_qsys_slurm, only: qsys_slurm
 use simple_qsys_sge,   only: qsys_sge
 use simple_qsys_pbs,   only: qsys_pbs
+use simple_error
 implicit none
 
 public :: qsys_factory
 private
+#include "simple_local_flags.inc"
 
 type :: qsys_factory
     private
@@ -37,8 +39,7 @@ contains
             case('pbs')
                 allocate(qsys_pbs   :: self%qsys_base_type)
             case DEFAULT
-                write(*,*) 'class:', which
-                stop 'unsupported in qsys_factory constructor'
+                THROW_HARD('class: '//trim(which)//' unsupported in qsys_factory constructor')
         end select
         call self%qsys_base_type%new
         ptr => self%qsys_base_type

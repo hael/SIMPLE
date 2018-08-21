@@ -389,8 +389,6 @@ integer (kind=int64) :: i, j, ir, l
 !        integer, intent(inout) :: iarr(:)
       !  integer ::  ir, l
         real    :: ra
-    !    n = size(rarr)
-   !     if( n /= size(iarr) ) stop 'nonconforming array sizes; math :: hpsort_1'
         if( nA < 2 ) return
         l  = nA/2+1
         ir = nA
@@ -1344,8 +1342,6 @@ integer (kind=int32) :: i, j, ir, l
 !        integer, intent(inout) :: iarr(:)
       !  integer ::  ir, l
         real    :: ra
-    !    n = size(rarr)
-   !     if( n /= size(iarr) ) stop 'nonconforming array sizes; math :: hpsort_1'
         if( nA < 2 ) return
         l  = nA/2+1
         ir = nA

@@ -82,7 +82,7 @@ contains
                 case('extr')
                     ! new particles are the randomization
                 case DEFAULT
-                    stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec 1'
+                    THROW_HARD('Unsupported refinement mode; cluster2D_exec 1')
             end select
         else
             ! default
@@ -112,7 +112,7 @@ contains
                 case('snhc')
                     l_extr = .false.
                 case DEFAULT
-                    stop 'Unsupported refinement mode; simple_strategy2D_matcher :: cluster2D_exec 2'
+                    THROW_HARD('unsupported refinement mode; cluster2D_exec 2')
             end select
         endif
 
@@ -185,7 +185,7 @@ contains
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
-            stop 'ERROR! no eo partitioning available; strategy2D_matcher :: cluster2D_exec'
+            THROW_HARD('no eo partitioning available; cluster2D_exec')
         endif
         if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
         if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')

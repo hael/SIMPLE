@@ -7,6 +7,7 @@ implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D
 private
+#include "simple_local_flags.inc"
 
 type strategy2D_alloc
     integer, allocatable :: cls_pops(:)
@@ -48,7 +49,7 @@ contains
                 call put_last(prev_class, s2D%srch_order(cnt,:))
             endif
         end do
-        if( any(s2D%srch_order == 0) ) stop 'Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch'
+        if( any(s2D%srch_order == 0) ) THROW_HARD('invalid index in srch_order; prep4strategy2D')
         call rt%kill
     end subroutine prep_strategy2D
 

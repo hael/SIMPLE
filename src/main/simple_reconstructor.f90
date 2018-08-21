@@ -657,7 +657,7 @@ contains
         class(reconstructor), intent(inout) :: self
         integer :: phys(3), h, k, m
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
-            stop 'expanded complex or rho matrices do not exist; simple_reconstructor::compress_exp'
+            THROW_HARD('expanded complex or rho matrices do not exist; compress_exp')
         endif
         call self%reset
         ! Fourier components & rho matrices compression
@@ -688,7 +688,7 @@ contains
         class(reconstructor), intent(inout) :: self
         integer :: phys(3), h, k, m, logi(3)
         if(.not. allocated(self%cmat_exp) .or. .not.allocated(self%rho_exp))then
-            stop 'expanded complex or rho matrices do not exist; simple_reconstructor::expand_exp'
+            THROW_HARD('expanded complex or rho matrices do not exist; expand_exp')
         endif
         call self%reset_exp
         ! Fourier components & rho matrices expansion

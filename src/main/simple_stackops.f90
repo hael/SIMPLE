@@ -4,11 +4,11 @@ include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
-private
-#include "simple_local_flags.inc"
 
 public :: make_pattern_stack
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
+private
+#include "simple_local_flags.inc"
 
 contains
 
@@ -45,7 +45,7 @@ contains
             write(*,*) 'ERROR! nonconforming matrix sizes'
             write(*,*) 'ldim of image: ', ldim
             write(*,*) 'ldim of mask : ', ldim_mask
-            stop 'simple_stackops :: make_pattern_stack'
+            THROW_HARD('make_pattern_stack')
         endif
         ! build and initialise objects
         call img%new(ldim,1.)

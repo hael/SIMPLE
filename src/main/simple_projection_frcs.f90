@@ -4,6 +4,7 @@ implicit none
 
 public :: projection_frcs
 private
+#include "simple_local_flags.inc"
 
 type projection_frcs
     private
@@ -94,10 +95,7 @@ contains
             write(*,*) 'state: ', state
             l_outside = .true.
         endif
-        if( l_outside )then
-            write(*,'(a)') msg
-            stop 'simple_projection_frcs :: raise_exception'
-        endif
+        if( l_outside ) THROW_HARD(trim(msg)//'; raise_exception')
     end subroutine raise_exception
 
     ! bound res
@@ -153,7 +151,7 @@ contains
         if( present(state) ) sstate = state
         call self%raise_exception( proj, sstate, 'ERROR, out of bounds in set_frc')
         if( size(frc) /= self%filtsz )then
-            stop 'size of input frc not conforming; simple_projection_frcs :: set_frc'
+            THROW_HARD('size of input frc not conforming; set_frc')
         else
             self%frcs(sstate,proj,:) = frc
         endif

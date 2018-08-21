@@ -1,11 +1,15 @@
 ! statistics utility functions
 module simple_stat
-use simple_defs ! singleton
-use simple_error, only: allocchk
-use simple_math, only: hpsort, median, median_nocopy
+use simple_defs   ! singleton
+use simple_error, only: allocchk, simple_exception
+use simple_math,  only: hpsort, median, median_nocopy
 implicit none
 
-private :: moment_1, moment_2, moment_3, normalize_1, normalize_2, normalize_3
+public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
+public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
+public :: robust_z_scores, robust_normalization
+private
+#include "simple_local_flags.inc"
 
 interface moment
     module procedure moment_1
@@ -302,7 +306,7 @@ contains
         real    :: r,ax,ay,sxx,syy,sxy,xt,yt
         integer :: j, n
         n = size(x)
-        if( size(y) /= n ) stop 'Arrays not equal size, in pearsn_1, module: simple_stat'
+        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_1')
         ax  = sum(x)/real(n)
         ay  = sum(y)/real(n)
         sxx = 0.
@@ -330,7 +334,7 @@ contains
         integer :: i, j, nx, ny
         nx = size(x,1)
         ny = size(x,2)
-        if( size(y,1) /= nx .or. size(y,2) /= ny ) stop 'Arrays not equal size, in pearsn_2, module: simple_stat'
+        if( size(y,1) /= nx .or. size(y,2) /= ny ) THROW_HARD('arrays not equal size in pearsn_2')
         ax  = sum(x)/real(nx*ny)
         ay  = sum(y)/real(nx*ny)
         sxx = 0.
@@ -362,7 +366,7 @@ contains
         ny = size(x,2)
         nz = size(x,3)
         if( size(y,1) /= nx .or. size(y,2) /= ny .or. size(y,3) /= nz )&
-        stop 'Arrays not equal size, in pearsn_3, module: simple_stat'
+        THROW_HARD('arrays not equal size, in pearsn_3')
         ax  = sum(x)/real(nx*ny*nz)
         ay  = sum(y)/real(nx*ny*nz)
         sxx = 0.
@@ -497,7 +501,7 @@ contains
         real, intent(out)   :: smin, smax
         integer             :: i, j, n, npairs
         if( size(s,1) .ne. size(s,2) )then
-            stop 'not a similarity matrix; analyze_smat; simple_stat'
+            THROW_HARD('not a similarity matrix; analyze_smat')
         endif
         n      = size(s,1)
         npairs = (n*(n-1))/2
@@ -523,7 +527,7 @@ contains
     !     real, allocatable :: sims(:)
     !     integer :: loc(1), i, j, n
     !     n = size(smat,1)
-    !     if( n /= size(smat,2) ) stop 'symmetric similarity matrix assumed; stat :: dev_from_smat'
+    !     if( n /= size(smat,2) ) THROW_HARD('symmetric similarity matrix assumed; stat :: dev_from_smat')
     !     allocate(sims(n))
     !     do i=1,n
     !         sims(i) = 0.0
@@ -549,7 +553,7 @@ contains
         real, allocatable :: dists(:)
         integer :: loc(1), i, j, n
         n = size(dmat,1)
-        if( n /= size(dmat,2) ) stop 'symmetric distance matrix assumed; stat :: median_dev_from_dmat'
+        if( n /= size(dmat,2) ) THROW_HARD('symmetric distance matrix assumed; dev_from_dmat')
         allocate(dists(n))
         do i=1,n
             dists(i) = 0.0

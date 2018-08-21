@@ -1,5 +1,6 @@
 module simple_strategy2D_neigh
 use simple_defs
+use simple_error
 use simple_strategy2D_alloc
 use simple_strategy2D,       only: strategy2D
 use simple_strategy2D_srch,  only: strategy2D_srch, strategy2D_spec
@@ -34,7 +35,7 @@ contains
         integer :: iref,loc(1),inpl_ind,inn
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( .not. allocated(build_glob%nnmat) )&
-        &stop 'nnmat need to be associated in self%spec; strategy2D_neigh :: srch_neigh'
+        &THROW_HARD('nnmat need to be associated in self%spec; srch_neigh')
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -1.

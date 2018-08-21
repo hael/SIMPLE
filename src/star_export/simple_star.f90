@@ -3,13 +3,15 @@ module simple_star
 include 'simple_lib.f08'
 use simple_stardoc
 use simple_sp_project, only: sp_project
-use simple_cmdline,        only: cmdline
+use simple_cmdline,    only: cmdline
 use simple_parameters
 use simple_binoris_io
 use simple_oris, only: oris
 implicit none
-private
+
 public :: star_project
+private
+#include "simple_local_flags.inc"
 
 
 type star_project
@@ -55,7 +57,7 @@ end type star_project
 interface star_project
     module procedure constructor
 end interface star_project
-#include "simple_local_flags.inc"
+
 contains
 
     !>  \brief  is an abstract constructor
@@ -85,12 +87,9 @@ contains
         class(sp_project), intent(inout)   :: sp
         class(parameters), intent(inout) :: p
         character(len=*),intent(inout) :: filename
-
         if( .not. file_exists(trim(filename)) )then
-            write(*,*) 'file: ', trim(filename)
-            stop 'file does not exist in cwd;  simple_star :: prepare '
+            THROW_HARD('file: '//trim(filename)//' not in cwd; prepare')
         endif
-
         !! import mode
         call self%doc%open4import(filename)
         call self%doc%close()
@@ -106,24 +105,19 @@ contains
         class(star_project), intent(inout) :: self
         integer :: n
         n=0
-        if(.not. self%doc%existence) &
-            stop ' simple_star ::  get_ndatalines doc unopened '
-
+        if(.not. self%doc%existence) THROW_HARD('get_ndatalines doc unopened')
         if( self%doc%num_data_lines == 0) then
             print *," simple_star :: get_ndatalines no data entries"
         else
             n= self%doc%num_data_lines
         endif
-
     end function get_ndatalines
 
     function get_nrecs_per_line(self)result(nrecs)
         class(star_project), intent(inout) :: self
         integer :: nrecs
         nrecs=0
-        if(.not. self%doc%existence) &
-            stop ' simple_star ::  get_ndatalines doc unopened '
-
+        if(.not. self%doc%existence) THROW_HARD('get_ndatalines doc unopened')
         if( self%doc%num_data_elements == 0) then
             print *," simple_star :: get_ndatalines no data entries"
         else
@@ -272,19 +266,13 @@ contains
         character(len=:), allocatable ::  oritype
         class(oris),      pointer     :: os_ptr
         call cline%set('oritype','mic')
-        !! make sure starfile has been parsed and temporary files are in current dir        
+        !! make sure starfile has been parsed and temporary files are in current dir
         call self%check_temp_files('import_ctf_estimation')
         !! set deftab
         call cline%set('deftab', 'oritab-stardoc.txt')
         if(.not. (cline%defined('stk') .or. cline%defined('stktab')) ) then
             call cline%set('filetab', 'filetab-stardoc.txt')
         endif
-
-  
-        ! if( n_ori_inputs > 1 )then
-        !     write(*,*) 'ERROR, multiple parameter sources inputted, please use (oritab|deftab|plaintexttab)'
-        !     stop 'commander_project :: exec_import_particles'
-        ! endif
 
         call params%new(cline)
 
@@ -326,8 +314,7 @@ contains
         ! inputted_boxtab = cline%defined('boxtab')
         ! ! project file management
         ! if( .not. file_exists(trim(params%projfile)) )then
-        !     write(*,*) 'Project file: ', trim(params%projfile), ' does not exists!'
-        !     stop 'ERROR! simple_commander_project :: exec_import_movies'
+        !      ! raise exception
         ! endif
         ! call spproj%read(params%projfile)
         ! ! CTF
@@ -348,8 +335,7 @@ contains
         !     case('flip')
         !         ctfvars%ctfflag = 2
         !     case DEFAULT
-        !         write(*,*) 'ctf flag params%ctf: ', params%ctf
-        !         stop 'ERROR! ctf flag not supported; commander_project :: import_movies'
+        !         ! raise exception
         ! end select
         ! ctfvars%l_phaseplate = .false.
         ! if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
@@ -370,9 +356,7 @@ contains
         ! !     nboxf = size(boxfnames)
         ! !     nmovf = nlines(params%filetab)
         ! !     if( nboxf /= nmovf )then
-        ! !         write(*,*) '# boxfiles: ', nboxf
-        ! !         write(*,*) '# movies  : ', nmovf
-        ! !         stop 'ERROR! # boxfiles .ne. # movies; commander_project :: exec_import_movies'
+        ! !         ! raise exception
         ! !     endif
         ! !     do i=1,nmovf
         ! !         call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
@@ -1034,7 +1018,7 @@ contains
             stype = PROJINFO_STAR
             !         case DEFAULT
         else
-            stop 'unsupported exporttype flag; star project :: exporttype2star'
+            THROW_HARD('unsupported exporttype flag; star project :: exporttype2star')
             !        end select
         end if
     end function exporttype2star

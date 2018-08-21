@@ -1,12 +1,13 @@
 ! routines for generation of directed random numbers
 module simple_ran_tabu
 use simple_defs
-use simple_error, only: allocchk
+use simple_error, only: allocchk, simple_exception
 use simple_rnd,   only: multinomal, irnd_gasdev, irnd_uni
 implicit none
 
 public :: ran_tabu
 private
+#include "simple_local_flags.inc"
 
 type :: ran_tabu
     private
@@ -63,7 +64,7 @@ contains
         integer,         intent(in)    :: i !< input tabu
         if( self%avail(i) ) then
             self%N_tabus = self%N_tabus + 1
-            if( self%N_tabus > self%NP ) stop 'nr of tabus larger than NP; insert; simple_ran_tabu'
+            if( self%N_tabus > self%NP ) THROW_HARD('nr of tabus larger than NP; insert')
         endif
         self%avail(i) = .false.
     end subroutine insert
@@ -95,7 +96,7 @@ contains
     function irnd( self ) result( ir )
         class(ran_tabu), intent(in) :: self
         integer :: ir
-        if( self%N_tabus == self%NP ) stop 'all numbers tabu; irnd; simple_ran_tabu'
+        if( self%N_tabus == self%NP ) THROW_HARD('all numbers tabu; irnd')
         do
             ir = irnd_uni(self%NP)
             if( self%avail(ir) ) return
@@ -122,7 +123,7 @@ contains
         class(ran_tabu), intent(in) :: self
         real,            intent(in) :: mean, stdev
         integer :: irnd
-        if( self%N_tabus == self%NP ) stop 'all numbers tabu; irnd_gau; simple_ran_tabu'
+        if( self%N_tabus == self%NP ) THROW_HARD('all numbers tabu; irnd_gau')
         do
             irnd = irnd_gasdev( mean, stdev, self%NP )
             if( self%avail(irnd) ) return
@@ -134,7 +135,7 @@ contains
         class(ran_tabu), intent(in) :: self
         real,            intent(in) :: pvec(self%NP) !< multinomal vector
         integer :: irnd, nrepeats
-        if( self%N_tabus == self%NP ) stop 'all numbers tabu; mnomal; simple_ran_tabu'
+        if( self%N_tabus == self%NP ) THROW_HARD('all numbers tabu; mnomal')
         nrepeats = 0
         do
             irnd = multinomal(pvec)

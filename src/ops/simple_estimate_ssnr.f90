@@ -1,9 +1,13 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
 use simple_defs
-use simple_error, only: allocchk
+use simple_error, only: allocchk, simple_exception
 use simple_math,  only: find
 implicit none
+
+public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, acc_dose2filter, dose_weight
+private
+#include "simple_local_flags.inc"
 
 contains
 
@@ -110,7 +114,7 @@ contains
             ! critical exposure at 200 kV expected to be ~25% lower
             critical_exp = critical_exp*kV_factor
         else
-            stop 'unsupported kV (acceleration voltage); simple_filterer :: dose_weight'
+            THROW_HARD('unsupported kV (acceleration voltage); dose_weight')
         endif
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight

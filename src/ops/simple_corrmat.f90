@@ -4,14 +4,14 @@ module simple_corrmat
 !$ use omp_lib
 !$ use omp_lib_kinds
 use simple_defs
-use simple_error, only: allocchk
+use simple_error,  only: allocchk, simple_exception
 use simple_jiffys, only: progress
 use simple_image,  only: image
-
 implicit none
 
 public :: calc_cartesian_corrmat
 private
+#include "simple_local_flags.inc"
 
 interface calc_cartesian_corrmat
     module procedure calc_cartesian_corrmat_1
@@ -33,7 +33,7 @@ contains
         ! prep imgs for corrcalc
         do iptcl=1,nptcls
             if( present(lp) )then
-                if( .not. present(msk) ) stop 'need mask radius (msk) 4 Fourier corr calc!'
+                if( .not. present(msk) ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                 ! apply a soft-edged mask
                 call imgs(iptcl)%mask(msk, 'soft')
                 ! Fourier transform
@@ -94,7 +94,7 @@ contains
         ! prep sel imgs for corrcalc
         do iptcl=1,nsel
             if( doftcalc )then
-                if( .not. domsk ) stop 'need mask radius (msk) 4 Fourier corr calc!'
+                if( .not. domsk ) THROW_HARD('need mask radius (msk) 4 Fourier corr calc!')
                 ! apply a soft-edged mask
                 call imgs_sel(iptcl)%mask(msk, 'soft')
                 ! Fourier transform

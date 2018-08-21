@@ -1,14 +1,16 @@
 module canny_no_thresh_mod
-  include 'simple_lib.f08'
-  use simple_image, only : image
-  use simple_ctf,  only : ctf
-  implicit none
+include 'simple_lib.f08'
+use simple_image, only : image
+use simple_ctf,  only : ctf
+implicit none
 
-  public :: sobel, canny_edge, canny, sobel_nothresh, build_ctf
-  private
+public :: sobel, canny_edge, canny, sobel_nothresh, build_ctf
+private
+#include "simple_local_flags.inc"
 
-  contains
-   !To build a ctf and visualize it in the image img_ctf
+contains
+
+    !To build a ctf and visualize it in the image img_ctf
     function build_ctf(smpd, kv, cs, fraca, dfx, dfy, angast) result(img_ctf)
         real,        intent(in) :: smpd, kv, cs, fraca, dfx, dfy, angast
         type(image)             :: ctf_image, img4viz, img_ctf
@@ -22,52 +24,52 @@ module canny_no_thresh_mod
         img_ctf = img4viz
     end function build_ctf
 
- !To sort a vector (low to high values)
-  recursive subroutine QsortC(A)
+    !To sort a vector (low to high values)
+    recursive subroutine QsortC(A)
         real, intent(inout) :: A(:)
         integer              :: iq
         if(size(A) > 1) then
-          call Partition(A, iq)
-          call QsortC(A(:iq-1))
-          call QsortC(A(iq:))
+            call Partition(A, iq)
+            call QsortC(A(:iq-1))
+            call QsortC(A(iq:))
         endif
-  end subroutine QsortC
+    end subroutine QsortC
 
-!To help sorting a vector
-  subroutine Partition(A, marker)
-      real,    intent(inout) :: A(:)
-      integer, intent(out)   :: marker
-      integer :: i, j
-      real    :: temp, x
-      x = A(1)
-      i = 0
-      j = size(A) + 1
-      do
-        j = j-1
+    !To help sorting a vector
+    subroutine Partition(A, marker)
+        real,    intent(inout) :: A(:)
+        integer, intent(out)   :: marker
+        integer :: i, j
+        real    :: temp, x
+        x = A(1)
+        i = 0
+        j = size(A) + 1
         do
-          if (A(j) <= x) exit
-          j = j-1
+            j = j-1
+            do
+                if (A(j) <= x) exit
+                j = j-1
+            end do
+            i = i+1
+            do
+                if (A(i) >= x) exit
+                i = i+1
+            end do
+            if (i < j) then
+                temp = A(i)  ! exchange A(i) and A(j)
+                A(i) = A(j)
+                A(j) = temp
+            elseif (i == j) then
+                marker = i+1
+                return
+            else
+                marker = i
+                return
+            endif
         end do
-        i = i+1
-        do
-          if (A(i) >= x) exit
-          i = i+1
-        end do
-        if (i < j) then
-            temp = A(i)  ! exchange A(i) and A(j)
-            A(i) = A(j)
-            A(j) = temp
-        elseif (i == j) then
-            marker = i+1
-            return
-        else
-           marker = i
-           return
-       endif
-     end do
-   end subroutine Partition
+    end subroutine Partition
 
-!To calculate the median value of the intensities of entries of the matrix
+    !To calculate the median value of the intensities of entries of the matrix
     function median_img(mat_in) result(m)
         real, intent(in)  :: mat_in(:,:,:)
         real, allocatable :: vect2(:), vect(:)
@@ -92,184 +94,175 @@ module canny_no_thresh_mod
     !be inserted in simple_image, it would be useful to merge this
     !function with calc_neigh_8 present in simple_image.
     function calc_neigh_8_canny(mat, px) result(neigh_8)
-      real,    intent(in)  :: mat(:,:,:)
-      integer, intent(in)  :: px(3)
-      integer, allocatable :: neigh_8(:,:,:)
-      integer              :: i, j, ldim(3)
-      ldim = shape(mat)
-      if(px(3) /= 1) then
-          print *, "The matrix has to be 2D!"
-          stop
-      endif
-      i = px(1)
-      j = px(2)            !Assumes to have a 2-dim matrix
-      if ( i-1 < 1 .and. j-1 < 1 ) then
-        allocate(neigh_8(3,3,1), source = 0)
-        neigh_8(1:3,1,1) = [i+1,j,1]
-        neigh_8(1:3,2,1) = [i+1,j+1,1]
-        neigh_8(1:3,3,1) = [i,j+1,1]
-      else if (j+1 > ldim(2) .and. i+1 > ldim(1)) then
-        allocate(neigh_8(3,3,1), source = 0)
-        neigh_8(1:3,1,1) = [i-1,j,1]
-        neigh_8(1:3,2,1) = [i-1,j-1,1]
-        neigh_8(1:3,3,1) = [i,j-1,1]
-      else if (j-1 < 1  .and. i+1 >ldim(1)) then
-        allocate(neigh_8(3,3,1), source = 0)
-        neigh_8(1:3,1,1) = [i-1,j,1]
-        neigh_8(1:3,2,1) = [i-1,j+1,1]
-        neigh_8(1:3,3,1) = [i,j+1,1]
-      else if (j+1 > ldim(2) .and. i-1 < 1) then
-        allocate(neigh_8(3,3,1), source = 0)
-        neigh_8(1:3,1,1) = [i,j-1,1]
-        neigh_8(1:3,2,1) = [i+1,j-1,1]
-        neigh_8(1:3,3,1) = [i+1,j,1]
-      else if( j-1 < 1 ) then
-        allocate(neigh_8(3,5,1), source = 0)
-        neigh_8(1:3,1,1) = [i-1,j,1]
-        neigh_8(1:3,2,1) = [i-1,j+1,1]
-        neigh_8(1:3,3,1) = [i,j+1,1]
-        neigh_8(1:3,4,1) = [i+1,j+1,1]
-        neigh_8(1:3,5,1) = [i+1,j,1]
-      else if ( j+1 > ldim(2) ) then
-        allocate(neigh_8(3,5,1), source = 0)
-        neigh_8(1:3,1,1) = [i-1,j,1]
-        neigh_8(1:3,2,1) = [i-1,j-1,1]
-        neigh_8(1:3,3,1) = [i,j-1,1]
-        neigh_8(1:3,4,1) = [i+1,j-1,1]
-        neigh_8(1:3,5,1) = [i+1,j,1]
-      else if ( i-1 < 1 ) then
-        allocate(neigh_8(3,5,1), source = 0)
-        neigh_8(1:3,1,1) = [i,j-1,1]
-        neigh_8(1:3,2,1) = [i+1,j-1,1]
-        neigh_8(1:3,3,1) = [i+1,j,1]
-        neigh_8(1:3,4,1) = [i+1,j+1,1]
-        neigh_8(1:3,5,1) = [i,j+1,1]
-      else if ( i+1 > ldim(1) ) then
-        allocate(neigh_8(3,5,1), source = 0)
-        neigh_8(1:3,1,1) = [i,j+1,1]
-        neigh_8(1:3,2,1) = [i-1,j+1,1]
-        neigh_8(1:3,3,1) = [i-1,j,1]
-        neigh_8(1:3,4,1) = [i-1,j-1,1]
-        neigh_8(1:3,5,1) = [i,j-1,1]
-      else
-        allocate(neigh_8(3,8,1), source = 0)
-        neigh_8(1:3,1,1) = [i-1,j-1,1]
-        neigh_8(1:3,2,1) = [i,j-1,1]
-        neigh_8(1:3,3,1) = [i+1,j-1,1]
-        neigh_8(1:3,4,1) = [i+1,j,1]
-        neigh_8(1:3,5,1) = [i+1,j+1,1]
-        neigh_8(1:3,6,1) = [i,j+1,1]
-        neigh_8(1:3,7,1) = [i-1,j+1,1]
-        neigh_8(1:3,8,1) = [i-1,j,1]
-      endif
+        real,    intent(in)  :: mat(:,:,:)
+        integer, intent(in)  :: px(3)
+        integer, allocatable :: neigh_8(:,:,:)
+        integer              :: i, j, ldim(3)
+        ldim = shape(mat)
+        if(px(3) /= 1) THROW_HARD("The matrix has to be 2D!")
+        i = px(1)
+        j = px(2)            !Assumes to have a 2-dim matrix
+        if ( i-1 < 1 .and. j-1 < 1 ) then
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i+1,j,1]
+            neigh_8(1:3,2,1) = [i+1,j+1,1]
+            neigh_8(1:3,3,1) = [i,j+1,1]
+        else if (j+1 > ldim(2) .and. i+1 > ldim(1)) then
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j-1,1]
+            neigh_8(1:3,3,1) = [i,j-1,1]
+        else if (j-1 < 1  .and. i+1 >ldim(1)) then
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j+1,1]
+            neigh_8(1:3,3,1) = [i,j+1,1]
+        else if (j+1 > ldim(2) .and. i-1 < 1) then
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j-1,1]
+            neigh_8(1:3,2,1) = [i+1,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j,1]
+        else if( j-1 < 1 ) then
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j+1,1]
+            neigh_8(1:3,3,1) = [i,j+1,1]
+            neigh_8(1:3,4,1) = [i+1,j+1,1]
+            neigh_8(1:3,5,1) = [i+1,j,1]
+        else if ( j+1 > ldim(2) ) then
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j-1,1]
+            neigh_8(1:3,3,1) = [i,j-1,1]
+            neigh_8(1:3,4,1) = [i+1,j-1,1]
+            neigh_8(1:3,5,1) = [i+1,j,1]
+        else if ( i-1 < 1 ) then
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j-1,1]
+            neigh_8(1:3,2,1) = [i+1,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j,1]
+            neigh_8(1:3,4,1) = [i+1,j+1,1]
+            neigh_8(1:3,5,1) = [i,j+1,1]
+        else if ( i+1 > ldim(1) ) then
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j+1,1]
+            neigh_8(1:3,2,1) = [i-1,j+1,1]
+            neigh_8(1:3,3,1) = [i-1,j,1]
+            neigh_8(1:3,4,1) = [i-1,j-1,1]
+            neigh_8(1:3,5,1) = [i,j-1,1]
+        else
+            allocate(neigh_8(3,8,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j-1,1]
+            neigh_8(1:3,2,1) = [i,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j-1,1]
+            neigh_8(1:3,4,1) = [i+1,j,1]
+            neigh_8(1:3,5,1) = [i+1,j+1,1]
+            neigh_8(1:3,6,1) = [i,j+1,1]
+            neigh_8(1:3,7,1) = [i-1,j+1,1]
+            neigh_8(1:3,8,1) = [i-1,j,1]
+        endif
     end function calc_neigh_8_canny
 
-!This function returns a matrix in which the first columns contain colum derivates,
-!the last columns contain row derivates of the input image
+    !This function returns a matrix in which the first columns contain colum derivates,
+    !the last columns contain row derivates of the input image
     subroutine calc_gradient(self, grad, Dc, Dr)
-      type(image),                 intent(inout) :: self
-      real, allocatable,           intent(out)   :: grad(:,:,:)
-      real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:)
-      type(image)        :: img_p                         !padded image
-      real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
-      integer, parameter :: L = 3                         !dimension of the masks
-      integer            :: ldim(3)                       !dimension of the image
-      integer            :: i,j,m,n                       !loop indeces
-      real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
-      real, allocatable  :: mat_in(:,:,:), mat_p(:,:,:)   !images, just the matrix
-      ldim = self%get_ldim()
-      if(ldim(3) /= 1) then
-        print *, "The image has to be 2D!"
-        stop
-      endif
-      allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
+        type(image),                 intent(inout) :: self
+        real, allocatable,           intent(out)   :: grad(:,:,:)
+        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:)
+        type(image)        :: img_p                         !padded image
+        real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
+        integer, parameter :: L = 3                         !dimension of the masks
+        integer            :: ldim(3)                       !dimension of the image
+        integer            :: i,j,m,n                       !loop indeces
+        real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+        real, allocatable  :: mat_in(:,:,:), mat_p(:,:,:)   !images, just the matrix
+        ldim = self%get_ldim()
+        if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
+        allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
                & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
-      wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1])      !Sobel masks
-      wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
-      mat_in = self%get_rmat()
-      call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
-      call self%pad(img_p)                                      !padding
-      mat_p = img_p%get_rmat()
-      do i = 1, ldim(1)
-          do j = 1, ldim(2)
-              do m = -(L-1)/2,(L-1)/2
-                  do n = -(L-1)/2,(L-1)/2
-                      Ddc(i,j,1) = Ddc(i,j,1)+mat_p(i+m+1,j+n+1,1)*wc(m,n,1)
-                      Ddr(i,j,1) = Ddr(i,j,1)+mat_p(i+m+1,j+n+1,1)*wr(m,n,1)
-                  end do
-              end do
-          end do
-      end do
-      deallocate(wc,wr)
-      grad = sqrt(Ddc**2+Ddr**2)
-      if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
-      if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
-      deallocate(Ddc,Ddr)
+        wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1])      !Sobel masks
+        wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+        mat_in = self%get_rmat()
+        call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
+        call self%pad(img_p)                                      !padding
+        mat_p = img_p%get_rmat()
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do m = -(L-1)/2,(L-1)/2
+                    do n = -(L-1)/2,(L-1)/2
+                        Ddc(i,j,1) = Ddc(i,j,1)+mat_p(i+m+1,j+n+1,1)*wc(m,n,1)
+                        Ddr(i,j,1) = Ddr(i,j,1)+mat_p(i+m+1,j+n+1,1)*wr(m,n,1)
+                    end do
+                end do
+            end do
+        end do
+        deallocate(wc,wr)
+        grad = sqrt(Ddc**2+Ddr**2)
+        if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
+        if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
+        deallocate(Ddc,Ddr)
     end subroutine calc_gradient
 
     !NON_MAX_SUPPRESSION
     !using the estimates of the Gx and Gy image gradients and the edge direction angle
     !determines whether the magnitude of the gradient assumes a local  maximum in the gradient direction
     subroutine non_max_supp(mat_in,dir_mat)
-      real, intent(inout) :: mat_in(:,:,:)
-      real,  intent(in)   :: dir_mat(:,:,:)
-      real, allocatable   :: rmat(:,:,:), temp_mat(:,:,:)
-      integer             :: ldim(3), i, j
-      ldim = shape(mat_in)
-      if(ldim(3) /= 1) then
-        print *, "The matrix has to be 2D!"
-        stop
-      endif
-      !if the rounded edge direction angle is   0 degrees, checks the north and south directions
-      !if the rounded edge direction angle is  45 degrees, checks the northwest and southeast directions
-      !if the rounded edge direction angle is  90 degrees, checks the east and west directions
-      !if the rounded edge direction angle is 135 degrees, checks the east and west directions
-      allocate(temp_mat(ldim(1),ldim(2),1), source = mat_in)
-      do i = 1, ldim(1)
-        do j = 1, ldim(2)
-            if( (pi/4. + pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/2.) &         !case(90), north-south
-            &     .or.(-pi/2. <= dir_mat(i,j,1) .and. (dir_mat(i,j,1) < -pi/4.-pi/8.) )) then
-                    if(j+1 > ldim(2)) then
+        real, intent(inout) :: mat_in(:,:,:)
+        real,  intent(in)   :: dir_mat(:,:,:)
+        real, allocatable   :: rmat(:,:,:), temp_mat(:,:,:)
+        integer             :: ldim(3), i, j
+        ldim = shape(mat_in)
+        if(ldim(3) /= 1) THROW_HARD("The matrix has to be 2D!")
+        !if the rounded edge direction angle is   0 degrees, checks the north and south directions
+        !if the rounded edge direction angle is  45 degrees, checks the northwest and southeast directions
+        !if the rounded edge direction angle is  90 degrees, checks the east and west directions
+        !if the rounded edge direction angle is 135 degrees, checks the east and west directions
+        allocate(temp_mat(ldim(1),ldim(2),1), source = mat_in)
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                if( (pi/4. + pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/2.) &         !case(90), north-south
+                &     .or.(-pi/2. <= dir_mat(i,j,1) .and. (dir_mat(i,j,1) < -pi/4.-pi/8.) )) then
+                        if(j+1 > ldim(2)) then
                             if(mat_in(i,j,1) < mat_in(i,j-1,1)) temp_mat(i,j,1) = 0.
-                    else if(j-1 < 1) then
+                        else if(j-1 < 1) then
                             if(mat_in(i,j,1) < mat_in(i,j+1,1)) temp_mat(i,j,1) = 0.
-                    else
+                        else
                             if(mat_in(i,j,1) < mat_in(i,j+1,1) .or. mat_in(i,j,1) < mat_in(i,j-1,1)) temp_mat(i,j,1) = 0.
-                    end if
-            else if( -pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/8.) then       !case(0), west-east
-                    if(i+1 > ldim(1)) then
+                        end if
+                else if( -pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/8.) then       !case(0), west-east
+                        if(i+1 > ldim(1)) then
                             if(mat_in(i,j,1) < mat_in(i-1,j,1)) temp_mat(i,j,1) = 0.
-                    else if(i-1 < 1) then
-                           if(mat_in(i,j,1) < mat_in(i+1,j,1)) temp_mat(i,j,1) = 0.
-                    else
-                           if(mat_in(i,j,1) < mat_in(i+1,j,1) .or. mat_in(i,j,1) < mat_in(i-1,j,1)) temp_mat(i,j,1) = 0.
-                    endif
-            else if(-pi/4.-pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1)< -pi/8.) then  !case(135) northeast - southwest
-                   if( (i-1 < 1 .and. j-1 >0) .or.(j+1 > ldim(2) .and. i+1 <= ldim(1)) ) then
-                          if(mat_in(i,j,1) < mat_in(i+1,j-1,1)) temp_mat(i,j,1) = 0.       !just northeast
-                   else if( (i-1 >0  .and. j-1 < 1) .or. ( i+1 > ldim(1) .and. j+1 <= ldim(2)) ) then
-                          if(mat_in(i,j,1) < mat_in(i-1,j+1,1)) temp_mat(i,j,1) = 0.       !just southwest
-                   else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
-                          if(mat_in(i,j,1) < mat_in(i-1,j+1,1) .or. mat_in(i,j,1) < mat_in(i+1,j-1,1)) temp_mat(i,j,1) = 0. !northeast- southwest
-                !In the angles I decide not to to anything
-                  endif
-            else if(pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/4. + pi/8.) then !case(45), northwest- southeast
-                   if((j-1 < 1 .and. i+1 <= ldim(1))  .or. (i-1 < 1 .and. j+1 <= ldim(2))) then
-                         if(mat_in(i,j,1) < mat_in(i+1,j+1,1)) temp_mat(i,j,1) = 0.        !just southeast
-                   elseif((i+1 > ldim(1) .and. j-1 > 0) .or. (j+1 > ldim(2) .and. i-1 > 0)) then
-                         if(mat_in(i,j,1) < mat_in(i-1,j-1,1)) temp_mat(i,j,1) = 0.    !just northwest
-                   else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
-                      if(mat_in(i,j,1) < mat_in(i-1,j-1,1) .or. mat_in(i,j,1) < mat_in(i+1,j+1,1)) temp_mat(i,j,1) = 0. !northwest - southeast
-              !In the angles I decide not to to anything
-                   endif
-            else !case default
-                 print *, "There is an error in the direction matrix"
-            end if
+                        else if(i-1 < 1) then
+                            if(mat_in(i,j,1) < mat_in(i+1,j,1)) temp_mat(i,j,1) = 0.
+                        else
+                            if(mat_in(i,j,1) < mat_in(i+1,j,1) .or. mat_in(i,j,1) < mat_in(i-1,j,1)) temp_mat(i,j,1) = 0.
+                        endif
+                else if(-pi/4.-pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1)< -pi/8.) then  !case(135) northeast - southwest
+                        if( (i-1 < 1 .and. j-1 >0) .or.(j+1 > ldim(2) .and. i+1 <= ldim(1)) ) then
+                            if(mat_in(i,j,1) < mat_in(i+1,j-1,1)) temp_mat(i,j,1) = 0.       !just northeast
+                        else if( (i-1 >0  .and. j-1 < 1) .or. ( i+1 > ldim(1) .and. j+1 <= ldim(2)) ) then
+                            if(mat_in(i,j,1) < mat_in(i-1,j+1,1)) temp_mat(i,j,1) = 0.       !just southwest
+                        else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
+                            if(mat_in(i,j,1) < mat_in(i-1,j+1,1) .or. mat_in(i,j,1) < mat_in(i+1,j-1,1)) temp_mat(i,j,1) = 0. !northeast- southwest
+                            !In the angles I decide not to to anything
+                        endif
+                else if(pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/4. + pi/8.) then !case(45), northwest- southeast
+                        if((j-1 < 1 .and. i+1 <= ldim(1))  .or. (i-1 < 1 .and. j+1 <= ldim(2))) then
+                            if(mat_in(i,j,1) < mat_in(i+1,j+1,1)) temp_mat(i,j,1) = 0.        !just southeast
+                        elseif((i+1 > ldim(1) .and. j-1 > 0) .or. (j+1 > ldim(2) .and. i-1 > 0)) then
+                            if(mat_in(i,j,1) < mat_in(i-1,j-1,1)) temp_mat(i,j,1) = 0.    !just northwest
+                        else if(i-1 > 0 .and. j+1 <= ldim(2) .and. i+1 <= ldim(1) .and. j-1 > 0) then
+                            if(mat_in(i,j,1) < mat_in(i-1,j-1,1) .or. mat_in(i,j,1) < mat_in(i+1,j+1,1)) temp_mat(i,j,1) = 0. !northwest - southeast
+                            !In the angles I decide not to to anything
+                        endif
+                else !case default
+                    print *, "There is an error in the direction matrix"
+                end if
+            enddo
         enddo
-      enddo
-      mat_in = temp_mat
-      deallocate(temp_mat)
-      end subroutine non_max_supp
+        mat_in = temp_mat
+        deallocate(temp_mat)
+     end subroutine non_max_supp
 
     !Edges stronger than thresh(2) are mantained, edges weaker than thresh(1) are discarded, in between edges are marked as "weak edges"
     subroutine double_thresh(mat_in, thresh)
@@ -340,10 +333,7 @@ module canny_no_thresh_mod
             real, allocatable    :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)                 !derivates, gradient
             integer, allocatable :: neigh_8(:,:,:)                                                    !8-neighborhoods of a pixel
             ldim = img_in%get_ldim()
-            if(ldim(3) /= 1) then
-              print *, "The image has to be 2D!"
-              stop
-            endif
+            if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
             call img_out%new(ldim,1.)  !reset if not empty
             !STEP 1: SMOOTHING
             !Apply a Gaussian filter to reduce noise

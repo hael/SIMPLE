@@ -11,16 +11,16 @@ private
 
 type sym
     private
-    type(oris)                    :: e_sym            !< symmetry eulers
-    character(len=3), allocatable :: subgrps(:)       !< subgroups
-    real                          :: eullims(3,2)     = 0.  !< euler angles limits (asymetric unit, including mirrors)
-    real                          :: eullims_nomirr(3,2)= 0.  !< euler angles limits (asymetric unit, excluding mirrors)
-    integer                       :: n=1              !< nr of symmetry ops
-    integer                       :: ncsym=1          !< num of order C sym
-    integer                       :: ndsym=1          !< num of order D sym
-    integer                       :: t_or_o=0         !< tetahedral or octahedral symmetry
-    character(len=3)              :: pgrp='c1'        !< point-group symmetry
-    logical                       :: c_or_d=.false.   !< c- or d-symmetry
+    type(oris)                    :: e_sym                    !< symmetry eulers
+    character(len=3), allocatable :: subgrps(:)               !< subgroups
+    real                          :: eullims(3,2) = 0.        !< euler angles limits (asymetric unit, including mirrors)
+    real                          :: eullims_nomirr(3,2) = 0. !< euler angles limits (asymetric unit, excluding mirrors)
+    integer                       :: n=1                      !< # symmetry ops
+    integer                       :: ncsym=1                  !< num of order C sym
+    integer                       :: ndsym=1                  !< num of order D sym
+    integer                       :: t_or_o=0                 !< tetahedral or octahedral symmetry
+    character(len=3)              :: pgrp='c1'                !< point-group symmetry
+    logical                       :: c_or_d=.false.           !< c- or d-symmetry
   contains
     ! constructor
     procedure          :: new
@@ -506,7 +506,7 @@ contains
         integer   :: n_os, nsym, symop, i
         type(ori) :: oasym, osym
         if( trim(self%pgrp).eq.'c1' )then
-            stop 'nothing to do, pgrp=c1; simple_sym :: symrandomize'
+            THROW_HARD('nothing to do, pgrp=c1; symrandomize')
         endif
         n_os = os_asym_unit%get_noris()
         nsym = self%n
@@ -533,7 +533,7 @@ contains
         ! return
         !!!!!!
         nos = os%get_noris()
-        if(is_odd(nos))stop 'Odd number of projections directions is not supported; simple_sym :: build refspiral'
+        if(is_odd(nos))THROW_HARD('odd number of projections directions not supported; build_refspiral')
         nos_nomirr = nos/2
         call os%new(nos)
         call os_nomirr%new(nos_nomirr)
