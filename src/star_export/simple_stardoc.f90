@@ -199,7 +199,7 @@ contains
         inquire(unit=funit,opened=isopened,iostat=ier)
         if(ier/=0) call fileiochk("readline isopened failed", ier)
         if(.not. isopened )then
-            HALT_NOW("readline isopened failed")
+            THROW_HARD("readline isopened failed")
         endif
         ! read characters from line and append to result
         do
@@ -419,15 +419,15 @@ contains
 
         if(ielem /= self%num_data_elements .or. ivalid /= self%num_valid_elements)then
             print *, " Second pass incorrectly counted  detected parameters "
-            HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 1")
+            THROW_HARD( "simple_stardoc:: read_header invalid element mismatch 1")
         endif
         if(idata /= self%num_data_lines)then
             print *, " Second pass incorrectly counted data lines "
-            HALT_NOW( "simple_stardoc:: read_header invalid data line mismatch ")
+            THROW_HARD( "simple_stardoc:: read_header invalid data line mismatch ")
         endif
         if(sum(int(self%param_converted)) /= self%num_valid_elements) then
             print *, " Second pass incorrectly allocated detected parameters "
-            HALT_NOW( "simple_stardoc:: read_header invalid element mismatch 2")
+            THROW_HARD( "simple_stardoc:: read_header invalid element mismatch 2")
         endif
         !! Check allocation of type variables
         if(.not. allocated(self%param_starlabels) .or. &
@@ -436,7 +436,7 @@ contains
             .not. allocated(self%param_scale) .or. &
             .not. allocated(self%param_converted)) then
             print *, " Second pass do not allocate correctly "
-            HALT_NOW( "simple_stardoc:: read_header allocation unsuccessful")
+            THROW_HARD( "simple_stardoc:: read_header allocation unsuccessful")
         endif
 
         print *, ">>>  STAR IMPORT HEADER INFO "
@@ -450,7 +450,7 @@ contains
                 end if
             else
                 print *, " Second pass incorrectly allocated detected parameter label ",i
-                HALT_NOW( "simple_stardoc:: read_header invalid label ")
+                THROW_HARD( "simple_stardoc:: read_header invalid label ")
             endif
         end do
 
@@ -546,13 +546,13 @@ contains
                             pos1 = index(trim(fname),"@")
                             if( pos1 /= 0 )then
                                 if(pos1 > len_trim(fname) - 1)then
-                                    HALT_NOW(" File part "//trim(fname)//" irregular"  )
+                                    THROW_HARD(" File part "//trim(fname)//" irregular"  )
                                 endif
                                 !! get the frame number
                                 if(.not.allocated(self%data_framenum)) allocate(self%data_framenum(self%num_data_lines))
                                 call str2int( trim(fname(1:pos1-1)) , ios, self%data_framenum(nDataline) )
                                 if(ios/=0) then
-                                    HALT_NOW( 'stardoc; read_datalines frame num str2int error :'//trim(fname(1:pos1-1)) )
+                                    THROW_HARD( 'stardoc; read_datalines frame num str2int error :'//trim(fname(1:pos1-1)) )
                                 endif
                                 !! shift the filename string
                                 fname = trim(fname(pos1+1:))
@@ -564,7 +564,7 @@ contains
                             pos1 = index(trim(fname),":mrc",back=.true.)
                             if( pos1 /= 0 )then
                                 if(pos1 < 4 .or. pos1 > len_trim(fname) - 1)then
-                                    HALT_NOW(" File part "//trim(fname)//" irregular"  )
+                                    THROW_HARD(" File part "//trim(fname)//" irregular"  )
                                 endif
                                 fname = trim(fname(1:pos1-1))
                             endif
@@ -603,15 +603,15 @@ contains
                                             fname = trim(tmp)//"s"
                                         else
                                             print *," Unable to find file in path of project "//trim(tmp)
-                                            HALT_NOW(" Unable to find file "//trim(tmp) )
+                                            THROW_HARD(" Unable to find file "//trim(tmp) )
                                         endif
                                     else
                                         print *," Unable to find file in path of current star file "//trim(tmp)
-                                        HALT_NOW(" Unable to find file "//trim(tmp) )
+                                        THROW_HARD(" Unable to find file "//trim(tmp) )
                                     endif
                                 else
                                     print *," Unable to find file or path of current star file "//trim(fname)
-                                    HALT_NOW("simple_stardoc failed to get file in starfile")
+                                    THROW_HARD("simple_stardoc failed to get file in starfile")
                                 endif
                             endif
                             if(self%param_labels(i)%str == "CtfImage")then
@@ -656,7 +656,7 @@ contains
             endif
         end do !! file loop
         if(nDataline /= self%num_data_lines)then
-            HALT_NOW(" Num data lines mismatch in read_data_lines and read_header")
+            THROW_HARD(" Num data lines mismatch in read_data_lines and read_header")
         endif
         !! Leave some provenence information on temporary files
         call date_and_time(date=datestr)

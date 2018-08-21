@@ -9,9 +9,8 @@
 ! WARRANTY. Redistribution and modification is regulated by the GNU General
 ! Public License.
 !-----------------------------------------------------------------------------!
-    logical :: debug=.false.
-    logical :: verbose=.false.
-
+logical :: debug=.false.
+logical :: verbose=.false.
 #define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': '
 #define __WPRINT_FILE_LINE_(FFFF,LLLL) write(*,'("DEBUG:",/,A,/,":",I0,":",A)',advance='no') FFFF,LLLL
 #define _PRINT_FILE_LINE_(myFILE,myLine) if(debug.or.global_debug) print *, myFILE//':myLine',
@@ -34,20 +33,11 @@
 #ifndef VerbosePrint
 # define VerbosePrint if(verbose.or.global_verbose.or.debug.or.global_debug) print *,
 #endif
-
-! HALTNOW must be used with and if/then statement dure to ";" otherwise it will break
-#ifndef HALT_NOW
-#if defined(INTEL)
-#define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') \
-__FILENAME__,__LINE__, msg; stop
-#else
-#define HALT_NOW(msg) write(*,'("Error in ",A," line ",I0,": ",A)') \
-__FILENAME__,__LINE__, msg; \
-call backtrace;stop
-#endif
-#endif
 #ifndef THROW_HARD
 #define THROW_HARD(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
+#endif
+#ifndef THROW_WARN
+#define THROW_WARN(msg) call simple_exception(msg, __FILENAME__ , __LINE__, l_stop=.false.)
 #endif
 #ifdef USING_CUDA
 #define CheckLaunchError(CudaErrorMsg) if(cudaDeviceSynchronize().ge.0)then;\
@@ -60,5 +50,4 @@ end associate;endif
 #else
 #define CheckLaunchError(s)
 #endif
-
-  logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)
+logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)

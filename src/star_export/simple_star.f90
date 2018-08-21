@@ -146,25 +146,25 @@ contains
 
         if (.not. file_exists('oritab-stardoc.txt')) then
             print *,"star_project; check_temp_files called from "//trim(msg)
-            HALT_NOW( 'star_project;  oritab-stardoc.txt not found' )
+            THROW_HARD( 'star_project;  oritab-stardoc.txt not found' )
         endif
         nl_deftab = nlines('oritab-stardoc.txt')
         if(nl_deftab /= self%doc%num_data_lines)then
             print *,"star_project; check_temp_files called from "//trim(msg)
-            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+            THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
         if (.not. file_exists('filetab-stardoc.txt')) then
             print *,"star_project; check_temp_files called from "//trim(msg)
-            HALT_NOW('star_project;  filetab-stardoc.txt not found')
+            THROW_HARD('star_project;  filetab-stardoc.txt not found')
         endif
         nl_filetab= nlines('filetab-stardoc.txt')
         if(nl_deftab /= self%doc%num_data_lines)then
             print *,"star_project; check_temp_files called from "//trim(msg)
-            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+            THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
         if(nl_filetab /= nl_deftab)then
             print *,"star_project; check_temp_files called from "//trim(msg)
-            HALT_NOW('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
+            THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
 
     end subroutine check_temp_files
@@ -278,7 +278,7 @@ contains
 
         ndatlines = binread_nlines(params%oritab)
         if(ndatlines /= self%doc%num_data_lines)then
-            HALT_NOW('star_project; import_ctf_estimation binread_nlines does not match num_data_lines from starfile')
+            THROW_HARD('star_project; import_ctf_estimation binread_nlines does not match num_data_lines from starfile')
         endif
         call os%new(ndatlines)
         call binread_oritab(params%oritab, spproj, os, [1,ndatlines])

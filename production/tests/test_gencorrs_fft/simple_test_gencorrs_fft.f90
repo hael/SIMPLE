@@ -49,26 +49,4 @@ do iptcl=1,p%nptcls - 1
     end do
 end do
 print *, 'time of fft_mod: ', toc(tfft)
-
-! erravg = 0.
-! errmax = 0.
-! cnt    = 0
-! do iptcl=1,p%nptcls - 1
-! 	do jptcl=iptcl + 1, p%nptcls
-! 		cc = pftcc%gencorrs(iptcl, jptcl)
-! 		cc_fft = pftcc%gencorrs_fft(iptcl, jptcl)
-! 		do irot=1,pftcc%get_nrots()
-! 			err    = abs(cc(irot) - cc_fft(irot))
-
-! 			print *, cc(irot), cc_fft(irot), err
-
-! 			if( err > errmax ) errmax = err
-! 			erravg = erravg + err
-! 			cnt = cnt + 1
-! 		end do
-! 		stop
-! 	end do
-! end do
-! print *, 'errmax: ', errmax
-! print *, 'erravg: ', erravg
 end program simple_test_gencorrs_fft

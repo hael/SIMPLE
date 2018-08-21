@@ -26,7 +26,6 @@ program simple_test_mpi
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call block_distribution
     call MPI_FINALIZE ( ierr )
-    stop
 
 contains
 
