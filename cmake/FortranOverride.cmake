@@ -405,9 +405,9 @@ message( STATUS "CMAKE_Fortran_FLAGS_DEBUG_INIT: ${CMAKE_Fortran_FLAGS_DEBUG_INI
 if(POLICY CMP0063)
   cmake_policy(SET CMP0063 OLD)
 endif()
-if(POLICY CMP0004)
-  cmake_policy(SET CMP0004 OLD)
-endif()
+# if(POLICY CMP0004)
+#   cmake_policy(SET CMP0004 OLD)
+# endif()
 
 #message(STATUS Executing: ENV{PATH} $ENV{PATH})
 ## Remove EMAN bin and possible library paths from PATH
