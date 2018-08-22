@@ -77,7 +77,7 @@ contains
         if( nframes < 2 )then
             err = .true.
             write(*,*) 'movie: ', trim(movie_stack_fname)
-            write(*,*) 'WARNING, nframes of movie < 2, aborting motion_correct'
+            THROW_WARN('nframes of movie < 2, aborting motion_correct')
             return
         endif
         ! make search object ready
@@ -156,8 +156,8 @@ contains
         allocate(shifts(nframes,2), source=opt_shifts)
         ! print
         if( corr < 0. )then
-            if( doprint ) write(*,'(a)') '>>> WARNING! OPTIMAL CORRELATION < 0.0'
             if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+            if( doprint ) THROW_WARN('OPTIMAL CORRELATION < 0.0')
         endif
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)

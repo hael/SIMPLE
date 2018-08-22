@@ -230,8 +230,7 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            write(*,'(a)') 'WARNING! stat :: normalize_sigm_1, division with zero'
-            write(*,'(a)') 'no normalisation done'
+            THROW_WARN('normalize_sigm_1, division with zero, no normalisation done')
         endif
     end subroutine normalize_sigm_1
 
@@ -250,8 +249,7 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
-            write(*,'(a)') 'no normalisation done'
+            THROW_WARN('normalize_sigm_2, division with zero, no normalisation done')
         endif
     end subroutine normalize_sigm_2
 
@@ -270,8 +268,7 @@ contains
             arr = (exp((arr-smin)/delta)-1.)/NNET_CONST
             !$omp end parallel workshare
         else
-            write(*,'(a)') 'WARNING! stat :: normalize_sigm_2, division with zero'
-            write(*,'(a)') 'no normalisation done'
+            THROW_WARN('normalize_sigm_3, division with zero, no normalisation done')
         endif
     end subroutine normalize_sigm_3
 
@@ -291,8 +288,7 @@ contains
             arr = (arr - smin)/delta
             !$omp end parallel workshare
         else
-            write(*,'(a)') 'WARNING! stat :: normalize_minmax, division with zero'
-            write(*,'(a)') 'no normalisation done'
+            THROW_WARN('normalize_minmax, division with zero, no normalisation done')
         endif
     end subroutine normalize_minmax
 

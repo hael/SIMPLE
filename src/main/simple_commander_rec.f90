@@ -276,8 +276,8 @@ contains
                     call recvol_read%read_rho(kernam)
                     call build%recvol%sum_reduce(recvol_read)
                 else
-                    if( .not. here(1) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(recnam)), ' missing'
-                    if( .not. here(2) ) write(*,'(A,A,A)') 'WARNING! ', adjustl(trim(kernam)), ' missing'
+                    if( .not. here(1) ) THROW_WARN(adjustl(trim(recnam))//' missing')
+                    if( .not. here(2) ) THROW_WARN(adjustl(trim(kernam))//' missing')
                     return
                 endif
             end subroutine assemble

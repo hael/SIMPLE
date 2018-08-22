@@ -165,7 +165,7 @@ contains
                         end do
                     end do
                 end do
-                if(spec%warn) write(*,'(a)') 'too many iterations in minimize; simple_opt_bfgs'
+                if(spec%warn) THROW_WARN('too many iterations in minimize; simple_opt_bfgs')
             end subroutine
 
     end subroutine

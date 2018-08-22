@@ -1,10 +1,12 @@
 ! box sizes optimised for FFTW perfomance
 module simple_magic_boxes
-use simple_math, only: find
+use simple_math,  only: find
+use simple_error, only: simple_exception
 implicit none
 
 public :: find_magic_box, find_boxmatch, print_magic_box_range, find_magic_boxes4scale, autoscale
 private
+#include "simple_local_flags.inc"
 
 integer, parameter :: NSZS=97
 integer :: boxsizes(NSZS) = [32, 36, 40, 48, 52, 56, 64, 66, 70, 72, 80, 84, 88, 100, 104, 108, 112, 120, 128, 130, 132,&
@@ -41,7 +43,7 @@ contains
         do i=ind_start,ind_stop
             write(*,'(i5)') boxsizes(i)
         end do
-        if( ind_stop == NSZS ) write(*,'(a)') 'WARNING! box size may underestimated (max value in list is 1024)'
+        if( ind_stop == NSZS ) THROW_WARN('box size may underestimated (max value in list is 1024)')
     end subroutine print_magic_box_range
 
     function find_magic_boxes4scale( orig_box, scales ) result( boxes )

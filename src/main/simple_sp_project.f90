@@ -468,7 +468,7 @@ contains
         call simple_abspath(moviename,fname,errmsg='simple_sp_project::add_single_movie')
         call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
-            write(*,*) 'WARNING! # frames in movie ', trim(fname), ' <= zero, ommitting'
+            THROW_WARN('# frames in movie: '//trim(fname)//' <= zero, omitting')
         else if( nframes > 1 )then
             call os_ptr%set(1, 'movie', trim(fname))
             call os_ptr%set(1, 'imgkind', 'movie')
@@ -534,7 +534,7 @@ contains
             call simple_abspath(movienames(cnt),moviename,errmsg='simple_sp_project::add_movies')
             call find_ldim_nptcls(trim(moviename), ldim, nframes)
             if( nframes <= 0 )then
-                write(*,*) 'WARNING! # frames in movie ', trim(moviename), ' <= zero, ommitting'
+                THROW_WARN('# frames in movie: '//trim(moviename)//' <= zero, omitting')
                 cycle
             else if( nframes > 1 )then
                 call os_ptr%set(imic, 'movie', trim(moviename))
@@ -1794,8 +1794,7 @@ contains
         end select
         n = os%get_noris()
         if( n == 0 )then
-            write(*,*) 'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
-            print *,'WARNING! cannot check virginity of non-existent field (touched for the very first time???)'
+            THROW_WARN('cannot check virginity of non-existent field (touched for the very first time???)')
             return
         endif
         do i=1,n
@@ -2254,61 +2253,61 @@ contains
                         if( self%os_mic%get_noris() > 0 )then
                             call self%os_mic%write(fname)
                         else
-                            write(*,*) 'WARNING, no mic-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no mic-type oris available to write; write_segment2txt')
                         endif
                     case('stk')
                         if( self%os_stk%get_noris() > 0 )then
                             call self%os_stk%write(fname)
                         else
-                            write(*,*) 'WARNING, no stk-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no stk-type oris available to write; write_segment2txt')
                         endif
                     case('ptcl2D')
                         if( self%os_ptcl2D%get_noris() > 0 )then
                             call self%os_ptcl2D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl2D-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no ptcl2D-type oris available to write; write_segment2txt')
                         endif
                     case('cls2D')
                         if( self%os_cls2D%get_noris() > 0 )then
                             call self%os_cls2D%write(fname)
                         else
-                            write(*,*) 'WARNING, no cls2D-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no cls2D-type oris available to write; write_segment2txt')
                         endif
                     case('cls3D')
                         if( self%os_cls3D%get_noris() > 0 )then
                             call self%os_cls3D%write(fname,  fromto)
                         else
-                            write(*,*) 'WARNING, no cls3D-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no cls3D-type oris available to write; write_segment2txt')
                         endif
                     case('ptcl3D')
                         if( self%os_ptcl3D%get_noris() > 0 )then
                             call self%os_ptcl3D%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no ptcl3D-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no ptcl3D-type oris available to write; write_segment2txt')
                         endif
                     case('out')
                         if( self%os_out%get_noris() > 0 )then
                             call self%os_out%write(fname)
                         else
-                            write(*,*) 'WARNING, no out-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no out-type oris available to write; write_segment2txt')
                         endif
                     case('projinfo')
                         if( self%projinfo%get_noris() > 0 )then
                             call self%projinfo%write(fname, fromto)
                         else
-                            write(*,*) 'WARNING, no projinfo-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no projinfo-type oris available to write; write_segment2txt')
                         endif
                     case('jobproc')
                         if( self%jobproc%get_noris() > 0 )then
                             call self%jobproc%write(fname)
                         else
-                            write(*,*) 'WARNING, no jobproc-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no jobproc-type oris available to write; write_segment2txt')
                         endif
                     case('compenv')
                         if( self%compenv%get_noris() > 0 )then
                             call self%compenv%write(fname)
                         else
-                            write(*,*) 'WARNING, no compenv-type oris available to write; sp_project :: write_segment2txt'
+                            THROW_WARN('no compenv-type oris available to write; write_segment2txt')
                         endif
                     case DEFAULT
                         THROW_HARD('unsupported oritype flag; write_segment2txt')

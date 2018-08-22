@@ -174,7 +174,7 @@ contains
         kfromto_here(:) = self%file_header(3:4)
         if ((fromp_here.ne.params_glob%fromp) .or. (top_here.ne.params_glob%top) .or. &
             (kfromto_here(1).ne.params_glob%kfromto(1)) .or. (kfromto_here(2).ne.params_glob%kfromto(2))) then
-            write (*,*) 'WARNING: dimensions in sigmas file do not match.'
+            THROW_WARN('dimensions in sigmas file do not match')
             write (*,*) 'params_glob%fromp: ',   params_glob%fromp,   ' ; in sigmas file: ', fromp_here
             write (*,*) 'params_glob%top: ',     params_glob%top,     ' ; in sigmas file: ', top_here
             write (*,*) 'params_glob%kfromto: ', params_glob%kfromto, ' ; in sigmas file: ', kfromto_here

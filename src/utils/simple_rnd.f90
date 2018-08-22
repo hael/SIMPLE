@@ -3,12 +3,14 @@
 module simple_rnd
 use simple_defs ! singleton
 use simple_math
-use simple_error, only: allocchk
+use simple_error,  only: allocchk, simple_exception
 use simple_syslib, only: get_process_id
 implicit none
 
-private :: idum
-public
+public :: seed_rnd, ran3, ran3arr, randn, multinomal, gasdev, irnd_uni, irnd_uni_pair
+public :: irnd_gasdev, rnd_4dim_sphere_pnt, shcloc, mnorm_smp, r8po_fa
+private
+#include "simple_local_flags.inc"
 
 interface ran3arr
     module procedure ran3arr_1
@@ -26,7 +28,7 @@ interface randn
     module procedure randn_2
 end interface
 
-integer(long), save   :: idum
+integer(long), save :: idum
 
 contains
 
@@ -195,7 +197,7 @@ contains
             harvest = gasdev( mean, stdev )
             cnt = cnt + 1
             if( cnt == maxits )then
-                write(*,*) 'WARNING! gasdev_3 exceeding maxits; simple_rnd'
+                THROW_WARN('gasdev_3 exceeding maxits')
                 return
              endif
         end do

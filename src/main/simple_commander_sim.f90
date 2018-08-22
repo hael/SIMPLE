@@ -316,7 +316,7 @@ contains
                     pos(cnt,1) = ix
                     pos(cnt,2) = iy
                     if( cnt == 500*npos )then
-                        write(*,'(a)') "WARNING! Exiting loop because maximum nr of iterations; gen_ptcl_pos; simple_math"
+                        THROW_WARN('exiting loop because maximum nr of iterations; gen_ptcl_pos')
                         exit
                     endif
                     if( cnt == npos ) exit

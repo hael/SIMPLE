@@ -189,14 +189,14 @@ contains
         noris = bos_doc%get_n_records(iseg)
         if( noris == 0 )then
             call bos_doc%close
-            write(*,*) 'WARNING! Empty project file segment, nothing to update, aborting; exec_update_project_stateflags'
+            THROW_WARN('empty project file segment, nothing to update, aborting; exec_update_project_stateflags')
             return
         endif
         if( noris /= n_lines )then
             call bos_doc%close
             write(*,*) '# lines in infile        : ', n_lines
             write(*,*) '# entries in file segment: ', noris
-            write(*,*) 'WARNING! # entries in infile/project file segment do not match, aborting; exec_update_project_stateflags'
+            THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_update_project_stateflags')
             return
         endif
         ! read segment

@@ -149,7 +149,7 @@ contains
                     end do
                     if(2.*abs(fp-cost).le.spec%ftol*(abs(fp)+abs(cost))) return ! termination criterion
                     if(iter.eq.spec%maxits)then
-                        if( spec%warn ) write(*,'(a)') 'powell exceeding maximum iterations; simple_opt_powell'
+                        if( spec%warn ) THROW_WARN('powell exceeding maximum iterations')
                         return
                     end if
                     do j=1,spec%ndim

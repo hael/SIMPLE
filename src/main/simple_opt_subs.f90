@@ -156,7 +156,7 @@ contains
                 do
                     iter = iter+1
                     if( iter == spec%maxits )then
-!                        if(warn) write(*,'(a)') 'brent exceeding maximum iterations; simple_opt_subs'
+                       if(warn) THROW_WARN('brent exceeding maximum iterations; simple_opt_subs')
                         return ! ‘rbrent’ may be used uninitialized in this function
                     endif
                     xm=0.5*(a+b)
@@ -280,7 +280,7 @@ contains
                         tmplam=-slope/(2.*b)
                     else
                         disc=b*b-3.*a*slope
-                        if(disc.lt.0..and.warn) write(*,'(a)') 'roundoff problem in lnsrch; simple_opt_subs'
+                        if(disc.lt.0..and.warn) THROW_WARN('roundoff problem in lnsrch')
                         tmplam=(-b+sqrt(disc))/(3.*a)
                     endif
                     if(tmplam.gt..5*alam)tmplam=.5*alam
@@ -352,7 +352,7 @@ contains
                         exit
                     end if
                     if(iter >= itmax)then
-                        if(warn) write (*,*) 'itmax exceeded in amoeba; simple_opt_subs'
+                        if(warn) THROW_WARN('itmax exceeded in amoeba')
                         exit
                     endif
                     ! Begin a new iteration. First extrapolate by a factor -1 through the face of the

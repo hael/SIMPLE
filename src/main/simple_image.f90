@@ -656,7 +656,7 @@ contains
             if( present(noutside) )then
                 noutside = noutside+1
             else
-                write(*,*) 'WARNING! Box extends outside micrograph; window; simple_image'
+                THROW_WARN('box extends outside micrograph; window')
             endif
         endif
         xoshoot = 0
@@ -2428,7 +2428,7 @@ contains
             call self_out%copy(self)
             self%cmat = conjg(self%cmat)
         else
-            write(*,'(a)') "WARNING! Cannot conjugate real image"
+            THROW_WARN('cannot conjugate real image')
         endif
     end function conjugate
 
@@ -4337,7 +4337,7 @@ contains
         if( present(errout) )then
             errout = err
         else
-            if( err ) write(*,'(a)') 'WARNING: variance zero; stats_1; simple_image'
+            if( err ) THROW_WARN('variance zero; stats_1')
         endif
         if( didft ) call self%fft()
     end subroutine stats_1
@@ -4364,7 +4364,7 @@ contains
         if( present(errout) )then
             errout = err
         else
-            if( err ) write(*,'(a)') 'WARNING: variance zero; stats_2; simple_image'
+            if( err ) THROW_WARN('variance zero; stats_2')
         endif
     end subroutine stats_2
 
@@ -4489,7 +4489,7 @@ contains
         integer                     :: i, j, k, npix
         real                        :: var, ep, dev
         if( self%ft )then
-            write(*,*) 'WARNING: Cannot cure FTs; cure; simple_image'
+            THROW_WARN('cannot cure FTs; cure')
             return
         endif
         npix   = product(self%ldim)
@@ -6551,7 +6551,7 @@ contains
         class(image), intent(inout) :: self
         real, intent(in)            :: avg, sdev
         if( self%ft )then
-            write(*,*) 'WARNING: Cannot normalize FTs; norm_ext; simple_image'
+            THROW_WARN('cannot normalize FTs; norm_ext')
             return
         endif
         if( abs(avg) > TINY ) self%rmat = self%rmat - avg
@@ -6571,7 +6571,7 @@ contains
         real, allocatable :: pixels(:)
         logical           :: err
         if( self%ft )then
-            write(*,*) 'WARNING: Cannot normalize FTs; noise_norm; simple_image'
+            THROW_WARN('cannot normalize FTs; noise_norm')
             return
         endif
         call maskimg%disc(self%ldim, self%smpd, msk, npix)
@@ -6592,7 +6592,7 @@ contains
             if( present(errout) )then
                 errout = err
             else
-                if( err ) write(*,'(a)') 'WARNING: variance zero; noise_norm; simple_image'
+                if( err ) THROW_WARN('variance zero; noise_norm')
             endif
             if( sdev > 1e-6 )then
                 self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&

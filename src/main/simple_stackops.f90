@@ -68,11 +68,6 @@ contains
             call progress(i,n)
             call img%read(fnameStack, i)
             pcavec = img%serialize(l_mask)
-            !err = .false.
-            !!!!!!!!!!!!!!!!!!!
-            !call normalize(pcavec, err)! normalize each window, IT IS WRONG
-            !!!!!!!!!!!!!!!!!!!
-            !if( err ) write(*,'(a,i7)') 'WARNING: variance zero! image nr: ', i
             avg = avg + pcavec
             write(fnum,rec=i) pcavec
             deallocate(pcavec)
