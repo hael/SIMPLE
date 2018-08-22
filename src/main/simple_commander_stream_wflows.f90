@@ -48,7 +48,7 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, iostatus
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
@@ -223,7 +223,7 @@ contains
         class(cmdline),                          intent(inout) :: cline
         character(len=:), allocatable :: WORK_PROJFILE
         integer,          parameter   :: SHIFTSRCH_PTCLSLIM  = 2000  ! # of ptcls required to turn on shift search
-        integer,          parameter   :: SHIFTSRCH_ITERLIM   = 5     ! # of iterations prior to turn on shift search
+        integer,          parameter   :: SHIFTSRCH_ITERLIM   = 10     ! # of iterations prior to turn on shift search
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
         integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
@@ -240,14 +240,11 @@ contains
         character(len=:),       allocatable :: spproj_list_fname, stk
         character(len=STDLEN)               :: str_iter, refs_glob
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
-        integer :: iter, origproj_time, orig_box, box, nptcls_glob, ncls_glob, tnow, iproj, n_new_spprojs, ind
-        integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_spprojs, n_spprojs_prev
-        logical :: do_autoscale, work_proj_has_changed, wait_for_new_ptcls
+        integer :: iter, origproj_time, orig_box, box, nptcls_glob, ncls_glob, tnow, iproj, n_new_spprojs
+        integer :: nptcls_glob_prev, ncls_glob_prev, last_injection, n_spprojs, n_spprojs_prev, n_new_ptcls
+        logical :: do_autoscale, work_proj_has_changed, wait_for_new_ptcls, l_ccres
         ! seed the random number generator
         call seed_rnd
-        ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','yes') ! only for parameters determination
@@ -264,6 +261,7 @@ contains
         ! init
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
+        l_ccres = .false.
         ! filepath creates spproj_list_fname with checks
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ! for microscopes that don't work too good
@@ -297,7 +295,7 @@ contains
                             call stream_proj%kill
                         enddo
                     endif
-                    write(*,*)'>>> PARTICLES COUNT: ', nptcls_glob, ' : ',cast_time_char(simple_gettime())
+                    write(*,'(A,I8,A,A)')'>>> PARTICLES COUNT: ', nptcls_glob, ' : ',cast_time_char(simple_gettime())
                     call flush(6)
                     if( nptcls_glob > params%ncls_start * params%nptcls_per_cls )then
                         exit ! Enough particles to initiate cluster2D
@@ -320,7 +318,9 @@ contains
         orig_box  = stream_proj%get_box()
         orig_smpd = stream_proj%get_smpd()
         orig_msk  = params%msk
-        params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC*0.9)
+        !params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC*0.8)
+        ! such that 2*msk=58 & boxmatch ~64
+        params%smpd_targets2D(1) = max(orig_smpd, orig_smpd*orig_msk/29.)
         if( do_autoscale )then
             call autoscale(orig_box, orig_smpd, params%smpd_targets2D(1), box, smpd, scale_factor)
             if( box == orig_box ) do_autoscale = .false.
@@ -379,19 +379,22 @@ contains
             call cline_cluster2D%set('nparts',  real(min(ncls_glob,params%nparts)))
             call cline_cluster2D%set('stream',  'yes') ! has to be updated at each iteration
             if( iter > 1 ) call cline_cluster2D%set('refs', trim(refs_glob))
-            if( nptcls_glob>SHIFTSRCH_PTCLSLIM .and. iter>SHIFTSRCH_ITERLIM )then
-                 call cline_cluster2D%set('trs', MINSHIFT)
-            endif
-            if( nptcls_glob>CCRES_NPTCLS_LIM .and. iter>5 )then
-                 call cline_cluster2D%set('objfun', 'ccres')
+            ! shift limit
+            if( nptcls_glob>SHIFTSRCH_PTCLSLIM .and. iter>SHIFTSRCH_ITERLIM )call cline_cluster2D%set('trs', MINSHIFT)
+            ! objective function
+            if( .not.l_ccres )then
+                if( nptcls_glob > CCRES_NPTCLS_LIM .and. iter > SHIFTSRCH_ITERLIM )then
+                    l_ccres = .true.
+                    call cline_cluster2D%set('objfun', 'ccres')
+                    write(*,'(A)')'>>> SWITCHED TO CCRES OBJECTIVE FUNCTION'
+                endif
             endif
             ! execute
             params_glob%nptcls = nptcls_glob
             call xcluster2D_distr%execute(cline_cluster2D)
-            work_proj_has_changed = .false.
             wait_for_new_ptcls    = .false.
             if( cline_cluster2D%defined('converged') )then
-                wait_for_new_ptcls = (cline_cluster2D%get_carg('converged').eq.'yes')
+                wait_for_new_ptcls = (cline_cluster2D%get_carg('converged').eq.'yes') .and. is_even(iter)
                 call cline_cluster2D%delete('converged')
             endif
             ! update
@@ -400,8 +403,10 @@ contains
             ! current references file name
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             ! remap zero-population classes
+            work_proj_has_changed = .false.
             call remap_empty_classes
-            ! termination and pause
+            if( work_proj_has_changed )call work_proj%write_segment_inside('ptcl2D',trim(WORK_PROJFILE))
+            ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 write(*,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
@@ -411,7 +416,7 @@ contains
                 write(*,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
                 exit
             endif
-            ! wait for new images if 2D run is considered converged
+            ! wait for new images
             tnow = simple_gettime()
             if( wait_for_new_ptcls )write(*,'(A,A)')'>>> WAITING FOR NEW PARTICLES ',cast_time_char(tnow)
             do while( wait_for_new_ptcls )
@@ -427,36 +432,42 @@ contains
                 n_spprojs      = nlines(spproj_list_fname)
                 n_new_spprojs  = n_spprojs - n_spprojs_prev
                 if( n_new_spprojs > 0 )then
-                    ! append and scale new stacks
+                    ! fetch new stacks
+                    n_new_ptcls = 0
                     if(allocated(spproj_list))deallocate(spproj_list)
                     if(allocated(stk_list))   deallocate(stk_list)
                     allocate(stk_list(n_new_spprojs))
                     call read_filetable(spproj_list_fname, spproj_list)
                     do iproj=n_spprojs_prev+1,n_spprojs
                         call stream_proj%read(spproj_list(iproj))
+                        n_new_ptcls = n_new_ptcls + stream_proj%get_nptcls()
                         stk = stream_proj%get_stkname(1)
                         stk_list(iproj-n_spprojs_prev) = trim(stk)
                     enddo
-                    call scale_stks( stk_list )
-                    do iproj=n_spprojs_prev+1,n_spprojs
-                        call stream_proj%read(spproj_list(iproj))
-                        ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
-                        if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
-                        call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars)
-                    enddo
-                    ! updates counters
-                    nptcls_glob_prev = nptcls_glob
-                    nptcls_glob      = work_proj%get_nptcls()
-                    ncls_glob_prev   = ncls_glob
-                    ncls_glob        = min(MAXNCLS, nint(real(nptcls_glob) / params%nptcls_per_cls))
-                    write(*,'(A,I8,A,A)')'>>> NEW PARTICLES COUNT: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
-                    ! remap in case of increased number of classes
-                    call map_new_ptcls
-                    last_injection = simple_gettime()
+                    if( n_new_ptcls > 0 )then
+                        ! scale new stacks
+                        call scale_stks( stk_list )
+                        ! updates counters
+                        nptcls_glob_prev = nptcls_glob
+                        nptcls_glob      = nptcls_glob + n_new_ptcls
+                        ncls_glob_prev   = ncls_glob
+                        ncls_glob        = min(MAXNCLS, nint(real(nptcls_glob)/real(params%nptcls_per_cls)))
+                        ! remap in case of increased number of classes using not updated project!
+                        call map_new_ptcls
+                        ! then only update project with new images
+                        do iproj=n_spprojs_prev+1,n_spprojs
+                            call stream_proj%read(spproj_list(iproj))
+                            ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
+                            if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
+                            call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars)
+                        enddo
+                        call work_proj%write  !!!
+                        ! logging
+                        write(*,'(A,I8,A,A)')'>>> NEW PARTICLES COUNT: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
+                        last_injection = simple_gettime()
                     endif
+                endif
             endif
-            ! updates document
-            if( work_proj_has_changed )call work_proj%write()
             ! update original project
             if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
                 write(*,'(A,A)')'>>> UPDATING PROJECT FILE ', trim(params%projfile)
@@ -555,13 +566,12 @@ contains
                 integer               :: icls
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
-                    smpd = work_proj%get_smpd()
-                    ! updates document
+                    ! updates document later
                     work_proj_has_changed = .true.
+                    smpd = work_proj%get_smpd()
                     ! updates classes
                     call img_cavg%new([box, box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
-                        print *,'remap_empty_classes', icls,fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
@@ -582,6 +592,9 @@ contains
                     stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
+                    ! cleanup
+                    call img_cavg%kill
+                    deallocate(fromtocls)
                 endif
             end subroutine remap_empty_classes
 
@@ -595,16 +608,14 @@ contains
                 character(len=STDLEN) :: stk
                 state = 1
                 if( ncls_glob.eq.ncls_glob_prev )return
-                ! updates references &FRCs
-                write(*,'(A,I6)')'>>> NEW CLASSES COUNT: ', ncls_glob
+                ! updates references & FRCs
+                write(*,'(A,I8)')'>>> NEW CLASSES   COUNT: ', ncls_glob
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
-                    work_proj_has_changed = .true.
                     ! references
                     smpd = work_proj%get_smpd()
                     call img_cavg%new([box,box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
-                        print *,'map_new_ptcls',icls,fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
@@ -640,6 +651,8 @@ contains
                     call frcs%write(FRCS_FILE)
                     call frcs%kill
                     call frcs_prev%kill
+                    deallocate(fromtocls)
+                    call img_cavg%kill
                 endif
             end subroutine map_new_ptcls
 

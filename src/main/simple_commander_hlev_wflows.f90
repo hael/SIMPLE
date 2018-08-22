@@ -226,6 +226,7 @@ contains
     subroutine exec_initial_3Dmodel( self, cline )
         use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
         use simple_oris,                   only: oris
+        use simple_image,                  only: image
         use simple_commander_volops,       only: reproject_commander, symaxis_search_commander
         use simple_parameters,             only: params_glob
         use simple_qsys_env,               only: qsys_env
@@ -253,17 +254,18 @@ contains
         ! other variables
         character(len=:), allocatable :: stk, orig_stk, frcs_fname
         character(len=:), allocatable :: WORK_PROJFILE
-        real,             allocatable :: res(:)
-        integer,          allocatable :: states(:)
+        real,             allocatable :: res(:), tmp_rarr(:)
+        integer,          allocatable :: states(:), tmp_iarr(:)
         type(qsys_env)        :: qenv
         type(parameters)      :: params
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
+        type(image)           :: img
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter
-        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk
-        integer               :: icls, ncavgs, orig_box, box, istk, status, nptcls
+        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
+        integer               :: icls, ncavgs, orig_box, box, istk, status, nptcls, cnt
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -288,6 +290,7 @@ contains
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
+        orig_smpd = ctfvars%smpd
         if( .not.spproj%os_cls2D%isthere('state') )then
             ! start from import
             allocate(states(ncavgs), source=1)
@@ -313,9 +316,11 @@ contains
         lplims(2) = 10.
         if( cline%defined('lpstop') ) lplims(2) = params%lpstop
         if( do_eo )then
-            res       = spproj%os_cls2D%get_all('res')
+            tmp_rarr  = spproj%os_cls2D%get_all('res')
+            tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+            res       = pack(tmp_rarr, mask=(tmp_iarr>0))
             lplims(1) = max(median_nocopy(res), lplims(2))
-            deallocate(res)
+            deallocate(res, tmp_iarr, tmp_rarr)
         else
             if( cline%defined('lpstart') ) lplims(1) = params%lpstart
         endif
@@ -565,7 +570,20 @@ contains
         call cline_reproject%set('vol1',   'rec_final_pproc'//params%ext)
         call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
+        ! write alternated stack
+        call img%new([orig_box,orig_box,1], orig_smpd)
+        cnt = -1
+        do icls=1,ncavgs
+            cnt = cnt + 2
+            call img%read(orig_stk,icls)
+            call img%norm
+            call img%write('cavgs_reprojs.mrc',cnt)
+            call img%read('reprojs.mrc',icls)
+            call img%norm
+            call img%write('cavgs_reprojs.mrc',cnt+1)
+        enddo
         ! end gracefully
+        call img%kill
         call spproj%kill
         call del_file(ORIG_WORK_PROJFILE)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
@@ -666,8 +684,8 @@ contains
         type(refine3D_distr_commander)      :: xrefine3D_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         ! command lines
-        type(cmdline)                       :: cline_refine3D1, cline_refine3D2
-        type(cmdline)                       :: cline_reconstruct3D_mixed_distr
+        type(cmdline)                 :: cline_refine3D1, cline_refine3D2
+        type(cmdline)                 :: cline_reconstruct3D_mixed_distr
         ! other variables
         type(parameters)              :: params
         type(sym)                     :: symop
@@ -675,8 +693,8 @@ contains
         type(oris)                    :: os
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: cavg_stk
-        real,             allocatable :: corrs(:), x(:), z(:), res(:)
-        integer,          allocatable :: labels(:), states(:)
+        real,             allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
+        integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
         integer  :: iter, startit, rename_stat, ncls
         logical  :: write_proj, fall_over, cavgs_import
@@ -723,9 +741,11 @@ contains
                 if(cline%defined('lp'))then
                     lp_cls3D = params%lp
                 else
-                    res      = spproj%os_cls2D%get_all('res')
-                    lp_cls3D = median_nocopy(res)
-                    deallocate(res)
+                    tmp_rarr  = spproj%os_cls2D%get_all('res')
+                    tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                    res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                    lp_cls3D  = median_nocopy(res)
+                    deallocate(res, tmp_iarr, tmp_rarr)
                 endif
                 if(cline%defined('lpstop')) lp_cls3D = max(lp_cls3D, params%lpstop)
             endif

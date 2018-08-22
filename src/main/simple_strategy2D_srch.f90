@@ -104,7 +104,7 @@ contains
             self%prev_class = irnd_uni(self%nrefs)
             self%prev_corr  = 0.
             self%best_corr  = 0.
-            self%prev_bfac  = 0.
+            self%prev_bfac  = 500. ! default b-factor
             if(params_glob%cc_objfun == OBJFUN_RES)then
                 call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             endif

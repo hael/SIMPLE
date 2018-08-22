@@ -58,7 +58,7 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         real                  :: extr_bound, frac_srch_space, extr_thresh
-        integer               :: iptcl, i, fnr, cnt, updatecnt, ngreedy, nsnhc
+        integer               :: iptcl, i, fnr, cnt, updatecnt
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
@@ -153,26 +153,21 @@ contains
 
         ! SNHC LOGICS
         if( l_snhc )then
-            ! factorial decay, -2 because first step is always greedy
             if( l_stream )then
                 ! size is set per particle
-                ngreedy = 0
-                nsnhc   = 0
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( updatecnt<=1 .or. updatecnt>20 )then
-                            snhc_sz(iptcl) = 0. ! greedy or semi-exhaustive
-                            ngreedy = ngreedy + 1
-                        else if( updatecnt < 21 )then
-                            nsnhc = nsnhc + 1
-                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/40.)) ! snhc
+                        ! 30 is arbitrary here and under testing
+                        if( updatecnt<=1 .or. updatecnt>30 )then
+                            snhc_sz(iptcl) = 0. ! greedy or exhaustive
+                        else if( updatecnt <= 30 )then
+                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/60.)) ! snhc
                         endif
                     endif
                 enddo
-                print *,'ngreedy:', ngreedy
-                print *,'nsnhc: ', nsnhc
             else
+                ! factorial decay, -2 because first step is always greedy
                 snhc_sz = min(SNHC2D_INITFRAC,&
                     &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
                 write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
