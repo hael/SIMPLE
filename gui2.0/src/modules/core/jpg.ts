@@ -3,7 +3,7 @@ import * as sharp from 'sharp'
 export default class JPG{
 
 	constructor() {
-
+	
 	}
 	
 	toJPEG(arg){

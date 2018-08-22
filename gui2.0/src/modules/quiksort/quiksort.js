@@ -6,113 +6,59 @@ var maxrad = 60
 
 Image.load('test1.jpeg').then((image) => {
 	var blur = image.grey()
-	var average = new Uint32Array(blur.data.length / 4);
-	
-	for(var angle = 1; angle < 360; angle++){
-		var rotated = blur.rotate(angle)
-		var cropped = rotated.crop({x : ((rotated.width - blur.width) / 2), y : ((rotated.height - blur.height) / 2), width : (blur.width/2), height : (blur.height/2)})
-		for(var pixel = 0; pixel < cropped.data.length; pixel++){
-			average[pixel] += cropped.data[pixel]
-		}
+	for(var x = 0; x < 5; x++){
+			for(var y = 0; y < 5; y++){
+				var cropped = blur.crop({
+					x:x,
+					y:y,
+					width: (image.width - 5),
+					height: (image.height - 5)
+				});	
+				ring(cropped)
+			}
 	}
-	
-	var cropped = blur.crop({width : (blur.width/2), height : (blur.height/2)})
-	
-	for(var pixel = 0; pixel < average.length; pixel++){
-		cropped.data[pixel] = Math.floor(average[pixel]/360)
-	}
-	var rotated = cropped.rotate(180)
-	var xmasscen = 0
-	var ymasscen = 0
-	var pixcount = 0
-	for(var x = 0; x < rotated.width; x++){
-		for(var y = 0; y < rotated.height; y++){
-			var radius = Math.pow((Math.pow(x, 2) + Math.pow(y, 2)), 0.5)
-			if(radius > (cropped.width - 10)){
-				xmasscen += x * cropped.getPixelXY(x, y)
-				ymasscen += y * cropped.getPixelXY(x, y)
-				pixcount++
-			}
-		}
-	}
-	xmasscen /= pixcount
-	ymasscen /= pixcount
-	console.log(xmasscen, ymasscen)
-	
-	
-	//var blur2 = blur.gaussianFilter({radius: 5, sigma: 1})
-	//var blur2 = blur.resize({width:50, InterpolationAlgorithm : 'bilinear'})
-	rotated.save('blur.jpg')
-
-//	average.save("stl.jpg") ("huang" | "intermodes" | "isodata" | "li" | "maxentropy" | "mean" | "minerror" | "minimum" | "moments" | "otsu" | "percentile" | "renyientropy" | "shanbhag" | "triangle" | "yen") 
-/*	
-	queue.push([(blur.width / 2), (blur.height / 2 ), 0])
-	
-	while(queue.length > 0){
-		if(pixels[queue[0][0]][queue[0][1]][0] != 0 && pixels[queue[0][0]][queue[0][1]][1] < maxrad){
-			//blur.setPixelXY(queue[0][0], queue[0][1], [255])
-			var pixelthreshold = pixels[queue[0][0]][queue[0][1]][0] - queue[0][2] -2
-			pixels[queue[0][0]][queue[0][1]][0] = 0
-			var repeat = true
-			//North
-			if(pixels[queue[0][0] - 1][queue[0][1]][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] - 1, queue[0][1], 0])
-			}
-			//NorthEast
-			if(pixels[queue[0][0] - 1][queue[0][1] - 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] - 1, queue[0][1] - 1, 0])
-			}
-			//NorthWest
-			if(pixels[queue[0][0] - 1][queue[0][1] + 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] - 1, queue[0][1] + 1, 0])
-			}
-			//East
-			if(pixels[queue[0][0]][queue[0][1] - 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0], queue[0][1] - 1, 0])
-			}
-			//West
-			if(pixels[queue[0][0]][queue[0][1] + 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0], queue[0][1] + 1, 0])
-			}
-			//South
-			if(pixels[queue[0][0] + 1][queue[0][1]][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] + 1, queue[0][1], 0])
-			}
-			//SouthEast
-			if(pixels[queue[0][0] + 1][queue[0][1] - 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] + 1, queue[0][1] - 1, 0])
-			}
-			//SouthWest
-			if(pixels[queue[0][0] + 1][queue[0][1] + 1][0] > pixelthreshold){
-				repeat = false
-				queue.push([queue[0][0] + 1, queue[0][1] + 1, 0])
-			}
-			if(repeat){
-				console.log("repeat")
-				queue.push([queue[0][0], queue[0][1], queue[0][2]])
-			}else{
-				pixels[queue[0][0]][queue[0][1]][0] = 0
-			}
-		}
-		queue.shift()
-	}
-	
-	/*for(var x = 0; x < blur.width; x++){
-		for(var y = 0; y < blur.height; y++){
-			if(pixels[x][y][1] < minrad){
-				blur.setPixelXY(x, y, [255])
-			}
-		}
-	}
-
-	blur2.save('blur.jpg');*/
-
 })
 
+function ring (blur) {	
+	var histogram = []
+	var histogrampop = []
+	for(var i = 0; i < Math.floor((blur.width / 2) / 2); i++){
+		histogram.push(0)
+		histogrampop.push(0)
+	}
+	for(var x = 0; x < blur.width; x++){
+		for(var y = 0; y < blur.height; y++){
+			var rad = Math.pow(Math.pow((x - (blur.width / 2 )), 2) + Math.pow((y - (blur.height / 2 )), 2), 0.5)
+			histogram[Math.floor(rad / 2)] += Number(blur.getPixelXY(x,y))
+			histogrampop[Math.floor(rad / 2)]++
+		}
+	}
+	for(var i = 0; i < Math.floor((blur.width / 2) / 2); i++){
+		histogram[i] /= histogrampop[i]	
+	}
+	var minmean = 0
+	var minmeanpop = 0
+	for(var i = 0; i <= Math.floor(minrad / 2); i++){
+		minmean += histogram[i]
+		minmeanpop++
+	}
+	minmean /= minmeanpop
+	
+	var outmean = 0
+	var outmeanpop = 0
+	for(var i = Math.floor(maxrad / 2);i < Math.floor((blur.width / 2) / 2); i++){
+		outmean += histogram[i]
+		outmeanpop++
+	}
+	outmean /= outmeanpop
+	threshold = (minmean + outmean) / 2
+	
+	console.log(minmean, outmean, threshold)
+
+	for(var i = Math.floor(minrad / 2) - 3; i < Math.floor((blur.width / 2) / 2); i++){
+		if(histogram[i]  < threshold && histogram[i+1]  < threshold && histogram[i+2]  < threshold){
+			console.log(i * 2)
+			break
+		}
+	}	
+}

@@ -7,23 +7,27 @@
     "@types/react": "^16.3.12",
     "@types/react-dom": "^16.0.5",
     "JSX": "^1.1.0",
-    "require": "^2.4.20",
     "binary-file": "^0.2.1",
-    "node-fetch": "^2.1.2",
-    "sharp": "^0.20.2",
-    "pug": "^2.0.0-beta11",
-    "sqlite3": "^4.0.0",
-    "express": "^4.16.3",
-    "morgan": "^1.9.0",
+    "child-process-promise": "^2.2.1",
     "compression": "^1.7.2",
+    "express": "^4.16.3",
     "http-auth": "^3.2.3",
-    "child-process-promise": "^2.2.1"
+    "morgan": "^1.9.0",
+    "nan": "^2.10.0",
+    "node-fetch": "^2.1.2",
+    "node-gyp": "^3.8.0",
+    "pug": "^2.0.0-beta11",
+    "require": "^2.4.20",
+    "sqlite3": "^4.0.0",
+    "sharp": "^0.20.7"
   },
   "devDependencies": {
     "typescript": "^2.9.2"
   },
   "scripts": {
     "install": "tsc",
-    "postinstall": "./install"
-  }
+    "compile": "node-gyp rebuild",
+    "concat": "./concat.sh"
+  },
+  "gypfile": true
 }

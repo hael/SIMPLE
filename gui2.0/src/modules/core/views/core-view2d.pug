@@ -24,7 +24,7 @@ div#frames
 				max="200"
 				step="1"
 				value="100"
-				oninput="viewer.modifyImages()"
+				oninput="viewer.modifyImages('frames')"
 			)
 		div
 			label(for='brightness') Brightness:
@@ -34,7 +34,7 @@ div#frames
 				max="200"
 				step="1"
 				value="100"
-				oninput="viewer.modifyImages()"
+				oninput="viewer.modifyImages('frames')"
 			)
 		div
 			label(for='zoom') Zoom:
@@ -44,7 +44,7 @@ div#frames
 				max="2"
 				step="0.1"
 				value="1"
-				oninput="viewer.modifyImages()"
+				oninput="viewer.modifyImages('frames')"
 			)
 		div
 			label(for='scale') Scale:
@@ -54,7 +54,7 @@ div#frames
 				max="400"
 				step="10"
 				value="200"
-				oninput="viewer.scaleImages()"
+				oninput="viewer.scaleImages('frames')"
 			)
 		div
 			button(

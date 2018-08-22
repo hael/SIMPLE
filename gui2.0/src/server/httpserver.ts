@@ -20,7 +20,7 @@ export default class HTTPServer {
 		this.logger = require('morgan')
 		this.compression = require('compression')
 		this.debug = require('debug')('inferno:HTTPserver')
-		this.densityserver = require("../../external/DensityServer/build/server/web-api")
+		this.densityserver = require("../../external/DensityServer/server/web-api")
 		this.auth = require('http-auth')
 		
 		if(multiuser){

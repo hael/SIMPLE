@@ -1,4 +1,4 @@
-///<reference path="../../../../../external/LiteMol/dist/js/LiteMol-plugin.d.ts" />
+///<reference path="../../../../../external/LiteMol/js/LiteMol-plugin.d.ts" />
 
 class Viewer {
 	

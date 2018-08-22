@@ -105,7 +105,6 @@ set_target_properties(simple_gui
   JOB_POOL_COMPILE NUM_JOBS
   )
 
-
 install(TARGETS simple_gui
   ARCHIVE DESTINATION "${CMAKE_INSTALL_BINDIR}"
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"

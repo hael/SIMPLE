@@ -1,4 +1,4 @@
-.viewer #cavgs,#mic,#fits {
+.viewer #cavgs,#mic,#fits,#ptcls {
 	height: calc(80vh - 75px);
 	display: flex;
 	flex-direction: column;
@@ -9,7 +9,7 @@
 	height: 300px;
 }
 
-#cavgs,#ptclsviewer,#mic,#fits .thumbnails {
+#cavgs,#ptclsviewer,#mic,#fits,#ptcls .thumbnails {
 	overflow-y: scroll;
 	overflow-x: hidden;
 }
@@ -35,11 +35,5 @@
 	padding: 10px;
 	height: 60vh;
 	display: none;
-}
-
-.viewer #ptcls {
-	height: calc(60vh - 75px);
-	display: flex;
-	flex-direction: column;
 }
 

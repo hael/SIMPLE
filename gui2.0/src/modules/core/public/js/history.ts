@@ -70,6 +70,21 @@ class History2 {
 				}
 			})
 	}
+	
+	deleteTask(taskid){
+		var request = {
+			mod : "core",
+			fnc : "deleteTask",
+			arg : {}
+		}
+		request['arg']['jobid'] = taskid
+		request['arg']['history'] = projectselector.selectedtable
+		return postAjaxPromise(request)
+			.then(response => response.json())
+			.then ((json) => {
+				projectselector.refreshHistory()
+			})
+	}
 }
 
 var history2

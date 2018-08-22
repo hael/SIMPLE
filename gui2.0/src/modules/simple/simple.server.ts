@@ -12,6 +12,8 @@ class Module {
 	private pack
 	private importmoviesview
 	private ctfview
+	private guinierwidget
+	private autopicktrainingwidget
 	
 	public metadata = {
 			"moduletitle" :"Simple",
@@ -40,8 +42,33 @@ class Module {
 			}
 			this.metadata['tasks'][commandkeys[0]] = task
 		}
+		
+		// Attach widgets
+		for(var widgetpage of this.metadata['tasks']['postprocess']['pages']){
+			for(var widgetkeys of widgetpage['keys']){
+				if(widgetkeys['key'] == "bfac"){
+					widgetkeys['keytype'] = "widget"
+					widgetkeys['widget'] = "guinierplotwidget.view(this)"
+				}
+			}
+			
+		}
+		
+		for(var widgetpage of this.metadata['tasks']['pick']['pages']){
+			for(var widgetkeys of widgetpage['keys']){
+				if(widgetkeys['key'] == "thres"){
+					widgetkeys['keytype'] = "widget"
+					widgetkeys['widget'] = "autopicktrainingwidget.view(this)"
+				}else if(widgetkeys['key'] == "ndev"){
+					widgetkeys['keytype'] = "widget"
+					widgetkeys['widget'] = "autopicktrainingwidget.view(this)"
+				}
+			}
+			
+		}
+		
 		const pug = require('pug')
-		this.pack = require("../../../external/DensityServer/build/pack/main.js")
+		this.pack = require("../../../external/DensityServer/pack/main.js")
 		this.view2dview = pug.compileFile('views/simple-view2d.pug')
 		this.viewini3dview = pug.compileFile('views/simple-viewini3d.pug')
 		this.cavgsview = pug.compileFile('views/simple-cavgs.pug')
@@ -50,6 +77,8 @@ class Module {
 		this.ptclsview = pug.compileFile('views/simple-viewptcls.pug')
 		this.importmoviesview = pug.compileFile('views/simple-viewimportmics.pug')
 		this.ctfview = pug.compileFile('views/simple-viewctf.pug')
+		this.guinierwidget = pug.compileFile('views/simple-guinierplotwidget.pug')
+		this.autopicktrainingwidget = pug.compileFile('views/simple-autopicktrainingwidget.pug')
 		process.stdout.write("Done\n")
 	}
 	
@@ -101,7 +130,9 @@ class Module {
 		var keynames = Object.keys(keys);
 		var commandargs = []
 		commandargs.push("prg=" + type)
-		commandargs.push("projfile=" + inputpath)
+		if(inputpath != undefined){
+			commandargs.push("projfile=" + inputpath)
+		}
 		commandargs.push("mkdir=no")
 		for(var key of keynames){
 			if(keys[key] != ""){
@@ -115,23 +146,20 @@ class Module {
 			}
 		}
 		
-		
-		
-		arg['view'] = ""
+		arg['view'] = null
 	
 		if(type == "cluster2D") {
-		//	arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"view2d\" }"
 			arg['view'] = {mod : "simple", fnc : "view2d"}
 		}else if(type == "initial_3Dmodel") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewini3d\" }"
-		}else if(type == "import_movies") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewImportMovies\" }"
+			arg['view'] = {mod : "simple", fnc : "viewini3d"}
+		}else if(type == "import_movies" || type == "motion_correct") {
+			arg['view'] = { mod : "simple", fnc : "viewImportMovies" }
 		}else if(type == "ctf_estimate") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewCTFEstimate\" }"
+			arg['view'] = { mod : "simple", fnc : "viewCTFEstimate" }
 		}else if(type == "import_particles") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewParticles\" }"
+			arg['view'] = { mod : "simple", fnc : "viewParticles" }
 		}else if(type == "extract") {
-			arg['view'] = "{ \"mod\" : \"simple\", \"fnc\" : \"viewParticles\" }"
+			arg['view'] = { mod : "simple", fnc : "viewParticles" }
 		}
 		
 		console.log(command, commandargs)
@@ -157,7 +185,7 @@ class Module {
 				console.log(`Spawned child pid: ${executeprocess.pid}`)
 				modules['available']['core']['updatePid'](arg['projecttable'], json['jobid'], executeprocess.pid)
 				
-				return({})
+				return({folder:json['jobfolder']})
 			})
 	}
 	
@@ -523,6 +551,75 @@ class Module {
 			})
 	}
 	
+	public getGuinierWidget(modules, arg){
+		return new Promise((resolve, reject) => {
+			resolve({html : this.guinierwidget({})})
+		})
+	}
+	
+	public calculateGuinier(modules, arg){
+		var spawn = require('child-process-promise').spawn
+		var command = "simple_exec"
+		var commandargs = []
+		var ptcls = []
+		var stks = []
+		commandargs.push("prg=volops")
+		commandargs.push("guinier=yes")
+		commandargs.push("smpd=" + arg['smpd'])
+		commandargs.push("vol1=" + arg['volume'])
+		commandargs.push("lp=" + arg['lp'])
+		commandargs.push("hp=" + arg['hp'])
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				var bfac
+				var plot = []
+				for(var line of lines){
+					if(line.includes("RECIPROCAL SQUARE RES")){
+						var elements = line.split((/[ ]+/))
+						plot.push({x : elements[4], y : elements[7]})
+					}else if(line.includes("B-FACTOR DETERMINED TO")){
+						var elements = line.split((/[ ]+/))
+						bfac = elements[4]
+					}
+				}
+				return({bfac:bfac, plot:plot})
+			})
+	}
+	
+	public getAutopickTrainingWidget(modules, arg){
+		return new Promise((resolve, reject) => {
+			resolve({html : this.autopicktrainingwidget({})})
+		})
+	}
+	
+	public createAutopickRefs(modules, arg){
+		return this.execute(modules, arg)
+			.then((response) => {
+				return({pickrefs:response['folder'] + "/pickrefs.mrc"})
+			})
+	}
+	
+	public readProjFile(projfile, section, keys){
+		var spawn = require('child-process-promise').spawn
+		var command = "simple_private_exec"
+		var commandargs = []
+		var queryresult = []
+		commandargs.push("prg=print_project_vals")
+		commandargs.push("projfile=" + projfile)
+		commandargs.push("oritype=" + section)
+		commandargs.push("keys=" + keys)
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				for(var line in lines){
+					var elements = lines[line].split((/[ ]+/))
+					elements.shift()
+					queryresult.push(elements)
+				}
+				return(queryresult)
+			})
+	}
 }
 
 module.exports = new Module()

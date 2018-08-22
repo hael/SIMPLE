@@ -15,11 +15,13 @@ export default class Task{
 		this.sqlite3 = require('sqlite3').verbose()
 	}
 	
-	getSelector() {
+	getSelector(arg) {
 		var tasks = {}
+		tasks['folder'] = arg['folder']
 		tasks['tasks'] = []
 		for(var module in modules['available']){
 			if(typeof(modules['available'][module]['metadata']) == "object"){
+				console.log(module)
 				tasks['tasks'].push(modules['available'][module]['metadata'])
 			}
 		}
@@ -86,6 +88,11 @@ export default class Task{
 	
 	updateStatus(table, jobid, status){
 		var query = "UPDATE " + table + " SET status='" + status + "' WHERE id=" + jobid
+		return this.sqlQuery(query)
+	}
+	
+	delete(arg){
+		var query = "DELETE FROM " + arg['history'] + " WHERE id=" + arg['jobid']
 		return this.sqlQuery(query)
 	}
 	

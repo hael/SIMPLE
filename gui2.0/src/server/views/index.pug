@@ -50,10 +50,23 @@ mixin gauze()
 mixin popups()
 	div#popup
 	div#browserpopup
+	div#widgetpopup
 
 mixin script()
 	script(
 		src="js/index.js"
+	)
+	script(
+		src="https://unpkg.com/d3-contour@1"
+	)
+	script(
+		src="https://unpkg.com/d3-geo@1"
+	)
+	script(
+		src="https://unpkg.com/d3-timer@1"
+	)
+	script(
+		src="https://unpkg.com/d3-polygon@1"
 	)
 	
 doctype html

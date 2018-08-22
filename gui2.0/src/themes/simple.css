@@ -12,3 +12,7 @@ button:hover {
 color: white;
 background-color: #2C6177;
 }
+
+body{
+	font-family: arial;
+}

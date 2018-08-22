@@ -1,0 +1,39 @@
+.guinierwidgetpopup {
+	width: 90vw;
+	height: 80vh;
+	font-size: 11px;
+	position: absolute;
+	left: 5vw;
+	top: 120px;
+	background-color: white;
+	padding: 10px;
+	z-index: 4;
+	border-radius: 6px;
+}
+
+.guinierwidgetpopup h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+.guinierwidgetpopup button{
+	width: 80px;
+	border-radius: 8px;
+	border-style: none;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}
+
+.guinierwidgetpopup #selectorbuttons{
+	display: flex;
+	justify-content: space-between;
+	margin-left: 20%;
+	margin-right: 20%;
+}
+
+.guinierwidgetpopup #closebutton {
+	height: 12px;
+	float: right;
+}
+

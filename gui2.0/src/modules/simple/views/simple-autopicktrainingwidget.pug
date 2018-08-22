@@ -1,0 +1,59 @@
+div#widgetgauze
+div
+	h="Autopick Training Widget"
+	img#closebutton(
+		src="img/close.png"
+		onclick="autopicktrainingwidget.hide()"
+	)
+
+div.inputpage
+	table
+		tr
+			td="Reference Volume"
+			td
+				input(
+					id="autopickvol"
+					type="text"
+				)
+		tr
+			td="Reference Classes"
+			td
+				input(
+					id="autopickclasses"
+					type="text"
+				)
+		tr
+			td="Sampling Distance"
+			td
+				input(
+					id="autopicksmpd"
+					type="text"
+				)
+		tr
+			td="Contrast"
+			td
+				input(
+					id="autopickcontrast"
+					type="text"
+				)
+		tr
+			td="Point Group"
+			td
+				input(
+					id="autopickpgrp"
+					type="text"
+				)
+table
+		tr
+			td="References"
+			td
+				input(
+					id="autopickrefs"
+					type="text"
+					disabled
+				)
+
+div.buttons
+	button(
+		onclick="autopicktrainingwidget.generate()"
+	)="Generate References"

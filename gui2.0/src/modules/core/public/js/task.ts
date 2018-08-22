@@ -16,6 +16,11 @@ class TaskSelector {
 			fnc : "taskSelector",
 			arg : {}
 		}
+		if(projectselector.selectedfolder != undefined){
+			request['arg']['folder'] = projectselector.selectedfolder
+		}else{
+			request['arg']['folder'] = "/tmp"
+		}
 		postAjaxPromise(request)
 			.then(response => response.json())
 			.then ((json) => {
@@ -80,7 +85,8 @@ class TaskSelector {
 				task.className = "task"
 			}
 		}
-		for(var task of document.querySelectorAll('[data-module='+ module + ']')){
+		//for(var task of document.querySelectorAll('[data-module='+ module + ']')){
+		for(var task of document.querySelectorAll('[data-module]')){
 			task.className = "taskdisplay"
 		}
 	}

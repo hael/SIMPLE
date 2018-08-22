@@ -10,7 +10,7 @@ export default class View{
 		const pug = require('pug')
 		this.view2dview = pug.compileFile('views/core-view2d.pug')
 		this.view3dview = pug.compileFile('views/core-view3d.pug')
-		this.pack = require("../../../external/DensityServer/build/pack/main.js")
+		this.pack = require("../../../external/DensityServer/pack/main.js")
 	}
 	
 	public view2d (arg) {

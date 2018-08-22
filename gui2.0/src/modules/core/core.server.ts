@@ -1,6 +1,6 @@
 import * as fs from 'fs'
 import * as binaryfile from 'binary-file'
-import * as sharp from 'sharp'
+//import * as sharp from 'sharp'
 import HeaderButtons from "./headerbuttons"
 import Project from "./project"
 import Browser from "./browser"
@@ -48,7 +48,7 @@ class Module {
 	}
 
 	taskSelector (modules, arg) {
-		return this.task.getSelector()
+		return this.task.getSelector(arg)
 	}
 	
 	refineTasks(modules, arg) {
@@ -57,6 +57,10 @@ class Module {
 	
 	taskSetup(modules, arg) {
 		return this.task.setup(arg)
+	}
+	
+	deleteTask(modules, arg) {
+		return this.task.delete(arg)
 	}
 	
 	showLog(modules, arg) {

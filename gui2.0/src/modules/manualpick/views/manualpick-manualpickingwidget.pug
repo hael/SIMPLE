@@ -1,0 +1,52 @@
+div#widgetgauze
+div
+	h="Manual Picking Widget"
+	img#closebutton(
+		src="img/close.png"
+		onclick="manualpickingwidget.hide()"
+	)
+
+div.inputpage
+	table
+		tr
+			td="Particle Radius"
+			td
+				input(
+					id="manualpickradius"
+					type="number"
+					onchange="manualpickingwidget.plotCoordinates()"
+					value=20
+				)
+		tr
+			td="Box Size"
+			td
+				input(
+					id="manualpickboxsize"
+					type="number"
+					onchange="manualpickingwidget.plotCoordinates()"
+					value=50
+				)
+
+table
+		tr
+			td="Micrograph"
+			td
+				select
+					each micrograph in micrographs
+						option(
+							onclick="manualpickingwidget.changeMicrograph('" + micrograph['path'] + "','" + micrograph['xdim'] + "','" + micrograph['ydim'] +"')"
+						)=micrograph['name']
+
+canvas#particlecanvas
+
+canvas#pickingcanvas(
+	width="500" 
+	height="500" 
+	style="border:2px solid black"
+	onclick="manualpickingwidget.clickHandler2(event)"
+)
+
+div.buttons
+	button(
+		onclick="autopicktrainingwidget.generate()"
+	)="Generate References"

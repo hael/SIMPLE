@@ -1,3 +1,22 @@
+mixin widget(key)
+	td=key['descr_short']
+	td
+		input.argument(
+			id="key"+key['key']
+			data-key=key['key']
+			type="text"
+		)
+	td
+		img(
+			src="img/widget.png"
+			onclick=key['widget']
+		)
+	td
+		img(
+			src="img/help.png"
+			onclick="taskselector.showHelp('" + key['descr_long'] + "')"
+		)
+
 mixin folder(key)
 	td=key['descr_short']
 	td
@@ -223,6 +242,8 @@ div.inputaccordion
 								+number(key)
 							else if key['keytype'] == "multi"
 								+multi(key)
+							else if key['keytype'] == "widget"
+								+widget(key)
 					else
 						tr.advanced
 							if key['keytype'] == "folder"
@@ -239,11 +260,9 @@ div.inputaccordion
 								+number(key)
 							else if key['keytype'] == "multi"
 								+multi(key)
+							else if key['keytype'] == "widget"
+								+widget(key)
 
-	if taskarray.widget
-		div#widget(
-			data-execute=taskarray['widget']['execute']
-		)
 div.buttons
 	button(
 		onclick="tasksetup.startTask()"

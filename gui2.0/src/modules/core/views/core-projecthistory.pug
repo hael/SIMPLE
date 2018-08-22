@@ -24,7 +24,7 @@ table
 			td
 				select
 					option
-					if(task['view'])
+					if task['view'] != "null"
 						option(
 							onclick="history2.viewOutput('" + task['view'] + "','" + task['folder'] + "','" + task['status'] + "'); history2.resetActions(this)"
 						)="View Output"
@@ -38,6 +38,6 @@ table
 						onclick="history2.resetActions(this)"
 					)="Kill"
 					option(
-						onclick="history2.resetActions(this)"
+						onclick="history2.deleteTask('" + task['id'] + "'); history2.resetActions(this)"
 					)="Delete"
 

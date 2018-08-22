@@ -1,6 +1,7 @@
 import * as fs from 'fs'
 import * as binaryfile from 'binary-file'
 import * as sharp from 'sharp'
+const {getHeader,toPixels} = require('../../Release/MRChandler')
 
 export default class MRC{
 
@@ -9,7 +10,11 @@ export default class MRC{
 	}
 	
 	readHeader(file) {
-		var header = {}
+		return new Promise((resolve, reject) => {
+			resolve(getHeader(file));
+		})
+
+	/*	var header = {}
 		const datain = new binaryfile(file, 'r', true)
 		return datain.open()
 			.then(function(){
@@ -29,7 +34,7 @@ export default class MRC{
 			})
 			.catch(function (err) {
 				console.log(`There was an error: ${err}`);
-			})
+			})*/
 	}
 	
 	readData(file, frame=0) {
@@ -64,54 +69,19 @@ export default class MRC{
 			})
 	}
 		
-	
-	toJPEG(arg){
-		return this.readData(arg['stackfile'], arg['frame'])
-			.then((mrcfile) => {
-				var mean = 0
-				var variance = 0
-				var tmp
-				
-				for(var i = 0; i < mrcfile.nx * mrcfile.ny; i++){
-					tmp = mean
-					mean = tmp + mrcfile['data'][i]
-				}
-				mean /= mrcfile.nx * mrcfile.ny
-
-				for(var i = 0; i < mrcfile.nx * mrcfile.ny; i++){
-					tmp = variance
-					variance = tmp + Math.pow((mrcfile['data'][i] - mean), 2)
-				}
-				variance /= mrcfile.nx * mrcfile.ny
-				var sd = Math.sqrt(variance)
-				var pixels = []
-				pixels.length = mrcfile.nx * mrcfile.ny
-				var norm
-				
-				for(var i = 0; i < mrcfile.nx * mrcfile.ny; i++){
-					norm = (mrcfile['data'][i] - mean) / sd
-					if(norm > 10){
-						pixels[i] = 255
-					} else if (norm < -10){
-						pixels[i] = 0
-					} else {
-						pixels[i] = Math.round((norm * 12.8) + 128)
-					}
-				}
-
-				var pixbuf =  Buffer.from(pixels)
-
-				return sharp(pixbuf, { raw : {
-					width : mrcfile.nx,
-					height : mrcfile.ny,
-					channels : 1
-					}
-				}).resize(Number(arg['width']))
-				  .jpeg()
-				  .toBuffer()
-			})
+	toJPEG (arg){
+		var json = toPixels(arg['stackfile'], arg['frame'])
+		return sharp(json['pixbuf'], { raw : {
+			width : json['nx'],
+			height : json['ny'],
+			channels : 1
+		}})
+			.resize(Number(arg['width']))
+			.jpeg()
+			.toBuffer()
 			.then(function (image) {
 				return({image : image})
 			})
 	}
+
 }
