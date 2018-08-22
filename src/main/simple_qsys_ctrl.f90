@@ -259,15 +259,13 @@ contains
             call self%myqsys%write_instr(q_descr, fhandle=funit)
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
-            ! write(funit,'(a)') 'echo $$ >> .pid'
         endif
         write(funit,'(a)') 'cd '//trim(CWD_GLOB)
         write(funit,'(a)') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
         ! direct output
-        ! write(funit,'(a)') ' > OUT'//int2str_pad(ipart,self%numlen)
-        write(funit,'(a)') ' >> PARTS_OUTPUT'
+        write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
@@ -289,10 +287,11 @@ contains
 
     !>  \brief  public script generator for single jobs
     subroutine generate_script_2( self, job_descr, q_descr, exec_bin, script_name, outfile )
-        class(qsys_ctrl), intent(inout) :: self
-        class(chash),     intent(in)    :: job_descr
-        class(chash),     intent(in)    :: q_descr
-        character(len=*), intent(in)    :: exec_bin, script_name, outfile
+        class(qsys_ctrl),           intent(inout) :: self
+        class(chash),               intent(in)    :: job_descr
+        class(chash),               intent(in)    :: q_descr
+        character(len=*),           intent(in)    :: exec_bin, script_name
+        character(len=*), optional, intent(in)    :: outfile
         character(len=512) :: io_msg
         integer :: ios, funit
         call fopen(funit, file=script_name, iostat=ios, STATUS='REPLACE', action='WRITE', iomsg=io_msg)
@@ -311,10 +310,12 @@ contains
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
         ! direct output
-        if( outfile .ne. '' )then
-            write(funit,'(a)') ' >> '//outfile
+        if( present(outfile) )then
+            ! unique output
+            write(funit,'(a)') ' > '//trim(outfile)
         else
-            write(funit,'(a)') ''
+            ! subprocess, global output
+            write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT
         endif
         ! exit shell when done
         write(funit,'(a)') ''
@@ -476,7 +477,7 @@ contains
                     self%jobs_submitted(ipart) = .true.
                     self%jobs_done(ipart)      = .false.
                     call del_file(self%jobs_done_fnames(ipart))
-                    call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name, outfile)
+                    call self%generate_script_2(job_descr, q_descr, self%exec_binary, script_name)
                     call self%submit_script( script_name )
                 endif
             enddo

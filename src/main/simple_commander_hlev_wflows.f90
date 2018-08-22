@@ -457,7 +457,7 @@ contains
             if( qenv%get_qsys() .eq. 'local' )then
                 call xsymsrch%execute(cline_symsrch)
             else
-                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH', 'SYMAXIS_SEARCH_FINISHED')
+                call qenv%exec_simple_prg_in_queue(cline_symsrch, 'SYMAXIS_SEARCH_FINISHED')
             endif
             call del_file('SYMAXIS_SEARCH_FINISHED')
         endif

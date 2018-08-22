@@ -537,7 +537,7 @@ contains
                 call cline_scale%set('dir_target', trim(SCALE_DIR))
                 call cline_scale%set('stream',     'yes')
                 call write_filetable(trim(SCALE_FILETAB), stk_fnames)
-                call qenv%exec_simple_prg_in_queue(cline_scale, 'OUT1','JOB_FINISHED_1')
+                call qenv%exec_simple_prg_in_queue(cline_scale, 'JOB_FINISHED_1')
                 call qsys_cleanup
                 do istk=1,size(stk_fnames)
                     fname            = add2fbody(stk_fnames(istk), params%ext, SCALE_SUFFIX)

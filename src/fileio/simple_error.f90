@@ -1,6 +1,7 @@
 module simple_error
-use simple_defs, only: alloc_stat
+use simple_defs
 use, intrinsic :: iso_fortran_env
+implicit none
 
 contains
 
@@ -16,7 +17,11 @@ contains
         else
             write(OUTPUT_UNIT,'(A)', advance='no') 'WARNING: '//trim(msg)
         endif
-        write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line
+        if( l_distr_exec_glob )then
+            write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line, '; part: ', part_glob, ' of distributed execution'
+        else
+            write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line
+        endif
         if( ll_stop ) stop
     end subroutine simple_exception
 

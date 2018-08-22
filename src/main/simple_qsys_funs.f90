@@ -26,6 +26,7 @@ contains
         call del_file('VOLASSEMBLE')
         call del_file('CAVGASSEMBLE')
         call del_file('SYMSRCH')
+        call del_file(SIMPLE_SUBPROC_OUT)
         call del_file(trim(TERM_STREAM))
         ! state numbered files
         call del_files('VOLASSEMBLE_FINISHED_STATE',     params_glob%nstates, numlen=NUMLEN_STATE)

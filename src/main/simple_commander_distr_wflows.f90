@@ -331,7 +331,7 @@ contains
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs( job_descr)
         ! assemble class averages
-        call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+        call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs_distr
@@ -442,7 +442,7 @@ contains
             refs_even = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_even' // params%ext
             refs_odd  = trim(CAVGS_ITER_FBODY) // trim(str_iter) // '_odd'  // params%ext
             call cline_cavgassemble%set('refs', trim(refs))
-            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE', 'CAVGASSEMBLE_FINISHED')
+            call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
             ! check convergence
             call xcheck_2Dconv%execute(cline_check_2Dconv)
             frac_srch_space = 0.
@@ -500,7 +500,7 @@ contains
         call cline_volassemble%set( 'eo',     'no')
         call cline_volassemble%set( 'prg',    'volassemble')
         call qenv%gen_scripts_and_schedule_jobs( job_descr)
-        call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE', 'VOLASSEMBLE_FINISHED')
+        call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_REFINE3D_INIT NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_refine3D_init_distr
@@ -726,15 +726,16 @@ contains
             endif
             do state = 1,params%nstates
                 str_state = int2str_pad(state,2)
-                if( params%eo .ne. 'no' )then
-                    volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
-                else
-                    volassemble_output = ''
-                endif
+                if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
                 call cline_volassemble%set( 'state', real(state) )
                 if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-                call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
-                    &script_name='simple_script_state'//trim(str_state))
+                if( params%eo .ne. 'no' )then
+                    call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                    &'simple_script_state'//trim(str_state), volassemble_output)
+                else
+                    call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                    &'simple_script_state'//trim(str_state))
+                endif
             end do
             call qsys_watcher(state_assemble_finished)
             ! rename & add volumes to project & update job_descr
@@ -881,15 +882,16 @@ contains
         ! parallel assembly
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)
-            if( params%eo .ne. 'no' )then
-                volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
-            else
-                volassemble_output = ''
-            endif
+            if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             call cline_volassemble%set( 'state', real(state) )
             if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-            call qenv%exec_simple_prg_in_queue(cline_volassemble, trim(volassemble_output),&
-                &script_name='simple_script_state'//trim(str_state))
+            if( params%eo .ne. 'no' )then
+                call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                'simple_script_state'//trim(str_state), trim(volassemble_output))
+            else
+                call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                'simple_script_state'//trim(str_state))
+            endif
         end do
         call qsys_watcher(state_assemble_finished)
         ! termination

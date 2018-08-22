@@ -40,6 +40,7 @@ character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
 ! other global variables
 integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
 logical                       :: l_distr_exec_glob !< global distributed execution flag
+integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
 
 ! plan for the CTF

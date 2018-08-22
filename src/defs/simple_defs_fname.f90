@@ -6,6 +6,8 @@ integer, parameter :: MAXNKEYS=100, KEYLEN=32
 integer, parameter :: SHORTSTRLEN = 12   !< shorter string length
 integer, parameter :: STDLEN      = 256  !< standard string length
 integer, parameter :: LONGSTRLEN  = 1024 !< longer string length
+! GLOBAL FILE CONSTANTS
+character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'

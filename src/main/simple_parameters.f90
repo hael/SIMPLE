@@ -1039,8 +1039,10 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         ! set execution mode (shmem or distr)
         if( cline%defined('part') .and. cline%defined('nparts') )then
             self%l_distr_exec = .true.
+            part_glob = self%part
         else
             self%l_distr_exec = .false.
+            part_glob = 1
         endif
         l_distr_exec_glob = self%l_distr_exec
         ! set lenght of number string for zero padding
