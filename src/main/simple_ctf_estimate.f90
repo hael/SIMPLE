@@ -30,6 +30,7 @@ logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
 integer               :: ndim         = 3        ! # optimisation dims
 real                  :: df_min       = 0.5      ! close 2 focus limit
 real                  :: df_max       = 5.0      ! far from focus limit
+real                  :: df_step      = 0.045    ! defocus step for grid search
 real                  :: astigtol     = 0.05     ! tolerated astigmatism
 real                  :: sxx          = 0.       ! memoized corr term
 real                  :: hp           = 0.       ! high-pass limit
@@ -64,8 +65,9 @@ contains
         ppspec_upper => pspec_upper
         ldim = pspec_all%get_ldim()
         if( dfrange(1) < dfrange(2) )then
-            df_min = dfrange(1)
-            df_max = dfrange(2)
+            df_min  = dfrange(1)
+            df_max  = dfrange(2)
+            df_step = (df_max - df_min) / real(NSTEPS)
         else
             THROW_HARD('invalid defocus range; ctf_estimate_init')
         endif
@@ -108,6 +110,7 @@ contains
         corr90deg = ppspec_all%real_corr(ppspec_all_rot90, cc_msk)
         call ppspec_all_rot90%kill
         ! contruct DE optimiser
+        ! these are defaults settings that will be updated on the fly in the refine routine
         call seed_rnd
         limits        = 0.
         limits(1:2,1) = df_min
@@ -214,9 +217,8 @@ contains
 
     subroutine grid_srch( dfx, dfy, angast, phshift, cc )
         real, intent(out) :: dfx, dfy, angast, phshift, cc
-        real              :: cost, df, cost_lowest, dfstep, df_best
+        real              :: cost, df, cost_lowest, df_best
         class(*), pointer :: fun_self => null()
-        dfstep = (df_max - df_min) / real(NSTEPS)
         if( l_phaseplate )then
             ! do a first grid search assuming:
             ! no astigmatism
@@ -230,7 +232,7 @@ contains
                     cost_lowest = cost
                     df_best     = df
                 endif
-                df = df + dfstep
+                df = df + df_step
             end do
         else
             ! do a first grid search assuming:
@@ -244,7 +246,7 @@ contains
                     cost_lowest = cost
                     df_best     = df
                 endif
-                df = df + dfstep
+                df = df + df_step
             end do
         endif
         dfx     = df_best
@@ -257,13 +259,32 @@ contains
 
     subroutine refine( dfx, dfy, angast, phshift, cc )
         real, intent(inout) :: dfx, dfy, angast, phshift, cc
-        real                :: cost
+        real                :: cost, half_range
         class(*), pointer   :: fun_self => null()
+        ! re-init limits for local search
+        half_range  = max(astigtol, df_step)
+        limits      = 0.
+        limits(1,1) = max(df_min,dfx - half_range)
+        limits(2,1) = max(df_min,dfy - half_range)
+        limits(1,2) = min(df_max,dfx + half_range)
+        limits(2,2) = min(df_max,dfy + half_range)
+        limits(3,1) = -180.
+        limits(3,2) = 180.
         if( l_phaseplate )then
+            limits(4,1) = 0.
+            limits(4,2) = 3.15
+        endif
+        ! re-init minimizer
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-4)
+        if( l_phaseplate )then
+            call ospec_de%set_costfun(ctf_estimate_cost_phaseplate)
             ospec_de%x = [dfx,dfy,angast,phshift]
         else
+            call ospec_de%set_costfun(ctf_estimate_cost)
             ospec_de%x = [dfx,dfy,angast]
         endif
+        call diffevol%new(ospec_de)
+        ! search
         call diffevol%minimize(ospec_de, fun_self, cost)
         dfx    = ospec_de%x(1)
         dfy    = ospec_de%x(2)
