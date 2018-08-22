@@ -26,7 +26,7 @@ if (USE_OPENMP)
        # set(OpenMP_Fortran_FLAGS "${OpenMP_Fortran_FLAGS} -DOPENMP_VERSION=${OpenMP_Fortran_VERSION}")
     endif(OpenMP_Fortran_VERSION)
   endif (NOT OpenMP_Fortran_FLAGS)
-endif()
+endif(USE_OPENMP)
 
 if (USE_MPI)
   # Find MPI when FC != mpif90

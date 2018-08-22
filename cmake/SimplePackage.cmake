@@ -1,18 +1,18 @@
 if(CPACK_GENERATOR)
   get_filename_component(cpack_build_dir "${CMAKE_BINARY_DIR}" ABSOLUTE)
   get_filename_component(cpack_source_dir "${CMAKE_SOURCE_DIR}" ABSOLUTE)
- # if("${cpack_build_dir}" STREQUAL "${cpack_source_dir}")
- endif()
+  # if("${cpack_build_dir}" STREQUAL "${cpack_source_dir}")
+endif()
 
 if(CPACK_GENERATOR)
 
   #if("${CPACK_GENERATOR}" STREQUAL "ON")
   # default settings
-    set(CPACK_GENERATOR_TGZ ON)
-    set(CPACK_SOURCE_TBZ2  OFF)
-    set(CPACK_SOURCE_TZ    OFF)
-    set(CPACK_SOURCE_TXZ   OFF)
-    set(CPACK_SOURCE_ZIP   ON)
+  set(CPACK_GENERATOR_TGZ ON)
+  set(CPACK_SOURCE_TBZ2  OFF)
+  set(CPACK_SOURCE_TZ    OFF)
+  set(CPACK_SOURCE_TXZ   OFF)
+  set(CPACK_SOURCE_ZIP   ON)
   #endif()
   # common package information
   set(CPACK_PACKAGE_NAME "SIMPLE")
@@ -23,12 +23,12 @@ if(CPACK_GENERATOR)
   set(CPACK_PACKAGE_VERSION_PATCH "${SIMPLE_GIT_VERSION}")
   set(CPACK_SET_DESTDIR "/usr/local")
   # Useful descriptions for components
-SET(CPACK_COMPONENT_LIBRARIES_DISPLAY_NAME "SIMPLE cryoEM library")
-SET(CPACK_COMPONENT_DOCUMENTATION_NAME "Doxygen documentation")
-SET(CPACK_COMPONENT_HEADERS_NAME "Developmental headers")
-SET(CPACK_COMPONENT_CMAKE_NAME "CMake support")
-set(CPACK_PACKAGE_DESCRIPTION
-"SIMPLE is a SIngle-particle cryo electron Microscope Image Processing
+  SET(CPACK_COMPONENT_LIBRARIES_DISPLAY_NAME "SIMPLE cryoEM library")
+  SET(CPACK_COMPONENT_DOCUMENTATION_NAME "Doxygen documentation")
+  SET(CPACK_COMPONENT_HEADERS_NAME "Developmental headers")
+  SET(CPACK_COMPONENT_CMAKE_NAME "CMake support")
+  set(CPACK_PACKAGE_DESCRIPTION
+    "SIMPLE is a SIngle-particle cryo electron Microscope Image Processing
 Engine, focusing on ab initio 3D reconstruction of low-symmetry single-particles.
 The SIMPLE back-end consists of an object-oriented numerical library written in
 modern Fortran. The SIMPLE front-end consists of a few standalone, interoperable

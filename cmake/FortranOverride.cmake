@@ -120,9 +120,9 @@ if(NOT DEFINED CMAKE_Fortran_COMPILER_SUPPORTS_F08_ISOENV)
   message(STATUS "Checking whether ${CMAKE_Fortran_COMPILER} supports Fortran 2008 iso_fortran_env compiler_version and compiler_options")
   file(WRITE ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/CMakeTmp/testFortran_F08_ISOENVSupport.f90 "
     program test_iso_support
-        use iso_fortran_env 
+        use iso_fortran_env
         implicit none
-    character(len=:),allocatable :: str 
+    character(len=:),allocatable :: str
 !character(len=:),external :: compiler_version, compiler_options
     str=compiler_version()
         if ( .not. allocated(str) ) then
@@ -284,10 +284,10 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform
   if(CMAKE_Fortran_COMPILER_SUPPORTS_F08 EQUAL 1)
-     set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
-   else()
-     set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
-   endif()
+    set(target "${target} -std=f2008 -fall-intrinsics -Wintrinsics-std")
+  else()
+    set(target "${target} -std=f2003 -fall-intrinsics -Wintrinsics-std")
+  endif()
 
   set(common   "${preproc} ${dialect} ${target} ${warn}")
 
@@ -299,7 +299,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(cstd   "-std=${C_DIALECT}11" )
   set(cppstd "-std=${C_DIALECT}++14" )
 
-option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
+  option(GFORTRAN_EXTRA_CHECKING "Use extra checks in commandline " OFF)
 
 elseif (CMAKE_Fortran_COMPILER_ID STREQUAL "PGI")
   # pgfortran

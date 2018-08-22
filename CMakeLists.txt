@@ -172,8 +172,8 @@ configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.
 
 # modules / depends
 FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES
-    LIST_DIRECTORIES false
-    RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
+  LIST_DIRECTORIES false
+  RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
 INSTALL(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"
@@ -185,50 +185,50 @@ if(NOT BUILD_SHARED_LIBS)
   configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
   configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.template"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
 else()
-configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
+  configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.bashrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc @ONLY )
   configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/scripts/add2.tcshrc.sharedtemplate"  ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc @ONLY )
-  endif()
+endif()
 install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/add2.bashrc ${CMAKE_CURRENT_BINARY_DIR}/add2.tcshrc
   DESTINATION ${CMAKE_INSTALL_PREFIX}
   CONFIGURATIONS DEBUG|RELEASE
   PERMISSIONS   OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ WORLD_WRITE
   )
 
-  if(${BUILD_DOCS})
+if(${BUILD_DOCS})
 
-    #
-    # User manual and tutorial
-    #
-    add_subdirectory(doc)
+  #
+  # User manual and tutorial
+  #
+  add_subdirectory(doc)
 
-    #
-    # Doxygen
-    #
-    option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation" ON)
-    if (ENABLE_DOXYGEN)
-      add_custom_target(doc
-        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Generating API documentation with Doxygen" VERBATIM
-        )
-      include(UseDoxygen OPTIONAL)
-      # add_doxygen(
-      #     docs
-      #     INPUT
-      #         "${CMAKE_SOURCE_DIR}/src"
-      #     STRIP_FROM_PATH
-      #         "${CMAKE_SOURCE_DIR}/src/inc"
-      #     STRIP_FROM_INC_PATH
-      #         "${CMAKE_SOURCE_DIR}/src/inc"
-      #     EXCLUDE_PATTERNS
-      #         */gnufor2/*
-      #     EXCLUDE_SYMBOLS
-      #         *debug*
-      #         *verbose*
-      #     ALL
-      # )
-    endif()
+  #
+  # Doxygen
+  #
+  option(ENABLE_DOXYGEN "Enable a 'make docs' target for Doxygen documentation" ON)
+  if (ENABLE_DOXYGEN)
+    add_custom_target(doc
+      ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+      COMMENT "Generating API documentation with Doxygen" VERBATIM
+      )
+    include(UseDoxygen OPTIONAL)
+    # add_doxygen(
+    #     docs
+    #     INPUT
+    #         "${CMAKE_SOURCE_DIR}/src"
+    #     STRIP_FROM_PATH
+    #         "${CMAKE_SOURCE_DIR}/src/inc"
+    #     STRIP_FROM_INC_PATH
+    #         "${CMAKE_SOURCE_DIR}/src/inc"
+    #     EXCLUDE_PATTERNS
+    #         */gnufor2/*
+    #     EXCLUDE_SYMBOLS
+    #         *debug*
+    #         *verbose*
+    #     ALL
+    # )
   endif()
+endif()
 
 
 if(VERBOSE) #only for the fool-hardy
@@ -264,7 +264,7 @@ add_subdirectory(production bin)
 
 #only for debugging
 if(VERBOSE)
- include(GenericLogging)
+  include(GenericLogging)
 endif()
 
 # Add message at end of installation
