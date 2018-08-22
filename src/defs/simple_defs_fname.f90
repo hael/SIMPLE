@@ -65,7 +65,8 @@ character(len=*), parameter :: STREAM_SPPROJFILES   = './stream_spprojfiles.txt'
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
 character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 ! MISCELLANEOUS
-character(len=3), parameter :: NIL                  = 'nil'
+character(len=*), parameter :: NIL                  = 'nil'
+character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
 ! oritype enumeration
 enum, bind(c)
     enumerator :: MIC_SEG=1, STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4, CLS3D_SEG=5,&

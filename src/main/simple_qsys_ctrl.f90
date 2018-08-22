@@ -265,7 +265,7 @@ contains
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
         ! direct output
-        write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT
+        write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
         ! exit shell when done
         write(funit,'(a)') ''
         write(funit,'(a)') 'exit'
@@ -312,10 +312,10 @@ contains
         ! direct output
         if( present(outfile) )then
             ! unique output
-            write(funit,'(a)') ' > '//trim(outfile)
+            write(funit,'(a)') ' > '//trim(outfile)//' '//STDERR2STDOUT
         else
             ! subprocess, global output
-            write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT
+            write(funit,'(a)') ' >> '//SIMPLE_SUBPROC_OUT//' '//STDERR2STDOUT
         endif
         ! exit shell when done
         write(funit,'(a)') ''
