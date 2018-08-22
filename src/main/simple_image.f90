@@ -203,7 +203,12 @@ contains
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
     procedure          :: prepare_connected_comps
-    procedure          :: elim_cc             !!!!!!!!!ADDED BY CHIARA
+    procedure          :: elim_cc                     !!!!!!!!!ADDED BY CHIARA
+    procedure          :: dilatation                  !!!!!!!!!ADDED BY CHIARA
+    procedure          :: erosion                     !!!!!!!!!ADDED BY CHIARA
+    procedure          :: morpho_closing              !!!!!!!!!ADDED BY CHIARA
+    procedure          :: morpho_opening              !!!!!!!!!ADDED BY CHIARA
+    procedure          :: border_mask                 !!!!!!!!!ADDED BY CHIARA
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -228,8 +233,6 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: sobel
-    procedure          :: automatic_thresh_sobel
     !procedure          :: NLmean              !!!!!!!!!ADDED BY CHIARA, still to work on
     !procedure          :: similarity_window   !!!!!!!!!ADDED BY CHIARA
     ! CALCULATORS
@@ -245,7 +248,9 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
-    procedure          :: calc_neigh_8
+    procedure          :: calc_neigh_8_1
+    procedure          :: calc_neigh_8_2     !!!!!!!!!!ADDED BY CHIARA
+    generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2 !!!!!!!!!!ADDED BY CHIARA
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -305,8 +310,7 @@ contains
     procedure          :: pad_mirr
     procedure          :: clip
     procedure          :: clip_inplace
-    procedure          :: scale_pixels         !!!!!!!ADDED BY CHIARA
-    procedure          :: negative_image    !!!!!!ADDED BY CHIARA
+    procedure          :: scale_pixels
     procedure          :: mirror
     procedure          :: norm
     procedure, private :: norm4viz
@@ -325,6 +329,7 @@ contains
     procedure          :: img2ft
     procedure          :: cure_outliers
     procedure          :: zero_below
+    procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
     ! FFTs
     procedure          :: fwd_ft
     procedure          :: bwd_ft
@@ -3164,7 +3169,7 @@ contains
                 do i = 1, img_in%ldim(1)
                     do j = 1, img_in%ldim(2)
                         if(img_in%rmat(i,j,1) > 0.5) then  !not background
-                            neigh_8 = img_cc%calc_neigh_8([i,j,1])
+                            call img_cc%calc_neigh_8([i,j,1], neigh_8)
                             img_cc%rmat(i,j,1) = minval(neigh_8, neigh_8 > 0.5)
                         endif
                     enddo
@@ -3236,6 +3241,96 @@ contains
             endif
           enddo
     end subroutine elim_cc
+
+     !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+     ! This subroutine is ment for 2D binary images. It implements
+     ! the morphological operation dilatation.
+     subroutine dilatation(self)
+       class(image), intent(inout) :: self
+       integer, allocatable :: neigh_8(:,:,:)
+       type(image) :: self_copy
+       integer     :: i, j, k
+       call self_copy%copy(self)
+       if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; dilatation')
+       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+       THROW_HARD('input for dilatation not binary; dilatation')
+       do i = 1, self%ldim(1)
+           do j = 1, self%ldim(2)
+               if(self_copy%rmat(i,j,1) == 1.) then  !just for white pixels
+                   call self%calc_neigh_8([i,j,1], neigh_8)
+                   do k = 1, size(neigh_8, dim=2)
+                       call self%set(neigh_8(1:3,k,1), 1.) !self%rmat(neigh_8) = 1.
+                   enddo
+                   deallocate(neigh_8)
+               endif
+           enddo
+       enddo
+       call self_copy%kill
+     end subroutine dilatation
+
+     !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+     ! This subroutine is ment for 2D binary images. It implements
+     ! the morphological operation erosion.
+     subroutine erosion(self)
+         class(image) :: self
+         logical, allocatable :: border(:,:,:)
+         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; erosion')
+         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+         THROW_HARD('input for erosion not binary; erosion')
+         call self%border_mask(border)
+         where(border)
+             self%rmat = 0.
+         endwhere
+     end subroutine erosion
+
+     !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+     ! This subroutine implements morphological operation of closing
+     ! on the image self.
+     subroutine morpho_closing(self)
+         class(image), intent(inout) :: self
+         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_closing')
+         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+         THROW_HARD('input for morpho_closing not binary; morpho_closing')
+         call self%dilatation()
+         call self%erosion()
+     end subroutine morpho_closing
+
+     !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+     ! This subroutine implements morphological operation of opening
+     ! on the image self.
+     subroutine morpho_opening(self)
+       class(image), intent(inout) :: self
+       if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_opening')
+       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+       THROW_HARD('input for morpho_opening not binary; morpho_opening')
+       call self%erosion()
+       call self%dilatation()
+     end subroutine morpho_opening
+
+     !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
+     ! This subroutine builds the logical array 'border' of the same dims of
+     ! the input image self. Border is true in corrispondence of
+     ! the border pixels in self. Self is meant to be binary.
+     subroutine border_mask(self, border)
+       class(image), intent(in)            :: self
+       logical, allocatable, intent(inout) :: border(:,:,:)
+       real, allocatable :: neigh_8(:)
+       integer :: i, j
+       if(self%ldim(3)/=1) THROW_HARD('This subroutine is for 2D images!; calc_border')
+       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+       THROW_HARD('input to calculate border not binary; calc_border')
+       if(allocated(border)) deallocate(border)
+       allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
+       do i = 1,self%ldim(1)
+           do j = 1, self%ldim(2)
+               if(abs(self%rmat(i,j,1)-1.) < TINY ) then !white pixels
+                   call self%calc_neigh_8([i,j,1], neigh_8)
+                   if(any(abs(neigh_8)<TINY)) border(i,j,1) = .true.
+                   deallocate(neigh_8)
+               endif
+           enddo
+       enddo
+     end subroutine border_mask
 
     ! FILTERS
 
@@ -4085,88 +4180,6 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    subroutine sobel(img_in,img_out,thresh)
-        class(image), intent(inout) :: img_in,img_out !image input and output
-        real,         intent(in)    :: thresh(1)      !threshold for Sobel algorithm
-        real,  allocatable :: grad(:,:,:)             !matrices
-        call img_out%new(img_in%ldim,1.)              !reset if not empty
-        call calc_gradient(img_in, grad)
-        where( grad > thresh(1) ) img_out%rmat = 1.
-        deallocate(grad)
-    end subroutine sobel
-
-    !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
-    ! This soubroutine performs sobel edge detection with an automatic iterative
-    ! threshold selection in order to obtian a threshold which leads to
-    ! a ratio between foreground and background pixels in the binary image
-    ! close to 'goal'. This particular number is selected because it is what needed
-    ! for Chiara's particle picking routine.
-    subroutine automatic_thresh_sobel(self, bin_img, goal, thresh)
-        class(image),    intent(inout)   :: self
-        class(image),    intent(out)     :: bin_img
-        real, optional,  intent(in)      :: goal
-        real, optional,  intent(out)     :: thresh(1) !to keep track of the selected threshold
-        real, allocatable  :: grad(:,:,:)
-        real               :: tthresh(1), ggoal       !selected threshold and ratio nforeground/nbackground
-        real               :: t(3)                    !to calculate 3 possible sobel thresholds for each iteration
-        real               :: ratio(3)                !n_foreground/nbackground for 3 different values of the thresh
-        real               :: diff(3)                 !difference between the ideal ratio (= goal) and the obtained 3 ratios
-        integer, parameter :: N_MAXIT = 100           !max number of iterations
-        integer            :: n_it
-        logical            :: DEBUG
-        real               :: r                       !random # which guarantees me not to get stuck
-        DEBUG  = .true.
-        ggoal = 2.
-        if(present(goal)) ggoal = goal
-        if(bin_img%exists()) call bin_img%kill
-        call bin_img%new(self%ldim, self%smpd)
-        call self%calc_gradient(grad)
-        tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
-        diff = 1. !initialization
-        if(DEBUG) print*, 'Initial guessing: ', tthresh
-        n_it = 0
-        do while(abs(minval(diff(:))) > 0.005 .and. n_it < N_MAXIT)
-            n_it = n_it + 1
-            call random_seed()
-            call random_number(r)                   !rand # in  [ 0,1 ), uniform distribution
-            r = r*(maxval(grad) + minval(grad))/100 !rand # in  [ 0,(max(grad)-min(grad))/100 )
-            t(1) = tthresh(1) + r
-            t(2) = 3./2.*tthresh(1) + r
-            t(3) = 3./4.*tthresh(1) + r
-            if(t(2) > maxval(grad) .or. t(3) < minval(grad)) THROW_HARD('cannot find the threshold! automatic_thresh_sobel')
-            call self%sobel(bin_img, t(1))
-            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-                ratio(1) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(1)
-            else
-                ratio(1) = 0.
-            endif
-            call self%sobel(bin_img, t(2))
-            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-                ratio(2) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(2)
-            else
-                ratio(2) = 0.
-            endif
-            call self%sobel(bin_img, t(3))
-            if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-                ratio(3) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(3)
-            else
-                ratio(3) = 0.
-            endif
-            diff(:) = abs(ggoal-ratio(:))
-            tthresh(:) = t(minloc(diff))
-            if(DEBUG) then
-                print *, 'ITERATION ', n_it
-                print *, 'ratios = ', ratio
-                print *, 'thresholds = ', t
-                print *, 'threshold selected = ', tthresh
-            endif
-        end do
-        if(present(thresh)) thresh = tthresh
-        call self%sobel(bin_img, tthresh)
-        if(DEBUG) print *, 'Final threshold = ', tthresh
-        deallocate(grad)
-    end subroutine automatic_thresh_sobel
-
     ! !!!!!!!!!ADDED BY CHIARA, for NLmean.
     ! function similarity_window(self,px) result(sw)
     !     class(image), intent(in) :: self
@@ -4593,13 +4606,13 @@ contains
     end subroutine calc_gradient
 
     ! Returns 8-neighborhoods of the pixel position px in self
-    ! it returns the intensity values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
+    ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! and the value of the pixel itself (the last one).
-    function calc_neigh_8( self, px) result(neigh_8)
-        class(image), intent(in)  :: self
-        integer,      intent(in)  :: px(3)
-        integer, allocatable :: neigh_8(:)
-        integer              :: i, j
+    subroutine calc_neigh_8_1(self, px, neigh_8)
+        class(image),      intent(in)    :: self
+        integer,           intent(in)    :: px(3)
+        real, allocatable, intent(inout) :: neigh_8(:)
+        integer :: i, j
         if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
             THROW_HARD('image has to be 2D; calc_neigh_8')
         endif
@@ -4612,33 +4625,34 @@ contains
         if( j < 1 .or. j > self%ldim(2) )then
             THROW_HARD('y-coordinate out of bound; calc_neigh_8')
         endif
+        if(allocated(neigh_8)) deallocate(neigh_8)
         ! identify neighborhood
         if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
-            allocate(neigh_8(4), source = 0)
+            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i+1,j,1)
             neigh_8(2) = self%rmat(i+1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
             neigh_8(4) = self%rmat(i,j,1)
         else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then ! SE corner
-            allocate(neigh_8(4), source = 0)
+            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
             neigh_8(4) = self%rmat(i,j,1)
         else if (j-1 < 1  .and. i+1 >self%ldim(1)) then            ! SW corner
-            allocate(neigh_8(4), source = 0)
+            allocate(neigh_8(4), source = 0.)
             neigh_8(3) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(1) = self%rmat(i,j+1,1)
             neigh_8(4) = self%rmat(i,j,1)
         else if (j+1 > self%ldim(2) .and. i-1 < 1) then            ! NE corner
-            allocate(neigh_8(4), source = 0)
+            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
             neigh_8(4) = self%rmat(i,j,1)
         else if( j-1 < 1 ) then                                    ! N border
-            allocate(neigh_8(6), source = 0)
+            allocate(neigh_8(6), source = 0.)
             neigh_8(5) = self%rmat(i-1,j,1)
             neigh_8(4) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
@@ -4646,7 +4660,7 @@ contains
             neigh_8(1) = self%rmat(i+1,j,1)
             neigh_8(6) = self%rmat(i,j,1)
         else if ( j+1 > self%ldim(2) ) then                        ! S border
-            allocate(neigh_8(6), source = 0)
+            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
@@ -4654,7 +4668,7 @@ contains
             neigh_8(5) = self%rmat(i+1,j,1)
             neigh_8(6) = self%rmat(i,j,1)
         else if ( i-1 < 1 ) then                                   ! W border
-            allocate(neigh_8(6), source = 0)
+            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
@@ -4662,7 +4676,7 @@ contains
             neigh_8(5) = self%rmat(i,j+1,1)
             neigh_8(6) = self%rmat(i,j,1)
         else if ( i+1 > self%ldim(1) ) then                       ! E border
-            allocate(neigh_8(6), source = 0)
+            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i,j+1,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i-1,j,1)
@@ -4670,7 +4684,7 @@ contains
             neigh_8(5) = self%rmat(i,j-1,1)
             neigh_8(6) = self%rmat(i,j,1)
         else                                                     ! DEFAULT
-            allocate(neigh_8(9), source = 0)
+            allocate(neigh_8(9), source = 0.)
             neigh_8(1) = self%rmat(i-1,j-1,1)
             neigh_8(2) = self%rmat(i,j-1,1)
             neigh_8(3) = self%rmat(i+1,j-1,1)
@@ -4681,7 +4695,83 @@ contains
             neigh_8(8) = self%rmat(i-1,j,1)
             neigh_8(9) = self%rmat(i,j,1)
         endif
-    end function calc_neigh_8
+    end subroutine calc_neigh_8_1
+
+    !!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
+    ! Returns 8-neighborhoods of the pixel position px in self
+    ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
+    ! starting from any 4-neigh. It doesn't consider the pixel itself.
+    subroutine calc_neigh_8_2(self, px, neigh_8)
+        class(image),         intent(in)   :: self
+        integer,              intent(in)   :: px(3)
+        integer, allocatable, intent(inout):: neigh_8(:,:,:)
+        integer :: i, j
+        if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
+            THROW_HARD('The image has to be 2D!; calc_neigh_8_2')
+        endif
+        i = px(1)
+        j = px(2)            !Assumes to have a 2-dim matrix
+        if(allocated(neigh_8)) deallocate(neigh_8)
+        if ( i-1 < 1 .and. j-1 < 1 ) then
+          allocate(neigh_8(3,3,1), source = 0)
+          neigh_8(1:3,1,1) = [i+1,j,1]
+          neigh_8(1:3,2,1) = [i+1,j+1,1]
+          neigh_8(1:3,3,1) = [i,j+1,1]
+        else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
+          allocate(neigh_8(3,3,1), source = 0)
+          neigh_8(1:3,1,1) = [i-1,j,1]
+          neigh_8(1:3,2,1) = [i-1,j-1,1]
+          neigh_8(1:3,3,1) = [i,j-1,1]
+        else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
+          allocate(neigh_8(3,3,1), source = 0)
+          neigh_8(1:3,3,1) = [i-1,j,1]
+          neigh_8(1:3,2,1) = [i-1,j+1,1]
+          neigh_8(1:3,1,1) = [i,j+1,1]
+        else if (j+1 > self%ldim(2) .and. i-1 < 1) then
+          allocate(neigh_8(3,3,1), source = 0)
+          neigh_8(1:3,1,1) = [i,j-1,1]
+          neigh_8(1:3,2,1) = [i+1,j-1,1]
+          neigh_8(1:3,3,1) = [i+1,j,1]
+        else if( j-1 < 1 ) then
+          allocate(neigh_8(3,5,1), source = 0)
+          neigh_8(1:3,5,1) = [i-1,j,1]
+          neigh_8(1:3,4,1) = [i-1,j+1,1]
+          neigh_8(1:3,3,1) = [i,j+1,1]
+          neigh_8(1:3,2,1) = [i+1,j+1,1]
+          neigh_8(1:3,1,1) = [i+1,j,1]
+        else if ( j+1 > self%ldim(2) ) then
+          allocate(neigh_8(3,5,1), source = 0)
+          neigh_8(1:3,1,1) = [i-1,j,1]
+          neigh_8(1:3,2,1) = [i-1,j-1,1]
+          neigh_8(1:3,3,1) = [i,j-1,1]
+          neigh_8(1:3,4,1) = [i+1,j-1,1]
+          neigh_8(1:3,5,1) = [i+1,j,1]
+        else if ( i-1 < 1 ) then
+          allocate(neigh_8(3,5,1), source = 0)
+          neigh_8(1:3,1,1) = [i,j-1,1]
+          neigh_8(1:3,2,1) = [i+1,j-1,1]
+          neigh_8(1:3,3,1) = [i+1,j,1]
+          neigh_8(1:3,4,1) = [i+1,j+1,1]
+          neigh_8(1:3,5,1) = [i,j+1,1]
+        else if ( i+1 > self%ldim(1) ) then
+          allocate(neigh_8(3,5,1), source = 0)
+          neigh_8(1:3,1,1) = [i,j+1,1]
+          neigh_8(1:3,2,1) = [i-1,j+1,1]
+          neigh_8(1:3,3,1) = [i-1,j,1]
+          neigh_8(1:3,4,1) = [i-1,j-1,1]
+          neigh_8(1:3,5,1) = [i,j-1,1]
+        else
+          allocate(neigh_8(3,8,1), source = 0)
+          neigh_8(1:3,1,1) = [i-1,j-1,1]
+          neigh_8(1:3,2,1) = [i,j-1,1]
+          neigh_8(1:3,3,1) = [i+1,j-1,1]
+          neigh_8(1:3,4,1) = [i+1,j,1]
+          neigh_8(1:3,5,1) = [i+1,j+1,1]
+          neigh_8(1:3,6,1) = [i,j+1,1]
+          neigh_8(1:3,7,1) = [i-1,j+1,1]
+          neigh_8(1:3,8,1) = [i-1,j,1]
+        endif
+    end subroutine calc_neigh_8_2
 
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys1(self,logi) result(phys)
@@ -5659,8 +5749,10 @@ contains
       ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
       ! & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
       ! Central cross
-      self%rmat(part_coords(1)-length:part_coords(1)+length,  part_coords(2), 1) = value
-      self%rmat(part_coords(1),  part_coords(2)-length:part_coords(2)+length, 1) = value
+      self%rmat(part_coords(1)-length:part_coords(1)+length, &
+             &  part_coords(2)-int((bborder-1)/2):part_coords(2)+int((bborder-1)/2), 1) = value
+      self%rmat(part_coords(1)-int((bborder-1)/2):part_coords(1)+int((bborder-1)/2), &
+             &  part_coords(2)-length:part_coords(2)+length, 1) = value
     end subroutine draw_picked
 
     !>  \brief  just a corner filling fun for testing purposes
@@ -6471,14 +6563,6 @@ contains
           self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sc*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+new_range(1)-sc*old_range(1)
     end subroutine scale_pixels
 
-    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
-   ! This subroutine takes in input the image self and trasforms it in its negative image.
-    subroutine negative_image(self)
-      class(image), intent(inout) :: self
-      self%rmat = -self%rmat + maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) &
-                           & + minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-    end subroutine negative_image
-
     !>  \brief  is for mirroring an image
     !!          mirror('x') corresponds to mirror2d
     subroutine mirror( self, md )
@@ -6919,6 +7003,34 @@ contains
         real,         intent(in)    :: thres
         where( self%rmat < thres ) self%rmat = 0.
     end subroutine zero_below
+
+    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+    ! build_ellipse construts an ellipse centered in center
+    ! with axis length equal to axis and rotation angle rot.
+    ! This subroutine is not a constructor since
+    ! it supposes self has already been created.
+    subroutine build_ellipse(self, center, axis, rot)
+        class(image), intent(inout) :: self
+        real,         intent(in)    :: center(2), axis(2), rot
+        real, allocatable :: theta(:)
+        integer           :: i, j, k
+        if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
+        if(self%ldim(3) /= 1) THROW_HARD("the image has to be 2D!")
+        theta = (/ (deg2rad(real(i)),i=1,360) /)
+        do k = 1,size(theta)
+            do i = 1, self%ldim(1)
+                do j = 1,self%ldim(2)
+                    if(abs(real(i) - center(1) - axis(1)*cos(theta(k))*cos(deg2rad(rot))&
+                                             & + axis(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
+                    &  abs(real(j) - center(1) - axis(1)*cos(theta(k))*sin(deg2rad(rot))&
+                                             & - axis(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
+                        call self%set([i,j,1], 1.)
+                    end if
+                enddo
+            enddo
+        enddo
+        deallocate(theta)
+    end subroutine build_ellipse
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

@@ -15,11 +15,14 @@ integer     :: ldim(3), ldim_shrunken(3), box, box_shrunken, nx, ny, border_offs
 real        :: shrink_factor
 
 contains
-
-    subroutine read_micrograph( micfname, smpd )
-        character(len=*), intent(in) :: micfname
-        real,             intent(in) :: smpd
+    subroutine read_micrograph( micfname, smpd, save_copy )
+        character(len=*),  intent(in) :: micfname
+        real,              intent(in) :: smpd
+        logical, optional, intent(in) :: save_copy
+        logical :: ssave_copy
         integer :: nframes
+        ssave_copy = .false.
+        if(present(save_copy)) ssave_copy = save_copy
         call find_ldim_nptcls(trim(micfname), ldim, nframes)
         if( nframes > 1 )then
             write(*,*) '# frames: ', nframes
@@ -27,7 +30,8 @@ contains
         endif
         call micrograph%new(ldim, smpd)
         call micrograph%read(trim(micfname))
-        if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); read micrograph'
+        if(ssave_copy) call micrograph%write('Original_micrograph.mrc')
+        if( DEBUG ) print *, 'debug(micops); read micrograph'
     end subroutine read_micrograph
 
     subroutine shrink_micrograph( shrink_fact, ldim_out, smpd_out )
@@ -53,7 +57,7 @@ contains
         real,    optional, intent(in)  :: snr
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
-        ! high-pass filter shrunken micrograph according to box_shrunken
+        ! ! high-pass filter shrunken micrograph according to box_shrunken
         call micrograph_shrunken%bp(box_shrunken * micrograph_shrunken%get_smpd(), 0., width=real(box_shrunken/2.))
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
@@ -113,7 +117,7 @@ contains
         endif
         if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
     end subroutine extract_boxes2file
-    !!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
+
     ! This subroutine does exactly what 'extract_boxes2file' in simple_micops does, but it works on
     ! whatever input image (not necessary a mic)
     subroutine extract_windows2file( micrograph_shrunken, offset, outstk, n_images, boffset, coord )

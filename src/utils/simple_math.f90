@@ -140,6 +140,14 @@ interface myacos
     module procedure myacos_dp
 end interface myacos
 
+!!!!!!!!ADDED BY CHIARA!!!!!!!!!!
+interface vis_mat
+    module procedure vis_2Dreal_mat
+    module procedure vis_2Dinteger_mat
+    module procedure vis_3Dreal_mat
+    module procedure vis_3Dinteger_mat
+end interface vis_mat
+
 contains
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
@@ -366,7 +374,7 @@ contains
         is = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function is_a_number_2
 
-        !>   to check if val is zero
+    !>   to check if val is zero
     elemental logical function is_zero_0( val )
         integer, intent(in) :: val  !< query val
         is_zero_0 = abs(val) < TINY
@@ -1963,4 +1971,43 @@ contains
         deallocate(mask)
     end subroutine elim_dup
 
+    !!!!!!ADDED BY CHIARA!!!!!
+    ! All the 4 following routines have testing purposes and allow
+    ! the user to print a matrix so that the output is similar to
+    ! the usual representation of a matrix.
+    subroutine vis_2Dreal_mat(mat)
+        real, intent(in) :: mat(:,:)
+        integer :: j, s(2)
+        s = shape(mat)
+        do j = 1, s(1)
+            print *, mat(j,:)
+        enddo
+    end subroutine vis_2Dreal_mat
+
+    subroutine vis_2Dinteger_mat(mat)
+        integer, intent(in) :: mat(:,:)
+        integer :: j, s(2)
+        s = shape(mat)
+        do j = 1, s(1)
+            print *, mat(j,:)
+        enddo
+    end subroutine vis_2Dinteger_mat
+
+    subroutine vis_3Dreal_mat(mat)
+        real, intent(in) :: mat(:,:,:)
+        integer :: j, s(3)
+        s = shape(mat)
+        do j = 1, s(1)
+            print *, mat(j,:,1)
+        enddo
+    end subroutine vis_3Dreal_mat
+
+    subroutine vis_3Dinteger_mat(mat)
+        integer, intent(in) :: mat(:,:,:)
+        integer :: j, s(3)
+        s = shape(mat)
+        do j = 1, s(1)
+            print *, mat(j,:,1)
+        enddo
+    end subroutine vis_3Dinteger_mat
 end module simple_math

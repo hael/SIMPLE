@@ -10,39 +10,6 @@ end type three_vect
 
 contains
 
-subroutine print_mat( matrix )
-    integer, intent(in) :: matrix(:,:)
-    integer             :: j, s(2)
-    s = shape(matrix)
-    do j = 1, s(2)
-        print *, matrix(:,j)
-    enddo
-end subroutine print_mat
-
-subroutine build_ellipse(self,center, axis, rot)
-    type(image), intent(inout) :: self
-    real, intent(in)           :: center(2), axis(2), rot ! USE RADIANS
-    real, allocatable          :: mat(:,:,:), teta(:)
-    integer                    :: ldim(3), i, j, k
-    allocate(teta(360))
-    do i = 1,360
-        teta(i) = deg2rad(real(i))
-    end do
-    ldim = self%get_ldim()
-    allocate(mat(ldim(1),ldim(2),1), source = self%get_rmat())
-    do k = 1,size(teta)
-        do i = 1,ldim(1)
-            do j = 1,ldim(2)
-                if(abs(i-center(1)-axis(1)*cos(teta(k))*cos(rot)+axis(2)*sin(teta(k))*sin(rot))<1 .and. &
-                & abs(j-center(1)-axis(1)*cos(teta(k))*sin(rot)-axis(2)*sin(teta(k))*cos(rot))<1) then
-                    mat(i,j,1) = 1.
-                end if
-            enddo
-        enddo
-    enddo
-    call self%set_rmat(mat)
-end subroutine build_ellipse
-
 function discret_param_space( ranges, num_steps ) result(vectors)
     real, dimension(2,3), intent(in) :: ranges
     integer                          :: num_steps(3), i
@@ -63,13 +30,11 @@ function discret_param_space( ranges, num_steps ) result(vectors)
         vectors%rot(i) = ranges(1,3)+(i*s(3))-s(3)
     end do
 end function discret_param_space
-
 end module Ht_project_mod
 
 program Ht_project
 use Ht_project_mod
 implicit none
-
 integer                 :: N, Na, Nb           !< number of points and discretization parameters
 integer                 :: i,j,k,l             !< loop indices
 real                    :: Aa, Bb              !< optimal parameters
@@ -87,7 +52,7 @@ ldim = [box,box,1]
 allocate( rmat(box,box,1) )
 call img_e%new(ldim,1.)
 center = [real(floor(real(box/2))), real(floor(real(box/2)))]
-call build_ellipse(img_e, center , axis = [50.,60.], rot = 0.)
+call img_e%build_ellipse( center , [50.,60.], 0.)
 rmat = img_e%get_rmat()
 N    = count(rmat > 0.5) ! number of points of interest, whites are 1
 allocate(x_inds(N), y_inds(N), source = 0)
@@ -144,6 +109,6 @@ print *, "b= ", Bb
 print *, "Max reached ", H(max_pos(1), max_pos(2))
 print *, "Number of voting points ", N
 print *, "Number of votes ",        sum(H)
-call build_ellipse(img_e,[real(floor(real(box/2))), real(floor(real(box/2)))],[Aa,Bb],rot = 0.)
-call img_e%vis
+call img_e%build_ellipse([real(floor(real(box/2))), real(floor(real(box/2)))],[Aa,Bb], 0.)
+call img_e%write('Final.mrc')
 end program Ht_project
