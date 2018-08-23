@@ -230,6 +230,7 @@ contains
         use simple_commander_volops,       only: reproject_commander, symaxis_search_commander
         use simple_parameters,             only: params_glob
         use simple_qsys_env,               only: qsys_env
+        use simple_sym,                    only: sym
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
@@ -261,9 +262,10 @@ contains
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
+        type(sym)             :: se1,se2
         type(image)           :: img
         character(len=2)      :: str_state
-        character(len=STDLEN) :: vol_iter
+        character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
         integer               :: icls, ncavgs, orig_box, box, istk, status, nptcls, cnt
         logical               :: srch4symaxis, do_autoscale, do_eo
@@ -285,7 +287,17 @@ contains
         ! set global state string
         str_state = int2str_pad(STATE,2)
         ! decide wether to search for the symmetry axis
-        srch4symaxis = params%pgrp .ne. 'c1'
+        pgrp_init    = trim(params%pgrp_start)
+        pgrp_refine  = trim(params%pgrp)
+        srch4symaxis = trim(pgrp_refine) .ne. trim(pgrp_init)
+        if( pgrp_init.ne.'c1' )then
+            se1 = sym(pgrp_init)
+            se2 = sym(pgrp_refine)
+            if(se1%get_nsym() >= se2%get_nsym())&
+                &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
+            call se1%kill
+            call se2%kill
+        endif
         ! read project & update sampling distance
         call spproj%read(params%projfile)
         ! retrieve cavgs stack & FRCS info
@@ -403,12 +415,13 @@ contains
         endif
         ! (3) SYMMETRY AXIS SEARCH
         if( srch4symaxis )then
-            ! need to replace original point-group flag with c1
-            call cline_refine3D_snhc%set('pgrp', 'c1')
-            call cline_refine3D_init%set('pgrp', 'c1')
+            ! need to replace original point-group flag with c1/pgrp_start
+            call cline_refine3D_snhc%set('pgrp', trim(pgrp_init))
+            call cline_refine3D_init%set('pgrp', trim(pgrp_init))
             ! symsrch
             call qenv%new(1, exec_bin='simple_exec')
             call cline_symsrch%set('prg',     'symaxis_search') ! needed for cluster exec
+            call cline_symsrch%set('pgrp',     trim(pgrp_refine))
             call cline_symsrch%set('msk',      msk)
             call cline_symsrch%set('smpd',     work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
@@ -419,6 +432,7 @@ contains
         endif
         ! (4) REFINE3D REFINE STEP
         call cline_refine3D_refine%set('prg',      'refine3D')
+        call cline_refine3D_refine%set('pgrp',     trim(pgrp_refine))
         call cline_refine3D_refine%set('projfile', trim(ORIG_WORK_PROJFILE))
         call cline_refine3D_refine%set('msk',      orig_msk)
         call cline_refine3D_refine%set('box',      real(orig_box))
@@ -438,6 +452,7 @@ contains
         endif
         ! (5) RE-PROJECT VOLUME
         call cline_reproject%set('prg',    'reproject')
+        call cline_reproject%set('pgrp',    trim(pgrp_refine))
         call cline_reproject%set('outstk', 'reprojs'//params%ext)
         call cline_reproject%set('smpd',    params%smpd)
         call cline_reproject%set('msk',     orig_msk)
@@ -636,14 +651,13 @@ contains
             end subroutine prep_eo_stks_refine
 
             subroutine conv_eo( os )
-                use simple_sym, only: sym
                 use simple_ori, only: ori
                 class(oris), intent(inout) :: os
                 type(sym) :: se
                 type(ori) :: o_odd, o_even
                 real      :: avg_euldist, euldist
                 integer   :: icls, ncls
-                call se%new(params%pgrp)
+                call se%new(pgrp_refine)
                 avg_euldist = 0.
                 ncls = 0
                 do icls=1,os%get_noris()/2

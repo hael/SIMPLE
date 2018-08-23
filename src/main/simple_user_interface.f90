@@ -1202,7 +1202,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 1, 0, 6, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1219,6 +1219,8 @@ contains
         call initial_3Dmodel%set_input('srch_ctrls', 5, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
         &for accelerated convergence rate. Final low-pass limit controls the degree of down-scaling(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         call initial_3Dmodel%set_input('srch_ctrls', 6, nrestarts)
+        call initial_3Dmodel%set_input('srch_ctrls', 7, 'pgrp_start','str',    'Initial point-group symmetry',&
+        &'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)

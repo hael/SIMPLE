@@ -166,6 +166,7 @@ type :: parameters
     character(len=STDLEN) :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
     character(len=STDLEN) :: pgrp='c1'            !< point-group symmetry(cn|dn|t|o|i)
+    character(len=STDLEN) :: pgrp_start='c1'      !< point-group symmetry(cn|dn|t|o|i)
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
@@ -515,6 +516,7 @@ contains
         call check_carg('pad',            self%pad)
         call check_carg('pcontrast',      self%pcontrast)
         call check_carg('pgrp',           self%pgrp)
+        call check_carg('pgrp_start',     self%pgrp_start)
         call check_carg('phaseplate',     self%phaseplate)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
