@@ -10,12 +10,11 @@ implicit none
 
 public :: binoris
 private
+#include "simple_local_flags.inc"
 
 integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
 integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
-
-#include "simple_local_flags.inc"
 
 type file_header_segment
     integer(kind=8)   :: fromto(2)          = 0
