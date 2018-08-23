@@ -33,7 +33,10 @@ CHARACTER(len=STDLEN) :: argtmp
 io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
 if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
 
-stars_from_matt=filepath(trim(simple_testbench),"star_test/stars_from_matt/")
+stars_from_matt=filepath(trim(simple_testbench),"stars_from_matt")
+if(.not. dir_exists(trim(stars_from_matt)) )&
+ THROW_HARD('Cannot run this test - stars_from_matt dir does not exist')
+
 if( command_argument_count() == 1 )then
     call get_command_argument(1,argtmp)
     print *, trim(argtmp)
@@ -107,45 +110,41 @@ endif
 !      &"fraca=0.1 kv=300 smpd=14 deftab=../oritab-stardoc.txt && "//&
 !      &"simple_exec prg=print_project_info")
 
-call exec_cmdline("simple_exec prg=new_project projname=SimpleImport",exitstat=io_stat)
-if(.not.dir_exists('SimpleImport') .or. io_stat/=0)&
-&THROW_HARD("new proj SimpleImport failed")
-call simple_chdir( 'SimpleImport', status=io_stat)
-if(io_stat/=0) THROW_HARD("simple_chdir failed")
-call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star" ,exitstat=io_stat)
-if(io_stat/=0)then
-    print *, " prg=importstar should fail without startype and smpd"
-else
-    THROW_HARD(" prg=importstar should fail without startype and smpd")
-endif
-call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" ,exitstat=io_stat)
-if(io_stat/=0)then
-    print *, " prg=importstar should fail without startype and smpd"
-else
-    THROW_HARD( " prg=importstar should fail without startype and smpd")
-endif
-call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah" ,exitstat=io_stat)
-if(io_stat/=0)then
-    print *, " prg=importstar should fail without a valid startype "
-else
-    THROW_HARD(" prg=importstar should fail without a valid startype")
-endif
-call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract" ,exitstat=io_stat)
-if(io_stat==0)then
-    print *, " prg=importstar valid "
-else
-    THROW_HARD(" prg=importstar should not fail with a valid startype and smpd")
-endif
-call simple_chdir( '..', status=io_stat)
-if(io_stat/=0) THROW_HARD("simple_chdir failed")
-call simple_rmdir('SimpleImport')
+call fopen(funit,'test_import_starproject')
+write(funit,*) "#!/bin/sh"
+write(funit,*) "simple_exec prg=new_project projname=SimpleImport"
+write(funit,*) "[ ! -d SimpleImport ];then echo new_project failed; fi"
+write(funit,*) "cd SimpleImport"
+write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star "
+write(funit,*) "if [ $? -ne 0 ];then"
+write(funit,*) "echo  'EXPECTED:   prg=importstar should fail without startype and smpd';else"
+write(funit,*) "echo  'UNEXPECTED: prg=importstar should fail without startype and smpd';fi"
+write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" 
+write(funit,*) "if [ $? -ne 0 ];then"
+write(funit,*) "echo 'EXPECTED: prg=importstar should fail without startype '; else"
+write(funit,*) "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; fi"
+write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah"
+
+write(funit,*) "echo 'EXPECTED: prg=importstar should fail without a valid startype ';else"
+write(funit,*) "echo 'UNEXPECTED: prg=importstar should fail without a valid startype';fi"
+
+write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract"
+write(funit,*) "if [ $? -eq 0 ];then"
+write(funit,*) "echo 'EXPECTED  valid import star args ';else"
+write(funit,*) "echo 'UNEXPECTED prg=importstar should not fail with a valid startype and smpd';fi"
+write(funit,*) "exit 0;"
+call fclose(funit)
+io_stat= simple_chmod('test_import_starproject','+x')
+call exec_cmdline('./test_import_starproject')
+
+
 
 
 print *, "Testing import_starproject with actual data"
-call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star", "smpd=1.1 startype=extract")
-call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", " smpd=1.1 startype=micrograph")
-call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", " smpd=1.1 startype=select")
-call runimport(trim(stars_from_matt)//"/Refine3D/Refine3D_1st/run_ct19_data.star", " smpd=1.1 startype=refine3D")
+call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="extract",io_stat=io_stat)
+call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
+call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="select",io_stat=io_stat)
+call runimport(trim(stars_from_matt)//"/Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="refine3D",io_stat=io_stat)
 
 
 
@@ -162,15 +161,17 @@ print *,' Testing directory star_test'
 
 contains
 
-    subroutine runimport(starfile,extraargs)
-        character(len=*), intent(in) :: starfile, extraargs
-        integer io_stat
+    subroutine runimport(starfile,smpd,startype, io_stat)
+        character(len=*), intent(in) :: starfile, startype
+real, intent(in) :: smpd
+        character(len=:),allocatable :: curdir
+        integer,intent(out):: io_stat
         call exec_cmdline("[ -d SimpleImport ] && rm -rf SimpleImport; "//&
             "simple_exec prg=new_project projname=SimpleImport;",exitstat=io_stat)
-        call simple_chdir( 'SimpleImport', status=io_stat)
+        call simple_chdir( 'SimpleImport', curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
-        call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(starfile)//" "//trim(extraargs),exitstat=io_stat)
-        call simple_chdir( '..', status=io_stat)
+        call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(starfile)//" startype="//trim(startype)//" smpd="//real2str(smpd),exitstat=io_stat)
+        call simple_chdir(curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
     end subroutine runimport
 
