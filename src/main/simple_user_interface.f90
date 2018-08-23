@@ -1387,7 +1387,7 @@ contains
             'STAR-formatted text file of input parameters ', 'e.g. params.star', .false., 'NONE')
         import_starproject%parm_ios(1)%required = .true.
         call import_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
-            'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. micrographs or class2D', .false., '')
+            'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. m|micrographs or ctf|ctf_estimation or p|ptcl|particles or cavgs|classaverages', .false., '')
         import_starproject%parm_ios(2)%required = .true.
         call import_starproject%set_input('parm_ios', 3, smpd) !! default required
         call import_starproject%set_input('parm_ios', 4, kv)

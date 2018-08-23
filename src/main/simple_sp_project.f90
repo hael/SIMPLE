@@ -59,7 +59,7 @@ contains
     procedure          :: add_fsc2os_out
     procedure          :: add_frcs2os_out
     procedure          :: add_vol2os_out
-    procedure, private :: add_entry2os_out
+    procedure          :: add_entry2os_out
     procedure          :: get_cavgs_stk
     procedure          :: get_vol
     procedure          :: get_fsc

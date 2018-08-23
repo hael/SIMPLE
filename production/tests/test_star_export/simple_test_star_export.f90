@@ -111,40 +111,44 @@ endif
 !      &"simple_exec prg=print_project_info")
 
 call fopen(funit,'test_import_starproject')
-write(funit,*) "#!/bin/sh"
-write(funit,*) "simple_exec prg=new_project projname=SimpleImport"
-write(funit,*) "[ ! -d SimpleImport ];then echo new_project failed; fi"
-write(funit,*) "cd SimpleImport"
-write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star "
-write(funit,*) "if [ $? -ne 0 ];then"
-write(funit,*) "echo  'EXPECTED:   prg=importstar should fail without startype and smpd';else"
-write(funit,*) "echo  'UNEXPECTED: prg=importstar should fail without startype and smpd';fi"
-write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" 
-write(funit,*) "if [ $? -ne 0 ];then"
-write(funit,*) "echo 'EXPECTED: prg=importstar should fail without startype '; else"
-write(funit,*) "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; fi"
-write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah"
+write(funit,'(a)')"#!/bin/sh"
+write(funit,'(a)')"set +e"
+write(funit,'(a)') "[ -d SimpleImport ] && rm -rf SimpleImport"
+write(funit,'(a)') "simple_exec prg=new_project projname=SimpleImport"
+write(funit,'(a)') "if[ ! -d SimpleImport ];then echo new_project failed;exit 1; fi"
+write(funit,'(a)') "cd SimpleImport"
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star "
+write(funit,'(a)') "if [ $? -ne 0 ];then"
+write(funit,'(a)') "echo  'EXPECTED:   prg=importstar should fail without startype and smpd';else"
+write(funit,'(a)') "echo  'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" 
+write(funit,'(a)') "if [ $? -ne 0 ];then"
+write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without startype '; else"
+write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1 fi"
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah"
 
-write(funit,*) "echo 'EXPECTED: prg=importstar should fail without a valid startype ';else"
-write(funit,*) "echo 'UNEXPECTED: prg=importstar should fail without a valid startype';fi"
+write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without a valid startype ';else"
+write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
 
-write(funit,*) "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract"
-write(funit,*) "if [ $? -eq 0 ];then"
-write(funit,*) "echo 'EXPECTED  valid import star args ';else"
-write(funit,*) "echo 'UNEXPECTED prg=importstar should not fail with a valid startype and smpd';fi"
-write(funit,*) "exit 0;"
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract"
+write(funit,'(a)') "if [ $? -eq 0 ];then"
+write(funit,'(a)') "echo 'EXPECTED  valid import star args ';else"
+write(funit,'(a)') "echo 'UNEXPECTED prg=importstar should not fail with a valid startype and smpd'; exit 1;fi"
+write(funit,'(a)') "echo '"
+
+write(funit,'(a)') "exit 0;"
 call fclose(funit)
 io_stat= simple_chmod('test_import_starproject','+x')
-call exec_cmdline('./test_import_starproject')
+! call exec_cmdline('./test_import_starproject')
 
 
 
 
-print *, "Testing import_starproject with actual data"
-call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="extract",io_stat=io_stat)
-call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
-call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="select",io_stat=io_stat)
-call runimport(trim(stars_from_matt)//"/Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="refine3D",io_stat=io_stat)
+! print *, "Testing import_starproject with actual data"
+! call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="extract",io_stat=io_stat)
+! call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
+! call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="select",io_stat=io_stat)
+! call runimport(trim(stars_from_matt)//"/Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="refine3D",io_stat=io_stat)
 
 
 

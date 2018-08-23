@@ -435,7 +435,7 @@ contains
             .not. allocated(self%param_isstr) .or. &
             .not. allocated(self%param_scale) .or. &
             .not. allocated(self%param_converted)) then
-            print *, " Second pass do not allocate correctly "
+            print *, " Second pass did not allocate correctly "
             THROW_HARD( "simple_stardoc:: read_header allocation unsuccessful")
         endif
 

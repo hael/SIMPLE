@@ -14,6 +14,9 @@ character(len=8)      :: datestr
 character(len=STDLEN) :: folder,  oldCWDfolder, curDir
 character(len=30)     :: fname
 integer(kind=8)       :: valueRSS,valuePeak,valueSize,valueHWM
+  character(len=*),parameter :: regex_source = "___ abc123def ___ ghi456 ___"
+  character(len=*),parameter :: regexString = "[a-z]*([0-9]+)([a-z]*)"
+
 global_verbose=.true.
 
 call seed_rnd
@@ -361,6 +364,58 @@ print *, '   subprocess returned PID ', pid
 print *, '>>>  Syslib function Test 7b: wait_pid'
 io_stat = wait_pid(pid)
 print *, '      wait_pid status', io_stat
+
+
+print *, '>>>'
+print *, '>>> Syslib function Test 8: Regular expressions '
+print *, '>>>'
+print *, '>>> Syslib function Test 8a: regexp_match'
+print *, 'RE test string:', trim(regex_source)
+print *, 'RE regexp string:', trim(regexString)
+io_stat = RE_match(regex_source, regexString)
+if(io_stat==0)then
+    print *, 'RE result ', io_stat, '  Success '
+else
+    THROW_HARD('Regexp match failed.')
+endif
+print *, '>>> Syslib function Test 8b: star types'
+io_stat = RE_match('single ptcl stack micrO ugraph movies class avgs stk', '(micro|movie|ptcl|cavg|stk)')
+if(io_stat==0)then
+    print *, 'RE result ', io_stat, '  Success '
+else
+    THROW_HARD('Regexp match failed.')
+endif
+print *, '>>> Syslib function Test 8b: star types case sensitivity'
+io_stat = RE_match('single PTCL stack MICRO ugraph MOVIES class avgs STK', '(micro|movie|ptcl|cavg|stk)')
+if(io_stat==0)then
+    print *, 'RE result ', io_stat, '  Success '
+else
+    THROW_HARD('Regexp match failed.')
+endif
+
+print *, '>>> Syslib function Test 8b: star types invalid'
+io_stat = RE_match('single particle', '(micro|movie|ptcl|cavgs|stk)')
+if(io_stat/=0)then
+    print *, 'RE result ', io_stat, '  Expected Failure '
+else
+    THROW_HARD('Regexp match failed on invalid string.')
+endif
+
+print *, '>>> Syslib function Test 8c: non-space characters '
+io_stat = RE_match('asd_+=fgqwerxcv b98745[\[\]['';/.,~!(*&$\t@^%@!)(kj\nh asdfkuywer', '[^[:space:]]')
+if(io_stat==0)then
+    print *, 'RE result ', io_stat, '  Success '
+else
+    THROW_HARD('Regexp match failed.')
+endif
+print *, '>>> Syslib function Test 8c: numbers '
+io_stat = RE_match('12345667878908876512394123345', '(23|78|94|25|08)')
+if(io_stat==0)then
+    print *, 'RE result ', io_stat, '  Success '
+else
+    THROW_HARD('Regexp match failed.')
+endif
+
 
 print *, '>>>'
 print *, '>>> Syslib tests completed successfully'

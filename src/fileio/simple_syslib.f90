@@ -28,7 +28,7 @@ public :: wait_for_closure, simple_getcwd, simple_chdir, simple_mkdir, simple_rm
 public :: simple_list_dirs, find_next_int_dir_prefix, simple_list_files, simple_glob_list_tofile
 public :: del_file, simple_del_files, syslib_rm_rf, simple_rm_force, simple_timestamp, cpu_usage
 public :: get_process_id, get_login_id, print_compiler_info, simple_sysinfo_usage, simple_mem_usage
-public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid
+public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid, RE_match, RE_multi
 private
 #include "simple_local_flags.inc"
 
@@ -296,6 +296,21 @@ interface
         integer(c_long), intent(inout) :: bufRAM             !> this process's buffered RAM
         integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
+
+    function regexp_match(source, regex) bind(C,name="regexp_match")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: regexp_match
+        character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
+        character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
+    end function 
+    function regexp_multi(source, regex) bind(C,name="regexp_multi")
+        use, intrinsic :: iso_c_binding
+        implicit none
+        integer(c_int) :: regexp_multi
+        character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
+        character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
+    end function 
 
 end interface
 
@@ -1368,5 +1383,26 @@ contains
             allocate(absolute_name, source=trim(infile))
         end if
     end subroutine simple_abspath
+
+    integer function RE_match(source, regex)
+        character(len=*),              intent(in)  :: source,regex
+        integer(c_int) :: res
+        character(kind=c_char,len=STDLEN)  :: source_c  !> input string
+        character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
+        source_c = trim(source)//achar(0)
+        regex_c = trim(regex)//achar(0)
+        res = regexp_match(source_c,regex_c)
+        RE_match = INT(res)
+    end function RE_match
+    integer function RE_multi(source, regex)
+        character(len=*),              intent(in)  :: source,regex
+        integer(c_int) :: res
+        character(kind=c_char,len=STDLEN)  :: source_c  !> input string
+        character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
+        source_c = trim(source)//achar(0)
+        regex_c = trim(regex)//achar(0)
+        res = regexp_multi(source_c,regex_c)
+        RE_multi = INT(res)
+    end function RE_multi
 
 end module simple_syslib

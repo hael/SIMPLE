@@ -51,6 +51,8 @@ contains
     procedure :: import_shiny3D
     procedure :: export_all
     procedure :: import_all
+    procedure :: import_particles
+    procedure :: import_cavgs
     procedure :: kill
 end type star_project
 
@@ -980,6 +982,286 @@ contains
         character(len=*),    intent(inout) :: filename
 
     end subroutine import_all
+
+
+    subroutine import_cavgs (self, spproj, params, cline, filename)
+        class(star_project), intent(inout) :: self
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
+        character(len=:), allocatable :: stk, stk_abspath
+        integer :: ldim(3), nptcls, ind
+
+        call cline%set('oritype','cavgs')
+        !! make sure starfile has been parsed and temporary files are in current dir
+        call self%check_temp_files('import_cavgs')
+        stk='filetab-stardoc.txt'
+!!        call spproj%add_cavgs2os_out(params%stk, params%smpd)
+        ! full path and existence check
+        call simple_abspath(stk,stk_abspath,errmsg='star_project :: import_cavgs')
+        ! find dimension of inputted stack
+        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+        ! add os_out entry
+        call spproj%add_entry2os_out('cavg', ind)
+        ! fill-in field
+        call spproj%os_out%set(ind, 'stk',     trim(stk_abspath))
+        call spproj%os_out%set(ind, 'box',     real(ldim(1)))
+        call spproj%os_out%set(ind, 'nptcls',  real(nptcls))
+        call spproj%os_out%set(ind, 'fromp',   1.0)
+        call spproj%os_out%set(ind, 'top',     real(nptcls))
+        call spproj%os_out%set(ind, 'smpd',    real(params%smpd))
+        call spproj%os_out%set(ind, 'stkkind', 'single')
+        call spproj%os_out%set(ind, 'imgkind', 'cavg')
+        call spproj%os_out%set(ind, 'ctf',     'no')
+        ! add congruent os_cls2D
+        call spproj%os_cls2D%new(nptcls)
+        call spproj%os_cls2D%set_all2single('state',1.)
+    !---------------^^^^ add_cavgs2os_out ----------
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+
+        !! write spproj in commander_star
+    end subroutine import_cavgs
+
+    subroutine import_particles (self, spproj, params, cline, filename)
+        use simple_sp_project, only: oritype2segment
+        use simple_oris,      only: oris
+        use simple_nrtxtfile, only: nrtxtfile
+        use simple_binoris_io ! use all in there
+        class(star_project), intent(inout) :: self
+        class(sp_project),   intent(inout) :: spproj
+        class(parameters),   intent(inout) :: params
+        class(cmdline),      intent(inout) :: cline
+        character(len=*),    intent(inout) :: filename
+        ! integer         :: i, nheaders, nlines
+        ! type(oris)      :: os
+        ! integer         :: ndatlines,noris,iseg, n_ori_inputs
+        ! type(ctfparams) :: ctfvars
+        ! logical         :: inputted_oritab, inputted_plaintexttab, inputted_deftab
+        ! character(len=:), allocatable ::  oritype
+        ! class(oris),      pointer     :: os_ptr
+
+        !character(len=STDLEN)         :: projfile
+        character(len=:), allocatable :: phaseplate, ctfstr
+        real,             allocatable :: line(:)
+        type(oris)       :: os
+        type(nrtxtfile)  :: paramfile
+        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
+        integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
+        type(ctfparams)  :: ctfvars
+
+        call cline%set('oritype','ptcl2D')
+        !! make sure starfile has been parsed and temporary files are in current dir
+        call self%check_temp_files('import_particles')
+
+        call params%new(cline)
+        ! PARAMETER INPUT MANAGEMENT
+        ! parameter input flags
+        inputted_oritab       = cline%defined('oritab')
+        inputted_deftab       = cline%defined('deftab')
+        inputted_plaintexttab = cline%defined('plaintexttab')
+        n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
+        ! exceptions
+        if( n_ori_inputs > 1 )then
+            THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_import_particles')
+        endif
+        if( cline%defined('stk') .and. cline%defined('stktab') )then
+            THROW_HARD('stk and stktab are both defined on command line, use either or; exec_import_particles')
+        endif
+        if( cline%defined('stk') .or. cline%defined('stktab') )then
+            if( trim(params%ctf) .ne. 'no' )then
+                ! there needs to be associated parameters of some form
+                if( n_ori_inputs < 1 )then
+                    THROW_HARD('stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)')
+                endif
+            endif
+        else
+            THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
+        endif
+        ! oris input
+        if( inputted_oritab )then
+            ndatlines = binread_nlines(params%oritab)
+            call os%new(ndatlines)
+            call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
+            call spproj%kill ! for safety
+        endif
+        if( inputted_deftab )then
+            ndatlines = binread_nlines(params%deftab)
+            call os%new(ndatlines)
+            call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
+            call spproj%kill ! for safety
+        endif
+        if( inputted_plaintexttab )then
+            call paramfile%new(params%plaintexttab, 1)
+            ndatlines = paramfile%get_ndatalines()
+            nrecs     = paramfile%get_nrecs_per_line()
+            if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
+                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_extract_ptcls')
+            endif
+            call os%new(ndatlines)
+            allocate( line(nrecs) )
+            do i=1,ndatlines
+                call paramfile%readNextDataLine(line)
+                select case(params%dfunit)
+                    case( 'A' )
+                        line(1) = line(1)/1.0e4
+                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
+                    case( 'microns' )
+                        ! nothing to do
+                    case DEFAULT
+                        THROW_HARD('unsupported dfunit; exec_extract_ptcls')
+                end select
+                select case(params%angastunit)
+                    case( 'radians' )
+                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
+                    case( 'degrees' )
+                        ! nothing to do
+                    case DEFAULT
+                        THROW_HARD('unsupported angastunit; exec_extract_ptcls')
+                end select
+                select case(params%phshiftunit)
+                    case( 'radians' )
+                        ! nothing to do
+                    case( 'degrees' )
+                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
+                    case DEFAULT
+                        THROW_HARD('unsupported phshiftunit; exec_extract_ptcls')
+                end select
+                call os%set(i, 'dfx', line(1))
+                if( nrecs > 1 )then
+                    call os%set(i, 'dfy', line(2))
+                    call os%set(i, 'angast', line(3))
+                endif
+                if( nrecs > 3 )then
+                    call os%set(i, 'phshift', line(4))
+                endif
+            end do
+        endif
+        if( cline%defined('stk') )then
+            ctfvars%smpd = params%smpd
+            select case(trim(params%ctf))
+                case('yes')
+                    ctfvars%ctfflag = CTFFLAG_YES
+                case('no')
+                    ctfvars%ctfflag = CTFFLAG_NO
+                case('flip')
+                    ctfvars%ctfflag = CTFFLAG_FLIP
+                case DEFAULT
+                    write(*,*)
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_extract_ptcls')
+            end select
+            if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
+                ! if importing single stack of extracted particles, these are hard requirements
+                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')
+                if( cline%defined('phaseplate') )then
+                    phaseplate = cline%get_carg('phaseplate')
+                else
+                    allocate(phaseplate, source='no')
+                endif
+                ctfvars%kv           = params%kv
+                ctfvars%cs           = params%cs
+                ctfvars%fraca        = params%fraca
+                ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+            endif
+        else
+            ! importing from stktab
+            if( n_ori_inputs == 1 )then
+                ! sampling distance
+                call os%set_all2single('smpd', params%smpd)
+                ! acceleration voltage
+                if( cline%defined('kv') )then
+                    call os%set_all2single('kv', params%kv)
+                else
+                    do i=1,ndatlines
+                        if( .not. os%isthere(i, 'kv') )then
+                            write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
+                            THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
+                        endif
+                    end do
+                endif
+                ! spherical aberration
+                if( cline%defined('cs') )then
+                    call os%set_all2single('cs', params%cs)
+                else
+                    do i=1,ndatlines
+                        if( .not. os%isthere(i, 'cs') )then
+                            write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
+                            THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
+                        endif
+                    end do
+                endif
+                ! fraction of amplitude contrast
+                if( cline%defined('fraca') )then
+                    call os%set_all2single('fraca', params%fraca)
+                else
+                    do i=1,ndatlines
+                        if( .not. os%isthere(i, 'fraca') )then
+                            write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
+                            THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
+                        endif
+                    end do
+                endif
+                ! phase-plate
+                if( cline%defined('phaseplate') )then
+                    call os%set_all2single('phaseplate', trim(params%phaseplate))
+                else
+                    do i=1,ndatlines
+                        if( .not. os%isthere(i, 'phaseplate') )then
+                            call os%set(i, 'phaseplate', 'no')
+                        endif
+                    end do
+                endif
+                call os%getter(1, 'phaseplate', phaseplate)
+                if( trim(phaseplate) .eq. 'yes' )then
+                    if( .not. os%isthere(1,'phshift') )then
+                        THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_import_particles')
+                    endif
+                endif
+                ! ctf flag
+                if( cline%defined('ctf') )then
+                    call os%set_all2single('ctf', trim(params%ctf))
+                else
+                    do i=1,ndatlines
+                        if( .not. os%isthere(i, 'ctf') )then
+                            call os%set(i, 'ctf', 'yes')
+                        endif
+                    end do
+                endif
+                call os%getter(1, 'ctf', ctfstr)
+                if( trim(ctfstr) .ne. 'no' )then
+                    if( .not. os%isthere(1,'dfx') )then
+                        THROW_HARD('ctf .ne. no requires dfx input, currently lacking; exec_import_particles')
+                    endif
+                endif
+            endif
+        endif
+
+        ! PROJECT FILE MANAGEMENT
+! already read in         call spproj%read(params%projfile)
+
+        ! UPDATE FIELDS
+        ! add stack if present
+        ! if( cline%defined('stk') )then
+        !     if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
+        !         ! get number of particles from stack
+        !         call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
+        !         call os%new(params%nptcls)
+        !         call os%set_all2single('state', 1.0)
+        !     endif
+            call spproj%add_single_stk(params%stk, ctfvars, os)
+!        endif
+        ! add list of stacks (stktab) if present
+!        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
+
+
+
+    end subroutine import_particles
+
 
 
     function exporttype2star( exporttype ) result(stype)
