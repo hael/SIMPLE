@@ -42,7 +42,7 @@ contains
     subroutine close_o_peaks_io
         if( l_open )then
             call fclose(funit)
-            funit = 0
+            funit  = 0
             l_open = .false.
         endif
     end subroutine close_o_peaks_io
@@ -59,6 +59,7 @@ contains
             if( recind < 1 )then
                 print *, 'iptcl:  ', iptcl
                 print *, 'fromto: ', fromto
+                print *, 'recind: ', recind
                 THROW_HARD('nonsensical record index; write_o_peak')
             endif
             npeaks = o_peak%get_noris()
@@ -101,6 +102,7 @@ contains
             if( recind < 1 )then
                 print *, 'iptcl:  ', iptcl
                 print *, 'fromto: ', fromto
+                print *, 'recind: ', recind
                 THROW_HARD('nonsensical record index; write_o_peak')
             endif
             ! read record
