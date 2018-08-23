@@ -158,11 +158,11 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        ! 30 is arbitrary here and under testing
-                        if( updatecnt<=1 .or. updatecnt>30 )then
+                        ! 20 is arbitrary here and under testing
+                        if( updatecnt<=1 .or. updatecnt>20 )then
                             snhc_sz(iptcl) = 0. ! greedy or exhaustive
-                        else if( updatecnt <= 30 )then
-                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/60.)) ! snhc
+                        else if( updatecnt <= 20 )then
+                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/40.)) ! snhc
                         endif
                     endif
                 enddo

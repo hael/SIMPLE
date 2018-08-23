@@ -262,6 +262,9 @@ contains
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
         l_ccres = .false.
+        if( cline%defined('objfun') )then
+            if( trim(params%objfun).eq.'ccres' )l_ccres = .true.
+        endif
         ! filepath creates spproj_list_fname with checks
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ! for microscopes that don't work too good
@@ -270,6 +273,7 @@ contains
         cline_cluster2D  = cline
         cline_make_cavgs = cline
         call cline_cluster2D%set('prg',       'cluster2D')
+        call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('autoscale', 'no')
         call cline_cluster2D%set('extr_iter', 100.) ! no extremal randomization
         call cline_cluster2D%delete('frac_update')
@@ -382,12 +386,10 @@ contains
             ! shift limit
             if( nptcls_glob>SHIFTSRCH_PTCLSLIM .and. iter>SHIFTSRCH_ITERLIM )call cline_cluster2D%set('trs', MINSHIFT)
             ! objective function
-            if( .not.l_ccres )then
-                if( nptcls_glob > CCRES_NPTCLS_LIM .and. iter > SHIFTSRCH_ITERLIM )then
-                    l_ccres = .true.
-                    call cline_cluster2D%set('objfun', 'ccres')
-                    write(*,'(A)')'>>> SWITCHED TO CCRES OBJECTIVE FUNCTION'
-                endif
+            if( l_ccres .and. nptcls_glob > CCRES_NPTCLS_LIM .and. iter > SHIFTSRCH_ITERLIM )then
+                l_ccres = .false.
+                call cline_cluster2D%set('objfun', 'ccres')
+                write(*,'(A)')'>>> SWITCHED TO CCRES OBJECTIVE FUNCTION'
             endif
             ! execute
             params_glob%nptcls = nptcls_glob
@@ -468,6 +470,9 @@ contains
                     endif
                 endif
             endif
+            !!!!!!!!!!!!
+            call work_proj%os_cls2D%write('classdoc_'//int2str_pad(iter,3)//'.txt')
+            !!!!!!!!!!!!
             ! update original project
             if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
                 write(*,'(A,A)')'>>> UPDATING PROJECT FILE ', trim(params%projfile)
@@ -511,17 +516,21 @@ contains
             end function is_timeout
 
             subroutine update_orig_proj
+                integer :: n_stks
                 ! assumes work_proj is to correct dimension
                 call orig_proj%read(params%projfile)
-                do iproj=n_spprojs_prev+1,n_spprojs
-                    call stream_proj%read(spproj_list(iproj))
-                    stk     = stream_proj%get_stkname(1)
-                    ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
-                    call orig_proj%add_stk(stk, ctfvars)
-                enddo
+                n_stks = orig_proj%os_stk%get_noris()
+                if( n_stks > n_spprojs )then
+                    do iproj=n_stks+1,n_spprojs
+                        call stream_proj%read(spproj_list(iproj))
+                        stk     = stream_proj%get_stkname(1)
+                        ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
+                        call orig_proj%add_stk(stk, ctfvars)
+                    enddo
+                endif
                 ! updates 2D & wipes 3D segment
-                if( do_autoscale )call work_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
                 orig_proj%os_ptcl2D = work_proj%os_ptcl2D
+                if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
                 orig_proj%os_ptcl3D = work_proj%os_ptcl3D ! to wipe the 3d segment
                 call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
                 call orig_proj%write()
@@ -564,6 +573,7 @@ contains
                 character(len=STDLEN) :: stk
                 real                  :: smpd
                 integer               :: icls
+                character(len=1)      :: mirr_flag
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
                     ! updates document later
@@ -572,25 +582,33 @@ contains
                     ! updates classes
                     call img_cavg%new([box, box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
+                        mirr_flag = 'x'
+                        if(ran3() > 0.5) mirr_flag = 'y'
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
                         stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                         stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation
                     call img_cavg%read(trim(refs_glob), ncls_glob)
+                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(trim(refs_glob), ncls_glob)
                     stk = add2fbody(trim(refs_glob),params%ext,'_even')
                     call img_cavg%read(stk, ncls_glob)
+                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(stk, ncls_glob)
                     stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
+                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(stk, ncls_glob)
                     ! cleanup
                     call img_cavg%kill
@@ -606,6 +624,7 @@ contains
                 real                  :: smpd
                 integer               :: icls, state
                 character(len=STDLEN) :: stk
+                character(len=1)      :: mirr_flag
                 state = 1
                 if( ncls_glob.eq.ncls_glob_prev )return
                 ! updates references & FRCs
@@ -616,15 +635,20 @@ contains
                     smpd = work_proj%get_smpd()
                     call img_cavg%new([box,box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
+                        mirr_flag = 'x'
+                        if(ran3() > 0.5) mirr_flag = 'y'
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
                         stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                         stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
+                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation
