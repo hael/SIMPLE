@@ -665,6 +665,10 @@ contains
                 call build%spproj%write_segment_inside(params%oritype, params%projfile)
             endif
         endif
+        ! rotate volume to symaxis for later comparison
+        call build%vol%read(params%vols(1))
+        build%vol2 = rotvol(build%vol, symaxis)
+        call build%vol2%write('vol_aligned2_'//trim(params%pgrp)//'axis'//params%ext)
         ! destruct
         call symaxis%kill
         call symaxis4write%kill

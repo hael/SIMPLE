@@ -52,7 +52,7 @@ contains
 end type cmdline
 
 contains
-    
+
     function constructor( key, carg, rarg ) result( self )
         character(len=*),  intent(in) :: key
         character(len=*),  intent(in), optional :: carg
@@ -560,9 +560,14 @@ contains
         endif
         if( arg(:pos-1) .ne. 'prg' )then
             write(*,'(a)') 'ERROR!'
-            write(*,'(a)') 'prg=simple_program required to be first on command line'
-            write(*,'(a)') 'Please, refer to the manual for a comprehensive '
-            write(*,'(a)') 'list of all programs and their specific documentation'
+            write(*,'(a)') ''
+            write(*,'(a)') 'prg=program required to be first on command line'
+            write(*,'(a)') ''
+            write(*,'(a)') 'Please, execute with prg=list to print all available programs'
+            write(*,'(a)') ''
+            write(*,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
+            write(*,'(a)') ''
+            write(*,'(a)') 'Executing with prg flag only prints all available command-line options'
             stop
         endif
     end subroutine cmdline_err

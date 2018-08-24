@@ -13,9 +13,9 @@ contains
         ll_stop = .true.
         if( present(l_stop) ) ll_stop = l_stop
         if( ll_stop )then
-            write(OUTPUT_UNIT,'(A)', advance='no') 'ERROR: '//trim(msg)
+            write(OUTPUT_UNIT,'(A)', advance='no') 'ERROR! '//trim(msg)
         else
-            write(OUTPUT_UNIT,'(A)', advance='no') 'WARNING: '//trim(msg)
+            write(OUTPUT_UNIT,'(A)', advance='no') 'WARNING! '//trim(msg)
         endif
         if( l_distr_exec_glob )then
             write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line, '; part: ', part_glob, ' of distributed execution'

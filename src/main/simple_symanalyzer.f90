@@ -229,7 +229,7 @@ contains
             call find_symaxis(pgrps(igrp)%str)
             ! rotate input (non-symmetrized) volume to symmetry axis
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
-            call vol_asym_aligned2axis%write('vol_c1_aligned_'//trim(pgrps(igrp)%str)//'.mrc')
+            call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc')
             call vol_asym_aligned2axis%mask(msk, 'soft')
             ! generate symmetrized volume
             call symaverage
