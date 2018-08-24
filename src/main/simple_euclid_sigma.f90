@@ -201,15 +201,17 @@ contains
 
     ! getters / setters
 
-    function sigma2_exists( self, iptcl ) result( res )
+    function sigma2_exists( self, iptcl ) result( l_flag )
         class(euclid_sigma), intent(in) :: self
         integer,             intent(in) :: iptcl
-        logical                         :: res
-        if (self%pinds(iptcl) .eq. 0) then
+        logical                         :: l_flag
+        l_flag = .false.
+        if( .not. self%exists ) return
+        if( self%pinds(iptcl) .eq. 0 )then
             write (*,*) 'iptcl = ', iptcl
             THROW_HARD('sigma2_exists. iptcl index wrong!')
         else
-            res = self%sigma2_exists_msk(self%pinds(iptcl))
+            l_flag = self%sigma2_exists_msk(self%pinds(iptcl))
         end if
     end function sigma2_exists
 

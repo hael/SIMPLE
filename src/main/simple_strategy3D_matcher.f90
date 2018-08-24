@@ -386,7 +386,7 @@ contains
                 orientation = build_glob%spproj_field%get_ori(iptcl)
                 ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
-                if ( eucl_sigma%sigma2_exists( iptcl ) ) then
+                if( eucl_sigma%sigma2_exists( iptcl ))then
                     call eucl_sigma%set_do_divide(.true.)
                     call eucl_sigma%set_divide_by(iptcl)
                 end if

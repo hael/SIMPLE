@@ -2586,37 +2586,8 @@ contains
         self%rmat = sqrt(self%rmat)
     end subroutine cendist
 
-    !>  \brief masscen is for determining the center of mass of binarised image
-    !!          only use this function for integer pixels shifting
-    !! \return  xyz
-    !!
-    function masscen( self ) result( xyz )
-        class(image), intent(inout) :: self
-        real    :: xyz(3), spix, ci, cj, ck
-        integer :: i, j, k
-        if( self%ft ) THROW_HARD('masscen not implemented for FTs; masscen')
-        spix = 0.
-        xyz  = 0.
-        ci   = -real(self%ldim(1))/2.
-        do i=1,self%ldim(1)
-            cj = -real(self%ldim(2))/2.
-            do j=1,self%ldim(2)
-                ck = -real(self%ldim(3))/2.
-                do k=1,self%ldim(3)
-                    xyz  = xyz  + self%rmat(i,j,k) * [ci, cj, ck]
-                    spix = spix + self%rmat(i,j,k)
-                    ck   = ck + 1.
-                end do
-                cj = cj + 1.
-            end do
-            ci = ci + 1.
-        end do
-        xyz = xyz / spix
-        if( self%ldim(3) == 1 ) xyz(3) = 0.
-    end function masscen
-
-    !> masscen as a subroutine
-    subroutine masscens( self, xyz )
+    !> to find centre of gravity
+    subroutine masscen( self, xyz )
         class(image), intent(inout) :: self
         real        , intent(out)   :: xyz(3)
         real    ::  spix, ci, cj, ck
@@ -2640,18 +2611,17 @@ contains
         end do
         xyz = xyz / spix
         if( self%ldim(3) == 1 ) xyz(3) = 0.
-    end subroutine masscens
+    end subroutine masscen
 
     !>  \brief center is for centering an image based on center of mass
     !! \param lp low-pass cut-off freq
     !! \param msk mask
     !! \return xyz shift
     !!
-    function center( self, lp, msk, bin_img ) result( xyz )
+    function center( self, lp, msk ) result( xyz )
         class(image),   intent(inout)      :: self
         real,           intent(in)         :: lp
         real, optional, intent(in)         :: msk
-        type(image), optional, intent(out) :: bin_img
         type(image) :: tmp
         real        :: xyz(3), rmsk
         call tmp%copy(self)
@@ -2663,9 +2633,7 @@ contains
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
         call tmp%mask(rmsk, 'soft')
-        call tmp%bin_kmeans
-        if(present(bin_img)) call bin_img%copy(tmp)
-        xyz = tmp%masscen()
+        call tmp%masscen(xyz)
         call tmp%kill
     end function center
 
@@ -2684,8 +2652,7 @@ contains
         call thread_safe_tmp_imgs(ithr)%bp(0., lp)
         call thread_safe_tmp_imgs(ithr)%ifft()
         call thread_safe_tmp_imgs(ithr)%mask(msk, 'soft')
-        call thread_safe_tmp_imgs(ithr)%bin_kmeans
-        xyz = thread_safe_tmp_imgs(ithr)%masscen()
+        call thread_safe_tmp_imgs(ithr)%masscen(xyz)
     end function center_serial
 
     !>  \brief bin_inv inverts a binary image
@@ -5181,7 +5148,7 @@ contains
        call self%find_connected_comps(imgcc)
        !find the biggest cc
        call imgcc%prepare_connected_comps(discard, min_sz)
-       xyz = imgcc%masscen()
+       call imgcc%masscen(xyz)
    end function center_edge
 
     ! MODIFIERS

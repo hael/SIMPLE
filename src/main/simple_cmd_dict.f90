@@ -131,7 +131,7 @@ contains
         call chdict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.3}')
         call chdict%push('lpstart',       'start low-pass limit(in A){15}')
         call chdict%push('lpstop',        'stop low-pass limit(in A){8}')
-        call chdict%push('masscen',       'center using binarisation and mass centering(yes|no){no}')
+        call chdict%push('masscen',       'center to center of gravity(yes|no){no}')
         call chdict%push('match_filt',    'matched filter on (yes|no){yes}')
         call chdict%push('maxits',        'maximum # iterations')
         call chdict%push('minp',          'minimum cluster population')

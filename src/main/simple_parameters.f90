@@ -44,7 +44,7 @@ type :: parameters
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
-    character(len=3)      :: masscen='no'         !< center using binarisation and mass centering(yes|no){no}
+    character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}

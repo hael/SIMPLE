@@ -80,6 +80,7 @@ contains
       integer              :: box
       integer              :: n_cc               ! n_cc  = # cc in the input image
       integer              :: cnt_particle, cnt_centered  !counters
+      real                 :: xyz_real(3)
       integer              :: xyz(3)             ! mass center coordinates
       integer, allocatable :: pos(:)             ! position of each cc
       integer, allocatable :: xyz_saved(:,:), xyz_no_rep(:,:), xyz_norep_noagg(:,:)
@@ -107,7 +108,8 @@ contains
                   cnt_particle = cnt_particle + 1
                   call  imgwin_particle%prepare_connected_comps(discard, 1)
                   call  imgwin_particle%morpho_closing()
-                  xyz = imgwin_particle%masscen() !particle centering
+                  call imgwin_particle%masscen(xyz_real) !particle centering
+                  xyz = nint(xyz_real)
                   xyz_saved(cnt_particle,:) =      int(xyz(:2)) + pos(:2)
                   if(n_cc > 1) picked = is_picked( int(xyz(:2)) + pos(:2), xyz_saved, part_radius, cnt_particle-1 )
                   call self%window_slim(int(xyz(:2))+pos(:2)-box/2, box, imgwin_centered, outside_centered)

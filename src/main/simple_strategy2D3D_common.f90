@@ -341,8 +341,6 @@ contains
         logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         logical :: mask_here(params_glob%fromp:params_glob%top)
         integer :: iptcl_batch, batchlims(2), imatch, iptcl
-        integer(timer_int_kind):: t1
-        t1=tic()
         if( present(ptcl_mask) )then
             mask_here = ptcl_mask
         else
@@ -351,7 +349,6 @@ contains
         if( .not. params_glob%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
         call prepimgbatch( batchsz_max )
         do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
-            t1=tic()
             batchlims = [iptcl_batch,min(params_glob%top,iptcl_batch + batchsz_max - 1)]
             call read_imgbatch( batchlims, mask_here )
             !$omp parallel do default(shared) private(iptcl,imatch)&
@@ -364,7 +361,6 @@ contains
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
             end do
             !$omp end parallel do
-             DebugPrint  '*** simple_strategy2D3D_common ***:  build_pftcc_particles', toc(t1)
         end do
     end subroutine build_pftcc_particles
 
@@ -446,7 +442,6 @@ contains
         endif
         ! return in Fourier space
         call img_out%fft()
-      !  DebugPrint  '*** simple_strategy2D3D_common ***: finished prepimg4align', toc(t1)
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
