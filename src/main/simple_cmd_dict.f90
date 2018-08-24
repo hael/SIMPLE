@@ -207,7 +207,6 @@ contains
         call chdict%push('qsys_qos',      'job scheduling priority (SLURM/PBS)')
         call chdict%push('qsys_reservation', 'Name of reserved target partition of distributed computer system (SLURM/PBS)')
         call chdict%push('real_filter',   'real-space filter kind(median|average|bman)')
-        call chdict%push('recvol_sigma',  'noise(sigma)-weighted volume reconstruction strategy(yes|no){no}')
         call chdict%push('refine',        'refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym|cont_single){no}')
         call chdict%push('refs',          'initial2Dreferences.ext')
         call chdict%push('remap_cls',    'remove empty and renumber and/or expand # clusters(yes|no){no}')

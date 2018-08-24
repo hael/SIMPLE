@@ -293,7 +293,7 @@ contains
         if( pgrp_init.ne.'c1' )then
             se1 = sym(pgrp_init)
             se2 = sym(pgrp_refine)
-            if(se1%get_nsym() >= se2%get_nsym())&
+            if(se1%get_nsym() > se2%get_nsym())&
                 &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
             call se1%kill
             call se2%kill

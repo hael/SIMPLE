@@ -154,7 +154,7 @@ contains
         ! SNHC LOGICS
         if( l_snhc )then
             if( l_stream )then
-                ! size is set per particle
+                ! neighbourhood size is set per particle
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))

@@ -386,12 +386,9 @@ contains
                 orientation = build_glob%spproj_field%get_ori(iptcl)
                 ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                 if( orientation%isstatezero() ) cycle
-                call eucl_sigma%set_do_divide(.false.)
-                if ( params_glob%recvol_sigma .eq. 'yes' ) then
-                    if ( eucl_sigma%sigma2_exists( iptcl ) ) then
-                        call eucl_sigma%set_do_divide(.true.)
-                        call eucl_sigma%set_divide_by(iptcl)
-                    end if
+                if ( eucl_sigma%sigma2_exists( iptcl ) ) then
+                    call eucl_sigma%set_do_divide(.true.)
+                    call eucl_sigma%set_divide_by(iptcl)
                 end if
                 select case(trim(params_glob%refine))
                     case('clustersym')

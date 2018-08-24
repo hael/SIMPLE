@@ -635,6 +635,7 @@ contains
         integer, allocatable, intent(out)   :: fromtocls(:,:)
         integer, allocatable :: inds2split(:), membership(:), pops(:), fromtoall(:,:)
         real,    allocatable :: probs(:)
+        logical, allocatable :: mask(:)
         type(ran_tabu)       :: rt
         integer              :: cnt, n_incl, pop, i, icls, ncls_here, iptcl, cls2split
         ncls_here = max(self%get_n('class'), ncls)
@@ -646,21 +647,18 @@ contains
         if(allocated(fromtocls))deallocate(fromtocls)
         allocate(fromtoall(ncls,2),source=0)
         allocate(probs(ncls), source=0.)
+        allocate(mask(ncls), source=.false.)
+        where( pops>0 )mask = .true.
         do icls = 1, ncls
             if( pops(icls) /= 0 )cycle
             if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
-            ! split class with maximum population
-            ! cls2split = maxloc(pops, dim=1)
-            ! pop       = pops(cls2split)
-            ! if( pop <= 2*MINCLSPOPLIM )exit
             ! split class preferentially with high population
-            probs = real(pops) - real(2*MINCLSPOPLIM)
-            where(probs<0.)probs=0.
-            probs     = probs/sum(probs)
-            probs     = probs**2. ! square skew
-            probs     = probs/sum(probs)
-            cls2split = multinomal(probs)
-            pop       = pops(cls2split)
+            probs = real(pops - 2*MINCLSPOPLIM)
+            where(probs<0. .or. .not.mask)probs=0.
+            probs           = probs/sum(probs)
+            cls2split       = multinomal(probs)
+            mask(cls2split) = .false. ! making sure we are not drawing twice from the same
+            pop             = pops(cls2split)
             if( pop <= 2*MINCLSPOPLIM )exit
             ! migration
             call self%get_pinds(cls2split, 'class', inds2split, consider_w=.false.) ! needs to be false
@@ -695,7 +693,7 @@ contains
         endif
         ! cleanup
         call rt%kill
-        deallocate(fromtoall,pops,probs)
+        deallocate(fromtoall,pops,probs,mask)
     end subroutine fill_empty_classes
 
     !>  \brief  for remapping clusters after exclusion

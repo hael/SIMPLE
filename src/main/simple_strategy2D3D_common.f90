@@ -382,8 +382,6 @@ contains
         type(ctfparams) :: ctfparms
         real            :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz()), x, y
         integer         :: ifrc
-        integer(timer_int_kind):: t1
-        t1=tic()
         ! shift
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
@@ -405,13 +403,13 @@ contains
                 ifrc = 0 ! turns off the matched filter
             endif
         else
-            if( trim(params_glob%match_filt) .eq. 'yes' )then
+            if( params_glob%l_match_filt )then
                 ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
             else
                 ifrc = 0 ! turns off the matched filter
             endif
         endif
-        if( ifrc > 0 )then
+        if( ifrc > 0 .and. params_glob%l_match_filt )then
             call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
                 call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
@@ -702,12 +700,20 @@ contains
                 call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
                 if( file_exists(fname_vol_filter) )then
                     call build_glob%vol2%read(fname_vol_filter)
-                    call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
+                    if( params_glob%l_match_filt )then
+                        call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
+                    else
+                        call build_glob%vol%apply_filter(build_glob%vol2)
+                    endif
                 else
                     ! matched filter based on Rosenthal & Henderson, 2003
                     if( any(build_glob%fsc(s,:) > 0.143) )then
                         filter = fsc2optlp(build_glob%fsc(s,:))
-                        call build_glob%vol%shellnorm_and_apply_filter(filter)
+                        if( params_glob%l_match_filt )then
+                            call build_glob%vol%shellnorm_and_apply_filter(filter)
+                        else
+                            call build_glob%vol%apply_filter(filter)
+                        endif
                     endif
                 endif
             else

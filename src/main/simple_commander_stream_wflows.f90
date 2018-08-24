@@ -573,7 +573,6 @@ contains
                 character(len=STDLEN) :: stk
                 real                  :: smpd
                 integer               :: icls
-                character(len=1)      :: mirr_flag
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls)
                 if( allocated(fromtocls) )then
                     ! updates document later
@@ -582,33 +581,26 @@ contains
                     ! updates classes
                     call img_cavg%new([box, box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
-                        mirr_flag = 'x'
-                        if(ran3() > 0.5) mirr_flag = 'y'
+                        print *,'*** remap',icls, fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
                         stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                         stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation
                     call img_cavg%read(trim(refs_glob), ncls_glob)
-                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(trim(refs_glob), ncls_glob)
                     stk = add2fbody(trim(refs_glob),params%ext,'_even')
                     call img_cavg%read(stk, ncls_glob)
-                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(stk, ncls_glob)
                     stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
-                    call img_cavg%mirror(mirr_flag)
                     call img_cavg%write(stk, ncls_glob)
                     ! cleanup
                     call img_cavg%kill
@@ -624,7 +616,6 @@ contains
                 real                  :: smpd
                 integer               :: icls, state
                 character(len=STDLEN) :: stk
-                character(len=1)      :: mirr_flag
                 state = 1
                 if( ncls_glob.eq.ncls_glob_prev )return
                 ! updates references & FRCs
@@ -635,20 +626,16 @@ contains
                     smpd = work_proj%get_smpd()
                     call img_cavg%new([box,box,1], smpd)
                     do icls = 1, size(fromtocls, dim=1)
-                        mirr_flag = 'x'
-                        if(ran3() > 0.5) mirr_flag = 'y'
+                        print *,'*** map',icls, fromtocls(icls,:)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
                         ! even & odd
                         stk = add2fbody(trim(refs_glob),params%ext,'_even')
                         call img_cavg%read(stk, fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                         stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call img_cavg%read(stk, fromtocls(icls, 1))
-                        call img_cavg%mirror(mirr_flag)
                         call img_cavg%write(stk, fromtocls(icls, 2))
                     enddo
                     ! stack size preservation

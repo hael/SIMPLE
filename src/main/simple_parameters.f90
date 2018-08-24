@@ -64,7 +64,6 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
-    character(len=3)      :: recvol_sigma='no'    !< noise(sigma)-strategy for volume reconstructor(yes|no){no}
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -527,7 +526,6 @@ contains
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
-        call check_carg('recvol_sigma',   self%recvol_sigma)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
         call check_carg('restart',        self%restart)
@@ -1118,13 +1116,6 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value
         if( .not. cline%defined('outer') ) self%outer = self%msk
-        ! matched filter flag
-        select case(self%match_filt)
-            case('no')
-                self%l_match_filt = .false.
-            case DEFAULT
-                self%l_match_filt = .true.
-        end select
         ! checks automask related values
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
@@ -1187,7 +1178,7 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
         if( file_exists(self%refs) )then
             ! get number of particles from stack
             call find_ldim_nptcls(self%refs, lfoo, ncls)
-DebugPrint 'found ncls from refs: ', ncls
+            DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls )then
                     write(*,*)'ncls in ',trim(self%refs),' : ',ncls
@@ -1273,8 +1264,20 @@ DebugPrint 'found ncls from refs: ', ncls
                 write(*,*) 'objfun flag: ', trim(self%objfun)
                 THROW_HARD('unsupported objective function; new')
         end select
-        self%l_needs_sigma = (( self%recvol_sigma .eq. 'yes' ).or.&
-            ( self%cc_objfun .eq. OBJFUN_EUCLID ))
+        ! matched filter and sigma needs flags
+        self%l_needs_sigma = .false.
+        if( self%cc_objfun == OBJFUN_EUCLID )then
+            ! no option given when objfun is Euclid, always off
+            self%l_match_filt  = .false.
+            self%l_needs_sigma = .true.
+        else
+            select case(self%match_filt)
+                case('no')
+                    self%l_match_filt = .false.
+                case DEFAULT
+                    self%l_match_filt = .true.
+            end select
+        endif
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.

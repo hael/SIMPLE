@@ -29,7 +29,6 @@ type strategy2D_srch
     integer                 :: best_class    =  0   !< best class index found by search
     integer                 :: prev_rot      =  0   !< previous in-plane rotation index
     integer                 :: best_rot      =  0   !< best in-plane rotation found by search
-    integer                 :: nthr          =  0   !< number of threads
     integer                 :: fromp         =  1   !< from particle index
     integer                 :: top           =  1   !< to particle index
     integer                 :: nnn           =  0   !< # nearest neighbors
@@ -66,7 +65,6 @@ contains
         self%nrefs_eval =  0
         self%trs        =  params_glob%trs
         self%doshift    =  params_glob%l_doshift
-        self%nthr       =  params_glob%nthr
         self%fromp      =  params_glob%fromp
         self%top        =  params_glob%top
         self%nnn        =  params_glob%nnn
