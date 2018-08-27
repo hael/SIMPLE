@@ -47,7 +47,6 @@ contains
             do icls=1,params_glob%ncls
                 s2D%cls_withdraw(icls) = finds(icls) > max(6,floor(ave))
             enddo
-            print *, s2D%cls_withdraw, count(s2D%cls_withdraw)
             deallocate(finds)
         else
             ! first iteration, no class assignment: all classes are up for grab
