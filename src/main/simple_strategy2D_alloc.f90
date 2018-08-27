@@ -7,10 +7,12 @@ implicit none
 
 public :: s2D, clean_strategy2D, prep_strategy2D
 private
-#include "simple_local_flags.inc"
 
 type strategy2D_alloc
+    ! per class
     integer, allocatable :: cls_pops(:)
+    logical, allocatable :: cls_withdraw(:)
+    ! per particle
     integer, allocatable :: srch_order(:,:)
 end type strategy2D_alloc
 
@@ -19,18 +21,34 @@ type(strategy2D_alloc) :: s2D
 contains
 
     subroutine clean_strategy2D
-        if( allocated(s2D%cls_pops)   ) deallocate(s2D%cls_pops)
-        if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
+        if( allocated(s2D%cls_pops)    ) deallocate(s2D%cls_pops)
+        if( allocated(s2D%cls_withdraw)) deallocate(s2D%cls_withdraw)
+        if( allocated(s2D%srch_order)  ) deallocate(s2D%srch_order)
     end subroutine clean_strategy2D
 
     subroutine prep_strategy2D( ptcl_mask, which_iter )
-        logical,        intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer,        intent(in)    :: which_iter
-        type(ran_tabu) :: rt
-        integer        :: iptcl, prev_class, cnt, nptcls
+        logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top)
+        integer, intent(in)  :: which_iter
+        type(ran_tabu)       :: rt
+        integer, allocatable :: finds(:)
+        integer              :: icls, iptcl, prev_class, cnt, nptcls
+        real                 :: res0143, res05, ave, sdev, var
+        logical              :: err
         ! gather class populations
+        allocate(s2D%cls_withdraw(params_glob%ncls), source=.true., stat=alloc_stat)
         if( build_glob%spproj_field%isthere('class') )then
             call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+            allocate(finds(params_glob%ncls))
+            do icls=1,params_glob%ncls
+                call build_glob%projfrcs%estimate_res(icls, res05, res0143)
+                finds(icls) = calc_fourier_index(res0143, params_glob%boxmatch, params_glob%smpd)
+            enddo
+            call moment( real(finds), ave, sdev, var, err )
+            do icls=1,params_glob%ncls
+                s2D%cls_withdraw(icls) = finds(icls) > max(6,floor(ave))
+            enddo
+            print *, s2D%cls_withdraw, count(s2D%cls_withdraw)
+            deallocate(finds)
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
@@ -49,7 +67,7 @@ contains
                 call put_last(prev_class, s2D%srch_order(cnt,:))
             endif
         end do
-        if( any(s2D%srch_order == 0) ) THROW_HARD('invalid index in srch_order; prep4strategy2D')
+        if( any(s2D%srch_order == 0) ) stop 'Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch'
         call rt%kill
     end subroutine prep_strategy2D
 

@@ -206,7 +206,8 @@ contains
             ! to avoid pathological cases, fall-back on lpstart
             lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-            params_glob%kstop      = params_glob%kfromto(2)
+            params_glob%kstop = params_glob%kfromto(2)
+            lplim             = params_glob%kstop
             ! possible extension of interpolation limit to accomodate corr_valid
             params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
             call build_glob%spproj_field%set_all2single('lp',lplim)

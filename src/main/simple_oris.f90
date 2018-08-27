@@ -148,6 +148,7 @@ type :: oris
     procedure          :: calc_hard_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec
+    procedure          :: calc_bfac_srch
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure          :: nearest_proj_neighbors
@@ -2194,6 +2195,29 @@ contains
             call self%delete_entry('bfac_rec')
         endif
     end subroutine calc_bfac_rec
+
+    subroutine calc_bfac_srch( self, bfac )
+        class(oris), intent(inout) :: self
+        real,        intent(out)   :: bfac
+        real,    allocatable :: states(:),x(:),bfacs(:)
+        logical, allocatable :: mask(:)
+        real    :: med, dev
+        integer :: i
+        if( self%isthere('bfac') )then
+            states = self%get_all('state')
+            bfacs  = self%get_all('bfac')
+            mask   = (states>0.5) .and. (bfacs>0.001)
+            x      = pack(bfacs, mask=mask)
+            ! bfac is two deviations better than median
+            med    = median(x)
+            dev    = mad_gau( x, med )
+            bfac = max(med-2.*dev, minval(x))
+            deallocate(x,states,bfacs,mask)
+        else
+            ! default value
+            bfac = 500.
+        endif
+    end subroutine calc_bfac_srch
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )

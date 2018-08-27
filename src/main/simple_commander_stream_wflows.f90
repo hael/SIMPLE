@@ -322,9 +322,7 @@ contains
         orig_box  = stream_proj%get_box()
         orig_smpd = stream_proj%get_smpd()
         orig_msk  = params%msk
-        !params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC*0.8)
-        ! such that 2*msk=58 & boxmatch ~64
-        params%smpd_targets2D(1) = max(orig_smpd, orig_smpd*orig_msk/29.)
+        params%smpd_targets2D(1) = max(orig_smpd, params%lp*LP2SMPDFAC)
         if( do_autoscale )then
             call autoscale(orig_box, orig_smpd, params%smpd_targets2D(1), box, smpd, scale_factor)
             if( box == orig_box ) do_autoscale = .false.

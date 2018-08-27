@@ -34,15 +34,14 @@ contains
         class(strategy2D_snhc), intent(inout) :: self
         integer :: iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
-        logical :: found_better, do_inplsrch, glob_best_set
+        logical :: found_better, do_inplsrch
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
+            call self%s%prep4srch
             do_inplsrch   = .true.
             cc_glob       = -1.
-            glob_best_set = .false.
             found_better  = .false.
             nrefs_bound   = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%stoch_bound)) )
             nrefs_bound   = max(2, nrefs_bound)
-            call self%s%prep4srch
             do isample=1,self%s%nrefs
                 ! keep track of how many references we are evaluating
                 self%s%nrefs_eval = self%s%nrefs_eval + 1
@@ -72,7 +71,6 @@ contains
                     cc_glob       = inpl_corr
                     class_glob    = iref
                     inpl_glob     = inpl_ind
-                    glob_best_set = .true.
                 endif
                 ! first improvement heuristic
                 if( found_better ) exit
@@ -80,17 +78,10 @@ contains
             if( found_better )then
                 ! best ref has already been updated
             else
-                if( glob_best_set )then
-                    ! use the globally best parameters
-                    self%s%best_class = class_glob
-                    self%s%best_corr  = cc_glob
-                    self%s%best_rot   = inpl_glob
-                else
-                    ! keep the old parameters
-                    self%s%best_class = self%s%prev_class
-                    self%s%best_corr  = self%s%prev_corr
-                    self%s%best_rot   = self%s%prev_rot
-                endif
+                ! use the globally best parameters
+                self%s%best_class = class_glob
+                self%s%best_corr  = cc_glob
+                self%s%best_rot   = inpl_glob
             endif
             if( do_inplsrch )call self%s%inpl_srch
             nrefs_bound = min(self%s%nrefs, nrefs_bound+1) ! to take into account withdrawal

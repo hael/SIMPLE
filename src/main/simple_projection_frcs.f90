@@ -257,7 +257,6 @@ contains
         class(projection_frcs), intent(inout) :: self
         character(len=*),       intent(in)    :: fname
         integer          :: funit, io_stat
-        !character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='READ',status='OLD', iostat=io_stat)
         call fileiochk('projection_frcs; read; open for read '//trim(fname), io_stat)
         read(unit=funit,pos=1) self%file_header
@@ -271,7 +270,6 @@ contains
         class(projection_frcs), intent(in) :: self
         character(len=*),       intent(in) :: fname
         integer          :: funit, io_stat
-        !character(len=7) :: stat_str
         call fopen(funit,fname,access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         call fileiochk('projection_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header

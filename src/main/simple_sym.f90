@@ -131,7 +131,6 @@ contains
         endif
         if(trim(self%pgrp).ne.'d1')call self%set_subgrps
         call self%build_eullims
-        ! call self%e_sym%swape1e3
     end subroutine new
 
     !>  \brief  builds the search range for the point-group

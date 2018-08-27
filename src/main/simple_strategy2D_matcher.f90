@@ -57,7 +57,7 @@ contains
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
-        real                  :: extr_bound, frac_srch_space, extr_thresh
+        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor
         integer               :: iptcl, i, fnr, cnt, updatecnt
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
@@ -177,6 +177,14 @@ contains
             snhc_sz = 0.
         endif
 
+        ! B-FACTOR
+        if( params_glob%cc_objfun == OBJFUN_RES )then
+            call build_glob%spproj_field%calc_bfac_srch(bfactor)
+            write(*,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
+        else
+            bfactor = 0.
+        endif
+
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -227,10 +235,9 @@ contains
         call preppftcc4align( which_iter )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
         DebugPrint ' cluster2D_exec;   GENERATE REFERENCE & PARTICLE POLAR FTs   ', rt_prep_pftcc
-        ! INITIALIZE
-        write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
 
-        ! STOCHASTIC IMAGE ALIGNMENT
+        ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
+        write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! array allocation for strategy2D
         call prep_strategy2D( ptcl_mask, which_iter )
         DebugPrint ' cluster2D_exec;     prep_strategy2D                        ',toc(t_init)
@@ -267,6 +274,7 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl     = iptcl
                 strategy2Dspec%iptcl_map = cnt
+                strategy2Dspec%bfac      = bfactor
                 if( trim(params_glob%refine).eq.'extr' )then
                     strategy2Dspec%stoch_bound = extr_bound
                 else
