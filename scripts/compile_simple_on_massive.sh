@@ -6,7 +6,7 @@ MASSIVE_ACCOUNT=el85
 
 ## STANDARD BUILD: GCC 5, fftw, static, OpenMP
 
-cat >>EOF
+cat <<EOF  > buildsimple
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
 #SBATCH --account=${MASSIVE_ACCOUNT}
@@ -27,14 +27,14 @@ make -j12 install > log_make 2> log_make_err
 ctest -V
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
-EOF > buildsimple
+EOF
 # scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
 # scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple
 
 
 ## LATEST GCC BUILD: GCC 8, fftw, static, OpenMP
 
-cat >>EOF
+cat <<EOF > buildsimplegcc8
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
 #SBATCH --account=${MASSIVE_ACCOUNT}
@@ -55,13 +55,13 @@ make -j12 install > log_make 2> log_make_err
 ctest -V  > log_check 2> log_check_err
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
-EOF > buildsimplegcc8
+EOF 
 # scp buildsimplegcc8 ${MASSIVE_USERNAME}@${MASSIVE}:~
 # scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplegcc8
 
 ## INTEL BUILD: IFORT 17, MKL, static, OpenMP
 
-cat >>EOF
+cat <<EOF  > buildsimpleintel
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
 #SBATCH --account=${MASSIVE_ACCOUNT}
@@ -90,11 +90,11 @@ OMP_NUM_THREADS=4 simple_test_omp
 simple_test_openacc
 mpirun -np 10 simple_test_mpi
 simple_test_openacc
-EOF > buildsimpleintel
+EOF
 
 ## CUDA/MPI BUILD: GCC 5, CUDA 8, OpenMPI 1.10, OpenMP, FFTW, shared
 
-cat >>EOF
+cat <<EOF > buildsimplecudampi
 #!/bin/bash
 #SBATCH --job-name=CompileSIMPLE
 #SBATCH --account=${MASSIVE_ACCOUNT}
@@ -119,6 +119,6 @@ simple_test_openacc
 srun simple_test_mpi
 module load virtualgl
 vglrun simple_test_cuda
-EOF > buildsimplecudampi
+EOF
 #scp buildsimplecudampi ${MASSIVE_USERNAME}@${MASSIVE}:~
 # scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplecudampi

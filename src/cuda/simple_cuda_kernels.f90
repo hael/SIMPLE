@@ -553,9 +553,6 @@ contains
                 end do
             end if
 
-
-
-
             ! CUDA
             do  it=1,iterations
                 c2=cmplx(0.,0.)

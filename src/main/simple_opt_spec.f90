@@ -284,7 +284,7 @@ contains
                 write(*,*) 'Bad limits for the constrained optimization!'
                 write(*,*) 'set_limits; simple_opt_spec'
                 write(*,*) 'Lim(',i,1,'):',lims(i,1),'Lim(',i,2,'):',lims(i,2)
-                stop
+                THROW_HARD('set_limit; opt_spec')
             endif
         end do
         if( allocated(self%limits) ) deallocate(self%limits)
@@ -303,7 +303,7 @@ contains
                 write(*,*) 'Bad limits for the constrained optimization!'
                 write(*,*) 'set_limits_init; simple_opt_spec'
                 write(*,*) 'Lim(',i,1,'):',lims_init(i,1),'Lim(',i,2,'):',lims_init(i,2)
-                stop
+                THROW_HARD('set_limit_inits; opt_spec')
             endif
         end do
         if( allocated(self%limits_init) ) deallocate(self%limits_init)

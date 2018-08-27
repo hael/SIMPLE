@@ -166,6 +166,18 @@ logical :: global_verbose = .false. !< global flag for verbosity FALSE by defaul
 #endif
 logical :: global_warn    = .false. !< warning flag
 integer :: alloc_stat
+
+!! Control exit status 
+!! STOP is standard, CALL EXIT is an extension. STOP lets you display a text message where EXIT doesn't. Both let you set an exit status value. Otherwise they are pretty much the same.
+!! use call exit(EXIT_FAILURE)
+integer, parameter :: EXIT_FAILURE = 1
+integer, parameter :: EXIT_FAILURE2 = 2
+integer, parameter :: EXIT_FAILURE3 = 3
+integer, parameter :: EXIT_FAILURE4 = 4
+integer, parameter :: EXIT_FAILURE5 = 5
+integer, parameter :: EXIT_FAILURE6 = 6
+integer, parameter :: EXIT_FAILURE7 = 7
+
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 

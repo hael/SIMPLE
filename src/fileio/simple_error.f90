@@ -22,7 +22,7 @@ contains
         else
             write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
-        if( ll_stop ) stop
+        if( ll_stop ) call exit(EXIT_FAILURE)
     end subroutine simple_exception
 
     !> \brief  is for checking allocation

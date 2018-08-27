@@ -1,15 +1,14 @@
 program simple_test_star_export
 include 'simple_lib.f08'
-use, intrinsic :: iso_fortran_env
-use, intrinsic :: iso_c_binding
-use simple_star
-use simple_cmdline,        only: cmdline
+
+use simple_cmdline,    only: cmdline
 use simple_parameters
-!use simple_builder,          only: builder
-use simple_sp_project,     only: sp_project
+
+use simple_sp_project, only: sp_project
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
 use simple_binoris,    only: binoris
+use simple_star
 use simple_stardoc
 use simple_star_dict,  only:  star_dict
 implicit none
@@ -112,10 +111,10 @@ endif
 
 call fopen(funit,'test_import_starproject')
 write(funit,'(a)')"#!/bin/sh"
-write(funit,'(a)')"set +e"
+write(funit,'(a)')"set +ev"
 write(funit,'(a)') "[ -d SimpleImport ] && rm -rf SimpleImport"
 write(funit,'(a)') "simple_exec prg=new_project projname=SimpleImport"
-write(funit,'(a)') "if[ ! -d SimpleImport ];then echo new_project failed;exit 1; fi"
+write(funit,'(a)') "if [ ! -d SimpleImport ];then echo new_project failed;exit 1; fi"
 write(funit,'(a)') "cd SimpleImport"
 write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star "
 write(funit,'(a)') "if [ $? -ne 0 ];then"
@@ -124,18 +123,25 @@ write(funit,'(a)') "echo  'UNEXPECTED: prg=importstar should fail without starty
 write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" 
 write(funit,'(a)') "if [ $? -ne 0 ];then"
 write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without startype '; else"
-write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1 fi"
+write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
 write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah"
-
+write(funit,'(a)') "if [ $? -ne 0 ];then"
 write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without a valid startype ';else"
 write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
-
 write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract"
+write(funit,'(a)') "if [ $? -ne 0 ];then"
+write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without a valid startype (extract is an older version) ';else"
+write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract oritab=oritab-stardoc.txt"
+write(funit,'(a)') "if [ $? -ne 0 ];then"
+write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail ';else"
+write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
+
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=particles"
 write(funit,'(a)') "if [ $? -eq 0 ];then"
 write(funit,'(a)') "echo 'EXPECTED  valid import star args ';else"
 write(funit,'(a)') "echo 'UNEXPECTED prg=importstar should not fail with a valid startype and smpd'; exit 1;fi"
-write(funit,'(a)') "echo '"
-
+write(funit,'(a)') "echo '$0 completed successfully '"
 write(funit,'(a)') "exit 0;"
 call fclose(funit)
 io_stat= simple_chmod('test_import_starproject','+x')

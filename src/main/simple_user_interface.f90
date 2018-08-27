@@ -498,7 +498,6 @@ contains
         write(*,'(A)') refine3D_init%name
         write(*,'(A)') scale_project%name
         write(*,'(A)') tseries_track%name
-        stop
     end subroutine list_distr_prgs_in_ui
 
     subroutine list_shmem_prgs_in_ui
@@ -544,7 +543,6 @@ contains
         write(*,'(A)') update_project%name
         write(*,'(A)') vizoris%name
         write(*,'(A)') volops%name
-        stop
     end subroutine list_shmem_prgs_in_ui
 
     ! private class methods

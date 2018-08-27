@@ -9,7 +9,6 @@ private
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_CMDARGS = 60
-
 !> cmdarg key/value pair command-line type
 type cmdarg
     character(len=:), allocatable :: key, carg
@@ -25,8 +24,8 @@ end interface
 type cmdline
     type(cmdarg)          :: cmds(MAX_CMDARGS)
     character(len=KEYLEN) :: checker(MAX_CMDARGS)
-    character(len=8192)   :: entire_line
-    integer               :: argcnt=0, ncheck=0
+    character(len=8192)   :: entire_line        !! PATH_MAX is 4096 https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h
+    integer               :: argcnt=0, ncheck=0 !! max system args `getconf ARG_MAX`
 contains
     procedure          :: parse
     procedure          :: parse_oldschool
@@ -96,16 +95,16 @@ contains
         if( str_has_substr(self%entire_line, 'prg=list') )then
             if( ptr2prg%is_distr() )then
                 call list_distr_prgs_in_ui
-                stop
+                call exit(EXIT_FAILURE2)
             else
                 call list_shmem_prgs_in_ui
-                stop
+                call exit(EXIT_FAILURE2)
             endif
         endif
         ! describe program if so instructed
         if( str_has_substr(self%entire_line, 'describe=yes') )then
             call ptr2prg%print_prg_descr_long()
-            stop
+            call exit(EXIT_FAILURE2)
         endif
         ! get required keys
         sz_keys_req = ptr2prg%get_nrequired_keys()
@@ -117,7 +116,7 @@ contains
         endif
         if( self%argcnt < nargs_required )then
             call ptr2prg%print_cmdline()
-            stop
+                call exit(EXIT_FAILURE2)
         else
             ! indicate which variables are required
             if( sz_keys_req > 0 )then
@@ -134,7 +133,7 @@ contains
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
+                call exit(EXIT_FAILURE3)
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -165,7 +164,7 @@ contains
             endif
             if( cmdargcnt < nreq )then
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
-                stop
+                call exit(EXIT_FAILURE5)
             else
                 ! indicate which variables are required
                 do ikey=1,size(keys_required)
@@ -175,7 +174,7 @@ contains
         else
             if( cmdargcnt < 2 )then
                 call print_cmdline(keys_required, keys_optional, distr=distr_exec)
-                stop
+                call exit(EXIT_FAILURE5)
             endif
         endif
         allowed_args = args()
@@ -187,7 +186,7 @@ contains
                 write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(*,*) 'Create a symbolic link with shorter name in the cwd'
-                stop
+                call exit(EXIT_FAILURE5)
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
         end do
@@ -209,7 +208,7 @@ contains
             if( .not. allowed_args%is_present(self%cmds(i)%key) )then
                 write(*,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
                 write(*,'(a)') 'Perhaps you have misspelled?'
-                stop
+                call exit(EXIT_FAILURE4)
             endif
             form = str2format(arg(pos1+1:))
             select case(form)
@@ -431,7 +430,7 @@ contains
         ! output
         if( any(cmderr) )then
             write(*,'(a)') 'ERROR, not enough input variables defined!'
-            stop
+            call exit(EXIT_FAILURE6)
         endif
         deallocate( cmderr )
     end subroutine check
@@ -556,7 +555,7 @@ contains
             write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
             write(*,*) 'which likely exeeds the lenght limit LONGSTRLEN'
             write(*,*) 'Create a symbolic link with shorter name in the cwd'
-            stop
+            call exit(EXIT_FAILURE7)
         endif
         if( arg(:pos-1) .ne. 'prg' )then
             write(*,'(a)') 'ERROR!'
@@ -568,7 +567,7 @@ contains
             write(*,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
             write(*,'(a)') ''
             write(*,'(a)') 'Executing with prg flag only prints all available command-line options'
-            stop
+            call exit(EXIT_FAILURE7)
         endif
     end subroutine cmdline_err
 
