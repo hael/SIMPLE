@@ -28,8 +28,8 @@ ctest -V
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 EOF > buildsimple
-scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
-scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple
+# scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
+# scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple
 
 
 ## LATEST GCC BUILD: GCC 8, fftw, static, OpenMP
@@ -56,8 +56,8 @@ ctest -V  > log_check 2> log_check_err
 source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 EOF > buildsimplegcc8
-scp buildsimplegcc8 ${MASSIVE_USERNAME}@${MASSIVE}:~
-scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplegcc8
+# scp buildsimplegcc8 ${MASSIVE_USERNAME}@${MASSIVE}:~
+# scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplegcc8
 
 ## INTEL BUILD: IFORT 17, MKL, static, OpenMP
 
@@ -120,5 +120,5 @@ srun simple_test_mpi
 module load virtualgl
 vglrun simple_test_cuda
 EOF > buildsimplecudampi
-scp buildsimplecudampi ${MASSIVE_USERNAME}@${MASSIVE}:~
-scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplecudampi
+#scp buildsimplecudampi ${MASSIVE_USERNAME}@${MASSIVE}:~
+# scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplecudampi
