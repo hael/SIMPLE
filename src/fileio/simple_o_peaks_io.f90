@@ -5,7 +5,7 @@ use simple_error, only: simple_exception
 use simple_oris,  only: oris
 implicit none
 
-public :: open_o_peaks_io, close_o_peaks_io, write_o_peak, read_o_peak
+public :: open_o_peaks_io, close_o_peaks_io, write_empty_o_peaks_file, write_o_peak, read_o_peak
 private
 #include "simple_local_flags.inc"
 
@@ -46,6 +46,27 @@ contains
             l_open = .false.
         endif
     end subroutine close_o_peaks_io
+
+    subroutine write_empty_o_peaks_file( fname, fromto )
+        character(len=*), intent(in)    :: fname
+        integer,          intent(in)    :: fromto(2)
+        type(o_peak_ori) :: o_peak_record(NPEAKS2REFINE)
+        integer :: recind, ipeak, iptcl
+        call open_o_peaks_io( fname )
+        do iptcl=fromto(1),fromto(2)
+            ! index stuff
+            recind = iptcl - fromto(1) + 1
+            if( recind < 1 )then
+                print *, 'iptcl:  ', iptcl
+                print *, 'fromto: ', fromto
+                print *, 'recind: ', recind
+                THROW_HARD('nonsensical record index; write_o_peak')
+            endif
+            ! write record
+            write(funit,rec=recind) o_peak_record
+        end do
+        call close_o_peaks_io
+    end subroutine write_empty_o_peaks_file
 
     subroutine write_o_peak( o_peak, fromto, iptcl )
         integer,     intent(in)    :: fromto(2), iptcl
@@ -90,11 +111,12 @@ contains
         endif
     end subroutine write_o_peak
 
-    subroutine read_o_peak( o_peak, fromto, iptcl )
+    subroutine read_o_peak( o_peak, fromto, iptcl, n_nozero )
         integer,     intent(in)    :: fromto(2), iptcl
         class(oris), intent(inout) :: o_peak
+        integer,     intent(out)   :: n_nozero
         type(o_peak_ori) :: o_peak_record(NPEAKS2REFINE)
-        integer :: recind, ipeak, npeaks, noris, cnt
+        integer :: recind, ipeak, npeaks, noris
         real    :: ow
         if( l_open )then
             ! index stuff
@@ -115,17 +137,17 @@ contains
             ! transfer record to o_peak
             noris = o_peak%get_noris()
             if( noris < npeaks ) call o_peak%new(npeaks)
-            cnt = 0
+            n_nozero = 0
             do ipeak=1,NPEAKS2REFINE
                 if( o_peak_record(ipeak)%ow > TINY )then
-                    cnt = cnt + 1
-                    call o_peak%set_euler(cnt,    o_peak_record(ipeak)%eul)
-                    call o_peak%set_shift(cnt,    o_peak_record(ipeak)%shift)
-                    call o_peak%set(cnt, 'corr',  o_peak_record(ipeak)%corr)
-                    call o_peak%set(cnt, 'ow',    o_peak_record(ipeak)%ow)
-                    call o_peak%set(cnt, 'iptcl', real(o_peak_record(ipeak)%iptcl))
-                    call o_peak%set(cnt, 'proj',  real(o_peak_record(ipeak)%proj))
-                    call o_peak%set(cnt, 'state', real(o_peak_record(ipeak)%state))
+                    n_nozero = n_nozero + 1
+                    call o_peak%set_euler(n_nozero,    o_peak_record(ipeak)%eul)
+                    call o_peak%set_shift(n_nozero,    o_peak_record(ipeak)%shift)
+                    call o_peak%set(n_nozero, 'corr',  o_peak_record(ipeak)%corr)
+                    call o_peak%set(n_nozero, 'ow',    o_peak_record(ipeak)%ow)
+                    call o_peak%set(n_nozero, 'iptcl', real(o_peak_record(ipeak)%iptcl))
+                    call o_peak%set(n_nozero, 'proj',  real(o_peak_record(ipeak)%proj))
+                    call o_peak%set(n_nozero, 'state', real(o_peak_record(ipeak)%state))
                 endif
             end do
         endif

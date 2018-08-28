@@ -5,6 +5,8 @@ module simple_strategy3D_matcher
 include 'simple_lib.f08'
 use simple_strategy3D_alloc ! singleton s3D
 use simple_timer
+use simple_o_peaks_io
+use simple_oris,                     only: oris
 use simple_qsys_funs,                only: qsys_job_finished
 use simple_binoris_io,               only: binwrite_oritab
 use simple_kbinterpol,               only: kbinterpol
@@ -72,9 +74,10 @@ contains
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
         type(image)           :: mskimg
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh
+        type(oris)            :: o_peak_prev
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, i_batch, ithr
-        integer :: ibatch, npeaks, batchlims(2), updatecnt
+        integer :: ibatch, npeaks, batchlims(2), updatecnt, state, n_nozero
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -318,11 +321,34 @@ contains
             call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
         end if
 
-        ! UPDATE STATS
+        ! UPDATE PARTICLE STATS
         call calc_ptcl_stats
 
+        ! O_PEAKS I/O & CONVERGENCE STATS
+        if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
+            ! write an empty one to be filled in
+            call write_empty_o_peaks_file(params_glob%o_peaks_file, [params_glob%fromp,params_glob%top])
+        endif
+        call open_o_peaks_io(trim(params_glob%o_peaks_file))
+        do iptcl=params_glob%fromp,params_glob%top
+            if( ptcl_mask(iptcl) )then
+                state = build_glob%spproj_field%get_state(iptcl)
+                call read_o_peak(o_peak_prev, [params_glob%fromp,params_glob%top], iptcl, n_nozero)
+                if( n_nozero == 0 )then
+                    ! there's nothing to compare, set overlap to zero
+                    call build_glob%spproj_field%set(iptcl, 'mi_proj', 0.)
+                else
+                    mi_proj = s3D%o_peaks(iptcl)%overlap(o_peak_prev, 'proj', state)
+                    call build_glob%spproj_field%set(iptcl, 'mi_proj', mi_proj)
+                endif
+                ! replace the peak on disc
+                call write_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl)
+            endif
+        end do
+        call close_o_peaks_io
+
         ! clean
-        call clean_strategy3D  ! deallocate s3D singleton
+        call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill

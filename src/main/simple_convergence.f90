@@ -13,15 +13,12 @@ private
 type convergence
     private
     real :: corr       = 0. !< average correlation
-    real :: corr_valid = 0. !< average correlation (4 validation)
     real :: dist       = 0. !< average angular distance
     real :: dist_inpl  = 0. !< average in-plane angular distance
     real :: npeaks     = 0. !< average # peaks
     real :: frac       = 0. !< average fraction of search space scanned
-    real :: mi_joint   = 0. !< joint parameter distribution overlap
     real :: mi_class   = 0. !< class parameter distribution overlap
     real :: mi_proj    = 0. !< projection parameter distribution overlap
-    real :: mi_inpl    = 0. !< in-plane parameter distribution overlap
     real :: mi_state   = 0. !< state parameter distribution overlap
     real :: spread     = 0. !< angular spread
     real :: bfac       = 0. !< average per-particle B-factor (search)
@@ -52,17 +49,13 @@ contains
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
         self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
-        self%mi_joint  = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
-        self%mi_inpl   = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
-        write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
-        write(*,'(A,1X,F7.4)') '>>> CLASS    DISTRIBUTION OVERLAP:     ', self%mi_class
-        write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PARTICLE UPDATES:        ', avg_updatecnt
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:     ', self%bfac
-        write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
+        write(*,'(A,1X,F7.4)') '>>> CLASS OVERLAP:            ', self%mi_class
+        write(*,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:   ', avg_updatecnt
+        write(*,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):  ', self%dist_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:', self%bfac
+        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:   ', self%frac
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION:              ', self%corr
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -88,7 +81,7 @@ contains
                 write(*,'(A)') '>>> CONVERGED: .NO.'
             endif
         else
-            if( self%mi_inpl > MI_INPL_LIM .or. self%dist_inpl < 0.5 )then
+            if( self%dist_inpl < 0.5 )then
                 write(*,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -105,48 +98,38 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt
-        logical :: converged, bfac_rec_there, corr_valid_there
+        logical :: converged, bfac_rec_there
         integer :: iptcl, istate
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-        self%corr        = build_glob%spproj_field%get_avg('corr',      mask=mask)
-        self%corr_valid  = 0.
-        corr_valid_there = build_glob%spproj_field%isthere('corr_valid')
-        if( corr_valid_there ) self%corr_valid = build_glob%spproj_field%get_avg('corr_valid') ! always updated for all ptcls with states > 0
-        self%dist        = build_glob%spproj_field%get_avg('dist',      mask=mask)
-        self%dist_inpl   = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
-        self%npeaks      = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
-        self%frac        = build_glob%spproj_field%get_avg('frac',      mask=mask)
-        self%mi_joint    = build_glob%spproj_field%get_avg('mi_joint',  mask=mask)
-        self%mi_proj     = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
-        self%mi_inpl     = build_glob%spproj_field%get_avg('mi_inpl',   mask=mask)
-        self%mi_state    = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        self%spread      = build_glob%spproj_field%get_avg('spread',    mask=mask)
-        self%bfac        = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
-        self%bfac_rec    = 0.
-        bfac_rec_there   = build_glob%spproj_field%isthere('bfac_rec')
+        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+        self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
+        self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
+        self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
+        self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
+        self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
+        self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
+        self%spread    = build_glob%spproj_field%get_avg('spread',    mask=mask)
+        self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
+        self%bfac_rec  = 0.
+        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
         if( bfac_rec_there ) self%bfac_rec = build_glob%spproj_field%get_avg('bfac_rec')
-        write(*,'(A,1X,F7.4)') '>>> JOINT    DISTRIBUTION OVERLAP:     ', self%mi_joint
-        write(*,'(A,1X,F7.4)') '>>> PROJ     DISTRIBUTION OVERLAP:     ', self%mi_proj
-        write(*,'(A,1X,F7.4)') '>>> IN-PLANE DISTRIBUTION OVERLAP:     ', self%mi_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PARTICLE UPDATES:        ', avg_updatecnt
+        write(*,'(A,1X,F7.4)') '>>> ORIENTATION OVERLAP:               ', self%mi_proj
+        write(*,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:            ', avg_updatecnt
         if( params_glob%nstates > 1 )then
-        write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
+        write(*,'(A,1X,F7.4)') '>>> STATE OVERLAP:                     ', self%mi_state
         endif
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE ANGULAR DISTANCE BTW ORIS: ', self%dist
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE IN-PLANE ANGULAR DISTANCE: ', self%dist_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE # PEAKS:                   ', self%npeaks
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PTCL B-FACTOR (SEARCH):', self%bfac
+        write(*,'(A,1X,F7.1)') '>>> AVG DIST BTW BEST ORIS (DEG):      ', self%dist
+        write(*,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST      (DEG):      ', self%dist_inpl
+        write(*,'(A,1X,F7.1)') '>>> AVG # PEAKS:                       ', self%npeaks
+        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (SEARCH):', self%bfac
         if( bfac_rec_there )then
-        write(*,'(A,1X,F7.1)') '>>> AVERAGE PER-PTCL B-FACTOR (REC):   ', self%bfac_rec
+        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (REC):   ', self%bfac_rec
         endif
-        write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION (SEARCH):              ', self%corr
-        if( corr_valid_there )then
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION (VALIDATION):          ', self%corr_valid
-        endif
-        write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD OF MODEL:           ', self%spread
+        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
+        write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
+        write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD (DEG):              ', self%spread
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
@@ -179,10 +162,8 @@ contains
                 istate = build_glob%spproj_field%get_state(iptcl)
                 if( istate==0 )cycle
                 state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_proj')
-                state_mi_joint(istate) = state_mi_joint(istate) + build_glob%spproj_field%get(iptcl,'mi_inpl')
                 statepops(istate)      = statepops(istate) + 1.
             end do
-            state_mi_joint = state_mi_joint/2.
             ! normalise the overlap
             forall( istate=1:params_glob%nstates, statepops(istate)>0. )&
                &state_mi_joint(istate) = state_mi_joint(istate)/statepops(istate)
@@ -216,8 +197,8 @@ contains
         integer           :: iptcl, istate
         self%frac      = build_glob%spproj_field%get_avg('frac')
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        write(*,'(A,1X,F7.4)') '>>> STATE DISTRIBUTION OVERLAP:        ', self%mi_state
-        write(*,'(A,1X,F7.1)') '>>> PERCENTAGE OF SEARCH SPACE SCANNED:', self%frac
+        write(*,'(A,1X,F7.4)') '>>> STATE OVERLAP:                ', self%mi_state
+        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:       ', self%frac
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(params_glob%nstates) )
@@ -229,7 +210,7 @@ contains
         end do
         if( build_glob%spproj_field%isthere('bfac') )then
             self%bfac = build_glob%spproj_field%get_avg('bfac')
-            write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR: ', self%bfac
+            write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:', self%bfac
         endif
         self%corr = build_glob%spproj_field%get_avg('corr')
         write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
@@ -254,22 +235,16 @@ contains
         select case(which)
             case('corr')
                 get = self%corr
-            case('corr_valid')
-                get = self%corr_valid
             case('dist')
                 get = self%dist
             case('dist_inpl')
                 get = self%dist_inpl
             case('frac')
                 get = self%frac
-            case('mi_joint')
-                get = self%mi_joint
             case('mi_class')
                 get = self%mi_class
             case('mi_proj')
                 get = self%mi_proj
-            case('mi_inpl')
-                get = self%mi_inpl
             case('mi_state')
                 get = self%mi_state
             case('spread')

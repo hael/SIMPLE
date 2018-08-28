@@ -72,26 +72,14 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: dist_inpl, euldist, mi_proj, mi_inpl, mi_joint, frac
+        real      :: dist_inpl, euldist, mi_proj, frac
         ! angular distances
         call build_glob%pgrpsyms%sym_dists(build_glob%spproj_field%get_ori(self%s%iptcl), self%o, osym, euldist, dist_inpl)
         ! generate convergence stats
         mi_proj  = 0.
-        mi_inpl  = 0.
-        mi_joint = 0.
-        if( euldist < 0.5 )then
-            mi_proj  = 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( self%irot == 0 .or. self%s%prev_roind == self%irot )then
-            mi_inpl  = 1.
-            mi_joint = mi_joint + 1.
-        endif
-        mi_joint = mi_joint / 2.
+        if( euldist < 0.5 ) mi_proj  = 1.
         call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_inpl',   mi_inpl)
         call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_joint',  mi_joint)
         ! fraction of search space scanned
         frac = 100.
         ! set the distances before we update the orientation

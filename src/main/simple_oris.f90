@@ -165,6 +165,7 @@ type :: oris
     procedure, private :: diststat_1
     procedure, private :: diststat_2
     generic            :: diststat => diststat_1, diststat_2
+    procedure          :: overlap
     ! DESTRUCTORS
     procedure          :: kill_chash
     procedure          :: kill
@@ -2543,6 +2544,53 @@ contains
         call moment(dists, avgd, sdevd, vard, err )
         deallocate(onormals1,onormals2)
     end subroutine diststat_2
+
+    real function overlap( self1, self2, which, state )
+        class(oris),      intent(inout) :: self1, self2
+        character(len=*), intent(in)    :: which
+        integer,          intent(in)    :: state
+        real,    allocatable :: arr1(:), arr2(:), tmp(:), ows(:), states(:)
+        logical, allocatable :: mask1(:), mask2(:)
+        integer :: n1, n2, n, sz, n_min, i
+        overlap = 0.
+        if( self1%n == 0 .or. self2%n == 0 ) return
+        if( .not. self1%isthere(trim(which)) )then
+            THROW_WARN('key: '//trim(which)//' not present in self1; overlap')
+            return
+        endif
+        if( .not. self2%isthere(trim(which)) )then
+            THROW_WARN('key: '//trim(which)//' not present in self2; overlap')
+            return
+        endif
+        if( .not. self1%isthere('state') )     THROW_HARD('key: state not present in self1; overlap')
+        if( .not. self2%isthere('state') )     THROW_HARD('key: state not present in self2; overlap')
+        if( .not. self1%isthere('ow') )        THROW_HARD('key: ow not present in self1; overlap')
+        if( .not. self2%isthere('ow') )        THROW_HARD('key: ow not present in self2; overlap')
+        ! extract self1 which labels
+        ows    = self1%get_all('ow')
+        states = self1%get_all('state')
+        where(nint(states) .ne. state) ows = 0.
+        if( .not. any(ows > TINY) ) return
+        tmp    = self1%get_all(trim(which))
+        arr1   = pack(tmp, mask=ows > TINY)
+        n1     = size(arr1)
+        ! extract self2 which labels
+        ows    = self2%get_all('ow')
+        states = self2%get_all('state')
+        where(nint(states) .ne. state) ows = 0.
+        if( .not. any(ows > TINY) ) return
+        tmp    = self2%get_all(trim(which))
+        arr2   = pack(tmp, mask=ows > TINY)
+        n2     = size(arr2)
+        ! translate to masks (this prevents counting duplicates)
+        sz = nint(max(maxval(arr1), maxval(arr2)))
+        allocate(mask1(sz), mask2(sz), source=.false.)
+        forall(i=1:n1) mask1(nint(arr1(i))) = .true.
+        forall(i=1:n2) mask2(nint(arr2(i))) = .true.
+        ! compare and normalize
+        n_min   = min(count(mask1),count(mask2))
+        overlap = real(count(mask1 .and. mask2)) / real(n_min)
+    end function overlap
 
     pure real function geodesic_distance( rmat1, rmat2 )
         real, intent(in) :: rmat1(3,3), rmat2(3,3)

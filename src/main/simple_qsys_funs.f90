@@ -34,7 +34,6 @@ contains
         ! part numbered files
         call del_files('OUT',                            params_glob%nparts)
         call del_files('algndoc_',                       params_glob%nparts, ext=trim(METADATA_EXT))
-        call del_files('unidoc_',                        params_glob%nparts, ext=trim(METADATA_EXT))
         call del_files('JOB_FINISHED_',                  params_glob%nparts)
         if(nokeep)call del_files('distr_simple_script_', params_glob%nparts)
     end subroutine qsys_cleanup

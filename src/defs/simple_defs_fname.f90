@@ -8,6 +8,7 @@ integer, parameter :: STDLEN      = 256  !< standard string length
 integer, parameter :: LONGSTRLEN  = 1024 !< longer string length
 ! GLOBAL FILE CONSTANTS
 character(len=*), parameter :: SIMPLE_SUBPROC_OUT   = 'SIMPLE_SUBPROC_OUTPUT'
+character(len=*), parameter :: O_PEAKS_FBODY        = 'oridistributions_part'
 ! EXTENSIONS
 character(len=*), parameter :: TXT_EXT              = '.txt'
 character(len=*), parameter :: BIN_EXT              = '.bin'
@@ -42,10 +43,6 @@ character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 ! EXTRACT
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
-! UNIDOC
-character(len=*), parameter :: UNIDOC_FBODY         = 'unidoc_'
-character(len=*), parameter :: UNIDOC_OUTPUT        = 'unidoc_output_'
-character(len=*), parameter :: SIMPLE_UNIDOC        = 'simple_unidoc'//trim(METADATA_EXT)
 ! CLUSTER3D
 character(len=*), parameter :: CLUSTER3D_FSC        = 'mixed_fsc'//BIN_EXT
 character(len=*), parameter :: CLUSTER3D_FRCS       = 'mixed_frcs'//BIN_EXT
@@ -57,7 +54,6 @@ character(len=*), parameter :: STDERROUT_DIR        = 'stderrout/'
 character(len=*), parameter :: DIR_CTF_ESTIMATE     = 'ctf_estimate/'
 character(len=*), parameter :: DIR_MOTION_CORRECT   = 'motion_correct/'
 character(len=*), parameter :: DIR_EXTRACT          = 'extract/'
-character(len=*), parameter :: DIR_UNIDOC           = 'unidocs/'
 character(len=*), parameter :: DIR_PICKER           = 'picker/'
 character(len=*), parameter :: DIR_PREPROC          = './'
 ! STREAMING

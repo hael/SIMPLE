@@ -2,7 +2,7 @@
 module simple_strategy3D_hard_single
 include 'simple_lib.f08'
 use simple_strategy3D_alloc       ! use all in there
-use simple_strategy3D_utils,      only: prob_select_peak, convergence_stats_single
+use simple_strategy3D_utils,      only: prob_select_peak
 use simple_strategy3D_hard_multi, only: strategy3D_hard_multi
 use simple_parameters,            only: params_glob
 use simple_builder,               only: build_glob
@@ -33,8 +33,6 @@ contains
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
-        ! generate convergence stats
-        call convergence_stats_single(self%s, best_loc, euldist)
         ! set the distances before we update the orientation
         if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
             call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))

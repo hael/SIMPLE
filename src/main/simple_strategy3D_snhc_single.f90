@@ -107,9 +107,7 @@ contains
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
         call build_glob%spproj_field%set(self%s%iptcl, 'mi_proj',   0.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_inpl',   0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'mi_state',  1.)
-        call build_glob%spproj_field%set(self%s%iptcl, 'mi_joint',  0.)
         if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
             call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
         else

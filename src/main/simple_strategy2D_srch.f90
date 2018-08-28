@@ -76,7 +76,6 @@ contains
         lims_init(:,1)  = -SHC_INPL_TRSHWDTH
         lims_init(:,2)  =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init, maxits=MAXITS)
-     !   DebugPrint  '>>> strategy2D_srch::CONSTRUCTED NEW SIMPLE_strategy2D_srch OBJECT'
     end subroutine new
 
     subroutine prep4srch( self )
@@ -122,7 +121,6 @@ contains
                 self%best_shvec = cxy(2:3)
             endif
         endif
-      !  DebugPrint '>>> strategy2D_srch::FINISHED SHIFT SEARCH'
     end subroutine inpl_srch
 
     subroutine store_solution( self, nrefs )
@@ -130,7 +128,7 @@ contains
         class(strategy2D_srch), intent(in) :: self
         integer,      optional, intent(in) :: nrefs
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, mi_inpl, mi_joint, frac, bfac
+        real :: e3, mi_class, frac, bfac
         ! updates b-factor
         bfac = pftcc_glob%fit_bfac(self%best_class, self%iptcl, self%best_rot, -self%best_shvec)
         ! get in-plane angle
@@ -145,17 +143,7 @@ contains
         dist = myacos(dot_product(x1,x2))
         ! calculate overlap between distributions
         mi_class = 0.
-        mi_inpl  = 0.
-        mi_joint = 0.
-        if( self%prev_class == self%best_class )then
-            mi_class = mi_class + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( self%prev_rot ==  self%best_rot )then
-            mi_inpl  = mi_inpl  + 1.
-            mi_joint = mi_joint + 1.
-        endif
-        mi_joint = mi_joint / 2.
+        if( self%prev_class == self%best_class ) mi_class = 1.
         ! search psace explored
         if( present(nrefs) )then
             frac = 100.*(real(self%nrefs_eval)/real(nrefs))
@@ -172,14 +160,11 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'bfac',       bfac)
         call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
-        call build_glob%spproj_field%set(self%iptcl, 'mi_inpl',    mi_inpl)
-        call build_glob%spproj_field%set(self%iptcl, 'mi_joint',   mi_joint)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)
-      !  DebugPrint  '>>> strategy2D_srch::GOT BEST ORI'
     end subroutine store_solution
 
     subroutine kill( self )
-        class(strategy2D_srch),  intent(inout) :: self !< instance
+        class(strategy2D_srch),  intent(inout) :: self
         call self%grad_shsrch_obj%kill
     end subroutine kill
 

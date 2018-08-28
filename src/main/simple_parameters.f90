@@ -111,6 +111,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
+    character(len=LONGSTRLEN) :: o_peaks_file=''
     character(len=LONGSTRLEN) :: oritab=''            !< table  of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab2=''           !< 2nd table of orientations(.txt|.simple)
     character(len=LONGSTRLEN) :: oritab3D=''          !< table of 3D orientations(.txt|.simple)
@@ -132,7 +133,6 @@ type :: parameters
     character(len=LONGSTRLEN) :: stk2=''              !< 2nd stack(in selection map: selected(cavgs).ext)
     character(len=LONGSTRLEN) :: stk3=''              !< 3d stack (in selection map (cavgs)2selectfrom.ext)
     character(len=LONGSTRLEN) :: stk_backgr=''        !< stack with image for background subtraction
-    character(len=LONGSTRLEN) :: unidoc=''            !< unified resources and orientations doc
     character(len=LONGSTRLEN) :: vol=''
     character(len=LONGSTRLEN) :: vol_filt=''          !< input filter volume(vol_filt.ext)
     character(len=LONGSTRLEN) :: vollist=''           !< table (text file) of volume files(.txt)
@@ -585,7 +585,6 @@ contains
         call check_file('stk2',           self%stk2,         notAllowed='T')
         call check_file('stk3',           self%stk3,         notAllowed='T')
         call check_file('stk_backgr',     self%stk_backgr,   notAllowed='T')
-        call check_file('unidoc',         self%unidoc,       'T')
         call check_file('vol_filt',       self%vol_filt,     notAllowed='T')
         call check_file('vollist',        self%vollist,      'T')
         call check_file('voltab',         self%voltab,       'T')
@@ -988,8 +987,6 @@ contains
                 if( .not. cline%defined('nptcls') )then
                     ! get number of particles from stack
                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
-DebugPrint 'found logical dimension of stack: ', lfoo
-DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 endif
             else
                 write(*,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
@@ -1005,7 +1002,6 @@ DebugPrint 'found nr of ptcls from stack: ', self%nptcls
                 if( .not. cline%defined('box') )then
                     call find_ldim_nptcls(self%refs, self%ldim, ifoo)
                     self%ldim(3) = 1
-DebugPrint 'found logical dimension of refs: ', self%ldim
                     self%box = self%ldim(1)
                 endif
             else
@@ -1292,6 +1288,13 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
                 write(*,*) 'imgkind: ', trim(self%imgkind)
                 THROW_HARD('unsupported imgkind; new')
         end select
+        ! o_peaks file
+        if(self%numlen > 0 )then
+            self%o_peaks_file = O_PEAKS_FBODY//int2str_pad(self%part, self%numlen)//BIN_EXT
+        else
+            self%o_peaks_file = O_PEAKS_FBODY//int2str(self%part)//BIN_EXT
+        endif
+
 !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
         ! first touch policy here
@@ -1494,7 +1497,6 @@ DebugPrint 'found logical dimension of refs: ', self%ldim
                 character(len=*), intent(inout) :: var
                 if( cline%defined(carg) )then
                     var = cline%get_carg(carg)
-DebugPrint trim(carg), '=', trim(var)
                 endif
             end subroutine check_carg
 
@@ -1503,7 +1505,6 @@ DebugPrint trim(carg), '=', trim(var)
                 integer,          intent(out) :: var
                 if( cline%defined(iarg) )then
                     var = nint(cline%get_rarg(iarg))
-DebugPrint trim(iarg), '=', var
                 endif
             end subroutine check_iarg
 
@@ -1512,7 +1513,6 @@ DebugPrint trim(iarg), '=', var
                 real, intent(out) :: var
                 if( cline%defined(rarg) )then
                     var = cline%get_rarg(rarg)
-DebugPrint trim(rarg), '=', var
                 endif
             end subroutine check_rarg
 
@@ -1523,7 +1523,6 @@ DebugPrint trim(rarg), '=', var
                         else
                             call find_ldim_nptcls(self%stk, self%ldim, ifoo)
                             self%ldim(3) = 1
-DebugPrint 'found logical dimension of stack: ', self%ldim
                             self%box     = self%ldim(1)
                         endif
                     else

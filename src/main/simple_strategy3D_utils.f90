@@ -8,7 +8,7 @@ use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: extract_peaks, prob_select_peak, corrs2softmax_weights, states_reweight
-public :: estimate_ang_spread, convergence_stats_single, convergence_stats_multi, sort_corrs
+public :: estimate_ang_spread, set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
@@ -326,75 +326,27 @@ contains
         if( var > 0. ) ang_spread = sqrt(var)
     end function estimate_ang_spread
 
-    subroutine convergence_stats_single( s, best_loc, euldist )
+    subroutine set_state_overlap( s, best_loc )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: best_loc(1)
-        real,                   intent(in)    :: euldist
-        integer :: roind
-        real    :: mi_proj, mi_inpl, mi_joint
-        roind    = pftcc_glob%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
-        mi_proj  = 0.
-        mi_inpl  = 0.
-        mi_joint = 0.
-        if( euldist < 0.5 )then
-            mi_proj = 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( s%prev_roind == roind )then
-            mi_inpl  = 1.
-            mi_joint = mi_joint + 1.
-        endif
-        mi_joint = mi_joint/2.
-        call build_glob%spproj_field%set(s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%spproj_field%set(s%iptcl, 'mi_inpl',   mi_inpl)
-        call build_glob%spproj_field%set(s%iptcl, 'mi_state',  1.)
-        call build_glob%spproj_field%set(s%iptcl, 'mi_joint',  mi_joint)
-    end subroutine convergence_stats_single
-
-    subroutine convergence_stats_multi( s, best_loc, euldist )
-        class(strategy3D_srch), intent(inout) :: s
-        integer,                intent(in)    :: best_loc(1)
-        real,                   intent(in)    :: euldist
-        integer :: roind, state
-        real    :: mi_proj, mi_inpl, mi_joint, mi_state
-        roind    = pftcc_glob%get_roind(360. - s3D%o_peaks(s%iptcl)%e3get(best_loc(1)))
-        mi_proj  = 0.
-        mi_inpl  = 0.
-        mi_joint = 0.
-        if( euldist < 0.5 )then
-            mi_proj = 1.
-            mi_joint = mi_joint + 1.
-        endif
-        if( s%prev_roind == roind )then
-            mi_inpl  = 1.
-            mi_joint = mi_joint + 1.
-        endif
+        integer :: state
+        real    :: mi_state
         mi_state = 0.
         state = nint( s3D%o_peaks(s%iptcl)%get(best_loc(1), 'state') )
         if( .not. s3D%state_exists(state) )then
-            THROW_HARD('empty state: '//int2str(state)//' convergence_stats_multi')
+            THROW_HARD('empty state: '//int2str(state)//' set_state_overlap')
         endif
-        if( s%prev_state == state )then
-            mi_state = 1.
-            mi_joint = mi_joint + mi_state
-        endif
-        mi_joint = mi_joint/3.
-        ! set the overlaps
-        call build_glob%spproj_field%set(s%iptcl, 'mi_proj',   mi_proj)
-        call build_glob%spproj_field%set(s%iptcl, 'mi_inpl',   mi_inpl)
+        if( s%prev_state == state ) mi_state = 1.
         call build_glob%spproj_field%set(s%iptcl, 'mi_state',  mi_state)
-        call build_glob%spproj_field%set(s%iptcl, 'mi_joint',  mi_joint)
-    end subroutine convergence_stats_multi
+    end subroutine set_state_overlap
 
     subroutine sort_corrs( s )
         class(strategy3D_srch), intent(inout) :: s
-        real                                  :: corrs(s%nrefs*NINPLPEAKS2SORT), corrs_highest(s%nrefs)
-        real                                  :: proj_space_tmp(s%nrefs*NINPLPEAKS2SORT)
-        real                                  :: areal
-        integer                               :: i, j
-        integer                               :: arange(2)
-        integer                               :: asequence(NINPLPEAKS2SORT) = (/(j, j=1,NINPLPEAKS2SORT)/)
-        integer                               :: idx_array(s%nrefs*NINPLPEAKS2SORT)
+        real    :: corrs(s%nrefs*NINPLPEAKS2SORT), corrs_highest(s%nrefs)
+        real    :: proj_space_tmp(s%nrefs*NINPLPEAKS2SORT), areal
+        integer :: i, j, arange(2)
+        integer :: asequence(NINPLPEAKS2SORT) = (/(j, j=1,NINPLPEAKS2SORT)/)
+        integer :: idx_array(s%nrefs*NINPLPEAKS2SORT)
         do i = 1,s%nrefs
             arange(1) = (i-1)*NINPLPEAKS2SORT+1
             arange(2) = i*NINPLPEAKS2SORT

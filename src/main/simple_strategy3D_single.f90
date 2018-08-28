@@ -21,7 +21,7 @@ contains
 
     subroutine oris_assign_single( self )
         use simple_ori,  only: ori
-        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread, convergence_stats_single
+        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
@@ -37,8 +37,6 @@ contains
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
-        ! generate convergence stats
-        call convergence_stats_single( self%s, best_loc, euldist )
         ! fraction of search space scanned
         if( self%s%neigh )then
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nnn)

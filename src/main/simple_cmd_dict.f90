@@ -251,7 +251,6 @@ contains
         call chdict%push('trs',           'maximum halfwidth shift(in pixels)')
         call chdict%push('trsstats',      'provide origin shift statistics(yes|no){no}')
         call chdict%push('tseries',       'images represent a time-series(yes|no){no}')
-        call chdict%push('unidoc',        'unified resources and orientations doc')
         call chdict%push('update_frac',   'fraction of particles to update(0.-1.){1.}')
         call chdict%push('user_account',  'Name of user account in distributed computer system (SLURM/PBS)')
         call chdict%push('user_email',    'Your e-mail address')

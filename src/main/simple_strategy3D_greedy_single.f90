@@ -37,8 +37,6 @@ contains
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             & s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
-        ! generate convergence stats
-        call convergence_stats_single(self%s, best_loc, euldist)
         ! fraction of search space scanned
         if( self%s%neigh )then
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nnn)

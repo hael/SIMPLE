@@ -41,7 +41,7 @@ contains
         integer,                     intent(in)    :: ithr
         integer :: sym_projs(self%s%nstates), loc(1), iproj, iref, isym, state
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
-        real    :: shvec(2), corr, mi_state, frac, mi_inpl, mi_proj, bfac, score4extr, corr_valid
+        real    :: shvec(2), corr, mi_state, frac, mi_proj, bfac, score4extr, corr_valid
         logical :: hetsym
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
@@ -94,7 +94,6 @@ contains
             enddo
             ! make moves
             mi_state = 0.
-            mi_inpl  = 1.
             mi_proj  = 1.
             if( score4extr < self%spec%extr_score_thresh )then
                 ! state randomization
@@ -148,7 +147,6 @@ contains
                                 call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
                                 call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref,1,3))           ! inpl = 1
                             endif
-                            if( self%s%prev_roind .ne. pftcc_glob%get_roind(360.-s3D%proj_space_euls(self%s%ithr, iref,1,3)) ) mi_inpl = 0.
                         endif
                     endif
                     call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
@@ -159,9 +157,7 @@ contains
             call build_glob%spproj_field%set(self%s%iptcl,'state',    real(state))
             call build_glob%spproj_field%set(self%s%iptcl,'corr',     corr)
             call build_glob%spproj_field%set(self%s%iptcl,'mi_proj',  mi_proj)
-            call build_glob%spproj_field%set(self%s%iptcl,'mi_inpl',  mi_inpl)
             call build_glob%spproj_field%set(self%s%iptcl,'mi_state', mi_state)
-            call build_glob%spproj_field%set(self%s%iptcl,'mi_joint', (mi_state+mi_inpl)/2.)
             call build_glob%spproj_field%set(self%s%iptcl,'w',        1.)
             call build_glob%spproj_field%set(self%s%iptcl,'bfac',     bfac)
             call build_glob%spproj_field%set(self%s%iptcl,'specscore',self%s%specscore)

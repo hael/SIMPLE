@@ -486,7 +486,7 @@ contains
         os = work_proj1%os_ptcl3D
         ! modulate shifts
         if( do_autoscale )call os%mul_shifts( 1./scale_factor )
-        ! clean stacks & project file
+        ! clean stacks & project file & o_peaks on disc
         call work_proj1%read_segment('stk', trim(WORK_PROJFILE))
         do istk=1,work_proj1%os_stk%get_noris()
             call work_proj1%os_stk%getter(istk, 'stk', stk)
@@ -495,6 +495,7 @@ contains
         call work_proj1%kill()
         call del_file(trim(WORK_PROJFILE))
         deallocate(WORK_PROJFILE)
+        call del_files(O_PEAKS_FBODY, params_glob%nparts, ext=BIN_EXT)
         ! re-create project
         call del_file(ORIG_WORK_PROJFILE)
         ctfvars%smpd        = params%smpd

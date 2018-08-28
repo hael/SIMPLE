@@ -116,7 +116,7 @@ contains
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
         ! generate convergence stats
-        call convergence_stats_multi(self%s, best_loc, euldist)
+        call set_state_overlap(self%s, best_loc)
         ! set the distances before we update the orientation
         if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
             call build_glob%spproj_field%set(self%s%iptcl, 'dist', 0.5*euldist + 0.5*build_glob%spproj_field%get(self%s%iptcl,'dist'))
