@@ -28,7 +28,7 @@ class ManualPickingWidget {
 			.then((response) => response.json())
 			.then ((json) => {
 				this.widgetpopup.innerHTML = json.html
-				this.widgetpopup.className = "guinierwidgetpopup"
+				this.widgetpopup.className = "manualpickingwidgetpopup"
 				this.coords = []
 				this.canvas = document.getElementById("pickingcanvas")
 				this.radius = document.getElementById("manualpickradius")

@@ -1,4 +1,4 @@
-.guinierwidgetpopup {
+.manualpickingwidgetpopup {
 	width: 90vw;
 	height: 80vh;
 	font-size: 11px;
@@ -11,12 +11,12 @@
 	border-radius: 6px;
 }
 
-.guinierwidgetpopup h{
+.manualpickingwidgetpopup h{
 	font-weight: bold;
 	font-size: 14px;
 }
 
-.guinierwidgetpopup button{
+.manualpickingwidgetpopup button{
 	width: 80px;
 	border-radius: 8px;
 	border-style: none;
@@ -25,15 +25,19 @@
 	margin-top: 5px;
 }
 
-.guinierwidgetpopup #selectorbuttons{
+.manualpickingwidgetpopup #selectorbuttons{
 	display: flex;
 	justify-content: space-between;
 	margin-left: 20%;
 	margin-right: 20%;
 }
 
-.guinierwidgetpopup #closebutton {
+.manualpickingwidgetpopup #closebutton {
 	height: 12px;
 	float: right;
 }
 
+.manualpickingwidgetpopup #pickingcanvas {
+	height: 70vh;
+	margin-left: 15vw;
+}

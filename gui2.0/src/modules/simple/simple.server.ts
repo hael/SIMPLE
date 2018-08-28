@@ -130,9 +130,9 @@ class Module {
 		var keynames = Object.keys(keys);
 		var commandargs = []
 		commandargs.push("prg=" + type)
-		if(inputpath != undefined){
-			commandargs.push("projfile=" + inputpath)
-		}
+		//if(inputpath != undefined){
+			//commandargs.push("projfile=" + inputpath)
+		//}
 		commandargs.push("mkdir=no")
 		for(var key of keynames){
 			if(keys[key] != ""){
@@ -156,9 +156,7 @@ class Module {
 			arg['view'] = { mod : "simple", fnc : "viewImportMovies" }
 		}else if(type == "ctf_estimate") {
 			arg['view'] = { mod : "simple", fnc : "viewCTFEstimate" }
-		}else if(type == "import_particles") {
-			arg['view'] = { mod : "simple", fnc : "viewParticles" }
-		}else if(type == "extract") {
+		}else if(type == "import_particles" || type == "extract") {
 			arg['view'] = { mod : "simple", fnc : "viewParticles" }
 		}
 		
@@ -166,6 +164,9 @@ class Module {
 		
 		return modules['available']['core']['taskCreate'](modules, arg)
 			.then((json) => {
+				if(inputpath != undefined){
+					fs.copyFileSync(inputpath, json['jobfolder'] + "/project.simple")
+				}
 				var executeprocess = spawn(command, commandargs, {detached: true, cwd: json['jobfolder']})
 				executeprocess.on('exit', function(code){
 					console.log(`child process exited with code ${code}`);
@@ -383,20 +384,23 @@ class Module {
 		var command = "simple_private_exec"
 		var commandargs = []
 		var classcontents = []
+		var particles = []
 		var stks = []
 		commandargs.push("prg=print_project_vals")
 		commandargs.push("projfile=" + arg['projfile'])
 		commandargs.push("oritype=ptcl2D")
-		commandargs.push("keys=class,x,y,dfx,dfy,angast,frameid,stkind,bfac")
+	//	commandargs.push("keys=class,x,y,dfx,dfy,angast,frameid,stkind,bfac")
+		commandargs.push("keys=class,x,y,dfx,dfy,angast,stkind,bfac")
 		return spawn(command, commandargs, {capture: ['stdout']})
 			.then((result) => {
 				var lines = result.stdout.split("\n")
 				for(var line of lines){
 					var elements = line.split((/[ ]+/))
 					elements.shift()
-					if(Number(elements[2]) == arg['class'] && elements[1] != "0"){
-						classcontents.push(elements)
-					}
+					//if(Number(elements[2]) == arg['class'] && elements[1] != "0"){
+					//	classcontents.push(elements)
+					//}
+					particles.push(elements)
 				}
 				return
 			})
@@ -405,21 +409,26 @@ class Module {
 				commandargs.push("prg=print_project_vals")
 				commandargs.push("projfile=" + arg['projfile'])
 				commandargs.push("oritype=stk")
-				commandargs.push("keys=stk")
+				commandargs.push("keys=stk,fromp")
 				return spawn(command, commandargs, {capture: ['stdout']})
 			})
 			.then((result) => {
 				var lines = result.stdout.split("\n")
 				for(var line of lines){
 					var elements = line.split((/[ ]+/))
-					stks.push(elements[3])
+					stks.push([elements[3], elements[4]])
 				}
 				return
 			})
 			.then(() => {
-				for(var i = 0; i < classcontents.length; i++){
-					var stk = stks[Number(classcontents[i][9]) - 1]
-					classcontents[i][9] = stk
+				for(var i = 0; i < particles.length; i++){
+					if(Number(particles[i][2]) == arg['class'] && particles[i][1] != "0"){
+						var stk = stks[Number(particles[i][8]) - 1][0]
+						var frameid = i - (Number(stks[Number(particles[i][8]) - 1][1]) - 1);
+						particles[i][8] = stk
+						particles[i].push(frameid)
+						classcontents.push(particles[i])
+					}
 					
 				}
 				return({html : this.ptclsview2d({ptcls : classcontents})})
