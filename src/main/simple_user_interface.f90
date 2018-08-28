@@ -2389,7 +2389,7 @@ contains
         call refine3D%set_input('srch_ctrls', 12, neigh)
         call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 14, nrestarts)
-        call refine3D%set_input('srch_ctrls', 15, 'sigma2_fudge', 'num',    'Sigma2-fudge factor',                             'Fudge factor for sigma2_noise{1.0}',                          '{1.0}',        .false., '1.0')
+        call refine3D%set_input('srch_ctrls', 15, 'sigma2_fudge', 'num', 'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
