@@ -171,7 +171,6 @@ contains
     end subroutine set_bp_range
 
     subroutine set_bp_range2D( cline, which_iter, frac_srch_space )
-         use simple_estimate_ssnr, only: fsc2ssnr
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         real,           intent(in)    :: frac_srch_space
@@ -211,7 +210,6 @@ contains
             params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
             call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
-        params_glob%kstop = params_glob%kfromto(2)
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
