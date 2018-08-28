@@ -72,11 +72,13 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
 else()
   list(REMOVE_ITEM TESTDIRS "tests/test_intel")
 endif()
-
-
+set(EXTRA_FFLAGS "")
+set(DONT_CHECK_RANGE "-fno-range-check")
 if(NOT USE_CUDA)
  list(REMOVE_ITEM TESTDIRS "tests/test_cuda")
  list(REMOVE_ITEM TESTDIRS "tests/test_cublas")
+else()
+ list(REMOVE_ITEM TESTDIRS "tests/test_img_export")
 endif()
 if(NOT USE_OPENMP)
  list(REMOVE_ITEM TESTDIRS "tests/test_omp")
@@ -98,6 +100,17 @@ endif()
 # endif()
 
 
+if(USE_MPI AND USE_OPENMP)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}")
+elseif(USE_MPI)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${MPI_Fortran_FLAGS}")
+elseif(USE_OPENMP)
+    set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${OpenMP_Fortran_FLAGS}")
+    if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "GNU")
+        set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${DONT_CHECK_RANGE}")
+    endif()
+endif()
+    
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})
@@ -114,27 +127,20 @@ foreach(TESTNAME ${TESTDIRS})
     if(USE_MPI AND USE_OPENMP)
       target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
       set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS  "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_FLAGS}"
+        COMPILE_FLAGS  "${EXTRA_FFLAGS}"
         LINK_FLAGS "${OpenMP_Fortran_FLAGS} ${MPI_Fortran_LINK_FLAGS}"
         LANGUAGE Fortran)
     elseif(USE_MPI)
       target_link_libraries(${TESTEXE}  ${MPI_Fortran_LIBRARIES})
       set_target_properties(${TESTEXE} PROPERTIES
-        COMPILE_FLAGS  "${MPI_Fortran_FLAGS}"
+        COMPILE_FLAGS  "${EXTRA_FFLAGS}"
         LINK_FLAGS "${MPI_Fortran_LINK_FLAGS}"
         LANGUAGE Fortran)
     elseif(USE_OPENMP)
-      if(${CMAKE_Fortran_COMPILER_ID} STREQUAL "PGI")
-	      set_target_properties(${TESTEXE} PROPERTIES
-          COMPILE_FLAGS "${OpenMP_Fortran_FLAGS}"
+      set_target_properties(${TESTEXE} PROPERTIES
+          COMPILE_FLAGS "${EXTRA_FFLAGS}"
           LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
           LANGUAGE Fortran)
-      else()
-	      set_target_properties(${TESTEXE} PROPERTIES
-          COMPILE_FLAGS "${OpenMP_Fortran_FLAGS} -fno-range-check"
-          LINK_FLAGS "${OpenMP_Fortran_FLAGS}"
-          LANGUAGE Fortran)
-      endif()
     endif()
     if(USE_CUDA)
       file(GLOB_RECURSE TESTCUDASOURCES LIST_DIRECTORIES true

@@ -104,7 +104,7 @@ cat <<EOF > buildsimplecudampi
 #SBATCH --cpus-per-task=12
 #SBATCH --qos=shortq
 
-module load  cuda/8.0.61 fftw/3.3.5-gcc5 cmake/3.5.2 git/2.8.1 gcc/5.4.0 openmpi 
+module load  cuda/8.0.61 fftw/3.3.5-gcc5 cmake/3.5.2 git/2.8.1 gcc/5.4.0 openmpi/1.10.3-gcc5-mlx
 cd ~/${SLURM_JOB_ACCOUNT}_scratch/${MASSIVE_USERNAME}/SIMPLE3.0
 git pull --rebase
 [ -d tmpbuildall ] && rm -rf tmpbuildall

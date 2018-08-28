@@ -2,13 +2,13 @@ module simple_cuda
 include 'simple_lib.f08'
 use, intrinsic :: ISO_C_BINDING
 use CUDA
-#include "simple_cuda_handle.inc"
 implicit none
+#include "simple_cuda_handle.inc"
 
- type( cudaDeviceProp ) :: cuda_properties
- integer                :: cuda_deviceCount
- integer                :: cuda_currentDevice
-
+type( cudaDeviceProp ) :: cuda_properties
+integer                :: cuda_deviceCount
+integer                :: cuda_currentDevice
+ 
 contains
 
     subroutine check_cuda_device
@@ -29,15 +29,12 @@ contains
         if (cudaResultCode /= cudaSuccess) then
             deviceCount = 0
         end if
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if(error_found )&
-        THROW_HARD("CUDA device count failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found, "CUDA device count failed")
         ! Check for the device to be an emulator. If not, increment the counter
         do device = 0, deviceCount - 1, 1
             cudaResultCode = cudaGetDeviceProperties(properties, device)
             if (properties%major /= 9999) gpuDeviceCount = gpuDeviceCount + 1
-            call my_cudaErrorCheck(cudaResultCode, error_found)
-            if(error_found) THROW_HARD("CUDA device property failed "//int2str(device))
+            HANDLE_CUDAERROR(cudaResultCode, error_found, "CUDA device property failed ")
         end do
         cuda_deviceCount= gpuDeviceCount
         print*, gpuDeviceCount, " GPU CUDA device(s) found"
@@ -45,8 +42,7 @@ contains
         do device = 0, deviceCount - 1, 1
             print*, "    Cuda device ", device
             cudaResultCode = cudaGetDeviceProperties(properties,device)
-             call my_cudaErrorCheck(cudaResultCode, error_found)
-             if( error_found) THROW_HARD("CUDA device property failed "//int2str(device))
+            HANDLE_CUDAERROR(cudaResultCode, error_found, "CUDA device property failed ")
              if(device==0) cuda_properties = properties
              call print_cuda_properties(properties)
          end do
@@ -64,8 +60,7 @@ contains
         deviceCount=0
         ! Obtain the device count from the system and check for errors
         cudaResultCode = cudaGetDeviceCount(deviceCount)
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if( error_found) THROW_HARD("cudaGetDeviceCount failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found,"cudaGetDeviceCount failed")
 
         if (d >= deviceCount) then
             print *, "simple_cuda::set_cuda_device index too high "
@@ -73,13 +68,11 @@ contains
         endif
 
         cudaResultCode = cudaGetDeviceProperties(properties, d)
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if( error_found) THROW_HARD("cudaGetDeviceProperties failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found,"cudaGetDeviceProperties failed")
         cuda_properties = properties
 
         cudaResultCode = cudaSetDevice(d)
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if( error_found) THROW_HARD("cudaSetDevice failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found, "cudaSetDevice failed")
         cuda_currentDevice = d
         print *, " New CUDA device set successfully ", cuda_currentDevice
         call print_cuda_properties(cuda_properties)
@@ -95,8 +88,7 @@ contains
 
         ! Obtain the device count from the system and check for errors
         cudaResultCode = cudaGetDeviceCount(deviceCount)
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if( error_found) THROW_HARD("cudaGetDeviceCount failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found, "cudaGetDeviceCount failed")
 
         if (d >= deviceCount) then
             print *, "simple_cuda::get_cuda_device index too high "
@@ -105,8 +97,7 @@ contains
         end if
 
         cudaResultCode = cudaGetDeviceProperties(properties, d)
-        call my_cudaErrorCheck(cudaResultCode, error_found)
-        if( error_found) THROW_HARD("cudaGetDeviceProperties failed")
+        HANDLE_CUDAERROR(cudaResultCode, error_found, "cudaGetDeviceProperties failed")
 
     end function get_cuda_property
 
@@ -180,8 +171,7 @@ contains
         logical :: error_found
         error_found=.false.
         ierr = cudaRuntimeGetVersion(cuVer)
-        call my_cudaErrorCheck(ierr, error_found)
-        if( error_found) THROW_HARD("cudaGetDeviceProperties failed ")
+        HANDLE_CUDAERROR(ierr, error_found,"cudaGetDeviceProperties failed ")
         write (*,'(A,I0)') 'CUDA Runtime Version: ', cuVer
     end subroutine cuda_query_version
     subroutine cuda_query_driver_version
@@ -190,8 +180,7 @@ contains
         logical :: error_found
         error_found=.false.
         ierr = cudaDriverGetVersion(driverVersion)
-        call my_cudaErrorCheck(ierr,error_found)
-        if (error_found  ) THROW_HARD ("cudaDriverGetVersion failed")
+        HANDLE_CUDAERROR(ierr,error_found, "cudaDriverGetVersion failed")
         write (*,'(A,I0)') 'CUDA Driver Version: ', driverVersion
      end subroutine cuda_query_driver_version
      subroutine cuda_query_device_count
@@ -200,8 +189,7 @@ contains
         logical :: error_found
         error_found=.false.
         ierr = cudaGetDeviceCount(deviceCount)
-        call my_cudaErrorCheck(ierr,error_found)
-        if (error_found  ) THROW_HARD("cudaGetDeviceCount failed")
+        HANDLE_CUDAERROR(ierr,error_found,"cudaGetDeviceCount failed")
         write (*,'(A,I0)') 'CUDA Devices Count: ', deviceCount
     end subroutine cuda_query_device_count
      subroutine cuda_query_thread_limit
@@ -211,8 +199,7 @@ contains
          logical :: error_found
          error_found=.false.
          ierr = cudaThreadGetLimit(pValue,limitStackSize)
-         call my_cudaErrorCheck(ierr,error_found)
-         if (error_found  ) THROW_HARD ("cudaThreadGetLimit failed")
+         HANDLE_CUDAERROR(ierr,error_found,"cudaThreadGetLimit failed")
          write (*,'(A,I0)') 'CUDA Thread Limit : ', pValue
      end subroutine cuda_query_thread_limit
      subroutine cuda_thread_synchronize
@@ -220,8 +207,7 @@ contains
          logical :: error_found
          error_found=.false.
          ierr = cudaThreadSynchronize()
-         call my_cudaErrorCheck(ierr,error_found)
-         if (error_found  ) THROW_HARD ( "cudaThreadSynchronize failed")
+         HANDLE_CUDAERROR(ierr,error_found, "cudaThreadSynchronize failed")
          print *," cudaThreadSynchronized "
      end subroutine cuda_thread_synchronize
      subroutine cuda_print_mem_info
@@ -230,8 +216,7 @@ contains
          logical :: error_found
          error_found=.false.
          ierr = cudaMemGetInfo(free,total)
-         call my_cudaErrorCheck(ierr,error_found)
-         if (error_found  ) THROW_HARD ("cudaMemGetInfo failed")
+         HANDLE_CUDAERROR(ierr,error_found, "cudaMemGetInfo failed")
          write (*,'(A,I0)') 'CUDA Memory Info (free/total) : ', free,total
      end subroutine cuda_print_mem_info
  end module simple_cuda

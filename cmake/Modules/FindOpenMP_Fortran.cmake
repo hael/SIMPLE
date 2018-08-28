@@ -72,13 +72,15 @@ if("${IFM3} " STREQUAL "m3 ")
   #    find_package(OpenMP REQUIRED)
   #    if(OPENMP_FOUND)
   #    endif()
-  add_definitions("-DMPI_NOF08_MODULE=1")
+  add_definitions("-DUSE_MPIF08_MODULE=0")
+else()
+  add_definitions("-DUSE_MPIF08_MODULE=1")
 endif() # building on MASSIVE
 
 
 if(NOT OPENMP_FOUND)
   if(CMAKE_${LANG}_COMPILER_ID STREQUAL "Intel")
-    add_definitions("-DMPI_NOF08_MODULE=1")
+    add_definitions("-DUSE_MPIF08_MODULE=1")
     if("${CMAKE_${LANG}_COMPILER_VERSION}" VERSION_LESS "15.0.0.20140528")
       set(OMP_FLAG_Intel "-openmp")
     else()

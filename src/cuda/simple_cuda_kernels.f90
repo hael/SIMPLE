@@ -1,121 +1,124 @@
 module simple_cuda_kernels
-    include 'simple_lib.f08'
-    use , intrinsic :: ISO_C_BINDING
-    use CUDA
-    implicit none
-    interface
-        !! c_kernels.cu
-        subroutine vecAddF(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddfloat")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, b, c
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine vecAddF
-        subroutine vecAddI(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddint")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, b, c
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine vecAddI
-        subroutine vecAddConstF(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddconstfloat")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, b, c ! b is a const
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine vecAddConstF
-        subroutine vecAddConstI(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddconstint")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, b, c ! b is a const
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine vecAddConstI
+include 'simple_lib.f08'
+use , intrinsic :: ISO_C_BINDING
+use CUDA
+implicit none
+#include "simple_cuda_handle.inc"
 
 
-    end interface
+interface
+    !! c_kernels.cu
+    subroutine vecAddF(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddfloat")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, b, c
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine vecAddF
+    subroutine vecAddI(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddint")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, b, c
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine vecAddI
+    subroutine vecAddConstF(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddconstfloat")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, b, c ! b is a const
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine vecAddConstF
+    subroutine vecAddConstI(a, b, c, dimGrid, dimBlk, N, stream) bind(C, name="vecaddconstint")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, b, c ! b is a const
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine vecAddConstI
 
-    !! Matmul.cu
-    interface
-        subroutine multiply_by_element( dimGrid, dimBlk, a, b, c, N, stream) bind(C, name="multiply_by_element")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a,b, c
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine multiply_by_element
-        subroutine multiply_by_block(dimGrid, threads, a, b, c, N, stream) bind(C, name="multiply_by_block")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, b,c
-            type (dim3) :: dimGrid
-            type (dim3) :: threads
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine multiply_by_block
-        subroutine  transpose_by_block(dimGrid, dimBlk, a,  c, N, stream) bind(C, name="transpose_by_block")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value :: a, c
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine transpose_by_block
-    end interface
 
-    !! Mul2D.cu  -- independent 2D multiplication kernels
-    ! interface
-    !     subroutine mul2dfloat( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dfloat")
-    !         use, intrinsic :: ISO_C_BINDING
-    !         real(c_float),dimension(:,:) :: a, b,c
-    !         integer(c_int), value :: Np,Ns, Bs
-    !     end subroutine mul2dfloat
-    ! subroutine mul2dcomplex( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dcomplex")
-    !         use, intrinsic :: ISO_C_BINDING
-    !         complex(C_FLOAT_COMPLEX),dimension(:,:) :: a,b,c
-    !         integer(c_int), value :: Np, Ns, Bs
-    !     end subroutine mul2dcomplex
-    ! end interface
+end interface
 
-    !! filter_kernels.cu
-    interface
-        !! Obtain
-        subroutine filter_gaussKernel(U,V,W,Z, sigma, dimGrid, dimBlk, N, stream) bind(C, name="gausskernelelementwise")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value ::U,V,W !grid
-            type(c_ptr) :: Z ! return value
-            real(c_float) ::  sigma
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine filter_gaussKernel
-        subroutine mulgaussKernel(A,B , sigma, dimGrid, dimBlk, N, stream) bind(C, name="gaussconvolution3d")
-            use, intrinsic :: ISO_C_BINDING
-            use CUDA, only : dim3, cudaStream_t
-            type (c_ptr), value ::A  !! B
-            type(c_ptr) :: B ! return value B= GaussKernel x A
-            real(c_float) ::  sigma
-            type (dim3) :: dimGrid
-            type (dim3) :: dimBlk
-            integer(c_int), value :: N
-            type (cudaStream_t) :: stream
-        end subroutine mulgaussKernel
-    end interface
+!! Matmul.cu
+interface
+    subroutine multiply_by_element( dimGrid, dimBlk, a, b, c, N, stream) bind(C, name="multiply_by_element")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a,b, c
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine multiply_by_element
+    subroutine multiply_by_block(dimGrid, threads, a, b, c, N, stream) bind(C, name="multiply_by_block")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, b,c
+        type (dim3) :: dimGrid
+        type (dim3) :: threads
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine multiply_by_block
+    subroutine  transpose_by_block(dimGrid, dimBlk, a,  c, N, stream) bind(C, name="transpose_by_block")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value :: a, c
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine transpose_by_block
+end interface
+
+!! Mul2D.cu  -- independent 2D multiplication kernels
+! interface
+!     subroutine mul2dfloat( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dfloat")
+!         use, intrinsic :: ISO_C_BINDING
+!         real(c_float),dimension(:,:) :: a, b,c
+!         integer(c_int), value :: Np,Ns, Bs
+!     end subroutine mul2dfloat
+! subroutine mul2dcomplex( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dcomplex")
+!         use, intrinsic :: ISO_C_BINDING
+!         complex(C_FLOAT_COMPLEX),dimension(:,:) :: a,b,c
+!         integer(c_int), value :: Np, Ns, Bs
+!     end subroutine mul2dcomplex
+! end interface
+
+!! filter_kernels.cu
+interface
+    !! Obtain
+    subroutine filter_gaussKernel(U,V,W,Z, sigma, dimGrid, dimBlk, N, stream) bind(C, name="gausskernelelementwise")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value ::U,V,W !grid
+        type(c_ptr) :: Z ! return value
+        real(c_float) ::  sigma
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine filter_gaussKernel
+    subroutine mulgaussKernel(A,B , sigma, dimGrid, dimBlk, N, stream) bind(C, name="gaussconvolution3d")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3, cudaStream_t
+        type (c_ptr), value ::A  !! B
+        type(c_ptr) :: B ! return value B= GaussKernel x A
+        real(c_float) ::  sigma
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+        type (cudaStream_t) :: stream
+    end subroutine mulgaussKernel
+end interface
 
 contains
 
@@ -123,15 +126,16 @@ contains
 
     !>  \brief corr is for correlating two images
     function corr_cuda( self1, self2, lp_dyn, hp_dyn ) result( r )
-      use simple_image, only: image
-      type(image),   intent(inout) :: self1, self2
-      real, optional, intent(in)    :: lp_dyn, hp_dyn
-      complex, allocatable :: cmat1(:,:,:), cmat2(:,:,:), vec1(:), vec2(:)
-      integer, allocatable :: bpmask(:,:,:)
-      real    :: r, sumasq, sumbsq
-      integer :: h, k, l, phys(3), lims(3,2),ldim(3), sqarg, sqlp, sqhp, npoints, npointsNP2
-      logical :: didft1, didft2
-      integer(kind=timer_int_kind) :: t1,t2
+        use simple_image, only: image
+        type(image),   intent(inout) :: self1, self2
+        real, optional, intent(in)    :: lp_dyn, hp_dyn
+        complex, allocatable :: cmat1(:,:,:), cmat2(:,:,:), vec1(:), vec2(:)
+        integer, allocatable :: bpmask(:,:,:)
+        real    :: r, sumasq, sumbsq
+        integer :: h, k, l, phys(3), lims(3,2),ldim(3), sqarg, sqlp, sqhp, npoints, npointsNP2
+        logical :: didft1, didft2
+        integer(kind=timer_int_kind) :: t1,t2
+#include "simple_local_flags.inc"
         r = 0.
 #ifdef USING_CUDA
         t1=tic()
@@ -168,20 +172,20 @@ contains
             !$omp parallel do collapse(3) default(shared) private(h,k,l,sqarg,phys)&
             !$omp  schedule(static) proc_bind(close)
             do h=lims(1,1),lims(1,2)
-               do k=lims(2,1),lims(2,2)
-                  do l=lims(3,1),lims(3,2)
-                     sqarg = h*h + k*k + l*l
-                     if( sqarg <= sqlp .and. sqarg >= sqhp  )then
-                        phys = self1%comp_addr_phys(h,k,l)
-                        bpmask(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = 1
-                        cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self1%get_cmat_at(phys(1),phys(2),phys(3))
-                        cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self2%get_cmat_at(phys(1),phys(2),phys(3))
-                     else
-                        cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
-                        cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
-                     endif
-                  enddo
-               enddo
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        sqarg = h*h + k*k + l*l
+                        if( sqarg <= sqlp .and. sqarg >= sqhp  )then
+                            phys = self1%comp_addr_phys(h,k,l)
+                            bpmask(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = 1
+                            cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self1%get_cmat_at(phys(1),phys(2),phys(3))
+                            cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = self2%get_cmat_at(phys(1),phys(2),phys(3))
+                        else
+                            cmat1(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
+                            cmat2(h-lims(1,1)+1, k-lims(2,1)+1, l-lims(3,1)+1) = cmplx(0.,0.)
+                        endif
+                    enddo
+                enddo
             enddo
             !$omp end parallel do
 
@@ -215,31 +219,26 @@ contains
 
             print *, " Image corr ", r, " took ", toc(t2)
 
-         else
+        else
             write(*,*) 'self1%ldim:', self1%get_ldim()
             write(*,*) 'self2%ldim:', self2%get_ldim()
             THROW_HARD('images to be correlated need to have same dimensions')
-         endif
-         if(allocated(cmat1)) deallocate(cmat1)
-         if(allocated(cmat2)) deallocate(cmat2)
-         if(allocated(bpmask)) deallocate(bpmask)
-         if(allocated(vec1)) deallocate(vec1)
-         if(allocated(vec2)) deallocate(vec2)
+        endif
+        if(allocated(cmat1)) deallocate(cmat1)
+        if(allocated(cmat2)) deallocate(cmat2)
+        if(allocated(bpmask)) deallocate(bpmask)
+        if(allocated(vec1)) deallocate(vec1)
+        if(allocated(vec2)) deallocate(vec2)
 
 #else
-         print *, " CUDA corr in image class not available for this build"
+        print *, " CUDA corr in image class not available for this build"
 #endif
     end function corr_cuda
-
-
-
-
-
 
     subroutine test_FortCUDA_kernels (arg)
         implicit none
         real, intent(in) :: arg
-#include "simple_cuda_handle.inc"
+
         type :: HostPtr
             real, pointer, dimension(:) :: host_ptr => null()
         end type HostPtr
@@ -448,7 +447,6 @@ contains
         enddo
 
     end subroutine test_FortCUDA_kernels
-
 
 
     subroutine test_fortran_mul1dComplex_kernels
@@ -932,7 +930,7 @@ contains
             call system_clock(t2)
             cserial = c2(N-1,M-1)
             ftime = ftime + REAL(t2-t1)/REAL(crate)
-                   !! OpenMP
+            !! OpenMP
             c2=cmplx(0.,0.)
             call system_clock(t9)
             !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close)

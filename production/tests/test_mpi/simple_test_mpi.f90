@@ -5,15 +5,19 @@
 !! mpiexec -np 4 simple_test_mpi
 
 program simple_test_mpi
-    include 'simple_lib.f08'
-#ifdef MPI_NOF08_MODULE
-    use mpi
-#else
+include 'simple_lib.f08'
+#if defined( USE_MPIF08_MODULE )
+#if USE_MPIF08_MODULE == 1
     use mpi_f08
+#else
+    use mpi
+#endif
+#else
+    use mpi
 #endif
 
-    implicit none
-    #include "simple_local_flags.inc"
+implicit none
+#include "simple_local_flags.inc"
     integer ierr, rank
 
     call MPI_INIT ( ierr )
