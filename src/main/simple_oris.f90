@@ -1442,6 +1442,7 @@ contains
             euls    = os_discrete%get_euler( irnd )
             euls(3) = self%o( i )%e3get()
             call self%o(i)%set_euler( euls )
+            call self%o(i)%set( 'proj', real(irnd) )
         end do
     end subroutine rnd_oris_discrete_from
 

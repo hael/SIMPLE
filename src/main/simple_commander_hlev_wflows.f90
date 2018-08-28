@@ -746,7 +746,7 @@ contains
             cavgs_import = spproj%os_ptcl2D%get_noris() == 0
             if( cavgs_import )then
                 ! start from import
-                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for inported class-averages; cluster3D')
+                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for imported class-averages; cluster3D')
                 lp_cls3D = params%lp
                 allocate(states(ncls), source=1)
             else

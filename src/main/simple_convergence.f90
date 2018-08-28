@@ -12,17 +12,17 @@ private
 
 type convergence
     private
-    real :: corr       = 0. !< average correlation
-    real :: dist       = 0. !< average angular distance
-    real :: dist_inpl  = 0. !< average in-plane angular distance
-    real :: npeaks     = 0. !< average # peaks
-    real :: frac       = 0. !< average fraction of search space scanned
-    real :: mi_class   = 0. !< class parameter distribution overlap
-    real :: mi_proj    = 0. !< projection parameter distribution overlap
-    real :: mi_state   = 0. !< state parameter distribution overlap
-    real :: spread     = 0. !< angular spread
-    real :: bfac       = 0. !< average per-particle B-factor (search)
-    real :: bfac_rec   = 0. !< average per-particle B-factor (rec)
+    real :: corr      = 0. !< average correlation
+    real :: dist      = 0. !< average angular distance
+    real :: dist_inpl = 0. !< average in-plane angular distance
+    real :: npeaks    = 0. !< average # peaks
+    real :: frac      = 0. !< average fraction of search space scanned
+    real :: mi_class  = 0. !< class parameter distribution overlap
+    real :: mi_proj   = 0. !< projection parameter distribution overlap
+    real :: mi_state  = 0. !< state parameter distribution overlap
+    real :: spread    = 0. !< angular spread
+    real :: bfac      = 0. !< average per-particle B-factor (search)
+    real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
