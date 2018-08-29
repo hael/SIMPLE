@@ -32,23 +32,25 @@ contains
 
     subroutine srch_snhc( self )
         class(strategy2D_snhc), intent(inout) :: self
-        integer :: iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound
+        integer :: iref, isample, inpl_ind, class_glob, inpl_glob, nrefs_bound, nrefs
         real    :: corrs(self%s%nrots), inpl_corr, cc_glob
-        logical :: found_better, do_inplsrch
+        logical :: found_better
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            do_inplsrch   = .true.
             cc_glob       = -1.
             found_better  = .false.
-            nrefs_bound   = min(self%s%nrefs, nint(real(self%s%nrefs)*(1.-self%spec%stoch_bound)) )
+            nrefs         = count(s2D%cls_chunk==self%s%chunk_id)
+            nrefs_bound   = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)) )
             nrefs_bound   = max(2, nrefs_bound)
             do isample=1,self%s%nrefs
-                ! keep track of how many references we are evaluating
-                self%s%nrefs_eval = self%s%nrefs_eval + 1
-                ! stochastic # references bound
-                if(self%s%nrefs_eval > nrefs_bound) exit
                 ! stochastic reference index
                 iref = s2D%srch_order(self%s%iptcl_map, isample)
+                ! check whether we are in the correct chunk
+                if( s2D%cls_chunk(iref) /= self%s%chunk_id )cycle
+                ! keep track of how many references we are evaluating
+                self%s%nrefs_eval = self%s%nrefs_eval + 1
+                ! neighbourhood size
+                if(self%s%nrefs_eval > nrefs_bound) exit
                 ! passes empty classes
                 if( s2D%cls_pops(iref) == 0 )cycle
                 ! shc update
@@ -83,8 +85,8 @@ contains
                 self%s%best_corr  = cc_glob
                 self%s%best_rot   = inpl_glob
             endif
-            if( do_inplsrch )call self%s%inpl_srch
-            nrefs_bound = min(self%s%nrefs, nrefs_bound+1) ! to take into account withdrawal
+            call self%s%inpl_srch
+            nrefs_bound = min(nrefs, nrefs_bound+1)
             call self%s%store_solution(nrefs=nrefs_bound)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)

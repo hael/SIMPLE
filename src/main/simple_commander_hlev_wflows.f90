@@ -602,6 +602,7 @@ contains
         call img%kill
         call spproj%kill
         call del_file(ORIG_WORK_PROJFILE)
+        call simple_rmdir(STKPARTSDIR)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains

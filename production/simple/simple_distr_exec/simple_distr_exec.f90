@@ -152,7 +152,6 @@ select case(prg)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',     'yes')
-        if( .not. cline%defined('refine')    ) call cline%set('refine',    'snhc')
         call xcluster2D_stream_distr%execute(cline)
 
     ! REFINE3D

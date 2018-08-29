@@ -12,9 +12,11 @@ private
 type strategy2D_alloc
     ! per class
     integer, allocatable :: cls_pops(:)
+    integer, allocatable :: cls_chunk(:)
     logical, allocatable :: cls_withdraw(:)
     ! per particle
     integer, allocatable :: srch_order(:,:)
+    logical, allocatable :: do_inplsrch(:)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -22,19 +24,24 @@ type(strategy2D_alloc) :: s2D
 contains
 
     subroutine clean_strategy2D
+        ! per class
         if( allocated(s2D%cls_pops)    ) deallocate(s2D%cls_pops)
+        if( allocated(s2D%cls_chunk)   ) deallocate(s2D%cls_chunk)
         if( allocated(s2D%cls_withdraw)) deallocate(s2D%cls_withdraw)
-        if( allocated(s2D%srch_order)  ) deallocate(s2D%srch_order)
+        ! per particle
+        if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
+        if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
     end subroutine clean_strategy2D
 
-    subroutine prep_strategy2D( ptcl_mask, which_iter )
-        logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top)
+    subroutine prep_strategy2D( ptcl_mask, which_iter, l_stream )
+        logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top), l_stream
         integer, intent(in)  :: which_iter
         type(ran_tabu)       :: rt
         integer, allocatable :: finds(:)
         integer              :: icls, iptcl, prev_class, cnt, nptcls
         real                 :: res0143, res05, ave, sdev, var
         logical              :: err
+        nptcls = count(ptcl_mask)
         ! gather class populations
         allocate(s2D%cls_withdraw(params_glob%ncls), source=.true., stat=alloc_stat)
         if( build_glob%spproj_field%isthere('class') )then
@@ -54,8 +61,25 @@ contains
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("simple_strategy2D_srch :: prep4strategy2D_srch")
         endif
+        ! chunks, 1 by default
+        allocate(s2D%cls_chunk(params_glob%ncls), source=1)
+        if( l_stream )then
+            do icls=1,params_glob%ncls
+                s2D%cls_chunk(icls) = ceiling(real(icls)/real(params_glob%ncls_start))
+            enddo
+        endif
+        ! in plane search
+        allocate(s2D%do_inplsrch(1:nptcls), source=params_glob%l_doshift)
+        if( l_stream )then
+            cnt = 0
+            do iptcl = params_glob%fromp, params_glob%top
+                if(ptcl_mask(iptcl))then
+                    cnt = cnt + 1
+                    s2D%do_inplsrch(cnt) = (build_glob%spproj_field%get(iptcl,'updatecnt') > 10.)
+                endif
+            end do
+        endif
         ! make random reference direction order
-        nptcls = count(ptcl_mask)
         allocate(s2D%srch_order(1:nptcls, params_glob%ncls), source=0)
         rt  = ran_tabu(params_glob%ncls)
         cnt = 0

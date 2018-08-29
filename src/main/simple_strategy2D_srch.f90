@@ -19,6 +19,7 @@ type strategy2D_spec
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0
     integer :: iptcl_map   = 0
+    integer :: chunk_id    = 0
 end type strategy2D_spec
 
 type strategy2D_srch
@@ -35,6 +36,7 @@ type strategy2D_srch
     integer                 :: nnn           =  0   !< # nearest neighbors
     integer                 :: iptcl         =  0   !< global particle index
     integer                 :: iptcl_map     =  0   !< index in pre-allocated arrays
+    integer                 :: chunk_id      =  0   !< index to chunk
     real                    :: trs           =  0.  !< shift range parameter [-trs,trs]
     real                    :: prev_shvec(2) =  0.  !< previous origin shift vector
     real                    :: best_shvec(2) =  0.  !< best shift vector found by search
@@ -61,12 +63,12 @@ contains
         ! set constants
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
+        self%chunk_id   =  spec%chunk_id
         self%prev_bfac  =  spec%bfac
         self%nrefs      =  params_glob%ncls
         self%nrots      =  round2even(twopi*real(params_glob%ring2))
         self%nrefs_eval =  0
         self%trs        =  params_glob%trs
-        self%doshift    =  params_glob%l_doshift
         self%fromp      =  params_glob%fromp
         self%top        =  params_glob%top
         self%nnn        =  params_glob%nnn
@@ -111,7 +113,7 @@ contains
         real              :: cxy(3)
         integer           :: irot
         self%best_shvec = [0.,0.]
-        if( self%doshift )then
+        if( s2D%do_inplsrch(self%iptcl_map) )then
             ! BFGS
             call self%grad_shsrch_obj%set_indices(self%best_class, self%iptcl)
             cxy = self%grad_shsrch_obj%minimize(irot=irot)

@@ -316,7 +316,7 @@ contains
         do icls=1,ncls
             ! batch planning
             icls_pop = class_pop(icls)
-            if( icls_pop < 2 ) cycle
+            if( icls_pop < 1 ) cycle
             nbatches = ceiling(real(icls_pop)/real(params_glob%nthr*BATCHTHRSZ))
             batches  = split_nobjs_even(icls_pop, nbatches)
             ! batch loop

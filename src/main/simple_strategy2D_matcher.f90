@@ -58,7 +58,9 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor
+        real                  :: chunk_id(params_glob%fromp:params_glob%top)
         integer               :: iptcl, i, fnr, cnt, updatecnt
+        integer               :: nchunks, nptcls_per_chunk
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
@@ -154,16 +156,14 @@ contains
         ! SNHC LOGICS
         if( l_snhc )then
             if( l_stream )then
-                ! neighbourhood size is set per particle
-                do iptcl=params_glob%fromp,params_glob%top
+                snhc_sz = 0.
+                ! factorial decay, -2 because first step is greedy of stochastic size
+                do iptcl = params_glob%fromp, params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        ! 20 is arbitrary here and under testing
-                        if( updatecnt<=1 .or. updatecnt>20 )then
-                            snhc_sz(iptcl) = 0. ! greedy or exhaustive
-                        else if( updatecnt <= 20 )then
-                            snhc_sz(iptcl) = max(0., 1.-(SNHC2D_INITFRAC+real(updatecnt-2)/40.)) ! snhc
-                        endif
+                        ! updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                        ! snhc_sz(iptcl) = min(SNHC2D_INITFRAC,&
+                        !     &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(updatecnt-2)))
+                        snhc_sz(iptcl) = 0. ! full neighbourhood
                     endif
                 enddo
             else
@@ -174,7 +174,20 @@ contains
                     &100.*(1.-snhc_sz(params_glob%fromp))
             endif
         else
-            snhc_sz = 0.
+            snhc_sz = 0.  ! full neighbourhood
+        endif
+
+        ! streaming chunks
+        if( l_stream )then
+            if(.not.build_glob%spproj_field%isthere('chunk'))then
+                THROW_HARD('CHUNK field not found; simple_strategy2D_matcher :: cluster2d_exec')
+            endif
+            do iptcl=params_glob%fromp,params_glob%top
+                chunk_id(iptcl) = nint(build_glob%spproj_field%get(iptcl,'chunk'))
+            enddo
+            where( chunk_id<0 )chunk_id = 0
+        else
+            chunk_id = 1
         endif
 
         ! B-FACTOR
@@ -239,7 +252,7 @@ contains
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
         write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! array allocation for strategy2D
-        call prep_strategy2D( ptcl_mask, which_iter )
+        call prep_strategy2D( ptcl_mask, which_iter, l_stream )
         DebugPrint ' cluster2D_exec;     prep_strategy2D                        ',toc(t_init)
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
@@ -275,6 +288,7 @@ contains
                 strategy2Dspec%iptcl     = iptcl
                 strategy2Dspec%iptcl_map = cnt
                 strategy2Dspec%bfac      = bfactor
+                strategy2Dspec%chunk_id  = chunk_id(iptcl)
                 if( trim(params_glob%refine).eq.'extr' )then
                     strategy2Dspec%stoch_bound = extr_bound
                 else
