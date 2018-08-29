@@ -175,7 +175,11 @@ contains
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-        corr = max(0.,maxval(corrs))
+        if( pftcc_glob%is_euclid(self%iptcl) )then
+            corr = maxval(corrs)
+        else
+            corr = max(0.,maxval(corrs))
+        endif
         self%prev_corr = corr
         ! calc validation corr
         if( params_glob%l_eo )then
@@ -227,9 +231,10 @@ contains
                 if( self%dowinpl )then
                     ! BFGS over shifts only
                     do i=self%nrefsmaxinpl,self%nrefsmaxinpl-self%npeaks+1,-1
-                        ref = s3D%proj_space_refinds_sorted(self%ithr, i)
+                        ref  = s3D%proj_space_refinds_sorted(self%ithr, i)
+                        if( .not. s3D%proj_space_corrs_srchd(self%ithr,ref) ) cycle ! must have seen the reference before
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        j   = s3D%proj_space_inplinds_sorted(self%ithr, i)
+                        j    = s3D%proj_space_inplinds_sorted(self%ithr, i)
                         irot = s3D%proj_space_inplinds(self%ithr, ref, j)
                         cxy  = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
@@ -241,10 +246,11 @@ contains
                     end do
                 else
                     ! BFGS over shifts with in-plane rot exhaustive callback
-                    do i=self% nrefs,self%nrefs-self%npeaks+1,-1
-                               ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
-                               call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                               cxy = self%grad_shsrch_obj%minimize(irot=irot)
+                    do i=self%nrefs,self%nrefs-self%npeaks+1,-1
+                        ref = s3D%proj_space_refinds_sorted_highest(self%ithr, i)
+                        if( .not. s3D%proj_space_corrs_srchd(self%ithr,ref) ) cycle ! must have seen the reference before
+                        call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
+                        cxy = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
                             ! irot > 0 guarantees improvement found, update solution
                             s3D%proj_space_euls( self%ithr,ref,1,3) = 360. - pftcc_glob%get_rot(irot)

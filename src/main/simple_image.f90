@@ -2632,7 +2632,8 @@ contains
         else
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
-        call tmp%mask(rmsk, 'soft')
+        call tmp%norm_bin
+        call tmp%mask(rmsk, 'hard')
         call tmp%masscen(xyz)
         call tmp%kill
     end function center
@@ -2651,7 +2652,8 @@ contains
         call thread_safe_tmp_imgs(ithr)%fft()
         call thread_safe_tmp_imgs(ithr)%bp(0., lp)
         call thread_safe_tmp_imgs(ithr)%ifft()
-        call thread_safe_tmp_imgs(ithr)%mask(msk, 'soft')
+        call thread_safe_tmp_imgs(ithr)%norm_bin
+        call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
         call thread_safe_tmp_imgs(ithr)%masscen(xyz)
     end function center_serial
 
@@ -3787,35 +3789,64 @@ contains
         hplim_freq = self%fit%get_find(1,hplim)
         lplim_freq = self%fit%get_find(1,lplim)
         lims = self%fit%loop_lims(2)
-        !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
-        !$omp collapse(3) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    freq = hyp(real(h),real(k),real(l))
-                    phys = self%comp_addr_phys([h,k,l])
-                    if( dohp )then
-                        if(freq .lt. hplim_freq) then
-                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        else if(freq .le. hplim_freq + wwidth) then
-                            w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
-                            self%cmat(phys(1),phys(2),phys(3)) = &
-                                &self%cmat(phys(1),phys(2),phys(3)) * w
+        if( self%wthreads )then
+            !$omp parallel do private(h,k,l,freq,phys,w) default(shared)&
+            !$omp collapse(3) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        freq = hyp(real(h),real(k),real(l))
+                        phys = self%comp_addr_phys([h,k,l])
+                        if( dohp )then
+                            if(freq .lt. hplim_freq) then
+                                self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            else if(freq .le. hplim_freq + wwidth) then
+                                w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
+                                self%cmat(phys(1),phys(2),phys(3)) = &
+                                    &self%cmat(phys(1),phys(2),phys(3)) * w
+                            endif
                         endif
-                    endif
-                    if( dolp )then
-                        if(freq .gt. lplim_freq)then
-                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        else if(freq .ge. lplim_freq - wwidth)then
-                            w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
-                            self%cmat(phys(1),phys(2),phys(3)) = &
-                                &self%cmat(phys(1),phys(2),phys(3)) * w
+                        if( dolp )then
+                            if(freq .gt. lplim_freq)then
+                                self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            else if(freq .ge. lplim_freq - wwidth)then
+                                w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
+                                self%cmat(phys(1),phys(2),phys(3)) = &
+                                    &self%cmat(phys(1),phys(2),phys(3)) * w
+                            endif
                         endif
-                    endif
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        freq = hyp(real(h),real(k),real(l))
+                        phys = self%comp_addr_phys([h,k,l])
+                        if( dohp )then
+                            if(freq .lt. hplim_freq) then
+                                self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            else if(freq .le. hplim_freq + wwidth) then
+                                w = (1.-cos(((freq-hplim_freq)/wwidth)*pi))/2.
+                                self%cmat(phys(1),phys(2),phys(3)) = &
+                                    &self%cmat(phys(1),phys(2),phys(3)) * w
+                            endif
+                        endif
+                        if( dolp )then
+                            if(freq .gt. lplim_freq)then
+                                self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            else if(freq .ge. lplim_freq - wwidth)then
+                                w = (cos(((freq-(lplim_freq-wwidth))/wwidth)*pi)+1.)/2.
+                                self%cmat(phys(1),phys(2),phys(3)) = &
+                                    &self%cmat(phys(1),phys(2),phys(3)) * w
+                            endif
+                        endif
+                    end do
+                end do
+            end do
+        endif
         if( didft ) call self%ifft()
     end subroutine bp
 
@@ -6670,19 +6701,13 @@ contains
     subroutine norm_bin( self )
         class(image), intent(inout) :: self
         real                        :: smin, smax
-        logical                     :: didft
-        didft = .false.
-        if( self%ft )then
-            call self%ifft()
-            didft = .true.
-        endif
+        if( self%ft ) THROW_HARD('image assumed to be real not FTed; norm_bin')
         ! find minmax
         smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         ! create [0,1]-normalized image
         self%rmat = (self%rmat - smin)  / (smax-smin)
         self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
-        if( didft ) call self%fft()
     end subroutine norm_bin
 
     !> \brief roavg  is for creating a rotation average of self

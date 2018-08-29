@@ -59,7 +59,12 @@ contains
             do isample=1,nrefs
                 iref = s3D%srch_order(self%s%ithr,isample)  ! set the stochastic reference index
                 call per_ref_srch                           ! actual search
-                if( self%s%nbetter >= self%s%npeaks ) exit  ! exit condition
+                ! exit condition
+                if( self%s%npeaks == 1 )then
+                    if( self%s%nbetter > 0 ) exit
+                else
+                    if( self%s%nbetter >= MINNPEAKS ) exit
+                endif
             end do
             call sort_corrs(self%s)  ! sort in correlation projection direction space
             call self%s%inpl_srch    ! search shifts
@@ -97,8 +102,8 @@ contains
                 else
                     ! identify the NINPLPEAKS2SORT top scoring in-planes
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                    loc                = maxnloc(inpl_corrs, NINPLPEAKS2SORT)
-                    best_inpl_corr     = inpl_corrs(loc(1))
+                    loc            = maxnloc(inpl_corrs, NINPLPEAKS2SORT)
+                    best_inpl_corr = inpl_corrs(loc(1))
                     call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
                 end if
                 ! update nbetter to keep track of how many improving solutions we have identified
