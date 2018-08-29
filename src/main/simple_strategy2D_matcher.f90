@@ -60,7 +60,6 @@ contains
         real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor
         real                  :: chunk_id(params_glob%fromp:params_glob%top)
         integer               :: iptcl, i, fnr, cnt, updatecnt
-        integer               :: nchunks, nptcls_per_chunk
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then

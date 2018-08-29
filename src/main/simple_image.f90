@@ -6338,7 +6338,7 @@ contains
                         jr = self%ldim(2)+1-j
                         do k=1,self%ldim(3)/2
                             kr = self%ldim(3)+1-k
-                            e = hardedge(ir,jr,kr,mskrad)
+                            e = hardedge(cis(i),cjs(j),cks(k),mskrad)
                             if( doinner )e = e * hardedge_inner(cis(i),cjs(j),cks(k),inner)
                             self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                             self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
@@ -6357,7 +6357,7 @@ contains
                     ir = self%ldim(1)+1-i
                     do j=1,self%ldim(2)/2
                         jr = self%ldim(2)+1-j
-                        e = hardedge(ir,jr,mskrad)
+                        e = hardedge(cis(i),cjs(j),mskrad)
                         if( doinner )e = e * hardedge_inner(ir,jr,inner)
                         self%rmat(i,j,1)   = e * self%rmat(i,j,1)
                         self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
