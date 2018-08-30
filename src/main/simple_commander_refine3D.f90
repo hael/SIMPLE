@@ -85,7 +85,7 @@ contains
                 type(ctfparams)      :: ctfvars
                 type(image)          :: mskimg
                 integer, allocatable :: sample(:)
-                integer              :: i, nsamp, ind
+                integer              :: i, nsamp, ind, eo
                 ! init volumes
                 call preprecvols()
                 if( trim(params%refine).eq.'tseries' )then
@@ -93,6 +93,12 @@ contains
                 else
                     call build%spproj_field%rnd_oris
                     call build%spproj_field%zero_shifts
+                endif
+                ! take care of E/O partitioning
+                if( params%l_eo )then
+                    if( build%spproj_field%get_nevenodd() == 0 )then
+                        call build%spproj_field%partition_eo
+                    endif
                 endif
                 params%vols(1) = 'startvol'//params%ext
                 nsamp = params%top - params%fromp + 1
@@ -114,10 +120,19 @@ contains
                     ctfvars     = build%spproj%get_ctfparams(params%oritype, ind)
                     call read_img(ind)
                     call build%img%norm_subtr_backgr_pad_fft(mskimg, build%img_pad)
-                    call build%recvols(1)%insert_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, pwght=1.0)
+                    if( params%l_eo )then
+                        eo = nint(orientation%get('eo'))
+                        call build%eorecvols(1)%grid_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, eo, pwght=1.)
+                    else
+                        call build%recvols(1)%insert_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, pwght=1.)
+                    endif
                 end do
                 deallocate(sample)
-                call norm_struct_facts()
+                if( params%l_eo )then
+                    call eonorm_struct_facts(cline)
+                else
+                    call norm_struct_facts()
+                endif
                 call killrecvols()
                 if( params%part .ne. 1 )then
                     ! so random oris only written once in distributed mode

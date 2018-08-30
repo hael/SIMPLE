@@ -499,8 +499,12 @@ contains
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
-        call cline_volassemble%set( 'eo',     'no')
-        call cline_volassemble%set( 'prg',    'volassemble')
+        if( params%l_eo )then
+            call cline_volassemble%set( 'prg', 'volassemble_eo')
+        else
+            call cline_volassemble%set( 'eo', 'no')
+            call cline_volassemble%set( 'prg', 'volassemble')
+        endif
         call cline_volassemble%delete('nthr') ! to ensure use of all resources in assembly
         call qenv%gen_scripts_and_schedule_jobs( job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE_FINISHED')
@@ -633,9 +637,17 @@ contains
         have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
         do_abinitio = .not. have_oris .and. .not. vol_defined
         if( do_abinitio )then
-            call xrefine3D_init_distr%execute( cline_refine3D_init)
-            call cline%set('vol1', trim(STARTVOL_FBODY)//'01'//params%ext)
-        else if( have_oris .and. .not. vol_defined )then
+            call build%spproj_field%rnd_oris
+            call build%spproj_field%zero_shifts
+            ! take care of E/O partitioning
+            if( params%l_eo )then
+                if( build%spproj_field%get_nevenodd() == 0 )then
+                    call build%spproj_field%partition_eo
+                endif
+            endif
+            have_oris = .true.
+        endif
+        if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
             do state = 1,params%nstates

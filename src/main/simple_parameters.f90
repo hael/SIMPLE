@@ -1105,7 +1105,7 @@ contains
             self%l_innermsk = .false.
         endif
         ! set eo flag
-        self%l_eo = self%eo .eq. 'yes'
+        self%l_eo = self%eo .ne. 'no'
         ! set nr of rotations
         self%nrots = round2even(twopi*real(self%ring2))
         ! boxmatch

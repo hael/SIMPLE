@@ -2419,7 +2419,7 @@ contains
         &'Random initialisation of 3D refinement',&                                                            ! descr_short
         &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
         &'simple_distr_exec',&                                                                                 ! executable
-        &0, 1, 0, 3, 1, 2, 2, .true.)                                                                          ! # entries in each group
+        &0, 1, 0, 3, 2, 2, 2, .true.)                                                                          ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2434,6 +2434,7 @@ contains
         &'# random samples', .false., 0.)
         ! filter controls
         call refine3D_init%set_input('filt_ctrls', 1, shellw)
+        call refine3D_init%set_input('filt_ctrls', 2, eo)
         ! mask controls
         call refine3D_init%set_input('mask_ctrls', 1, msk)
         call refine3D_init%set_input('mask_ctrls', 2, inner)
