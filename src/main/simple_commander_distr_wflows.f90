@@ -518,13 +518,11 @@ contains
         class(refine3D_distr_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
-        type(refine3D_init_distr_commander) :: xrefine3D_init_distr
         type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
         type(check_3Dconv_commander)        :: xcheck_3Dconv
         type(postprocess_commander)         :: xpostprocess
         ! command lines
         type(cmdline)    :: cline_reconstruct3D_distr
-        type(cmdline)    :: cline_refine3D_init
         type(cmdline)    :: cline_check_3Dconv
         type(cmdline)    :: cline_volassemble
         type(cmdline)    :: cline_postprocess
@@ -567,13 +565,11 @@ contains
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
-        cline_refine3D_init       = cline
         cline_check_3Dconv        = cline
         cline_volassemble         = cline
         cline_postprocess         = cline
         ! initialise static command line parameters and static job description parameter
         call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
-        call cline_refine3D_init%set(       'prg', 'refine3D_init' ) ! required for distributed call
         call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('mirr',    'no')
