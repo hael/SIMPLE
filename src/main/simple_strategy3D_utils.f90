@@ -174,9 +174,7 @@ contains
             arg4softmax = arg4softmax - maxval(arg4softmax)
             ! calculate softmax weights
             ws = exp(arg4softmax)
-            if( .not. pftcc_glob%is_euclid(s%iptcl) )then
-                where( corrs <= TINY ) ws = 0.
-            end if
+            if( .not. pftcc_glob%is_euclid(s%iptcl) ) where( corrs <= TINY ) ws = 0.
             ! normalise
             wsum = sum(ws)
             ws = ws / wsum

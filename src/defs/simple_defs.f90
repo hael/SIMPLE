@@ -125,6 +125,7 @@ integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lpli
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
 integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
+integer, parameter :: NPROJPEAKS           = 40        !< minimum # projection directions evaluated in more random stochastic search
 integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
 integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
 integer, parameter :: MINNPEAKS            = 6         !< minimum # of peaks in soft assignment
