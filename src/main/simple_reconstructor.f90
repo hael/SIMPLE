@@ -1,8 +1,6 @@
 ! 3D reconstruction from projections using convolution interpolation (gridding)
 module simple_reconstructor
 !$ use omp_lib
-!$ use omp_lib_kinds
-use, intrinsic :: iso_c_binding
 include 'simple_lib.f08'
 use simple_kbinterpol, only: kbinterpol
 use simple_image,      only: image

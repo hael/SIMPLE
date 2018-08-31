@@ -396,26 +396,37 @@ contains
     !>  \brief works out whether a character string is a comment line
     logical function strIsComment( line )
         character(len=*), intent(in)  ::  line
-        integer ::  pos1
+        integer ::  pos1,linelen
+        strIsComment = .false.
+        if(strIsEmpty(line)) return
+
         pos1 = firstNonBlank(line)
         ! if we didn't find a non-blank character, then the line must be blank!
-        if( pos1 .eq. 0 )then
-            strIsComment = .false.
-        else if( scan(line(pos1:),'#!c;', back=.false.) .eq. 1 )then
-            ! the first non-blank character is a comment character. if that's a c, we need to check that the following character is a space.
+        if( pos1 .eq. 0 ) return
+        linelen=len_trim(line)
+        if( scan(line(pos1:),'#!c;', back=.false.) .eq. 1 )then
+            ! the first non-blank character is a comment character. 
+            strIsComment = .true.
+            ! on one condidtion:
+            ! if that's a c, we need to check that the following character is a space.
             if( stringsAreEqual(line(pos1:pos1),'c') )then
-                if( stringsAreEqual(line(pos1+1:pos1+1),' ') )then
-                    strIsComment = .true.
-                else
-                    strIsComment = .false.
+                if (pos1+1 .le. linelen)then
+                    if( .not.stringsAreEqual(line(pos1+1:pos1+1),' ') )then
+                        strIsComment = .false.
+                    endif
                 endif
-            else
-                strIsComment = .true.
             endif
-        else
-            strIsComment = .false.
         endif
     end function strIsComment
+
+    pure logical function strIsEmpty(line)
+        character(len=*),   intent(in)  ::  line
+        if( len_trim(line) == 0 )then
+             strIsEmpty = .true.
+         else
+             strIsEmpty = .false.
+         end if
+    end function strIsEmpty
 
     !>  \brief works out whether a character string is blank
     pure logical function strIsBlank(line)

@@ -80,7 +80,7 @@ public :: args, test_args
 private
 #include \"simple_local_flags.inc\"
 
-integer, parameter :: NARGMAX=500
+integer, parameter :: NARGMAX=500, MINVARS=100
 
 type args
     private
@@ -156,7 +156,7 @@ subroutine test_args()
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
     status = simple_getenv(\"SIMPLE_PATH\",spath)
-    if (status /= 0) THROW_HARD(\"test_args SIMPLE_PATH env variable not found\")
+    if (status /= 0) stop 'test_args SIMPLE_PATH env variable not found'
     spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH ', trim(adjustl(spath))
     write(*,'(a)') '**info(simple_args_unit_test): getting current working directory'
@@ -166,7 +166,7 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test): getting directory that contains varlist'
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. &
     (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
-    THROW_HARD(\"test_args SIMPLE_BUILD_PATH  not found\")
+    stop 'test_args SIMPLE_BUILD_PATH  not found'
     else
         bpath= filepath( trim(adjustl(SIMPLE_BUILD_PATH)),'lib/simple')
     endif
@@ -195,8 +195,13 @@ subroutine test_args()
         endif
     endif
     n = nlines(vfilename)
-    call fopen(funit, status='old', action='read', file=trim(adjustl(vfilename)), iostat=io_stat)
-    if(io_stat /= 0) call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
+    if(n<MINVARS) stop 'test_args SIMPLE_BUILD_PATH  not found'
+
+    call fopen(funit, file=trim(adjustl(vfilename)), status='old', action='read', iostat=io_stat)
+    if(io_stat /= 0) then
+     call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
+stop 'simple_args::test  Unable to open varlist '
+end if
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then
