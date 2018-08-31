@@ -156,7 +156,7 @@ subroutine test_args()
     as = args()
     write(*,'(a)') '**info(simple_args_unit_test): getting SIMPLE_PATH env variable'
     status = simple_getenv(\"SIMPLE_PATH\",spath)
-    if (status /= 0) stop 'test_args SIMPLE_PATH env variable not found'
+    if (status /= 0) THROW_HARD( 'test_args SIMPLE_PATH env variable not found')
     spath = trim(adjustl(spath))
     print *, 'get_environment_variable found SIMPLE_PATH ', trim(adjustl(spath))
     write(*,'(a)') '**info(simple_args_unit_test): getting current working directory'
@@ -166,7 +166,7 @@ subroutine test_args()
     write(*,'(a)') '**info(simple_args_unit_test): getting directory that contains varlist'
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. &
     (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
-    stop 'test_args SIMPLE_BUILD_PATH  not found'
+    THROW_HARD( 'test_args SIMPLE_BUILD_PATH  not found')
     else
         bpath= filepath( trim(adjustl(SIMPLE_BUILD_PATH)),'lib/simple')
     endif
@@ -195,12 +195,12 @@ subroutine test_args()
         endif
     endif
     n = nlines(vfilename)
-    if(n<MINVARS) stop 'test_args SIMPLE_BUILD_PATH  not found'
+    if(n<MINVARS) THROW_HARD( 'test_args SIMPLE_BUILD_PATH  not found')
 
     call fopen(funit, file=trim(adjustl(vfilename)), status='old', action='read', iostat=io_stat)
     if(io_stat /= 0) then
      call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
-stop 'simple_args::test  Unable to open varlist '
+THROW_HARD( 'simple_args::test  Unable to open varlist ')
 end if
     do i=1,n
         read(funit,*) arg
@@ -208,7 +208,7 @@ end if
             ! alles gut
         else
             write(*,'(a)') 'this argument should be present: ', arg
-            stop 'part 1 of the unit test failed'
+            THROW_HARD( 'part 1 of the unit test failed')
         endif
     end do
     call fclose(funit, errmsg=\"simple_args::test close\")
@@ -218,7 +218,7 @@ end if
     write(*,'(a)') '**info(simple_args_unit_test, part 2): testing for args that should NOT be present'
     if( as%is_present(errarg1) .or. as%is_present(errarg2) .or. as%is_present(errarg3) )then
         write(*,'(a)') 'the tested argumnets should NOT be present'
-        stop 'part 2 of the unit test failed'
+        THROW_HARD( 'part 2 of the unit test failed')
     endif
     write(*,'(a)') 'SIMPLE_ARGS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 end subroutine
