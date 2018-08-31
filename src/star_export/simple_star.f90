@@ -8,9 +8,8 @@ use simple_parameters
 use simple_binoris_io
 use simple_oris, only: oris
 implicit none
-
-public :: star_project
 private
+public :: star_project
 #include "simple_local_flags.inc"
 
 
@@ -25,7 +24,7 @@ contains
     procedure :: check_temp_files
     procedure :: read
     procedure :: print_info
-
+    procedure :: print_valid_import_startypes
     !! Explicit import/export methods
     procedure :: export_micrographs
     procedure :: import_micrographs
@@ -205,7 +204,6 @@ contains
             'MicrographNameNoDW',&
             'MicrographName    '/)
         call self%doc%write(filename, sp, labels)
-
     end subroutine export_motion_corrected_micrographs
     subroutine import_motion_corrected_micrographs (self, sp, params, cline, filename)
         class(star_project), intent(inout) :: self
@@ -251,7 +249,6 @@ contains
             'CtfFigureOfMerit   ',&
             'CtfMaxResolution   ' /)
         call self%doc%write(filename, sp, labels)
-
     end subroutine export_ctf_estimation
     subroutine import_ctf_estimation (self, spproj, params, cline, filename)
         use simple_sp_project, only: oritype2segment
@@ -983,7 +980,7 @@ contains
 
     end subroutine import_all
 
-
+    !> Import class averages
     subroutine import_cavgs (self, spproj, params, cline, filename)
         class(star_project), intent(inout) :: self
         class(sp_project),   intent(inout) :: spproj
@@ -1023,7 +1020,7 @@ contains
         ! update computer environment
         call spproj%update_compenv( cline )
 
-        !! write spproj in commander_star
+        !! write spproj in commander_star; import_starproject
     end subroutine import_cavgs
 
     subroutine import_particles (self, spproj, params, cline, filename)
@@ -1064,6 +1061,7 @@ contains
         inputted_deftab       = cline%defined('deftab')
         inputted_plaintexttab = cline%defined('plaintexttab')
         n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
+
         ! exceptions
         if( n_ori_inputs > 1 )then
             THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_import_particles')
@@ -1081,6 +1079,8 @@ contains
         else
             THROW_HARD('either stk or stktab needed on command line; exec_import_particles')
         endif
+
+
         ! oris input
         if( inputted_oritab )then
             ndatlines = binread_nlines(params%oritab)
@@ -1304,6 +1304,17 @@ contains
             !        end select
         end if
     end function exporttype2star
+
+
+    subroutine print_valid_import_startypes(self)
+        class(star_project) :: self
+        write (*,*) " import_starproject valid startypes:                                      "
+        write (*,*) " Accepted values are m|movies|micrographs ==> import micrographs          "
+        write (*,*) "                     ctf|ctf_estimation   ==> import mic + ctf params     "
+        write (*,*) "                     p|ptcl|particles|stack   ==> import particles        "
+        write (*,*) "                     cavgs|class2D|class3D    ==> import class averages   "
+    end subroutine print_valid_import_startypes
+
 
 
     subroutine kill(self,keeptabs)

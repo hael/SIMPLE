@@ -2,16 +2,16 @@
 module simple_sort
 implicit none
 private
-
 !! Quicksort
 public :: qsortf
-private :: partition
 !! Quicksort microbench
 public :: quicksort_m_sp, quicksort_m_dp, quicksort_m_int
 !! Bitonic sort
 public :: bitSort, bitonic_sort
 !! Radix sort
 public :: radixsort
+!! MergeSort
+public :: MergeSort, MergeSort_r4
 logical, parameter :: noassert = .true.
 contains
 

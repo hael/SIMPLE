@@ -89,7 +89,8 @@ contains
         call chdict%push('errify',        'introduce error(yes|no){no}')
         call chdict%push('even',          'even orientation distribution(yes|no){no}')
         call chdict%push('exp_doc',       'specifying exp_time and dose_rate per tomogram')
-        call chdict%push('startype',      'specifying startype for STAR formated projects (movies|micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post|all)')
+        call chdict%push('startype',      'specifying startype for STAR formated projects for import'//&
+            '(m[icrographs]|ctf[estimation]|c[avg|lass2d]|p[tcls|articles])')
         call chdict%push('exp_time',      'exposure time(in s)')
         call chdict%push('extr_init',     'initial extremal ratio(0-1){0.5}')
         call chdict%push('ext',           'file extension{.mrc}')

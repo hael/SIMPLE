@@ -5,9 +5,8 @@ module simple_ft_expanded
 include 'simple_lib.f08'
 use simple_image,  only: image
 implicit none
-
-public :: ft_expanded, ft_exp_reset_tmp_pointers
 private
+public :: ft_expanded, ft_exp_reset_tmp_pointers
 #include "simple_local_flags.inc"
 
 complex(dp), parameter     :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)

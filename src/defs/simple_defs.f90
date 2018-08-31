@@ -1,10 +1,8 @@
 module simple_defs
-use, intrinsic :: iso_c_binding
 use, intrinsic :: iso_fortran_env
+use, intrinsic :: iso_c_binding
 use simple_defs_fname
 implicit none
-integer,  parameter :: ascii        = selected_char_kind ("ascii")
-integer,  parameter :: ucs4         = selected_char_kind ('ISO_10646')
 integer,  parameter :: MAXS         = 99   !< maximum number of states
 integer,  parameter :: short        = selected_int_kind(4)
 integer,  parameter :: long         = selected_int_kind(9)
@@ -37,19 +35,18 @@ real(dp), parameter :: PISQR        = DPI*DPI
 ! directory-based execution model
 character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
 
-! other global variables
-integer(kind=c_int)           :: nthr_glob         !< number of threads global variable
+ ! other global variables
+integer                       :: nthr_glob         !< number of threads global variable
 logical                       :: l_distr_exec_glob !< global distributed execution flag
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
 
-! plan for the CTF
-type :: ctfplan
-    character(len=STDLEN) :: mode=''                !< astig/noastig
-    character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
-    logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
+! ! plan for the CTF
+type ctfplan
+   character(len=STDLEN) :: mode=''                !< astig/noastig
+   character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
+   logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfplan
-
 ! type for arrays of allocatable strings
 type str4arr
     character(len=:), allocatable :: str
@@ -66,7 +63,7 @@ enum, bind(c)
 end enum
 
 ! type for CTF parameters
-type :: ctfparams
+type ctfparams
     integer :: ctfflag = 0
     real    :: smpd    = 0.
     real    :: kv      = 0.
@@ -171,8 +168,10 @@ logical :: global_warn    = .false. !< warning flag
 integer :: alloc_stat
 
 !! Control exit status
-!! STOP is standard, CALL EXIT is an extension. STOP lets you display a text message where EXIT doesn't. Both let you set an exit status value. Otherwise they are pretty much the same.
+!! STOP is standard, CALL EXIT is an extension. STOP lets you display a text message where EXIT
+!! doesn't. Both let you set an exit status value. Otherwise they are pretty much the same.
 !! use call exit(EXIT_FAILURE)
+integer, parameter :: EXIT_SUCCESS = 0
 integer, parameter :: EXIT_FAILURE = 1
 integer, parameter :: EXIT_FAILURE2 = 2
 integer, parameter :: EXIT_FAILURE3 = 3
@@ -183,5 +182,6 @@ integer, parameter :: EXIT_FAILURE7 = 7
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
+
 
 end module simple_defs

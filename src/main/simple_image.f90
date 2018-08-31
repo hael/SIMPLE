@@ -10,9 +10,8 @@ use simple_winfuns, only: winfuns
 use simple_fftw3
 use gnufor2
 implicit none
-
-public :: image, test_image
 private
+public :: image, test_image
 #include "simple_local_flags.inc"
 
 type :: image
@@ -373,7 +372,7 @@ contains
         if( self%existence )then
             if( any(self%ldim /= ldim) )then
                 do_allocate = .true.
-                call self%kill
+                call self%kill()
             else
                 do_allocate = .false.
                 call fftwf_destroy_plan(self%plan_fwd)
@@ -442,7 +441,7 @@ contains
     subroutine construct_thread_safe_tmp_imgs( self, nthr )
         class(image), intent(in) :: self
         integer,      intent(in) :: nthr
-        integer :: i, ldim(3), sz
+        integer :: i, sz, ldim(3)
         logical :: do_allocate
         if( allocated(thread_safe_tmp_imgs) )then
             ldim = thread_safe_tmp_imgs(1)%get_ldim()
@@ -462,7 +461,7 @@ contains
         if( do_allocate )then
             allocate( thread_safe_tmp_imgs(nthr) )
             do i=1,nthr
-                call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, wthreads=.false.)
+                call thread_safe_tmp_imgs(i)%new(self%ldim, self%smpd, .false.)
             end do
         endif
     end subroutine construct_thread_safe_tmp_imgs
@@ -503,7 +502,7 @@ contains
     subroutine copy( self, self_in )
         class(image), intent(inout) :: self
         class(image), intent(in)    :: self_in
-        call self%new(self_in%ldim, self_in%smpd, wthreads=self%wthreads)
+        call self%new(self_in%ldim, self_in%smpd, self%wthreads)
         self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
             &self_in%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
         self%ft = self_in%ft
@@ -602,8 +601,8 @@ contains
         end do
         call pspec_all%add(pspec_lower)
         call pspec_all%add(pspec_upper)
-        call tmp%kill
-        call tmp2%kill
+        call tmp%kill()
+        call tmp2%kill()
         if( didft ) call self%fft()
     end subroutine mic2eospecs
 
@@ -720,12 +719,15 @@ contains
         if(present(offset)) then  !no sovrapposition
             if(offset == int(box/2)) THROW_HARD("invalid offset choice; add_window") ! box is supposet to be even
             if (offset > int(box/2)) then
-                self%rmat(fromc(1)+box-offset-1:offset,fromc(2)+box-offset-1:offset,1) = imgwin%rmat(box-offset:offset,box-offset:offset,1)
+                self%rmat(fromc(1)+box-offset-1:offset,fromc(2)+box-offset-1:offset,1) = &
+                    &imgwin%rmat(box-offset:offset,box-offset:offset,1)
             else
-                self%rmat(fromc(1)+offset-1:box-offset,fromc(2)+offset-1:box-offset,1) = imgwin%rmat(offset:box-offset,offset:box-offset,1)
+                self%rmat(fromc(1)+offset-1:box-offset,fromc(2)+offset-1:box-offset,1) = &
+                    &imgwin%rmat(offset:box-offset,offset:box-offset,1)
             endif
         else
-            self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) = self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) + imgwin%rmat(1:box,1:box,1) !add everything
+            self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) = self%rmat(fromc(1):toc(1),fromc(2):toc(2),1) &
+                &+ imgwin%rmat(1:box,1:box,1) !add everything
         endif
     end subroutine add_window
 
@@ -3064,7 +3066,7 @@ contains
         call img_pad%set_smpd(self2%get_smpd())
         call self2%pad(img_pad, backgr=background)
         img_out%rmat(ldim(1)+border+1:ldim_col(1),:ldim_col(2),1) = img_pad%rmat(:ldim(1),:ldim(2),1)
-        call img_pad%kill
+        call img_pad%kill()
     end subroutine collage
 
     ! This subroutine creates the initial label map of a binary image in order
@@ -3096,7 +3098,7 @@ contains
         class(image), intent(out)   :: self_out
         integer :: i, j, cnt
         real    :: tmp
-        if(self_out%existence) call self_out%kill    !Reset if present
+        if(self_out%existence) call self_out%kill()  !Reset if present
         call self_out%new(self_in%ldim,self_in%smpd)
         if(self_in%ldim(3) /= 1) THROW_HARD('enumerate_connected_comps. Only for 2D images!')
         cnt = 0   !it is going to be the new label of the connected component
@@ -3122,7 +3124,7 @@ contains
         real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:),neigh_8(:)
         integer           :: i, j, n_it, n_maxit
         logical           :: finished_job
-        if(img_out%existence) call img_out%kill
+        if(img_out%existence) call img_out%kill()
         finished_job = .false.
         call img_cc%new (img_in%ldim,img_in%smpd)
         allocate(mat4compare(img_in%ldim(1),img_in%ldim(2),1), source = 0.)
@@ -6039,7 +6041,7 @@ contains
         winsz = nint((self%ldim(1) * self%smpd) / lp)
         call tmp%real_space_filter(winsz, 'average')
         self%rmat = self%rmat - tmp%rmat
-        call tmp%kill
+        call tmp%kill()
     end subroutine subtr_backgr
 
     subroutine subtr_avg_and_square( self )

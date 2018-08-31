@@ -270,7 +270,7 @@ interface
     end function touch
 
     subroutine free_file_list(p, n) bind(c, name='free_file_list')
-        use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_char
+        use, intrinsic :: iso_c_binding
         implicit none
         type(c_ptr),    intent(in), value :: p
         integer(c_int), intent(in), value :: n

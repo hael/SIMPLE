@@ -11,9 +11,8 @@ module simple_ctf
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 implicit none
-
-public :: ctf
 private
+public :: ctf
 #include "simple_local_flags.inc"
 
 type ctf

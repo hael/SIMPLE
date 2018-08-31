@@ -77,18 +77,18 @@ type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
+type(simple_program), target :: exportstar_project
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
-type(simple_program), target :: info_image
-type(simple_program), target :: info_stktab
-type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
 type(simple_program), target :: import_particles
 type(simple_program), target :: import_starproject
-type(simple_program), target :: exportstar_project
+type(simple_program), target :: info_image
+type(simple_program), target :: info_stktab
+type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -109,10 +109,10 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
-type(simple_program), target :: reproject
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
+type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
@@ -138,25 +138,24 @@ type(simple_input_param) :: box
 type(simple_input_param) :: clip
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
+type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
+type(simple_input_param) :: dfmax
+type(simple_input_param) :: dfmin
+type(simple_input_param) :: dfstep
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eo
+type(simple_input_param) :: focusmsk
+type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
 type(simple_input_param) :: fromf
+type(simple_input_param) :: hp
+type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
-type(simple_input_param) :: deftab
-type(simple_input_param) :: dfmin
-type(simple_input_param) :: dfmax
-type(simple_input_param) :: dfstep
-type(simple_input_param) :: startype
-type(simple_input_param) :: frac
-type(simple_input_param) :: focusmsk
-type(simple_input_param) :: hp
 type(simple_input_param) :: lp
 type(simple_input_param) :: lplim_crit
-type(simple_input_param) :: inner
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mirr
 type(simple_input_param) :: mkdir_
@@ -164,15 +163,15 @@ type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
-type(simple_input_param) :: neigh
 type(simple_input_param) :: neg
+type(simple_input_param) :: neigh
+type(simple_input_param) :: nparts
+type(simple_input_param) :: nptcls
 type(simple_input_param) :: nrestarts
 type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
-type(simple_input_param) :: nparts
-type(simple_input_param) :: nptcls
-type(simple_input_param) :: numlen
 type(simple_input_param) :: nthr
+type(simple_input_param) :: numlen
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
@@ -182,8 +181,8 @@ type(simple_input_param) :: outfile
 type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
-type(simple_input_param) :: phaseplate
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projname
 type(simple_input_param) :: pspecsz
@@ -194,8 +193,9 @@ type(simple_input_param) :: remap_cls
 type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
 type(simple_input_param) :: smpd
-type(simple_input_param) :: startit
 type(simple_input_param) :: starfile
+type(simple_input_param) :: startit
+type(simple_input_param) :: startype
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
 type(simple_input_param) :: time_per_image

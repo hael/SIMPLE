@@ -76,8 +76,8 @@ contains
         allocate(opt_symaxes(nthr_glob))
         do ithr=1,nthr_glob
             ! optimiser spec
-            call opt_symaxes(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
-            &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=30)
+            call opt_symaxes(ithr)%ospec%specify("simplex",ndim=3,limits=lims,nrestarts=nrestarts,maxits=30)
+                !&ftol=1e-4,gtol=1e-4,limits=lims,nrestarts=nrestarts,maxits=30)
             ! point to costfun
             call opt_symaxes(ithr)%ospec%set_costfun(volpft_symsrch_costfun)
             ! generate optimizer object with the factory

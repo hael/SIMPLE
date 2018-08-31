@@ -120,7 +120,7 @@ write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_fr
 write(funit,'(a)') "if [ $? -ne 0 ];then"
 write(funit,'(a)') "echo  'EXPECTED:   prg=importstar should fail without startype and smpd';else"
 write(funit,'(a)') "echo  'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1" 
+write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1"
 write(funit,'(a)') "if [ $? -ne 0 ];then"
 write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without startype '; else"
 write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
@@ -151,11 +151,12 @@ io_stat= simple_chmod('test_import_starproject','+x')
 
 
 ! print *, "Testing import_starproject with actual data"
-! call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="extract",io_stat=io_stat)
+! call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="p",io_stat=io_stat)
 ! call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
-! call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="select",io_stat=io_stat)
-! call runimport(trim(stars_from_matt)//"/Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="refine3D",io_stat=io_stat)
+! call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="m",io_stat=io_stat)
+! call runimport(filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="ptcls",io_stat=io_stat)
 
+!call runimport(filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs",io_stat=io_stat)
 
 
 ! call test_stardoc
@@ -312,8 +313,6 @@ real, intent(in) :: smpd
             THROW_HARD('file size too small to contain a header; openstar')
         endif
     end subroutine openstar
-
-
 
 
     subroutine readline(funit, line, ier)

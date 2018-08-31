@@ -3,9 +3,8 @@ module simple_cmdline
 include 'simple_lib.f08'
 use simple_cmd_dict ! use all in there
 implicit none
-
-public :: cmdarg, cmdline, cmdline_err
 private
+public :: cmdarg, cmdline, cmdline_err
 #include "simple_local_flags.inc"
 
 integer, parameter :: MAX_CMDARGS = 60

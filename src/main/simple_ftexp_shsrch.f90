@@ -7,9 +7,8 @@ use simple_optimizer,   only: optimizer
 use simple_ft_expanded, only: ft_expanded, ft_exp_reset_tmp_pointers
 use simple_image,       only: image
 implicit none
-
-public :: ftexp_shsrch_init, ftexp_shsrch_set_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
 private
+public :: ftexp_shsrch_init, ftexp_shsrch_set_ptrs, ftexp_shsrch_minimize, test_ftexp_shsrch
 #include "simple_local_flags.inc"
 
 type(opt_factory)             :: ofac              !< optimizer factory

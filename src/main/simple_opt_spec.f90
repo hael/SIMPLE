@@ -51,7 +51,7 @@ type :: opt_spec
     real, allocatable         :: x_4_tmp(:)                           !< temporary storage for single precision function value
     logical                   :: debug     = .false.
     logical                   :: warn      = .false.
-    logical                   :: verbose   = .false.
+ !   logical                   :: verbose   = .false.
     logical                   :: converged = .false.                  !< converged status
     logical                   :: exists    = .false.                  !< to indicate existence
   contains
@@ -149,8 +149,8 @@ contains
 
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
-    nrestarts, limits, limits_init, cyclic, verbose_arg, debug_arg, npop,&
-    cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step )
+    &nrestarts, limits, limits_init, cyclic, verbose_arg, debug_arg, npop,&
+    &cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step )
         class(opt_spec),            intent(inout) :: self                !< instance
         character(len=*),           intent(in)    :: str_opt             !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim                !< problem dimensionality
@@ -240,7 +240,7 @@ contains
             if(alloc_stat.ne.0)call allocchk('In: specify; simple_opt_spec, stepsz',alloc_stat)
             self%stepsz = stepsz
         endif
-        if(present(verbose_arg)) self%verbose = verbose_arg
+ !       if(present(verbose_arg)) self%verbose = verbose_arg
         if(present(npop))        self%npop    = npop
         if(present(cfac))        self%cfac    = cfac
         if(present(debug_arg))   self%debug   = debug_arg
@@ -416,8 +416,8 @@ contains
         real(dp),        intent(inout) :: x(:)
         real(dp),        intent(out)   :: f, gradient(:)
         real                           :: f_4
-        if   ( ((.not. associated(self%costfun  )) .or. (.not. associated(self%gcostfun))) .and.  &
-            &  ((.not. associated(self%costfun_8)) .or. (.not. associated(self%gcostfun_8)))         ) then
+        if(((.not. associated(self%costfun  )) .or. (.not. associated(self%gcostfun))) .and.  &
+          &((.not. associated(self%costfun_8)) .or. (.not. associated(self%gcostfun_8))) ) then
             write (*,*) 'error : simple_opt_spec: no costfun or gcostfun associated'
             return
         end if
