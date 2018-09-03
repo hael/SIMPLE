@@ -7,7 +7,9 @@
 ! Total time was    8.74800014      seconds
 program simple_test_laplace_solver
 use simple_defs
+#ifdef USE_OPENACC
 use openacc
+
 implicit none
 integer,  parameter :: width=1000, height=1000
 real(sp), parameter :: temp_tol=0.01
@@ -71,5 +73,5 @@ contains
       enddo
       print *
   end subroutine track_progress
-
+#endif
 end program simple_test_laplace_solver

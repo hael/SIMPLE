@@ -392,8 +392,7 @@ contains
     end function interp_fcomp
 
     function interp_fcomp_hyperb( self, loc )result( comp )
-        use ieee_arithmetic, only: ieee_is_nan
-        class(projector), intent(inout) :: self
+      class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
         complex :: comp
         integer, parameter :: maxits     = 30
@@ -438,8 +437,7 @@ contains
     end function interp_fcomp_hyperb
 
     function interp_fcomp_weiszfeld( self, loc )result( comp )
-        use ieee_arithmetic, only: ieee_is_nan
-        class(projector), intent(inout) :: self
+      class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
         complex :: comp
         integer, parameter :: maxits     = 30
@@ -506,10 +504,10 @@ contains
             cnt = cnt + 1
             it_condition = (eps > relTol).and.(cnt .lt. maxits)
         end do
-        if ((cnt .gt. maxits).or.(ieee_is_nan(real(zi))).or.(ieee_is_nan(aimag(zi)))) then
+        if ((cnt .gt. maxits).or.(is_nan(real(zi))).or.(is_nan(aimag(zi)))) then
             ! if convergence has not been achieved, try double precision algorithm
             comp = self%interp_fcomp_weiszfeld_dp( loc )
-            if ((ieee_is_nan(real(comp))).or.(ieee_is_nan(aimag(comp)))) then
+            if ((is_nan(real(comp))).or.(is_nan(aimag(comp)))) then
                 ! if still not converged (due to NaN), then use KB kernel
                 comp = self%interp_fcomp( loc )
             end if
@@ -519,8 +517,7 @@ contains
     end function interp_fcomp_weiszfeld
 
     function interp_fcomp_weiszfeld_dp( self, loc ) result( comp )
-        use ieee_arithmetic, only: ieee_is_nan
-        class(projector), intent(inout) :: self
+      class(projector), intent(inout) :: self
         real,             intent(in)    :: loc(3)
         complex :: comp
         integer,  parameter :: maxits     = 30
@@ -587,7 +584,7 @@ contains
             cnt     = cnt + 1
             it_condition = (eps > relTol).and.(cnt .lt. maxits)
         end do
-        if ((cnt .gt. maxits).or.(ieee_is_nan(real(zi))).or.(ieee_is_nan(aimag(zi)))) then
+        if ((cnt .gt. maxits).or.(is_nan(real(zi))).or.(is_nan(aimag(zi)))) then
             ! if not converging or results in NaN, fall back to kernel interpolation
             comp = self%interp_fcomp(loc)
         else
