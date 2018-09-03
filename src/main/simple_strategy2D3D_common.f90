@@ -548,7 +548,9 @@ contains
         integer, allocatable :: pops(:)
         integer    :: icls, pop
         real       :: frc05, frc0143
-        call build_glob%spproj%os_cls2D%new(params_glob%ncls)
+        if( build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls )then
+            call build_glob%spproj%os_cls2D%new(params_glob%ncls)
+        endif
         call build_glob%spproj_field%get_pops(pops, 'class', maxn=params_glob%ncls)
         do icls=1,params_glob%ncls
             call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
@@ -762,7 +764,19 @@ contains
                     endif
                 endif
             else
-                ! no filtering involved for multiple states
+                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
+                call build_glob%vol%fft()
+                if( file_exists(fname_vol_filter) )then
+                    ! anisotropic filter
+                    call build_glob%vol2%read(fname_vol_filter)
+                    call build_glob%vol%apply_filter(build_glob%vol2)
+                else
+                    ! matched filter based on Rosenthal & Henderson, 2003
+                    if( any(build_glob%fsc(s,:) > 0.143) )then
+                        filter = fsc2optlp(build_glob%fsc(s,:))
+                        call build_glob%vol%apply_filter(filter)
+                    endif
+                endif
             endif
         endif
         ! back to real space

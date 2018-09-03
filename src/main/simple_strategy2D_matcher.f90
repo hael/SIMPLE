@@ -46,6 +46,7 @@ contains
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         logical,               intent(in)    :: l_stream
+        real,    allocatable :: corrs(:)
         integer, allocatable :: pinds(:)
         logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
@@ -57,9 +58,9 @@ contains
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
-        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor
+        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor, ave_corrs
         real                  :: chunk_id(params_glob%fromp:params_glob%top)
-        integer               :: iptcl, i, fnr, cnt, updatecnt
+        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
@@ -156,15 +157,29 @@ contains
         if( l_snhc )then
             if( l_stream )then
                 snhc_sz = 0.
-                ! factorial decay, -2 because first step is greedy of stochastic size
+                if( build_glob%spproj%os_cls2D%isthere('corr') )then
+                    corrs     = build_glob%spproj%os_cls2D%get_all('corr')
+                    ave_corrs = sum(corrs,mask=corrs>0.) / real(count(corrs>0.))
+                else
+                    allocate(corrs(params_glob%ncls),source=0.)
+                    ave_corrs = 1.
+                endif
                 do iptcl = params_glob%fromp, params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        ! updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        ! snhc_sz(iptcl) = min(SNHC2D_INITFRAC,&
-                        !     &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(updatecnt-2)))
-                        snhc_sz(iptcl) = 0. ! full neighbourhood
+                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                        if(updatecnt>=2 .and. updatecnt<=10 )then
+                            prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
+                            if( corrs(prev_class) < ave_corrs )then
+                                snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
+                            else
+                                snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
+                            endif
+                        else
+                            snhc_sz(iptcl) = 0.
+                        endif
                     endif
                 enddo
+                deallocate(corrs)
             else
                 ! factorial decay, -2 because first step is always greedy
                 snhc_sz = min(SNHC2D_INITFRAC,&

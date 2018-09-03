@@ -107,7 +107,6 @@ contains
                 ! SHC state optimization
                 self%s%prev_corr  = corrs(self%s%prev_state)
                 state             = shcloc(self%s%nstates, corrs, self%s%prev_corr)
-                !state             = maxloc(corrs, dim=1)
                 corr              = corrs(state)
                 self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
                 if( self%s%prev_state .eq. state ) mi_state = 1.
@@ -165,6 +164,7 @@ contains
             call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  corr)
             call s3D%o_peaks(self%s%iptcl)%set(1,'w',     1.)
             call s3D%o_peaks(self%s%iptcl)%set(1,'ow',    1.)
+            call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  real(self%s%prev_proj))
             call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
             call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(self%s%iptcl))
         else

@@ -40,7 +40,7 @@ contains
             cc_glob       = -1.
             found_better  = .false.
             nrefs         = count(s2D%cls_chunk==self%s%chunk_id)
-            nrefs_bound   = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)) )
+            nrefs_bound   = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)))
             nrefs_bound   = max(2, nrefs_bound)
             do isample=1,self%s%nrefs
                 ! stochastic reference index
