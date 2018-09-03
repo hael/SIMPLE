@@ -14,8 +14,6 @@ public :: strategy3D_multi
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: MORE_RANDOM = .false.
-
 type, extends(strategy3D) :: strategy3D_multi
     type(strategy3D_srch) :: s
     type(strategy3D_spec) :: spec
@@ -63,10 +61,8 @@ contains
                 ! exit condition
                 if( self%s%npeaks == 1 )then
                     if( self%s%nbetter > 0 ) exit
-                else if( MORE_RANDOM )then
-                    if( self%s%nbetter > 0 .and. self%s%nrefs_eval >= NPROJPEAKS ) exit
                 else
-                    if( self%s%nbetter >= MINNPEAKS ) exit
+                    if( self%s%nbetter >= RANDOMNESS_FAC .and. self%s%nrefs_eval >= NPROJPEAKS ) exit
                 endif
             end do
             call sort_corrs(self%s)  ! sort in correlation projection direction space
