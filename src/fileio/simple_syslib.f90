@@ -577,7 +577,10 @@ contains
         inquire(file=trim(adjustl(filename)), opened=currently_opened, iostat=status)
         if(status /= 0)&
             call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
-        if(.not.currently_opened) open(newunit=funit,file=trim(adjustl(filename)),status='old')
+        if(.not.currently_opened)&
+             open(newunit=funit,file=trim(adjustl(filename)),status='old',iostat=status)
+        if(status /= 0)&
+            call simple_error_check(status,"simple_syslib::simple_sys_stat open failed "//trim(filename))
         !allocate(buffer(13), source=0)
         status = STAT (trim(adjustl(filename)) , buffer)
         if (status /= 0) then

@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.2 FATAL_ERROR)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 include(FortranOverride)
-
 project(SIMPLE Fortran)
-#enable_language( CXX C )
 
 set(PROJECT_BRIEF "SIMPLE is a program package for cryo-EM image processing (https://simplecryoem.com)")
 
@@ -47,14 +45,12 @@ option(USE_LINK_TIME_OPTIMISATION "Enable link-time optimisation" OFF)
 #################################################################
 # Add our local modules to the module path
 #set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
-set(SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src")
-set(SCRIPTS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/scripts")
-set(TEST_SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/tests")
-set(PROD_SRC_PATH "${CMAKE_CURRENT_SOURCE_DIR}/production/simple")
+
 set(EXTRA_LIBS "")
 set(NUM_JOBS 1)
 include(ProcessorCount)
 ProcessorCount(NUM_JOBS)
+
 set(BUILD_NAME "${CMAKE_Fortran_COMPILER_ID}_${CMAKE_BUILD_TYPE}" CACHE STRING "Build name with compiler, type and FFT backend ")
 set(CMAKE_Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
 
@@ -118,7 +114,7 @@ endif()
 # CREATE libSIMPLE<VERSION>
 #
 #################################################################
-add_subdirectory(${SRC_PATH} lib)
+add_subdirectory(src lib)
 list(APPEND EXTRA_LIBS
   ${SIMPLELIB}
   ${CMAKE_THREAD_LIBS_INIT}
@@ -133,7 +129,7 @@ message(STATUS " EXTRA_LIBS  ${EXTRA_LIBS}")
 #
 #################################################################
 # The script folder contains some handy perl scripts for running SIMPLE
-add_subdirectory(${SCRIPTS_PATH})
+add_subdirectory(scripts)
 
 
 #################################################################
@@ -174,6 +170,7 @@ configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/ProjectConfigVersion.
 FILE(GLOB_RECURSE SIMPLE_CMAKE_FILES
   LIST_DIRECTORIES false
   RELATIVE ${CMAKE_SOURCE_DIR} "*.cmake" )
+list(REMOVE_DUPLICATES SIMPLE_CMAKE_FILES)
 INSTALL(
   FILES ${SIMPLE_CMAKE_FILES}
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/simple/CMake"

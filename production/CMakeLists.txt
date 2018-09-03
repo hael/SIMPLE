@@ -192,7 +192,7 @@ endforeach(TESTNAME)
 list(APPEND CTESTDIRS
   simple_test_ansi_colors
   simple_test_binoris
-  simple_test_cartcorr_sanity
+#  simple_test_cartcorr_sanity
   simple_test_corrs2weights
   simple_test_extr_frac
   simple_test_fileio

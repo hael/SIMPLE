@@ -162,10 +162,10 @@ contains
        if(inputted_startype)then
            write (*,*) "Testing for valid startype:", trim(params%startype)
            ! Use regular expression to find startype
-           if( RE_match(params%startype,&
-               '(m|movies|micrographs|'&
+           if( RE_match(params%startype,        &
+               '(m|movies|micrographs|'//       &
                'ctf|ctf_estimation|ctfparams|'//&
-               'p|ptcl|particles|'//&
+               'p|ptcl|particles|'//            &
                'cavg|classaverages)') /=0 )then
 
                inputted_startype=.false.

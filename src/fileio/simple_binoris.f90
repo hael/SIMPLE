@@ -12,9 +12,9 @@ public :: binoris
 private
 #include "simple_local_flags.inc"
 
-integer(kind=8), parameter :: MAX_N_SEGEMENTS = 20
+integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS = 20
 integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
-integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGEMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
+integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
 
 type file_header_segment
     integer(kind=8)   :: fromto(2)          = 0
@@ -25,7 +25,7 @@ end type file_header_segment
 
 type binoris
     private
-    type(file_header_segment) :: header(MAX_N_SEGEMENTS)
+    type(file_header_segment) :: header(MAX_N_SEGMENTS)
     integer                   :: n_segments  = 0
     integer                   :: funit       = 0
     logical                   :: l_open      = .false.
@@ -74,7 +74,7 @@ contains
         character(len=*),  intent(in)    :: fname         !< filename
         logical, optional, intent(in)    :: del_if_exists !< If the file already exists on disk, replace
         integer(kind=8)    :: filesz
-        integer            :: isegment
+        integer(kind(ENUM_ORISEG)) :: isegment
         if( present(del_if_exists) )then
             if( del_if_exists )then
                 call del_file(trim(fname))
@@ -99,7 +99,7 @@ contains
         call self%clear_segments
         call self%read_header
         self%n_segments = 0 ! for counting # segments
-        do isegment=1,MAX_N_SEGEMENTS
+        do isegment=1,MAX_N_SEGMENTS
             ! update # segments counter
             if( self%header(isegment)%n_bytes_per_record > 0 .and. self%header(isegment)%n_records > 0&
                 &.and. self%header(isegment)%first_data_byte > 0 ) self%n_segments = isegment
@@ -160,8 +160,8 @@ contains
 
     subroutine print_header( self )
         class(binoris), intent(in) :: self
-        integer :: isegment
-        do isegment=1,MAX_N_SEGEMENTS
+        integer(kind(ENUM_ORISEG))    :: isegment
+        do isegment=1,MAX_N_SEGMENTS
             write(*,*) '*****  HEADER, segment: ', isegment
             write(*,*) 'fromto(1)         : ', self%header(isegment)%fromto(1)
             write(*,*) 'fromto(2)         : ', self%header(isegment)%fromto(2)
@@ -173,12 +173,13 @@ contains
 
     subroutine write_segment_inside_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
-        class(binoris),        intent(inout) :: self
-        integer,               intent(in)    :: isegment
-        class(oris), optional, intent(inout) :: os ! indexed from 1 to nptcls
-        integer,     optional, intent(in)    :: fromto(2)
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        class(oris), optional,   intent(inout) :: os ! indexed from 1 to nptcls
+        integer,     optional,   intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
-        integer         :: i, nspaces, noris, iseg
+        integer         :: i, nspaces, noris
+        integer(kind(ENUM_ORISEG)) :: iseg
         integer(kind=8) :: end_part1, start_part3, end_part3
         integer(kind=8) :: ibytes, first_data_byte
         character(len=1), allocatable ::bytearr_part3(:)
@@ -234,12 +235,13 @@ contains
 
     subroutine write_segment_inside_2( self, isegment, os_strings, fromto, strlen_max )
         use simple_oris,   only: oris
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        type(str4arr),  intent(in)    :: os_strings(:)
-        integer,        intent(in)    :: fromto(2), strlen_max
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        type(str4arr),           intent(in)    :: os_strings(:)
+        integer,                 intent(in)    :: fromto(2), strlen_max
         character(len=:), allocatable :: str_dyn
-        integer         :: i, nspaces, noris, iseg
+        integer(kind(ENUM_ORISEG)) :: iseg
+        integer         :: i, nspaces, noris
         integer(kind=8) :: end_part1, start_part3, end_part3
         integer(kind=8) :: ibytes, first_data_byte
         character(len=1), allocatable :: bytearr_part3(:)
@@ -288,10 +290,10 @@ contains
 
     subroutine byte_manager4seg_inside_1( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
-        integer,                       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
         integer(kind=8),               intent(out)   :: end_part1, start_part3, end_part3
         character(len=1), allocatable, intent(out)   :: bytearr_part3(:)
-        integer :: iseg
+        integer(kind(ENUM_ORISEG))  :: iseg
         ! READ RAW BYTES OF PART 1 OF FILE
         ! figure out byte range
         end_part1 = N_BYTES_HEADER
@@ -322,11 +324,11 @@ contains
 
     subroutine byte_manager4seg_inside_2( self, isegment, end_part1, start_part3, end_part3, bytearr_part3 )
         class(binoris),                intent(inout) :: self
-        integer,                       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
         integer(kind=8),               intent(in)    :: end_part1, start_part3, end_part3
         character(len=1), allocatable, intent(in)    :: bytearr_part3(:)
         integer(kind=8) :: n_bytes_part3_orig, n_bytes_part3
-        integer         :: iseg
+        integer(kind(ENUM_ORISEG)) :: iseg
         ! update byte ranges in header
         call self%update_byte_ranges
         ! validate byte ranges
@@ -355,10 +357,10 @@ contains
 
     subroutine write_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
-        class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        class(oris),       intent(inout) :: os ! indexed from 1 to nptcls
-        integer, optional, intent(in)    :: fromto(2)
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        class(oris),             intent(inout) :: os ! indexed from 1 to nptcls
+        integer, optional,       intent(in)    :: fromto(2)
         character(len=:), allocatable :: str_dyn
         integer :: i, nspaces, noris
         integer(kind=8) :: ibytes
@@ -392,9 +394,9 @@ contains
 
     subroutine write_segment_2( self, isegment, fromto, strlen_max, sarr )
         class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        integer,        intent(in)    :: fromto(2), strlen_max
-        type(str4arr),  intent(inout) :: sarr(:) ! indexed from 1 to nptcls
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        integer,                 intent(in)    :: fromto(2), strlen_max
+        type(str4arr),           intent(inout) :: sarr(:) ! indexed from 1 to nptcls
         integer :: i, nspaces
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
@@ -423,8 +425,8 @@ contains
     ! assumes that byte ranges have been updated
     ! on startup, initialize ibytes to the first data byte of the segment
     subroutine write_record( self, isegment, ibytes, str )
-        class(binoris),   intent(inout) :: self
-        integer,          intent(in)    :: isegment
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer(kind=8),  intent(inout) :: ibytes
         character(len=*), intent(in)    :: str
         integer :: nspaces
@@ -439,13 +441,13 @@ contains
 
     subroutine add_segment_1( self, isegment, os, fromto )
         use simple_oris,   only: oris
-        class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
-        class(oris),       intent(inout) :: os
-        integer, optional, intent(in)    :: fromto(2)
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        class(oris),             intent(inout) :: os
+        integer, optional,       intent(in)    :: fromto(2)
         integer :: strlen_max
         ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
+        if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
             write(*,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -466,12 +468,12 @@ contains
     end subroutine add_segment_1
 
     subroutine add_segment_2( self, isegment, fromto, strlen_max )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        integer,        intent(in)    :: fromto(2)
-        integer,        intent(in)    :: strlen_max
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
+        integer,                 intent(in) :: fromto(2)
+        integer,                 intent(in) :: strlen_max
         ! sanity check isegment
-        if( isegment < 1 .or. isegment > MAX_N_SEGEMENTS )then
+        if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
             write(*,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
@@ -486,8 +488,8 @@ contains
 
     subroutine update_byte_ranges( self )
         class(binoris), intent(inout) :: self
-        integer(kind=8) :: n_bytes_tot
-        integer :: isegment
+        integer(kind=8)         :: n_bytes_tot
+        integer(kind(ENUM_ORISEG)) :: isegment
         n_bytes_tot = N_BYTES_HEADER
         if( self%n_segments <= 0 ) return
         do isegment=1,self%n_segments
@@ -500,9 +502,9 @@ contains
 
     subroutine read_first_segment_record( self, isegment, o )
         use simple_ori, only: ori
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        class(ori),     intent(inout) :: o
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        class(ori),              intent(inout) :: o
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
@@ -521,7 +523,7 @@ contains
     subroutine read_segment_1( self, isegment, os, fromto, only_ctfparams_state_eo )
         use simple_oris,   only: oris
         class(binoris),    intent(inout) :: self
-        integer,           intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         class(oris),       intent(inout) :: os
         integer, optional, intent(in) :: fromto(2)
         logical, optional, intent(in) :: only_ctfparams_state_eo
@@ -570,11 +572,11 @@ contains
     end subroutine read_segment_1
 
     subroutine read_segment_2( self, isegment, sarr )
-        class(binoris), intent(inout) :: self
-        integer,        intent(in)    :: isegment
-        type(str4arr),  intent(inout) :: sarr(:)
+        class(binoris),          intent(inout) :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
+        type(str4arr),           intent(inout) :: sarr(:)
         integer :: i
-        integer(kind=8) :: ibytes
+        integer(kind=8) :: ibytes, nbytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
@@ -584,7 +586,8 @@ contains
             ! read orientation data into array of allocatable strings
             ibytes = self%header(isegment)%first_data_byte
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-                allocate(character(len=self%header(isegment)%n_bytes_per_record) :: sarr(i)%str)
+               !nbytes = self%header(isegment)%n_bytes_per_record
+                !allocate(character(len=nbytes) :: sarr(i)%str)
                 read(unit=self%funit,pos=ibytes) sarr(i)%str
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
@@ -595,7 +598,7 @@ contains
 
     subroutine read_record( self, isegment, ibytes, str )
         class(binoris),                intent(inout) :: self
-        integer,                       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
         integer(kind=8),               intent(inout) :: ibytes
         character(len=:), allocatable, intent(out)   :: str
         if( allocated(str) ) deallocate(str)
@@ -612,27 +615,27 @@ contains
     end function get_n_segments
 
     pure function get_fromto( self, isegment ) result( fromto )
-        class(binoris), intent(in) :: self
-        integer,        intent(in) :: isegment
+        class(binoris),          intent(in) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         integer :: fromto(2)
         fromto = self%header(isegment)%fromto
     end function get_fromto
 
     pure integer function get_n_records( self, isegment )
-        class(binoris), intent(in) :: self
-        integer,        intent(in) :: isegment
+        class(binoris),          intent(in) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_n_records = self%header(isegment)%n_records
     end function get_n_records
 
     pure integer function get_n_bytes_per_record( self, isegment )
-        class(binoris), intent(in) :: self
-        integer,        intent(in) :: isegment
+        class(binoris),          intent(in) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_n_bytes_per_record = self%header(isegment)%n_bytes_per_record
     end function get_n_bytes_per_record
 
     pure integer(kind=8) function get_n_bytes_tot( self )
         class(binoris), intent(in) :: self
-        integer :: isegment
+        integer(kind(ENUM_ORISEG))    :: isegment
         get_n_bytes_tot = N_BYTES_HEADER
         if( self%n_segments <= 0 ) return
         do isegment=1,self%n_segments
@@ -643,8 +646,8 @@ contains
     end function get_n_bytes_tot
 
     pure integer(kind=8) function get_first_data_byte( self, isegment )
-        class(binoris), intent(in) :: self
-        integer,        intent(in) :: isegment
+        class(binoris),          intent(in) :: self
+        integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_first_data_byte = self%header(isegment)%first_data_byte
     end function get_first_data_byte
 

@@ -24,8 +24,8 @@ mkdir tmpbuild
 cd tmpbuild
 cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG .. -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
+. add2.bashrc
 ctest -V
-source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 EOF
 # scp buildsimple ${MASSIVE_USERNAME}@${MASSIVE}:~
@@ -52,10 +52,10 @@ mkdir tmpbuild-gcc8
 cd tmpbuild-gcc8
 cmake  -DUSE_OPENACC=OFF -DUSE_MPI=OFF  -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG ..  -Wdev  --debug-trycompile > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
+. add2.bashrc
 ctest -V  > log_check 2> log_check_err
-source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
-EOF 
+EOF
 # scp buildsimplegcc8 ${MASSIVE_USERNAME}@${MASSIVE}:~
 # scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplegcc8
 
@@ -84,15 +84,15 @@ cd tmpbuild-intel
 #FC=mpifort CC=mpicc CXX=mpicxx 
  FC=ifort CC=icc CXX=icpc LDFLAGS="" cmake -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=OFF -DUSE_MPI=OFF -DCMAKE_BUILD_TYPE=RELEASE -Wdev -DINTEL_OMP_OVERRIDE=ON -DUSE_AUTO_PARALLELISE=ON --debug-trycompile .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
+. add2.bashrc
 ctest -V > log_check 2> log_check_err
-source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 simple_test_openacc
 mpirun -np 10 simple_test_mpi
 simple_test_openacc
 EOF
 
-## CUDA/MPI BUILD: GCC 5, CUDA 8, OpenMPI 1.10, OpenMP, FFTW, shared
+## CUDA/MPI BUILD: GCC 5, CUDA 8, OpenMPI 1.10.3, OpenMP, FFTW 3.3.5, shared
 
 cat <<EOF > buildsimplecudampi
 #!/bin/bash
@@ -112,8 +112,8 @@ mkdir tmpbuildall
 cd tmpbuild
 FC=mpifort CC=mpicc CXX=mpicxx cmake  -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=ON -DUSE_MPI=ON -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=DEBUG -BUILD_SHARED_LIBS=ON .. > log_cmake 2> log_cmake_err
 make -j12 install > log_make 2> log_make_err
+. add2.bashrc
 ctest -V > log_check 2> log_check_err
-source add2.bashrc
 OMP_NUM_THREADS=4 simple_test_omp
 simple_test_openacc
 srun simple_test_mpi
@@ -122,3 +122,31 @@ vglrun simple_test_cuda
 EOF
 #scp buildsimplecudampi ${MASSIVE_USERNAME}@${MASSIVE}:~
 # scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimplecudampi
+
+## CUDA/MPI BUILD: GCC 4.9, CUDA 8, OpenMPI 1.10.3, OpenMP, FFTW 3.3.4, shared
+
+cat <<EOF > buildsimple-gcc4.9-mpi
+#!/bin/bash
+#SBATCH --job-name=CompileSIMPLE
+#SBATCH --account=${MASSIVE_ACCOUNT}
+#SBATCH --time=00:05:00
+#SBATCH --ntasks=1
+#SBATCH --mem-per-cpu=4096
+#SBATCH --cpus-per-task=12
+#SBATCH --qos=shortq
+
+module load  fftw/3.3.4-gcc cmake/3.5.2 git/2.8.1 gcc/4.9.3 openmpi/1.10.3-gcc4-mlx-verbs
+cd ~/${SLURM_JOB_ACCOUNT}_scratch/${MASSIVE_USERNAME}/SIMPLE3.0
+git pull --rebase
+[ -d tmpbuildgcc4 ] && rm -rf tmpbuildgcc4
+mkdir tmpbuildgcc4
+cd tmpbuild
+FC=mpifort CC=mpicc CXX=mpicxx cmake  -DVERBOSE=ON -DSIMPLE_BUILD_GUI=OFF -DUSE_OPENACC=OFF -DUSE_MPI=ON -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=DEBUG -BUILD_SHARED_LIBS=ON .. > log_cmake 2> log_cmake_err
+make -j12 install > log_make 2> log_make_err
+. add2.bashrc
+ctest -V > log_check 2> log_check_err
+OMP_NUM_THREADS=4 simple_test_omp
+srun ./bin/simple_test_mpi
+EOF
+#scp buildsimple-gcc49-mpi ${MASSIVE_USERNAME}@${MASSIVE}:~
+# scp ${MASSIVE_USERNAME}@${MASSIVE} sbatch -A ${MASSIVE_ACCOUNT} ~/buildsimple-gcc49-mpi

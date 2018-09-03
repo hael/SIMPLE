@@ -1,4 +1,4 @@
- !! Modified by Michael Eager, Feb 2018
+!! Modified by Michael Eager, Feb 2018
 program simple_test_jpg_export
 include 'simple_lib.f08'
 use simple_jpg, only : test_jpg_export

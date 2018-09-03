@@ -9,7 +9,7 @@ public :: sp_project, oritype2segment
 private
 #include "simple_local_flags.inc"
 
-integer, parameter :: MAXN_OS_SEG = 13
+integer(kind(ENUM_ORISEG)), parameter :: MAXN_OS_SEG = 13
 
 type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
@@ -490,11 +490,11 @@ contains
             call os_ptr%set(1, 'phaseplate', 'no')
         endif
         select case(ctfvars%ctfflag)
-            case(0)
+            case(CTFFLAG_NO)
                 call os_ptr%set(1, 'ctf', 'no')
-            case(1)
+            case(CTFFLAG_YES)
                 call os_ptr%set(1, 'ctf', 'yes')
-            case(2)
+            case(CTFFLAG_FLIP)
                 call os_ptr%set(1, 'ctf', 'flip')
             case DEFAULT
                 THROW_HARD('ctfflag: '//int2str(ctfvars%ctfflag)//' unsupported; add_single_movie')
@@ -560,11 +560,11 @@ contains
                 call os_ptr%set(imic, 'phaseplate', 'no')
             endif
             select case(ctfvars%ctfflag)
-                case(0)
+                case(CTFFLAG_NO)
                     call os_ptr%set(imic, 'ctf', 'no')
-                case(1)
+                case(CTFFLAG_YES)
                     call os_ptr%set(imic, 'ctf', 'yes')
-                case(2)
+                case(CTFFLAG_FLIP)
                     call os_ptr%set(imic, 'ctf', 'flip')
                 case DEFAULT
                     THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_movies')
@@ -1538,9 +1538,10 @@ contains
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
-        class(oris), pointer          :: ptcl_field
-        character(len=:), allocatable :: ctfflag
-        integer              :: stkind, ind_in_stk
+        class(oris), pointer         :: ptcl_field
+        character(len=:),allocatable :: ctfflag_str
+        integer               :: stkind, ind_in_stk
+        get_ctfflag = 'no' 
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -1549,25 +1550,24 @@ contains
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
             case('cls2D', 'cls3D')
-                get_ctfflag = 'no'
                 return
             case DEFAULT
                 THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfflag')
         end select
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, 1, stkind, ind_in_stk)
-        ! CTF flag
+        ! CTF flag string
         if( self%os_stk%isthere(stkind, 'ctf') )then
-            call self%os_stk%getter(stkind, 'ctf', ctfflag)
+            call self%os_stk%getter(stkind, 'ctf', ctfflag_str)
         else if( ptcl_field%isthere(1, 'ctf') )then
-            call ptcl_field%getter(1, 'ctf', ctfflag)
+            call ptcl_field%getter(1, 'ctf', ctfflag_str)
         else
-            ctfflag = 'no'
+           ctfflag_str = 'no'
         endif
-        get_ctfflag = trim(ctfflag)
+        get_ctfflag = trim(ctfflag_str)
     end function get_ctfflag
 
-    integer function get_ctfflag_type( self, oritype )
+    integer(kind(ENUM_CTFFLAG)) function get_ctfflag_type( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         character(len=:), allocatable :: ctfflag
@@ -1639,22 +1639,10 @@ contains
             ctfflag = NIL
         endif
         l_noctf = .false.
-        select case(trim(ctfflag))
-            case(NIL)
-                THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
-            case('no')
-                ctfvars%ctfflag = CTFFLAG_NO
-                l_noctf = .true.
-            case('yes')
-                ctfvars%ctfflag = CTFFLAG_YES
-            case('mul')
-                THROW_HARD('ctf=mul depreciated; sget_ctfparams')
-            case('flip')
-                ctfvars%ctfflag = CTFFLAG_FLIP
-            case DEFAULT
-                write(*,*) 'stkind/iptcl: ', stkind, iptcl
-                THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
-        end select
+        if(strIsBlank(trim(ctfflag))) THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
+        ctfvars%ctfflag = self%get_ctfflag_type(trim(ctfflag))
+        if(ctfvars%ctfflag == CTFFLAG_NO) l_noctf = .true.
+        
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')
@@ -2143,8 +2131,8 @@ contains
     end subroutine read_segment
 
     subroutine segreader( self, isegment, only_ctfparams_state_eo )
-        class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: isegment
+        class(sp_project), intent(inout)                :: self
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         logical, optional, intent(in)    :: only_ctfparams_state_eo
         integer :: n
         n = self%bos%get_n_records(isegment)
@@ -2188,9 +2176,9 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*), optional, intent(in) :: fname
         integer,          optional, intent(in) :: fromto(2)
-        integer,          optional, intent(in) :: isegment
+        integer(kind(ENUM_ORISEG)), optional, intent(in) :: isegment
         character(len=:), allocatable :: projfile
-        integer :: iseg
+        integer(kind(ENUM_ORISEG)) :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 THROW_HARD('file format of: '//trim(fname)//' not supported; write')
@@ -2218,7 +2206,7 @@ contains
         character(len=*), optional, intent(in)    :: fname
         integer,          optional, intent(in)    :: fromto(2)
         character(len=:), allocatable :: projfile
-        integer :: iseg
+        integer(kind(ENUM_ORISEG)) :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 THROW_HARD('file format of: '//trim(fname)//'not supported; sp_project :: write')
@@ -2433,7 +2421,7 @@ contains
 
     subroutine segwriter( self, isegment, fromto )
         class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer, optional, intent(in)    :: fromto(2)
         select case(isegment)
             case(MIC_SEG)
@@ -2461,7 +2449,7 @@ contains
 
     subroutine segwriter_inside( self, isegment, fromto )
         class(sp_project), intent(inout) :: self
-        integer,           intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         integer, optional, intent(in)    :: fromto(2)
         select case(isegment)
             case(MIC_SEG)
@@ -2504,7 +2492,7 @@ contains
 
     ! private supporting subroutines / functions
 
-    integer function oritype2segment( oritype )
+    integer(kind(ENUM_ORISEG))  function oritype2segment( oritype )
         character(len=*),  intent(in) :: oritype
         select case(trim(oritype))
             case('mic')

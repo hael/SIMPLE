@@ -77,7 +77,7 @@ contains
         class(sp_project), intent(inout) :: spproj
         class(oris),       intent(inout) :: a
         integer,           intent(in)    :: fromto(2)
-        integer, optional, intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)), optional, intent(in) :: isegment
         select case(fname2format(fname))
             case('O')
                 call spproj%write(fname, fromto, isegment)

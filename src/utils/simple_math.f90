@@ -41,6 +41,12 @@ interface check4nans
     module procedure check4nans_2
 end interface
 
+interface is_nan
+    module procedure is_a_number_1
+    module procedure is_a_number_2
+    module procedure is_a_number_3
+end interface
+
 interface is_even
     module procedure is_even_1
     module procedure is_even_2
@@ -356,23 +362,42 @@ contains
     end function resang
 
      !>   checking for is_a_number
-    pure function is_a_number_1( number ) result( is )
+    pure logical function is_a_number_1( number ) 
         real, intent(in) :: number  !< input variable for checking
-        logical :: is
-        is = .true.
+        
+        is_a_number_1 = .true.
         if( number > 0. )then
         else if( number <= 0. )then
         else
-            is = .false.
+            is_a_number_1 = .false.
         endif
     end function is_a_number_1
 
     !>   validity check of complex number (so that it is not nan)
-    pure function is_a_number_2( complex_number ) result( is )
+    pure logical function is_a_number_2( complex_number ) 
         complex, intent(in) :: complex_number !< input variable for checking
-        logical             :: is
-        is = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
+    
+        is_a_number_2 = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function is_a_number_2
+
+     !>   checking for is_a_number
+    pure logical function is_a_number_3( number ) 
+        real(dp), intent(in) :: number  !< input variable for checking
+      
+        is_a_number_3 = .true.
+        if( number > 0. )then
+        else if( number <= 0. )then
+        else
+            is_a_number_3 = .false.
+        endif
+    end function is_a_number_3
+
+    !>   validity check of complex number (so that it is not nan)
+    pure logical function is_a_number_4( complex_number ) 
+        complex(dp), intent(in) :: complex_number !< input variable for checking
+     
+        is_a_number_4 = is_a_number_3(real(complex_number)) .and. is_a_number_3(aimag(complex_number))
+    end function is_a_number_4
 
     !>   to check if val is zero
     elemental logical function is_zero_0( val )

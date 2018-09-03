@@ -191,8 +191,8 @@ contains
         integer                                       :: n1, num_procs, my_id, ista, iend, &
             iwork1, iwork2
 
-        iwork1 = ( n2 - n1 + 1 ) / num_procs
-        iwork2 = mod( n2 - n1 + 1, num_procs )
+        iwork1 = int( n2 - n1 + 1 ) / num_procs
+        iwork2 = mod( int(n2 - n1 + 1), num_procs )
         ista = my_id * iwork1 + n1 + min( my_id, iwork2 )
         iend = ista + iwork1 - 1
         if( iwork2 > my_id ) then

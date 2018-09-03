@@ -165,8 +165,9 @@ subroutine test_args()
     print *, 'Current working directory ', trim(adjustl(cwd))
     write(*,'(a)') '**info(simple_args_unit_test): getting directory that contains varlist'
     if( .not. dir_exists(SIMPLE_BUILD_PATH) .and. &
-    (.not. dir_exists(trim(adjustl(SIMPLE_BUILD_PATH))//'/lib/simple'))) then
-    THROW_HARD( 'test_args SIMPLE_BUILD_PATH  not found')
+    .not. dir_exists(filepath(trim(SIMPLE_BUILD_PATH),'lib/simple'))) then
+    write(*,*)'test_args SIMPLE_BUILD_PATH  not found'
+    call exit(EXIT_FAILURE)
     else
         bpath= filepath( trim(adjustl(SIMPLE_BUILD_PATH)),'lib/simple')
     endif
@@ -199,9 +200,9 @@ subroutine test_args()
 
     call fopen(funit, file=trim(adjustl(vfilename)), status='old', action='read', iostat=io_stat)
     if(io_stat /= 0) then
-     call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
-THROW_HARD( 'simple_args::test  Unable to open varlist ')
-end if
+        call fileiochk(\"simple_args::test  Unable to open \"//trim(adjustl(vfilename)),io_stat)
+        THROW_HARD( 'simple_args::test  Unable to open varlist ')
+    end if
     do i=1,n
         read(funit,*) arg
         if( as%is_present(arg) )then

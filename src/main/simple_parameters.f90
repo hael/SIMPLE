@@ -176,6 +176,9 @@ type :: parameters
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
+    ! special integer kinds
+    integer(kind(ENUM_ORISEG)) :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
+    integer(kind(ENUM_OBJFUN)) :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -188,7 +191,7 @@ type :: parameters
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-    integer :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+!    integer :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -262,7 +265,6 @@ type :: parameters
     integer :: ring1=2
     integer :: ring2=0
     integer :: spec=0
-    integer :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
     integer :: state2split=0       !< state group to split

@@ -34,7 +34,7 @@ type, extends(image) :: reconstructor
     integer                     :: lims(3,2)      = 0           !< Friedel limits
     integer                     :: rho_shape(3)   = 0           !< shape of sampling density matrix
     integer                     :: cyc_lims(3,2)  = 0           !< redundant limits of the 2D image
-    integer                     :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
+    integer(kind(ENUM_CTFFLAG)) :: ctfflag                      !< ctf flag <yes=1|no=0|flip=2>
     logical                     :: phaseplate     = .false.     !< Volta phaseplate images or not
     logical                     :: rho_allocated  = .false.     !< existence of rho matrix
   contains

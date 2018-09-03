@@ -259,7 +259,8 @@ contains
         character(len=*),    intent(inout) :: filename
         integer         :: i, nheaders, nlines
         type(oris)      :: os
-        integer         :: ndatlines,noris,iseg, n_ori_inputs
+        integer         :: ndatlines,noris, n_ori_inputs
+        integer(kind(ENUM_ORISEG)) :: iseg
         type(ctfparams) :: ctfvars
         logical         :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         character(len=:), allocatable ::  oritype
@@ -269,7 +270,7 @@ contains
         call self%check_temp_files('import_ctf_estimation')
         !! set deftab
         call cline%set('deftab', 'oritab-stardoc.txt')
-        if(.not. (cline%defined('stk') .or. cline%defined('stktab')) ) then
+        if(.not. (cline%defined('filetab') .or. cline%defined('stktab')) ) then
             call cline%set('filetab', 'filetab-stardoc.txt')
         endif
 
@@ -1033,15 +1034,6 @@ contains
         class(parameters),   intent(inout) :: params
         class(cmdline),      intent(inout) :: cline
         character(len=*),    intent(inout) :: filename
-        ! integer         :: i, nheaders, nlines
-        ! type(oris)      :: os
-        ! integer         :: ndatlines,noris,iseg, n_ori_inputs
-        ! type(ctfparams) :: ctfvars
-        ! logical         :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-        ! character(len=:), allocatable ::  oritype
-        ! class(oris),      pointer     :: os_ptr
-
-        !character(len=STDLEN)         :: projfile
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
         type(oris)       :: os
@@ -1093,52 +1085,6 @@ contains
             call os%new(ndatlines)
             call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
             call spproj%kill ! for safety
-        endif
-        if( inputted_plaintexttab )then
-            call paramfile%new(params%plaintexttab, 1)
-            ndatlines = paramfile%get_ndatalines()
-            nrecs     = paramfile%get_nrecs_per_line()
-            if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_extract_ptcls')
-            endif
-            call os%new(ndatlines)
-            allocate( line(nrecs) )
-            do i=1,ndatlines
-                call paramfile%readNextDataLine(line)
-                select case(params%dfunit)
-                    case( 'A' )
-                        line(1) = line(1)/1.0e4
-                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
-                    case( 'microns' )
-                        ! nothing to do
-                    case DEFAULT
-                        THROW_HARD('unsupported dfunit; exec_extract_ptcls')
-                end select
-                select case(params%angastunit)
-                    case( 'radians' )
-                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
-                    case( 'degrees' )
-                        ! nothing to do
-                    case DEFAULT
-                        THROW_HARD('unsupported angastunit; exec_extract_ptcls')
-                end select
-                select case(params%phshiftunit)
-                    case( 'radians' )
-                        ! nothing to do
-                    case( 'degrees' )
-                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
-                    case DEFAULT
-                        THROW_HARD('unsupported phshiftunit; exec_extract_ptcls')
-                end select
-                call os%set(i, 'dfx', line(1))
-                if( nrecs > 1 )then
-                    call os%set(i, 'dfy', line(2))
-                    call os%set(i, 'angast', line(3))
-                endif
-                if( nrecs > 3 )then
-                    call os%set(i, 'phshift', line(4))
-                endif
-            end do
         endif
         if( cline%defined('stk') )then
             ctfvars%smpd = params%smpd
@@ -1266,7 +1212,7 @@ contains
 
     function exporttype2star( exporttype ) result(stype)
         character(len=*),  intent(in) :: exporttype
-        integer(kind=kind(MIC_STAR))  :: stype
+        integer(kind(ENUM_STARTYPE))  :: stype
         !select case(trim(exporttype))
         ! match oritype equivalent for star export type
         !case('movies') ! movies

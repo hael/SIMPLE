@@ -419,6 +419,7 @@ contains
         endif
     end function strIsComment
 
+    !>  \brief works out whether a character string is blank
     pure logical function strIsEmpty(line)
         character(len=*),   intent(in)  ::  line
         if( len_trim(line) == 0 )then

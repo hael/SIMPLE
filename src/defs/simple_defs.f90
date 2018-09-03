@@ -54,17 +54,17 @@ end type str4arr
 
 ! CTF flag type
 enum, bind(c)
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2, ENUM_CTFFLAG=100
 end enum
 
 ! Objective function
 enum, bind(c)
-    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2
+    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2, ENUM_OBJFUN=100
 end enum
 
 ! type for CTF parameters
 type ctfparams
-    integer :: ctfflag = 0
+    integer(kind(ENUM_CTFFLAG)) :: ctfflag = 0
     real    :: smpd    = 0.
     real    :: kv      = 0.
     real    :: cs      = 0.
