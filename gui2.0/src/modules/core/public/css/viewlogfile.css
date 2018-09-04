@@ -1,13 +1,14 @@
 .viewlogfile {
-	width: 36vw;
-	font-size: 11px;
+	width: 60vw;
+	font-size: 12px;
 	position: absolute;
-	left: calc(50vw - 18vw);
+	left: 20vw;
 	top: 200px;
 	background-color: white;
 	padding: 10px;
 	z-index: 4;
 	border-radius: 6px;
+	height: calc(100vh - 270px);
 }
 
 
@@ -23,13 +24,13 @@
 	font-size: 12px;
 	height: 30px;
 	margin-top: 5px;
+	margin-left: 2vw;
+	margin-right: 2vw;
 }
 
 .viewlogfile #selectorbuttons{
 	display: flex;
-	justify-content: space-between;
-	margin-left: 20%;
-	margin-right: 20%;
+	justify-content: center;
 }
 
 .viewlogfile #closebutton {
@@ -37,3 +38,7 @@
 	float: right;
 }
 
+.viewlogfile pre {
+	height: calc(100vh - 345px);
+	overflow: scroll;
+}

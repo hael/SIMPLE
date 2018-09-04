@@ -35,7 +35,7 @@ table
 						onclick="history2.rerunJob('" + task['arguments'] + "'); history2.resetActions(this)"
 					)="ReRun"
 					option(
-						onclick="history2.resetActions(this)"
+						onclick="history2.killTask('" + task['id'] + "','" + task['pid'] + "'); history2.resetActions(this)"
 					)="Kill"
 					option(
 						onclick="history2.deleteTask('" + task['id'] + "'); history2.resetActions(this)"

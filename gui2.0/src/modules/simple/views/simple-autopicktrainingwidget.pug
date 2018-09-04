@@ -9,42 +9,6 @@ div
 div.inputpage
 	table
 		tr
-			td="Reference Volume"
-			td
-				input(
-					id="autopickvol"
-					type="text"
-				)
-		tr
-			td="Reference Classes"
-			td
-				input(
-					id="autopickclasses"
-					type="text"
-				)
-		tr
-			td="Sampling Distance"
-			td
-				input(
-					id="autopicksmpd"
-					type="text"
-				)
-		tr
-			td="Contrast"
-			td
-				input(
-					id="autopickcontrast"
-					type="text"
-				)
-		tr
-			td="Point Group"
-			td
-				input(
-					id="autopickpgrp"
-					type="text"
-				)
-table
-		tr
 			td="References"
 			td
 				input(
@@ -52,8 +16,34 @@ table
 					type="text"
 					disabled
 				)
+		tr
+			td="Distance Threshold"
+			td
+				input(
+					id="autopickthreshold"
+					type="text"
+				)
+		tr
+			td="Quality"
+			td
+				input(
+					id="autopickquality"
+					type="text"
+				)
+
+select#micrographselector
+	each val, index in mics
+		option(
+			value = index['text']
+		)=val
+
+canvas#micrographcanvas
+
 
 div.buttons
 	button(
-		onclick="autopicktrainingwidget.generate()"
-	)="Generate References"
+		onclick="autopicktrainingwidget.pick()"
+	)="Pick"
+	button(
+		onclick="autopicktrainingwidget.done()"
+	)="Done"

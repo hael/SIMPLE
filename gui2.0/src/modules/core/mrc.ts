@@ -10,6 +10,7 @@ export default class MRC{
 	}
 	
 	readHeader(file) {
+		console.log("READING " + file)
 		return new Promise((resolve, reject) => {
 			resolve(getHeader(file));
 		})

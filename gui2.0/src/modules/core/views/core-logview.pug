@@ -6,8 +6,9 @@ div
 	)
 	
 div
-	pre=data
+	pre#logtext=data
 
 div#selectorbuttons
-	button(onclick="history2.hideLog()")="OK"
+	button(onclick="history2.showLog('" + folder + "')")="Refresh"
+	button(onclick="history2.hideLog()")="Close"
 

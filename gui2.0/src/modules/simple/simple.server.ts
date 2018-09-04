@@ -14,6 +14,7 @@ class Module {
 	private ctfview
 	private guinierwidget
 	private autopicktrainingwidget
+	private makepickrefswidget
 	
 	public metadata = {
 			"moduletitle" :"Simple",
@@ -62,6 +63,9 @@ class Module {
 				}else if(widgetkeys['key'] == "ndev"){
 					widgetkeys['keytype'] = "widget"
 					widgetkeys['widget'] = "autopicktrainingwidget.view(this)"
+				}else if(widgetkeys['key'] == "refs"){
+					widgetkeys['keytype'] = "widget"
+					widgetkeys['widget'] = "pickrefswidget.view(this)"
 				}
 			}
 			
@@ -79,6 +83,7 @@ class Module {
 		this.ctfview = pug.compileFile('views/simple-viewctf.pug')
 		this.guinierwidget = pug.compileFile('views/simple-guinierplotwidget.pug')
 		this.autopicktrainingwidget = pug.compileFile('views/simple-autopicktrainingwidget.pug')
+		this.makepickrefswidget = pug.compileFile('views/simple-makepickrefswidget.pug')
 		process.stdout.write("Done\n")
 	}
 	
@@ -122,6 +127,70 @@ class Module {
 	}
 	
 	public execute(modules, arg){
+		var spawn = require('child_process').spawn
+		var command = arg['executable']
+		var type = arg['type']
+		var inputpath = arg['inputpath']
+		var keys = arg['keys']
+		var keynames = Object.keys(keys);
+		var commandargs = []
+		commandargs.push("prg=" + type)
+		commandargs.push("mkdir=no")
+		for(var key of keynames){
+			if(keys[key] != ""){
+				if(keys[key] == "true"){
+					commandargs.push(key.replace('key', '') + "=yes")
+				}else if(keys[key] == "false"){
+					commandargs.push(key.replace('key', '') + "=no")
+				}else{
+					commandargs.push(key.replace('key', '') + "=" + keys[key])
+				}
+			}
+		}
+		
+		arg['view'] = null
+	
+		if(type == "cluster2D") {
+			arg['view'] = {mod : "simple", fnc : "view2d"}
+		}else if(type == "initial_3Dmodel") {
+			arg['view'] = {mod : "simple", fnc : "viewini3d"}
+		}else if(type == "import_movies" || type == "motion_correct") {
+			arg['view'] = { mod : "simple", fnc : "viewImportMovies" }
+		}else if(type == "ctf_estimate") {
+			arg['view'] = { mod : "simple", fnc : "viewCTFEstimate" }
+		}else if(type == "import_particles" || type == "extract") {
+			arg['view'] = { mod : "simple", fnc : "viewParticles" }
+		}
+		
+		console.log(command, commandargs)
+		
+		return modules['available']['core']['taskCreate'](modules, arg)
+			.then((json) => {
+				if(inputpath != undefined){
+					fs.copyFileSync(inputpath, json['jobfolder'] + "/project.simple")
+				}
+				const out = fs.openSync(json['jobfolder'] + '/task.log', 'a')
+				const err = fs.openSync(json['jobfolder'] + '/task.log', 'a')
+				var executeprocess = spawn(command, commandargs, {detached: true, cwd: json['jobfolder'], stdio: [ 'ignore', out, err ]})
+				executeprocess.on('exit', function(code){
+				console.log(`child process exited with code ${code}`);
+					if(code !== null){
+						modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Finished")
+					}
+				})
+				executeprocess.on('error', function(error){
+					console.log(`child process exited with error ${error}`)
+					modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Error")
+				})
+				
+				console.log(`Spawned child pid: ${executeprocess.pid}`)
+				modules['available']['core']['updatePid'](arg['projecttable'], json['jobid'], executeprocess.pid)
+				
+				return({folder:json['jobfolder']})
+			})
+	}
+	
+	public executeOld(modules, arg){
 		var spawn = require('child_process').spawn
 		var command = arg['executable']
 		var type = arg['type']
@@ -597,15 +666,150 @@ class Module {
 	}
 	
 	public getAutopickTrainingWidget(modules, arg){
+		var spawn = require('child-process-promise').spawn
+		var path = require("path")
+		var command = "simple_private_exec"
+		var commandargs = []
+		var mics = []
+		commandargs.push("prg=print_project_vals")
+		commandargs.push("projfile=" + arg['projfile'])
+		commandargs.push("oritype=mic")
+		commandargs.push("keys=intg,xdim,ydim")
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				for(var line of lines){
+					var elements = line.split((/[ ]+/))
+					elements.shift()
+					if(elements.length > 0){
+						mics.push({text : path.basename(elements[2]).replace(".mrc", ""), xdim : elements[3], ydim : elements[4]})
+					}
+				}
+				return({html : this.autopicktrainingwidget({mics : mics})})
+			})
+	}
+	
+	public trainAutopick(modules, arg){
+		var spawn = require('child-process-promise').spawn
+		var command = "simple_private_exec"
+		var commandargs = []
+		var selection = []
+		
+		var trainingfolder = arg['projectfolder'] + "/.training"
+		
+		if(!fs.existsSync(trainingfolder)){
+			fs.mkdirSync(trainingfolder)
+		}
+		
+		var files = fs.readdirSync(trainingfolder)
+		
+		for (var file of files){
+			if(file.includes(".box")){
+			//	fs.unlinkSync(trainingfolder + "/" + file)
+			}
+		}
+		
+		
+		fs.copyFileSync(arg['projfile'], trainingfolder + "/project.simple")
+		
+		commandargs.push("prg=print_project_vals")
+		commandargs.push("projfile=" + trainingfolder + "/project.simple")
+		commandargs.push("oritype=mic")
+		commandargs.push("keys=intg")
+		
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				for(var line of lines){
+					var elements = line.split((/[ ]+/))
+					elements.shift()
+					if(elements.length > 0){
+						selection.push(0)
+					}
+				}
+				
+				selection[arg['micrographid']] = 1
+				
+				var selectionfile = ""
+				
+				for (var state of selection){
+					selectionfile += state + '\n'
+				}
+				
+				fs.writeFileSync(trainingfolder + "/selection.txt", selectionfile)
+				
+				return
+			})
+			.then(() => {
+				commandargs = []
+				commandargs.push("prg=update_project_stateflags")
+				commandargs.push("projfile=" + trainingfolder + "/project.simple" )
+				commandargs.push("oritype=mic")
+				commandargs.push("infile=" + trainingfolder + "/selection.txt")
+				return spawn(command, commandargs, {capture: ['stdout']})
+					.then(() => {
+						return({status : "ok"})
+					})
+					.catch((error) => {
+						return({status : "error"})
+					})
+			})
+			/*.then(() => {
+				command = "simple_distr_exec"
+				commandargs = []
+				commandargs.push("prg=pick")
+				commandargs.push("refs=" + arg['refs'])
+				commandargs.push("ndev=" + arg['ndev'])
+				commandargs.push("thres=" + arg['thres'])
+				commandargs.push("nparts=1")
+				commandargs.push("mkdir=no")
+				return spawn(command, commandargs, {capture: ['stdout'], cwd: trainingfolder})
+					.then(() => {
+						return({status : "ok"})
+					})
+					.catch((error) => {
+						return({status : "error"})
+					})
+			})*/
+			.then(() => {
+				var files = fs.readdirSync(trainingfolder)
+				var boxfile
+				var boxes 
+				for (var file of files){
+					if(file.includes(".box")){
+						boxfile = trainingfolder + "/" + file
+						boxes = fs.readFileSync(boxfile, {encoding : 'utf8'})
+						break
+					}
+				}
+				
+				var lines = boxes.split("\n")
+				var coordinates = []
+				var boxsize
+				for(var line of lines){
+					var elements = line.split((/[ , \t]+/))
+					if(elements.length > 2){
+						coordinates.push([elements[0], elements[1]])
+						boxsize = elements[3]
+					}
+				}
+				return({coordinates : coordinates, boxsize : boxsize})
+			})
+			
+	}
+	
+	public getMakePickRefsWidget(modules, arg){
 		return new Promise((resolve, reject) => {
-			resolve({html : this.autopicktrainingwidget({})})
+			resolve({html : this.makepickrefswidget({})})
 		})
 	}
 	
 	public createAutopickRefs(modules, arg){
+		var folder
 		return this.execute(modules, arg)
 			.then((response) => {
-				return({pickrefs:response['folder'] + "/pickrefs.mrc"})
+				folder = response['folder']
+				return({pickrefs : folder + "/pickrefs.mrc"})
 			})
 	}
 	

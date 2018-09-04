@@ -2,7 +2,7 @@ for cssfolder in `find src -name "css"`; do
     cat $cssfolder/*.css >> dist/public/css/index.css
 done
 
-for jsfolder in `find dist -name "js"`; do
+for jsfolder in `find dist -not -path dist/public/js -name "js"`; do
     cat $jsfolder/*.js >> dist/public/js/index.js
 done
 

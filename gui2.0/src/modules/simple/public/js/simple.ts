@@ -155,6 +155,12 @@ class Simple {
 		
 	}
 	
+	hideParticles2D(){
+		var ptclsviewer = document.getElementById('ptclsviewer')
+		ptclsviewer.style.display = "none"
+		ptclsviewer.innerHTML = ""
+	}
+	
 	sumParticles2D(parentid){
 		var particlecounter =  document.getElementById('particlecounter')
 		var thumbnails =  document.getElementById(parentid).getElementsByClassName('thumbnail')

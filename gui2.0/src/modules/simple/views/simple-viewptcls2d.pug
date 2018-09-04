@@ -1,9 +1,11 @@
+div#ptclsgauze
 div
 	h="View Particles"
 	img#closebutton(
 		src="img/close.png"
-		onclick="viewer.hide()"
+		onclick="simple.hideParticles2D()"
 	)
+
 div#ptcls
 	div.thumbnails
 		each ptcl,index in ptcls

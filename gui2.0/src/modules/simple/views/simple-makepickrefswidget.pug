@@ -1,0 +1,54 @@
+div#widgetgauze
+div
+	h="Create Picking References Widget"
+	img#closebutton(
+		src="img/close.png"
+		onclick="pickrefswidget.hide()"
+	)
+
+div.inputpage
+	table
+		tr
+			td="Reference Volume"
+			td
+				input(
+					id="autopickvol"
+					type="text"
+				)
+		tr
+			td
+				i="or"
+		tr
+			td="Reference Classes"
+			td
+				input(
+					id="autopickclasses"
+					type="text"
+				)
+		tr
+			td="Sampling Distance"
+			td
+				input(
+					id="autopicksmpd"
+					type="text"
+				)
+		tr
+			td="Contrast"
+			td
+				input(
+					id="autopickcontrast"
+					type="text"
+				)
+		tr
+			td="Point Group"
+			td
+				input(
+					id="autopickpgrp"
+					type="text"
+				)
+
+
+div.buttons
+	button(
+		onclick="pickrefswidget.generate()"
+	)="Generate References"

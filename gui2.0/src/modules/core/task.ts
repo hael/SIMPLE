@@ -96,6 +96,11 @@ export default class Task{
 		return this.sqlQuery(query)
 	}
 	
+	kill(arg){
+		process.kill(arg['jobpid'])
+		return this.updateStatus(arg['history'], arg['jobid'], "Killed")
+	}
+	
 	private sqlQuery(query){
 		return new Promise((resolve,reject) => {
 			var db = new this.sqlite3.Database('simple.sqlite')

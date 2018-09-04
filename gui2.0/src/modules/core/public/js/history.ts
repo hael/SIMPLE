@@ -21,6 +21,8 @@ class History2 {
 				this.gauze.style.display = "block"
 				this.popup.innerHTML = json.html
 				this.popup.className = "viewlogfile"
+				var logtext = document.getElementById('logtext')
+				logtext.scrollTop = logtext.scrollHeight - logtext.clientHeight
 			})
 	}
 	
@@ -78,6 +80,22 @@ class History2 {
 			arg : {}
 		}
 		request['arg']['jobid'] = taskid
+		request['arg']['history'] = projectselector.selectedtable
+		return postAjaxPromise(request)
+			.then(response => response.json())
+			.then ((json) => {
+				projectselector.refreshHistory()
+			})
+	}
+	
+	killTask(taskid, taskpid){
+		var request = {
+			mod : "core",
+			fnc : "killTask",
+			arg : {}
+		}
+		request['arg']['jobid'] = taskid
+		request['arg']['jobpid'] = taskpid
 		request['arg']['history'] = projectselector.selectedtable
 		return postAjaxPromise(request)
 			.then(response => response.json())

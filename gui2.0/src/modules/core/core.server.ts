@@ -63,6 +63,10 @@ class Module {
 		return this.task.delete(arg)
 	}
 	
+	killTask(modules, arg) {
+		return this.task.kill(arg)
+	}
+	
 	showLog(modules, arg) {
 		return this.project.getLog(arg)
 	}

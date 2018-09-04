@@ -74,7 +74,7 @@ export default class Project{
 			resolve(log)
 		})
 		.then((data) => {
-			return ({html : this.logview({data : data})})
+			return ({html : this.logview({data : data, folder : arg['folder']})})
 		})
 	}
 	

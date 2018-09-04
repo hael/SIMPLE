@@ -1,4 +1,4 @@
-.viewer #cavgs,#mic,#fits,#ptcls {
+.viewer #cavgs,#mic,#fits {
 	height: calc(80vh - 75px);
 	display: flex;
 	flex-direction: column;
@@ -9,8 +9,8 @@
 	height: 300px;
 }
 
-#cavgs,#ptclsviewer,#mic,#fits,#ptcls .thumbnails {
-	overflow-y: scroll;
+#cavgs {
+	overflow-y: hidden;
 	overflow-x: hidden;
 }
 
@@ -20,9 +20,25 @@
 	left: 0px;
 }
 
+#cavgs .thumbnails {
+	overflow-x: hidden;
+	overflow-y: scroll;
+}
+
 #ptclsviewer .scrollmenu {
 	display: none;
 	height: 300px;
+}
+
+#ptcls {
+	display: flex;
+	height: calc(60vh - 60px);
+	flex-direction: column;
+}
+
+#ptclsviewer .thumbnails {
+	overflow-x: hidden;
+	overflow-y: scroll;
 }
 
 .viewer #ptclsviewer {
@@ -35,5 +51,16 @@
 	padding: 10px;
 	height: 60vh;
 	display: none;
+}
+
+#ptclsviewer #ptclsgauze {
+	 position: fixed;
+        top: 0px;
+        left: 0px;
+        width: 100vw;
+        height: 100vh;
+        background-color: black;
+        opacity: 0.2;
+        z-index: -1;
 }
 

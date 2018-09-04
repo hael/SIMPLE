@@ -1,10 +1,17 @@
 class AutoPickTrainingWidget {
 
 	private widgetpopup
+	private img
 	
 	constructor(){
 		this.widgetpopup = document.getElementById('widgetpopup')
+		this.img = new Image()
+		this.img.addEventListener('load',() => {
+			this.ctx.drawImage(this.img,0,0)
+		}, false)
 	}
+	
+	
 	
 	refresh(){
 		var request = {
@@ -12,11 +19,13 @@ class AutoPickTrainingWidget {
 			fnc : "getAutopickTrainingWidget",
 			arg : {}
 		}
+		request['arg']['projfile'] = (<HTMLInputElement>document.getElementById('inputpath')).value
 		return postAjaxPromise(request)
 			.then((response) => response.json())
 			.then ((json) => {
 				this.widgetpopup.innerHTML = json.html
-				this.widgetpopup.className = "guinierwidgetpopup"
+				this.widgetpopup.className = "guinierwidgetpopup"; 
+				(<HTMLInputElement>document.getElementById('autopickrefs')).value = (<HTMLInputElement>document.getElementById('keyrefs')).value
 			})
 	}
 	
@@ -29,25 +38,17 @@ class AutoPickTrainingWidget {
 		this.widgetpopup.className = ""
 	}
 	
-	generate(){
+	pick(){
 		var request = {}
-		request['fnc'] = "createAutopickRefs"
+		request['fnc'] = "trainAutopick"
 		request['mod'] = "simple"
 		request['arg'] = {}
-		request['arg']['keys'] = {}
-		request['arg']['projecttable'] = projectselector.selectedtable
-		request['arg']['executable'] = "simple_exec"
-		request['arg']['mod'] = "simple"
-		request['arg']['type'] = "make_pickrefs"
 		request['arg']['projectfolder'] = projectselector.selectedfolder
-		request['arg']['name'] = "Generated picking references"
-		request['arg']['description'] = "Created from the autopick training widget"
-		
-		request['arg']['keys']['keyvol1'] = (<HTMLInputElement>document.getElementById('autopickvol')).value
-		request['arg']['keys']['keystk'] = (<HTMLInputElement>document.getElementById('autopickclasses')).value
-		request['arg']['keys']['keysmpd'] = (<HTMLInputElement>document.getElementById('autopicksmpd')).value
-		request['arg']['keys']['keycontrast'] = (<HTMLInputElement>document.getElementById('autopickcontrast')).value
-		request['arg']['keys']['keypgrp'] = (<HTMLInputElement>document.getElementById('autopickpgrp')).value
+		request['arg']['projfile'] = (<HTMLInputElement>document.getElementById('inputpath')).value
+		request['arg']['micrographid'] = (<HTMLSelectElement>document.getElementById('micrographselector')).value
+		request['arg']['refs'] = (<HTMLInputElement>document.getElementById('autopickrefs')).value
+		request['arg']['ndev'] = (<HTMLInputElement>document.getElementById('autopickquality')).value
+		request['arg']['thres'] = (<HTMLInputElement>document.getElementById('autopickthreshold')).value
 
 		return postAjaxPromise(request)
 			.then((response) => response.json())
@@ -56,6 +57,9 @@ class AutoPickTrainingWidget {
 			})
 	}
 
+	done(){
+		
+	}
 }
 
 var autopicktrainingwidget
