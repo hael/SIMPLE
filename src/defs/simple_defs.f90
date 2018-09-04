@@ -181,6 +181,8 @@ integer, parameter :: EXIT_FAILURE5 = 5
 integer, parameter :: EXIT_FAILURE6 = 6
 integer, parameter :: EXIT_FAILURE7 = 7
 
+logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)
+
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
 
