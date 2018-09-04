@@ -576,7 +576,7 @@ contains
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
         type(str4arr),           intent(inout) :: sarr(:)
         integer :: i
-        integer(kind=8) :: ibytes, nbytes
+        integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
             write(*,*) 'isegment: ', isegment
@@ -586,8 +586,7 @@ contains
             ! read orientation data into array of allocatable strings
             ibytes = self%header(isegment)%first_data_byte
             do i=self%header(isegment)%fromto(1),self%header(isegment)%fromto(2)
-               !nbytes = self%header(isegment)%n_bytes_per_record
-                !allocate(character(len=nbytes) :: sarr(i)%str)
+                allocate(character(len=self%header(isegment)%n_bytes_per_record) :: sarr(i)%str)
                 read(unit=self%funit,pos=ibytes) sarr(i)%str
                 ibytes = ibytes + self%header(isegment)%n_bytes_per_record
             end do
