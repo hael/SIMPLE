@@ -1639,9 +1639,22 @@ contains
             ctfflag = NIL
         endif
         l_noctf = .false.
-        if(strIsBlank(trim(ctfflag))) THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
-        ctfvars%ctfflag = self%get_ctfflag_type(trim(ctfflag))
-        if(ctfvars%ctfflag == CTFFLAG_NO) l_noctf = .true.
+        select case(trim(ctfflag))
+        case(NIL)
+            THROW_HARD('ctf key lacking in os_stk_field & ptcl fields; get_ctfparams')
+        case('no')
+            ctfvars%ctfflag = CTFFLAG_NO
+            l_noctf = .true.
+        case('yes')
+            ctfvars%ctfflag = CTFFLAG_YES
+        case('mul')
+            THROW_HARD('ctf=mul depreciated; sget_ctfparams')
+        case('flip')
+            ctfvars%ctfflag = CTFFLAG_FLIP
+        case DEFAULT
+            write(*,*) 'stkind/iptcl: ', stkind, iptcl
+            THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
+        end select
         
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
