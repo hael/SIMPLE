@@ -31,6 +31,7 @@ program simple_test_chiara_pick_edge
   !      fname = '/home/lenovoc30/Desktop/MassCenter/NegativeStaining/16.06.34 CCD Acquire_0000_1.mrc'
   !      smpd  = 1.
   !      part_radius = 15.
+  !      part_concentration = 0.2
 
   if( command_argument_count() < 3 )then
       write(*,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)]'
@@ -60,27 +61,30 @@ program simple_test_chiara_pick_edge
   call mic_lp%ifft()
   call mic_lp%write('LowPassFiltered.mrc')
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! In order to save time, comment the following lines:
-  ! 3) Edge Detection
-  call mic_copy%stats( ave, sdev, maxv, minv )
-  call mic_copy%bin(ave+.7*sdev)
-  call mic_copy%write('Bin1.mrc')
-  call mic_copy%real_space_filter(4, 'median') !median filtering allows easy calculation of cc
-  call mic_copy%write('Bin1Median.mrc')
-  ! 5) Connected components (cc) identification
-  call imgcc%new(ldim_shrunken, smpd_shrunken)
-  call mic_copy%find_connected_comps(imgcc)
-  call imgcc%write('ConnectedComponents.mrc')
-! In order to save time, DEcomment the following lines:
+  !
+  ! ! 3) Edge Detection
+  ! call mic_copy%stats( ave, sdev, maxv, minv )
+  ! call mic_copy%bin(ave+.7*sdev)
+  ! call mic_copy%write('Bin1.mrc')
+  ! call mic_copy%real_space_filter(4, 'median') !median filtering allows easy calculation of cc
+  ! call mic_copy%write('Bin1Median.mrc')
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! ! call mic_bin%morpho_opening()
+  ! ! call mic_bin%morpho_closing()
+  ! ! call mic_bin%write('MorphoOpenedClosed.mrc')
+  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! ! 5) Connected components (cc) identification
   ! call imgcc%new(ldim_shrunken, smpd_shrunken)
-  ! call imgcc%read('/home/lenovoc30/Desktop/MassCenter/try1/ConnectedComponents.mrc')
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! call mic_copy%find_connected_comps(imgcc)
+  ! call imgcc%write('ConnectedComponents.mrc')
+  ! ! 6) cc filtering
 
-  !  6) cc filtering
+
   call imgcc%new(ldim_shrunken, smpd_shrunken)
   call imgcc%read('/home/lenovoc30/Desktop/MassCenter/try1/ConnectedComponents.mrc')
-  min_sz = 10*int(part_radius)
+
+  !min_sz =  int((15/100)*3*part_radius**2)   !15% of the size of the particle (suppose it's circular)
+  min_sz = 10*int(part_radius+5)
   max_sz = 70*int(part_radius)
   call imgcc%elim_cc([min_sz,max_sz])
   call imgcc%write('ConnectedComponentsElimin.mrc')

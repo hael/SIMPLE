@@ -74,7 +74,7 @@ contains
         ! calculate distance stats
         call distimg%new(self%get_ldim(), params_glob%smpd)
         call distimg%cendist
-        call distimg%stats(self, ave, sdev, maxv, minv, med)
+        call distimg%stats(ave, sdev, maxv, minv, self, med)
         winsz = max(8, nint((params_glob%msk - maxv) / 2.))
         ! soft edge mask
         call self%grow_bins(2) ! in addition to binwidth (4 safety)

@@ -1972,6 +1972,7 @@ contains
         real, allocatable   :: matrix(:,:,:)
         integer      :: s(3), i, j
         s = shape(mask)
+        if(allocated(matrix)) deallocate(matrix)
         allocate(matrix(s(1),s(2),1), source = 0.)
         do i = 1, s(1)
             do j = 1, s(2)

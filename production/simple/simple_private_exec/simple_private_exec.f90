@@ -60,6 +60,7 @@ type(automask_commander)             :: xautomask
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(scale_commander)                :: xscale         ! DUPLICATED
 type(binarise_commander)             :: xbinarise
+type(edge_detector_commander)        :: xdetector
 
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)              :: xmasscen
@@ -635,6 +636,17 @@ select case(prg)
         keys_optional(10) = 'outstk'
         call cline%parse_oldschool(keys_optional=keys_optional(:10))
         call xbinarise%execute(cline)
+    case('edge_detect')
+        keys_required(1) = 'detector'
+        keys_required(2) = 'stk'
+        keys_required(3) = 'automatic'
+        keys_optional(1) = 'outstk'
+        keys_optional(2) = 'thres'
+        keys_optional(3) = 'npix'
+        keys_optional(4) = 'thres_low'
+        keys_optional(5) = 'thres_up'        
+        call cline%parse_oldschool(keys_required(:3),keys_optional(:5))
+        call xdetector%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
 

@@ -10,17 +10,16 @@ private
 contains
 
   ! Classic Sobel edge detection routine.
-  subroutine sobel(img_in,img_out,thresh)
-      class(image), intent(inout) :: img_in,img_out   !image input and output
+  subroutine sobel(img_in,thresh)
+      class(image), intent(inout) :: img_in           !image input and output
       real,         intent(in)    :: thresh(1)        !threshold for Sobel algorithm
       real,  allocatable :: grad(:,:,:), rmat(:,:,:)  !matrices
       integer :: ldim(3)
       ldim = img_in%get_ldim()
-      call img_out%new(ldim,1.)          !reset if not empty
       allocate(rmat(ldim(1),ldim(2),1 ), source = 0.)
       call img_in%calc_gradient(grad)
       where(grad > thresh(1) ) rmat = 1.
-      call img_out%set_rmat(rmat)
+      call img_in%set_rmat(rmat)
       deallocate(grad,rmat)
   end subroutine sobel
 
@@ -29,9 +28,8 @@ contains
   ! a ratio between foreground and background pixels in the binary image
   ! close to 'goal'. This particular number is selected because it is what needed
   ! for Chiara's particle picking routine.
-  subroutine automatic_thresh_sobel(img_in, bin_img, goal, thresh)
-      class(image),    intent(inout)   :: img_in
-      class(image),    intent(out)     :: bin_img
+  subroutine automatic_thresh_sobel(img, goal, thresh)
+      class(image),    intent(inout)   :: img
       real, optional,  intent(in)      :: goal
       real, optional,  intent(out)     :: thresh(1) !to keep track of the selected threshold
       real, allocatable  :: grad(:,:,:)
@@ -46,9 +44,7 @@ contains
       DEBUG  = .true.
       ggoal = 2.
       if(present(goal)) ggoal = goal
-      if(bin_img%exists()) call bin_img%kill
-      call bin_img%new(img_in%get_ldim(), img_in%get_smpd())
-      call img_in%calc_gradient(grad)
+      call img%calc_gradient(grad)
       tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
       diff = 1.     !initialization
       if(DEBUG) print*, 'Initial guessing: ', tthresh
@@ -62,21 +58,21 @@ contains
           t(2) = 3./2.*tthresh(1) + r
           t(3) = 3./4.*tthresh(1) + r
           if(t(2) > maxval(grad) .or. t(3) < minval(grad)) THROW_HARD('cannot find the threshold! automatic_thresh_sobel')
-          call sobel(img_in, bin_img, t(1))
-          if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-              ratio(1) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(1)
+          call sobel(img,t(1))
+          if(abs(real(img%nbackground())) > TINY) then !do not divide by 0
+              ratio(1) = real(img%nforeground())/real(img%nbackground())  !obtained ratio with threshold = t(1)
           else
               ratio(1) = 0.
           endif
-          call sobel(img_in, bin_img, t(2))
-          if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-              ratio(2) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(2)
+          call sobel(img,t(2))
+          if(abs(real(img%nbackground())) > TINY) then !do not divide by 0
+              ratio(2) = real(img%nforeground())/real(img%nbackground())  !obtained ratio with threshold = t(2)
           else
               ratio(2) = 0.
           endif
-          call sobel(img_in, bin_img, t(3))
-          if(abs(real(bin_img%nbackground())) > TINY) then !do not divide by 0
-              ratio(3) = real(bin_img%nforeground())/real(bin_img%nbackground())  !obtained ratio with threshold = t(3)
+          call sobel(img,t(3))
+          if(abs(real(img%nbackground())) > TINY) then !do not divide by 0
+              ratio(3) = real(img%nforeground())/real(img%nbackground())  !obtained ratio with threshold = t(3)
           else
               ratio(3) = 0.
           endif
@@ -90,7 +86,7 @@ contains
           endif
       end do
       if(present(thresh)) thresh = tthresh
-      call sobel(img_in, bin_img, tthresh)
+      call sobel(img, tthresh)
       if(DEBUG) print *, 'Final threshold = ', tthresh
       deallocate(grad)
   end subroutine automatic_thresh_sobel
@@ -110,14 +106,14 @@ contains
   !        the algorithm it is fixed to its default value (= 0.33)
   !        as suggested in the source.
   ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
-  subroutine canny(img_in, img_out, thresh)
-      type(image),    intent(inout) :: img_in, img_out
+  subroutine canny(img_in,thresh)
+      type(image),    intent(inout) :: img_in
       real, optional, intent(in)    :: thresh(2)
       real                       :: tthresh(2),  sigma, m
       real, allocatable          :: grad(:,:,:), vector(:)
       integer                    :: ldim(3)
       if(present(thresh)) then
-         call canny_edge(img_in, img_out, thresh)
+         call canny_edge(img_in,thresh)
          return
       endif
       sigma = 0.33
@@ -129,7 +125,7 @@ contains
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
       tthresh(1) = max(0.   ,(1-sigma)*m) !lower
       tthresh(2) = min(255., (1+sigma)*m) !upper
-      call canny_edge(img_in, img_out, tthresh)
+      call canny_edge(img_in,tthresh)
       deallocate(vector)
   end subroutine canny
 
@@ -216,8 +212,8 @@ contains
 
   ! Canny routine for edge detection, in its classical verison.
   ! It requires a double threshold.
-  subroutine canny_edge(img_in,img_out, thresh)
-        type(image), intent(inout) :: img_in, img_out                               !input and output image
+  subroutine canny_edge(img_in, thresh)
+        type(image), intent(inout) :: img_in                              !input and output image
         real,        intent(in)    :: thresh(2)                                     !low and high thresholds
         type(image) :: Gr !gradient image
         integer     :: ldim(3), s(3), r(3), k, i, j                        !just for implementation
@@ -225,8 +221,6 @@ contains
         integer, allocatable :: neigh_8(:,:,:)                                      !8-neighborhoods of a pixel
         ldim = img_in%get_ldim()
         if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
-        if(img_out%exists()) call img_out%kill !reset if not empty
-        call img_out%new(ldim,1.)
         call      Gr%new(ldim,1.)
         !STEP 1: SMOOTHING
         !Apply a Gaussian filter to reduce noise
@@ -267,7 +261,7 @@ contains
                 endif
             enddo
         enddo
-        img_out = Gr
+        img_in = Gr
         deallocate(grad)
   end subroutine canny_edge
 end module simple_edge_detector

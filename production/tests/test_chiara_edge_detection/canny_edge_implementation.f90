@@ -18,32 +18,36 @@ call img_in05%read('/home/lenovoc30/Desktop/Edge Detection/one_projection05.mrc'
 !1) Sobel, threshold;
 !2) Canny, threshold;
 !3) Canny, threshold: NO.
-!NOISELESS IMAGE
-    call sobel(img_in,img_out, thresh(1))           !1)
-    call img_out%write('Sobel.mrc')
-    call canny(img_in,img_out, [0.1,0.5])           !2)
-    call img_out%write('Canny_thresh.mrc')
-    call canny(img_in,img_out)                      !3)
-    call img_out%write('Canny_NO_thresh.mrc')
-!IMAGE WITH SNR = 2
-    call sobel(img_in2,img_out, thresh(2))          !1)
-    call img_out%write('Sobel2.mrc')
-    call canny(img_in2,img_out, [0.5,0.95])         !2)
-    call img_out%write('Canny_thresh2.mrc')
-    call canny(img_in2,img_out)                     !3)
-    call img_out%write('Canny_NO_thresh2.mrc')
-!IMAGE WITH SNR = 1
-    call sobel(img_in1,img_out, thresh(2))          !1)
-    call img_out%write('Sobel1.mrc')
-    call canny(img_in1,img_out, [0.5,0.95])         !2)
-    call img_out%write('Canny_thresh1.mrc')
-    call canny(img_in1,img_out)                     !3)
-    call img_out%write('Canny_NO_thresh1.mrc')
-!IMAGE WITH SNR = 0.5
-    call sobel(img_in05,img_out, thresh(2))         !1)
-    call img_out%write('Sobel05.mrc')
-    call canny(img_in05,img_out, [0.5,0.95])        !2)
-    call img_out%write('Canny_thresh05.mrc')
-    call canny(img_in05,img_out)                    !3)
+
+! ALL THE FOLLOWING HAS TO BE MODIFIED ACCORDING TO THE
+!NEW ROUTINE SOBEL ETC
+
+! !NOISELESS IMAGE
+!     call sobel(img_in,thresh(1))           !1)
+!     call img_in%write('Sobel.mrc')
+!     call canny(img_in,img_out, [0.1,0.5])           !2)
+!     call img_out%write('Canny_thresh.mrc')
+!     call canny(img_in,img_out)                      !3)
+!     call img_out%write('Canny_NO_thresh.mrc')
+! !IMAGE WITH SNR = 2
+!     call sobel(img_in2,thresh(2))          !1)
+!     call img_in2%write('Sobel2.mrc')
+!     call canny(img_in2,img_out, [0.5,0.95])         !2)
+!     call img_out%write('Canny_thresh2.mrc')
+!     call canny(img_in2,img_out)                     !3)
+!     call img_out%write('Canny_NO_thresh2.mrc')
+! !IMAGE WITH SNR = 1
+!     call sobel(img_in1,img_out, thresh(2))          !1)
+!     call img_out%write('Sobel1.mrc')
+!     call canny(img_in1,img_out, [0.5,0.95])         !2)
+!     call img_out%write('Canny_thresh1.mrc')
+!     call canny(img_in1,img_out)                     !3)
+!     call img_out%write('Canny_NO_thresh1.mrc')
+! !IMAGE WITH SNR = 0.5
+!     call sobel(img_in05,img_out, thresh(2))         !1)
+!     call img_out%write('Sobel05.mrc')
+!     call canny(img_in05,img_out, [0.5,0.95])        !2)
+!     call img_out%write('Canny_thresh05.mrc')
+!     call canny(img_in05,img_out)                    !3)
     call img_out%write('Canny_NO_thresh05.mrc')
 end program canny_no_thresh
