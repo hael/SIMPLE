@@ -8,6 +8,7 @@ implicit none
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
+public :: subtr_backgr_imgfile
 !! Normalisation
 public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
 public :: shellnorm_imgfile, matchfilt_imgfile
@@ -342,6 +343,25 @@ contains
         call img_resized1%kill
         call img_resized2%kill
     end subroutine resize_imgfile_double
+
+    subroutine subtr_backgr_imgfile( fname2subtr, fname, smpd, lp )
+        character(len=*), intent(in) :: fname2subtr, fname
+        real,             intent(in) :: smpd, lp
+        type(image) :: img
+        integer     :: i, n, ldim(3)
+        call find_ldim_nptcls(fname2subtr, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'subtr_backgr_imgfile' )
+        call img%new(ldim,smpd)
+        write(*,'(a)') '>>> SUBTRACTING BACKGROUND FROM IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2subtr, i)
+            call img%subtr_backgr(lp)
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine subtr_backgr_imgfile
 
     subroutine norm_bin_imgfile( fname2norm, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname

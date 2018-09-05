@@ -634,7 +634,8 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
-        call cline%parse_oldschool(keys_optional=keys_optional(:10))
+        keys_optional(11) = 'ndev'
+        call cline%parse_oldschool(keys_optional=keys_optional(:11))
         call xbinarise%execute(cline)
     case('edge_detect')
         keys_required(1) = 'detector'
@@ -644,7 +645,7 @@ select case(prg)
         keys_optional(2) = 'thres'
         keys_optional(3) = 'npix'
         keys_optional(4) = 'thres_low'
-        keys_optional(5) = 'thres_up'        
+        keys_optional(5) = 'thres_up'
         call cline%parse_oldschool(keys_required(:3),keys_optional(:5))
         call xdetector%execute(cline)
 

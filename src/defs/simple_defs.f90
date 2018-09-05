@@ -76,6 +76,14 @@ type ctfparams
     logical :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfparams
 
+type stats_struct
+    real :: avg  = 0.
+    real :: med  = 0.
+    real :: sdev = 0.
+    real :: maxv = 0
+    real :: minv = 0.
+end type stats_struct
+
 ! character constants
 character(len=*), parameter :: NEWLINE = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG='2>/dev/null'

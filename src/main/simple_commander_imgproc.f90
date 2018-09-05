@@ -96,10 +96,14 @@ contains
 
             subroutine doit( img_or_vol )
                 class(image), intent(inout) :: img_or_vol
+                real :: ave, sdev, maxv, minv
                 if( cline%defined('thres') )then
                     call img_or_vol%bin(params%thres)
                 else if( cline%defined('npix') )then
                     call img_or_vol%bin(params%npix)
+                else if( cline%defined('ndev') )then
+                    call img_or_vol%stats( ave, sdev, maxv, minv)
+                    call img_or_vol%bin(ave + params%ndev * sdev)
                 else
                    call img_or_vol%bin_kmeans
                 endif
@@ -608,8 +612,7 @@ contains
     subroutine exec_stackops( self, cline )
         use simple_oris, only: oris
         use simple_stackops
-        use simple_procimgfile, only: copy_imgfile, add_noise_imgfile, neg_imgfile,&
-            &mirror_imgfile, shellnorm_imgfile, add_noise_imgfile
+        use simple_procimgfile
         class(stackops_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters)              :: params
@@ -824,6 +827,11 @@ contains
         ! mirror
         if( params%mirr .ne. 'no' )then
             call mirror_imgfile(params%stk, params%outstk, params%mirr, params%smpd)
+            goto 999
+        endif
+        if( params%subtr_backgr .eq. 'yes' )then
+            if( .not. cline%defined('lp') ) THROW_HARD('need lp arg for background subtraction; exec_stackops')
+            call subtr_backgr_imgfile(params%stk, params%outstk, params%smpd, params%lp)
             goto 999
         endif
         ! default
