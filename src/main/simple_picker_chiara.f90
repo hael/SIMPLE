@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
-public :: extract_particles, extract_particles_NOmasscen
+public :: extract_particles_NOmasscen
 
 private
 #include "simple_local_flags.inc"
@@ -71,82 +71,87 @@ contains
       deallocate(msk)
   end subroutine elimin_aggregation
 
-  ! This subroutine takes in input an image, its connected components image,
-  ! and extract particles using a mass centering process.
-  !notation:: cc = connected component.
-  subroutine extract_particles(self, img_cc, part_radius)
-      type(image),  intent(inout) :: self        !original image
-      type(image),  intent(inout) :: img_cc      !connected components image
-      integer,      intent(in)    :: part_radius !extimated particle radius
-      type(image)          :: imgwin_particle, imgwin_centered, img_masked, self_back_no_aggreg
-      integer              :: box
-      integer              :: n_cc               ! n_cc  = # cc in the input image
-      integer              :: cnt_particle, cnt_centered
-      integer              :: xyz(3)             ! mass center coordinates
-      integer, allocatable :: pos(:)             ! position of each cc
-      integer, allocatable :: xyz_saved(:,:), xyz_no_rep(:,:), xyz_norep_noagg(:,:)
-      real,    allocatable :: rmat(:,:,:), rmat_masked(:,:,:)
-      logical              :: outside_particle, outside_centered, discard, picked
-      ! Initialisations
-      box  = (part_radius)*4
-      rmat = img_cc%get_rmat()
-      cnt_particle = 0
-      cnt_centered = 0
-      call imgwin_particle%new([box,box,1],1.)
-      call imgwin_centered%new([box,box,1],1.)
-      call img_masked%new([box,box,1],1.)
-      outside_particle  = .false.
-      outside_centered  = .false.
-      picked = .false.
-      allocate(xyz_saved(int(maxval(rmat)),2),xyz_no_rep(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
-      ! Some copies of the lp-micrograph, to highlight on them the picked particles
-      call self_back_no_aggreg%copy(self)
-      ! Particle identification, extraction and centering
-      do n_cc = 1, int(maxval(rmat))   !automatically do not consider background
-          if(minval(abs(rmat-n_cc)) < TINY) then
-              pos = minloc(abs(rmat-n_cc)) !where is the selected cc, particle identification
-              call img_cc%window_slim(pos-box/2, box, imgwin_particle, outside_particle) !particle extraction
-              !!!!!!!!!!!!!!!!
-              call self%window_slim(pos-box/2, box, img_masked, outside_particle)
-              !rmat_masked = img_masked%get_rmat()
-              !!!!!!!!!!!!!!!!
-              if(.not. outside_particle) then
-                  cnt_particle = cnt_particle + 1
-                  call  imgwin_particle%prepare_connected_comps(discard, 1)
-                  call  imgwin_particle%morpho_closing()
-                  call  imgwin_particle%dilatation()
-                  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                  !rmat_masked = rmat_masked*imgwin_particle%get_rmat()
-                  !call img_masked%set_rmat(rmat_masked)
-                  !call img_masked%write('img_masked.mrc', cnt_particle)
-                  xyz = img_masked%masscen() !particle centering
-                  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
->>>>>>> Stashed changes
-                  xyz_saved(cnt_particle,:) =      int(xyz(:2)) + pos(:2)
-                  if(n_cc > 1) picked = is_picked( int(xyz(:2)) + pos(:2), xyz_saved, part_radius, cnt_particle-1 )
-                  call self%window_slim(int(xyz(:2))+pos(:2)-box/2, box, imgwin_centered, outside_centered)
-                  if( .not. picked .and. .not. discard .and. .not. outside_centered) then
-                      cnt_centered = cnt_centered + 1
-                      xyz_no_rep(cnt_centered,:) =int(xyz(:2))+pos(:2)
-                  endif
-              endif
-          endif
-      enddo
-      call elimin_aggregation( xyz_no_rep, part_radius+5, xyz_norep_noagg ) !+5 not to pick too close particles
-      cnt_particle = 0
-      do n_cc = 1, cnt_centered
-          if( abs(xyz_norep_noagg(n_cc,1)) >  0) then
-              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back_no_aggreg%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3)
-              call self%window_slim( xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_centered, outside_centered )
-              if( .not. outside_centered) then
-                  cnt_particle = cnt_particle + 1
-                  call imgwin_centered%write('centered_particlesMASSCEN.mrc', cnt_particle)
-              endif
-          endif
-      end do
-      call self_back_no_aggreg%write('picked_particlesMASSCEN.mrc')
-      deallocate(xyz_saved, xyz_no_rep, xyz_norep_noagg, rmat)!, rmat_masked)
-  end subroutine extract_particles
+
+! OLD VERSION
+!   ! This subroutine takes in input an image, its connected components image,
+!   ! and extract particles using a mass centering process.
+!   !notation:: cc = connected component.
+!   subroutine extract_particles(self, img_cc, part_radius)
+!       type(image),  intent(inout) :: self        !original image
+!       type(image),  intent(inout) :: img_cc      !connected components image
+!       integer,      intent(in)    :: part_radius !extimated particle radius
+!       type(image)          :: imgwin_particle, imgwin_centered, img_masked, self_back_no_aggreg
+!       integer              :: box
+!       integer              :: n_cc               ! n_cc  = # cc in the input image
+!       integer              :: cnt_particle, cnt_centered
+!       integer              :: xyz(3)             ! mass center coordinates
+!       integer, allocatable :: pos(:)             ! position of each cc
+!       integer, allocatable :: xyz_saved(:,:), xyz_no_rep(:,:), xyz_norep_noagg(:,:)
+!       real,    allocatable :: rmat(:,:,:), rmat_masked(:,:,:)
+!       logical              :: outside_particle, outside_centered, discard, picked
+!       ! Initialisations
+!       box  = (part_radius)*4
+!       rmat = img_cc%get_rmat()
+!       cnt_particle = 0
+!       cnt_centered = 0
+!       call imgwin_particle%new([box,box,1],1.)
+!       call imgwin_centered%new([box,box,1],1.)
+!       call img_masked%new([box,box,1],1.)
+!       outside_particle  = .false.
+!       outside_centered  = .false.
+!       picked = .false.
+!       allocate(xyz_saved(int(maxval(rmat)),2),xyz_no_rep(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
+!       ! Some copies of the lp-micrograph, to highlight on them the picked particles
+!       call self_back_no_aggreg%copy(self)
+!       ! Particle identification, extraction and centering
+!       do n_cc = 1, int(maxval(rmat))   !automatically do not consider background
+!           if(minval(abs(rmat-n_cc)) < TINY) then
+!               pos = minloc(abs(rmat-n_cc)) !where is the selected cc, particle identification
+!               call img_cc%window_slim(pos-box/2, box, imgwin_particle, outside_particle) !particle extraction
+!               !!!!!!!!!!!!!!!!
+!               call self%window_slim(pos-box/2, box, img_masked, outside_particle)
+!               !rmat_masked = img_masked%get_rmat()
+!               !!!!!!!!!!!!!!!!
+!               if(.not. outside_particle) then
+!                   cnt_particle = cnt_particle + 1
+!                   call  imgwin_particle%prepare_connected_comps(discard, 1)
+!                   call  imgwin_particle%morpho_closing()
+! ! <<<<<<< Updated upstream
+!                   call imgwin_particle%masscen(xyz_real) !particle centering
+!                   xyz = nint(xyz_real)
+! ! =======
+!                   ! call  imgwin_particle%dilatation()
+!                   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!                   !rmat_masked = rmat_masked*imgwin_particle%get_rmat()
+!                   !call img_masked%set_rmat(rmat_masked)
+!                   !call img_masked%write('img_masked.mrc', cnt_particle)
+!                   ! xyz = img_masked%masscen() !particle centering
+!                   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!                   xyz_saved(cnt_particle,:) =      int(xyz(:2)) + pos(:2)
+!                   if(n_cc > 1) picked = is_picked( int(xyz(:2)) + pos(:2), xyz_saved, part_radius, cnt_particle-1 )
+!                   call self%window_slim(int(xyz(:2))+pos(:2)-box/2, box, imgwin_centered, outside_centered)
+!                   if( .not. picked .and. .not. discard .and. .not. outside_centered) then
+!                       cnt_centered = cnt_centered + 1
+!                       xyz_no_rep(cnt_centered,:) =int(xyz(:2))+pos(:2)
+!                   endif
+!               endif
+!           endif
+!       enddo
+!       call elimin_aggregation( xyz_no_rep, part_radius+5, xyz_norep_noagg ) !+5 not to pick too close particles
+!       cnt_particle = 0
+!       do n_cc = 1, cnt_centered
+!           if( abs(xyz_norep_noagg(n_cc,1)) >  0) then
+!               if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back_no_aggreg%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3)
+!               call self%window_slim( xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_centered, outside_centered )
+!               if( .not. outside_centered) then
+!                   cnt_particle = cnt_particle + 1
+!                   call imgwin_centered%write('centered_particlesMASSCEN.mrc', cnt_particle)
+!               endif
+!           endif
+!       end do
+!       call self_back_no_aggreg%write('picked_particlesMASSCEN.mrc')
+!       deallocate(xyz_saved, xyz_no_rep, xyz_norep_noagg, rmat)!, rmat_masked)
+!   end subroutine extract_particles
 
   ! This subroutine takes in input an image, its connected components image,
   ! and extract particles. It doesn't use mass_center.
