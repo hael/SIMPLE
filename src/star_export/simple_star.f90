@@ -997,7 +997,7 @@ contains
         stk='filetab-stardoc.txt'
 !!        call spproj%add_cavgs2os_out(params%stk, params%smpd)
         ! full path and existence check
-        call simple_abspath(stk,stk_abspath,errmsg='star_project :: import_cavgs')
+        stk_abspath = simple_abspath(stk,errmsg='star_project :: import_cavgs')
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         ! add os_out entry

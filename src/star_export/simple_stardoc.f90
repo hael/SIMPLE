@@ -570,7 +570,7 @@ contains
                             endif
                             if(.not. allocated(projrootdir))then
                                 !! Estimate Project root dir
-                                call simple_abspath(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT), projrootdir)
+                                projrootdir = simple_abspath(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT))
                                 DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
                             end if
 

@@ -545,6 +545,7 @@ contains
         startpos2=1;startpos3=1;startpos4=1
         s1 = trim(adjustl(p1))
         endpos1 = len_trim(s1)
+        ! Exceptions
         if(endpos1<1) THROW_HARD("first arg too small")
         if(s1(endpos1:endpos1)==PATH_SEPARATOR) endpos1 = endpos1-1
         if(endpos1<1) THROW_HARD("first arg cannot be /")

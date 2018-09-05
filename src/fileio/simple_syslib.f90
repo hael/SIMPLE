@@ -21,15 +21,15 @@ use, intrinsic :: iso_c_binding
 #endif
 implicit none
 
-public :: exec_cmdline, exec_subprocess, simple_isenv, simple_getenv, simple_sleep
-public :: simple_touch, syslib_symlink, syslib_copy_file, simple_rename, simple_chmod
-public :: simple_file_stat, is_io, is_open, dir_exists, file_exists, is_file_open
-public :: wait_for_closure, simple_getcwd, simple_chdir, simple_mkdir, simple_rmdir
-public :: simple_list_dirs, find_next_int_dir_prefix, simple_list_files, simple_glob_list_tofile
-public :: del_file, simple_del_files, syslib_rm_rf, simple_rm_force, simple_timestamp, cpu_usage
-public :: get_process_id, get_login_id, print_compiler_info, simple_sysinfo_usage, simple_mem_usage
-public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid, RE_match, RE_multi
-private
+! public :: exec_cmdline, exec_subprocess, simple_isenv, simple_getenv, simple_sleep
+! public :: simple_touch, syslib_symlink, syslib_copy_file, simple_rename, simple_chmod
+! public :: simple_file_stat, is_io, is_open, dir_exists, file_exists, is_file_open
+! public :: wait_for_closure, simple_getcwd, simple_chdir, simple_mkdir, simple_rmdir
+! public :: simple_list_dirs, find_next_int_dir_prefix, simple_list_files, simple_glob_list_tofile
+! public :: del_file, simple_del_files, syslib_rm_rf, simple_rm_force, simple_timestamp, cpu_usage
+! public :: get_process_id, get_login_id, print_compiler_info, simple_sysinfo_usage, simple_mem_usage
+! public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid, RE_match, RE_multi
+! private
 #include "simple_local_flags.inc"
 
 #ifdef GNU_STD2008
@@ -303,16 +303,27 @@ interface
         integer(c_int) :: regexp_match
         character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
-    end function 
+    end function
     function regexp_multi(source, regex) bind(C,name="regexp_multi")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: regexp_multi
         character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
-    end function 
+    end function
 
 end interface
+
+interface simple_getenv
+    module procedure simple_getenv_1
+    module procedure simple_getenv_2
+end interface
+
+interface simple_abspath
+!    module procedure simple_abspath_1
+    module procedure simple_abspath_2
+end interface
+
 
 contains
 
@@ -392,7 +403,7 @@ contains
     end function simple_isenv
 
     !> simple_getenv gets the environment variable string and returns status
-    function simple_getenv( name , retval, allowfail)  result( status )
+    function simple_getenv_1( name , retval, allowfail)  result( status )
         character(len=*),      intent(in)  :: name
         character(len=*),      intent(out) :: retval
         logical,     optional, intent(in)  :: allowfail
@@ -409,7 +420,28 @@ contains
             retval = ""
             return
         end if
-    end function simple_getenv
+    end function simple_getenv_1
+
+    !> simple_getenv gets the environment variable string and returns status
+    function simple_getenv_2( name , status, allowfail)  result( retval )
+        character(len=*),      intent(in)  :: name
+        character(len=:), allocatable       :: retval
+        logical,     optional, intent(in)  :: allowfail
+        integer, intent(out)               :: status
+        integer                            :: length
+        call get_environment_variable( trim(name), value=retval, length=length, status=status)
+        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
+        if( status ==  1 )then
+            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+            retval = 'undefined'
+            return
+        endif
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
+        if( length ==  0 .or. status /= 0 )then
+            retval = ""
+            return
+        end if
+    end function simple_getenv_2
 
     subroutine simple_sleep( secs )
         integer, intent(in) :: secs
@@ -596,6 +628,9 @@ contains
         endif
     end subroutine simple_file_stat
 
+
+
+
     logical function is_io(unit)
         integer, intent(in) :: unit
         is_io=.false.
@@ -710,7 +745,7 @@ contains
         endif
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
-        call simple_abspath (trim(newd), targetdir, eemsg, check_exists)
+        targetdir = simple_abspath_2 (trim(newd), errmsg=eemsg, check_exists=check_exists)
         inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
         if(dir_e) then
 #if defined(INTEL)
@@ -1354,16 +1389,16 @@ contains
         call exec_cmdline(trim(command))
     end subroutine simple_dump_mem_usage
 
-    subroutine simple_abspath (infile, absolute_name, errmsg, check_exists)
+    function simple_abspath_1 (infile, absolute_name,  check_exists) result(status)
         character(len=*),              intent(in)  :: infile
         character(len=:), allocatable, intent(out) :: absolute_name
-        character(len=*), optional,    intent(in)  :: errmsg
+       ! character(len=*), optional,    intent(in)  :: errmsg
         logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                          :: cstring
         character(len=LINE_MAX_LEN), target  :: fstr
         character(kind=c_char,len=STDLEN)    :: infilename_c
         character(kind=c_char,len=LONGSTRLEN):: outfilename_c
-        integer :: lengthin, status, lengthout
+        integer :: lengthin, lengthout, status
         logical :: check_exists_here
         check_exists_here = .true.
         if( present(check_exists) )check_exists_here = check_exists
@@ -1385,7 +1420,43 @@ contains
         else
             allocate(absolute_name, source=trim(infile))
         end if
-    end subroutine simple_abspath
+    end function simple_abspath_1
+
+    function simple_abspath_2 (infile,errmsg,status,check_exists) result(absolute_name)
+        character(len=*),              intent(in)  :: infile
+        integer,          optional,    intent(out) :: status
+        character(len=*), optional,    intent(in)  :: errmsg
+        character(len=:), allocatable :: absolute_name
+        logical,          optional,    intent(in)  :: check_exists
+        type(c_ptr)                          :: cstring
+        character(len=LINE_MAX_LEN), target  :: fstr
+        character(kind=c_char,len=STDLEN)    :: infilename_c
+        character(kind=c_char,len=LONGSTRLEN):: outfilename_c
+        integer :: lengthin,  lengthout, status_here
+        logical :: check_exists_here
+        check_exists_here = .true.
+        if( present(check_exists) )check_exists_here = check_exists
+        if( check_exists_here )then
+            if( .not.file_exists(trim(infile)) )then
+                THROW_HARD('file: '//trim(infile)//' does not exist')
+            endif
+        endif
+        lengthin     = len_trim(infile)
+        cstring      = c_loc(fstr)
+        infilename_c = trim(infile)//achar(0)
+        status_here  = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
+        call syslib_c2fortran_string(outfilename_c)
+        if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
+        if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
+        if(allocated(absolute_name)) deallocate(absolute_name)
+        if( lengthout > 1)then
+           allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
+        else
+            allocate(absolute_name, source=trim(infile))
+        end if
+        if(present(status))status = status_here
+    end function simple_abspath_2
+
 
     integer function RE_match(source, regex)
         character(len=*),              intent(in)  :: source,regex
@@ -1402,10 +1473,11 @@ contains
         integer(c_int) :: res
         character(kind=c_char,len=STDLEN)  :: source_c  !> input string
         character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
+        RE_multi = 0
         source_c = trim(source)//achar(0)
         regex_c = trim(regex)//achar(0)
         res = regexp_multi(source_c,regex_c)
-        RE_multi = INT(res)
+        if(res > 0) RE_multi = INT(res)
     end function RE_multi
 
 end module simple_syslib

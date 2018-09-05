@@ -415,7 +415,7 @@ contains
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
-                call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_import_movies')
+                 boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
                 call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
             end do
         endif
@@ -449,7 +449,7 @@ contains
             THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
         endif
         do i=1,nos_mic
-            call simple_abspath(trim(boxfnames(i)),boxf_abspath,errmsg='commander_project :: exec_import_movies')
+            boxf_abspath = simple_abspath(trim(boxfnames(i)),errmsg='commander_project :: exec_import_movies')
             call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file
@@ -755,8 +755,8 @@ contains
                 THROW_HARD('# boxfiles .ne. # movies; exec_update_movies')
             endif
             do i=1,nmovf
-                call simple_abspath(trim(boxfnames(i)), boxf_abspath, 'commander_project :: exec_update_movies')
-                call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+                boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_update_movies')
+                call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
             end do
         endif
         ! write project file
@@ -789,7 +789,7 @@ contains
             THROW_HARD('# boxfiles .ne. # os_mic entries; exec_update_boxes')
         endif
         do i=1,nos_mic
-            call simple_abspath(boxfnames(i), boxf_abspath, errmsg='commander_project :: exec_update_movies')
+             boxf_abspath = simple_abspath(boxfnames(i), errmsg='commander_project :: exec_update_movies')
             call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file

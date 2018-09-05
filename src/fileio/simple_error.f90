@@ -22,6 +22,9 @@ contains
         else
             write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
+#if defined(GNU) && defined(_DEBUG)
+        call backtrace()
+#endif
         if( ll_stop ) call exit(EXIT_FAILURE)
     end subroutine simple_exception
 

@@ -127,17 +127,17 @@ contains
         call img_jpg%write_jpg(self%moviename_thumb, quality=90)
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
-        call simple_abspath(moviename, fname, errmsg='simple_motion_correct_iter::iterate 1')
+        fname = simple_abspath(moviename,  errmsg='simple_motion_correct_iter::iterate 1')
         call orientation%set('movie',  trim(fname))
-        call simple_abspath(self%moviename_intg, fname, errmsg='simple_motion_correct_iter::iterate 2')
+        fname = simple_abspath(self%moviename_intg, errmsg='simple_motion_correct_iter::iterate 2')
         call orientation%set('intg',   trim(fname))
-        call simple_abspath(self%moviename_forctf, fname, errmsg='simple_motion_correct_iter::iterate 3')
+        fname = simple_abspath(self%moviename_forctf, errmsg='simple_motion_correct_iter::iterate 3')
         call orientation%set('forctf', trim(fname))
-        call simple_abspath(self%moviename_thumb, fname, errmsg='simple_motion_correct_iter::iterate 4')
+        fname = simple_abspath(self%moviename_thumb, errmsg='simple_motion_correct_iter::iterate 4')
         call orientation%set('thumb',  trim(fname))
         call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )then
-            call simple_abspath(self%moviename_intg_frames, fname, errmsg='simple_motion_correct_iter::iterate 5')
+            fname = simple_abspath(self%moviename_intg_frames, errmsg='simple_motion_correct_iter::iterate 5')
             call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         endif
         ! destruct

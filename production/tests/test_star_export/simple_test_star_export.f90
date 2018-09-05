@@ -29,7 +29,7 @@ type(star_dict) :: sdict
 logical :: isopened
 CHARACTER(len=STDLEN) :: argtmp
 !stars_from_matt="/scratch/el85/stars_from_matt/"
-io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', simple_testbench)
+io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', retval=simple_testbench, allow_fail=.false.)
 if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
 
 stars_from_matt=filepath(trim(simple_testbench),"stars_from_matt")
@@ -158,6 +158,13 @@ io_stat= simple_chmod('test_import_starproject','+x')
 
 !call runimport(filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs",io_stat=io_stat)
 
+ call createtest('test_extract_ptcls',filepath(trim(stars_from_matt),"Extract/364Box_Extract_LocalCTF/particles.star"),smpd=1.1,startype="p")
+ call createtest('test_importmicr',filepath(trim(stars_from_matt),"Import/Import/micrographs.star"), smpd=1.1,startype="micrograph")
+ call createtest('test_manualpick',filepath(trim(stars_from_matt),"ManualPick/ManualPick/micrographs_selected.star"), smpd=1.1, startype="m")
+ call createtest('test_refine_ptcls',filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star"), smpd=1.1,startype="ptcls")
+call createtest('test_select_cavgs',filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs")
+
+
 
 ! call test_stardoc
 
@@ -185,6 +192,21 @@ real, intent(in) :: smpd
         call simple_chdir(curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
     end subroutine runimport
+
+    subroutine createtest(f, starfile,smpd,startype)
+        character(len=*), intent(in) :: f, starfile, startype
+real, intent(in) :: smpd
+        character(len=:),allocatable :: curdir
+
+        integer :: fid
+        call fopen(fid,trim(f))
+        write(fid,*)"[ -d SimpleImport ] && rm -rf SimpleImport; "
+        write(fid,*) "simple_exec prg=new_project projname=SimpleImport;"
+        write(fid,*) "[ ! -d SimpleImport] && exit 1; cd SimpleImport"
+        write(fid,*) "simple_exec prg=import_starproject starfile="//trim(starfile)//" startype="//trim(startype)//" smpd="//real2str(smpd)
+        write(fid,*) "simple_exec prg=print_project_info"
+        call fclose(fid)
+    end subroutine createtest
 
     subroutine create_relion_starfile
         call exec_cmdline( 'relion_star_loopheader rlnMicrographNameNoDW rlnMicrographName > tmp_mc.star')

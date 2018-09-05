@@ -594,7 +594,7 @@ contains
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
                 do i=1,size(boxfiles)
-                    call simple_abspath(boxfiles(i),boxfile_name,check_exists=.false.)
+                    boxfile_name = simple_abspath(boxfiles(i), errmsg='simple_commander_preprocess::exec_extract',check_exists=.false.)
                     boxfiles(i) = trim(boxfile_name)
                 enddo
             else
