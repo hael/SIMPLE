@@ -2,6 +2,7 @@
 	height: calc(80vh - 75px);
 	display: flex;
 	flex-direction: column;
+	overflow-y: scroll;
 }
 
 .scrollmenu {
@@ -24,6 +25,23 @@
 	overflow-x: hidden;
 	overflow-y: scroll;
 }
+
+#mic {
+	overflow-y: hidden;
+	overflow-x: hidden;
+}
+
+#mic .viewptcls {
+	position: relative;
+	bottom: 32px;
+	left: 0px;
+}
+
+#mic .thumbnails {
+	overflow-x: hidden;
+	overflow-y: scroll;
+}
+
 
 #ptclsviewer .scrollmenu {
 	display: none;

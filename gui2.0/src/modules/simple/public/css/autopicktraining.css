@@ -1,4 +1,4 @@
-.guinierwidgetpopup {
+.autopicktrainingpopup {
 	width: 90vw;
 	height: 80vh;
 	font-size: 11px;
@@ -11,12 +11,12 @@
 	border-radius: 6px;
 }
 
-.guinierwidgetpopup h{
+.autopicktrainingpopup h{
 	font-weight: bold;
 	font-size: 14px;
 }
 
-.guinierwidgetpopup button{
+.autopicktrainingpopup button{
 	width: 80px;
 	border-radius: 8px;
 	border-style: none;
@@ -25,15 +25,18 @@
 	margin-top: 5px;
 }
 
-.guinierwidgetpopup #selectorbuttons{
+.autopicktrainingpopup #selectorbuttons{
 	display: flex;
 	justify-content: space-between;
 	margin-left: 20%;
 	margin-right: 20%;
 }
 
-.guinierwidgetpopup #closebutton {
+.autopicktrainingpopup #closebutton {
 	height: 12px;
 	float: right;
 }
 
+.autopicktrainingpopup #micrographcanvas {
+	    height: calc(80vh - 150px);
+}

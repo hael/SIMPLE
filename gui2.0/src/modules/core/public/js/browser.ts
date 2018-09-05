@@ -11,6 +11,9 @@ class Browser {
 	}
 	
 	show(args){
+		if (args['path'] == "selectedfolder"){
+			args['path'] = projectselector.selectedfolder
+		}
 		this.args = args
 		this.refresh()
 	}

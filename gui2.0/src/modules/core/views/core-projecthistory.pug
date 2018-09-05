@@ -29,7 +29,7 @@ table
 							onclick="history2.viewOutput('" + task['view'] + "','" + task['folder'] + "','" + task['status'] + "'); history2.resetActions(this)"
 						)="View Output"
 					option(
-						onclick="browser.show({buttons : [{ name : 'view2d', action : 'viewer.view2d'}, { name : 'view3d', action : 'viewer.view3d'}], path : '" + task['folder'] + "', gauze : true}); history2.resetActions(this)"
+						onclick="browser.show({buttons : [{ name : 'view2d', action : 'viewer.view2d()'}, { name : 'view3d', action : 'viewer.view3d()'}], path : '" + task['folder'] + "', gauze : true}); history2.resetActions(this)"
 					)="View Files"
 					option(
 						onclick="history2.rerunJob('" + task['arguments'] + "'); history2.resetActions(this)"

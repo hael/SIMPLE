@@ -34,11 +34,11 @@ div.inputpage
 select#micrographselector
 	each val, index in mics
 		option(
-			value = index['text']
-		)=val
+			value = index
+			onclick = "autopicktrainingwidget.loadMicrograph('" + val['path'] + "','" + val['xdim'] + "','" + val['xdim'] + "')"
+		)=val['name']
 
 canvas#micrographcanvas
-
 
 div.buttons
 	button(

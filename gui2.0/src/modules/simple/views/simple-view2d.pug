@@ -8,6 +8,7 @@ div
 label(
 	for="iterationselector"
 )="Iteration"
+
 select#iterationselector
 	each iteration, index in iterations
 		if (index == iterations.length - 1 && status == "Finished")
@@ -18,6 +19,12 @@ select#iterationselector
 			option(
 				onclick="simple.viewCavgs('" + folder + "/" + iteration + "', false )"
 			)=index + 1
+
+img#refresh(
+	onclick="history2.viewOutput('{\"mod\":\"simple\",\"fnc\":\"view2d\"}','" + folder + "','" + status + "')"
+	src="../img/refresh.png"
+)
+
 label#particlecounter
 
 div#cavgs

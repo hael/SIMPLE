@@ -28,7 +28,7 @@ mixin folder(key)
 	td
 		img(
 			src="img/folder.png"
-			onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"key" + key['key'] + "\")'}], path : '/tmp', gauze : true})"
+			onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"key" + key['key'] + "\")'}], path : 'selectedfolder', gauze : true})"
 		)
 	td
 		img(
@@ -47,7 +47,7 @@ mixin file(key)
 	td
 		img(
 			src="img/folder.png"
-			onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"key" + key['key'] + "\")'}], path : '/tmp', gauze : true})"
+			onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"key" + key['key'] + "\")'}], path : 'selectedfolder', gauze : true})"
 		)
 	td
 		img(
@@ -168,10 +168,6 @@ div.inputaccordion
 	div.inputpage
 		div.inputheader
 			h="job parameters"
-			img.advancedbutton(
-				src="img/gear.png"
-				onclick="tasksetup.toggleAdvanced(this)"
-			)
 		table
 			tr
 				td="Job Name"
@@ -215,15 +211,19 @@ div.inputaccordion
 						onclick="taskselector.showHelp('Input file')"
 					)
 	each page, index in taskarray['pages']
+		- var advancedcount = 0
+		- for (var key of page['keys']){ if(!key['required']){advancedcount++}}
 		div.inputpage(
 			id="inputpage" + index
 		)
-			div.inputheader
-				h=page["title"]
-				img.advancedbutton(
-					src="img/gear.png"
+			div.inputheader(
 					onclick="tasksetup.toggleAdvanced(this)"
 				)
+				h=page["title"]
+				if advancedcount > 0
+					img.advancedbutton(
+						src="img/plus.png"
+					)
 			table
 				each key in page['keys']
 					if (key['required'])
@@ -245,7 +245,9 @@ div.inputaccordion
 							else if key['keytype'] == "widget"
 								+widget(key)
 					else
-						tr.advanced
+						tr.advanced(
+							style="display:none"
+						)
 							if key['keytype'] == "folder"
 								+folder(key)
 							else if key['keytype'] == "file"

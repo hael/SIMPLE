@@ -37,7 +37,7 @@
 
 
 .taskselector input{
-	width: calc(100% - 20px);
+	width: calc(100% - 30px);
 	padding: 6px 10px;
 	margin: 5px 0;
 	box-sizing: border-box;
@@ -56,9 +56,7 @@
 
 .taskselector #selectorbuttons{
 	display: flex;
-	justify-content: space-between;
-	margin-left: 20%;
-	margin-right: 20%;
+	justify-content: center;
 }
 
 .taskselector #closebutton {
@@ -80,4 +78,8 @@
     flex-direction: column;
     height: calc(100% - 25px);
     overflow-y: auto;
+}
+
+.taskselector #taskdescription {
+	height : 20px;
 }

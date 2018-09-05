@@ -210,17 +210,16 @@ class TaskSetup {
 	}
 	
 	toggleAdvanced(element){
-		var advanced = element.parentElement.parentElement.getElementsByClassName("advanced")
-		if(this.advanced){
-			for(var input of advanced){
-				input.style.display = "none"
-			}
-			this.advanced = false
-		} else {
-			for(var input of advanced){
+		var advanced = element.parentElement.getElementsByClassName("advanced")
+		var advancedbutton = element.getElementsByClassName("advancedbutton")[0]
+		for(var input of advanced){
+			if(input.style.display == "none"){
 				input.style.display = "table-row"
-			}
-			this.advanced = true
+				advancedbutton.src = "img/minus.png"
+			}else{
+				input.style.display = "none"
+				advancedbutton.src = "img/plus.png"
+			}	
 		}
 	}
 

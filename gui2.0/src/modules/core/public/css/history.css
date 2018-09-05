@@ -24,6 +24,14 @@
 	background-color: #D4DAED;
 }
 
+#viewwindowbody table tr{
+	color: #58708d;
+}
+
+#viewwindowbody table tr:first-child{
+	color: black;
+}
+
 #viewwindowbody table tr:hover{
 	background-color: lightgrey;
 }

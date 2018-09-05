@@ -99,18 +99,30 @@ class Module {
 				return spawn(command, commandargs, {capture: ['stdout']})
 					.then((result) => {
 						var taskarray = []
-						if(result.stdout.includes("per-micrograph stack")){
+						if(result.stdout.includes("micrographs")){
 							taskarray.push("ctf_estimate")
+							taskarray.push("motion_correct")
+							taskarray.push("extract")
 						}else{
 							taskarray.push("import_movies")
 						}
-						if(result.stdout.includes("per-particle 2D")){
+						if(result.stdout.includes("per-micrograph stack")){
 							taskarray.push("cluster2D")
 						}else{
 							taskarray.push("import_particles")
 						}
+						if(result.stdout.includes("per-particle 2D")){
+							taskarray.push("cluster3D")
+						}else{
+							taskarray.push("import_particles")
+						}
 						if(result.stdout.includes("per-particle 3D" )){
-							taskarray.push("postprocess")
+							taskarray.push("refine3D")
+						}else{
+							taskarray.push("")
+						}
+						if(result.stdout.includes("per-cluster  2D")){
+							taskarray.push("initial_3Dmodel")
 						}else{
 							taskarray.push("")
 						}
@@ -273,7 +285,7 @@ class Module {
 		view['status'] = arg['status']
 		view['folder'] = arg['folder']
 		return new Promise((resolve, reject) => {
-			resolve({html : this.view2dview(view)})
+			resolve({html : this.view2dview(view), func : "simple.selectRecent2D()"})
 		})
 	}
 	
@@ -518,6 +530,9 @@ class Module {
 			.then((result) => {
 				var lines = result.stdout.split("\n")
 				for(var line of lines){
+					if (line.includes("key: intg is missing in segment")){
+						break
+					}
 					var elements = line.split((/[ ]+/))
 					if(elements[3]){
 						mics.push([ elements[3], elements[3].split('\\').pop().split('/').pop()])
@@ -682,7 +697,7 @@ class Module {
 					var elements = line.split((/[ ]+/))
 					elements.shift()
 					if(elements.length > 0){
-						mics.push({text : path.basename(elements[2]).replace(".mrc", ""), xdim : elements[3], ydim : elements[4]})
+						mics.push({path : elements[2], name : path.basename(elements[2]).replace(".mrc", ""), xdim : elements[3], ydim : elements[4]})
 					}
 				}
 				return({html : this.autopicktrainingwidget({mics : mics})})
@@ -705,7 +720,7 @@ class Module {
 		
 		for (var file of files){
 			if(file.includes(".box")){
-			//	fs.unlinkSync(trainingfolder + "/" + file)
+				fs.unlinkSync(trainingfolder + "/" + file)
 			}
 		}
 		
@@ -754,7 +769,7 @@ class Module {
 						return({status : "error"})
 					})
 			})
-			/*.then(() => {
+			.then(() => {
 				command = "simple_distr_exec"
 				commandargs = []
 				commandargs.push("prg=pick")
@@ -770,8 +785,10 @@ class Module {
 					.catch((error) => {
 						return({status : "error"})
 					})
-			})*/
-			.then(() => {
+			})
+			.then((result) => {
+				console.log(result.stderr)
+				console.log(result.stdout)
 				var files = fs.readdirSync(trainingfolder)
 				var boxfile
 				var boxes 

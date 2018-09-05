@@ -1,4 +1,7 @@
-.manualpickingwidgetpopup {
+//change dimensions in here
+
+
+.guinierwidgetpopup {
 	width: 90vw;
 	height: 80vh;
 	font-size: 11px;
@@ -11,12 +14,22 @@
 	border-radius: 6px;
 }
 
-.manualpickingwidgetpopup h{
-	font-weight: bold;
-	font-size: 14px;
+.guinierwidgetpopup #rightside{
+	position: absolute;
+	top: 50px;
+	right: 50px;
 }
 
-.manualpickingwidgetpopup button{
+.guinierwidgetpopup #leftside{
+	height: 100%
+}
+
+.guinierwidgetpopup h{
+	font-weight: bold;
+	font-size: 20px;
+}
+
+.guinierwidgetpopup button{
 	width: 80px;
 	border-radius: 8px;
 	border-style: none;
@@ -25,19 +38,59 @@
 	margin-top: 5px;
 }
 
-.manualpickingwidgetpopup #selectorbuttons{
+.guinierwidgetpopup #selectorbuttons{
 	display: flex;
 	justify-content: space-between;
 	margin-left: 20%;
 	margin-right: 20%;
 }
 
-.manualpickingwidgetpopup #closebutton {
+.guinierwidgetpopup #closebutton {
 	height: 12px;
 	float: right;
 }
 
-.manualpickingwidgetpopup #pickingcanvas {
-	height: 70vh;
-	margin-left: 15vw;
+.guinierwidgetpopup #pickingcanvas {
+	height: 80%;
+	position:relative;
+	left:30px;
+	top:10px;
+}
+
+.guinierwidgetpopup #prev {
+	position: absolute;
+	left: 10px;
+	bottom: 10px;
+}
+
+.guinierwidgetpopup #next {
+	position: absolute;
+	right: 50%;
+	bottom: 10px;
+}
+
+.guinierwidgetpopup #done {
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
+}
+
+.guinierwidgetpopup #particlecanvas{
+	border-style: solid;
+}
+
+.guinierwidgetpopup #manualpickradius {
+	width: 50px;
+	font-size: 12px;
+	padding: 0px;
+}
+
+.guinierwidgetpopup #manualpickboxsize {
+	width: 50px;
+	font-size: 12px;
+	padding: 0px;
+}
+
+.guinierwidgetpopup select,.select-selected {
+	font-size:12px;
 }

@@ -4,6 +4,14 @@ class Simple {
 
 	private	plugin
 
+	selectRecent2D(){
+		var select = <HTMLSelectElement>document.getElementById('iterationselector')
+		console.log(select.options.length)
+		select.options[select.options.length - 1].selected = true
+		select.options[select.options.length - 1].click()
+		
+	}
+
 	viewCavgs(file, status){
 		var request = {
 			mod : "simple",
@@ -16,6 +24,7 @@ class Simple {
 			.then((response) => response.json())
 			.then ((json) => {
 				document.getElementById('cavgs').innerHTML = json.html
+				viewer.sortThumbnails()
 				viewer.loadImages('cavgs')
 				simple.sumParticles2D('cavgs')
 			})
@@ -204,6 +213,7 @@ class Simple {
 					data.element._node.onclick = () => {
 						var thumbnail = <HTMLDivElement>document.querySelector('[data-class="' + classnumber + '"]')
 						thumbnail.style.backgroundColor = "red"
+						thumbnail.scrollIntoView()
 						setTimeout(() => { 
 							thumbnail.style.backgroundColor = "grey"
 						}, 1000)
@@ -233,6 +243,7 @@ class Simple {
 					data.element._node.onclick = () => {
 						var thumbnail = <HTMLDivElement>document.querySelector('[data-class="' + classnumber + '"]')
 						thumbnail.style.backgroundColor = "red"
+						thumbnail.scrollIntoView()
 						setTimeout(() => { 
 							thumbnail.style.backgroundColor = "grey"
 						}, 1000)
@@ -264,6 +275,7 @@ class Simple {
 					data.element._node.onclick = () => {
 						var thumbnail = <HTMLDivElement>document.querySelector('[data-class="' + classnumber + '"]')
 						thumbnail.style.backgroundColor = "red"
+						thumbnail.scrollIntoView()
 						setTimeout(() => { 
 							thumbnail.style.backgroundColor = "grey"
 						}, 1000)
@@ -318,6 +330,8 @@ class Simple {
 					data.element._node.setAttribute('data-index', index)
 					data.element._node.onclick = () => {
 						var thumbnail = thumbnails[index] as HTMLElement
+					//	var thumbnails = document.getElementById('thumbnails') as HTMLElement
+						thumbnail.scrollIntoView()
 						thumbnail.style.backgroundColor = "red"
 						setTimeout(() => { 
 							thumbnail.style.backgroundColor = "grey"

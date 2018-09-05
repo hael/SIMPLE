@@ -6,9 +6,6 @@ class AutoPickTrainingWidget {
 	constructor(){
 		this.widgetpopup = document.getElementById('widgetpopup')
 		this.img = new Image()
-		this.img.addEventListener('load',() => {
-			this.ctx.drawImage(this.img,0,0)
-		}, false)
 	}
 	
 	
@@ -24,7 +21,7 @@ class AutoPickTrainingWidget {
 			.then((response) => response.json())
 			.then ((json) => {
 				this.widgetpopup.innerHTML = json.html
-				this.widgetpopup.className = "guinierwidgetpopup"; 
+				this.widgetpopup.className = "autopicktrainingpopup"; 
 				(<HTMLInputElement>document.getElementById('autopickrefs')).value = (<HTMLInputElement>document.getElementById('keyrefs')).value
 			})
 	}
@@ -53,12 +50,38 @@ class AutoPickTrainingWidget {
 		return postAjaxPromise(request)
 			.then((response) => response.json())
 			.then ((json) => {
-				(<HTMLInputElement>document.getElementById('autopickrefs')).value = json.pickrefs
+				this.drawBoxes(json.coordinates, json.boxsize)
 			})
 	}
 
 	done(){
 		
+	}
+	
+	drawBoxes(coordinates, boxsize){
+		var canvas = <HTMLCanvasElement>document.getElementById('micrographcanvas')
+		var ctx = canvas.getContext('2d')
+		ctx.clearRect(0, 0, canvas.width, canvas.height)
+		ctx.drawImage(this.img, 0, 0)
+		ctx.lineWidth = 4
+		ctx.lineJoin = "round"
+		ctx.strokeStyle = "magenta"
+		for(var coordinate of coordinates){
+			ctx.strokeRect(coordinate[0]-(boxsize/2), coordinate[1]-(boxsize/2), boxsize, boxsize)
+		}
+		
+	}
+	
+	loadMicrograph(path, xdim, ydim){
+		var canvas = <HTMLCanvasElement>document.getElementById('micrographcanvas')
+		var ctx = canvas.getContext('2d')
+		this.img.addEventListener('load',() => {
+			ctx.drawImage(this.img,0,0)
+		}, false)
+		canvas.width = 4096
+		canvas.height = 4096
+		this.img.src = "/image?stackfile=" + path + "&frame=0&width=" + xdim
+
 	}
 }
 
