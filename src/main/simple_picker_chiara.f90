@@ -114,10 +114,6 @@ contains
                   cnt_particle = cnt_particle + 1
                   call  imgwin_particle%prepare_connected_comps(discard, 1)
                   call  imgwin_particle%morpho_closing()
-<<<<<<< Updated upstream
-                  call imgwin_particle%masscen(xyz_real) !particle centering
-                  xyz = nint(xyz_real)
-=======
                   call  imgwin_particle%dilatation()
                   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                   !rmat_masked = rmat_masked*imgwin_particle%get_rmat()
