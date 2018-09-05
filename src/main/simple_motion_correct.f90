@@ -326,14 +326,18 @@ contains
             allocate( acc_doses(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = ctfvars%kv
-            time_per_frame = params_glob%exp_time/real(nframes)           ! unit: s
+            time_per_frame = params_glob%exp_time/real(nframes)  ! unit: s
             dose_rate      = params_glob%dose_rate
             do iframe=1,nframes
                 current_time      = real(iframe)*time_per_frame ! unit: s
                 acc_doses(iframe) = dose_rate*current_time      ! unit: e/A2/s * s = e/A2
             end do
         endif
-        deallocate(rmat, rmat_pad, win, outliers)
+        ! safe deallocation
+        if( allocated(rmat)     ) deallocate(rmat)
+        if( allocated(rmat_pad) ) deallocate(rmat_pad)
+        if( allocated(win)      ) deallocate(win)
+        if( allocated(outliers) ) deallocate(outliers)
         call tmpmovsum%kill
         existence = .true.
         DebugPrint  'motion_correct_init, done'

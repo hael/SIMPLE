@@ -17,8 +17,7 @@ type :: motion_correct_iter
     private
     character(len=4)      :: speckind = 'sqrt'
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
-    character(len=STDLEN) :: moviename_forctf
-    character(len=STDLEN) :: moviename_thumb
+    character(len=STDLEN) :: moviename_forctf, moviename_thumb, moviename_pspec
     type(image)           :: moviesum, moviesum_corrected, moviesum_corrected_frames
     type(image)           :: moviesum_ctf, pspec_sum, pspec_ctf
     type(image)           :: pspec_half_n_half, thumbnail
@@ -39,10 +38,11 @@ contains
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:)
-        type(image) :: img_jpg
-        integer     :: ldim(3), ldim_thumb(3)
-        real        :: corr, scale
-        logical     :: err
+        type(stats_struct) :: shstats(2)
+        type(image)        :: img_jpg
+        integer            :: ldim(3), ldim_thumb(3)
+        real               :: corr, scale, var
+        logical            :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(*,*) 'inputted movie stack does not exist: ', moviename
@@ -57,6 +57,7 @@ contains
         endif
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
+        self%moviename_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//POWSPEC_SUFFIX//trim(params_glob%ext)
         self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
         if( cline%defined('tof') )then
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
@@ -74,6 +75,17 @@ contains
         ! execute the motion_correction
         call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err, gainref_fname)
         if( err ) return
+        ! return shift stats
+        call moment(shifts(1,:), shstats(1)%avg, shstats(1)%sdev, var, err)
+        call moment(shifts(2,:), shstats(2)%avg, shstats(2)%sdev, var, err)
+        call orientation%set('xavg',  shstats(1)%avg)
+        call orientation%set('xsdev', shstats(1)%sdev)
+        call orientation%set('xmax',  maxval(shifts(1,:)))
+        call orientation%set('xmin',  minval(shifts(1,:)))
+        call orientation%set('yavg',  shstats(2)%avg)
+        call orientation%set('ysdev', shstats(2)%sdev)
+        call orientation%set('ymax',  maxval(shifts(2,:)))
+        call orientation%set('ymin',  minval(shifts(2,:)))
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then
             call motion_correct_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
@@ -90,15 +102,16 @@ contains
             DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
         ! generate power-spectra and cleanup
-        self%pspec_sum         = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)
-        self%pspec_ctf         = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind)
+        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)
+        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind)
+        call self%pspec_sum%dampen_central_cross
+        call self%pspec_ctf%dampen_central_cross
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
-        call self%pspec_sum%kill
-        call self%pspec_ctf%kill
         ! write output
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
         call self%moviesum_corrected%write(self%moviename_intg)
         call self%moviesum_ctf%write(self%moviename_forctf)
+        call self%pspec_ctf%write(self%moviename_pspec)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
         scale         = real(params_glob%pspecsz)/real(ldim(1))
@@ -128,6 +141,8 @@ contains
             call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         endif
         ! destruct
+        call self%pspec_sum%kill
+        call self%pspec_ctf%kill
         call self%moviesum%kill
         call self%moviesum_corrected%kill
         call self%moviesum_corrected_frames%kill

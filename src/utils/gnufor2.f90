@@ -972,7 +972,7 @@ contains
         nx=size(x)
         xmin=minval(x)
         xmax=maxval(x)
-        dx=(xmax-xmin)/n
+        dx=(xmax+1-xmin)/n
         do i=0,n
             xhist(i)=xmin+i*dx
         end do
@@ -982,8 +982,8 @@ contains
             yhist(j)=yhist(j)+1
         end do
 
-        write (dxtic,'(e15.7)') dx
-        write (yrange,'(e15.7)') maxval(yhist)*1.2
+        !write (dxtic,  '(e15.7)') dx
+        write (yrange, '(e15.7)') maxval(yhist)*1.2
         write (xrange1,'(e15.7)') xmin-(n/10.0)*dx
         write (xrange2,'(e15.7)') xmax+(n/10.0)*dx
         xtic_start=xrange1
@@ -1040,8 +1040,8 @@ contains
         write ( file_unit, '(a)' ) 'set nokey'
         write ( file_unit, '(a)' ) 'set yrange [0.0:'// trim(yrange) //']'
         write ( file_unit, '(a)' ) 'set xrange ['// trim(xrange1) // ':'// trim(xrange2) //']'
-        write ( file_unit, '(a)' ) 'set xtic nomirror rotate by -45 '
-        write ( file_unit, '(a)' ) 'set xtics '// trim(xtic_start) // ','// trim(dxtic) // ','// trim(xtic_end)
+        !write ( file_unit, '(a)' ) 'set xtic nomirror rotate by -45 '
+        !write ( file_unit, '(a)' ) 'set xtics '// trim(xtic_start) // ','// trim(dxtic) // ','// trim(xtic_end)
         write ( file_unit, '(a)' ) 'set style data histograms'
         write ( file_unit, '(a)' ) 'set style fill solid border -1'
 

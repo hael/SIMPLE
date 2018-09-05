@@ -77,6 +77,7 @@ type :: parameters
     character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
+    character(len=3)      :: subtr_backgr='no'
     character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
     character(len=3)      :: swap='no'
     character(len=3)      :: taper_edges='no'     !< self-explanatory
@@ -143,9 +144,11 @@ type :: parameters
     character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
+    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no} !!!!!!!!ADDED BY CHIARAA
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
+    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny)     !!!!!!!!ADDED BY CHIARAA
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -368,6 +371,8 @@ type :: parameters
     real    :: tau=TAU_DEFAULT     !< tau fudge factor, controls the sharpness of the orientation weight distribution,
                                    !! smaller number means sharper distribution
     real    :: thres=0.            !< threshold (binarisation: 0-1; distance filer: in pixels)
+    real    :: thres_low=0.        !< lower threshold for canny edge detection
+    real    :: thres_up=1.         !< upper threshold for canny edge detection
     real    :: time_per_image=200.
     real    :: time_per_frame=0.
     real    :: trs=0.              !< maximum halfwidth shift(in pixels)
@@ -452,6 +457,7 @@ contains
         call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
+        call check_carg('automatic',      self%automatic)          !!!!!!!!!!!!!ADDED BY CHIARA
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
@@ -465,6 +471,7 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
+        call check_carg('detector',       self%detector)           !!!!!!!!!!!!!ADDED BY CHIARA
         call check_carg('dfunit',         self%dfunit)
         call check_carg('dir',            self%dir)
         call check_carg('dir_box',        self%dir_box)
@@ -543,6 +550,7 @@ contains
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
+        call check_carg('subtr_backgr',   self%subtr_backgr)
         call check_carg('symrnd',         self%symrnd)
         call check_carg('swap',           self%swap)
         call check_carg('taper_edges',    self%taper_edges)
@@ -742,6 +750,8 @@ contains
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)
         call check_rarg('thres',          self%thres)
+        call check_rarg('thres_low',      self%thres_low)               !!!ADDED BY CHIARA
+        call check_rarg('thres_up',       self%thres_up)                 !!!ADDED BY CHIARA
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)

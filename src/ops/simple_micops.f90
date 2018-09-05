@@ -57,14 +57,11 @@ contains
         real,    optional, intent(in)  :: snr
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
-        ! ! high-pass filter shrunken micrograph according to box_shrunken
-        call micrograph_shrunken%bp(box_shrunken * micrograph_shrunken%get_smpd(), 0., width=real(box_shrunken/2.))
+        !high-pass filter shrunken micrograph according to box_shrunken
+        call micrograph_shrunken%bp(box_shrunken * micrograph_shrunken%get_smpd(), 0.)!, width=real(box_shrunken/2.)) Chiara
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
         if(present(snr)) call micrograph_shrunken%add_gauran(snr)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!
-        !call micrograph_shrunken%norm
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!
         if( DEBUG_HERE ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
         ! loop dimensions for target extraction will be 0:nx and 0:ny
         nx = ldim_shrunken(1) - box_shrunken

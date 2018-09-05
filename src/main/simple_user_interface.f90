@@ -1102,8 +1102,8 @@ contains
         call filter%set_input('filt_ctrls', 5, 'winsz', 'num', 'Half-window size', 'Half-window size(in pixels)', 'winsz in pixels', .false., 1.0)
         call filter%set_input('filt_ctrls', 6, 'width', 'num', 'Cosine low-pass filter falloff',&
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
-        call filter%set_input('filt_ctrls', 7, 'real_filter', 'binary', 'Real-space filter',&
-        &'Real-space filter(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call filter%set_input('filt_ctrls', 7, 'real_filter', 'multi', 'Real-space filter',&
+        &'Real-space filter(median|average|stdev|bman|no){no}', '(median|average|stdev|bman|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls', 8, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
         call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
         call filter%set_input('filt_ctrls',10, frcs)
@@ -2749,7 +2749,7 @@ contains
         &'If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, '&
         &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 17, 0, 0, 0, 0, 1, .false.)              ! # entries in each group
+        &2, 18, 0, 0, 0, 0, 1, .false.)              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
@@ -2773,6 +2773,7 @@ contains
         call stackops%set_input('parm_ios', 15, 'top',   'num', 'To particle index', 'Stop index for stack copy', 'stop index', .false., 1.0)
         call stackops%set_input('parm_ios', 16, outfile)
         call stackops%set_input('parm_ios', 17, 'stats', 'binary', 'Provide statistics', 'Provide statistics about images in stack(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call stackops%set_input('parm_ios', 18, 'subtr_backr', 'binary', 'Subtract background', 'Subtract background through real-space filtering(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls

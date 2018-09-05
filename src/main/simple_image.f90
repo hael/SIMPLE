@@ -3167,28 +3167,31 @@ contains
     end function size_connected_comps
 
     ! This function takes in input a connected component image and modifies
-    ! it in order to prepare the centering process developed through the
-    ! mass center function.
+    ! it in order to prepare the centering process.
     ! Notation: cc = connected component.
     subroutine prepare_connected_comps(self, discard, min_sz)
-            class(image), intent(inout)   :: self     !image which contains connected components
-            logical, intent(out)          :: discard
-            integer, optional, intent(in) :: min_sz
-            integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
-            integer              :: mmin_sz
-            mmin_sz = 1
-            discard = .false.
-            sz = self%size_connected_comps()
-            biggest_cc  = maxloc(sz(2,:))
-            biggest_val = real(sz(1, biggest_cc))
-            if(present(min_sz)) mmin_sz = min_sz
-            if( sz(2,biggest_cc(1)) < mmin_sz ) discard = .true.  !if the biggest cc is smaller than mmin_sz, discard image
-            where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
-                self%rmat = 0.
-            elsewhere
-                self%rmat = 1.   !self is now binary
-            endwhere
-            deallocate(sz,biggest_cc,biggest_val)
+          class(image),      intent(inout) :: self     !image which contains connected components
+          logical, optional, intent(out)   :: discard
+          integer, optional, intent(in)    :: min_sz
+          integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
+          if(present(discard) .and. .not. present(min_sz)) THROW_HARD('Need min_sz;  prepare_connected_comps')
+          if(present(min_sz) .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
+          sz = self%size_connected_comps()
+          biggest_cc  = maxloc(sz(2,:))
+          biggest_val = real(sz(1, biggest_cc))
+          if(present(discard)) then
+              if( sz(2,biggest_cc(1)) < min_sz ) then
+                discard = .true.  !if the biggest cc is smaller than min_sz, discard image
+              else
+                discard = .false.
+              endif
+          endif
+          where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
+              self%rmat = 0.
+          elsewhere
+              self%rmat = 1.   !self is now binary
+          endwhere
+          deallocate(sz,biggest_cc,biggest_val)
     end subroutine prepare_connected_comps
 
     !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!
@@ -4356,19 +4359,23 @@ contains
     end subroutine stats_1
 
     !> \brief stats  is for providing within mask statistics
-    subroutine stats_2( self, mskimg, ave, sdev, maxv, minv, med, errout )
-        class(image),      intent(inout) :: self
-        class(image),      intent(in)    :: mskimg
-        real,              intent(out)   :: ave, sdev, maxv, minv
-        real,    optional, intent(out)   :: med
-        logical, optional, intent(out)   :: errout
+    subroutine stats_2( self, ave, sdev, maxv, minv, mskimg, med, errout )
+        class(image),           intent(inout) :: self
+        real,                   intent(out)   :: ave, sdev, maxv, minv
+        class(image), optional, intent(in)    :: mskimg
+        real,         optional, intent(out)   :: med
+        logical,      optional, intent(out)   :: errout
         real              :: var
         logical           :: err
         real, allocatable :: pixels(:)
         ! FT
         if( self%ft ) THROW_HARD('not for FTed imgs; stats_2')
-        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.95 )
+        if( present(mskimg) )then
+            pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+                &mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.95 )
+        else
+          pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), .true.)
+        endif
         maxv = maxval(pixels)
         minv = minval(pixels)
         call moment( pixels, ave, sdev, var, err )
@@ -5722,7 +5729,7 @@ contains
       integer :: length            !length of the drawn side
       bborder = 1
       if(present(border)) bborder = border
-      value = maxval(self%rmat(:,:,:))
+      value = minval(self%rmat(:,:,:)) !maxval(self%rmat(:,:,:))
       wide = 4*part_radius
       length = int(part_radius/2)
       if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')

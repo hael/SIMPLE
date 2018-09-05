@@ -47,7 +47,9 @@ img_ctf = build_ctf(smpd=1.0, kv=300., cs=2.7, fraca=0.1, dfx=0., dfy=0., angast
 call img_ctf%vis
 call img_ctf%rtsq_serial( 90., 0., 0., rmat_out )
 call img2%set_rmat(rmat_out)
+!call img2%vis
 cc   = img_ctf%ccf(img2)
+call cc%vis
 rmat = img_ctf%get_rmat()
 call cc%scale_pixels([10.,20.])
 cc_mat       = cc%get_rmat()
@@ -68,6 +70,7 @@ img_ctf = build_ctf(smpd=1.0, kv=300., cs=2.7, fraca=0.1, dfx=3., dfy=1., angast
 call img_ctf%vis
 call img_ctf%rtsq_serial( 90., 0., 0., rmat_out )
 call img2%set_rmat(rmat_out)
+!call img2%vis
 cc   = img_ctf%ccf(img2)
 call cc%vis
 rmat = img_ctf%get_rmat()
@@ -90,6 +93,7 @@ img_ctf = build_ctf(smpd=.5, kv=270., cs=2.7, fraca=0.1, dfx=0., dfy=0., angast=
 call img_ctf%vis
 call img_ctf%rtsq_serial( 90., 0., 0., rmat_out )
 call img2%set_rmat(rmat_out)
+!call img2%vis
 cc   = img_ctf%ccf(img2)
 call cc%vis
 rmat = img_ctf%get_rmat()
