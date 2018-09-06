@@ -14,8 +14,8 @@ use simple_star_dict,  only:  star_dict
 implicit none
 #include "simple_local_flags.inc"
 character(len=STDLEN) :: oldCWDfolder,curDir,datestr,stars_from_matt
-character(len=STDLEN) :: simple_testbench,timestr,folder, fileref, filecompare
-character(len=:),allocatable:: tmpfile,line
+character(len=STDLEN) :: timestr,folder, fileref, filecompare
+character(len=:),allocatable:: testbenchdir,tmpfile,line
 integer(8) :: count1
 integer :: io_stat,funit,ier
 integer :: num_data_elements, num_data_lines
@@ -29,10 +29,10 @@ type(star_dict) :: sdict
 logical :: isopened
 CHARACTER(len=STDLEN) :: argtmp
 !stars_from_matt="/scratch/el85/stars_from_matt/"
-io_stat = simple_getenv('SIMPLE_TESTBENCH_DATA', retval=simple_testbench, allow_fail=.false.)
+testbenchdir = simple_getenv('SIMPLE_TESTBENCH_DATA', status=io_stat,allowfail=.false.)
 if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
 
-stars_from_matt=filepath(trim(simple_testbench),"stars_from_matt")
+stars_from_matt=filepath(trim(testbenchdir),"stars_from_matt")
 if(.not. dir_exists(trim(stars_from_matt)) )&
  THROW_HARD('Cannot run this test - stars_from_matt dir does not exist')
 
@@ -169,7 +169,7 @@ call createtest('test_select_cavgs',filepath(trim(stars_from_matt),"Select/1stCu
 ! call test_stardoc
 
 print *,' Testing directory star_test'
-!call system('ls '//trim(adjustl(simple_testbench))//PATH_SEPARATOR//'star_test')
+!call system('ls '//trim(adjustl(testbenchdir))//PATH_SEPARATOR//'star_test')
 
 !! Motion Correction
 ! call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
@@ -188,7 +188,8 @@ real, intent(in) :: smpd
             "simple_exec prg=new_project projname=SimpleImport;",exitstat=io_stat)
         call simple_chdir( 'SimpleImport', curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
-        call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(starfile)//" startype="//trim(startype)//" smpd="//real2str(smpd),exitstat=io_stat)
+        call exec_cmdline("simple_exec prg=import_starproject starfile="//trim(starfile)//&
+            " startype="//trim(startype)//" smpd="//real2str(smpd),exitstat=io_stat)
         call simple_chdir(curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
     end subroutine runimport
@@ -203,7 +204,8 @@ real, intent(in) :: smpd
         write(fid,*)"[ -d SimpleImport ] && rm -rf SimpleImport; "
         write(fid,*) "simple_exec prg=new_project projname=SimpleImport;"
         write(fid,*) "[ ! -d SimpleImport] && exit 1; cd SimpleImport"
-        write(fid,*) "simple_exec prg=import_starproject starfile="//trim(starfile)//" startype="//trim(startype)//" smpd="//real2str(smpd)
+        write(fid,*) "simple_exec prg=import_starproject starfile="//trim(starfile)//&
+            " startype="//trim(startype)//" smpd="//real2str(smpd)
         write(fid,*) "simple_exec prg=print_project_info"
         call fclose(fid)
     end subroutine createtest
