@@ -31,7 +31,10 @@ type stardoc
     real         , allocatable         :: param_scale(:)
     integer      , allocatable         :: param_converted(:)
     type(starframes), allocatable      :: frames(:)
-    character(len=:), allocatable      :: current_file
+
+    character(len=:), allocatable      :: current_starfile
+    character(len=:), allocatable      :: project_root_dir
+
     integer,public   :: num_valid_elements   = 0
     integer,public   :: num_data_elements    = 0
     integer,public   :: num_data_lines       = 0
@@ -154,8 +157,8 @@ contains
         self%l_open = .true.
         self%existence =.true.
         if(.not. self%sdict%exists() ) call self%sdict%new()
-        if(allocated(self%current_file)) deallocate(self%current_file)
-        allocate(self%current_file,source=trim(adjustl(filename)))
+        if(allocated(self%current_starfile)) deallocate(self%current_starfile)
+        allocate(self%current_starfile,source=trim(adjustl(filename)))
         ! check size
         filesz = funit_size(self%funit)
         if( filesz == -1 )then
@@ -178,7 +181,7 @@ contains
         if( self%l_open )then
             call fclose(self%funit,io_stat,errmsg='stardoc ; close ')
             self%l_open = .false.
-            if(allocated(self%current_file)) deallocate(self%current_file)
+            if(allocated(self%current_starfile)) deallocate(self%current_starfile)
         end if
     end subroutine close
 
@@ -277,6 +280,7 @@ contains
                     pos2 = firstBlank(trim(line))
                     DebugPrint " Found STAR field line ",self%num_data_elements, trim(line), " VAR= ",pos2, line(pos1+4:pos2)
                     starlabel = trim(adjustl(line(pos1+4:pos2)))
+
                     if( self%sdict%isthere(starlabel) )then
                         self%num_valid_elements=self%num_valid_elements+1
                         simplelabel = self%sdict%star2simple(starlabel)
@@ -285,7 +289,7 @@ contains
                     else
                         print *," STAR field: ", trim(starlabel), " star field not in dictionary"
                     end if
-
+                    !! Jump to next line in starfile
                     cycle
                 else
                     inHeader=.false.
@@ -293,48 +297,26 @@ contains
                     inData = .true.
                 endif
             endif
+
             !! Count number of  data lines
             if(inData)then   !! continue through to end of file
                 self%num_data_lines = self%num_data_lines + 1
                 cycle
             end if
 
-            ! !! does line contain ''data_''
-            ! if ( .not. (index(trim(line),"data_") == 0))then
-            !     DebugPrint " Found STAR 'data_*' in header ", line
-            !     !! Quick string length comparison
-            !     if(lenstr == len_trim("data_pipeline_general"))then
-            !         print *," Found STAR 'data_pipeline_general' header -- Not supported "
-            !         exit
-            !     else if(lenstr == len_trim("data_pipeline_processes"))then
-            !         print *," Found STAR 'data_pipeline_processes' header -- Not supported "
-            !         exit
-            !     else if(lenstr == len_trim("data_sampling_general"))then
-            !         print *," Found STAR 'data_sampling_general' header -- Not supported "
-            !         exit
-            !     else if(lenstr == len_trim("data_optimiser_general"))then
-            !         print *," Found STAR 'data_optimiser_general' header -- Not supported "
-            !         exit
-            !     else if(lenstr == len_trim("data_model_general"))then
-            !         print *," Found STAR 'data_model_general' header -- Not supported "
-            !         exit
-            !     end if
-            !     !!otherwise
-            !     cycle
-            ! endif
             if (.not. (index(trim(line), "loop_") == 0) )then
                 inHeader=.true.
                 DebugPrint "Begin STAR field lines ", line
             endif
 
         end do
-
         !! End of first pass
         DebugPrint " STAR fields: ", self%num_data_elements, " detected with ", self%num_valid_elements, " in dictionary "
         DebugPrint " STAR data lines : ", self%num_data_lines
         if(inHeader) THROW_HARD("read_header parsing failed")
         inData=.false.; inHeader=.false.
         cnt=1;
+        !! Allocate the stardoc parameters
         allocate(self%param_starlabels(self%num_data_elements))
         allocate(self%param_labels(self%num_data_elements))
         allocate(self%param_isstr(self%num_data_elements))
@@ -343,8 +325,10 @@ contains
         self%param_isstr=.false.
         self%param_scale = 1.0
         self%param_converted = 0
-        DebugPrint " Rereading STAR file -- populating params "
+
+
         !! Second pass
+        DebugPrint " Rereading STAR file -- populating params "
         ielem=0;ivalid=0;idata=0
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
@@ -361,6 +345,7 @@ contains
             !! Process fields in header
             if(inHeader)then
                 if (.not. (index(trim(line),"_rln") == 0) )then
+
                     ielem=ielem+1
                     pos1 = firstNonBlank(trim(line))
                     pos2 = firstBlank(trim(line))
@@ -368,6 +353,7 @@ contains
                     starlabel = trim(adjustl(line(pos1+4:pos2)))
                     allocate(self%param_starlabels(ielem)%str,source=trim(adjustl(starlabel)))
                     if( self%sdict%isthere(starlabel) )then
+
                         ivalid=ivalid+1
                         DebugPrint " STAR field found in dictionary ", ivalid, " of ", self%num_valid_elements
 
@@ -404,6 +390,7 @@ contains
                     print *, "Line number ",idata, ":: ", line
                     THROW_HARD("line has insufficient elements")
                 endif
+                !! Jump to next line
                 cycle
             end if
 
@@ -414,9 +401,11 @@ contains
 
         end do
         DebugPrint " End of second pass "
+        !! Reset starfile
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 
+        !! Check exceptions
         if(ielem /= self%num_data_elements .or. ivalid /= self%num_valid_elements)then
             print *, " Second pass incorrectly counted  detected parameters "
             THROW_HARD( "simple_stardoc:: read_header invalid element mismatch 1")
@@ -453,31 +442,40 @@ contains
                 THROW_HARD( "simple_stardoc:: read_header invalid label ")
             endif
         end do
-
         DebugPrint " End of read_header "
+
     end subroutine read_header
 
     subroutine read_data_lines(self)
         class(stardoc), intent(inout) :: self
-        integer          :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
-        character(len=:),allocatable :: line,fname,tmp, projrootdir, experrootdir
-        character(len=:),allocatable :: sline
-        character(len=STDLEN) :: datestr
         character(len=STDLEN),allocatable :: lineparts(:)
-        logical, allocatable :: fnameselected(:)
-        integer :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
+        character(len=:),allocatable      :: sline, line, experiment_rootdir
+        character(len=:),allocatable      :: imgfile_rootdir, imgfilename,tmpfilename
+        character(len=STDLEN)             :: datestr
+        integer              :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
+        logical, allocatable :: imgfilenameselected(:)
+        integer              :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
         logical :: inData, inHeader
         real :: tmpval
-        inHeader=.false.;inData=.false.
-        n=0;cnt=1;ios=0
-        nDataline=0; nargsOnDataline=0
+
+        inHeader        = .false.
+        inData          = .false.
+        n               = 0
+        cnt             = 1
+        ios             = 0
+        nDataline       = 0
+        nargsOnDataline = 0
 
         if(.not.self%l_open)then
             THROW_HARD('stardoc module read_header file not opened')
         endif
-        if(.not.allocated(experrootdir)) experrootdir= get_fpath(trim(self%current_file))
+
+        !! Estimate Micrograph project root directory starting with starfile's directory
+        if(.not.allocated(experiment_rootdir)) experiment_rootdir= get_fpath(trim(self%current_starfile))
+        !! de/reallocate the big data parameter field
         if(allocated(self%data)) deallocate(self%data)
         allocate(self%data(self%num_data_lines))
+        !! Open temporary files
         if(file_exists('filetab-stardoc.txt')) call del_file("filetab-stardoc.txt")
         call fopen(filetabunit,file="filetab-stardoc.txt")
         if(file_exists('oritab-stardoc.txt')) call del_file("oritab-stardoc.txt")
@@ -488,7 +486,8 @@ contains
         call fopen(imagenamefunit,file="imagename-stardoc.txt")
         if(file_exists('ctfimage-stardoc.txt')) call del_file("ctfimage-stardoc.txt")
         call fopen(ctfimagefunit,file="ctfimage-stardoc.txt")
-        allocate(fnameselected(self%num_data_lines),source=.false.)
+        allocate(imgfilenameselected(self%num_data_lines),source=.false.)
+
         do
             call readline(self%funit, line, ios)
             if(ios /= 0) exit
@@ -513,138 +512,159 @@ contains
             if(inData)then
                 nDataline=nDataline+1
                 DebugPrint " Found STAR data line ", line
+                !! Check the number of records on line
                 nargsOnDataline = cntRecsPerLine(trim(line))
                 if(nargsOnDataline /=  self%num_data_elements) then
                     print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
                     print *, line
                     THROW_HARD("line has insufficient elements")
                 endif
+                !! split line
                 self%data(nDataline)%str = trim(line)
                 if(allocated(lineparts))deallocate(lineparts)
                 allocate(lineparts(nargsOnDataline))
                 call parsestr(line,' ',lineparts,nargsParsed)
+                !! double-check number of args after split
+                if(nargsParsed /= nargsOnDataline )then
 
-                if(nargsParsed == nargsOnDataline )then
-                    DebugPrint " Line Parsing : ", trim(self%data(nDataline)%str)
-                    !write(*,'(A)', advance='no') " data values ["
-                    !do i=1, nargsParsed
-                    !    write(*,'(A)', advance='no') trim(adjustl(lineparts(i)))//", "
-                    !end do
-                    !write(*,*) "]"
-                    if(allocated(sline))deallocate(sline)
-                    do i=1, nargsParsed
-                        if( self%param_converted(i) == 0 )then
-                            DebugPrint " ignoring ",i, trim(self%param_labels(i)%str)," ", trim(adjustl(lineparts(i)))
-                            cycle
-                        endif
-                        !! Check filename params point to actual files
-                        if ( self%param_isstr(i) ) then
-                            if(allocated(fname))deallocate(fname)
-                            allocate(fname,source=trim(adjustl(lineparts(i))))
-
-                            !! check filename for irregular STAR behaviour
-                            pos1 = index(trim(fname),"@")
-                            if( pos1 /= 0 )then
-                                if(pos1 > len_trim(fname) - 1)then
-                                    THROW_HARD(" File part "//trim(fname)//" irregular"  )
-                                endif
-                                !! get the frame number
-                                if(.not.allocated(self%data_framenum)) allocate(self%data_framenum(self%num_data_lines))
-                                call str2int( trim(fname(1:pos1-1)) , ios, self%data_framenum(nDataline) )
-                                if(ios/=0) then
-                                    THROW_HARD( 'stardoc; read_datalines frame num str2int error :'//trim(fname(1:pos1-1)) )
-                                endif
-                                !! shift the filename string
-                                fname = trim(fname(pos1+1:))
-                                write(imagenamefunit,'(A,1x, I0)') trim(fname), self%data_framenum(nDataline)
-                            endif
-                            !! modify string for :mrc extension
-                            !! Special note: CtfImage files are recorded as "*.ctf:mrc". These are
-                            !! not imported into SIMPLE, but we still check to see if they exist
-                            pos1 = index(trim(fname),":mrc",back=.true.)
-                            if( pos1 /= 0 )then
-                                if(pos1 < 4 .or. pos1 > len_trim(fname) - 1)then
-                                    THROW_HARD(" File part "//trim(fname)//" irregular"  )
-                                endif
-                                fname = trim(fname(1:pos1-1))
-                            endif
-                            if(.not. allocated(projrootdir))then
-                                !! Estimate Project root dir
-                                projrootdir = simple_abspath(filepath(get_fpath(self%current_file),PATH_PARENT,PATH_PARENT))
-                                DebugPrint " Project root dir (estimate from ../../ of starfile) : ", trim(projrootdir)
-                            end if
-
-                            DebugPrint " Parsing file param : ", trim(fname)
-                            if( file_exists (trim(fname)) )then
-                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)
-                            else if( file_exists (trim(fname)//"s") )then
-                                !! Account for MRCS extension
-                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(fname)//"s"
-                                fname = trim(fname)//"s"
-                            else
-                                tmp = get_fpath(trim(self%current_file))
-                                if( allocated(tmp) )then
-                                    tmp = filepath(trim(tmp), trim(fname))
-                                    if( file_exists (trim(tmp)) )then
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                        fname = trim(tmp)
-                                    else if( file_exists (trim(tmp)//"s") )then
-                                        !! Account for MRCS extension
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)//"s"
-                                        fname = trim(tmp)//"s"
-                                    else if ( allocated(projrootdir)) then
-                                        tmp = filepath(trim(projrootdir), trim(fname))
-                                        if( file_exists (trim(tmp)) )then
-                                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)
-                                            fname = trim(tmp)
-                                        else if( file_exists (trim(tmp)//"s") )then
-                                            !! Account for MRCS extension
-                                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmp)//"s"
-                                            fname = trim(tmp)//"s"
-                                        else
-                                            print *," Unable to find file in path of project "//trim(tmp)
-                                            THROW_HARD(" Unable to find file "//trim(tmp) )
-                                        endif
-                                    else
-                                        print *," Unable to find file in path of current star file "//trim(tmp)
-                                        THROW_HARD(" Unable to find file "//trim(tmp) )
-                                    endif
-                                else
-                                    print *," Unable to find file or path of current star file "//trim(fname)
-                                    THROW_HARD("simple_stardoc failed to get file in starfile")
-                                endif
-                            endif
-                            if(self%param_labels(i)%str == "CtfImage")then
-                                write(ctfimagefunit,'(A)') trim(fname)
-                            else if (.not.fnameselected(nDataline))then
-                                write(filetabunit,'(A)') trim(fname)
-                                fnameselected(nDataline) = .true.
-                            else
-                                write(filetabunit2,'(A)') trim(fname)
-                            endif
-                        else
-                            !! Data to be inserted
-                            tmpval = str2real(trim(adjustl(lineparts(i))))
-                            DebugPrint " String converted ", trim(adjustl(lineparts(i))), " to ", tmpval
-                            tmpval = tmpval * self%param_scale(i)
-                            if(.not.allocated(sline))then
-                                sline  = trim(self%param_labels(i)%str)//&
-                                    &"="//trim(real2str(tmpval))
-                            else
-                                sline  = trim(adjustl(sline))//" "//trim(self%param_labels(i)%str)//&
-                                    &"="//trim(real2str(tmpval))
-                            endif
-                        endif
-                    end do
-                    DebugPrint " Processed Data Line #",nDataline,":", trim(sline)
-                    write(oritabunit,'(A)') trim(sline)
-
-                else
                     print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
                     print *, line
                     THROW_HARD("line has insufficient elements")
                 endif
 
+                DebugPrint " Line Parsing : ", trim(self%data(nDataline)%str)
+                if(allocated(sline))deallocate(sline)
+                do i=1, nargsParsed
+
+                    if( self%param_converted(i) == 0 )then
+                        DebugPrint " ignoring ",i, trim(self%param_labels(i)%str)," ", trim(adjustl(lineparts(i)))
+                        cycle
+                    endif
+
+                    !! Check filename params point to actual files
+                    if ( self%param_isstr(i) ) then
+                        if(allocated(imgfilename))deallocate(imgfilename)
+                        allocate(imgfilename,source=trim(adjustl(lineparts(i))))
+                        !! Assign imgfile root directory at first dataline
+                        if(.not. allocated(imgfile_rootdir)) imgfile_rootdir = get_fpath(trim(imgfilename))
+
+                        !! check filename for irregular STAR behaviour
+                        pos1 = index(trim(imgfilename),"@")
+                        if( pos1 /= 0 )then
+                            if(pos1 > len_trim(imgfilename) - 1)then
+                                THROW_HARD(" File part "//trim(imgfilename)//" irregular"  )
+                            endif
+                            !! get the frame number
+                            if(.not.allocated(self%data_framenum)) allocate(self%data_framenum(self%num_data_lines))
+                            call str2int( trim(imgfilename(1:pos1-1)) , ios, self%data_framenum(nDataline) )
+                            if(ios/=0) then
+                                THROW_HARD( 'stardoc; read_datalines frame num str2int error :'//trim(imgfilename(1:pos1-1)) )
+                            endif
+                            !! shift the filename string
+                            imgfilename = trim(imgfilename(pos1+1:))
+                            write(imagenamefunit,'(A,1x, I0)') trim(imgfilename), self%data_framenum(nDataline)
+                        endif
+                        !! modify string for :mrc extension
+                        !! Special note: CtfImage files are recorded as "*.ctf:mrc". These are
+                        !! not imported into SIMPLE, but we still check to see if they exist
+                        pos1 = index(trim(imgfilename),":mrc",back=.true.)
+                        if( pos1 /= 0 )then
+                            if(pos1 < 4 .or. pos1 > len_trim(imgfilename) - 1)then
+                                THROW_HARD(" File part "//trim(imgfilename)//" irregular"  )
+                            endif
+                            imgfilename = trim(imgfilename(1:pos1-1))
+                        endif
+                        !! Try experiment root directory on first data set
+                        if(.not. allocated(self%project_root_dir))then
+                            if( dir_exists(trim(imgfile_rootdir))) then
+
+                                !! Check the current working directory, using the relative imgfile's directory
+                                self%project_root_dir = simple_abspath(PATH_HERE)
+
+                            else if( dir_exists(trim(experiment_rootdir)) .and. &
+                                dir_exists(filepath(trim(experiment_rootdir), trim(imgfile_rootdir)))) then
+
+                                !! The files are where we expected them to be
+                                self%project_root_dir = simple_abspath(trim(experiment_rootdir))
+
+                            else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT)) .and. &
+                                dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, &
+                                trim(imgfile_rootdir)))) then
+
+                                !! The files are in parent directory to starfile
+                                self%project_root_dir = simple_abspath(&
+                                    filepath(trim(experiment_rootdir),PATH_PARENT))
+
+                            else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT,PATH_PARENT)) .and. &
+                                dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, PATH_PARENT, &
+                                trim(imgfile_rootdir)))) then
+
+                                !! The files are in parent directory to starfile
+                                self%project_root_dir = simple_abspath(&
+                                    filepath(trim(experiment_rootdir), PATH_PARENT,PATH_PARENT))
+
+                            endif
+                            if(.not. allocated(self%project_root_dir)) THROW_HARD("Stardoc root project not found")
+                            DebugPrint " Project STARFILE       : ", trim(self%current_starfile)
+                            DebugPrint " Project root dir found : ", trim(self%project_root_dir)
+                        end if
+                        DebugPrint " Parsing file param : ", trim(imgfilename)
+                        if( file_exists (trim(imgfilename)) )then
+                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)
+
+                        else if( file_exists (trim(imgfilename)//"s") )then
+                            !! Account for MRCS extension
+                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)//"s"
+                            imgfilename = trim(imgfilename)//"s"
+
+                        else
+                            if ( allocated(self%project_root_dir)) then
+                                tmpfilename = filepath(trim(self%project_root_dir), trim(imgfilename))
+                                if( file_exists (trim(tmpfilename)) )then
+
+                                    print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)
+                                    imgfilename = trim(tmpfilename)
+
+                                else if( file_exists (trim(tmpfilename)//"s") )then
+                                    !! Account for MRCS extension
+                                    print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)//"s"
+                                    imgfilename = trim(tmpfilename)//"s"
+
+                                else
+                                    print *," Unable to find file in path of project "//trim(tmpfilename)
+                                    THROW_HARD(" Unable to find file "//trim(tmpfilename) )
+                                endif
+                            else
+                                print *," Unable to find file in path of current star file "//trim(tmpfilename)
+                                THROW_HARD(" Unable to find file "//trim(tmpfilename) )
+                            endif
+                        endif
+                        if(self%param_labels(i)%str == "CtfImage")then
+                            write(ctfimagefunit,'(A)') trim(imgfilename)
+                        else if (.not.imgfilenameselected(nDataline))then
+                            write(filetabunit,'(A)') trim(imgfilename)
+                            imgfilenameselected(nDataline) = .true.
+                        else
+                            write(filetabunit2,'(A)') trim(imgfilename)
+                        endif
+                    else
+                        !! Data to be inserted
+                        tmpval = str2real(trim(adjustl(lineparts(i))))
+                        DebugPrint " String converted ", trim(adjustl(lineparts(i))), " to ", tmpval
+                        tmpval = tmpval * self%param_scale(i)
+                        if(.not.allocated(sline))then
+                            sline  = trim(self%param_labels(i)%str)//&
+                                &"="//trim(real2str(tmpval))
+                        else
+                            sline  = trim(adjustl(sline))//" "//trim(self%param_labels(i)%str)//&
+                                &"="//trim(real2str(tmpval))
+                        endif
+                    endif
+                end do
+                DebugPrint " Processed Data Line #",nDataline,":", trim(sline)
+                write(oritabunit,'(A)') trim(sline)
+
+                !! Jump to next line
                 cycle
             endif  !! inData
 
@@ -660,7 +680,7 @@ contains
         endif
         !! Leave some provenence information on temporary files
         call date_and_time(date=datestr)
-        write(filetabunit, '(A,A,A,A)') "# SIMPLE IMPORTSTAR from file:",trim(self%current_file), " on Date: ", trim(datestr)
+        write(filetabunit, '(A,A,A,A)') "# SIMPLE IMPORTSTAR from file:",trim(self%current_starfile), " on Date: ", trim(datestr)
         !! close all the opened files
         if(is_open(filetabunit)) call fclose(filetabunit, errmsg="star_doc ; read_header filetab")
         if(is_open(filetabunit2)) call fclose(filetabunit2, errmsg="star_doc ; read_header filetab2")
@@ -684,13 +704,13 @@ contains
 
     subroutine  write(self, filename, sp, vars)
         use simple_sp_project
-        class(stardoc), intent(inout) :: self
+        class(stardoc),    intent(inout) :: self
         class(sp_project), intent(inout) :: sp
-        character(len=KEYLEN) :: vars(:)          ! fixed-length strings
+        character(len=KEYLEN)          :: vars(:)          ! fixed-length strings
         character(len=*),intent(inout) :: filename
-        character(len=LONGSTRLEN*8) :: starline
-        character(len=LONGSTRLEN) :: imagename
-        character(len=:), allocatable ::  val,stackfile,state
+        character(len=LONGSTRLEN*8)    :: starline
+        character(len=LONGSTRLEN)      :: imagename
+        character(len=:), allocatable  ::  val,stackfile,state
         integer  :: i, io_stat, iframe, ielem
         real     :: statef, defocus
 
@@ -820,7 +840,7 @@ contains
         class(stardoc), intent(inout) :: self
         integer :: i
         write(*,*) " Star formatted project information "
-        write(*,*) " Star file:               ", trim(adjustl(self%current_file))
+        write(*,*) " Star file:               ", trim(adjustl(self%current_starfile))
         write(*,*) " # header parameters:     ", self%num_data_elements
         write(*,*) " # compatible parameters: ", self%num_valid_elements
         write(*,*) " # data lines:            ", self%num_data_lines
