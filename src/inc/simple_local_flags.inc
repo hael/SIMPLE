@@ -9,8 +9,8 @@
 ! WARRANTY. Redistribution and modification is regulated by the GNU General
 ! Public License.
 !-----------------------------------------------------------------------------!
-logical, private :: debug=.false.
-logical, private :: verbose=.false.
+logical :: debug=.false.
+logical :: verbose=.false.
 #define _WPRINT_FILE_LINE_(FFFF,LLLL) if(debug.or.global_debug)write(*,'(A,A,I0,A)',advance='no') FFFF,':',LLLL,': '
 #define __WPRINT_FILE_LINE_(FFFF,LLLL) write(*,'("DEBUG:",/,A,/,":",I0,":",A)',advance='no') FFFF,LLLL
 #define _PRINT_FILE_LINE_(myFILE,myLine) if(debug.or.global_debug) print *, myFILE//':myLine',

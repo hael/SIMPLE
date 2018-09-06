@@ -54,17 +54,19 @@ end type str4arr
 
 ! CTF flag type
 enum, bind(c)
-    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2, ENUM_CTFFLAG=100
+    enumerator :: ENUM_CTFFLAG = -1
+    enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
 end enum
 
 ! Objective function
 enum, bind(c)
-    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2, ENUM_OBJFUN=100
+    enumerator :: ENUM_OBJFUN= -1
+    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2
 end enum
 
 ! type for CTF parameters
 type ctfparams
-    integer(kind(ENUM_CTFFLAG)) :: ctfflag = 0
+    integer(kind(ENUM_CTFFLAG)) :: ctfflag = CTFFLAG_NO
     real    :: smpd    = 0.
     real    :: kv      = 0.
     real    :: cs      = 0.
@@ -84,9 +86,20 @@ type stats_struct
     real :: minv = 0.
 end type stats_struct
 
-! character constants
-character(len=*), parameter :: NEWLINE = new_line('a')
-character(len=*), parameter :: SUPPRESS_MSG='2>/dev/null'
+! oritype enumeration
+enum, bind(c)
+    enumerator :: ENUM_ORISEG = 0
+    enumerator :: MIC_SEG = 1,STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4,CLS3D_SEG=5, PTCL3D_SEG=6, OUT_SEG=7
+    enumerator :: PROJINFO_SEG=11, JOBPROC_SEG=12, COMPENV_SEG=13
+end enum
+integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG
+! export (to STAR) type enumeration
+enum, bind(c)
+    enumerator :: ENUM_STARTYPE = 0
+    enumerator :: MOV_STAR = 1, MIC_STAR = 2, STK_STAR = 3, PTCL_STAR = 4, CLSAVG_STAR = 5, OUT_STAR = 6
+    enumerator :: PROJINFO_STAR = 7
+end enum
+integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
@@ -138,7 +151,7 @@ integer, parameter :: NSPACE_REDUCED       = 600       !< # projection direction
 integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
-logical, parameter :: MIR_PROJNS = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)
+
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
@@ -152,6 +165,7 @@ integer, parameter :: SZSN_MAX   = 20
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
+
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION
@@ -189,7 +203,8 @@ integer, parameter :: EXIT_FAILURE5 = 5
 integer, parameter :: EXIT_FAILURE6 = 6
 integer, parameter :: EXIT_FAILURE7 = 7
 
-logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously (remove this flag once integration is done)
+logical :: mir_projns = .false.    ! flag indicating if mirrored projection should be computed simultaneously
+                                   ! (remove this flag once integration is done)
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"

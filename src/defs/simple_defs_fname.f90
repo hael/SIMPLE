@@ -63,16 +63,8 @@ character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 ! MISCELLANEOUS
 character(len=*), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
-! oritype enumeration
-enum, bind(c)
-    enumerator :: ENUM_ORISEG=0, MIC_SEG=1, STK_SEG=2, PTCL2D_SEG=3, CLS2D_SEG=4,&
-         &CLS3D_SEG=5, PTCL3D_SEG=6, OUT_SEG=7, PROJINFO_SEG=11, JOBPROC_SEG=12,&
-         &COMPENV_SEG=13, GENERIC_SEG=6
-end enum
-! export (to STAR) type enumeration
-enum, bind(c)
-    enumerator :: ENUM_STARTYPE=0, MOV_STAR=1, MIC_STAR=2, STK_STAR=3, PTCL_STAR=4,&
-         &CLSAVG_STAR=5, OUT_STAR=6, PROJINFO_STAR=11, GENERIC_STAR=4
-end enum
+! character constants
+character(len=*), parameter :: NEWLINE              = new_line('a')
+character(len=*), parameter :: SUPPRESS_MSG         = '2>/dev/null'
 
 end module simple_defs_fname

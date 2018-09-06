@@ -20,107 +20,9 @@ use, intrinsic :: iso_c_binding
     use ifcore
 #endif
 implicit none
+! local version of throw_hard to enable public feature
+#define THROW_ERROR(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
 
-! public :: exec_cmdline, exec_subprocess, simple_isenv, simple_getenv, simple_sleep
-! public :: simple_touch, syslib_symlink, syslib_copy_file, simple_rename, simple_chmod
-! public :: simple_file_stat, is_io, is_open, dir_exists, file_exists, is_file_open
-! public :: wait_for_closure, simple_getcwd, simple_chdir, simple_mkdir, simple_rmdir
-! public :: simple_list_dirs, find_next_int_dir_prefix, simple_list_files, simple_glob_list_tofile
-! public :: del_file, simple_del_files, syslib_rm_rf, simple_rm_force, simple_timestamp, cpu_usage
-! public :: get_process_id, get_login_id, print_compiler_info, simple_sysinfo_usage, simple_mem_usage
-! public :: simple_dump_mem_usage, simple_abspath, isdir, wait_pid, RE_match, RE_multi
-! private
-#include "simple_local_flags.inc"
-
-#ifdef GNU_STD2008
-    integer , external :: sizeof, iand, ishft, loc
-    interface
-        integer function chdir(path)
-        character*(*), intent(in) :: path
-        end function
-
-        integer function chmod(nam, mode)
-        character*(*), intent(in) :: nam, mode
-        end function
-
-        pure character*(24) function ctime(stime)
-        integer, intent(in) :: stime
-        end function
-
-        pure subroutine date(str)
-        character*(*), intent(out) :: str
-        end subroutine
-
-        subroutine flush(lu)
-        integer, intent(in) :: lu
-        end subroutine
-
-        integer function fork()
-        end function
-
-        integer function fputc(lu,ch)
-        integer, intent(in) :: lu
-        character*(*), intent(in) :: ch
-        end function
-
-        subroutine free(p)
-        integer, intent(in) :: p
-        end subroutine
-
-        integer function fseek(lu,offset,from)
-        integer, intent(in) :: lu, offset, from
-        end function
-
-        integer function ftell(lu)
-        integer, intent(in) :: lu
-        end function
-
-        subroutine getarg(i,c)
-            integer, intent(in) :: i
-            character*(*), intent(out) :: c
-        end subroutine
-
-        integer function iargc()
-        end function
-
-        integer function getc(ch)
-            character*(*), intent(out) :: ch
-        end function
-
-        integer function getcwd(dir)
-            character*(*), intent(out) :: dir
-        end function
-
-        integer function rename(from,to)
-        character*(*), intent(in) :: from, to
-        end function
-
-        subroutine sleep(itime)
-        integer, intent(in) :: itime
-        end subroutine
-
-        integer function stat(nm,statb)
-        character*(*), intent(in) :: nm
-        integer, intent(out) :: statb(*)
-        end function
-
-        integer function symlnk(n1,n2)
-        character*(*), intent(in) :: n1, n2
-        end function
-
-        pure integer function time()
-        end function
-
-        integer function unlink(fil)
-        character*(*), intent(in) :: fil
-        end function
-
-        integer function wait(st)
-        integer, intent(out) :: st
-        end function
-
-      end interface
-#endif
 
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
@@ -409,13 +311,13 @@ contains
         logical,     optional, intent(in)  :: allowfail
         integer                            :: length, status
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
-        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
+        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv_1'
         if( status ==  1 )then
-            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
+            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
             retval = 'undefined'
             return
         endif
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_1'
         if( length ==  0 .or. status /= 0 )then
             retval = ""
             return
@@ -423,24 +325,26 @@ contains
     end function simple_getenv_1
 
     !> simple_getenv gets the environment variable string and returns status
-    function simple_getenv_2( name , status, allowfail)  result( retval )
+    function simple_getenv_2( name , status, allowfail)  result( envval )
         character(len=*),      intent(in)  :: name
-        character(len=:), allocatable       :: retval
-        logical,     optional, intent(in)  :: allowfail
         integer, intent(out)               :: status
+        logical,     optional, intent(in)  :: allowfail
+        character(len=:), allocatable      :: envval
+        character(len=STDLEN)              :: retval
         integer                            :: length
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
-        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv'
+        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv_2'
         if( status ==  1 )then
-            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv'
-            retval = 'undefined'
+            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_2'
+            envval = 'undefined'
             return
         endif
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv'
+        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_2'
         if( length ==  0 .or. status /= 0 )then
-            retval = ""
+            envval = ""
             return
         end if
+        envval = trim(retval)
     end function simple_getenv_2
 
     subroutine simple_sleep( secs )
@@ -523,17 +427,17 @@ contains
         bytepos = 1
         do ichunk=1,nchunks
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
+            if( ioerr /= 0 ) THROW_ERROR("failed to read byte buffer")
             write(out, pos=bytepos, iostat=ioerr) byte_buffer
-            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
+            if( ioerr /= 0 ) THROW_ERROR("failed to write byte buffer")
             bytepos = bytepos + bufsz
         end do
         ! take care of leftover
         if( leftover > 0 )then
             read(in,   pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) THROW_HARD("failed to read byte buffer")
+            if( ioerr /= 0 ) THROW_ERROR("failed to read byte buffer")
             write(out, pos=bytepos, iostat=ioerr) byte_buffer(:leftover)
-            if( ioerr /= 0 ) THROW_HARD("failed to write byte buffer")
+            if( ioerr /= 0 ) THROW_ERROR("failed to write byte buffer")
         endif
         close(in)
         close(out)
@@ -566,7 +470,7 @@ contains
                 call simple_error_check(file_status,trim(msg))
             deallocate(f1,f2,msg)
         else
-            THROW_HARD("designated input file doesn't exist "//trim(filein)//trim(errormsg))
+            THROW_ERROR("designated input file doesn't exist "//trim(filein)//trim(errormsg))
         end if
         deallocate(errormsg)
     end function simple_rename
@@ -648,7 +552,7 @@ contains
         if(is_iostat_eor(io_status) .or. is_iostat_end(io_status)) return
         if (io_status .ne. 0) then
             print *, 'is_open: I/O error ', io_status, ': ', trim(adjustl(io_message))
-            THROW_HARD('I/O')
+            THROW_ERROR('I/O')
         endif
     end function is_open
 
@@ -689,7 +593,7 @@ contains
         io_status = 0
         inquire(file=fname, opened=is_file_open,iostat=io_status,iomsg=io_message)
         if (io_status .ne. 0) then
-            THROW_HARD('I/O '//trim(adjustl(io_message)))
+            THROW_ERROR('I/O '//trim(adjustl(io_message)))
         endif
     end function is_file_open
 
@@ -701,7 +605,7 @@ contains
         wait_time = 0
         do
             if( wait_time == 60 )then
-                THROW_WARN('been waiting for a minute for file: '//trim(adjustl(fname)))
+                call simple_exception('been waiting for a minute for file: '//trim(adjustl(fname)), 'simple_syslib.f90', __LINE__,l_stop=.false.)
                 wait_time = 0
                 flush(OUTPUT_UNIT)
             endif
@@ -768,7 +672,7 @@ contains
             endif
         else
             if(present(errmsg))write (*,*) trim(errmsg)
-            THROW_HARD("directory does not exist")
+            THROW_ERROR("directory does not exist")
         endif
         if(present(status)) status = io_status
         deallocate(targetdir)
@@ -886,7 +790,7 @@ contains
         integer :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
         stat = list_dirs(trim(pathhere), num_dirs)
-        if(stat/=0)THROW_HARD("failed to process list_dirs "//trim(pathhere))
+        if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
         if(present(outfile)) call syslib_copy_file('__simple_filelist__', trim(outfile))
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(num_dirs) )
@@ -999,11 +903,11 @@ contains
         end if
         if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
         status = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
-        if(status/=0)THROW_HARD("failed to process file list "//trim(thisglob))
+        if(status/=0)THROW_ERROR("failed to process file list "//trim(thisglob))
         if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
         if(file_exists(trim(outfile))) call del_file(trim(outfile))
         call syslib_copy_file(trim('__simple_filelist__'), trim(outfile), status)
-        if(status/=0) THROW_HARD("failed to copy tmpfile to "//trim(outfile))
+        if(status/=0) THROW_ERROR("failed to copy tmpfile to "//trim(outfile))
         deallocate(thisglob)
     end function simple_glob_list_tofile
 
@@ -1015,7 +919,7 @@ contains
             open(newunit=fnr,file=file,STATUS='OLD',IOSTAT=file_status)
             if( file_status == 0 )then
                 close(fnr, status='delete',IOSTAT=file_status)
-                if(file_status /=0) THROW_HARD("failed to close file "//trim(file))
+                if(file_status /=0) THROW_ERROR("failed to close file "//trim(file))
             end if
         endif
     end subroutine del_file
@@ -1035,7 +939,7 @@ contains
         endif
         !! glob must be protected by c_null char
         iostatus =  glob_file_list(trim(thisglob), glob_elems, 0)  ! simple_posix.c
-        if(status/=0) THROW_HARD("glob failed")
+        if(status/=0) THROW_ERROR("glob failed")
         !! Read temp filelist
         open(newunit=luntmp, file='__simple_filelist__')
         allocate( list(glob_elems) )
@@ -1049,7 +953,7 @@ contains
                 call del_file(list(i))
             enddo
             do i=1,glob_elems
-                if(file_exists(list(i))) THROW_HARD("failed to delete "//trim(list(i)))
+                if(file_exists(list(i))) THROW_ERROR("failed to delete "//trim(list(i)))
             enddo
         else
             print *,"simple_syslib::simple_del_files no files matching ", trim(thisglob)
@@ -1082,18 +986,18 @@ contains
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
-        if(iostatus/=0) THROW_HARD("glob failed")
+        if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
             read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) THROW_HARD("reading temp file failed")
+            if(iostatus/=0) THROW_ERROR("reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
-                    THROW_HARD("failed to delete "//trim(list(i)))
+                    THROW_ERROR("failed to delete "//trim(list(i)))
                 end if
             enddo
         else
@@ -1120,18 +1024,18 @@ contains
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
         iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
-        if(iostatus/=0) THROW_HARD("glob failed")
+        if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
         do i = 1,glob_elems
             read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) THROW_HARD("reading temp file failed")
+            if(iostatus/=0) THROW_ERROR("reading temp file failed")
         enddo
         close( luntmp, status = 'delete' )
         if ( glob_elems > 0) then
             do i=1, glob_elems
                 if(file_exists(list(i))) then
-                    THROW_HARD("failed to delete "//trim(list(i)))
+                    THROW_ERROR("failed to delete "//trim(list(i)))
                 end if
             enddo
         else
@@ -1205,13 +1109,13 @@ contains
         write(*,'(a)') 'CPU Usage'
         open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
         if (ios /= 0) then
-            THROW_HARD('opening /proc/stat')
+            THROW_ERROR('opening /proc/stat')
         else
             read(unit, fmt = *, iostat = ios) lineID, (times(i), i = 1, 9)
-            if (ios /= 0)         THROW_HARD('reading /proc/stat')
+            if (ios /= 0)         THROW_ERROR('reading /proc/stat')
             close(unit, iostat = ios)
-            if (ios /= 0)         THROW_HARD('closing /proc/stat')
-            if (lineID /= 'cpu ') THROW_HARD('reading /proc/stat')
+            if (ios /= 0)         THROW_ERROR('closing /proc/stat')
+            if (lineID /= 'cpu ') THROW_ERROR('reading /proc/stat')
             sumtimes = sum(times)
             percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
             write(*, fmt = '(F6.2,A2)') percent, '%'
@@ -1259,7 +1163,7 @@ contains
         compiler_ver = COMPILER_VERSION()
 #endif
         if(allocated(compiler_ver))then
-            if(len(compiler_ver) <= 0) THROW_HARD('simple_syslib compiler_version str le 0')
+            if(len(compiler_ver) <= 0) THROW_ERROR('simple_syslib compiler_version str le 0')
             if (present(file_unit)) then
                 file_unit_op = file_unit
             else
@@ -1281,7 +1185,7 @@ contains
         integer :: stat
         integer(c_long) :: HWM, totRAM, shRAM, bufRAM, peakBuf
         stat = get_sysinfo( HWM, totRAM, shRAM, bufRAM, peakBuf)
-        if (stat /= 0 ) THROW_HARD("failed to get sysinfo")
+        if (stat /= 0 ) THROW_ERROR("failed to get sysinfo")
         valueRSS = bufRAM
         valuePeak = totRAM
         valueSize = shRAM
@@ -1306,8 +1210,8 @@ contains
         character(len=80)  :: line
         character(len=8)   :: pid_char=' '
         integer            :: pid,unit
-        logical            :: ifxst, debug
-        debug=.false.
+        logical            :: ifxst
+
         valueRSS=-1    ! return negative number if not found
         if(present(valuePeak))valuePeak=-1
         if(present(valueSize))valueSize=-1
@@ -1316,7 +1220,7 @@ contains
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        if(debug) print *,'simple_mem_usage:debug:  Fetching ', trim(filename)
+        if(global_debug) print *,'simple_mem_usage:debug:  Fetching ', trim(filename)
         !--- read system file
         inquire (file=trim(filename),exist=ifxst)
         if (.not.ifxst) then
@@ -1330,7 +1234,7 @@ contains
                 read (unit,'(a)',end=110) line
                 if (line(1:7).eq.'VmPeak:') then
                     read (line(8:),*) valuePeak
-                    if(debug) print *,'simple_mem_usage:debug:  Peak ', valuePeak
+                    if(global_debug) print *,'simple_mem_usage:debug:  Peak ', valuePeak
                     exit
                 endif
             enddo
@@ -1341,7 +1245,7 @@ contains
                 read (unit,'(a)',end=120) line
                 if (line(1:7).eq.'VmSize:') then
                     read (line(8:),*) valueSize
-                    if(debug) print *,'simple_mem_usage:debug:  VM Size ', valueSize
+                    if(global_debug) print *,'simple_mem_usage:debug:  VM Size ', valueSize
                     exit
                 endif
             enddo
@@ -1352,7 +1256,7 @@ contains
                 read (unit,'(a)',end=130) line
                 if (line(1:6).eq.'VmHWM:') then
                     read (line(7:),*) valueHWM
-                    if(debug) print *,'simple_mem_usage:debug:  peak RAM ', valueHWM
+                    if(global_debug) print *,'simple_mem_usage:debug:  peak RAM ', valueHWM
                     exit
                 endif
             enddo
@@ -1362,7 +1266,7 @@ contains
             read (unit,'(a)',end=140) line
             if (line(1:6).eq.'VmRSS:') then
                 read (line(7:),*) valueRSS
-                if(debug) print *,'simple_mem_usage:debug: RSS ', valueRSS
+                if(global_debug) print *,'simple_mem_usage:debug: RSS ', valueRSS
                 exit
             endif
         enddo
@@ -1404,7 +1308,7 @@ contains
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
-                THROW_HARD('file: '//trim(infile)//' does not exist')
+                THROW_ERROR('file: '//trim(infile)//' does not exist')
             endif
         endif
         lengthin     = len_trim(infile)
@@ -1438,7 +1342,7 @@ contains
         if( present(check_exists) )check_exists_here = check_exists
         if( check_exists_here )then
             if( .not.file_exists(trim(infile)) )then
-                THROW_HARD('file: '//trim(infile)//' does not exist')
+                THROW_ERROR('file: '//trim(infile)//' does not exist')
             endif
         endif
         lengthin     = len_trim(infile)
