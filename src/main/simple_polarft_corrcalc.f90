@@ -199,7 +199,7 @@ type :: polarft_corrcalc
     procedure          :: gencorr_euclid_grad_only_for_rot_8
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
-    procedure          :: calc_frc
+    procedure, private :: calc_frc
     procedure          :: specscore
     procedure          :: fit_bfac
     procedure          :: calc_roinv_corrmat

@@ -679,7 +679,7 @@ contains
         else
             call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
         endif
-        ! preprocessign / streaming adds pairs: one micrograph and one stack
+        ! preprocessing / streaming adds pairs: one micrograph and one stack
         ! so this keeps track of the index in this setting
         if( self%os_mic%get_noris() == n_os_stk )then
             call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))

@@ -58,9 +58,9 @@ contains
         !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
-        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor, ave_corrs
-        real                  :: chunk_id(params_glob%fromp:params_glob%top)
-        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class
+        integer               :: chunk_id(params_glob%fromp:params_glob%top)
+        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor, ave, sdev, threshold
+        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n
         logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
 
         if( L_BENCH )then
@@ -158,21 +158,30 @@ contains
             if( l_stream )then
                 snhc_sz = 0.
                 if( build_glob%spproj%os_cls2D%isthere('corr') )then
-                    corrs     = build_glob%spproj%os_cls2D%get_all('corr')
-                    ave_corrs = sum(corrs,mask=corrs>0.) / real(count(corrs>0.))
+                    corrs = build_glob%spproj%os_cls2D%get_all('corr')
+                    n     = count(corrs>0.0001)
+                    ave   = sum(corrs,mask=(corrs>0.0001)) / real(n)
+                    sdev  = sqrt(sum((corrs-ave)**2.,mask=(corrs>0.0001))/real(n))
+                    threshold = ave-sdev
                 else
                     allocate(corrs(params_glob%ncls),source=0.)
-                    ave_corrs = 1.
+                    threshold = 1.
                 endif
                 do iptcl = params_glob%fromp, params_glob%top
                     if( ptcl_mask(iptcl) )then
+                        if( build_glob%spproj_field%get_state(iptcl)==0 )cycle
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if(updatecnt>=2 .and. updatecnt<=10 )then
+                        if(updatecnt>=2 .and. updatecnt<=10)then
                             prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
-                            if( corrs(prev_class) < ave_corrs )then
-                                snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
+                            if(corrs(prev_class) < threshold)then
+                                snhc_sz(iptcl) = 0.
                             else
                                 snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
+                                if( build_glob%spproj_field%isthere(iptcl,'rank') )then
+                                    call build_glob%spproj_field%set(iptcl,'rank', build_glob%spproj_field%get(iptcl,'rank')+1.)
+                                else
+                                    call build_glob%spproj_field%set(iptcl,'rank', 0.)
+                                endif
                             endif
                         else
                             snhc_sz(iptcl) = 0.

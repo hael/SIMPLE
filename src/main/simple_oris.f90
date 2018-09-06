@@ -1085,7 +1085,7 @@ contains
         integer :: i, cnt, icls, sz
         real    :: val, update_frac_here
         update_frac_here = update_frac * real(fromto(2)-fromto(1)+1) / real(self%n)
-        mask = .false.
+        mask   = .false.
         do icls=1,ncls
             call self%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
@@ -1093,7 +1093,7 @@ contains
                 nsamples = max(1,nint(real(sz) * update_frac_here ))
                 allocate(counts(sz))
                 do i=1,sz
-                    if( self%o(clsarr(i))%isthere('updatecnt') )then
+                    if( self%o(clsarr(i))%isthere('updatecnt'))then
                         counts(i) = self%o(clsarr(i))%get('updatecnt')
                     else
                         counts(i) = 0.

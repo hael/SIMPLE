@@ -222,11 +222,10 @@ contains
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         character(len=:), allocatable :: WORK_PROJFILE
-        integer,          parameter   :: SHIFTSRCHCNT_LIM    = 5     !
-        integer,          parameter   :: CHUNKMERGE_LIM      = 10    !
+        integer,          parameter   :: CHUNKMERGE_LIM      = 10    ! # number of iterations for merging chunks
         integer,          parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,          parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
-        integer,          parameter   :: MAXNCLS             = 1000  ! maximum # of classes
+        integer,          parameter   :: MAXNCLS_LIM         = 500   ! maximum # of classes
         integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 900   ! 15mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
         type(cluster2D_distr_commander)     :: xcluster2D_distr
@@ -234,17 +233,19 @@ contains
         type(cmdline)                       :: cline_cluster2D, cline_make_cavgs
         type(sp_project)                    :: orig_proj, work_proj, stream_proj
         type(ctfparams)                     :: ctfvars
-        type(oris)                          :: os_stk
+        type(oris)                          :: os_stk, tmp_os
         type(ori)                           :: o_stk
-        character(LONGSTRLEN),  allocatable :: spproj_list(:), stk_list(:)
-        character(len=:),       allocatable :: spproj_list_fname, stk
+        type(image)                         :: img
+        character(LONGSTRLEN),  allocatable :: spproj_list(:), stk_list(:), mic_list(:)
+        character(len=:),       allocatable :: spproj_list_fname, stk, imgkind
         character(len=STDLEN)               :: str_iter, refs_glob
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
-        integer :: i,iter, icls, orig_box, box, nptcls_glob, iproj, n_new_spprojs
+        integer :: i,iter, icls, orig_box, box, nptcls_glob, iproj, n_new_spprojs, imic
         integer :: nptcls_glob_prev, n_spprojs, n_spprojs_prev, n_new_ptcls, orig_nparts, nparts
         integer :: iptcl, ichunk, nrefs_glob, rnd_cls, ncls_glob, tnow, last_injection, maxnptcls
         integer :: chunk2merge, nptcls_per_chunk, nchunks, nchunks_prev, maxnchunks, origproj_time
-        logical :: do_autoscale, work_proj_has_changed, wait_for_new_ptcls, l_ccres, l_maxed
+        integer :: first_ptcl, last_ptcl, first_leftover, ncls_prev_glob, maxncls
+        logical :: do_autoscale, work_proj_has_changed, l_ccres, l_maxed, buffer_exists
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -263,16 +264,17 @@ contains
         ! init
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
-        l_maxed = .false.
         l_ccres = .false.
         if( cline%defined('objfun') )then
             if( trim(params%objfun).eq.'ccres' )l_ccres = .true.
         endif
-        orig_nparts      = params%nparts
-        nptcls_per_chunk = params%nptcls_per_cls*params%ncls_start
-        maxnptcls        = MAXNCLS*params%nptcls_per_cls
-        maxnchunks       = floor(real(maxnptcls)/real(nptcls_per_chunk))
-        ! filepath creates spproj_list_fname with checks
+        orig_nparts       = params%nparts
+        maxncls           = floor(real(maxncls_lim)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
+        nptcls_per_chunk  = params%nptcls_per_cls*params%ncls_start
+        maxnptcls         = MAXNCLS*params%nptcls_per_cls
+        maxnchunks        = floor(real(maxnptcls)/real(nptcls_per_chunk))
+        buffer_exists     = .false.
+        l_maxed           = .false.
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ! for microscopes that don't work too good
         if(.not.cline%defined('time_inactive'))params%time_inactive = 12*3600
@@ -349,10 +351,27 @@ contains
         call cline_cluster2D%set('msk',      real(msk))
         call stream_proj%kill
         ! prep for new stacks
-        allocate(stk_list(n_spprojs))
+        allocate(stk_list(n_spprojs),mic_list(n_spprojs))
         call os_stk%new(n_spprojs) ! for original project stktab import
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
+            imic = 0
+            if(stream_proj%get_nmics()>0)then
+                ! builds movies list
+                do i=1,stream_proj%os_mic%get_noris()
+                    call stream_proj%os_mic%getter(i,'imgkind',imgkind)
+                    if(trim(imgkind).eq.'mic')then
+                        imic = i
+                        exit
+                    endif
+                enddo
+                if(imic==0)then
+                    THROW_HARD('Missing micrograph; simple_commander_stream_wflows')
+                else
+                    mic_list(iproj) = stream_proj%os_mic%get_static(imic,'intg')
+                endif
+            endif
+            ! builds stk list
             o_stk           = stream_proj%os_stk%get_ori(1)
             ctfvars         = stream_proj%get_ctfparams('ptcl2D', 1)
             stk             = stream_proj%get_stkname(1)
@@ -363,6 +382,15 @@ contains
         ! updates original project
         call write_filetable('stktab.txt', stk_list)
         call orig_proj%add_stktab('stktab.txt', os_stk)
+        if(imic/=0)then
+            call write_filetable('mictab.txt', mic_list)
+            ctfvars = stream_proj%get_micparams(imic)
+            call orig_proj%add_movies('mictab.txt', ctfvars)
+            do iproj=1,n_spprojs
+                call orig_proj%os_stk%set(iproj,'micind',real(iproj))
+            enddo
+            call del_file('mictab.txt')
+        endif
         call orig_proj%write
         call orig_proj%kill
         ! scale & updates stack list
@@ -371,85 +399,166 @@ contains
         call write_filetable('stktab.txt', stk_list)
         call os_stk%set_all2single('smpd', smpd)
         call work_proj%add_stktab('stktab.txt', os_stk)
-        call work_proj%write
         call del_file('stktab.txt')
-        ! MAIN LOOP
         nptcls_glob    = work_proj%get_nptcls()
         last_injection = simple_gettime()
         origproj_time  = last_injection
         nchunks        = floor(real(nptcls_glob)/real(nptcls_per_chunk))
         nchunks_prev   = 0
+        do iptcl=1,nptcls_glob
+            if( is_even(iptcl) )then
+                call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+            else
+                call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+            endif
+        enddo
+        do iptcl=min(nchunks*nptcls_per_chunk,maxnptcls)+1,nptcls_glob
+            call work_proj%os_ptcl2D%set(iptcl,'state',0.)
+        enddo
+        call work_proj%write
+        ! MAIN LOOP
         do iter = 1, 999
             str_iter  = int2str_pad(iter,3)
             ! time handling
             if( is_timeout(simple_gettime()) )exit
             ! CHUNKING
             work_proj_has_changed = .false.
-            nchunks   = min(maxnchunks,floor(real(nptcls_glob)/real(nptcls_per_chunk))) ! current number of chunks
-            ncls_glob = nchunks*params_glob%ncls_start                                  ! current number of classes
-            if( ncls_glob>=MAXNCLS .or. nchunks>=maxnchunks)l_maxed = .true.
-            if( l_maxed )then
-                ! new particles are assigned to chunk=1
+            ncls_prev_glob = ncls_glob
+            nchunks        = floor(real(nptcls_glob)/real(nptcls_per_chunk)) ! current number of chunks
+            ncls_glob      = nchunks*params_glob%ncls_start                  ! current number of classes
+            if( nptcls_glob>maxnptcls+nptcls_per_chunk .and. iter>1 )l_maxed = .true.
+            if( l_maxed .and. iter>1 )then
                 work_proj_has_changed = .true.
-                do iptcl=maxnptcls,nptcls_glob
-                    if( work_proj%os_ptcl2D%isthere(iptcl,'updatecnt') ) cycle
-                    call work_proj%os_ptcl2D%set(iptcl,'chunk',    1.)
-                    call work_proj%os_ptcl2D%set(iptcl,'state',    1.)
-                    call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.) ! greedy search
-                    call work_proj%os_ptcl2D%set(iptcl,'class',    real(irnd_uni(MAXNCLS)))
-                    if(is_even(iptcl))then
-                        call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+                ! find latest chunk & first leftover
+                first_ptcl     = 0
+                first_leftover = 0
+                do iptcl=maxnptcls+1,nptcls_glob,nptcls_per_chunk
+                    if(work_proj%os_ptcl2D%isthere(iptcl,'chunk'))then
+                        ichunk = nint(work_proj%os_ptcl2D%get(iptcl,'chunk'))
+                        if(ichunk==maxnchunks+1)then
+                            first_ptcl = iptcl
+                            last_ptcl  = iptcl+nptcls_per_chunk-1
+                        endif
                     else
-                        call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+                        first_leftover = iptcl
+                        exit
                     endif
                 enddo
-            else
-                ! deactivate left-overs
-                if( nptcls_glob > nchunks*nptcls_per_chunk )then
-                    work_proj_has_changed = .true.
-                    do iptcl=nchunks*nptcls_per_chunk+1,nptcls_glob
-                        call work_proj%os_ptcl2D%set(iptcl,'state',    0.)
+                buffer_exists = first_ptcl/=0
+                if( buffer_exists )then
+                    ncls_glob = MAXNCLS+params%ncls_start
+                    nchunks   = maxnchunks+1
+                    if(nint(work_proj%os_ptcl2D%get(first_ptcl,'updatecnt'))>=CHUNKMERGE_LIM&
+                        &.and.nint(work_proj%os_ptcl2D%get(1,'updatecnt'))>=CHUNKMERGE_LIM)then
+                        ! flush buffer
+                        buffer_exists = .false.
+                        write(*,'(A,A)')'>>> FLUSHING BUFFER ',cast_time_char(simple_gettime())
+                        ncls_glob = MAXNCLS
+                        nchunks   = maxnchunks
+                        do iptcl=first_ptcl,last_ptcl
+                            call work_proj%os_ptcl2D%set(iptcl,'chunk',    1.)
+                            call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.) ! greedy search
+                            call work_proj%os_ptcl2D%set(iptcl,'class',    real(irnd_uni(MAXNCLS)))
+                            if( is_even(iptcl) )then
+                                call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+                            else
+                                call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+                            endif
+                        enddo
+                        tmp_os = work_proj%os_cls2D
+                        call work_proj%os_cls2D%new(MAXNCLS)
+                        do icls=1,MAXNCLS
+                            call work_proj%os_cls2D%set_ori(icls, tmp_os%get_ori(icls))
+                        enddo
+                        call img%new([box,box,1],smpd)
+                        call img%read(refs_glob,MAXNCLS)
+                        call img%write(refs_glob,MAXNCLS)
+                        call img%kill
+                        call tmp_os%kill
+                    endif
+                else
+                    ncls_glob = MAXNCLS
+                    nchunks   = maxnchunks
+                endif
+                if( first_leftover>0 )then
+                    if( .not.buffer_exists .and. nptcls_glob-first_leftover+1>nptcls_per_chunk )then
+                        write(*,'(A,A)')'>>> FORMING NEW BUFFER ',cast_time_char(simple_gettime())
+                        ncls_glob  = MAXNCLS+params%ncls_start
+                        nchunks    = maxnchunks+1
+                        do iptcl=first_leftover,first_leftover+nptcls_per_chunk-1
+                            call work_proj%os_ptcl2D%set(iptcl,'state',    1.)
+                            call work_proj%os_ptcl2D%set(iptcl,'chunk',    real(maxnchunks+1))
+                            call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.) ! greedy search
+                            call work_proj%os_ptcl2D%set(iptcl,'class',    real(irnd_uni(params%ncls_start+MAXNCLS)))
+                            if( is_even(iptcl) )then
+                                call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+                            else
+                                call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+                            endif
+                        enddo
+                        if( work_proj%os_cls2D%get_noris()<ncls_glob )then
+                            call work_proj%os_cls2D%reallocate(ncls_glob)
+                        endif
+                        call append_rnd_buffer_refs
+                        do icls=MAXNCLS+1,MAXNCLS+params%ncls_start
+                            call work_proj%os_cls2D%set(icls,'chunk',real(maxnchunks+1))
+                        enddo
+                        first_leftover = first_leftover + nptcls_per_chunk
+                    endif
+                endif
+                if( first_leftover>0 )then
+                    ! deactivate leftovers
+                    do iptcl=first_leftover+1,nptcls_glob
+                        call work_proj%os_ptcl2D%set(iptcl,'state',0.)
                         call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)
                     enddo
                 endif
-            endif
-            if( nchunks > nchunks_prev )then
-                write(*,'(A,I6)')'>>> # OF CHUNKS: ',nchunks
+            else
                 work_proj_has_changed = .true.
-                ! builds new chunk
-                do iptcl=nchunks_prev*nptcls_per_chunk+1,nchunks*nptcls_per_chunk
-                    ichunk = ceiling(real(iptcl)/real(nptcls_per_chunk))
-                    call work_proj%os_ptcl2D%set(iptcl,'chunk',    real(ichunk))
-                    call work_proj%os_ptcl2D%set(iptcl,'state',    1.)
-                    call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)          ! takes care of first greedy iteration
-                    rnd_cls = nchunks_prev*params_glob%ncls_start+irnd_uni((nchunks-nchunks_prev)*params_glob%ncls_start)
-                    call work_proj%os_ptcl2D%set(iptcl,'class',real(rnd_cls))   ! to avoid empty classes
-                    if(is_even(iptcl))then
-                        call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+                nchunks   = min(maxnchunks,nchunks)
+                ncls_glob = nchunks*params%ncls_start
+                if( nchunks > nchunks_prev )then
+                    write(*,'(A,I6)')'>>> # OF CHUNKS: ',nchunks
+                    ! builds new chunk
+                    do iptcl=nchunks_prev*nptcls_per_chunk+1,nchunks*nptcls_per_chunk
+                        ichunk = ceiling(real(iptcl)/real(nptcls_per_chunk))
+                        call work_proj%os_ptcl2D%set(iptcl,'chunk',    real(ichunk))
+                        call work_proj%os_ptcl2D%set(iptcl,'state',    1.)
+                        call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)          ! takes care of first greedy iteration
+                        rnd_cls = nchunks_prev*params_glob%ncls_start+irnd_uni((nchunks-nchunks_prev)*params_glob%ncls_start)
+                        call work_proj%os_ptcl2D%set(iptcl,'class',real(rnd_cls))   ! to avoid empty classes
+                        if( is_even(iptcl) )then
+                            call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
+                        else
+                            call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+                        endif
+                    enddo
+                    if( nchunks_prev>0 )then
+                        call work_proj%os_cls2D%reallocate(ncls_glob)
+                        call append_rnd_refs
                     else
-                        call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
+                        call work_proj%os_cls2D%new(ncls_glob)
                     endif
-                enddo
-                if( nchunks_prev>0 )then
-                    call work_proj%os_cls2D%reallocate(ncls_glob)
-                    call append_rnd_refs
-                else
-                    call work_proj%os_cls2D%new(ncls_glob)
+                    do icls=1,ncls_glob
+                        if(.not.work_proj%os_cls2D%isthere(icls,'chunk'))then
+                            ichunk = ceiling(real(icls)/real(params%ncls_start))
+                            call work_proj%os_cls2D%set(icls,'chunk',real(ichunk))
+                        endif
+                    enddo
+                    ! update counter
+                    nchunks_prev = nchunks
                 endif
-                do icls=1,ncls_glob
-                    if(.not.work_proj%os_cls2D%isthere(icls,'chunk'))then
-                        ichunk = ceiling(real(icls)/real(params%ncls_start))
-                        call work_proj%os_cls2D%set(icls,'chunk',real(ichunk))
-                    endif
+                ! deactivate leftovers
+                do iptcl=nchunks*nptcls_per_chunk+1,nptcls_glob
+                    call work_proj%os_ptcl2D%set(iptcl,'state',    0.)
+                    call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)
                 enddo
-                ! update counter
-                nchunks_prev = nchunks
             endif
             ! MERGE CHUNKS
             if( nint(work_proj%os_ptcl2D%get(1,'updatecnt')) >= CHUNKMERGE_LIM )then
                 ! condition for merging: first chunk.ne.1 and updatecnt>=CHUNKMERGE_LIM
                 chunk2merge = 0
-                do iptcl=nptcls_per_chunk+1,nptcls_glob,nptcls_per_chunk
+                do iptcl=nptcls_per_chunk+1,maxnptcls,nptcls_per_chunk
                     ichunk = nint(work_proj%os_ptcl2D%get(iptcl,'chunk'))
                     if(ichunk == 1) cycle
                     if(nint(work_proj%os_ptcl2D%get(iptcl,'updatecnt')) >= CHUNKMERGE_LIM)then
@@ -461,7 +570,7 @@ contains
                 if( chunk2merge > 1 )then
                     work_proj_has_changed = .true.
                     write(*,'(A,I6)')'>>> MERGING CHUNK: ',chunk2merge
-                    do iptcl=i,nchunks*nptcls_per_chunk
+                    do iptcl=i,maxnptcls
                         ichunk = nint(work_proj%os_ptcl2D%get(iptcl,'chunk'))
                         if(ichunk  > chunk2merge)exit
                         if(ichunk == chunk2merge)then
@@ -474,8 +583,21 @@ contains
             endif
             ! write project
             if( work_proj_has_changed )call work_proj%write(trim(WORK_PROJFILE))
+            !call work_proj%os_cls2D%write('cls2D_'//int2str(iter)//'.txt')
+            !call work_proj%os_ptcl2D%write('ptcl2D_'//int2str(iter)//'.txt')
             ! CLUSTER2D EXECUTION
-            nparts = min(orig_nparts, min(ncls_glob,nchunks))
+            last_ptcl = 0
+            do iptcl=nptcls_per_chunk,nptcls_glob,nptcls_per_chunk
+                if(work_proj%os_ptcl2D%isthere(iptcl,'chunk'))then
+                    last_ptcl = iptcl
+                else
+                    exit
+                endif
+            enddo
+            do nparts=orig_nparts,1,-1
+                if(real(nptcls_glob)/real(nparts) > real(nptcls_glob-last_ptcl) )exit
+            enddo
+            print *,'nparts:',nparts
             call cline_cluster2D%delete('endit')
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
@@ -487,11 +609,7 @@ contains
             params_glob%nptcls = nptcls_glob
             call xcluster2D_distr%execute(cline_cluster2D)
             params_glob%nparts = orig_nparts
-            wait_for_new_ptcls = .false.
-            if( cline_cluster2D%defined('converged') )then
-                wait_for_new_ptcls = (cline_cluster2D%get_carg('converged').eq.'yes') .and. is_even(iter)
-                call cline_cluster2D%delete('converged')
-            endif
+            if( cline_cluster2D%defined('converged') )call cline_cluster2D%delete('converged')
             ! update
             call work_proj%kill
             call work_proj%read(trim(WORK_PROJFILE))
@@ -513,14 +631,7 @@ contains
             endif
             ! wait for new images
             tnow = simple_gettime()
-             if( wait_for_new_ptcls )call simple_sleep(WAIT_WATCHER)
-            ! if( wait_for_new_ptcls )write(*,'(A,A)')'>>> WAITING FOR NEW PARTICLES ',cast_time_char(tnow)
-            ! do while( wait_for_new_ptcls )
-            !     if( is_timeout(tnow) )exit
-            !     call simple_sleep(WAIT_WATCHER)
-            !     if( is_file_open(spproj_list_fname) )cycle
-            !     if( nlines(spproj_list_fname) > n_spprojs )wait_for_new_ptcls = .false.
-            ! enddo
+             call simple_sleep(WAIT_WATCHER)
             if( is_timeout(tnow) )exit
             ! handles whether new individual project files have appeared
             if( .not.is_file_open(spproj_list_fname) )then
@@ -553,7 +664,10 @@ contains
                             if( do_autoscale )ctfvars%smpd = ctfvars%smpd / scale_factor
                             call work_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars)
                         enddo
-                        call work_proj%write  !!!
+                        do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
+                            call work_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
+                        enddo
+                        call work_proj%write
                         write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                         last_injection = simple_gettime()
                     endif
@@ -640,6 +754,55 @@ contains
                 deallocate(vec,stkname)
             end subroutine append_rnd_refs
 
+            subroutine append_rnd_buffer_refs
+                use simple_projection_frcs, only: projection_frcs
+                type(projection_frcs)         :: frcs_prev, frcs
+                type(ran_tabu)                :: rt
+                type(image)                   :: img
+                integer,          allocatable :: vec(:)
+                character(len=:), allocatable :: stkname
+                character(len=STDLEN) :: stk
+                integer               :: i, icls, ind, ncls, state
+                write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+                state       = 1
+                ncls        = MAXNCLS+params%ncls_start
+                rt = ran_tabu(nptcls_per_chunk)
+                allocate(vec(nptcls_per_chunk))
+                call rt%ne_ran_iarr(vec)
+                vec = vec + first_leftover-1
+                call img%new([box,box,1],smpd)
+                do i = 1,params%ncls_start
+                    call progress(i, params%ncls_start)
+                    icls = MAXNCLS + i
+                    call work_proj%get_stkname_and_ind('ptcl2D', vec(i), stkname, ind)
+                    call img%read(stkname, ind)
+                    call img%norm
+                    call img%write(refs_glob, icls)
+                    ! even & odd
+                    stk = add2fbody(trim(refs_glob),params%ext,'_even')
+                    call img%write(stk, icls)
+                    stk = add2fbody(trim(refs_glob),params%ext,'_odd')
+                    call img%write(stk, icls)
+                end do
+                ! FRCs
+                call frcs_prev%new(ncls_prev_glob, box, smpd, state)
+                call frcs%new(ncls, box, smpd, state)
+                call frcs_prev%read(FRCS_FILE)
+                do icls = 1,ncls_prev_glob
+                    call frcs%set_frc(icls,frcs_prev%get_frc(icls, box, state), state)
+                enddo
+                do icls=MAXNCLS+1,ncls
+                    call frcs%set_frc( icls,frcs_prev%get_frc(irnd_uni(ncls_prev_glob), box, state), state)
+                enddo
+                call frcs%write(FRCS_FILE)
+                ! cleanup
+                call frcs%kill
+                call frcs_prev%kill
+                call rt%kill
+                call img%kill
+                deallocate(vec,stkname)
+            end subroutine append_rnd_buffer_refs
+
             logical function is_timeout( time_now )
                 integer, intent(in) :: time_now
                 is_timeout = .false.
@@ -654,10 +817,12 @@ contains
             end function is_timeout
 
             subroutine update_orig_proj
-                integer :: n_stks
+                integer :: i,imic,n_stks,n,cnt
                 ! assumes work_proj is to correct dimension
                 call orig_proj%read(params%projfile)
                 n_stks = orig_proj%os_stk%get_noris()
+                n      = n_spprojs-(n_stks+1)
+                ! stacks
                 if( n_stks > n_spprojs )then
                     do iproj=n_stks+1,n_spprojs
                         call stream_proj%read(spproj_list(iproj))
@@ -666,7 +831,38 @@ contains
                         call orig_proj%add_stk(stk, ctfvars)
                     enddo
                 endif
+                ! mics
+                if( n_stks>n_spprojs .and. stream_proj%get_nmics()>0 )then
+                    if(allocated(mic_list))deallocate(mic_list)
+                    allocate(mic_list(n))
+                    cnt  = 0
+                    imic = 0
+                    do iproj=n_stks+1,n_spprojs
+                        call stream_proj%read(spproj_list(iproj))
+                        do i=1,stream_proj%os_mic%get_noris()
+                            call stream_proj%os_mic%getter(i,'imgkind',imgkind)
+                            if(trim(imgkind).eq.'mic')then
+                                imic = i
+                                exit
+                            endif
+                        enddo
+                        if(imic==0)then
+                            THROW_HARD('Missing micrograph; simple_commander_stream_wflows')
+                        else
+                            cnt = cnt + 1
+                            mic_list(cnt) = stream_proj%os_mic%get_static(imic,'intg')
+                        endif
+                    enddo
+                    call write_filetable('mictab.txt', mic_list)
+                    ctfvars = stream_proj%get_micparams(imic)
+                    call orig_proj%add_movies('mictab.txt', ctfvars)
+                    do iproj=n_stks+1,n_spprojs
+                        call orig_proj%os_stk%set(iproj,'micind',real(iproj))
+                    enddo
+                    call del_file('mictab.txt')
+                endif
                 ! updates 2D & wipes 3D segment
+                orig_proj%os_cls2D  = work_proj%os_cls2D
                 orig_proj%os_ptcl2D = work_proj%os_ptcl2D
                 if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
                 orig_proj%os_ptcl3D = work_proj%os_ptcl3D ! to wipe the 3d segment
