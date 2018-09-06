@@ -194,6 +194,7 @@ class TaskSetup {
 				request['arg']['keys'][argument.id] = argument.value
 			}
 		}
+		console.log(request)
 		postAjaxPromise(request).then(function(response){
 			return response.text()
 		}).then((html) => {

@@ -58,6 +58,7 @@ class History2 {
 	}
 	
 	rerunJob(argstring){
+		console.log(argstring)
 		var args = JSON.parse(argstring)
 		taskselector.selectedmodule = args.mod
 		taskselector.selectedtask = args.type

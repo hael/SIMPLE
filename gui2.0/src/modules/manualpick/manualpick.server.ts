@@ -54,25 +54,24 @@ class Module {
 							
 						}
 					}
-					//testing
-				/*	 micrographs = [
-						{name: "test1", path: "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337193_Data_23336346_23336347_20180523_1726-163966_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test2", path: "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337193_Data_23336361_23336362_20180523_1725-163963_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test3", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337193_Data_23336368_23336369_20180523_1726-163964_intg.mrc", xdim: 3860, ydim: 3860},
-						{name:  "test4", path: "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337193_Data_23336374_23336375_20180523_1726-163965_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test5", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337193_Data_23336381_23336382_20180523_1727-163967_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test6", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337194_Data_23336346_23336347_20180523_1730-163971_intg.mrc", xdim: 3860, ydim: 3860},
-						{name:  "test7", path: "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337194_Data_23336361_23336362_20180523_1728-163968_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test8", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337194_Data_23336368_23336369_20180523_1729-163969_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test9", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337194_Data_23336374_23336375_20180523_1729-163970_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test10", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337194_Data_23336381_23336382_20180523_1730-163972_intg.mrc", xdim: 3860, ydim: 3860},
-						{name: "test11", path:  "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337195_Data_23336346_23336347_20180523_1733-163976_intg.mrc", xdim: 3860, ydim: 3860},
-						{name:  "test12", path: "/beegfs/lea/ApoFer/2018-05-23_KriosK2/1_pipeline/pipeline/micrographs/FoilHole_23337195_Data_23336361_23336362_20180523_1732-163973_intg.mrc", xdim: 3860, ydim: 3860}
-					 ]*/
-					
+
 					return({html : this.manualpickwidget({micrographs: micrographs})})
 				})
 		}
+	}
+	
+	public execute(modules, args){
+		return modules['available']['core']['taskCreate'](modules, args)
+			.then((json) => {
+				var coords = JSON.parse(args['keys']['keypick'])
+				fs.appendFileSync(json['jobfolder'] + "/task.log", "Writing coordinates ...")
+				for(var coord of coords){
+					fs.appendFileSync(json['jobfolder'] + "/" + coord['name'].replace(".mrc", ".box"), coord['xcoord'] + "\t" + coord['ycoord'] + "\t" + coord['boxsize'] + "\t" + coord['boxsize'] + "\n")
+				}
+				fs.appendFileSync(json['jobfolder'] + "/task.log", "Wrote " + coords.length + " coordinates")
+				modules['available']['core']['updateStatus'](args['projecttable'], json['jobid'], "Finished")
+				return({})
+			})
 	}
 	
 }

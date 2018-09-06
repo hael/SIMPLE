@@ -267,7 +267,7 @@ class ManualPickingWidget {
 			}
 			
 			this.coords.push({"xcoord":x, "ycoord":y})	
-			this.allCoords.push({"name":this.micrographName, "xcoord":(x-(l/2)), "ycoord":(y-(l/2)), "boxsize":l})
+			this.allCoords.push({"name":this.micrographName, "xcoord": Math.round((x-(l/2))), "ycoord": Math.round((y-(l/2))), "boxsize":l})
 			
 			this.plotCoordinates()
 		
