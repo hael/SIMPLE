@@ -110,6 +110,8 @@ div.viewertoolbar
 			onchange="viewer.scaleImages('ptclsviewer')"
 		)
 	div
-		button(
-			onclick="viewer.toggleScrollMenu('ptclsviewer', 'plot')"
-		)="Plot"
+		img(
+				src="img/plot.png"
+				onclick="viewer.toggleScrollMenu('ptclsviewer', 'plot')"
+				title="Plot"
+			)

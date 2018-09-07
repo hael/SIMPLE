@@ -51,9 +51,6 @@ div.scrollmenu#save
 	
 div.scrollmenu#plot
 	h="Plot"
-	label(
-		for="plottype"
-	)="Type"
 	select#plottype(
 		onchange="simple.plot2D('cavgs')"
 	)
@@ -66,6 +63,16 @@ div.scrollmenu#plot
 		option(
 			value="resvpop"
 		)="Resolution vs Population"
+	label(
+		for="ymax"
+	)="Y Axis Maximum"
+	input#ymax(
+		type="number",
+		value=1000,
+		min=0,
+		max=100000,
+		onchange="simple.plot2D('cavgs')"
+	)
 	div#chart
 
 div.scrollmenu#select
@@ -191,21 +198,29 @@ div.viewertoolbar
 		)
 	if(status)
 		div
-			button(
+			img(
+				src="../img/sort.png"
 				onclick="viewer.toggleScrollMenu('cavgs', 'sort')"
-			)="Sort"
+				title="Sort"
+			)
 
 		div
-			button(
+			img(
+				src="../img/select.png"
 				onclick="viewer.toggleScrollMenu('cavgs', 'select')"
-			)="Select"
+				title="Select"
+			)
 
 		div
-			button(
+			img(
+				src="img/plot.png"
 				onclick="viewer.toggleScrollMenu('cavgs', 'plot')"
-			)="Plot"
+				title="Plot"
+			)
 
 		div
-			button(
+			img(
+				src="img/save.png"
 				onclick="viewer.toggleScrollMenu('cavgs', 'save')"
-			)="Save"
+				title="Save"
+			)

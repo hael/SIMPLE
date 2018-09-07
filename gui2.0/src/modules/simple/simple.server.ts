@@ -343,26 +343,28 @@ class Module {
 		var contents = fs.readdirSync(arg['folder'])
 		var iterations = []
 		for(var file of contents){
-			if(file.includes("recvol_state01_iter") && ! file.includes("pproc")){
+			if(file.includes("recvol_state01_iter") && file.includes("pproc")){
 				iterations.push(file)
 			}
 		}
 		iterations.sort()
 		var view = {}
 		view['iterations'] = iterations
-		
-		if(fs.existsSync(arg['folder'] + "/rec_final.mrc")){
+		if(fs.existsSync(arg['folder'] + "/rec_final_pproc.mrc")){
 			view['final'] = true
 		}
-		
+
 		view['status'] = arg['status']
 		view['folder'] = arg['folder']
+		
 		return new Promise((resolve, reject) => {
 			resolve({html : this.viewini3dview(view)})
 		})
 	}
 	
 	public viewIni3dIteration(modules, arg) {
+		var path = require("path")
+		var grepit = require('grepit')
 		var id = Math.floor(Math.random() * 10000)
 		var config = {
 				input: [ { name: 'em', filename: arg['file']}],
@@ -371,13 +373,49 @@ class Module {
 				blockSize: 96
 			}
 		var view = {}
+		var iterations = 0
+		arg['folder'] = path.dirname(arg['file'])
+		var contents = fs.readdirSync(arg['folder'])
+		
+		for(var file of contents){
+			if(file.includes("recvol_state01_iter") && file.includes("pproc")){
+				iterations++
+			}
+		}
+		
 		if(arg['file'].includes("final")){
 			view['final'] = true
+			if(fs.existsSync(arg['folder'] + "/RESOLUTION_STATE01_ITER0" + iterations)){
+				var fsc50 = grepit(/RESOLUTION AT FSC=0.500 DETERMINED TO/, arg['folder'] + "/RESOLUTION_STATE01_ITER0" + iterations)
+				var fsc143 = grepit(/RESOLUTION AT FSC=0.143 DETERMINED TO/, arg['folder'] + "/RESOLUTION_STATE01_ITER0" + iterations)
+				view['fsc50'] = fsc50[0].replace('>>> RESOLUTION AT ','')
+				view['fsc143'] = fsc143[0].replace('>>> RESOLUTION AT ','')
+			}
+			if(fs.existsSync(arg['folder'] + "/cavgs_reprojs.mrc")){
+				return (modules.available.core.readMRCHeader(arg['folder'] + "/cavgs_reprojs.mrc"))
+					.then((header) => {
+						view['reprojections'] = arg['folder'] + "/cavgs_reprojs.mrc"
+						view['reprojectionscount'] = header['nz']
+						return({})
+					})
+					.then(() => {
+						return(this.pack.default(config.input, config.blockSize, config.isPeriodic, config.outputFilename))
+					})
+					.then(() => {
+						return({html : this.ini3diterationview(view), mdb : id})
+					})
+			}else{
+				return(this.pack.default(config.input, config.blockSize, config.isPeriodic, config.outputFilename))
+				.then(() => {
+						return({html : this.ini3diterationview(view), mdb : id})
+				})
+			}
+		} else {
+			return(this.pack.default(config.input, config.blockSize, config.isPeriodic, config.outputFilename))
+			.then(() => {
+					return({html : this.ini3diterationview(view), mdb : id})
+			})
 		}
-		return(this.pack.default(config.input, config.blockSize, config.isPeriodic, config.outputFilename))
-		.then(() => {
-				return({html : this.ini3diterationview(view), mdb : id})
-		})
 	}
 	
 	public setupProject(arg){
@@ -561,7 +599,8 @@ class Module {
 				for(var line of lines){
 					var elements = line.split((/[ ]+/))
 					if(elements[3]){
-						fits.push([arg['folder'] + "/" + elements[3].split('\\').pop().split('/').pop().replace("_intg.mrc", "_ctf_estimate_diag.jpg"), elements[4], elements[5], elements[6]])
+
+						fits.push([arg['folder'] + "/" + elements[3].split('\\').pop().split('/').pop().replace(".mrc", ".jpg"), elements[4], elements[5], elements[6]])
 					}
 				}
 				return

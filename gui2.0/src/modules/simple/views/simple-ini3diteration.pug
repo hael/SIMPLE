@@ -1,6 +1,27 @@
 #view3dpane
 	div#litemol
-	
+	div#reprojections
+		if(final)
+			div
+				b="Reprojections"
+			div.thumbnails
+				- var index = 0
+				while index < reprojectionscount
+					div.thumbnail
+						div.dynimgcontainer
+							img.dynimg(
+								data-path=reprojections
+								data-frame=index
+							)
+						div.dynimgcontainer
+							img.dynimg(
+								data-path=reprojections
+								data-frame=index + 1
+							)
+					- index += 2
+	if (fsc50 && fsc143)
+		div.fsc=fsc50
+		div.fsc=fsc143
 	div.viewertoolbar
 		div
 			label(for='sigma') Sigma:
@@ -12,8 +33,3 @@
 				value="1"
 				onchange="simple.updateIsoSurface(this.value)"
 			)
-		if final
-			div
-				button(
-					onclick=""
-				)="View Reprojections"

@@ -5,6 +5,7 @@ div
 		onclick="viewer.hide()"
 	)
 
+label="Iteration"
 select
 	each iteration, index in iterations
 		option(
@@ -12,13 +13,7 @@ select
 		)=index
 	if final
 		option(
-			onclick="simple.viewIni3dIteration('" + folder + "/rec_final.mrc', true)"
+			onclick="simple.viewIni3dIteration('" + folder + "/rec_final_pproc.mrc', true)"
 		)="Final"
-label(
-	for="pproc"
-	)="Show Post Processed"
-input#pproc(
-	type="checkbox"
-)
 
 div#inivol

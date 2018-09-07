@@ -36,15 +36,13 @@ class Simple {
 			fnc : "viewIni3dIteration",
 			arg : {}
 		}
-		if((<HTMLInputElement>document.getElementById('pproc')).checked){
-			request['arg']['file'] = file.replace(".mrc", "_pproc.mrc")
-		} else {
-			request['arg']['file'] = file
-		}
+		request['arg']['file'] = file
+
 		return postAjaxPromise(request)
 			.then(response => response.json())
 			.then ((json) => {
 				document.getElementById('inivol').innerHTML = json.html
+				viewer.loadImages('reprojections')
 				this.plugin =  LiteMol.Plugin.create({ target: '#litemol' })
 				var surface = this.plugin.createTransform()
 					.add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=4", type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
@@ -61,7 +59,7 @@ class Simple {
 						}, {ref : "density3d"})
 				this.plugin.applyTransform(surface);
 				LiteMol.Bootstrap.Command.Layout.SetViewportOptions.dispatch(this.plugin.context, { clearColor: LiteMol.Visualization.Color.fromRgb(255, 255, 255) })
-				LiteMol.Bootstrap.Command.Visual.ResetScene.dispatch(this.plugin.context, void 0)
+				LiteMol.Bootstrap.Command.Visual.ResetScene.dispatch(this.plugin.context, void 0);
 			})
 	}
 	
@@ -190,6 +188,7 @@ class Simple {
 		var plottype = document.getElementById(parentid).querySelector('[id=plottype]') as HTMLInputElement
 		var labels = []
 		var data = []
+		var ymax = (<HTMLInputElement>document.getElementById('ymax')).value
 		
 		if(plottype.value == "classvpop"){
 			for(var thumbnail of thumbnails){
@@ -197,13 +196,15 @@ class Simple {
 				data.push(thumbnail.getAttribute('data-pop'))
 			}
 			var chart = new Chartist.Bar('#chart', {
-					labels: labels,
+					//labels: labels,
 					series: [ data ]
 				}, {
 					fullWidth: true,
 					chartPadding: {
 						right: 40
-					}
+					},
+					high:ymax,
+					low:0
 			});
 			chart.on("draw", (data) => {
 				if(data.type === "bar"){
@@ -227,13 +228,16 @@ class Simple {
 				data.push(thumbnail.getAttribute('data-res'))
 			}
 			var chart = new Chartist.Bar('#chart', {
-					labels: labels,
+					//labels: labels,
 					series: [ data ]
 				}, {
 					fullWidth: true,
 					chartPadding: {
 						right: 40
-					}
+					},
+					high:ymax,
+					low:0
+					
 			});
 			chart.on("draw", (data) => {
 				if(data.type === "bar"){
@@ -265,7 +269,9 @@ class Simple {
 					showLine: false,
 					chartPadding: {
 						right: 40
-					}
+					},
+					high:ymax,
+					low:0
 			});
 			chart.on("draw", (data) => {
 				if(data.type === "point"){

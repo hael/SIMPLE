@@ -11,6 +11,7 @@
     "child-process-promise": "^2.2.1",
     "compression": "^1.7.2",
     "express": "^4.16.3",
+    "grepit": "^1.0.0",
     "http-auth": "^3.2.3",
     "morgan": "^1.9.0",
     "nan": "^2.10.0",

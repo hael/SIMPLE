@@ -5,27 +5,28 @@ div
 		onclick="viewer.hide()"
 	)
 
-label(
-	for="iterationselector"
-)="Iteration"
+div#subheader
+	label(
+		for="iterationselector"
+	)="Iteration"
 
-select#iterationselector
-	each iteration, index in iterations
-		if (index == iterations.length - 1 && status == "Finished")
-			option(
-				onclick="simple.viewCavgs('" + folder + "/" + iteration + "', true)"
-			)=index + 1
-		else
-			option(
-				onclick="simple.viewCavgs('" + folder + "/" + iteration + "', false )"
-			)=index + 1
+	select#iterationselector
+		each iteration, index in iterations
+			if (index == iterations.length - 1 && status == "Finished")
+				option(
+					onclick="simple.viewCavgs('" + folder + "/" + iteration + "', true)"
+				)=index + 1
+			else
+				option(
+					onclick="simple.viewCavgs('" + folder + "/" + iteration + "', false )"
+				)=index + 1
 
-img#refresh(
-	onclick="history2.viewOutput('{\"mod\":\"simple\",\"fnc\":\"view2d\"}','" + folder + "','" + status + "')"
-	src="../img/refresh.png"
-)
+	img#refresh(
+		onclick="history2.viewOutput('{\"mod\":\"simple\",\"fnc\":\"view2d\"}','" + folder + "','" + status + "')"
+		src="../img/refresh.png"
+	)
 
-label#particlecounter
+	label#particlecounter
 
 div#cavgs
 

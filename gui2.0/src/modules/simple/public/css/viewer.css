@@ -1,8 +1,15 @@
-.viewer #cavgs,#mic,#fits {
+.viewer #fits {
 	height: calc(80vh - 75px);
 	display: flex;
 	flex-direction: column;
 	overflow-y: scroll;
+}
+
+.viewer #cavgs,#mic {
+	height: calc(80vh - 75px);
+	display: flex;
+	flex-direction: column;
+	overflow-y: hidden;
 }
 
 .scrollmenu {
@@ -24,6 +31,18 @@
 #cavgs .thumbnails {
 	overflow-x: hidden;
 	overflow-y: scroll;
+}
+
+#cavgs #plottype{
+	margin-left: 33vw;
+}
+
+#cavgs #plot label{
+	margin-left: 22vw;
+}
+
+#cavgs #ymax{
+	width: 100px;
 }
 
 #mic {
@@ -82,3 +101,23 @@
         z-index: -1;
 }
 
+#inivol .lm-plugin{
+	width: calc(90vw - 500px);
+	height: calc(80vh - 108px);
+}
+
+#litemol {
+	display: inline-block;
+}
+
+.viewer #reprojections {
+	width: 450px;
+	vertical-align: top;
+	display: inline-block;
+}
+
+.viewer #reprojections .thumbnails{
+	overflow-y: scroll;
+	height: calc(80vh - 118px);
+	width : 100%;
+}
