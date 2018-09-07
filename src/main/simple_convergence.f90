@@ -37,13 +37,18 @@ contains
         class(cmdline),     intent(inout) :: cline
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:)
+        real,    allocatable :: tmp_arr(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
         logical :: converged
-        updatecnts = build_glob%spproj_field%get_all('updatecnt')
-        avg_updatecnt = sum(updatecnts) / size(updatecnts)
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        ! generate mask
+        allocate(mask(build_glob%spproj_field%get_noris()))
+        tmp_arr = build_glob%spproj_field%get_all('updatecnt')
+        mask    = tmp_arr > 0.5
+        tmp_arr = build_glob%spproj_field%get_all('state')
+        mask    = mask .and. tmp_arr > 0.5
+        deallocate(tmp_arr)
+        ! stats
         avg_updatecnt  = build_glob%spproj_field%get_avg('updatecnt', mask=mask)
         self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)

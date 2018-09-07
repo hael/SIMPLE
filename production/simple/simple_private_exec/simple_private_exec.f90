@@ -328,17 +328,15 @@ select case(prg)
         keys_optional(13) = 'startit'
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'center'
-        keys_optional(16) = 'refine'
-        keys_optional(17) = 'match_filt'
-        keys_optional(18) = 'shellw'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:18))
+        keys_optional(16) = 'match_filt'
+        keys_optional(17) = 'shellw'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:17))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     30.)
         if( .not. cline%defined('eo')        ) call cline%set('eo',       'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
-        if( .not. cline%defined('refine')    ) call cline%set('refine',   'snhc')
         call xcluster2D%execute(cline)
     case( 'cavgassemble' )
         ! for assembling class averages when the clustering

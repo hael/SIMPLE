@@ -403,7 +403,7 @@ contains
         else
             refs = trim(params%refs)
         endif
-        ! extremal dynamics
+        ! variable neighbourhood size
         if( cline%defined('extr_iter') )then
             params%extr_iter = params%extr_iter - 1
         else

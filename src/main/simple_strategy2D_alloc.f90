@@ -38,7 +38,6 @@ contains
         logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top), l_stream
         integer, intent(in)  :: which_iter
         type(ran_tabu)       :: rt, rt_best, rt_worst
-        type(image)          :: img
         real,    allocatable :: corrs(:)
         integer, allocatable :: inds(:)
         real                 :: ave, sdev, threshold
@@ -66,7 +65,7 @@ contains
             do iptcl = params_glob%fromp, params_glob%top
                 if(ptcl_mask(iptcl))then
                     cnt = cnt + 1
-                    s2D%do_inplsrch(cnt) = (build_glob%spproj_field%get(iptcl,'updatecnt') > 5.)
+                    s2D%do_inplsrch(cnt) = (build_glob%spproj_field%get(iptcl,'updatecnt') > 5.5)
                 endif
             end do
         endif
@@ -83,19 +82,9 @@ contains
             threshold = ave-sdev
             n_worst = count(corrs<threshold .and. corrs>0.0001)
             ! set top ranking mask
-            cnt = 0
-            call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
             do icls=1,params_glob%ncls
                 if( corrs(icls) > 0.0001 )s2D%cls_topseg(icls) = (corrs(icls) > threshold)
-                if( params_glob%part==1 )then
-                    if(.not.s2D%cls_topseg(icls))then
-                        cnt = cnt +1
-                        call img%read(params_glob%refs,icls)
-                        call img%write('rejects_'//int2str(which_iter)//'.mrc',cnt)
-                    endif
-                endif
             enddo
-            call img%kill
             ! generates search orders
             inds = (/(icls,icls=1,params_glob%ncls)/)
             where( s2D%cls_topseg )
@@ -130,6 +119,7 @@ contains
             call rt_best%kill
             call rt_worst%kill
         else
+            ! stochastic search order
             cnt = 0
             do iptcl = params_glob%fromp, params_glob%top
                 if(ptcl_mask(iptcl))then

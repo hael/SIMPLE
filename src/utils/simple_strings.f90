@@ -405,7 +405,7 @@ contains
         if( pos1 .eq. 0 ) return
         linelen=len_trim(line)
         if( scan(line(pos1:),'#!c;', back=.false.) .eq. 1 )then
-            ! the first non-blank character is a comment character. 
+            ! the first non-blank character is a comment character.
             strIsComment = .true.
             ! on one condidtion:
             ! if that's a c, we need to check that the following character is a space.

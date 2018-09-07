@@ -48,6 +48,7 @@ type :: oris
     procedure          :: get_pops
     procedure          :: get_pinds
     procedure          :: gen_mask
+    procedure          :: mask_from_state
     procedure, private :: get_all_normals
     procedure          :: states_exist
     procedure          :: get_arr
@@ -825,6 +826,33 @@ contains
         end do
     end subroutine gen_mask
 
+    !>  \brief  generate a mask for a single value of label state
+    subroutine mask_from_state( self, state, l_mask, pinds, fromto )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: state
+        logical, allocatable, intent(out)   :: l_mask(:)
+        integer, allocatable, intent(out)   :: pinds(:)
+        integer, optional,    intent(in)    :: fromto(2)
+        integer :: i, cnt, ffromto(2)
+        ffromto(1) = 1
+        ffromto(2) = self%n
+        if( present(fromto) ) ffromto = fromto
+        if( allocated(l_mask) ) deallocate(l_mask)
+        if( allocated(pinds)  ) deallocate(pinds)
+        allocate(l_mask(ffromto(1):ffromto(2)))
+        l_mask = .false.
+        do i=ffromto(1),ffromto(2)
+            if( self%o(i)%get_state() == state ) l_mask(i)=.true.
+        end do
+        allocate(pinds(1:count(l_mask)))
+        cnt = 0
+        do i=ffromto(1),ffromto(2)
+            if( .not.l_mask(i) ) cycle
+            cnt = cnt + 1
+            pinds(cnt) = i
+        end do
+    end subroutine mask_from_state
+
     !>  \brief  is for getting an array of 'which' variables with
     !!          filtering based on class/state/proj
     function get_arr( self, which, class, state ) result( vals )
@@ -1082,21 +1110,24 @@ contains
         logical,              intent(out)   :: mask(fromto(1):fromto(2))
         real,    allocatable :: counts(:)
         integer, allocatable :: clsarr(:)
+        logical :: state_mask(fromto(1):fromto(2))
         integer :: i, cnt, icls, sz
         real    :: val, update_frac_here
-        update_frac_here = update_frac * real(fromto(2)-fromto(1)+1) / real(self%n)
-        mask   = .false.
+        state_mask = .false.
+        mask       = .false.
+        do i=fromto(1),fromto(2)
+            if(self%o(i)%get_state() > 0) state_mask(i) = .true.
+        enddo
+        update_frac_here = update_frac * real(count(state_mask)) / real(self%n)
         do icls=1,ncls
             call self%get_pinds(icls, 'class', clsarr)
             if( allocated(clsarr) )then
-                sz      = size(clsarr)
+                sz       = size(clsarr)
                 nsamples = max(1,nint(real(sz) * update_frac_here ))
-                allocate(counts(sz))
+                allocate(counts(sz), source=0.)
                 do i=1,sz
                     if( self%o(clsarr(i))%isthere('updatecnt'))then
                         counts(i) = self%o(clsarr(i))%get('updatecnt')
-                    else
-                        counts(i) = 0.
                     endif
                 end do
                 ! order counts
@@ -1104,6 +1135,7 @@ contains
                 cnt = 0
                 do i=1,sz
                     if( clsarr(i) >= fromto(1) .and. clsarr(i) <= fromto(2) )then
+                    if( .not.state_mask(clsarr(i)) )cycle
                         cnt = cnt +1
                         if( cnt > nsamples )exit
                         mask(clsarr(i)) = .true.
@@ -1127,24 +1159,39 @@ contains
                 endif
             end do
         else
-            nsamples = fromto(2)-fromto(1)+1
-            mask     = .true.
-            inds     = (/ (i,i=fromto(1),fromto(2)) /)
+            nsamples = count(state_mask)
+            allocate(inds(nsamples), source=0)
+            cnt = 0
             do i=fromto(1),fromto(2)
-                call self%o(i)%set('updatecnt', 1.)
+                mask(i) = state_mask(i)
+                if(mask(i))then
+                    cnt       = cnt+1
+                    inds(cnt) = i
+                    call self%o(i)%set('updatecnt', 1.)
+                endif
             end do
         endif
     end subroutine sample4update_and_incrcnt2D
 
-    subroutine incr_updatecnt( self, fromto )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: fromto(2)
+    subroutine incr_updatecnt( self, fromto, mask )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: fromto(2)
+        logical, optional, intent(in)    :: mask(fromto(1):fromto(2))
         integer :: i
         real    :: cnt
-        do i=fromto(1),fromto(2)
-            cnt = self%o(i)%get('updatecnt')
-            call self%o(i)%set('updatecnt', cnt + 1.0)
-        end do
+        if( present(mask) )then
+            do i=fromto(1),fromto(2)
+                if( .not.mask(i) )cycle
+                cnt = self%o(i)%get('updatecnt')
+                call self%o(i)%set('updatecnt', cnt + 1.0)
+            end do
+        else
+            ! soon to be deprecated
+            do i=fromto(1),fromto(2)
+                cnt = self%o(i)%get('updatecnt')
+                call self%o(i)%set('updatecnt', cnt + 1.0)
+            end do
+        endif
     end subroutine incr_updatecnt
 
     !>  \brief  check wether the orientation has any typical search parameter

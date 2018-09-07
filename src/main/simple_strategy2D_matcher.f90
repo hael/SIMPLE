@@ -41,7 +41,6 @@ contains
         use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_neigh,      only: strategy2D_neigh
-        use simple_strategy2D_stochastic, only: strategy2D_stochastic
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
@@ -59,9 +58,9 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        real                  :: extr_bound, frac_srch_space, extr_thresh, bfactor, ave, sdev, threshold
+        real                  :: frac_srch_space, bfactor, ave, sdev, threshold
         integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n
-        logical               :: doprint, l_partial_sums, l_extr, l_frac_update, l_snhc
+        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
 
         if( L_BENCH )then
             t_init = tic()
@@ -76,65 +75,24 @@ contains
             ! streaming: no fractional update
             l_frac_update  = .false.
             l_partial_sums = .false.
-            l_extr         = .false.
-            l_snhc         = .false.
-            select case(trim(params_glob%refine))
-                case('snhc')
-                    l_snhc = .true.
-                case('extr')
-                    ! new particles are the randomization
-                case DEFAULT
-                    THROW_HARD('Unsupported refinement mode; cluster2D_exec 1')
-            end select
         else
             ! default
             if( params_glob%extr_iter == 1 )then
                 ! greedy start
                 l_partial_sums = .false.
-                l_extr         = .false.
                 l_snhc         = .false.
                 l_frac_update  = .false.
             else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
                 ! extremal opt without fractional update
                 l_partial_sums = .false.
-                l_extr         = .true.
                 l_snhc         = .true.
                 l_frac_update  = .false.
             else
-                ! optional fractional update, no extremal opt
+                ! optional fractional update, no snhc opt
                 l_partial_sums = params_glob%l_frac_update
-                l_extr         = .false.
                 l_snhc         = .false.
                 l_frac_update  = params_glob%l_frac_update
             endif
-            ! refinement logic
-            select case(trim(params_glob%refine))
-                case('extr')
-                    l_snhc = .false.
-                case('snhc')
-                    l_extr = .false.
-                case DEFAULT
-                    THROW_HARD('unsupported refinement mode; cluster2D_exec 2')
-            end select
-        endif
-
-        ! EXTREMAL LOGICS
-        if( l_extr )then
-            ! factorial decay, -2 because first step is always greedy
-            extr_thresh = EXTRINITHRESH * (1.-EXTRTHRESH_CONST)**real(params_glob%extr_iter-2)
-            extr_thresh = min(EXTRINITHRESH, max(0., extr_thresh))
-            select case(params_glob%cc_objfun)
-                case(OBJFUN_CC,OBJFUN_EUCLID)
-                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
-                case(OBJFUN_RES)
-                    extr_bound = build_glob%spproj_field%extremal_bound(extr_thresh, 'bfac')
-            end select
-            write(*,'(A,F8.2)') '>>> PARTICLE RANDOMIZATION(%):', 100.*extr_thresh
-            write(*,'(A,F8.2)') '>>> EXTREMAL THRESHOLD:    ', extr_bound
-            DebugPrint ' cluster2D_exec; extremal time                           ',toc(t_init)
-        else
-            extr_thresh = 0.
-            extr_bound  = -huge(extr_bound)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -145,11 +103,14 @@ contains
             call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, &
                 [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
-            nptcls2update = params_glob%top - params_glob%fromp + 1
-            allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
-            pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
-            ptcl_mask = .true.
-            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
+            ! nptcls2update = params_glob%top - params_glob%fromp + 1
+            ! allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
+            ! pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
+            ! ptcl_mask = .true.
+            ! call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
+            call build_glob%spproj_field%mask_from_state(1, ptcl_mask, pinds, fromto=[params_glob%fromp,params_glob%top])
+            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], mask=ptcl_mask)
+            nptcls2update = count(ptcl_mask)
         endif
         DebugPrint ' cluster2D_exec;  INDEX SAMPLING                             ', toc(t_init)
 
@@ -291,11 +252,7 @@ contains
                         if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         else
-                            if(params_glob%refine.eq.'extr')then
-                                allocate(strategy2D_stochastic :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                            else
-                                allocate(strategy2D_snhc       :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                            endif
+                            allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif
                         if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
                     endif
@@ -308,15 +265,11 @@ contains
             if( ptcl_mask(iptcl) )then
                 cnt = cnt + 1
                 ! search spec
-                strategy2Dspec%iptcl     = iptcl
-                strategy2Dspec%iptcl_map = cnt
-                strategy2Dspec%bfac      = bfactor
-                strategy2Dspec%chunk_id  = chunk_id(iptcl)
-                if( trim(params_glob%refine).eq.'extr' )then
-                    strategy2Dspec%stoch_bound = extr_bound
-                else
-                    strategy2Dspec%stoch_bound = snhc_sz(iptcl)
-                endif
+                strategy2Dspec%iptcl       = iptcl
+                strategy2Dspec%iptcl_map   = cnt
+                strategy2Dspec%bfac        = bfactor
+                strategy2Dspec%chunk_id    = chunk_id(iptcl)
+                strategy2Dspec%stoch_bound = snhc_sz(iptcl)
                 ! search object
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif

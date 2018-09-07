@@ -242,7 +242,7 @@ contains
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: i,iter, icls, orig_box, box, nptcls_glob, iproj, n_new_spprojs, imic
         integer :: nptcls_glob_prev, n_spprojs, n_spprojs_prev, n_new_ptcls, orig_nparts, nparts
-        integer :: iptcl, ichunk, nrefs_glob, rnd_cls, ncls_glob, tnow, last_injection, maxnptcls
+        integer :: iptcl, ichunk, rnd_cls, ncls_glob, tnow, last_injection, maxnptcls
         integer :: chunk2merge, nptcls_per_chunk, nchunks, nchunks_prev, maxnchunks, origproj_time
         integer :: first_ptcl, last_ptcl, first_leftover, ncls_prev_glob, maxncls
         logical :: do_autoscale, work_proj_has_changed, l_ccres, l_maxed, buffer_exists
@@ -284,7 +284,7 @@ contains
         call cline_cluster2D%set('prg',       'cluster2D')
         call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('autoscale', 'no')
-        call cline_cluster2D%set('extr_iter', 100.) ! no extremal randomization
+        call cline_cluster2D%set('extr_iter', 100.) ! stochasticity is driven from here
         call cline_cluster2D%set('refine',    'snhc')
         call cline_cluster2D%set('trs',       MINSHIFT)
         call cline_cluster2D%delete('frac_update')
@@ -431,6 +431,7 @@ contains
                 work_proj_has_changed = .true.
                 ! find latest chunk & first leftover
                 first_ptcl     = 0
+                last_ptcl      = 0
                 first_leftover = 0
                 do iptcl=maxnptcls+1,nptcls_glob,nptcls_per_chunk
                     if(work_proj%os_ptcl2D%isthere(iptcl,'chunk'))then
@@ -510,7 +511,6 @@ contains
                     ! deactivate leftovers
                     do iptcl=first_leftover+1,nptcls_glob
                         call work_proj%os_ptcl2D%set(iptcl,'state',0.)
-                        call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)
                     enddo
                 endif
             else
@@ -551,7 +551,6 @@ contains
                 ! deactivate leftovers
                 do iptcl=nchunks*nptcls_per_chunk+1,nptcls_glob
                     call work_proj%os_ptcl2D%set(iptcl,'state',    0.)
-                    call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)
                 enddo
             endif
             ! MERGE CHUNKS
@@ -597,7 +596,6 @@ contains
             do nparts=orig_nparts,1,-1
                 if(real(nptcls_glob)/real(nparts) > real(nptcls_glob-last_ptcl) )exit
             enddo
-            print *,'nparts:',nparts
             call cline_cluster2D%delete('endit')
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
@@ -710,7 +708,7 @@ contains
                 integer,          allocatable :: vec(:)
                 character(len=:), allocatable :: stkname
                 character(len=STDLEN) :: stk
-                integer               :: i, ii, icls, nptcls_here, ind, ncls, ncls_prev, state, nran
+                integer               :: i, icls, nptcls_here, ind, ncls, ncls_prev, state, nran
                 write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
                 state       = 1
                 ncls        = nchunks*params_glob%ncls_start
