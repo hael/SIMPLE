@@ -317,6 +317,7 @@ contains
     procedure          :: noise_norm
     procedure          :: edges_norm
     procedure          :: norm_bin
+    procedure          :: sigmoid
     procedure          :: roavg
     procedure          :: rtsq
     procedure          :: rtsq_serial
@@ -6715,9 +6716,23 @@ contains
         smin  = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         smax  = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
         ! create [0,1]-normalized image
-        self%rmat = (self%rmat - smin)  / (smax-smin)
-        self%rmat = (exp(self%rmat)-1.) / (exp(1.)-1.)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - smin)  / (smax-smin)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+            &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
     end subroutine norm_bin
+
+    !>  \brief  applies sigmoid function, shifts zero back & sets negative values to zero
+    subroutine sigmoid( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) THROW_HARD('image assumed to be real not FTed; sigmoid')
+        where(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>=0.)
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
+                &1./(1.+exp(-self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))) - 0.5
+        elsewhere
+            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
+        end where
+    end subroutine sigmoid
 
     !> \brief roavg  is for creating a rotation average of self
     !! \param angstep angular step

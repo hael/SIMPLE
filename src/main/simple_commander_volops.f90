@@ -644,7 +644,9 @@ contains
         ! center volume
         call build%vol%read(params%vols(1))
         shvec = 0.
-        if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
+        if( params%center.eq.'yes' )then
+            shvec = build%vol%center(params%cenlp,params%msk)
+        endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! init search object

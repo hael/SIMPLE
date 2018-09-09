@@ -526,11 +526,6 @@ contains
         type(oris) :: tmp, os_nomirr
         integer    :: cnt, i, n, nprojs, lim, nos, nos_nomirr
         logical, allocatable :: avail(:)
-        !!!!!!!!!!!!!!
-        !!! old fashioned way
-        ! call os%spiral(self%get_nsym(), self%get_eullims())
-        ! return
-        !!!!!!
         nos = os%get_noris()
         if(is_odd(nos))THROW_HARD('odd number of projections directions not supported; build_refspiral')
         nos_nomirr = nos/2

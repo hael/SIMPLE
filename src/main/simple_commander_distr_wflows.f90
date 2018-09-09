@@ -642,6 +642,7 @@ contains
                 endif
             endif
             have_oris = .true.
+            call build%spproj%write_segment_inside(params%oritype)
         endif
         if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
