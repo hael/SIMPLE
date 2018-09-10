@@ -24,12 +24,12 @@ contains
             THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
-            case('O')
-                call spproj%read(fname)
-            case('T')
-                call a%read(fname, fromto=fromto)
-            case DEFAULT
-                THROW_HARD('format: '//fname2format(fname)//' unsupported')
+        case('O')
+            call spproj%read(fname)
+        case('T')
+            call a%read(fname, fromto=fromto)
+        case DEFAULT
+            THROW_HARD('format: '//fname2format(fname)//' unsupported')
         end select
     end subroutine binread_oritab
 
@@ -42,12 +42,12 @@ contains
             THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
-            case('O')
-                call spproj%read_ctfparams_state_eo(fname)
-            case('T')
-                call a%read_ctfparams_state_eo(fname)
-            case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' unsupported')
+        case('O')
+            call spproj%read_ctfparams_state_eo(fname)
+        case('T')
+            call a%read_ctfparams_state_eo(fname)
+        case DEFAULT
+            THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end subroutine binread_ctfparams_state_eo
 
@@ -57,18 +57,19 @@ contains
         character(len=*), intent(in) :: fname
         integer       :: nl
         type(binoris) :: bos
+        nl = -1
         if( .not. file_exists(fname) )then
             THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
-            case('O')
-                call bos%open(fname)
-                nl = bos%get_n_records(params_glob%spproj_iseg)
-                call bos%close
-            case('T')
-                nl = nlines(fname)
-            case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' unsupported')
+        case('O')
+            call bos%open(fname)
+            nl = bos%get_n_records(params_glob%spproj_iseg)
+            call bos%close
+        case('T')
+            nl = nlines(fname)
+        case DEFAULT
+            THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end function binread_nlines
 
@@ -79,12 +80,12 @@ contains
         integer,           intent(in)    :: fromto(2)
         integer(kind(ENUM_ORISEG)), optional, intent(in) :: isegment
         select case(fname2format(fname))
-            case('O')
-                call spproj%write(fname, fromto, isegment)
-            case('T')
-                call a%write(fname, fromto)
-            case DEFAULT
-                THROW_HARD('format of file: '//trim(fname)//' unsupported')
+        case('O')
+            call spproj%write(fname, fromto, isegment)
+        case('T')
+            call a%write(fname, fromto)
+        case DEFAULT
+            THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end subroutine binwrite_oritab
 

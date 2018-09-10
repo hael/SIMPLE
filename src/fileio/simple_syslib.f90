@@ -240,6 +240,7 @@ contains
         logical :: l_doprint, wwait, l_suppress_errors
         l_doprint = .false.
         wwait     = .true.
+        l_suppress_errors = .false.
         if( present(waitflag)        ) wwait = waitflag
         if( present(suppress_errors) ) l_suppress_errors = suppress_errors
         if( l_suppress_errors )then
@@ -254,7 +255,7 @@ contains
         ! Fortran 2003
         exec_stat = system(trim(adjustl(cmdstr)))
 #endif
-       if( l_doprint )then
+        if( l_doprint )then
             write(*,*) 'command            : ', cmdstr
             write(*,*) 'status of execution: ', exec_stat
         endif
@@ -514,7 +515,7 @@ contains
         if(status /= 0)&
             call simple_error_check(status,"simple_syslib::simple_sys_stat inquire failed "//trim(filename))
         if(.not.currently_opened)&
-             open(newunit=funit,file=trim(adjustl(filename)),status='old',iostat=status)
+            open(newunit=funit,file=trim(adjustl(filename)),status='old',iostat=status)
         if(status /= 0)&
             call simple_error_check(status,"simple_syslib::simple_sys_stat open failed "//trim(filename))
         !allocate(buffer(13), source=0)
@@ -569,8 +570,8 @@ contains
         deallocate(d1)
         if (status == 1) then
             dir_exists = .true.
-           call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
-           if(global_debug)then
+            call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
+            if(global_debug)then
                 print *, " status ", status
                 print *, " file mode ", buffer(3)
                 print *, " last modified ", buffer(10)
@@ -753,7 +754,7 @@ contains
 #ifdef INTEL
             qq =  deldirqq(trim(adjustl(path)))
             if(.not. qq) call simple_error_check(io_status, &
-                    "syslib:: deldirqq failed  "//trim(path))
+                "syslib:: deldirqq failed  "//trim(path))
 #else
             io_status = removedir(trim(adjustl(path)), length, count)
 #endif
@@ -812,6 +813,7 @@ contains
         integer :: i, j, last_nr_ind, io_stat
         integer :: next_int_dir_prefix, ndirs
         dirs  = simple_list_dirs(dir2list)
+        last_nr_ind=1
         if( allocated(dirs) )then
             ndirs = size(dirs)
         else
@@ -1042,9 +1044,9 @@ contains
             print *,"simple_syslib::simple_rm_force no files matching ", trim(thisglob)
         endif
         if(present(dlist)) then
-           allocate( dlist(glob_elems), source=list)
+            allocate( dlist(glob_elems), source=list)
         else
-           deallocate(list)
+            deallocate(list)
         end if
         if(present(status))status=iostatus
         deallocate(thisglob)
@@ -1102,7 +1104,7 @@ contains
         character(len = 4) lineID ! 'cpu '
         integer, dimension(9) :: times
         cpu_usage=0.0
-        sumtimes = 0
+        sumtimes = 0; oldsum=0
         oldidle=0
         times = 0
         percent = 0.
@@ -1141,6 +1143,11 @@ contains
         integer  :: status
         character(len=:), allocatable :: compilation_cmd, compiler_ver
         character(len=56)  :: str !! needed by intel
+        if (present(file_unit)) then
+            file_unit_op = file_unit
+        else
+            file_unit_op = OUTPUT_UNIT
+        end if
 #ifdef __INTEL_COMPILER
 #if __INTEL_COMPILER >= 1700
         status = FOR_IFCORE_VERSION( str )
@@ -1156,7 +1163,8 @@ contains
 #endif
 #endif
         write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
-        trim(FC_COMPILER_CMAKE_VERSION)
+            trim(FC_COMPILER_CMAKE_VERSION)
+
 #ifdef USE_F08_ISOENV
         ! F2003 does not have compiler_version/OPTIONS in iso_fortran_env
         compilation_cmd = COMPILER_OPTIONS()
@@ -1164,11 +1172,6 @@ contains
 #endif
         if(allocated(compiler_ver))then
             if(len(compiler_ver) <= 0) THROW_ERROR('simple_syslib compiler_version str le 0')
-            if (present(file_unit)) then
-                file_unit_op = file_unit
-            else
-                file_unit_op = OUTPUT_UNIT
-            end if
 
             write( file_unit_op, '(A,A,A,A)' ) &
                 ' This file was compiled by ', trim(adjustl(compiler_ver)), &

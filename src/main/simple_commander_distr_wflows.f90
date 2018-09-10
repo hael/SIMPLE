@@ -471,7 +471,6 @@ contains
     end subroutine exec_cluster2D_distr
 
     subroutine exec_refine3D_init_distr( self, cline )
-        use simple_parameters, only: params_glob
         class(refine3D_init_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)      :: params
@@ -540,7 +539,7 @@ contains
         character(len=STDLEN)     :: str_state, fsc_file
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd
-        integer :: i, s, state, iter, iostat, box, nfiles
+        integer :: i, state, iter, iostat, box, nfiles
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
@@ -982,11 +981,11 @@ contains
         character(len=LONGSTRLEN), allocatable :: part_stks(:)
         type(parameters)              :: params
         type(builder)                 :: build
-        character(len=:), allocatable :: projfile_sc, projname_sc, stk, stk_sc, ext
+        character(len=:), allocatable :: projfile_sc
         character(len=STDLEN) :: filetab
         integer, allocatable  :: parts(:,:)
         real                  :: smpd, smpd_target
-        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox, iostatus
+        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox
         logical               :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled

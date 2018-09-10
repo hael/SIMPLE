@@ -70,7 +70,7 @@ contains
 
         ! call self%keywords_general%push('AutopickFigureOfMerit',             '')    !!
         ! call self%keywords_general%push('AverageNrOfFrames',                 '')    !!
-        ! call self%keywords_general%push('ClassNumber',                       '')    !! arbitrary 
+        ! call self%keywords_general%push('ClassNumber',                       '')    !! arbitrary
 
 
         !!  Symmetry libraries have been copied from XMIPP. As such, with the exception of
@@ -113,8 +113,8 @@ contains
         call self%keywords_general%push('DefocusU',                          'dfx')  !! dfmax
         call self%keywords_general%push('DefocusV',                          'dfy') !! dfmin
         call self%keywords_general%push('DetectorPixelSize',                 'smpd') !! ??
-!        call self%keywords_general%push('GroupName',                         '')
-!        call self%keywords_general%push('GroupNumber',                       '')
+        !        call self%keywords_general%push('GroupName',                         '')
+        !        call self%keywords_general%push('GroupNumber',                       '')
         ! call self%keywords_general%push('LogLikeliContribution',             '')
         ! call self%keywords_general%push('Magnification',                     '')
         ! call self%keywords_general%push('MaxValueProbDistribution',          '')
@@ -227,7 +227,7 @@ contains
     function isthere( self, starkey ) result( found )
         class(star_dict),       intent(inout) :: self
         character(len=*), intent(inout)    :: starkey
-        logical :: filename_found, general_found, found
+        logical :: found
         integer :: which
         found=.false.
         which =  self%keywords_general%lookup(trim(starkey))
@@ -260,7 +260,7 @@ contains
         class(star_dict), intent(inout) :: self
         integer,    intent(in)    :: fhandle
         character(len=2048) :: line
-        logical :: isthere(3)
+
         read(fhandle,fmt='(A)') line
         ! call sauron_line_parser( line, self%htab, self%chtab )
         ! isthere(1) = self%htab%isthere('e1')
@@ -349,7 +349,7 @@ contains
         class(star_dict),     intent(inout) :: self
         character(len=*), intent(in) :: key
         integer, intent(out) :: mode
-        integer :: ikey, which
+        integer :: which
         which =-1
         mode=-1
         if ( self%keywords_general%isthere(key) )then

@@ -7,7 +7,7 @@ implicit none
 integer, parameter  :: OPT_STATUS_SUCCESS = 1, OPT_STATUS_CONTINUE = 0, OPT_STATUS_ERROR = -1
 
 contains
-    
+
     subroutine take_step (x, p, step, lambda, x1)
         real(dp), intent(in) :: x(:), p(:), step, lambda
         real(dp), intent(out) :: x1(:)
@@ -178,7 +178,7 @@ contains
         vect_equal_4 = size(array1) == size(array2)
         if ( vect_equal_4 ) then
             do i = 1,size(array1)
-                vect_equal_4 = array1(i) == array2(i)
+                vect_equal_4 = is_equal(array1(i), array2(i))
                 if ( .not. vect_equal_4 )exit
             enddo
         endif
@@ -190,7 +190,7 @@ contains
         vect_equal = size(array1) == size(array2)
         if ( vect_equal ) then
             do i = 1,size(array1)
-                vect_equal = array1(i) == array2(i)
+                vect_equal = is_equal(array1(i), array2(i))
                 if ( .not. vect_equal )exit
             enddo
         endif

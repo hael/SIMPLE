@@ -1571,7 +1571,7 @@ contains
         class(image),      intent(inout) :: self
         logical,           intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable, intent(in)    :: pcavec(:)
-        real    :: field(self%ldim(1),self%ldim(2),self%ldim(3))
+        !real    :: field(self%ldim(1),self%ldim(2),self%ldim(3))
         integer :: sz, sz_msk, i, j, k, cnt
         if( allocated(pcavec) )then
             sz     = size(pcavec)
@@ -3104,16 +3104,16 @@ contains
         if(self_in%ldim(3) /= 1) THROW_HARD('enumerate_connected_comps. Only for 2D images!')
         cnt = 0   !it is going to be the new label of the connected component
         do i = 1, self_in%ldim(1)
-           do j = 1, self_in%ldim(2)
-               if( self_in%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
-                   cnt = cnt + 1
-                   tmp = self_in%rmat(i,j,1)
-                   where(self_in%rmat == tmp)
-                       self_out%rmat = cnt
-                       self_in%rmat  = 0.            !Not to consider this cc again
-                   endwhere
-               endif
-           enddo
+            do j = 1, self_in%ldim(2)
+                if( self_in%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
+                    cnt = cnt + 1
+                    tmp = self_in%rmat(i,j,1)
+                    where(self_in%rmat == tmp)
+                        self_out%rmat = cnt
+                        self_in%rmat  = 0.            !Not to consider this cc again
+                    endwhere
+                endif
+            enddo
         enddo
     end subroutine enumerate_connected_comps
 
@@ -3146,8 +3146,8 @@ contains
                         endif
                     enddo
                 enddo
-              endif
-          enddo
+            endif
+        enddo
         call img_cc%enumerate_connected_comps(img_out)
         deallocate(label_matrix, mat4compare)
     end subroutine find_connected_comps
@@ -3171,28 +3171,28 @@ contains
     ! it in order to prepare the centering process.
     ! Notation: cc = connected component.
     subroutine prepare_connected_comps(self, discard, min_sz)
-          class(image),      intent(inout) :: self     !image which contains connected components
-          logical, optional, intent(out)   :: discard
-          integer, optional, intent(in)    :: min_sz
-          integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
-          if(present(discard) .and. .not. present(min_sz)) THROW_HARD('Need min_sz;  prepare_connected_comps')
-          if(present(min_sz) .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
-          sz = self%size_connected_comps()
-          biggest_cc  = maxloc(sz(2,:))
-          biggest_val = real(sz(1, biggest_cc))
-          if(present(discard)) then
-              if( sz(2,biggest_cc(1)) < min_sz ) then
+        class(image),      intent(inout) :: self     !image which contains connected components
+        logical, optional, intent(out)   :: discard
+        integer, optional, intent(in)    :: min_sz
+        integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
+        if(present(discard) .and. .not. present(min_sz)) THROW_HARD('Need min_sz;  prepare_connected_comps')
+        if(present(min_sz) .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
+        sz = self%size_connected_comps()
+        biggest_cc  = maxloc(sz(2,:))
+        biggest_val = real(sz(1, biggest_cc))
+        if(present(discard)) then
+            if( sz(2,biggest_cc(1)) < min_sz ) then
                 discard = .true.  !if the biggest cc is smaller than min_sz, discard image
-              else
+            else
                 discard = .false.
-              endif
-          endif
-          where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
-              self%rmat = 0.
-          elsewhere
-              self%rmat = 1.   !self is now binary
-          endwhere
-          deallocate(sz,biggest_cc,biggest_val)
+            endif
+        endif
+        where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
+            self%rmat = 0.
+        elsewhere
+            self%rmat = 1.   !self is now binary
+        endwhere
+        deallocate(sz,biggest_cc,biggest_val)
     end subroutine prepare_connected_comps
 
     !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!
@@ -3201,111 +3201,111 @@ contains
     ! or bigger than max_sz = range(2).
     ! It is created in order to prepare a micrograph for picking particles.
     subroutine elim_cc(self, range)
-          class(image), intent(inout) :: self
-          integer,      intent(in)    :: range(2)
-          integer, allocatable :: sz(:,:)
-          integer              :: n_cc
-          real                 :: label
-          sz = self%size_connected_comps()
-          do n_cc = 1, size(sz, dim = 2)  !for each cc
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: range(2)
+        integer, allocatable :: sz(:,:)
+        integer              :: n_cc
+        real                 :: label
+        sz = self%size_connected_comps()
+        do n_cc = 1, size(sz, dim = 2)  !for each cc
             if(sz(2,n_cc) < range(1) .or. sz(2,n_cc) > range(2)) then  !if the cc has size < min_sz or > max_sz
                 label = real(sz(1,n_cc))  !label of the cc
                 where(abs(self%rmat - label) < TINY)  !rmat == label
                     self%rmat = 0.        !set to 0
                 endwhere
             endif
-          enddo
+        enddo
     end subroutine elim_cc
 
      !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation dilatation.
-     subroutine dilatation(self)
-       class(image), intent(inout) :: self
-       integer, allocatable :: neigh_8(:,:,:)
-       type(image) :: self_copy
-       integer     :: i, j, k
-       call self_copy%copy(self)
-       if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; dilatation')
-       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-       THROW_HARD('input for dilatation not binary; dilatation')
-       do i = 1, self%ldim(1)
-           do j = 1, self%ldim(2)
-               if(self_copy%rmat(i,j,1) == 1.) then  !just for white pixels
-                   call self%calc_neigh_8([i,j,1], neigh_8)
-                   do k = 1, size(neigh_8, dim=2)
-                       call self%set(neigh_8(1:3,k,1), 1.) !self%rmat(neigh_8) = 1.
-                   enddo
-                   deallocate(neigh_8)
-               endif
-           enddo
-       enddo
-       call self_copy%kill
-     end subroutine dilatation
+    subroutine dilatation(self)
+        class(image), intent(inout) :: self
+        integer, allocatable :: neigh_8(:,:,:)
+        type(image) :: self_copy
+        integer     :: i, j, k
+        call self_copy%copy(self)
+        if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; dilatation')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input for dilatation not binary; dilatation')
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                if(self_copy%rmat(i,j,1) == 1.) then  !just for white pixels
+                    call self%calc_neigh_8([i,j,1], neigh_8)
+                    do k = 1, size(neigh_8, dim=2)
+                        call self%set(neigh_8(1:3,k,1), 1.) !self%rmat(neigh_8) = 1.
+                    enddo
+                    deallocate(neigh_8)
+                endif
+            enddo
+        enddo
+        call self_copy%kill
+    end subroutine dilatation
 
      !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation erosion.
-     subroutine erosion(self)
-         class(image) :: self
-         logical, allocatable :: border(:,:,:)
-         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; erosion')
-         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-         THROW_HARD('input for erosion not binary; erosion')
-         call self%border_mask(border)
-         where(border)
-             self%rmat = 0.
-         endwhere
-     end subroutine erosion
+    subroutine erosion(self)
+        class(image) :: self
+        logical, allocatable :: border(:,:,:)
+        if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; erosion')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input for erosion not binary; erosion')
+        call self%border_mask(border)
+        where(border)
+            self%rmat = 0.
+        endwhere
+    end subroutine erosion
 
      !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
      ! This subroutine implements morphological operation of closing
      ! on the image self.
-     subroutine morpho_closing(self)
-         class(image), intent(inout) :: self
-         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_closing')
-         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-         THROW_HARD('input for morpho_closing not binary; morpho_closing')
-         call self%dilatation()
-         call self%erosion()
-     end subroutine morpho_closing
+    subroutine morpho_closing(self)
+        class(image), intent(inout) :: self
+        if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_closing')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input for morpho_closing not binary; morpho_closing')
+        call self%dilatation()
+        call self%erosion()
+    end subroutine morpho_closing
 
      !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
      ! This subroutine implements morphological operation of opening
      ! on the image self.
-     subroutine morpho_opening(self)
-       class(image), intent(inout) :: self
-       if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_opening')
-       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-       THROW_HARD('input for morpho_opening not binary; morpho_opening')
-       call self%erosion()
-       call self%dilatation()
-     end subroutine morpho_opening
+    subroutine morpho_opening(self)
+        class(image), intent(inout) :: self
+        if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_opening')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input for morpho_opening not binary; morpho_opening')
+        call self%erosion()
+        call self%dilatation()
+    end subroutine morpho_opening
 
      !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
      ! This subroutine builds the logical array 'border' of the same dims of
      ! the input image self. Border is true in corrispondence of
      ! the border pixels in self. Self is meant to be binary.
-     subroutine border_mask(self, border)
-       class(image), intent(in)            :: self
-       logical, allocatable, intent(inout) :: border(:,:,:)
-       real, allocatable :: neigh_8(:)
-       integer :: i, j
-       if(self%ldim(3)/=1) THROW_HARD('This subroutine is for 2D images!; calc_border')
-       if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-       THROW_HARD('input to calculate border not binary; calc_border')
-       if(allocated(border)) deallocate(border)
-       allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
-       do i = 1,self%ldim(1)
-           do j = 1, self%ldim(2)
-               if(abs(self%rmat(i,j,1)-1.) < TINY ) then !white pixels
-                   call self%calc_neigh_8([i,j,1], neigh_8)
-                   if(any(abs(neigh_8)<TINY)) border(i,j,1) = .true.
-                   deallocate(neigh_8)
-               endif
-           enddo
-       enddo
-     end subroutine border_mask
+    subroutine border_mask(self, border)
+        class(image), intent(in)            :: self
+        logical, allocatable, intent(inout) :: border(:,:,:)
+        real, allocatable :: neigh_8(:)
+        integer :: i, j
+        if(self%ldim(3)/=1) THROW_HARD('This subroutine is for 2D images!; calc_border')
+        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
+            THROW_HARD('input to calculate border not binary; calc_border')
+        if(allocated(border)) deallocate(border)
+        allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
+        do i = 1,self%ldim(1)
+            do j = 1, self%ldim(2)
+                if(abs(self%rmat(i,j,1)-1.) < TINY ) then !white pixels
+                    call self%calc_neigh_8([i,j,1], neigh_8)
+                    if(any(abs(neigh_8)<TINY)) border(i,j,1) = .true.
+                    deallocate(neigh_8)
+                endif
+            enddo
+        enddo
+    end subroutine border_mask
 
     ! FILTERS
 
@@ -4064,15 +4064,15 @@ contains
             end do
         else
             if (which == 'bman')then
-              do i=-winsz,winsz
-                do j=-winsz,winsz
-                    do k=-winsz,winsz
-                        cnt = cnt + 1
-                        wfvals(cnt) = wfun(i) * wfun(j) * wfun(k)
-                        norm = norm + wfvals(cnt)
+                do i=-winsz,winsz
+                    do j=-winsz,winsz
+                        do k=-winsz,winsz
+                            cnt = cnt + 1
+                            wfvals(cnt) = wfun(i) * wfun(j) * wfun(k)
+                            norm = norm + wfvals(cnt)
+                        end do
                     end do
                 end do
-            end do
             else
                 !$omp parallel do collapse(3) default(shared) private(i,j,k) schedule(static) proc_bind(close)&
                 !$omp reduction(+:norm)
@@ -4114,7 +4114,7 @@ contains
                 do i=1,self%ldim(1)
                     do j=1,self%ldim(2)
                         pixels = self%win2arr(i, j, 1, winsz)
-                        img_filt%rmat(i,j,k) = stdev(pixels)
+                        img_filt%rmat(i,j,1) = stdev(pixels)
                     end do
                 end do
                 !$omp end parallel do
@@ -4465,7 +4465,6 @@ contains
         class(image), intent(inout) :: self
         real :: avg
         logical :: didft
-        integer :: i,j,k
         didft = .false.
         if( self%ft )then
             call self%ifft()
@@ -4721,63 +4720,63 @@ contains
         j = px(2)            !Assumes to have a 2-dim matrix
         if(allocated(neigh_8)) deallocate(neigh_8)
         if ( i-1 < 1 .and. j-1 < 1 ) then
-          allocate(neigh_8(3,3,1), source = 0)
-          neigh_8(1:3,1,1) = [i+1,j,1]
-          neigh_8(1:3,2,1) = [i+1,j+1,1]
-          neigh_8(1:3,3,1) = [i,j+1,1]
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i+1,j,1]
+            neigh_8(1:3,2,1) = [i+1,j+1,1]
+            neigh_8(1:3,3,1) = [i,j+1,1]
         else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
-          allocate(neigh_8(3,3,1), source = 0)
-          neigh_8(1:3,1,1) = [i-1,j,1]
-          neigh_8(1:3,2,1) = [i-1,j-1,1]
-          neigh_8(1:3,3,1) = [i,j-1,1]
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j-1,1]
+            neigh_8(1:3,3,1) = [i,j-1,1]
         else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
-          allocate(neigh_8(3,3,1), source = 0)
-          neigh_8(1:3,3,1) = [i-1,j,1]
-          neigh_8(1:3,2,1) = [i-1,j+1,1]
-          neigh_8(1:3,1,1) = [i,j+1,1]
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,3,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j+1,1]
+            neigh_8(1:3,1,1) = [i,j+1,1]
         else if (j+1 > self%ldim(2) .and. i-1 < 1) then
-          allocate(neigh_8(3,3,1), source = 0)
-          neigh_8(1:3,1,1) = [i,j-1,1]
-          neigh_8(1:3,2,1) = [i+1,j-1,1]
-          neigh_8(1:3,3,1) = [i+1,j,1]
+            allocate(neigh_8(3,3,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j-1,1]
+            neigh_8(1:3,2,1) = [i+1,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j,1]
         else if( j-1 < 1 ) then
-          allocate(neigh_8(3,5,1), source = 0)
-          neigh_8(1:3,5,1) = [i-1,j,1]
-          neigh_8(1:3,4,1) = [i-1,j+1,1]
-          neigh_8(1:3,3,1) = [i,j+1,1]
-          neigh_8(1:3,2,1) = [i+1,j+1,1]
-          neigh_8(1:3,1,1) = [i+1,j,1]
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,5,1) = [i-1,j,1]
+            neigh_8(1:3,4,1) = [i-1,j+1,1]
+            neigh_8(1:3,3,1) = [i,j+1,1]
+            neigh_8(1:3,2,1) = [i+1,j+1,1]
+            neigh_8(1:3,1,1) = [i+1,j,1]
         else if ( j+1 > self%ldim(2) ) then
-          allocate(neigh_8(3,5,1), source = 0)
-          neigh_8(1:3,1,1) = [i-1,j,1]
-          neigh_8(1:3,2,1) = [i-1,j-1,1]
-          neigh_8(1:3,3,1) = [i,j-1,1]
-          neigh_8(1:3,4,1) = [i+1,j-1,1]
-          neigh_8(1:3,5,1) = [i+1,j,1]
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j,1]
+            neigh_8(1:3,2,1) = [i-1,j-1,1]
+            neigh_8(1:3,3,1) = [i,j-1,1]
+            neigh_8(1:3,4,1) = [i+1,j-1,1]
+            neigh_8(1:3,5,1) = [i+1,j,1]
         else if ( i-1 < 1 ) then
-          allocate(neigh_8(3,5,1), source = 0)
-          neigh_8(1:3,1,1) = [i,j-1,1]
-          neigh_8(1:3,2,1) = [i+1,j-1,1]
-          neigh_8(1:3,3,1) = [i+1,j,1]
-          neigh_8(1:3,4,1) = [i+1,j+1,1]
-          neigh_8(1:3,5,1) = [i,j+1,1]
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j-1,1]
+            neigh_8(1:3,2,1) = [i+1,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j,1]
+            neigh_8(1:3,4,1) = [i+1,j+1,1]
+            neigh_8(1:3,5,1) = [i,j+1,1]
         else if ( i+1 > self%ldim(1) ) then
-          allocate(neigh_8(3,5,1), source = 0)
-          neigh_8(1:3,1,1) = [i,j+1,1]
-          neigh_8(1:3,2,1) = [i-1,j+1,1]
-          neigh_8(1:3,3,1) = [i-1,j,1]
-          neigh_8(1:3,4,1) = [i-1,j-1,1]
-          neigh_8(1:3,5,1) = [i,j-1,1]
+            allocate(neigh_8(3,5,1), source = 0)
+            neigh_8(1:3,1,1) = [i,j+1,1]
+            neigh_8(1:3,2,1) = [i-1,j+1,1]
+            neigh_8(1:3,3,1) = [i-1,j,1]
+            neigh_8(1:3,4,1) = [i-1,j-1,1]
+            neigh_8(1:3,5,1) = [i,j-1,1]
         else
-          allocate(neigh_8(3,8,1), source = 0)
-          neigh_8(1:3,1,1) = [i-1,j-1,1]
-          neigh_8(1:3,2,1) = [i,j-1,1]
-          neigh_8(1:3,3,1) = [i+1,j-1,1]
-          neigh_8(1:3,4,1) = [i+1,j,1]
-          neigh_8(1:3,5,1) = [i+1,j+1,1]
-          neigh_8(1:3,6,1) = [i,j+1,1]
-          neigh_8(1:3,7,1) = [i-1,j+1,1]
-          neigh_8(1:3,8,1) = [i-1,j,1]
+            allocate(neigh_8(3,8,1), source = 0)
+            neigh_8(1:3,1,1) = [i-1,j-1,1]
+            neigh_8(1:3,2,1) = [i,j-1,1]
+            neigh_8(1:3,3,1) = [i+1,j-1,1]
+            neigh_8(1:3,4,1) = [i+1,j,1]
+            neigh_8(1:3,5,1) = [i+1,j+1,1]
+            neigh_8(1:3,6,1) = [i,j+1,1]
+            neigh_8(1:3,7,1) = [i-1,j+1,1]
+            neigh_8(1:3,8,1) = [i-1,j,1]
         endif
     end subroutine calc_neigh_8_2
 
@@ -5160,37 +5159,37 @@ contains
    !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
    ! The result of this funcion is the median value of the intensities
    ! of the pixels in the image self.
-   function median_value(self) result(m)
-      class(image), intent(in) :: self
-      real              :: m
-      real, allocatable :: pixels(:), pixels_nodup(:)
-      pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-      & mask = .true.)
-      call elim_dup(pixels,pixels_nodup)
-      m = median(pixels_nodup)  !or median_nocopy?
-      deallocate(pixels,pixels_nodup)
-   end function median_value
+    function median_value(self) result(m)
+        class(image), intent(in) :: self
+        real              :: m
+        real, allocatable :: pixels(:), pixels_nodup(:)
+        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+            & mask = .true.)
+        call elim_dup(pixels,pixels_nodup)
+        m = median(pixels_nodup)  !or median_nocopy?
+        deallocate(pixels,pixels_nodup)
+    end function median_value
 
    !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
    ! This function has as output the coordinates of the mass center
    ! of img_in, calculated on the basis of the biggest connected
    ! component (cc) in img_in. If this cc is too small, than
    ! discard = .true.
-   function center_edge( self, discard ) result( xyz )
-       class(image), intent(inout) :: self
-       logical,        intent(out) :: discard
-       type(image) :: imgcc
-       real        :: xyz(3)
-       integer     :: min_sz !minumum size of the biggest cc in img_in
-       min_sz = 20 !too small cc have already been eliminated, this control
-       ! is in order to discard too offcentered windows, in which it wouldn t
-       ! be possible to properly center the particle
-       ! find all the cc in img_in
-       call self%find_connected_comps(imgcc)
-       !find the biggest cc
-       call imgcc%prepare_connected_comps(discard, min_sz)
-       call imgcc%masscen(xyz)
-   end function center_edge
+    function center_edge( self, discard ) result( xyz )
+        class(image), intent(inout) :: self
+        logical,        intent(out) :: discard
+        type(image) :: imgcc
+        real        :: xyz(3)
+        integer     :: min_sz !minumum size of the biggest cc in img_in
+        min_sz = 20 !too small cc have already been eliminated, this control
+        ! is in order to discard too offcentered windows, in which it wouldn t
+        ! be possible to properly center the particle
+        ! find all the cc in img_in
+        call self%find_connected_comps(imgcc)
+        !find the biggest cc
+        call imgcc%prepare_connected_comps(discard, min_sz)
+        call imgcc%masscen(xyz)
+    end function center_edge
 
     ! MODIFIERS
 

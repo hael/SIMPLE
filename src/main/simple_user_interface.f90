@@ -640,8 +640,8 @@ contains
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
-!        call set_param(starfile,       'starfile',       'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
-!        call set_param(startype,    'startype',    'str',   'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
+        call set_param(starfile,       'starfile',       'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
+        call set_param(startype,    'startype',    'str',   'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 

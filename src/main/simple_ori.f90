@@ -612,15 +612,14 @@ contains
     subroutine set_ctfvars(self, ctfvars)
         class(ori),       intent(inout) :: self
         class(ctfparams), intent(in)    :: ctfvars
-        character(len=:), allocatable :: ctfstr, phplate
         call self%set('smpd',  ctfvars%smpd)
         select case( ctfvars%ctfflag )
-            case(CTFFLAG_NO)
-                call self%set('ctf', 'no')
-            case(CTFFLAG_YES)
-                call self%set('ctf', 'yes')
-            case(CTFFLAG_FLIP)
-                call self%set('ctf', 'flip')
+        case(CTFFLAG_NO)
+            call self%set('ctf', 'no')
+        case(CTFFLAG_YES)
+            call self%set('ctf', 'yes')
+        case(CTFFLAG_FLIP)
+            call self%set('ctf', 'flip')
         end select
         call self%set('cs',    ctfvars%cs)
         call self%set('kv',    ctfvars%kv)

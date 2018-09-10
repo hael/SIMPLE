@@ -133,7 +133,7 @@ contains
         class(ppca), intent(inout)             :: self
         character(len=*), intent(in)           :: datastk, featstk
         integer, intent(in)                    :: recsz, maxpcaits
-        integer                                :: k, file_stat, funit2, recsz2, err, fhandle_txt
+        integer                                :: k, file_stat, funit2, recsz2, err
         real                                   :: p, p_prev
         write(*,'(A)') '>>> GENERATIVE ITERATIVE PCA'
         open(newunit=self%funit, status='old', action='read', file=datastk,&

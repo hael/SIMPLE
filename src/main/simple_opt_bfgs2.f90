@@ -335,7 +335,7 @@ contains
         function wrap_f(alpha) result(res)
             real(dp), intent(in) :: alpha
             real(dp) :: res
-            if (alpha == self%wrapper%f_cache_key) then ! using previously cached f(alpha)
+            if (is_equal(alpha, self%wrapper%f_cache_key)) then ! using previously cached f(alpha)
                 res = self%wrapper%f_alpha
                 return
             end if

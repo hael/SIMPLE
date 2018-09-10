@@ -9,8 +9,7 @@ contains
         use simple_projector,   only: projector
         class(projector), intent(inout) :: volprojobj
         character(len=*), intent(in)    :: volfname
-        real    :: smpd_target, smpd_sc, scale
-        integer :: ldim(3), ifoo, box_sc
+        integer :: ldim(3), ifoo
         ! find logical dimension
         call find_ldim_nptcls(volfname, ldim, ifoo)
         ! create conforming projector object

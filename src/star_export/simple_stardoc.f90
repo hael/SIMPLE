@@ -66,6 +66,7 @@ contains
     procedure        :: put_r4
     procedure        :: put_i4
     procedure        :: put_str
+    procedure        :: putdata
     !generic         :: put => put_r4, put_i4, put_str
     procedure        :: kill_stored_params
     procedure,public :: kill
@@ -111,7 +112,7 @@ contains
     subroutine new( self, n )
         class(stardoc), intent(inout) :: self
         integer,        intent(in)    :: n
-        integer :: i
+
         call self%kill()
         if(.not. self%sdict%exists() ) call self%sdict%new()
 
@@ -242,8 +243,8 @@ contains
     !> Parse the STAR file header
     subroutine read_header(self)
         class(stardoc), intent(inout) :: self
-        character(len=:), allocatable :: line,tmp, starlabel,simplelabel
-        integer :: ielem,ivalid,idata,ios,lenstr,isize,cnt,i
+        character(len=:), allocatable :: line, starlabel, simplelabel
+        integer :: ielem, ivalid, idata, ios, lenstr,cnt,i
         integer :: pos1,pos2, nargsline
         logical :: inData, inHeader
         self%num_data_elements=0
@@ -452,7 +453,7 @@ contains
         character(len=:),allocatable      :: sline, line, experiment_rootdir
         character(len=:),allocatable      :: imgfile_rootdir, imgfilename,tmpfilename
         character(len=STDLEN)             :: datestr
-        integer              :: n, cnt, ios, lenstr, pos1, pos2, i, nargsOnDataline, nDataline, nargsParsed
+        integer              :: n, cnt, ios, lenstr, pos1, i, nargsOnDataline, nDataline, nargsParsed
         logical, allocatable :: imgfilenameselected(:)
         integer              :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
         logical :: inData, inHeader
@@ -635,8 +636,8 @@ contains
                                     THROW_HARD(" Unable to find file "//trim(tmpfilename) )
                                 endif
                             else
-                                print *," Unable to find file in path of current star file "//trim(tmpfilename)
-                                THROW_HARD(" Unable to find file "//trim(tmpfilename) )
+                                print *," Unable to find file in path of current star file "//trim(imgfilename)
+                                THROW_HARD(" Unable to find file "//trim(imgfilename) )
                             endif
                         endif
                         if(self%param_labels(i)%str == "CtfImage")then
@@ -710,9 +711,9 @@ contains
         character(len=*),intent(inout) :: filename
         character(len=LONGSTRLEN*8)    :: starline
         character(len=LONGSTRLEN)      :: imagename
-        character(len=:), allocatable  ::  val,stackfile,state
-        integer  :: i, io_stat, iframe, ielem
-        real     :: statef, defocus
+        character(len=:), allocatable  ::  stackfile
+        integer  :: i, io_stat, iframe
+        real     :: statef
 
         if(self%l_open)call self%close
         call fopen(self%funit, trim(filename) ,iostat=io_stat)
@@ -729,7 +730,7 @@ contains
 
         do iframe=1, self%num_frames
             statef = self%frames(iframe)%state
-            if (statef .ne. 0)then
+            if (.not. is_zero(statef) )then
 
                 !! create zero-padded frame number and stackfile
                 imagename=int2str_pad(self%get_i4(i,"frameid"),5)//'@'//&
@@ -762,10 +763,9 @@ contains
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
         character(len=LONGSTRLEN*8) :: line
-        character(len=LONGSTRLEN) :: imagename
         integer :: starfd, io_stat, i, n, endPos, num_labels, elems, iframe, idata
         character(len=LONGSTRLEN)     :: args(MAX_STAR_ARGS_PER_LINE)
-        logical :: inFrame, inData
+        logical :: inData
         inData=.false.
         call fopen(starfd, trim(filename),iostat=io_stat)
         if(io_stat/=0) call fileiochk("In stardoc; write; unable to open "//trim(filename))

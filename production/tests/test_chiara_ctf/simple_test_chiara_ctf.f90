@@ -6,20 +6,20 @@ use simple_image,      only: image
 use simple_parameters, only: parameters
 implicit none
 contains
-  function build_ctf(smpd, dfx,dfy,angast, cs,kv, fraca) result(img_ctf)
-    integer, parameter     :: box=256
-    real                   :: dfx, dfy, angast, smpd, cs, kv, fraca
-    type(image)            :: ctf_image,img4viz,img_ctf
-    type(ctf)              :: tfun
-    type(parameters)       :: params
-    integer, dimension(3)  :: ldim
-    call ctf_image%new([box,box,1], smpd)
-    call img4viz%new([box,box,1],   smpd)
-    tfun = ctf(smpd, kv, cs, fraca)
-    call tfun%ctf2img(ctf_image, dfx, dfy, angast)
-    call ctf_image%ft2img('real', img4viz)
-    img_ctf = img4viz
-  end function build_ctf
+    function build_ctf(smpd, dfx,dfy,angast, cs,kv, fraca) result(img_ctf)
+        integer, parameter     :: box=256
+        real                   :: dfx, dfy, angast, smpd, cs, kv, fraca
+        type(image)            :: ctf_image,img4viz,img_ctf
+        type(ctf)              :: tfun
+        type(parameters)       :: params
+        integer, dimension(3)  :: ldim
+        call ctf_image%new([box,box,1], smpd)
+        call img4viz%new([box,box,1],   smpd)
+        tfun = ctf(smpd, kv, cs, fraca)
+        call tfun%ctf2img(ctf_image, dfx, dfy, angast)
+        call ctf_image%ft2img('real', img4viz)
+        img_ctf = img4viz
+    end function build_ctf
 end module construct_ctf
 
 program simple_chiara_ctf
@@ -42,7 +42,7 @@ integer, dimension(3)  :: ldim
 if( command_argument_count() < 1 )then
     write(*,'(a)',advance='no') 'simple_test_chiara_ctf2 smpd=<sampling distance(in A)>'
     write(*,'(a)')              ' [kv=<acceleration voltage(in kV){300.}>] [fraca=<fraction &
-                                & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
+        & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
     stop
 endif
 call cline%parse_oldschool

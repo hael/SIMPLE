@@ -91,8 +91,8 @@ contains
         character(len=STDLEN) :: errmsg
         type(sym) :: symobj
         integer   :: ncsyms, nsyms, icsym, cnt, idsym, nscoring, j, ldim(3), ccn_start
-        integer   :: isym, jsym, ksym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
-        real      :: cc_sum, smpd
+        integer   :: isym, jsym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
+        real      :: smpd
         ! to ensure correct input
         ccn_start = max(2,cn_start)
         ! get info from vol_in
@@ -113,7 +113,7 @@ contains
         if( platonic )then
             if( ccn_start > 2 .or. cn_stop < 5 )then
                 errmsg = 'cn range must include rotational symmetries from orders 2-5 when searching for Platonic groups. '//&
-                &'Set cn_start = 2 and cn_stop > 5 on command line; eval_point_groups'
+                    &'Set cn_start = 2 and cn_stop > 5 on command line; eval_point_groups'
                 THROW_HARD(trim(errmsg))
             endif
             nsyms = nsyms + 3
@@ -177,15 +177,15 @@ contains
         do isym=1,nsyms
             iisym = inds(isym)
             write(*,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
-            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
+                &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
         end do
         call fopen(fnr, status='replace', file='symmetry_test_fscs.txt', action='write')
         do isym=1,nsyms
             iisym = inds(isym)
             write(fnr,'(a,1x,i2,1x,a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'RANK', isym, 'POINT-GROUP:',&
-            &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
+                &pgrps(iisym)%str, 'SCORE:', pgrps(iisym)%score, 'CORRELATION:', pgrps(iisym)%cc_avg, 'Z-SCORE:', zscores(iisym)
             do j=1,size(res)
-               write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', pgrps(iisym)%fsc(j)
+                write(fnr,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', pgrps(iisym)%fsc(j)
             end do
         end do
         call fclose(fnr)
@@ -262,39 +262,39 @@ contains
         call symaxis%kill
         call symobj%kill
 
-        contains
+    contains
 
-            subroutine find_symaxis( pgrp )
-                character(len=*), intent(in) :: pgrp
-                call volpft_symsrch_init(vol_in, pgrp, hp, lp)
-                call volpft_srch4symaxis(symaxis)
-                call vol_in%ifft ! return in real-space
-                ! get the rotation matrix for the symaxis
-                rmat_symaxis = symaxis%get_mat()
-            end subroutine find_symaxis
+        subroutine find_symaxis( pgrp )
+            character(len=*), intent(in) :: pgrp
+            call volpft_symsrch_init(vol_in, pgrp, hp, lp)
+            call volpft_srch4symaxis(symaxis)
+            call vol_in%ifft ! return in real-space
+            ! get the rotation matrix for the symaxis
+            rmat_symaxis = symaxis%get_mat()
+        end subroutine find_symaxis
 
-            subroutine symaverage
-                real, allocatable :: sym_rmats(:,:,:)
-                integer           :: isym, nsym
-                type(ori)         :: o
-                real              :: rmat(3,3)
-                ! extract the rotation matrices for the symops
-                nsym = symobj%get_nsym()
-                allocate(sym_rmats(nsym,3,3))
-                do isym=1,nsym
-                    o = symobj%get_symori(isym)
-                    sym_rmats(isym,:,:) = o%get_mat()
-                end do
-                ! rotate over symmetry related rotations and update vol_sym
-                vol_sym = 0.
-                do isym=1,nsym
-                    rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
-                    call o%set_euler(m2euler(rmat))
-                    call rotvol_slim(vol_pad, rovol_pad, rovol, o)
-                    call vol_sym%add_workshare(rovol)
-                end do
-                call vol_sym%div(real(nsym))
-            end subroutine symaverage
+        subroutine symaverage
+            real, allocatable :: sym_rmats(:,:,:)
+            integer           :: isym, nsym
+            type(ori)         :: o
+            real              :: rmat(3,3)
+            ! extract the rotation matrices for the symops
+            nsym = symobj%get_nsym()
+            allocate(sym_rmats(nsym,3,3))
+            do isym=1,nsym
+                o = symobj%get_symori(isym)
+                sym_rmats(isym,:,:) = o%get_mat()
+            end do
+            ! rotate over symmetry related rotations and update vol_sym
+            vol_sym = 0.
+            do isym=1,nsym
+                rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
+                call o%set_euler(m2euler(rmat))
+                call rotvol_slim(vol_pad, rovol_pad, rovol, o)
+                call vol_sym%add_workshare(rovol)
+            end do
+            call vol_sym%div(real(nsym))
+        end subroutine symaverage
 
     end subroutine eval_point_groups
 

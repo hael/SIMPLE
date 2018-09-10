@@ -61,7 +61,9 @@ contains
         real                  :: frac_srch_space, bfactor, ave, sdev, threshold
         integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
-
+        l_partial_sums = .false.
+        l_snhc         = .false.
+        l_frac_update  = .false.
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
@@ -241,22 +243,22 @@ contains
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
         select case(trim(params_glob%neigh))
-            case('yes')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy2D_neigh :: strategy2Dsrch(iptcl)%ptr)
-                end do
-            case DEFAULT
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
-                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        else
-                            allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        endif
-                        if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
+        case('yes')
+            do iptcl=params_glob%fromp,params_glob%top
+                if( ptcl_mask(iptcl) ) allocate(strategy2D_neigh :: strategy2Dsrch(iptcl)%ptr)
+            end do
+        case DEFAULT
+            do iptcl=params_glob%fromp,params_glob%top
+                if( ptcl_mask(iptcl) )then
+                    updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
+                    if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                        allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                    else
+                        allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                     endif
-                enddo
+                    if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
+                endif
+            enddo
         end select
         DebugPrint ' cluster2D_exec;    srch constructed                         ', toc(t_init)
         ! actual construction
@@ -292,8 +294,8 @@ contains
 
         !$omp parallel do default(shared) schedule(guided) private(i,iptcl) proc_bind(close)
         do i=1,nptcls2update
-           iptcl = pinds(i)
-           call strategy2Dsrch(iptcl)%ptr%srch
+            iptcl = pinds(i)
+            call strategy2Dsrch(iptcl)%ptr%srch
         end do
         !$omp end parallel do
         DebugPrint ' cluster2D_exec;   strategy2Dsrch ', toc(t_init)
@@ -303,9 +305,9 @@ contains
         DebugPrint ' cluster2D_exec;   clean_strategy2D ', toc(t_init)
         call pftcc%kill
         do i=1,nptcls2update
-           iptcl = pinds(i)
-           call strategy2Dsrch(iptcl)%ptr%kill
-           nullify(strategy2Dsrch(iptcl)%ptr)
+            iptcl = pinds(i)
+            call strategy2Dsrch(iptcl)%ptr%kill
+            nullify(strategy2Dsrch(iptcl)%ptr)
         end do
         deallocate( strategy2Dsrch, pinds, ptcl_mask )
         if( L_BENCH ) rt_align = toc(t_align)

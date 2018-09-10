@@ -109,7 +109,7 @@ contains
             ! compute new trial point at x1= x - step * dir, where dir is the
             ! normalized gradient
             gnorm = norm_2(self%gradient)
-            if (gnorm == 0.0_8) then
+            if (is_zero(gnorm)) then
                 status = OPT_STATUS_ERROR
                 return
             end if

@@ -52,7 +52,7 @@ contains
     subroutine simple_error_check(io_stat, msg)
         integer,                    intent(in) :: io_stat
         character(len=*), optional, intent(in) :: msg
-        integer :: last_sys_error
+
         !! Intel and GNU
         if (io_stat==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
         if (io_stat==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat

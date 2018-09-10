@@ -200,7 +200,7 @@ contains
         integer, intent(in), optional    :: quality
         integer, intent(in), optional    :: colorspec
         type(c_ptr)                      :: img
-        integer                          :: w,h,d,c, slice, dx, dy
+        integer                          :: w,h,d,c, dx, dy
         integer                          :: status, newshape(2)
         real, allocatable                :: new_buffer(:,:)
         character(len=STDLEN)            :: fstr
@@ -468,7 +468,7 @@ contains
         height     = 149
         status     = 1
         bmp_size   = width * height * pixel_size
-        status = simple_getenv('SIMPLE_PATH', simple_path_str)
+        simple_path_str = simple_getenv('SIMPLE_PATH', status)
         if(status/=0) THROW_HARD("SIMPLE_PATH not found in environment")
         print *,"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")

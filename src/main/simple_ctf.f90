@@ -272,81 +272,81 @@ contains
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         select case(mode)
-            case('abs')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(phys(1),phys(2),phys(3), abs(tval))
-                    end do
+        case('abs')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), abs(tval))
                 end do
-            case('ctf')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
-                    end do
+            end do
+        case('ctf')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                 end do
-            case('flip')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(phys(1),phys(2),phys(3), sign(1.,tval))
-                    end do
+            end do
+        case('flip')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), sign(1.,tval))
                 end do
-            case('flipneg')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at(phys(1),phys(2),phys(3), -sign(1.,tval))
-                    end do
+            end do
+        case('flipneg')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at(phys(1),phys(2),phys(3), -sign(1.,tval))
                 end do
-            case('neg')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at( phys(1),phys(2),phys(3), -tval)
-                    end do
+            end do
+        case('neg')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at( phys(1),phys(2),phys(3), -tval)
                 end do
-            case('square')
-                do h=lims(1,1),lims(1,2)
-                    do k=lims(2,1),lims(2,2)
-                        hinv      = real(h) * inv_ldim(1)
-                        kinv      = real(k) * inv_ldim(2)
-                        spaFreqSq = hinv * hinv + kinv * kinv
-                        ang       = atan2(real(k),real(h))
-                        tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                        phys      = img%comp_addr_phys([h,k,0])
-                        call img%mul_cmat_at( phys(1),phys(2),phys(3), min(1.,max(tval**2.,0.001)))
-                    end do
+            end do
+        case('square')
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    hinv      = real(h) * inv_ldim(1)
+                    kinv      = real(k) * inv_ldim(2)
+                    spaFreqSq = hinv * hinv + kinv * kinv
+                    ang       = atan2(real(k),real(h))
+                    tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                    phys      = img%comp_addr_phys([h,k,0])
+                    call img%mul_cmat_at( phys(1),phys(2),phys(3), min(1.,max(tval**2.,0.001)))
                 end do
-            case DEFAULT
-                write(*,*) 'mode:', mode
-                THROW_HARD('unsupported mode in ctf2img')
+            end do
+        case DEFAULT
+            write(*,*) 'mode:', mode
+            THROW_HARD('unsupported mode in ctf2img')
         end select
     end subroutine apply_serial
 
@@ -405,6 +405,8 @@ contains
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         rnyq_sq  = real(img%get_nyq()**2)
+        bfacw_nyq = 1.
+        bfac_sc   = TINY
         if( do_bfac )then
             if(bfac > TINY)then
                 bfac_sc   = bfac/4.

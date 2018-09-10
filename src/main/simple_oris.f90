@@ -103,6 +103,7 @@ type :: oris
     procedure          :: rnd_states
     procedure          :: rnd_lps
     procedure          :: rnd_corrs
+    procedure          :: rnd_proj_space
     procedure          :: revshsgn
     procedure          :: revorisgn
     procedure          :: ini_tseries
@@ -1135,7 +1136,7 @@ contains
                 cnt = 0
                 do i=1,sz
                     if( clsarr(i) >= fromto(1) .and. clsarr(i) <= fromto(2) )then
-                    if( .not.state_mask(clsarr(i)) )cycle
+                        if( .not.state_mask(clsarr(i)) )cycle
                         cnt = cnt +1
                         if( cnt > nsamples )exit
                         mask(clsarr(i)) = .true.
@@ -2275,7 +2276,6 @@ contains
         real,    allocatable :: states(:),x(:),bfacs(:)
         logical, allocatable :: mask(:)
         real    :: med, dev
-        integer :: i
         if( self%isthere('bfac') )then
             states = self%get_all('state')
             bfacs  = self%get_all('bfac')
@@ -2623,7 +2623,7 @@ contains
         integer,          intent(in)    :: state
         real,    allocatable :: arr1(:), arr2(:), tmp(:), ows(:), states(:)
         logical, allocatable :: mask1(:), mask2(:)
-        integer :: n1, n2, n, sz, n_min, i
+        integer :: n1, n2, sz, n_min, i
         overlap = 0.
         if( self1%n == 0 .or. self2%n == 0 ) return
         if( .not. self1%isthere(trim(which)) )then

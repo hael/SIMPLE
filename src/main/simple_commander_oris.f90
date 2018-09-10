@@ -497,7 +497,6 @@ contains
         character(len=STDLEN)         :: args(32)
         class(oris),      pointer     :: os_ptr => null()
         integer :: nargs, iarg, iptcl, nptcls
-        logical :: err
         ! set oritype
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! parse commad-line

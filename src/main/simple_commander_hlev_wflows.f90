@@ -267,7 +267,7 @@ contains
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
-        integer               :: icls, ncavgs, orig_box, box, istk, status, nptcls, cnt
+        integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -713,7 +713,7 @@ contains
         integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
         integer  :: iter, startit, rename_stat, ncls
-        logical  :: write_proj, fall_over, cavgs_import
+        logical  :: fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')

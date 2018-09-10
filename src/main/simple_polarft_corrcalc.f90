@@ -1082,7 +1082,7 @@ contains
         integer,                 intent(in)    :: i, irot
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         integer     :: rot, k
-        real(sp)    :: euclid, euclidtmp
+        real(sp)    :: euclid
         complex(sp) :: tmp
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
@@ -1255,7 +1255,7 @@ contains
         real,                    intent(out)   :: cc(self%nrots)
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: corrs_over_k(:)
-        real(sp) :: sqsum_ref, sqsum_ptcl
+        real(sp) :: sqsum_ref
         integer  :: ithr
         ithr         =  omp_get_thread_num() + 1
         pft_ref      => self%heap_vars(ithr)%pft_ref

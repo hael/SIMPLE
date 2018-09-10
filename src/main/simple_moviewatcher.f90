@@ -43,7 +43,7 @@ contains
         integer,                                intent(in) :: report_time  ! in seconds
         character(len=LONGSTRLEN), allocatable, intent(in) :: prev_movies(:)
         type(moviewatcher) :: self
-        integer            :: i,n
+        integer            :: i
         call self%kill
         if( .not. file_exists(trim(adjustl(params_glob%dir_movies))) )then
             print *, 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
@@ -86,7 +86,7 @@ contains
         fail_cnt = 0
         ! builds files array
         call simple_list_files(trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc '//&
-             &trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs', farray)
+            &trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs', farray)
         if( .not.allocated(farray) )return ! nothing to report
         ! absolute paths
         n_lsfiles = size(farray)
@@ -110,9 +110,9 @@ contains
                 last_modified      = tnow - fileinfo(10)
                 last_status_change = tnow - fileinfo(11)
                 if(    (last_accessed      > self%report_time)&
-                &.and. (last_modified      > self%report_time)&
-                &.and. (last_status_change > self%report_time)&
-                &.and. is_closed ) is_new_movie(i) = .true.
+                    &.and. (last_modified      > self%report_time)&
+                    &.and. (last_status_change > self%report_time)&
+                    &.and. is_closed ) is_new_movie(i) = .true.
                 if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
                     &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             else

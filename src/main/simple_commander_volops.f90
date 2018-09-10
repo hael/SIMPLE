@@ -336,7 +336,7 @@ contains
         type(parameters)         :: params
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
-        integer                  :: i, loop_end
+        integer                  :: i
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif

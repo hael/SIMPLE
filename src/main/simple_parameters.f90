@@ -416,10 +416,9 @@ contains
         class(cmdline),            intent(inout) :: cline
         logical,         optional, intent(in)    :: silent
         character(len=LONGSTRLEN), allocatable   :: sp_files(:)
-        character(len=:),          allocatable   :: stk_part_fname_sc, phaseplate, ctfflag
+        character(len=:),          allocatable   :: phaseplate, ctfflag
         character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
-        character(len=STDLEN)         :: stk_part_fname
         character(len=1)              :: checkupfile(50)
         character(len=:), allocatable :: absname
         type(binoris)    :: bos
@@ -763,7 +762,7 @@ contains
         call check_rarg('ysh',            self%ysh)
         call check_rarg('zsh',            self%zsh)
 
-!>>> START, EXECUTION RELATED
+        !>>> START, EXECUTION RELATED
         ! get cwd
         call simple_getcwd(self%cwd)
         ! update CWD globals in defs
@@ -850,9 +849,9 @@ contains
                 CWD_GLOB = trim(self%cwd)
             endif
         endif
-!>>> END, EXECUTION RELATED
+        !>>> END, EXECUTION RELATED
 
-!>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
+        !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)
         ! determines whether at least one volume is on the cmdline
         vol_defined = .false.
         do i=1,size(vol_defined)
@@ -897,29 +896,29 @@ contains
         if( cline%defined('oritype') )then
             ! this determines the spproj_iseg
             select case(trim(self%oritype))
-                case('mic')
-                    self%spproj_iseg = MIC_SEG
-                case('stk')
-                    self%spproj_iseg = STK_SEG
-                case('ptcl2D')
-                    self%spproj_iseg = PTCL2D_SEG
-                case('cls2D')
-                    self%spproj_iseg = CLS2D_SEG
-                case('cls3D')
-                    self%spproj_iseg = CLS3D_SEG
-                case('ptcl3D')
-                    self%spproj_iseg = PTCL3D_SEG
-                case('out')
-                    self%spproj_iseg = OUT_SEG
-                case('projinfo')
-                    self%spproj_iseg = PROJINFO_SEG
-                case('jobproc')
-                    self%spproj_iseg = JOBPROC_SEG
-                case('compenv')
-                    self%spproj_iseg = COMPENV_SEG
-                case DEFAULT
-                    write(*,*) 'oritype: ', trim(self%oritype)
-                    THROW_HARD('unsupported oritype; new')
+            case('mic')
+                self%spproj_iseg = MIC_SEG
+            case('stk')
+                self%spproj_iseg = STK_SEG
+            case('ptcl2D')
+                self%spproj_iseg = PTCL2D_SEG
+            case('cls2D')
+                self%spproj_iseg = CLS2D_SEG
+            case('cls3D')
+                self%spproj_iseg = CLS3D_SEG
+            case('ptcl3D')
+                self%spproj_iseg = PTCL3D_SEG
+            case('out')
+                self%spproj_iseg = OUT_SEG
+            case('projinfo')
+                self%spproj_iseg = PROJINFO_SEG
+            case('jobproc')
+                self%spproj_iseg = JOBPROC_SEG
+            case('compenv')
+                self%spproj_iseg = COMPENV_SEG
+            case DEFAULT
+                write(*,*) 'oritype: ', trim(self%oritype)
+                THROW_HARD('unsupported oritype; new')
             end select
         else
             self%oritype     = 'ptcl3D'
@@ -932,7 +931,7 @@ contains
             call cline%set('projfile', trim(self%projfile))
         endif
         if( file_exists(trim(self%projfile)) )then ! existence should be the only requirement here (not sp_required)
-                                                   ! or the private_exec programs don't get what they need
+            ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
             if( self%stream.eq.'no' )then
                 if( self%spproj_iseg==OUT_SEG )then
@@ -952,10 +951,10 @@ contains
                     ! smpd/box
                     call o%new
                     select case(self%spproj_iseg)
-                        case(MIC_SEG)
-                            call bos%read_first_segment_record(MIC_SEG, o)
-                        case DEFAULT
-                            call bos%read_first_segment_record(STK_SEG, o)
+                    case(MIC_SEG)
+                        call bos%read_first_segment_record(MIC_SEG, o)
+                    case DEFAULT
+                        call bos%read_first_segment_record(STK_SEG, o)
                     end select
                     if( o%isthere('smpd') .and. .not. cline%defined('smpd') )then
                         self%smpd = o%get('smpd')
@@ -970,8 +969,8 @@ contains
             if( .not.bos%is_opened() )call bos%open(trim(self%projfile)) ! projfile opened here
             ! CTF plan
             select case(trim(self%oritype))
-                case('ptcl2D', 'ptcl3D')
-                    call bos%read_first_segment_record(STK_SEG, o)
+            case('ptcl2D', 'ptcl3D')
+                call bos%read_first_segment_record(STK_SEG, o)
             end select
             if( .not. cline%defined('ctf') )then
                 if( o%exists() )then
@@ -1039,9 +1038,9 @@ contains
                 self%vols_odd(istate)  = add2fbody(self%vols(istate), self%ext, '_odd' )
             end do
         endif
-!<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
+        !<<< END, SANITY CHECKING AND PARAMETER EXTRACTION FROM VOL(S)/STACK(S)
 
-!>>> START, PARALLELISATION-RELATED
+        !>>> START, PARALLELISATION-RELATED
         ! set split mode (even)
         self%split_mode = 'even'
         nparts_set      = .false.
@@ -1069,15 +1068,15 @@ contains
         endif
         ! OpenMP threads
         if( cline%defined('nthr') )then
-!$          call omp_set_num_threads(self%nthr)
+            !$          call omp_set_num_threads(self%nthr)
         else
-!$          self%nthr = omp_get_max_threads()
-!$          call omp_set_num_threads(self%nthr)
+            !$          self%nthr = omp_get_max_threads()
+            !$          call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
-!<<< END, PARALLELISATION-RELATED
+        !<<< END, PARALLELISATION-RELATED
 
-!>>> START, IMAGE-PROCESSING-RELATED
+        !>>> START, IMAGE-PROCESSING-RELATED
         if( .not. cline%defined('xdim') ) self%xdim = self%box/2
         self%xdimpd = round2even(self%alpha*real(self%box/2))
         self%boxpd  = 2*self%xdimpd
@@ -1215,9 +1214,9 @@ contains
         if( .not. cline%defined('trs') )then
             select case(trim(self%refine))
             case('single', 'multi', 'snhc')
-                    self%trs = 0.
-                case DEFAULT
-                    self%trs = 1.
+                self%trs = 0.
+            case DEFAULT
+                self%trs = 1.
             end select
         endif
         self%l_doshift = .true.
@@ -1256,21 +1255,21 @@ contains
         endif
         ! objective function used in prime2D/3D
         select case(trim(self%objfun))
-            case('cc')
-                self%cc_objfun = OBJFUN_CC
-                ! below is to guard against over-fitting
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.3
-            case('ccres')
-                self%cc_objfun = OBJFUN_RES
-                ! with ccres there is already a guarding mechanism in place
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
-            case('euclid')
-                self%cc_objfun = OBJFUN_EUCLID
-                ! to be consistent with RELION
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
-            case DEFAULT
-                write(*,*) 'objfun flag: ', trim(self%objfun)
-                THROW_HARD('unsupported objective function; new')
+        case('cc')
+            self%cc_objfun = OBJFUN_CC
+            ! below is to guard against over-fitting
+            if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.3
+        case('ccres')
+            self%cc_objfun = OBJFUN_RES
+            ! with ccres there is already a guarding mechanism in place
+            if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
+        case('euclid')
+            self%cc_objfun = OBJFUN_EUCLID
+            ! to be consistent with RELION
+            if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
+        case DEFAULT
+            write(*,*) 'objfun flag: ', trim(self%objfun)
+            THROW_HARD('unsupported objective function; new')
         end select
         ! matched filter and sigma needs flags
         self%l_needs_sigma = .false.
@@ -1280,10 +1279,10 @@ contains
             self%l_needs_sigma = .true.
         else
             select case(self%match_filt)
-                case('no')
-                    self%l_match_filt = .false.
-                case DEFAULT
-                    self%l_match_filt = .true.
+            case('no')
+                self%l_match_filt = .false.
+            case DEFAULT
+                self%l_match_filt = .true.
             end select
         endif
         ! B-factor weighted corr or not
@@ -1294,11 +1293,11 @@ contains
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
         ! sanity check imgkind
         select case(trim(self%imgkind))
-            case('movie', 'mic','ptcl', 'cavg', 'vol', 'vol_cavg')
-                ! alles gut!
-            case DEFAULT
-                write(*,*) 'imgkind: ', trim(self%imgkind)
-                THROW_HARD('unsupported imgkind; new')
+        case('movie', 'mic','ptcl', 'cavg', 'vol', 'vol_cavg')
+            ! alles gut!
+        case DEFAULT
+            write(*,*) 'imgkind: ', trim(self%imgkind)
+            THROW_HARD('unsupported imgkind; new')
         end select
         ! o_peaks file
         if(self%numlen > 0 )then
@@ -1307,243 +1306,243 @@ contains
             self%o_peaks_file = O_PEAKS_FBODY//int2str(self%part)//BIN_EXT
         endif
 
-!>>> END, IMAGE-PROCESSING-RELATED
+        !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance
         ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self
         if( .not. ssilent ) write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
-        contains
+    contains
 
-            subroutine check_vol( i )
-                integer,           intent(in) :: i
-                character(len=STDLEN)         :: key
-                character(len=LONGSTRLEN)     :: vol
-                character(len=:), allocatable :: abs_fname
-                key = 'vol'//int2str(i)
-                if( cline%defined(key) )then
-                    vol = trim(cline%get_carg(key))
-                    if( vol(1:1).eq.PATH_SEPARATOR )then
-                        ! already in absolute path format
-                        call check_file(key, self%vols(i), notAllowed='T')
-                        if( .not. file_exists(self%vols(i)) )then
-                            write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
-                            stop
-                        endif
-                    else
-                        if( self%mkdir .eq. 'yes' )then
-                            ! with respect to parent folder
-                            ! needs to be done here because not part of the check_file list
-                            vol = PATH_PARENT//trim(vol)
-                            call cline%set(key, vol)
-                        endif
-                        call check_file(key, self%vols(i), notAllowed='T')
-                        if( .not. file_exists(self%vols(i)) )then
-                            write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
-                            stop
-                        else
-                            abs_fname = simple_abspath(self%vols(i),'parameters :: check_vol', check_exists=.false.)
-                            if( len_trim( abs_fname) > LONGSTRLEN )then
-                                THROW_HARD('argument too long: '//trim( abs_fname)//' new :: check_vol')
-                            endif
-                            self%vols(i) = trim(abs_fname)
-                            call cline%set(key, trim(self%vols(i)))
-                            deallocate(abs_fname)
-                        endif
-                    endif
-                endif
-            end subroutine check_vol
-
-            subroutine read_vols
-                character(len=LONGSTRLEN)     :: filename, name
-                character(len=:), allocatable :: abs_name
-                integer                       :: nl, fnr, i, io_stat
-                filename = cline%get_carg('vollist')
-                if( filename(1:1).ne.PATH_SEPARATOR )then
-                    if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
-                endif
-                nl = nlines(filename)
-                call fopen(fnr, file=filename, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("parameters ; read_vols error opening "//trim(filename), io_stat)
-                do i=1,nl
-                    read(fnr,*, iostat=io_stat) name
-                    if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
-                    if( name .ne. '' )then
-                        abs_name = simple_abspath(name,'parameters :: read_vols', check_exists=.false.)
-                        self%vols(i) = trim(abs_name)
-                        deallocate(abs_name)
-                    endif
-                end do
-                call fclose(fnr,errmsg="parameters ; read_vols error closing "//trim(filename))
-            end subroutine read_vols
-
-            subroutine read_masks
-                character(len=LONGSTRLEN)     :: filename, name
-                character(len=:), allocatable :: abs_name
-                integer                       :: nl, fnr, i, io_stat
-                filename = cline%get_carg('msklist')
-                if( filename(1:1).ne.PATH_SEPARATOR )then
-                    if( self%mkdir.eq.'yes' )  filename = PATH_PARENT//trim(filename)
-                endif
-                nl = nlines(filename)
-                call fopen(fnr, file=filename, iostat=io_stat)
-                if(io_stat /= 0) call fileiochk("parameters ; read_masks error opening "//trim(filename), io_stat)
-                do i=1,nl
-                    read(fnr,*, iostat=io_stat) name
-                    if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
-                    if( name .ne. '' )then
-                        abs_name = simple_abspath(name,errmsg='parameters :: read_masks', check_exists=.false.)
-                        self%mskvols(i) = trim(abs_name)
-                        deallocate(abs_name)
-                    endif
-                end do
-                call fclose(fnr,errmsg="parameters ; read_masks error closing "//trim(filename))
-            end subroutine read_masks
-
-            subroutine check_file( file, var, allowed1, allowed2, notAllowed )
-                character(len=*),           intent(in)    :: file
-                character(len=*),           intent(inout) :: var
-                character(len=1), optional, intent(in)    :: allowed1, allowed2, notAllowed
-                character(len=:), allocatable :: abspath_file
-                character(len=1)              :: file_descr
-                logical                       :: raise_exception
-                if( cline%defined(file) )then
-                    var             = trim(cline%get_carg(file))
-                    file_descr      = fname2format(var)
-                    raise_exception = .false.
-                    if( present(allowed1) )then
-                        if( present(allowed2) )then
-                            if( allowed1 == file_descr .or. allowed2 == file_descr )then
-                                ! all good
-                            else
-                                raise_exception = .true.
-                            endif
-                        else
-                            if( allowed1 /= file_descr ) raise_exception = .true.
-                        endif
-                    endif
-                    if( present(notAllowed) )then
-                        if( notAllowed == file_descr ) raise_exception = .true.
-                    endif
-                    if( raise_exception )then
-                        write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
-                        write(*,*) 'flag:', trim(file)
+        subroutine check_vol( i )
+            integer,           intent(in) :: i
+            character(len=STDLEN)         :: key
+            character(len=LONGSTRLEN)     :: vol
+            character(len=:), allocatable :: abs_fname
+            key = 'vol'//int2str(i)
+            if( cline%defined(key) )then
+                vol = trim(cline%get_carg(key))
+                if( vol(1:1).eq.PATH_SEPARATOR )then
+                    ! already in absolute path format
+                    call check_file(key, self%vols(i), notAllowed='T')
+                    if( .not. file_exists(self%vols(i)) )then
+                        write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
                         stop
                     endif
-                    select case(file_descr)
-                        case ('I')
-                            THROW_HARD('Support for IMAGIC files is not implemented!')
-                        case ('M')
-                            ! MRC files are supported
-                            cntfile = cntfile+1
-                            checkupfile(cntfile) = 'M'
-                        case ('S')
-                            ! SPIDER files are supported
-                            cntfile = cntfile+1
-                            checkupfile(cntfile) = 'S'
-                        case ('N')
-                            write(*,*) 'file: ', trim(var)
-                            THROW_HARD('This file format is not supported by SIMPLE')
-                        case ('T','B','P','O', 'R')
-                            ! text files are supported
-                            ! binary files are supported
-                            ! PDB files are supported
-                            ! *.simple project files are supported
-                            ! R=*.star format -- in testing
-                        case DEFAULT
-                            write(*,*) 'file: ', trim(var)
-                            THROW_HARD('This file format is not supported by SIMPLE')
-                    end select
-                    if( file_exists(var) )then
-                        ! updates name to include absolute path
-                        abspath_file = simple_abspath(var,errmsg='parameters :: check_file', check_exists=.false.)
-                        if( len_trim(abspath_file) > LONGSTRLEN )then
-                            THROW_HARD('argument too long: '//trim(abspath_file)//' new :: checkfile')
+                else
+                    if( self%mkdir .eq. 'yes' )then
+                        ! with respect to parent folder
+                        ! needs to be done here because not part of the check_file list
+                        vol = PATH_PARENT//trim(vol)
+                        call cline%set(key, vol)
+                    endif
+                    call check_file(key, self%vols(i), notAllowed='T')
+                    if( .not. file_exists(self%vols(i)) )then
+                        write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
+                        stop
+                    else
+                        abs_fname = simple_abspath(self%vols(i),'parameters :: check_vol', check_exists=.false.)
+                        if( len_trim( abs_fname) > LONGSTRLEN )then
+                            THROW_HARD('argument too long: '//trim( abs_fname)//' new :: check_vol')
                         endif
-                        var = trim(abspath_file)
-                        call cline%set(file,trim(var))
-                        deallocate(abspath_file)
-                    endif
-                    DebugPrint trim(file), '=', trim(var)
-                endif
-            end subroutine check_file
-
-            subroutine check_file_formats
-                integer :: i, j
-                if( cntfile > 0 )then
-                    do i=1,cntfile
-                        do j=1,cntfile
-                            if( i == j ) cycle
-                            if( checkupfile(i) == checkupfile(j) ) cycle ! all ok
-                        end do
-                    end do
-                    call self%set_img_format(checkupfile(1))
-                endif
-            end subroutine check_file_formats
-
-            subroutine double_check_file_formats
-                character(len=STDLEN) :: fname
-                character(len=1)      :: form
-                integer :: funit, io_stat
-                if( cntfile == 0 )then
-                    if( cline%defined('filetab') )then
-                        call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
-                        call fileiochk("In parameters:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
-                        read(funit,'(a256)') fname
-                        form = fname2format(fname)
-                        call fclose(funit, &
-                            errmsg="In parameters:: double_check_file_formats fclose failed "//trim(self%filetab) )
-                        call self%set_img_format(form)
+                        self%vols(i) = trim(abs_fname)
+                        call cline%set(key, trim(self%vols(i)))
+                        deallocate(abs_fname)
                     endif
                 endif
-            end subroutine double_check_file_formats
+            endif
+        end subroutine check_vol
 
-            subroutine mkfnames
-                if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
-                if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
-                if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
-            end subroutine mkfnames
-
-            subroutine check_carg( carg, var )
-                character(len=*), intent(in)    :: carg
-                character(len=*), intent(inout) :: var
-                if( cline%defined(carg) )then
-                    var = cline%get_carg(carg)
+        subroutine read_vols
+            character(len=LONGSTRLEN)     :: filename, name
+            character(len=:), allocatable :: abs_name
+            integer                       :: nl, fnr, i, io_stat
+            filename = cline%get_carg('vollist')
+            if( filename(1:1).ne.PATH_SEPARATOR )then
+                if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
+            endif
+            nl = nlines(filename)
+            call fopen(fnr, file=filename, iostat=io_stat)
+            if(io_stat /= 0) call fileiochk("parameters ; read_vols error opening "//trim(filename), io_stat)
+            do i=1,nl
+                read(fnr,*, iostat=io_stat) name
+                if(io_stat /= 0) call fileiochk("parameters ; read_vols error reading "//trim(filename), io_stat)
+                if( name .ne. '' )then
+                    abs_name = simple_abspath(name,'parameters :: read_vols', check_exists=.false.)
+                    self%vols(i) = trim(abs_name)
+                    deallocate(abs_name)
                 endif
-            end subroutine check_carg
+            end do
+            call fclose(fnr,errmsg="parameters ; read_vols error closing "//trim(filename))
+        end subroutine read_vols
 
-            subroutine check_iarg( iarg, var )
-                character(len=*), intent(in)  :: iarg
-                integer,          intent(out) :: var
-                if( cline%defined(iarg) )then
-                    var = nint(cline%get_rarg(iarg))
+        subroutine read_masks
+            character(len=LONGSTRLEN)     :: filename, name
+            character(len=:), allocatable :: abs_name
+            integer                       :: nl, fnr, i, io_stat
+            filename = cline%get_carg('msklist')
+            if( filename(1:1).ne.PATH_SEPARATOR )then
+                if( self%mkdir.eq.'yes' )  filename = PATH_PARENT//trim(filename)
+            endif
+            nl = nlines(filename)
+            call fopen(fnr, file=filename, iostat=io_stat)
+            if(io_stat /= 0) call fileiochk("parameters ; read_masks error opening "//trim(filename), io_stat)
+            do i=1,nl
+                read(fnr,*, iostat=io_stat) name
+                if(io_stat /= 0) call fileiochk("parameters ; read_masks error reading "//trim(filename), io_stat)
+                if( name .ne. '' )then
+                    abs_name = simple_abspath(name,errmsg='parameters :: read_masks', check_exists=.false.)
+                    self%mskvols(i) = trim(abs_name)
+                    deallocate(abs_name)
                 endif
-            end subroutine check_iarg
+            end do
+            call fclose(fnr,errmsg="parameters ; read_masks error closing "//trim(filename))
+        end subroutine read_masks
 
-            subroutine check_rarg( rarg, var )
-                character(len=*), intent(in)  :: rarg
-                real, intent(out) :: var
-                if( cline%defined(rarg) )then
-                    var = cline%get_rarg(rarg)
-                endif
-            end subroutine check_rarg
-
-            subroutine set_ldim_box_from_stk
-                if( cline%defined('stk') )then
-                    if( file_exists(self%stk) )then
-                        if( cline%defined('box') )then
+        subroutine check_file( file, var, allowed1, allowed2, notAllowed )
+            character(len=*),           intent(in)    :: file
+            character(len=*),           intent(inout) :: var
+            character(len=1), optional, intent(in)    :: allowed1, allowed2, notAllowed
+            character(len=:), allocatable :: abspath_file
+            character(len=1)              :: file_descr
+            logical                       :: raise_exception
+            if( cline%defined(file) )then
+                var             = trim(cline%get_carg(file))
+                file_descr      = fname2format(var)
+                raise_exception = .false.
+                if( present(allowed1) )then
+                    if( present(allowed2) )then
+                        if( allowed1 == file_descr .or. allowed2 == file_descr )then
+                            ! all good
                         else
-                            call find_ldim_nptcls(self%stk, self%ldim, ifoo)
-                            self%ldim(3) = 1
-                            self%box     = self%ldim(1)
+                            raise_exception = .true.
                         endif
                     else
-                        write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
-                        write(*,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
-                        THROW_HARD("set_ldim_box_from_stk")
+                        if( allowed1 /= file_descr ) raise_exception = .true.
                     endif
                 endif
-            end subroutine set_ldim_box_from_stk
+                if( present(notAllowed) )then
+                    if( notAllowed == file_descr ) raise_exception = .true.
+                endif
+                if( raise_exception )then
+                    write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
+                    write(*,*) 'flag:', trim(file)
+                    stop
+                endif
+                select case(file_descr)
+                case ('I')
+                    THROW_HARD('Support for IMAGIC files is not implemented!')
+                case ('M')
+                    ! MRC files are supported
+                    cntfile = cntfile+1
+                    checkupfile(cntfile) = 'M'
+                case ('S')
+                    ! SPIDER files are supported
+                    cntfile = cntfile+1
+                    checkupfile(cntfile) = 'S'
+                case ('N')
+                    write(*,*) 'file: ', trim(var)
+                    THROW_HARD('This file format is not supported by SIMPLE')
+                case ('T','B','P','O', 'R')
+                    ! text files are supported
+                    ! binary files are supported
+                    ! PDB files are supported
+                    ! *.simple project files are supported
+                    ! R=*.star format -- in testing
+                case DEFAULT
+                    write(*,*) 'file: ', trim(var)
+                    THROW_HARD('This file format is not supported by SIMPLE')
+                end select
+                if( file_exists(var) )then
+                    ! updates name to include absolute path
+                    abspath_file = simple_abspath(var,errmsg='parameters :: check_file', check_exists=.false.)
+                    if( len_trim(abspath_file) > LONGSTRLEN )then
+                        THROW_HARD('argument too long: '//trim(abspath_file)//' new :: checkfile')
+                    endif
+                    var = trim(abspath_file)
+                    call cline%set(file,trim(var))
+                    deallocate(abspath_file)
+                endif
+                DebugPrint trim(file), '=', trim(var)
+            endif
+        end subroutine check_file
+
+        subroutine check_file_formats
+            integer :: i, j
+            if( cntfile > 0 )then
+                do i=1,cntfile
+                    do j=1,cntfile
+                        if( i == j ) cycle
+                        if( checkupfile(i) == checkupfile(j) ) cycle ! all ok
+                    end do
+                end do
+                call self%set_img_format(checkupfile(1))
+            endif
+        end subroutine check_file_formats
+
+        subroutine double_check_file_formats
+            character(len=STDLEN) :: fname
+            character(len=1)      :: form
+            integer :: funit, io_stat
+            if( cntfile == 0 )then
+                if( cline%defined('filetab') )then
+                    call fopen(funit, status='old', file=self%filetab, iostat=io_stat)
+                    call fileiochk("In parameters:: double_check_file_formats fopen failed "//trim(self%filetab) , io_stat)
+                    read(funit,'(a256)') fname
+                    form = fname2format(fname)
+                    call fclose(funit, &
+                        errmsg="In parameters:: double_check_file_formats fclose failed "//trim(self%filetab) )
+                    call self%set_img_format(form)
+                endif
+            endif
+        end subroutine double_check_file_formats
+
+        subroutine mkfnames
+            if( .not. cline%defined('outstk')  ) self%outstk  = 'outstk'//self%ext
+            if( .not. cline%defined('outstk2') ) self%outstk2 = 'outstk2'//self%ext
+            if( .not. cline%defined('outvol')  ) self%outvol  = 'outvol'//self%ext
+        end subroutine mkfnames
+
+        subroutine check_carg( carg, var )
+            character(len=*), intent(in)    :: carg
+            character(len=*), intent(inout) :: var
+            if( cline%defined(carg) )then
+                var = cline%get_carg(carg)
+            endif
+        end subroutine check_carg
+
+        subroutine check_iarg( iarg, var )
+            character(len=*), intent(in)  :: iarg
+            integer,          intent(out) :: var
+            if( cline%defined(iarg) )then
+                var = nint(cline%get_rarg(iarg))
+            endif
+        end subroutine check_iarg
+
+        subroutine check_rarg( rarg, var )
+            character(len=*), intent(in)  :: rarg
+            real, intent(out) :: var
+            if( cline%defined(rarg) )then
+                var = cline%get_rarg(rarg)
+            endif
+        end subroutine check_rarg
+
+        subroutine set_ldim_box_from_stk
+            if( cline%defined('stk') )then
+                if( file_exists(self%stk) )then
+                    if( cline%defined('box') )then
+                    else
+                        call find_ldim_nptcls(self%stk, self%ldim, ifoo)
+                        self%ldim(3) = 1
+                        self%box     = self%ldim(1)
+                    endif
+                else
+                    write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
+                    write(*,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
+                    THROW_HARD("set_ldim_box_from_stk")
+                endif
+            endif
+        end subroutine set_ldim_box_from_stk
 
     end subroutine new
 

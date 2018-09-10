@@ -80,9 +80,9 @@ contains
         integer     :: xind, yind, cnt, toc(2)
         logical     :: outside
         if( present(boffset) )then
-          border_offset = boffset
+            border_offset = boffset
         else
-          border_offset = 0
+            border_offset = 0
         endif
         call imgwin%new([box_shrunken,box_shrunken,1], micrograph_shrunken%get_smpd())
         cnt = 0
@@ -97,19 +97,19 @@ contains
         end do
         n_images = cnt
         if(present(coord)) then
-              allocate(coord(cnt,2))
-              cnt = 0
-              do xind=border_offset,nx-border_offset,offset
-                  do yind=border_offset,ny-border_offset,offset
+            allocate(coord(cnt,2))
+            cnt = 0
+            do xind=border_offset,nx-border_offset,offset
+                do yind=border_offset,ny-border_offset,offset
                     outside = .false.
                     toc = [xind,yind] + box_shrunken
                     if(toc(1) > ldim_shrunken(1) .or. toc(2) > ldim_shrunken(2))  outside = .true.
-                      if( .not. outside )then
-                          cnt = cnt + 1
-                          coord(cnt,:) = [xind,yind]
-                      endif
-                  end do
-              end do
+                    if( .not. outside )then
+                        cnt = cnt + 1
+                        coord(cnt,:) = [xind,yind]
+                    endif
+                end do
+            end do
 
         endif
         if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
@@ -128,9 +128,9 @@ contains
         integer     :: xind, yind, cnt, toc(2)
         logical     :: outside
         if( present(boffset) )then
-          border_offset = boffset
+            border_offset = boffset
         else
-          border_offset = 0
+            border_offset = 0
         endif
         call imgwin%new([box_shrunken,box_shrunken,1], micrograph_shrunken%get_smpd())
         cnt = 0
@@ -145,19 +145,19 @@ contains
         end do
         n_images = cnt
         if(present(coord)) then
-              allocate(coord(cnt,2))
-              cnt = 0
-              do xind=border_offset,nx-border_offset,offset
-                  do yind=border_offset,ny-border_offset,offset
+            allocate(coord(cnt,2))
+            cnt = 0
+            do xind=border_offset,nx-border_offset,offset
+                do yind=border_offset,ny-border_offset,offset
                     outside = .false.
                     toc = [xind,yind] + box_shrunken
                     if(toc(1) > ldim_shrunken(1) .or. toc(2) > ldim_shrunken(2))  outside = .true.
-                      if( .not. outside )then
-                          cnt = cnt + 1
-                          coord(cnt,:) = [xind,yind]
-                      endif
-                  end do
-              end do
+                    if( .not. outside )then
+                        cnt = cnt + 1
+                        coord(cnt,:) = [xind,yind]
+                    endif
+                end do
+            end do
 
         endif
         if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); wrote # images to stack: ', n_images

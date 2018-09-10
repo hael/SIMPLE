@@ -27,8 +27,6 @@ contains
         class(image), target, intent(inout) :: vol_ref, vol_target
         real,                 intent(in)    :: hp_in, lp_in, trs_in
         integer, optional, intent(in)       :: nrestarts_in
-        integer :: ldim(3), ldim_pd(3), boxpd
-        real    :: smpd, eul(3)
         hp  = hp_in
         lp  = lp_in
         nrestarts = 3

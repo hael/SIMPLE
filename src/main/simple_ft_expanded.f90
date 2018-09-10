@@ -375,9 +375,9 @@ contains
             r = r / denom
         else
             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
             THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_shifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end function corr_shifted_8
@@ -407,9 +407,9 @@ contains
             grad = grad / denom
         else
             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
             THROW_HARD('cannot correlate expanded_ft:s with different dims; :corr_gshifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_gshifted_8
@@ -443,9 +443,9 @@ contains
             grad = grad / denom
         else
             write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-            self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
+                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
             write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-            self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
+                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
             THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_fdfshifted_8')
         endif ! end of if( self1.eqdims.self2 ) statement
     end subroutine corr_fdfshifted_8
@@ -453,11 +453,11 @@ contains
     !> \brief  correctly normalize correlations after minimization
     subroutine corr_normalize( self1, self2, corr )
         class(ft_expanded), intent(inout) :: self1, self2 !< instances
-        real,               intent(inout) :: corr
+        real(sp),           intent(inout) :: corr
         real(dp)                          :: sumasq,sumbsq
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
-        corr   = corr * denom / sqrt(sumasq * sumbsq)
+        corr   = real(real(corr,dp) * denom / sqrt(sumasq * sumbsq), sp)
     end subroutine corr_normalize
 
     subroutine calc_tmpmat_re(self1, self2, shvec)

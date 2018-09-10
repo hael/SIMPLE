@@ -78,9 +78,9 @@ contains
         errmsg_this="In simple_fileio::fopen "
         if (present(errmsg)) errmsg_this=errmsg
         if (.not. (present(iostat) .or. present(form) .or. present(recl) .or.&
-        & present(async) .or. present(pad) .or. present(action) .or. present(status)&
-        & .or. present(position) .or. present(access) .or. present(decimal) .or. &
-        present(round) .or. present(delim) .or. present(blank) ) )then
+            & present(async) .or. present(pad) .or. present(action) .or. present(status)&
+            & .or. present(position) .or. present(access) .or. present(decimal) .or. &
+            present(round) .or. present(delim) .or. present(blank) ) )then
             open(NEWUNIT=funit, FILE=trim(adjustl(filename)),IOSTAT=iostat_this)
             call fileiochk(trim(adjustl(errmsg_this))//" fopen basic open "//trim(filename), iostat_this,.false.)
             if(is_io(funit)) THROW_HARD( "newunit returned "//int2str(funit))
@@ -365,22 +365,22 @@ contains
         ! Step #1 : count the number of opened units
         ! Step #2 : store the number of opened units
         do step=1,2
-           nbunits=0
-           do iunit=1, MAX_UNIT_NUMBER
-              if( iunit /= 5 .and. iunit /= 6 .and. iunit /= 9 ) then
-                 inquire( UNIT = iunit, opened = lopen )
-                 if( lopen )then
-                    if( step == 1 )then ! count the number of opened units
-                       nbunits = nbunits + 1
-                   else                 ! store the number of opened units
-                       nbunits = nbunits + 1
-                       units ( nbunits ) = iunit
-                    endif
-                 end if
-              end if
-           end do
-           ! At the end of step #1, allocate the array
-           if( step == 1) allocate( units(nbunits) )
+            nbunits=0
+            do iunit=1, MAX_UNIT_NUMBER
+                if( iunit /= 5 .and. iunit /= 6 .and. iunit /= 9 ) then
+                    inquire( UNIT = iunit, opened = lopen )
+                    if( lopen )then
+                        if( step == 1 )then ! count the number of opened units
+                            nbunits = nbunits + 1
+                        else                 ! store the number of opened units
+                            nbunits = nbunits + 1
+                            units ( nbunits ) = iunit
+                        endif
+                    end if
+                end if
+            end do
+            ! At the end of step #1, allocate the array
+            if( step == 1) allocate( units(nbunits) )
         enddo
     end subroutine get_open_funits
 
@@ -564,27 +564,31 @@ contains
             if(endpos3<1) THROW_HARD("third arg cannot be /")
             if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
             if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
-        endif
-        if(present(p4))then
-            s4 = trim(adjustl(p4))
-            endpos4 = len_trim(s4)
-            if(endpos4==0) THROW_HARD("fourth arg too small")
-            if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
-            if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-            if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4))
-        else if(present(p3))then
-            allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                &PATH_SEPARATOR//s3(startpos3:endpos3))
+
+            if(present(p4))then
+                s4 = trim(adjustl(p4))
+                endpos4 = len_trim(s4)
+                if(endpos4==0) THROW_HARD("fourth arg too small")
+                if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
+                if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
+                if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
+                if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
+                allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                    &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4))
+            else
+                !! Concat arg1 arg2 and arg3
+                allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                    &PATH_SEPARATOR//s3(startpos3:endpos3))
+            endif
         else
+            !! Concat arg1 and arg2
             allocate(fname,source=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2))
         endif
     end function filepath_1
 
     !> concatenate strings together to create a filename similar to filepath_1 above
     !! for non-allocatable character results
+    !! Third and Fourth args are optional
     function filepath_2(p1, p2, p3, p4, nonalloc ) result(fname)
         character(len=*),  intent(in)           :: p1
         character(len=*),  intent(in)           :: p2
@@ -615,25 +619,26 @@ contains
             if(endpos3<1) THROW_HARD("third arg cannot be /")
             if(s3(1:1)==PATH_SEPARATOR) startpos3 = 2
             if(endpos3-startpos3==0) THROW_HARD("third arg cannot be "//trim(s3))
-        end if
-        if(present(p4))then
-            s4 = trim(adjustl(p4))
-            endpos4 = len_trim(s4)
-            if(endpos4==0) THROW_HARD("fourth arg too small")
-            if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
-            if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
-            if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
-            if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
-            !! concatenate four pathnames
-            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4)
-        else if(present(p3))then
-           !! concatenate three pathnames
-           fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
-                &PATH_SEPARATOR//s3(startpos3:endpos3)
+
+            if(present(p4))then
+                s4 = trim(adjustl(p4))
+                endpos4 = len_trim(s4)
+                if(endpos4==0) THROW_HARD("fourth arg too small")
+                if(s4(endpos4:endpos4)==PATH_SEPARATOR) endpos4 = endpos4-1
+                if(endpos4==0) THROW_HARD("fourth arg  cannot be /")
+                if(s4(1:1)==PATH_SEPARATOR) startpos4 = 2
+                if(endpos4-startpos4==0) THROW_HARD("fourth arg cannot be "//trim(s4))
+                !! concatenate four pathnames
+                fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                    &PATH_SEPARATOR//s3(startpos3:endpos3)//PATH_SEPARATOR//s4(startpos4:endpos4)
+            else
+                !! concatenate three pathnames
+                fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos2:endpos2)//&
+                    &PATH_SEPARATOR//s3(startpos3:endpos3)
+            endif
         else
-           !! concatenate two pathnames
-           fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos4:endpos2)
+            !! concatenate two pathnames
+            fname=s1(1:endpos1)//PATH_SEPARATOR//s2(startpos4:endpos2)
         endif
     end function filepath_2
 
@@ -668,26 +673,26 @@ contains
         character(len=:), allocatable :: extension
         extension = fname2ext(fname)
         select case(extension)
-            case ('img','hed')
-                fname2format = 'I'
-            case ('mrc','map','st','ctf','mrcs')
-                fname2format = 'M'
-            case ('spi')
-                fname2format = 'S'
-            case('bin','raw','sbin')
-                fname2format = 'B'
-            case('dbin')
-                fname2format = 'D'
-            case('txt', 'asc', 'box','dat')
-                fname2format = 'T'
-            case('pdb')
-                fname2format = 'P'
-            case('simple')
-                fname2format = 'O'
-            case('star')
-                fname2format = 'R'
-            case DEFAULT
-                fname2format = 'N'
+        case ('img','hed')
+            fname2format = 'I'
+        case ('mrc','map','st','ctf','mrcs')
+            fname2format = 'M'
+        case ('spi')
+            fname2format = 'S'
+        case('bin','raw','sbin')
+            fname2format = 'B'
+        case('dbin')
+            fname2format = 'D'
+        case('txt', 'asc', 'box','dat')
+            fname2format = 'T'
+        case('pdb')
+            fname2format = 'P'
+        case('simple')
+            fname2format = 'O'
+        case('star')
+            fname2format = 'R'
+        case DEFAULT
+            fname2format = 'N'
         end select
     end function fname2format
 

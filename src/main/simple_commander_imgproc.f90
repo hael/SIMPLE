@@ -105,7 +105,7 @@ contains
                     call img_or_vol%stats( ave, sdev, maxv, minv)
                     call img_or_vol%bin(ave + params%ndev * sdev)
                 else
-                   call img_or_vol%bin_kmeans
+                    call img_or_vol%bin_kmeans
                 endif
                 write(*,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(*,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
@@ -116,7 +116,7 @@ contains
                 endif
                 if( cline%defined('edge') ) call img_or_vol%cos_edge(params%edge)
                 if( cline%defined('neg')  ) call img_or_vol%bin_inv
-            end subroutine
+            end subroutine doit
 
     end subroutine exec_binarise
 
@@ -128,7 +128,7 @@ contains
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: igrow, iptcl
+        integer :: iptcl
         ! error check
         if( .not. cline%defined('stk') )then
             THROW_HARD('ERROR! stk needs to be present; simple_edge_detector')
@@ -146,25 +146,25 @@ contains
             THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; simple_edge_detector')
         endif
         if( cline%defined('thres') .and. params%automatic .eq. 'yes') then
-                THROW_HARD('cannot chose thres in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres in automatic mode; simple_edge_detector')
         endif
         if( cline%defined('npix') .and. params%automatic .eq. 'yes') then
-                THROW_HARD('cannot chose npix in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose npix in automatic mode; simple_edge_detector')
         endif
         if( cline%defined('thres_low') .and. params%automatic .eq. 'yes') then
-                THROW_HARD('cannot chose thres_low in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres_low in automatic mode; simple_edge_detector')
         endif
         if( cline%defined('thres_up') .and. params%automatic .eq. 'yes') then
-                THROW_HARD('cannot chose thres_up in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres_up in automatic mode; simple_edge_detector')
         endif
         if( cline%defined('thres') .and. params%detector .eq. 'canny') then
-                THROW_HARD('canny needs double thresholding; simple_edge_detector')
+            THROW_HARD('canny needs double thresholding; simple_edge_detector')
         endif
         if( cline%defined('thres_low') .and. params%detector .eq. 'sobel') then
-                THROW_HARD('sobel needs just one threshold; simple_edge_detector')
+            THROW_HARD('sobel needs just one threshold; simple_edge_detector')
         endif
         if( cline%defined('thres_up') .and. params%detector .eq. 'sobel') then
-                THROW_HARD('sobel needs just one threshold; simple_edge_detector')
+            THROW_HARD('sobel needs just one threshold; simple_edge_detector')
         endif
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         do iptcl=1,params%nptcls
@@ -175,53 +175,53 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_EDGE_DETECTOR NORMAL STOP ****')
 
-        contains
+    contains
 
-            subroutine doit( img )
-                use simple_edge_detector
-                class(image), intent(inout) :: img
-                real, allocatable  :: grad(:,:,:)
-                real    :: thresh(1)
-                integer :: ldim(3)
-                select case ( params%detector )
-                case ('sobel')
-                    if( cline%defined('thres') )then
-                        thresh(1) = params%thres
-                        call sobel(img,thresh)
-                    else if( cline%defined('npix') )then
-                        ldim = img%get_ldim()
-                        call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
-                    elseif( params%automatic .eq. 'yes') then
-                        call img%calc_gradient(grad)
-                        thresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
-                        call sobel(img,thresh)
-                        deallocate(grad)
+        subroutine doit( img )
+            use simple_edge_detector
+            class(image), intent(inout) :: img
+            real, allocatable  :: grad(:,:,:)
+            real    :: thresh(1)
+            integer :: ldim(3)
+            select case ( params%detector )
+            case ('sobel')
+                if( cline%defined('thres') )then
+                    thresh(1) = params%thres
+                    call sobel(img,thresh)
+                else if( cline%defined('npix') )then
+                    ldim = img%get_ldim()
+                    call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
+                elseif( params%automatic .eq. 'yes') then
+                    call img%calc_gradient(grad)
+                    thresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
+                    call sobel(img,thresh)
+                    deallocate(grad)
+                else
+                    THROW_HARD('ERROR!; simple_edge_detector ')
+                endif
+            case ('canny')
+                if( cline%defined('npix')) then
+                    THROW_HARD('parameter npix non compatible with canny; simple_edge_detector')
+                endif
+                if( params%automatic .eq. 'no' ) then
+                    if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
+                        THROW_HARD('both upper and lower threshold needed; simple_edge_detector')
                     else
-                        THROW_HARD('ERROR!; simple_edge_detector ')
+                        call canny(img,[params%thres_low, params%thres_up])
                     endif
-                case ('canny')
-                    if( cline%defined('npix')) then
-                        THROW_HARD('parameter npix non compatible with canny; simple_edge_detector')
-                    endif
-                    if( params%automatic .eq. 'no' ) then
-                        if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                            THROW_HARD('both upper and lower threshold needed; simple_edge_detector')
-                        else
-                            call canny(img,[params%thres_low, params%thres_up])
-                        endif
-                    elseif( params%automatic .eq. 'yes') then
-                        if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                            THROW_HARD('cannot define thresholds in automatic mode; simple_edge_detector')
-                        else
-                            call canny(img)
-                        endif
+                elseif( params%automatic .eq. 'yes') then
+                    if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
+                        THROW_HARD('cannot define thresholds in automatic mode; simple_edge_detector')
                     else
-                        THROW_HARD('ERROR!; simple_edge_detector ')
+                        call canny(img)
                     endif
-                case DEFAULT
-                    THROW_HARD('Unknown detector argument; simple_edge_detector')
-               end select
-            end subroutine
+                else
+                    THROW_HARD('ERROR!; simple_edge_detector ')
+                endif
+            case DEFAULT
+                THROW_HARD('Unknown detector argument; simple_edge_detector')
+            end select
+        end subroutine doit
     end subroutine exec_edge_detector
 
     !> for converting between SPIDER and MRC formats
@@ -388,7 +388,6 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: spec(:)
-        integer           :: k
         if( cline%defined('stk')  .and. cline%defined('vol1') )THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
@@ -837,7 +836,7 @@ contains
         ! default
         write(*,*)'Nothing to do!'
         ! end gracefully
-    999 call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
+999     call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
 end module simple_commander_imgproc

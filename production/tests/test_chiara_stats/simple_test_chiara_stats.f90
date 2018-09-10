@@ -33,22 +33,22 @@ open(unit = 18, file = "StatisticsWindowsBack.txt")
 open(unit = 19, file = "StatisticsBinaryFore.txt")
 open(unit = 20, file = "StatisticsBinaryBack.txt")
 do n_image = 1, 74
-  call imgwin_bin%read('/home/lenovoc30/Desktop/MassCenter/try1/centered_particles_BIN.mrc', n_image)
-  call imgwin%read('/home/lenovoc30/Desktop/MassCenter/try1/centered_particles.mrc', n_image)
-  !FOREGROUND
-  call imgwin%stats('foreground', ave, sdev, maxv, minv)
-  call imgwin_bin%stats('foreground', aveB, sdevB, maxvB, minvB)
-  write(unit = 17, fmt = "(a,i0,4(a,f0.0))") &
-  &'image=', n_image,' ave=', ave, ' sdev=', sdev,' maxv=', maxv, ' minv=', minv
-  write(unit = 19, fmt = "(a,i0,4(a,f0.0))") &
-  &'Bimage=', n_image, ' aveB=', aveB, ' sdevB=', sdevB, ' maxvB=', maxvB, ' minvB=', minvB
-  !BACKGROUND STATS
-  call imgwin%stats('background', ave, sdev, maxv, minv)
-  call imgwin_bin%stats('background', aveB, sdevB, maxvB, minvB)
-  write(unit = 18, fmt = "(a,i0,4(a,f0.0))") &
-  &'image=', n_image, ' back-ave=', ave, ' back-sdev=', sdev,' back-maxv=', maxv, ' back-minv=', minv
-  write(unit = 20, fmt = "(a,i0,4(a,f0.0))") &
-  &'Bimage=', n_image,' back-aveB=', aveB, ' back-sdevB=', sdevB, ' back-maxvB=', maxvB, ' back-minvB=', minvB
+    call imgwin_bin%read('/home/lenovoc30/Desktop/MassCenter/try1/centered_particles_BIN.mrc', n_image)
+    call imgwin%read('/home/lenovoc30/Desktop/MassCenter/try1/centered_particles.mrc', n_image)
+    !FOREGROUND
+    call imgwin%stats('foreground', ave, sdev, maxv, minv)
+    call imgwin_bin%stats('foreground', aveB, sdevB, maxvB, minvB)
+    write(unit = 17, fmt = "(a,i0,4(a,f0.0))") &
+        &'image=', n_image,' ave=', ave, ' sdev=', sdev,' maxv=', maxv, ' minv=', minv
+    write(unit = 19, fmt = "(a,i0,4(a,f0.0))") &
+        &'Bimage=', n_image, ' aveB=', aveB, ' sdevB=', sdevB, ' maxvB=', maxvB, ' minvB=', minvB
+    !BACKGROUND STATS
+    call imgwin%stats('background', ave, sdev, maxv, minv)
+    call imgwin_bin%stats('background', aveB, sdevB, maxvB, minvB)
+    write(unit = 18, fmt = "(a,i0,4(a,f0.0))") &
+        &'image=', n_image, ' back-ave=', ave, ' back-sdev=', sdev,' back-maxv=', maxv, ' back-minv=', minv
+    write(unit = 20, fmt = "(a,i0,4(a,f0.0))") &
+        &'Bimage=', n_image,' back-aveB=', aveB, ' back-sdevB=', sdevB, ' back-maxvB=', maxvB, ' back-minvB=', minvB
 enddo
 close(17, status = "keep")
 close(18, status = "keep")
@@ -80,7 +80,7 @@ allocate(fore_minv(nl), back_minv(nl), fore_maxv(nl), back_maxv(nl))
 allocate(indices(nl))
 
 do i = 1, nl
-indices(i) = real(i)
+    indices(i) = real(i)
 enddo
 call plot(indices,fore_avg)
 ! call plot(indices,fore_avg_bin, color1 = 'black')

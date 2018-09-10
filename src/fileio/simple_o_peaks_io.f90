@@ -51,7 +51,7 @@ contains
         character(len=*), intent(in)    :: fname
         integer,          intent(in)    :: fromto(2)
         type(o_peak_ori) :: o_peak_record(NPEAKS2REFINE)
-        integer :: recind, ipeak, iptcl
+        integer :: recind, iptcl
         call open_o_peaks_io( fname )
         do iptcl=fromto(1),fromto(2)
             ! index stuff
@@ -117,7 +117,6 @@ contains
         integer,     intent(out)   :: n_nozero
         type(o_peak_ori) :: o_peak_record(NPEAKS2REFINE)
         integer :: recind, ipeak, npeaks, noris
-        real    :: ow
         if( l_open )then
             ! index stuff
             recind = iptcl - fromto(1) + 1

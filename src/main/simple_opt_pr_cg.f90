@@ -117,7 +117,7 @@ contains
                 fa = self%f
                 stepa = 0.0_8
                 stepc = self%step
-                if ((self%pnorm == 0.0_8).or.(self%g0norm == 0.0_8)) then
+                if (is_zero(self%pnorm).or.is_zero(self%g0norm)) then
                     status = OPT_STATUS_ERROR
                     return
                 end if
@@ -148,7 +148,7 @@ contains
                 ! xb based on parabolic interpolation
                 call intermediate_point(spec%x_8, self%p, dir / self%pnorm, pg, &
                     & stepa, stepc, fa, fc, self%x1, self%gradient, stepb, fb, spec, fun_self)
-                if (stepb == 0.0_8) then
+                if (is_zero(stepb)) then
                     status = OPT_STATUS_ERROR
                     return
                 end if
