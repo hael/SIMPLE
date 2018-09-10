@@ -30,9 +30,20 @@ if [ ! -d prime3D_bench ];then
     exit 1
 else
     cd prime3D_bench
-    simple_exec prg=import_particles ctf=yes  cs=2.7 deftab=../extract_params.txt fraca=0.1 kv=300 stk=../scaledsel.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40 projname=prime3D_bench
+    # simple_exec prg=import_particles ctf=yes  cs=2.7  fraca=0.1 kv=300 stk=../selected.mrc oritab=../prime3Ddoc_035.txt ctf=yes smpd=2.55 msk=40
+    simple_exec prg=scale smpd=1.275 newbox=128 outstk=selected_dwnsc.mrc stk=../selected.mrc
+    simple_exec prg=import_cavgs stk=selected_dwnsc.mrc  smpd=1.275
+    #    time simple_distr_exec prg=cluster3D ncls=100 nparts=2 nthr=10
 
-    time simple_distr_exec prg=cluster3D ncls=100 nparts=2 nthr=10
+    time simple_distr_exec prg=initial_3Dmodel msk=44 pgrp=d2  nparts=2 nthr=10 eo=no > init3D.stdout 2>  init3D.stderr
+    # Copy project files
+    cp prime3D_bench.simple prime3D_bench.simple.bkup
+    cp 1_initial_3Dmodel/prime3D_bench.simple ./
+    #) > init3D.timing
+    time simple_distr_exec prg=cluster3D msk=44 prgp=d2  nparts=2 nthr=10 lp=10 nstates=2 oritype=cls3D > cluster3D.stdout 2> cluster3D.stderr
+    #) > cluster3D.timing
+    # Assuming 42 iterations
+    chimera 2_cluster3D/recvol_state01_iter042.mrc  2_cluster3D/recvol_state02_iter042.mrc
 fi
 duration=$SECONDS
 echo "$(($duration / 60)) minutes and $(($duration % 60)) seconds elapsed."
