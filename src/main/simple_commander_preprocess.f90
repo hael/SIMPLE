@@ -570,13 +570,14 @@ contains
         integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
         integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
         real                      :: particle_position(2)
+        logical                   :: spproj_modified
         call cline%set('oritype', 'mic')
         call params%new(cline)
         ! output directory
         output_dir = PATH_HERE
         if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
         ! read in integrated movies
-        call spproj%read_segment(params%oritype, params_glob%projfile)
+        call spproj%read(params_glob%projfile)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
         ntot = spproj%os_mic%get_noris()
         ! input directory
@@ -604,6 +605,7 @@ contains
         endif
         ! sanity checks
         allocate(mics_mask(ntot), source=.false.)
+        spproj_modified = .false.
         nmics  = 0
         nptcls = 0
         do imic = 1, ntot
@@ -622,6 +624,7 @@ contains
                 boxfile_name = boxfile_from_mic(mic_name)
                 if(trim(boxfile_name).eq.NIL)cycle
                 call spproj%os_mic%set(imic, 'boxfile', trim(boxfile_name))
+                spproj_modified = .true.
             else
                 call o_mic%getter('boxfile', boxfile_name)
                 if( .not.file_exists(boxfile_name) )cycle
@@ -646,6 +649,7 @@ contains
                 params%box = nint(boxdata(1,3))
             endif
         enddo
+        if( spproj_modified )call spproj%write()
         call spproj%kill
         if( nmics == 0 )     THROW_HARD('No particles to extract! exec_extract')
         if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
@@ -775,10 +779,10 @@ contains
                 character(len=*), intent(in) :: mic
                 character(len=LONGSTRLEN)    :: box_from_mic
                 integer :: ibox
-                box_from_mic     = fname_new_ext(mic,'box')
+                box_from_mic     = fname_new_ext(basename(mic),'box')
                 boxfile_from_mic = NIL
                 do ibox=1,size(boxfiles)
-                    if(trim(boxfiles(ibox)).eq.trim(box_from_mic))then
+                    if(trim(basename(boxfiles(ibox))).eq.trim(box_from_mic))then
                         boxfile_from_mic = trim(boxfiles(ibox))
                         return
                     endif

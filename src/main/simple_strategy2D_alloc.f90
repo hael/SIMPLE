@@ -34,14 +34,17 @@ contains
     end subroutine clean_strategy2D
 
     subroutine prep_strategy2D( ptcl_mask, which_iter, l_stream )
-        use simple_image, only: image
+        !use simple_image, only: image
         logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top), l_stream
         integer, intent(in)  :: which_iter
         type(ran_tabu)       :: rt, rt_best, rt_worst
-        real,    allocatable :: corrs(:)
-        integer, allocatable :: inds(:)
-        real                 :: ave, sdev, threshold
-        integer              :: n, icls, iptcl, prev_class, cnt, nptcls, n_worst, updatecnt
+        real,    allocatable :: res(:), corrs(:)
+        integer, allocatable :: inds(:), finds(:)
+        real                 :: ave, sdev, corrs_ave, corrs_dev
+        integer              :: n,icls,iptcl,prev_class,cnt,nptcls,n_best,updatecnt,threshold
+        !!!!!!!1
+        ! type(image) :: img
+        !!!!!!
         nptcls = count(ptcl_mask)
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
@@ -73,49 +76,57 @@ contains
         allocate(s2D%srch_order(1:nptcls, params_glob%ncls), source=0)
         allocate(s2D%cls_topseg(params_glob%ncls), source=.true.)
         rt  = ran_tabu(params_glob%ncls)
-        if( l_stream .and. build_glob%spproj%os_cls2D%isthere('corr') )then
+        if( l_stream .and. build_glob%spproj%os_cls2D%isthere('res') )then
             ! determine threshold
-            corrs     = build_glob%spproj%os_cls2D%get_all('corr')
-            n         = count(corrs>0.0001)
-            ave       = sum(corrs,mask=(corrs>0.0001))/real(n)
-            sdev      = sqrt(sum((corrs-ave)**2.,mask=(corrs>0.0001))/real(n))
-            threshold = ave-sdev
-            n_worst = count(corrs<threshold .and. corrs>0.0001)
-            ! set top ranking mask
-            do icls=1,params_glob%ncls
-                if( corrs(icls) > 0.0001 )s2D%cls_topseg(icls) = (corrs(icls) > threshold)
+            res = build_glob%spproj%os_cls2D%get_all('res')
+            where(res <= params_glob%smpd) res = params_glob%hp
+            n = size(res)
+            allocate(finds(n))
+            do icls=1,n
+                finds(icls) = calc_fourier_index(res(icls), params_glob%boxmatch, params_glob%smpd)
             enddo
+            ave            = sum(real(finds))/real(n)
+            sdev           = sqrt(sum((real(finds)-ave)**2./real(n)))
+            threshold      = ceiling(ave-sdev)
+            s2D%cls_topseg = (finds >= threshold) ! top ranking mask
+            n_best         = count(.not.s2D%cls_topseg)
+            !!!!!!!!!!!!!
+            ! call img%new([params_glob%box,params_glob%box,1],params_glob%smpd)
+            ! do icls=1,n
+            !     call img%read(params_glob%refs,icls)
+            !     if(s2D%cls_topseg(icls))then
+            !         call img%write('topseg_'//int2str(which_iter)//'.mrc',icls)
+            !     else
+            !         call img%write('lowseg_'//int2str(which_iter)//'.mrc',icls)
+            !     endif
+            ! enddo
+            ! call img%kill
+            !!!!!!!!!!!
             ! generates search orders
             inds = (/(icls,icls=1,params_glob%ncls)/)
-            where( s2D%cls_topseg )
-                corrs = 1.
-            else where
-                corrs = 0.
-            end where
-            call hpsort(corrs,inds)
-            rt_best  = ran_tabu(params_glob%ncls-n_worst)
-            rt_worst = ran_tabu(n_worst)
+            res  = params_glob%hp
+            where(s2D%cls_topseg) res = params_glob%smpd
+            call hpsort(res,inds)
+            rt_best  = ran_tabu(n_best)
+            rt_worst = ran_tabu(params_glob%ncls-n_best)
             cnt = 0
             do iptcl=params_glob%fromp,params_glob%top
                 if(.not.ptcl_mask(iptcl)) cycle
                 cnt = cnt + 1
-                if(build_glob%spproj_field%get(iptcl,'state')<0.5)then
-                    call rt%ne_ran_iarr(s2D%srch_order(cnt,:))
-                    cycle
-                endif
                 updatecnt  = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                 prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
-                if(updatecnt>=2 .and. updatecnt<=10)then
-                    s2D%srch_order(cnt,:) = inds
-                    call rt_worst%shuffle(s2D%srch_order(cnt,1:n_worst))
-                    call rt_best%shuffle(s2D%srch_order(cnt,n_worst+1:params_glob%ncls))
-                    if(s2D%cls_topseg(prev_class)) call reverse(s2D%srch_order(cnt,:))
+                !if(updatecnt>=2 .and. updatecnt<=10)then
+                if(updatecnt>=2 .and. updatecnt<=20)then
+                    s2D%srch_order(cnt,:) = (/(icls,icls=1,params_glob%ncls)/)
+                    call rt_best%shuffle(s2D%srch_order(cnt,1:n_best))
+                    if(n_best < params_glob%ncls) call rt_worst%shuffle(s2D%srch_order(cnt,n_best+1:params_glob%ncls))
+                    if(.not.s2D%cls_topseg(prev_class)) call reverse(s2D%srch_order(cnt,:))
                 else
                     call rt%ne_ran_iarr(s2D%srch_order(cnt,:))
                 endif
                 call put_last(prev_class, s2D%srch_order(cnt,:))
             enddo
-            deallocate(corrs,inds)
+            deallocate(res,inds)
             call rt_best%kill
             call rt_worst%kill
         else

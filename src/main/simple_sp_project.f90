@@ -1655,7 +1655,7 @@ contains
             write(*,*) 'stkind/iptcl: ', stkind, iptcl
             THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
         end select
-        
+
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')
@@ -2186,12 +2186,12 @@ contains
     ! writers
 
     subroutine write( self, fname, fromto, isegment )
-        class(sp_project), intent(inout) :: self
-        character(len=*), optional, intent(in) :: fname
-        integer,          optional, intent(in) :: fromto(2)
-        integer(kind(ENUM_ORISEG)), optional, intent(in) :: isegment
+        class(sp_project),                    intent(inout) :: self
+        character(len=*),           optional, intent(in)    :: fname
+        integer,                    optional, intent(in)    :: fromto(2)
+        integer(kind(ENUM_ORISEG)), optional, intent(in)    :: isegment
         character(len=:), allocatable :: projfile
-        integer(kind(ENUM_ORISEG)) :: iseg
+        integer(kind(ENUM_ORISEG))    :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
                 THROW_HARD('file format of: '//trim(fname)//' not supported; write')

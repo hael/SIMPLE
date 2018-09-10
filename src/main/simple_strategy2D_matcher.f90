@@ -45,7 +45,7 @@ contains
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         logical,               intent(in)    :: l_stream
-        real,    allocatable :: corrs(:)
+        real,    allocatable :: res(:)
         integer, allocatable :: pinds(:)
         logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
@@ -58,8 +58,8 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        real                  :: frac_srch_space, bfactor, ave, sdev, threshold
-        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n
+        real                  :: frac_srch_space, bfactor, ave, sdev
+        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n, threshold
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
         l_partial_sums = .false.
         l_snhc         = .false.
@@ -120,23 +120,26 @@ contains
         if( l_snhc )then
             if( l_stream )then
                 snhc_sz = 0.
-                if( build_glob%spproj%os_cls2D%isthere('corr') )then
-                    corrs = build_glob%spproj%os_cls2D%get_all('corr')
-                    n     = count(corrs>0.0001)
-                    ave   = sum(corrs,mask=(corrs>0.0001)) / real(n)
-                    sdev  = sqrt(sum((corrs-ave)**2.,mask=(corrs>0.0001))/real(n))
-                    threshold = ave-sdev
+                if( build_glob%spproj%os_cls2D%isthere('res') )then
+                    res = build_glob%spproj%os_cls2D%get_all('res')
+                    n   = size(res)
+                    where(res <= params_glob%smpd)res = params_glob%hp
+                    do i=1,n
+                        res(i) = real(calc_fourier_index(res(i),params_glob%boxmatch,params_glob%smpd))
+                    enddo
+                    ave       = sum(res)/real(n)
+                    sdev      = sqrt(sum((res-ave)**2./real(n)))
+                    threshold = ceiling(ave-sdev)
                 else
-                    allocate(corrs(params_glob%ncls),source=0.)
+                    allocate(res(params_glob%ncls),source=0.)
                     threshold = 1.
                 endif
                 do iptcl = params_glob%fromp, params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        if( build_glob%spproj_field%get_state(iptcl)==0 )cycle
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if(updatecnt>=2 .and. updatecnt<=10)then
                             prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
-                            if(corrs(prev_class) < threshold)then
+                            if(res(prev_class) > threshold)then
                                 snhc_sz(iptcl) = 0.
                             else
                                 snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
@@ -151,7 +154,7 @@ contains
                         endif
                     endif
                 enddo
-                deallocate(corrs)
+                deallocate(res)
             else
                 ! factorial decay, -2 because first step is always greedy
                 snhc_sz = min(SNHC2D_INITFRAC,&

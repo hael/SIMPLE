@@ -215,6 +215,7 @@ contains
     end subroutine exec_preprocess_stream
 
     subroutine exec_cluster2D_stream_distr( self, cline )
+        use simple_projection_frcs,        only: projection_frcs
         use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander
         use simple_image,                  only: image
         use simple_oris,                   only: oris
@@ -524,15 +525,16 @@ contains
                         ichunk = ceiling(real(iptcl)/real(nptcls_per_chunk))
                         call work_proj%os_ptcl2D%set(iptcl,'chunk',    real(ichunk))
                         call work_proj%os_ptcl2D%set(iptcl,'state',    1.)
-                        call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)          ! takes care of first greedy iteration
+                        call work_proj%os_ptcl2D%set(iptcl,'updatecnt',0.)              ! takes care of first greedy iteration
                         rnd_cls = nchunks_prev*params_glob%ncls_start+irnd_uni((nchunks-nchunks_prev)*params_glob%ncls_start)
-                        call work_proj%os_ptcl2D%set(iptcl,'class',real(rnd_cls))   ! to avoid empty classes
+                        call work_proj%os_ptcl2D%set(iptcl,'class',    real(rnd_cls))   ! to avoid empty classes
                         if( is_even(iptcl) )then
                             call work_proj%os_ptcl2D%set(iptcl,'eo',0.)
                         else
                             call work_proj%os_ptcl2D%set(iptcl,'eo',1.)
                         endif
                     enddo
+                    ! updates cls2D segment
                     if( nchunks_prev>0 )then
                         call work_proj%os_cls2D%reallocate(ncls_glob)
                         call append_rnd_refs
@@ -550,7 +552,7 @@ contains
                 endif
                 ! deactivate leftovers
                 do iptcl=nchunks*nptcls_per_chunk+1,nptcls_glob
-                    call work_proj%os_ptcl2D%set(iptcl,'state',    0.)
+                    call work_proj%os_ptcl2D%set(iptcl,'state',0.)
                 enddo
             endif
             ! MERGE CHUNKS
@@ -567,6 +569,7 @@ contains
                     endif
                 enddo
                 if( chunk2merge > 1 )then
+                    ! REJECTION MUST HAPPEn HERE
                     work_proj_has_changed = .true.
                     write(*,'(A,I6)')'>>> MERGING CHUNK: ',chunk2merge
                     do iptcl=i,maxnptcls
@@ -582,20 +585,10 @@ contains
             endif
             ! write project
             if( work_proj_has_changed )call work_proj%write(trim(WORK_PROJFILE))
-            !call work_proj%os_cls2D%write('cls2D_'//int2str(iter)//'.txt')
-            !call work_proj%os_ptcl2D%write('ptcl2D_'//int2str(iter)//'.txt')
+            ! call work_proj%os_cls2D%write('cls2D_'//int2str(iter)//'.txt')
+            ! call work_proj%os_ptcl2D%write('ptcl2D_'//int2str(iter)//'.txt')
             ! CLUSTER2D EXECUTION
-            last_ptcl = 0
-            do iptcl=nptcls_per_chunk,nptcls_glob,nptcls_per_chunk
-                if(work_proj%os_ptcl2D%isthere(iptcl,'chunk'))then
-                    last_ptcl = iptcl
-                else
-                    exit
-                endif
-            enddo
-            do nparts=orig_nparts,1,-1
-                if(real(nptcls_glob)/real(nparts) > real(nptcls_glob-last_ptcl) )exit
-            enddo
+            nparts = calc_nparts()
             call cline_cluster2D%delete('endit')
             call cline_cluster2D%set('startit', real(iter))
             call cline_cluster2D%set('maxits',  real(iter))
@@ -615,7 +608,7 @@ contains
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             ! remap zero-population classes
             work_proj_has_changed = .false.
-            if(.not.l_maxed) call remap_empty_classes
+            if( .not.l_maxed ) call remap_empty_classes
             if( work_proj_has_changed )call work_proj%write_segment_inside('ptcl2D',trim(WORK_PROJFILE))
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
@@ -627,10 +620,9 @@ contains
                 write(*,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
                 exit
             endif
-            ! wait for new images
+            ! wait
             tnow = simple_gettime()
              call simple_sleep(WAIT_WATCHER)
-            if( is_timeout(tnow) )exit
             ! handles whether new individual project files have appeared
             if( .not.is_file_open(spproj_list_fname) )then
                 n_spprojs_prev = n_spprojs
@@ -701,7 +693,6 @@ contains
         contains
 
             subroutine append_rnd_refs
-                use simple_projection_frcs, only: projection_frcs
                 type(projection_frcs)         :: frcs_prev, frcs
                 type(ran_tabu)                :: rt
                 type(image)                   :: img
@@ -753,7 +744,6 @@ contains
             end subroutine append_rnd_refs
 
             subroutine append_rnd_buffer_refs
-                use simple_projection_frcs, only: projection_frcs
                 type(projection_frcs)         :: frcs_prev, frcs
                 type(ran_tabu)                :: rt
                 type(image)                   :: img
@@ -805,10 +795,10 @@ contains
                 integer, intent(in) :: time_now
                 is_timeout = .false.
                 if(time_now-last_injection > params%time_inactive)then
-                    write(*,*)'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
+                    write(*,'(A,A)')'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
                     is_timeout = .true.
                 else if(time_now-last_injection > 3600)then
-                    write(*,*)'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
+                    write(*,'(A,A)')'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
                     call flush(6)
                 endif
                 return
@@ -821,7 +811,7 @@ contains
                 n_stks = orig_proj%os_stk%get_noris()
                 n      = n_spprojs-(n_stks+1)
                 ! stacks
-                if( n_stks > n_spprojs )then
+                if( n > 0 )then
                     do iproj=n_stks+1,n_spprojs
                         call stream_proj%read(spproj_list(iproj))
                         stk     = stream_proj%get_stkname(1)
@@ -900,20 +890,23 @@ contains
 
             !>  empty classes re-mapping, commits the project to disk
             subroutine remap_empty_classes
-                integer, allocatable  :: fromtocls(:,:)
+                type(projection_frcs) :: frcs
                 type(image)           :: img_cavg
+                real,     allocatable :: frc(:)
+                integer,  allocatable :: fromtocls(:,:)
                 character(len=STDLEN) :: stk
-                real                  :: smpd
-                integer               :: icls
+                real                  :: smpd,res05,res0143
+                integer               :: icls, ind, state
                 call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls,&
                     &ncls_per_chunk=params_glob%ncls_start)
                 if( allocated(fromtocls) )then
                     ! updates document later
                     work_proj_has_changed = .true.
-                    smpd = work_proj%get_smpd()
+                    smpd  = work_proj%get_smpd()
+                    state = 1
                     ! updates classes
                     call img_cavg%new([box, box,1], smpd)
-                    do icls = 1, size(fromtocls, dim=1)
+                    do icls = 1,size(fromtocls, dim=1)
                         ! cavg
                         call img_cavg%read(trim(refs_glob), fromtocls(icls, 1))
                         call img_cavg%write(trim(refs_glob), fromtocls(icls, 2))
@@ -934,11 +927,42 @@ contains
                     stk = add2fbody(trim(refs_glob),params%ext,'_odd')
                     call img_cavg%read(stk, ncls_glob)
                     call img_cavg%write(stk, ncls_glob)
+                    ! adjust populations & resolutions in os_cls2D
+                    call frcs%new(ncls_glob, box, smpd, state)
+                    call frcs%read(FRCS_FILE)
+                    do icls = 1,size(fromtocls, dim=1)
+                        ind = fromtocls(icls,1)
+                        call frcs%estimate_res(ind,res05,res0143)
+                        call frcs%set_frc(fromtocls(icls,2), frcs%get_frc(ind, box, state),state)
+                        call work_proj%os_cls2D%set(ind,'pop',real(work_proj%os_ptcl2D%get_pop(ind, 'class')))
+                        call work_proj%os_cls2D%set(ind,'res',res05)
+                        ind = fromtocls(icls,2)
+                        call work_proj%os_cls2D%set(ind,'pop',real(work_proj%os_ptcl2D%get_pop(ind, 'class')))
+                        call work_proj%os_cls2D%set(ind,'res',res05)
+                    end do
+                    call frcs%write(FRCS_FILE)
                     ! cleanup
                     call img_cavg%kill
+                    call frcs%kill
                     deallocate(fromtocls)
                 endif
             end subroutine remap_empty_classes
+
+            !>  determines the number of parts for distributed execution
+            integer function calc_nparts()
+                integer :: i,ind
+                ind = 0
+                do i=nptcls_per_chunk,nptcls_glob,nptcls_per_chunk
+                    if(work_proj%os_ptcl2D%isthere(i,'chunk'))then
+                        ind = i
+                    else
+                        exit
+                    endif
+                enddo
+                do calc_nparts=orig_nparts,1,-1
+                    if(real(nptcls_glob)/real(calc_nparts) > real(nptcls_glob-ind) )exit
+                enddo
+            end function calc_nparts
 
     end subroutine exec_cluster2D_stream_distr
 
