@@ -26,7 +26,12 @@ class Viewer {
 	loadImages(element) {
 		var images = document.getElementById(element).getElementsByClassName('dynimg') 
 		for (var image of images){
-			(<HTMLImageElement>image).src = "/image?stackfile=" + (<HTMLImageElement>image).dataset.path + "&frame=" + (<HTMLImageElement>image).dataset.frame + "&width=" + (<HTMLImageElement>image).clientWidth
+			if((<HTMLImageElement>image).dataset.path){
+				(<HTMLImageElement>image).src = "/image?stackfile=" + (<HTMLImageElement>image).dataset.path + "&frame=" + (<HTMLImageElement>image).dataset.frame + "&width=" + (<HTMLImageElement>image).clientWidth
+			}else if((<HTMLImageElement>image).dataset.sprite){
+				(<HTMLImageElement>image).style.background = "url(/image?stackfile=" + (<HTMLImageElement>image).dataset.sprite + "&frame=0&width=" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spritewidth) + ") " + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spriteid)  + "px 0px"
+
+			}
 		}
 	}
 	
@@ -34,8 +39,15 @@ class Viewer {
 		var brightness = document.getElementById(element).querySelector('[id=brightness]') as HTMLInputElement
 		var contrast = document.getElementById(element).querySelector('[id=contrast]') as HTMLInputElement
 		var zoom = document.getElementById(element).querySelector('[id=zoom]') as HTMLInputElement
+		var target = document.getElementById(element).querySelector('[id=target]') !== null
+		var images
 		
-		var images =  document.getElementById(element).getElementsByClassName('dynimg') 
+		if(target){
+			images =  document.getElementById(element).querySelectorAll(".dynimg." + (<HTMLSelectElement>document.getElementById(element).querySelector('[id=target]')).value)
+		} else {
+			images =  document.getElementById(element).getElementsByClassName('dynimg')
+		}
+		
 		for (var image of images){
 			(<HTMLImageElement>image).style.filter = "contrast(" + contrast.value + "%) brightness(" + brightness.value + "%)";
 			(<HTMLImageElement>image).style.transform = "scale(" + zoom.value + ")";
@@ -114,23 +126,25 @@ class Viewer {
 	toggleSelect(element) {
 		var images = element.getElementsByClassName('dynimg')
 		var plotpoint = document.querySelector('[data-plotclass="' + element.getAttribute('data-class') + '"]')
-		for (var image of images){
-			if(element.dataset.selected == "true"){
-				element.dataset.selected = "false"
+		if(element.dataset.selected == "true"){
+			element.dataset.selected = "false"
+			for (var image of images){
 				image.style.visibility = "hidden"
-				if(plotpoint){
-					(<HTMLElement>plotpoint).style.stroke = "grey"
-				}
-			}else{
-				element.dataset.selected = "true"
+			}
+			if(plotpoint){
+				(<HTMLElement>plotpoint).style.stroke = "grey"
+			}
+		}else {
+			element.dataset.selected = "true"
+			for (var image of images){
 				image.style.visibility = "unset"
-				if(plotpoint){
-					(<HTMLElement>plotpoint).style.stroke = "#d70206"
-				}
+			}
+			if(plotpoint){
+				(<HTMLElement>plotpoint).style.stroke = "#d70206"
 			}
 		}
 	}
-	
+
 	sortThumbnails() {
 		var attribute = (<HTMLInputElement>document.getElementById('sortattribute')).value
 		var order = (<HTMLInputElement>document.getElementById('sortorder')).value

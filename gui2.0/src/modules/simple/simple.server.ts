@@ -15,6 +15,7 @@ class Module {
 	private guinierwidget
 	private autopicktrainingwidget
 	private makepickrefswidget
+	private preprocessstreamview
 	
 	public metadata = {
 			"moduletitle" :"Simple",
@@ -84,6 +85,7 @@ class Module {
 		this.guinierwidget = pug.compileFile('views/simple-guinierplotwidget.pug')
 		this.autopicktrainingwidget = pug.compileFile('views/simple-autopicktrainingwidget.pug')
 		this.makepickrefswidget = pug.compileFile('views/simple-makepickrefswidget.pug')
+		this.preprocessstreamview = pug.compileFile('views/simple-viewpreprocessstream.pug')
 		process.stdout.write("Done\n")
 	}
 	
@@ -172,7 +174,10 @@ class Module {
 			arg['view'] = { mod : "simple", fnc : "viewCTFEstimate" }
 		}else if(type == "import_particles" || type == "extract") {
 			arg['view'] = { mod : "simple", fnc : "viewParticles" }
+		}else if(type == "preprocess_stream") {
+			arg['view'] = { mod : "simple", fnc : "viewPreprocessStream" }
 		}
+		
 		
 		console.log(command, commandargs)
 		
@@ -607,6 +612,33 @@ class Module {
 			})
 			.then(() => {
 				return({html : this.ctfview({fits : fits, folder : arg['folder'], projectfile : projectfile}), func : "viewer.loadImages('fits')"})
+			})
+	}
+	
+	public viewPreprocessStream(modules, arg){
+		var spawn = require('child-process-promise').spawn
+		var command = "simple_private_exec"
+		var commandargs = []
+		var preproc = []
+		var projectfile = arg['folder'] + "/project.simple"
+		commandargs.push("prg=print_project_vals")
+		commandargs.push("projfile=" + projectfile)
+		commandargs.push("oritype=mic")
+		commandargs.push("keys=thumb,dfx,dfy,angast,ctf_estimatecc,dferr,ctfscore,cc90")
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				for(var line of lines){
+					var elements = line.split((/[ ]+/))
+					if(elements[3]){
+						console.log(elements[3], elements[3].replace("motion_correct", "ctf_estimate").replace("thumb.jpg", "ctf_estimate_diag.jpg"), elements[4], elements[5], elements[6], elements[7], elements[8], elements[9], elements[10])
+						preproc.push([elements[3], elements[3].replace("motion_correct", "ctf_estimate").replace("thumb.jpg", "ctf_estimate_diag.jpg"), elements[4], elements[5], elements[6], elements[7], elements[8], elements[9], elements[10]])
+					}
+				}
+				return
+			})
+			.then(() => {
+				return({html : this.preprocessstreamview({preproc : preproc, folder : arg['folder'], projectfile : projectfile}), func : "simple.viewPreprocessStream()"})
 			})
 	}
 	

@@ -334,6 +334,7 @@ class Simple {
 				if(data.type === "point"){
 					var index = data.index
 					data.element._node.setAttribute('data-index', index)
+					data.element._node.setAttribute('data-plotclass', index)
 					data.element._node.onclick = () => {
 						var thumbnail = thumbnails[index] as HTMLElement
 					//	var thumbnails = document.getElementById('thumbnails') as HTMLElement
@@ -383,6 +384,25 @@ class Simple {
 			thumbnails.appendChild(thumbnail)
 		}
 		viewer.loadImages('ptcls')
+	}
+	
+	viewPreprocessStream(){
+		viewer.loadImages('preproc')
+		this.sumMicrographs('preproc')
+	}	
+	
+	sumMicrographs(parentid){
+		var counter =  document.getElementById('micrographcounter')
+		var thumbnails = document.getElementById(parentid).getElementsByClassName('thumbnail')
+		var total = 0
+		var selected = 0
+		for (var thumbnail of thumbnails){
+			total++
+			if(thumbnail.getAttribute('data-selected') == "true"){
+				selected++
+			}
+		}
+		counter.innerHTML = "Selected " + selected + " of " + total + " micrographs"
 	}
 }
 

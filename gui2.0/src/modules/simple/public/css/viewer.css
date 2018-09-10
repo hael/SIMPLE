@@ -5,7 +5,7 @@
 	overflow-y: scroll;
 }
 
-.viewer #cavgs,#mic {
+.viewer #cavgs,#mic,#preproc {
 	height: calc(80vh - 75px);
 	display: flex;
 	flex-direction: column;
@@ -60,7 +60,6 @@
 	overflow-x: hidden;
 	overflow-y: scroll;
 }
-
 
 #ptclsviewer .scrollmenu {
 	display: none;
@@ -120,4 +119,9 @@
 	overflow-y: scroll;
 	height: calc(80vh - 118px);
 	width : 100%;
+}
+
+#preproc .thumbnails {
+	overflow-x: hidden;
+	overflow-y: scroll;
 }
