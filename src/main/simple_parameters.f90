@@ -175,6 +175,7 @@ type :: parameters
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
+    character(len=STDLEN) :: shift_cc_jacob='no'  !< use Jacobian for cc-based shift search
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -382,22 +383,23 @@ type :: parameters
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)      = .false.
-    logical :: l_autoscale    = .false.
-    logical :: l_cc_bfac      = .true.
-    logical :: l_distr_exec   = .false.
-    logical :: l_dev          = .false.
-    logical :: l_dose_weight  = .false.
-    logical :: l_doshift      = .false.
-    logical :: l_focusmsk     = .false.
-    logical :: l_frac_update  = .false.
-    logical :: l_innermsk     = .false.
-    logical :: l_match_filt   = .true.
-    logical :: l_phaseplate   = .false.
-    logical :: l_needs_sigma  = .false.
-    logical :: l_remap_cls    = .false.
-    logical :: l_eo           = .false.
-    logical :: sp_required    = .false.
+    logical :: cyclic(7)        = .false.
+    logical :: l_autoscale      = .false.
+    logical :: l_cc_bfac        = .true.
+    logical :: l_distr_exec     = .false.
+    logical :: l_dev            = .false.
+    logical :: l_dose_weight    = .false.
+    logical :: l_doshift        = .false.
+    logical :: l_focusmsk       = .false.
+    logical :: l_frac_update    = .false.
+    logical :: l_innermsk       = .false.
+    logical :: l_match_filt     = .true.
+    logical :: l_needs_sigma    = .false.
+    logical :: l_phaseplate     = .false.
+    logical :: l_remap_cls      = .false.
+    logical :: l_shift_cc_jacob = .false.
+    logical :: l_eo             = .false.
+    logical :: sp_required      = .false.
   contains
     procedure          :: new
     procedure, private :: set_img_format
@@ -544,6 +546,7 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
+        call check_carg('shift_cc_jacob', self%shift_cc_jacob)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
         call check_carg('stats',          self%stats)
@@ -1285,6 +1288,8 @@ contains
                 self%l_match_filt = .true.
             end select
         endif
+        ! Jacobian for cc-based shift search
+        if ( self%shift_cc_jacob .eq. 'yes' ) self%l_shift_cc_jacob = .true.
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.
