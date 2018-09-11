@@ -15,23 +15,24 @@
 ! 07 May 2018 - FortCUDA implementaiton
 !------------------------------------------------------------------------------
 program simple_test_cuda
-    include 'simple_lib.f08'
-    use simple_image,            only: image
-    use gnufor2
-    use CUDA
-    use simple_cuda
-    use simple_timer_cuda
-    use simple_cuda_kernels
-    use, intrinsic :: ISO_C_BINDING
-    implicit none
+include 'simple_lib.f08'
+use simple_image,            only: image
+use gnufor2
+use CUDA
+use simple_cuda
+use simple_timer_cuda
+use simple_cuda_kernels
+use, intrinsic :: ISO_C_BINDING
+implicit none
 
-    type (timer_cuda) :: ctimer
-    type (cudaEvent_t)  :: ev1,ev2
-    integer(timer_int_kind) :: t1
-    integer(c_int):: runtimeVersion,driverVersion,pValue, deviceCount,free,total
-    integer (KIND(cudaLimitStackSize))::limitStackSize= cudaLimitStackSize
-    integer (KIND(cudaSuccess)) :: err
-    logical :: error_found
+type (timer_cuda) :: ctimer
+type (cudaEvent_t)  :: ev1,ev2
+integer(timer_int_kind) :: t1
+integer(c_int):: runtimeVersion,driverVersion,pValue, deviceCount,free,total
+integer (KIND(cudaLimitStackSize))::limitStackSize= cudaLimitStackSize
+integer (KIND(cudaSuccess)) :: err
+logical :: error_found
+
     error_found=.false.
 
     print *," CUDA Runtime functions "
@@ -49,26 +50,15 @@ program simple_test_cuda
     write (*,'(A)') 'TESTING CUDA FORTRAN PRECISION '
     call test_cuda_precision( error_found )
 
-    write (*,'(A)') 'SIMPLE_CUDA timer setup'
-    ctimer = timer_cuda()
-
-    write (*,'(A)') 'TESTING CUDAFOR TIMING'
-    ! call ctimer%nowCU()
-    t1=tic()
-    ev1=ctimer%ticU()
-    ev2=ctimer%ticU()
-    write (*,'(A)') 'SIMPLE_CUDA timer CPU/CUDA'
-    print *, " Simple_timer ", toc(t1)
-    print *, " CUDA Event timer 1", ctimer%tocU(ev1)
-    print *, " CUDA Event timer 2",ctimer%tocU(ev2)
-    call ctimer%kill_()
+    write (*,'(A)') 'SIMPLE_CUDA timer test'
 
     write (*,*)""
     write (*,'(A)') 'TESTING CUDA FORTRAN KERNELS'
-    !  call test_FortCUDA_kernels(0.)
-    call test_fortran_mul1dComplex_kernels
+    !call test_FortCUDA_kernels(0.)
+    !call test_fortran_mul1dComplex_kernels
     call test_fortran_squaremul2dComplex_kernels
-    call test_fortran_mul2dComplex_kernels
+    call test_fortran_squaremuladd2dComplex_kernels
+    !call test_fortran_mul2dComplex_kernels
 
 
 contains
@@ -168,6 +158,24 @@ contains
             write(*, "('Compensated sum in SP             =',f12.1,'   Error=', f12.1)")  sum_kahan, 7.*N-sum_kahan
 
             deallocate(x)
-        end subroutine sum_accuracy
+    end subroutine sum_accuracy
+
+    subroutine simple_test_cuda_timer
+
+    ctimer = timer_cuda()
+
+    write (*,'(A)') 'TESTING CUDAFOR TIMING'
+    ! call ctimer%nowCU()
+    t1=tic()
+    ev1=ctimer%ticU()
+    ev2=ctimer%ticU()
+    write (*,'(A)') 'SIMPLE_CUDA timer CPU/CUDA'
+    print *, " Simple_timer ", toc(t1)
+    print *, " CUDA Event timer 1", ctimer%tocU(ev1)
+    print *, " CUDA Event timer 2",ctimer%tocU(ev2)
+    call ctimer%kill_()
+
+    end subroutine simple_test_cuda_timer
+
 
 end program simple_test_cuda

@@ -86,12 +86,16 @@ end interface
 !         real(c_float),dimension(:,:) :: a, b,c
 !         integer(c_int), value :: Np,Ns, Bs
 !     end subroutine mul2dfloat
-! subroutine mul2dcomplex( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dcomplex")
+!     subroutine mul2dcomplex( a,b, c, Np,Ns, Bs) bind(C, name="kernelmul2dcomplex")
 !         use, intrinsic :: ISO_C_BINDING
 !         complex(C_FLOAT_COMPLEX),dimension(:,:) :: a,b,c
 !         integer(c_int), value :: Np, Ns, Bs
 !     end subroutine mul2dcomplex
-! end interface
+!     subroutine muladd2dcomplex( a,b, c,d, Np,Ns, Bs) bind(C, name="kernelmul2dcomplex")
+!         use, intrinsic :: ISO_C_BINDING
+!         complex(C_FLOAT_COMPLEX),dimension(:,:) :: a,b,c,d
+!         integer(c_int), value :: Np, Ns, Bs
+!     end subroutine muladd2dcomplex! end interface
 
 !! filter_kernels.cu
 interface
@@ -874,6 +878,228 @@ contains
         ! print *, " CUDA time    :", cutime
 
     end subroutine test_fortran_squaremul2dComplex_kernels
+
+    subroutine test_fortran_squaremuladd2dComplex_kernels
+        !$ use omp_lib
+        implicit none
+
+        !define the floating point kind to be single precision
+        integer, parameter :: fp_kind = kind(0.0)
+
+        !define length of the array
+        integer, parameter :: NNmin=8
+        integer, parameter :: NNmax=14
+        integer, parameter :: iterations= 30
+
+
+        complex(fp_kind), dimension(:,:), allocatable :: c, c2
+        complex(fp_kind) :: cserial
+        integer(8) :: i,j, it
+        integer :: N,  B
+        integer(8) :: t1, t2, t3, t4, t5,t6, t7,t8, t9,t10,crate, cmax
+        real(8) :: ftime, cutime, mmtime, vectime,omptime, cuda_su, cuda_per, vec_su,vec_per, omp_su, omp_per
+        logical :: printc = .false.
+        ftime=0.
+        cutime=0.
+        mmtime=0.
+        vectime=0.
+
+
+        print *," CUDA 2D matrix muladd testing -- Square 2D matrix"
+        print *," Iteration  NxN                       { Timing      %Reduced      SpeedupX }"
+
+        print *,"                      Fortran(serial)  Fortran(omp)                                   CUDA   "
+        call system_clock(count_max=cmax, count_rate=crate)
+
+        ! Initialize array c, compute c2=c*c
+        do it=1,iterations
+            N=2**(NNmin +it-1)
+            if(N > 2**NNmax) exit
+
+            allocate(c(N,N), c2(N,N))
+            do i = 1, N
+                do j=1, N
+                    c(i,j) = cmplx(i,2*real(j)/real(N))
+                end do
+            end do
+
+            !! SERIAL
+            c2=cmplx(0.,0.)
+            call system_clock(t1)
+            do i = 1, N
+                do j=1,N
+                    c2(i,j)= c(i,j)*c(i,j) + c(i,j)
+                end do
+            end do
+            call system_clock(t2)
+            cserial = c2(N-1,N-1)
+            ftime = ftime + REAL(t2-t1)/REAL(crate)
+            ! if(printc)then
+            !     print *, "Results from Fortran Serial"
+            !     do i = N-3, N
+            !         do j=N-3,N
+            !             print *,i, c(i,j),c2(i,j)
+            !         end do
+            !     end do
+            ! end if
+
+            !! OpenMP
+            c2=cmplx(0.,0.)
+            call system_clock(t9)
+            !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close)
+            do i = 1, N
+                do j=1,N
+                    c2(i,j)= c(i,j)*c(i,j) + c(i,j)
+                end do
+            end do
+            !$omp end parallel do
+            call system_clock(t10)
+            omptime = omptime + REAL(t10-t9)/REAL(crate)
+            omp_per=(REAL(t10-t9) -  REAL(t2-t1))*100/(REAL(t2-t1))
+            omp_su =(REAL(t2-t1) -  REAL(t10-t9))/(REAL(t10-t9))
+            if(cserial .ne. c2(N-1,N-1)) print *,' OpenMP N=',N, ' failed ', cserial, c2(N-1,N-1)
+
+
+            ! if(printc)then
+            !     print *, "Results from Fortran"
+            !     do i = N-3, N
+            !         do j=N-3,N
+            !             print *,i, c(i,j),c2(i,j)
+            !         end do
+            !     end do
+            ! end if
+
+
+
+
+            ! CUDA
+            c2=cmplx(0.,0.)
+            call system_clock(t3)
+            ! Do the same computation with CUDA.
+            ! Fortran -> C -> CUDA ->C ->Fortran
+            call kernelmuladd2dcomplex(c,c,c,c2,N,N,8)
+            call system_clock(t4)
+            cutime = cutime + REAL(t4-t3)/REAL(crate)
+            if(cserial .ne. c2(N-1,N-1)) then
+                print *,' CUDA N=',N,' failed', cserial, c2(N-1,N-1), N-1,N-1
+                !  print * ,cmplx(N-1,2*(N-1)), cmplx(N-1,2*(N-1))*cmplx(N-1,2*(N-1))
+                print *, c2
+                stop
+            endif
+
+
+            ! !Results from CUDA
+            ! if(printc)then
+            !     print *, "Results from CUDA"
+            !     do i = N-3, N
+            !         do j=N-3,N
+            !             print *,i, c(i,j),c2(i,j)
+            !         end do
+            !     end do
+            ! end if
+            cuda_per=(REAL(t4-t3) -  REAL(t2-t1))*100/(REAL(t2-t1))
+            cuda_su =(REAL(t2-t1) -  REAL(t4-t3))/(REAL(t4-t3))
+
+            write(*,'(4x,I4,I10,F15.5,F15.5,F15.5,F15.5,F15.3,F15.5,F15.5,F15.5)')it,N,&
+                &REAL(t2-t1)/REAL(crate),&
+                REAL(t10-t9)/REAL(crate), omp_per, omp_su,&
+                & REAL(t4-t3)/REAL(crate), cuda_per, cuda_su
+
+
+            deallocate(c,c2)
+
+        enddo
+        print *, " Fortran time (serial) :", ftime
+        print *, " Fortran time (openmp):", omptime
+        print *, " CUDA time    :", cutime
+
+
+        print *, ""
+        print *," Block_size testing  square 2D array"
+        ftime=0.
+        cutime=0.
+        call system_clock(count_max=cmax, count_rate=crate)
+        ! Initialize array c, compute c2=c*c
+        N=(2_8)**12
+        allocate(c(N,N), c2(N,N))
+        do i = 1, N
+            do j=1, N
+                c(i,j) = cmplx(i,2*real(j)/real(N))
+            end do
+        end do
+
+        !! SERIAL
+        c2=cmplx(0.,0.)
+        call system_clock(t1)
+        do i = 1, N
+            do j=1,N
+                c2(i,j)= c(i,j)*c(i,j)
+            end do
+        end do
+        call system_clock(t2)
+        ftime = ftime + REAL(t2-t1)/REAL(crate)
+        cserial = c2(N-1,N-1)
+
+
+        ! ! Print results from Fortran
+        ! if(printc)then
+        !     print *, "Results from Fortran"
+        !     do i = N-3, N
+        !         do j=N-3,N
+        !             print *,i, c(i,j),c2(i,j)
+        !         end do
+        !     end do
+        ! end if
+
+        deallocate(c,c2)
+        do it=1,4
+            B= 2**(it+2)
+            allocate(c(N,N), c2(N,N))
+            do i = 1, N
+                do j=1, N
+                    c(i,j) = cmplx(i,2*real(j)/real(N))
+                end do
+            end do
+
+            ! Put
+            c2=cmplx(0.,0.)
+            call system_clock(t3)
+            ! Do the same computation with CUDA.
+            ! Fortran -> C -> CUDA ->C ->Fortran
+            call kernelmuladd2dcomplex(c,c,c,c2,N,N,B)
+            call system_clock(t4)
+            cutime = cutime + REAL(t4-t3)/REAL(crate)
+            if(cserial .ne. c2(N-1,N-1)) then
+                print *,' CUDA N=',N,' failed', cserial, c2(N-1,N-1), N-1,N-1
+                stop
+            endif
+
+            ! !Results from CUDA
+            ! if(printc)then
+            !     print *, "Results from CUDA"
+            !     do i = N-3, N
+            !         do j=N-3,N
+            !             print *,i, c(i,j),c2(i,j)
+            !         end do
+            !     end do
+            ! end if
+            cuda_per=(REAL(t4-t3) -  REAL(t2-t1))*100/(REAL(t2-t1))
+            cuda_su =(REAL(t2-t1) -  REAL(t4-t3))/(REAL(t4-t3))
+
+            print *, it+2, B,  REAL(t2-t1)/REAL(crate), REAL(t4-t3)/REAL(crate), &
+                cuda_per,   cuda_su
+
+
+            deallocate(c,c2)
+
+        enddo
+
+        ! print *, " Fortran time :", ftime
+        ! print *, " CUDA time    :", cutime
+
+    end subroutine test_fortran_squaremuladd2dComplex_kernels
+
+
 
     subroutine test_fortran_mul2dComplex_kernels
         !$ use omp_lib
