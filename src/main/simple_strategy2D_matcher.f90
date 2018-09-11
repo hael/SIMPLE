@@ -45,7 +45,6 @@ contains
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
         logical,               intent(in)    :: l_stream
-        real,    allocatable :: res(:)
         integer, allocatable :: pinds(:)
         logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
@@ -58,8 +57,9 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        real                  :: frac_srch_space, bfactor, ave, sdev
-        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class, n, threshold
+        logical               :: cls_mask(params_glob%ncls)
+        real                  :: frac_srch_space, bfactor, score
+        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
         l_partial_sums = .false.
         l_snhc         = .false.
@@ -105,11 +105,6 @@ contains
             call build_glob%spproj_field%sample4update_and_incrcnt2D(params_glob%ncls, &
                 [params_glob%fromp,params_glob%top], params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
-            ! nptcls2update = params_glob%top - params_glob%fromp + 1
-            ! allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
-            ! pinds     = (/(i,i=params_glob%fromp,params_glob%top)/)
-            ! ptcl_mask = .true.
-            ! call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
             call build_glob%spproj_field%mask_from_state(1, ptcl_mask, pinds, fromto=[params_glob%fromp,params_glob%top])
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], mask=ptcl_mask)
             nptcls2update = count(ptcl_mask)
@@ -120,41 +115,28 @@ contains
         if( l_snhc )then
             if( l_stream )then
                 snhc_sz = 0.
-                if( build_glob%spproj%os_cls2D%isthere('res') )then
-                    res = build_glob%spproj%os_cls2D%get_all('res')
-                    n   = size(res)
-                    where(res <= params_glob%smpd)res = params_glob%hp
-                    do i=1,n
-                        res(i) = real(calc_fourier_index(res(i),params_glob%boxmatch,params_glob%smpd))
-                    enddo
-                    ave       = sum(res)/real(n)
-                    sdev      = sqrt(sum((res-ave)**2./real(n)))
-                    threshold = ceiling(ave-sdev)
-                else
-                    allocate(res(params_glob%ncls),source=0.)
-                    threshold = 1.
-                endif
-                do iptcl = params_glob%fromp, params_glob%top
+                call build_glob%spproj%os_cls2D%find_best_classes(params_glob%boxmatch,params_glob%smpd, cls_mask)
+                do iptcl=params_glob%fromp, params_glob%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if(updatecnt>=2 .and. updatecnt<=10)then
                             prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
-                            if(res(prev_class) > threshold)then
-                                snhc_sz(iptcl) = 0.
-                            else
+                            if( cls_mask(prev_class) )then
                                 snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
-                                if( build_glob%spproj_field%isthere(iptcl,'rank') )then
-                                    call build_glob%spproj_field%set(iptcl,'rank', build_glob%spproj_field%get(iptcl,'rank')+1.)
-                                else
-                                    call build_glob%spproj_field%set(iptcl,'rank', 0.)
-                                endif
+                            else
+                                snhc_sz(iptcl) = 0.
+                            endif
+                            if( .not.build_glob%spproj_field%isthere(iptcl,'rank') )call build_glob%spproj_field%set(iptcl,'rank',0.)
+                            if( cls_mask(prev_class) )then
+                                score = build_glob%spproj_field%get(iptcl,'rank')*real(updatecnt-1)
+                                score = min(1.,(score+1.)/real(updatecnt))
+                                call build_glob%spproj_field%set(iptcl,'rank', score)
                             endif
                         else
                             snhc_sz(iptcl) = 0.
                         endif
                     endif
                 enddo
-                deallocate(res)
             else
                 ! factorial decay, -2 because first step is always greedy
                 snhc_sz = min(SNHC2D_INITFRAC,&

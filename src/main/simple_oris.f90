@@ -151,6 +151,7 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec
     procedure          :: calc_bfac_srch
+    procedure          :: find_best_classes
     procedure          :: find_closest_proj
     procedure          :: discretize
     procedure          :: nearest_proj_neighbors
@@ -2291,6 +2292,47 @@ contains
             bfac = 500.
         endif
     end subroutine calc_bfac_srch
+
+    subroutine find_best_classes( self, box, smpd, cls_mask )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: box
+        real,        intent(in)    :: smpd
+        logical,     intent(inout) :: cls_mask(1:self%n)
+        real,    allocatable :: rfinds(:), corrs(:)
+        logical, allocatable :: corrs_msk(:)
+        real    :: ave, sdev, res, res_threshold, corr_threshold
+        integer :: icls
+        cls_mask = .true.
+        if( self%isthere('res') )then
+            allocate(rfinds(self%n), source=0.)
+            do icls=1,self%n
+                res = self%get(icls, 'res')
+                rfinds(icls) = real(calc_fourier_index(res,box,smpd))
+            enddo
+            ave  = sum(rfinds)/real(self%n)
+            sdev = sqrt(sum((rfinds-ave)**2.)/real(self%n))
+            res_threshold = ave-0.5*sdev
+        else
+            allocate(rfinds(self%n), source=huge(res_threshold))
+            res_threshold = 0.
+        endif
+        if( self%isthere('corr') )then
+            corrs     = self%get_all('corr')
+            corrs_msk = corrs>0.0001
+            ave  = sum(corrs,mask=corrs_msk) / real(count(corrs_msk))
+            sdev = sqrt(sum((corrs-ave)**2., mask=corrs_msk)/real(count(corrs_msk)))
+            corr_threshold = ave-0.5*sdev
+            deallocate(corrs_msk)
+        else
+            allocate(corrs(self%n), source=huge(corr_threshold))
+            corr_threshold = 0.
+        endif
+        do icls=1,self%n
+            if( rfinds(icls) < res_threshold  ) cls_mask(icls) = .false.
+            if( corrs(icls)  < corr_threshold ) cls_mask(icls) = .false.
+        enddo
+        deallocate(rfinds,corrs)
+    end subroutine find_best_classes
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights( self, frac )

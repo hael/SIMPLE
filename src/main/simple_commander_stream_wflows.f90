@@ -559,7 +559,7 @@ contains
             if( nint(work_proj%os_ptcl2D%get(1,'updatecnt')) >= CHUNKMERGE_LIM )then
                 ! condition for merging: first chunk.ne.1 and updatecnt>=CHUNKMERGE_LIM
                 chunk2merge = 0
-                do iptcl=nptcls_per_chunk+1,maxnptcls,nptcls_per_chunk
+                do iptcl=nptcls_per_chunk+1,nchunks*nptcls_per_chunk,nptcls_per_chunk
                     ichunk = nint(work_proj%os_ptcl2D%get(iptcl,'chunk'))
                     if(ichunk == 1) cycle
                     if(nint(work_proj%os_ptcl2D%get(iptcl,'updatecnt')) >= CHUNKMERGE_LIM)then
@@ -585,8 +585,6 @@ contains
             endif
             ! write project
             if( work_proj_has_changed )call work_proj%write(trim(WORK_PROJFILE))
-            ! call work_proj%os_cls2D%write('cls2D_'//int2str(iter)//'.txt')
-            ! call work_proj%os_ptcl2D%write('ptcl2D_'//int2str(iter)//'.txt')
             ! CLUSTER2D EXECUTION
             nparts = calc_nparts()
             call cline_cluster2D%delete('endit')
@@ -892,7 +890,6 @@ contains
             subroutine remap_empty_classes
                 type(projection_frcs) :: frcs
                 type(image)           :: img_cavg
-                real,     allocatable :: frc(:)
                 integer,  allocatable :: fromtocls(:,:)
                 character(len=STDLEN) :: stk
                 real                  :: smpd,res05,res0143
