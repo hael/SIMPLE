@@ -73,9 +73,9 @@ cat <<EOF  > buildsimpleintel
 
 module load git cmake/3.5.2 intel/2017u4
 export INTEL_DIR=/usr/local/intel/2017u4/
- . ${INTEL_DIR}/bin/compilervars.sh intel64
- . ${INTEL_DIR}/mkl/bin/mklvars.sh intel64 lp64
-#  . /usr/local/intel/2015.0.090/mpirt/bin/intel64/mpivars.sh intel64 lp64
+ . \${INTEL_DIR}/bin/compilervars.sh intel64
+ . \${INTEL_DIR}/mkl/bin/mklvars.sh intel64 lp64
+#  . \${INTEL_DIR}/mpirt/bin/intel64/mpivars.sh intel64 lp64
 cd ~/${SLURM_JOB_ACCOUNT}_scratch/${MASSIVE_USERNAME}/SIMPLE3.0
 git pull --rebase
 [ -d tmpbuild-intel ] && rm -rf tmpbuild-intel
@@ -87,9 +87,6 @@ make -j12 install > log_make 2> log_make_err
 . add2.bashrc
 ctest -V > log_check 2> log_check_err
 OMP_NUM_THREADS=4 simple_test_omp
-simple_test_openacc
-mpirun -np 10 simple_test_mpi
-simple_test_openacc
 EOF
 
 ## CUDA/MPI BUILD: GCC 5, CUDA 8, OpenMPI 1.10.3, OpenMP, FFTW 3.3.5, shared
@@ -115,7 +112,6 @@ make -j12 install > log_make 2> log_make_err
 . add2.bashrc
 ctest -V > log_check 2> log_check_err
 OMP_NUM_THREADS=4 simple_test_omp
-simple_test_openacc
 srun simple_test_mpi
 module load virtualgl
 vglrun simple_test_cuda
