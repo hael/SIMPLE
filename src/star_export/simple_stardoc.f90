@@ -577,34 +577,7 @@ contains
                         endif
                         !! Try experiment root directory on first data set
                         if(.not. allocated(self%project_root_dir))then
-                            if( dir_exists(trim(imgfile_rootdir))) then
-
-                                !! Check the current working directory, using the relative imgfile's directory
-                                self%project_root_dir = simple_abspath(PATH_HERE)
-
-                            else if( dir_exists(trim(experiment_rootdir)) .and. &
-                                dir_exists(filepath(trim(experiment_rootdir), trim(imgfile_rootdir)))) then
-
-                                !! The files are where we expected them to be
-                                self%project_root_dir = simple_abspath(trim(experiment_rootdir))
-
-                            else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT)) .and. &
-                                dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, &
-                                trim(imgfile_rootdir)))) then
-
-                                !! The files are in parent directory to starfile
-                                self%project_root_dir = simple_abspath(&
-                                    filepath(trim(experiment_rootdir),PATH_PARENT))
-
-                            else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT,PATH_PARENT)) .and. &
-                                dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, PATH_PARENT, &
-                                trim(imgfile_rootdir)))) then
-
-                                !! The files are in parent directory to starfile
-                                self%project_root_dir = simple_abspath(&
-                                    filepath(trim(experiment_rootdir), PATH_PARENT,PATH_PARENT))
-
-                            endif
+                           self%project_root_dir = self%get_project_root_dir()
                             if(.not. allocated(self%project_root_dir)) THROW_HARD("Stardoc root project not found")
                             DebugPrint " Project STARFILE       : ", trim(self%current_starfile)
                             DebugPrint " Project root dir found : ", trim(self%project_root_dir)
@@ -938,6 +911,41 @@ contains
         character(len=LONGSTRLEN) :: val
         val = self%frames(iframe)%chtab%get(key)
     end function get_str
+
+    !> Find and return the STAR project's root folder
+    function get_project_root_dir(self, imgfile) return(project_root_dir)
+        class(stardoc),intent(inout) :: self
+        character(len=*) intent(in)  :: imgfile
+        character(len=:),allocatable :: project_root_dir, imgfile_rootdir
+        imgfile_rootdir = get_fpath(imgfile)
+        if( dir_exists(trim(imgfile_rootdir))) then
+           !! Check the current working directory, using the relative imgfile's directory
+           project_root_dir = simple_abspath(PATH_HERE)
+
+        else if( dir_exists(trim(experiment_rootdir)) .and. &
+             dir_exists(filepath(trim(experiment_rootdir), trim(imgfile_rootdir)))) then
+
+           !! The files are where we expected them to be
+           project_root_dir = simple_abspath(trim(experiment_rootdir))
+           
+        else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT)) .and. &
+             dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, &
+             trim(imgfile_rootdir)))) then
+           
+           !! The files are in parent directory to starfile
+           project_root_dir = simple_abspath(&
+                filepath(trim(experiment_rootdir),PATH_PARENT))
+
+        else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT,PATH_PARENT)) &
+             .and. dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, PATH_PARENT, &
+             trim(imgfile_rootdir)))) then
+
+           !! The files are in parent directory to starfile
+           project_root_dir = simple_abspath(&
+                filepath(trim(experiment_rootdir), PATH_PARENT,PATH_PARENT))
+           
+        endif
+      end function get_project_root_dir
 
     subroutine kill_frame( self )
         class(starframes), intent(inout) :: self
