@@ -77,15 +77,15 @@ contains
 
     !>  \brief  is a constructor
     function constructor( pgrp ) result( self )
-        character(len=*), intent(in)  :: pgrp        !< sym group string
-        type(sym)                     :: self
+        character(len=*), intent(in) :: pgrp        !< sym group string
+        type(sym)                    :: self
         call self%new(pgrp)
     end function constructor
 
     !>  \brief  is a constructor
     subroutine new( self, pgrp )
-        class(sym),        intent(inout) :: self
-        character(len=*),  intent(in)    :: pgrp         !< sym group string
+        class(sym),       intent(inout) :: self
+        character(len=*), intent(in)    :: pgrp         !< sym group string
         call self%kill
         self%c_or_d = .false.
         self%n      = 1

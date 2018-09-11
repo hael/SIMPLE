@@ -12,6 +12,8 @@ public :: symmetrize_map, symmetry_tester
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: DEBUG_HERE = .false.
+
 type sym_stats
     character(len=:), allocatable :: str
     real,             allocatable :: fsc(:)
@@ -94,12 +96,12 @@ contains
         integer   :: isym, jsym, isub, nsubs, filtsz, iisym, fnr, kfromto(2)
         real      :: smpd
         ! to ensure correct input
-        ccn_start = max(2,cn_start)
+        ccn_start  = max(2,cn_start)
         ! get info from vol_in
-        res    = vol_in%get_res()
-        smpd   = vol_in%get_smpd()
-        filtsz = vol_in%get_filtsz()
-        ldim   = vol_in%get_ldim()
+        res        = vol_in%get_res()
+        smpd       = vol_in%get_smpd()
+        filtsz     = vol_in%get_filtsz()
+        ldim       = vol_in%get_ldim()
         ! set Fourier index range
         kfromto(1) = calc_fourier_index(hp, ldim(1), smpd)
         kfromto(2) = calc_fourier_index(lp, ldim(1), smpd)
@@ -123,12 +125,12 @@ contains
         allocate(pgrps(nsyms))
         cnt = 0
         do icsym=ccn_start,cn_stop
-            cnt  = cnt + 1
+            cnt            = cnt + 1
             pgrps(cnt)%str = 'c'//int2str(icsym)
         end do
         if( dihedral .or. platonic )then
             do idsym=ccn_start,cn_stop
-                cnt  = cnt + 1
+                cnt            = cnt + 1
                 pgrps(cnt)%str = 'd'//int2str(idsym)
             end do
             write(*,'(a)') '>>> TESTING DIHEDRAL SYMMETRIES'
@@ -145,6 +147,7 @@ contains
         scoring_groups = .false.
         do isym=1,nsyms
             ! make point-group object
+            if( DEBUG_HERE ) print *, 'point group considered: ', trim(pgrps(isym)%str)
             call symobj%new(pgrps(isym)%str)
             nsubs = symobj%get_nsubgrp()
             ! identify scoring groups
@@ -153,7 +156,18 @@ contains
             do isub=1,nsubs
                 subgrp = symobj%get_subgrp_descr(isub)
                 do jsym=1,nsyms
-                    if( trim(subgrp) .eq. trim(pgrps(jsym)%str) ) scoring_groups(jsym) = .true.
+                    select case(trim(subgrp))
+                        case('c1','C1')
+                            if( DEBUG_HERE ) print *, 'c1 case: ', trim(subgrp)
+                            cycle
+                        case DEFAULT
+                            if( trim(subgrp) .eq. trim(pgrps(jsym)%str) )then
+                                scoring_groups(jsym) = .true.
+                                if( DEBUG_HERE )then
+                                    if( scoring_groups(jsym) ) print *, 'scoring group: ', trim(subgrp)
+                                endif
+                            endif
+                    end select
                 end do
             end do
             pgrps(isym)%cc_avg = 0.
@@ -168,7 +182,6 @@ contains
             scores(isym)       = pgrps(isym)%score
         end do
         ! calculate Z-scores
-        ! zscores = robust_z_scores(scores)
         zscores = z_scores(scores)
         ! produce ranked output
         inds = (/(isym,isym=1,nsyms)/)
@@ -222,6 +235,9 @@ contains
         ! loop over point-groups
         ngrps = size(pgrps)
         do igrp=1,ngrps
+            if( trim(pgrps(igrp)%str) .eq. 'c1' .or. trim(pgrps(igrp)%str) .eq. 'C1' )then
+                THROW_HARD('cannot evaluate pgrp=c1, nonsensical; eval_point_groups')
+            endif
             call progress(igrp, ngrps)
             ! make point-group object
             call symobj%new(pgrps(igrp)%str)
