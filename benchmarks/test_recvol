@@ -18,7 +18,7 @@ echo " ## >>> DONE BUILDING GENERAL TOOLBOX                                     
 echo " ## >>> DONE BUILDING RECONSTRUCTION TOOLBOX                                      "
 echo " ## >>> KAISER-BESSEL INTERPOLATION                                               "
 echo " ## Percent Complete:  100%                                                       "
-echo " ## >>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION                  "
+echo " ## >>> SAMPLING DENSITY (RHO) CORRyECTION & WIENER NORMALIZATION                  "
 echo " ## GENERATED VOLUMES: recvol*.ext                                                "
 echo " ## **** SIMPLE_RECVOL NORMAL STOP ****                                           "
 echo " ##                                                                               "
@@ -36,8 +36,9 @@ simple_exec prg=new_project projname=reconstruct3D_test > /dev/null
 if [ ! -d reconstruct3D_test ]; then
     echo "new_project could not create folder"
 else
+
     cd reconstruct3D_test
-    nice simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projname=reconstruct3D_test  > /dev/null
+    nice simple_exec prg=import_particles ctf=no oritab=../projvol_oris.txt pgrp=c1 smpd=2 stk=../projs.mrc projname=reconstruct3D_test  > import_particles.stdout
 
     time simple_distr_exec prg=reconstruct3D msk=50 nthr=10  pgrp=c1 nparts=2
 

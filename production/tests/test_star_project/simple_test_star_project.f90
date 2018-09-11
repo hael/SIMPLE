@@ -1,9 +1,7 @@
 program simple_test_star_export
 include 'simple_lib.f08'
-
 use simple_cmdline,    only: cmdline
 use simple_parameters
-
 use simple_sp_project, only: sp_project
 use simple_oris,       only: oris
 use simple_sp_project, only: sp_project
@@ -28,162 +26,102 @@ type(stardoc) :: sdoc
 type(star_dict) :: sdict
 logical :: isopened
 CHARACTER(len=STDLEN) :: argtmp
-!stars_from_matt="/scratch/el85/stars_from_matt/"
-testbenchdir = simple_getenv('SIMPLE_TESTBENCH_DATA', status=io_stat,allowfail=.false.)
-if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
-
-stars_from_matt=filepath(trim(testbenchdir),"stars_from_matt")
-if(.not. dir_exists(trim(stars_from_matt)) )&
- THROW_HARD('Cannot run this test - stars_from_matt dir does not exist')
-
-if( command_argument_count() == 1 )then
-    call get_command_argument(1,argtmp)
-    print *, trim(argtmp)
-    allocate(tmpfile,source=trim(argtmp))
-else
-    tmpfile=filepath(trim(stars_from_matt),"micrographs_all_gctf.star")
-endif
-
-print *, trim(tmpfile)
-global_debug=.true.
-debug=.true.
-isopened=.false.
-call date_and_time(date=datestr)
-folder = 'SIMPLE_TEST_STAR_'//trim(datestr)
-call simple_mkdir( trim(folder) , status=io_stat)
-if(io_stat/=0) THROW_HARD("simple_mkdir failed")
-print *," Changing directory to ", folder
-call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
-if(io_stat/=0) THROW_HARD("simple_chdir failed")
-call simple_getcwd(curDir)
-print *," Current working directory ", curDir
-count1=tic()
-
- print *,' Testing star_dict'
- if( .not. sdict%exists()) then
-     print *,"Star dictionary constructor did not call new() "
-     call sdict%new()
- endif
-
- call sdict%print_star_dict()
 
 
+    !stars_from_matt="/scratch/el85/stars_from_matt/"
+    testbenchdir = simple_getenv('SIMPLE_TESTBENCH_DATA', status=io_stat,allowfail=.false.)
+    if(io_stat/=0) THROW_HARD('Cannot run this test without SIMPLE_TESTBENCH_DATA')
 
-print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(tmpfile)
-!tmpfile= trim(adjustl(tmpfile))
-!! Testing starformat
-call openstar(trim(tmpfile),funit)
-print *,"(info)**simple_test_star_export:  Testing star formatted file is_open ", is_open(funit)
-if(.not. is_open(funit)) then
-    THROW_HARD("readline isopened failed")
-endif
- ier=0
- print *,"(info)**simple_test_star_export: Readline testing"
- do while (ier==0)
-     call readline(funit,line,ier)
-     if(allocated(line))print *,line
- enddo
- print *,"(info)**simple_test_star_export: Reading header"
- call read_header(funit)
-! write(*,*)
-! write(*,*)
-! write(*,*)
-! write(*,*)
-! print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
-! print *,"(info)**simple_test_star_export: Reading body"
-! call read_data_lines(funit)
-! print *,"(info)**simple_test_star_export: Testing star formatted file, ", funit, is_open(funit)
- call fclose(funit,io_stat,errmsg='stardoc ; close ')
- if( is_open(funit)) then
-     THROW_HARD(" star file still open after closing")
- endif
+    stars_from_matt=filepath(trim(testbenchdir),"stars_from_matt")
+    if(.not. dir_exists(trim(stars_from_matt)) )&
+        THROW_HARD('Cannot run this test - stars_from_matt dir does not exist')
 
-  print *, 'Testing star module'
-  call s%prepareimport(myproject,p,tmpfile)
- ! ! call s%import_ctf_estimation(myproject,tmpfile)
-  call s%kill(keeptabs=.true.)
- ! print *, '     star module imported successfully'
+    if( command_argument_count() == 1 )then
+        call get_command_argument(1,argtmp)
+        print *, trim(argtmp)
+        allocate(tmpfile,source=trim(argtmp))
+    else
+        tmpfile=filepath(trim(stars_from_matt),"micrographs_all_gctf.star")
+    endif
 
-!  call exec_cmdline("simple_exec prg=new_project projname=test && cd test && "//&
-!      &"simple_exec prg=import_movies filetab=../filetab-stardoc.txt  cs=2.7 ctf=yes "//&
-!      &"fraca=0.1 kv=300 smpd=14 deftab=../oritab-stardoc.txt && "//&
-!      &"simple_exec prg=print_project_info")
+    print *, trim(tmpfile)
+    global_debug=.true.
+    debug=.true.
+    isopened=.false.
+    call date_and_time(date=datestr)
+    folder = 'SIMPLE_TEST_STAR_'//trim(datestr)
+    call simple_mkdir( trim(folder) , status=io_stat)
+    if(io_stat/=0) THROW_HARD("simple_mkdir failed")
+    print *," Changing directory to ", folder
+    call simple_chdir( trim(folder),  oldCWDfolder , status=io_stat)
+    if(io_stat/=0) THROW_HARD("simple_chdir failed")
+    call simple_getcwd(curDir)
+    print *," Current working directory ", curDir
+    count1=tic()
 
-call fopen(funit,'test_import_starproject')
-write(funit,'(a)')"#!/bin/sh"
-write(funit,'(a)')"set +ev"
-write(funit,'(a)') "[ -d SimpleImport ] && rm -rf SimpleImport"
-write(funit,'(a)') "simple_exec prg=new_project projname=SimpleImport"
-write(funit,'(a)') "if [ ! -d SimpleImport ];then echo new_project failed;exit 1; fi"
-write(funit,'(a)') "cd SimpleImport"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star "
-write(funit,'(a)') "if [ $? -ne 0 ];then"
-write(funit,'(a)') "echo  'EXPECTED:   prg=importstar should fail without startype and smpd';else"
-write(funit,'(a)') "echo  'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1"
-write(funit,'(a)') "if [ $? -ne 0 ];then"
-write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without startype '; else"
-write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without startype and smpd'; exit 1; fi"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=blah"
-write(funit,'(a)') "if [ $? -ne 0 ];then"
-write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without a valid startype ';else"
-write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract"
-write(funit,'(a)') "if [ $? -ne 0 ];then"
-write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail without a valid startype (extract is an older version) ';else"
-write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=extract oritab=oritab-stardoc.txt"
-write(funit,'(a)') "if [ $? -ne 0 ];then"
-write(funit,'(a)') "echo 'EXPECTED: prg=importstar should fail ';else"
-write(funit,'(a)') "echo 'UNEXPECTED: prg=importstar should fail without a valid startype'; exit 1;fi"
+    print *,' Testing star_dict'
+    if( .not. sdict%exists()) then
+        print *,"Star dictionary constructor did not call new() "
+        call sdict%new()
+    endif
 
-write(funit,'(a)') "simple_exec prg=import_starproject starfile="//trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star smpd=1.1 startype=particles"
-write(funit,'(a)') "if [ $? -eq 0 ];then"
-write(funit,'(a)') "echo 'EXPECTED  valid import star args ';else"
-write(funit,'(a)') "echo 'UNEXPECTED prg=importstar should not fail with a valid startype and smpd'; exit 1;fi"
-write(funit,'(a)') "echo '$0 completed successfully '"
-write(funit,'(a)') "exit 0;"
-call fclose(funit)
-io_stat= simple_chmod('test_import_starproject','+x')
-! call exec_cmdline('./test_import_starproject')
+    call sdict%print_star_dict()
 
 
 
+    print *,"(info)**simple_test_star_export:  Testing star formatted file ", trim(tmpfile)
+    !tmpfile= trim(adjustl(tmpfile))
+    !! Testing starformat
+    call openstar(trim(tmpfile),funit)
+    print *,"(info)**simple_test_star_export:  Testing star formatted file is_open ", is_open(funit)
+    if(.not. is_open(funit)) then
+        THROW_HARD("readline isopened failed")
+    endif
+    ier=0
+    print *,"(info)**simple_test_star_export: Readline testing"
+    do while (ier==0)
+        call readline(funit,line,ier)
+        if(allocated(line))print *,line
+    enddo
+    print *,"(info)**simple_test_star_export: Reading header"
+    call read_header(funit)
+    call fclose(funit,io_stat,errmsg='stardoc ; close ')
+    if( is_open(funit)) then
+        THROW_HARD(" star file still open after closing")
+    endif
 
-! print *, "Testing import_starproject with actual data"
-! call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="p",io_stat=io_stat)
-! call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
-! call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="m",io_stat=io_stat)
-! call runimport(filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="ptcls",io_stat=io_stat)
+    print *, 'Testing star module'
+    call s%prepareimport(myproject,p,tmpfile)
+    ! ! call s%import_ctf_estimation(myproject,tmpfile)
+    call s%kill(keeptabs=.true.)
 
-!call runimport(filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs",io_stat=io_stat)
+    ! print *, "Testing import_starproject with actual data"
+    ! call runimport(trim(stars_from_matt)//"/Extract/364Box_Extract_LocalCTF/particles.star",smpd=1.1,startype="p",io_stat=io_stat)
+    ! call runimport(trim(stars_from_matt)//"/Import/Import/micrographs.star", smpd=1.1,startype="micrograph",io_stat=io_stat)
+    ! call runimport(trim(stars_from_matt)//"/ManualPick/ManualPick/micrographs_selected.star", smpd=1.1, startype="m",io_stat=io_stat)
+    ! call runimport(filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star", smpd=1.1,startype="ptcls",io_stat=io_stat)
 
- call createtest('test_extract_ptcls',filepath(trim(stars_from_matt),"Extract/364Box_Extract_LocalCTF/particles.star"),smpd=1.1,startype="p")
- call createtest('test_importmicr',filepath(trim(stars_from_matt),"Import/Import/micrographs.star"), smpd=1.1,startype="micrograph")
- call createtest('test_manualpick',filepath(trim(stars_from_matt),"ManualPick/ManualPick/micrographs_selected.star"), smpd=1.1, startype="m")
- call createtest('test_refine_ptcls',filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star"), smpd=1.1,startype="ptcls")
-call createtest('test_select_cavgs',filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs")
+    !call runimport(filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs",io_stat=io_stat)
+
+    call createtest('test_extract_ptcls',filepath(trim(stars_from_matt),"Extract/364Box_Extract_LocalCTF/particles.star"),smpd=1.1,startype="p")
+    call createtest('test_importmicr',filepath(trim(stars_from_matt),"Import/Import/micrographs.star"), smpd=1.1,startype="micrograph")
+    call createtest('test_manualpick',filepath(trim(stars_from_matt),"ManualPick/ManualPick/micrographs_selected.star"), smpd=1.1, startype="m")
+    call createtest('test_refine_ptcls',filepath(trim(stars_from_matt),"Refine3D/Refine3D_1st/run_ct19_data.star"), smpd=1.1,startype="ptcls")
+    call createtest('test_select_cavgs',filepath(trim(stars_from_matt),"Select/1stCut/class_averages.star"), smpd=1.1,startype="cavgs")
 
 
 
-! call test_stardoc
-
-print *,' Testing directory star_test'
-!call system('ls '//trim(adjustl(testbenchdir))//PATH_SEPARATOR//'star_test')
-
-!! Motion Correction
-! call s%export_motion_corrected_micrographs (trim('tmp_mc.star'))
-
-! call create_relion_starfile
-! call sp_project_setup
+    ! call create_relion_starfile
+    ! call sp_project_setup
 
 contains
 
     subroutine runimport(starfile,smpd,startype, io_stat)
         character(len=*), intent(in) :: starfile, startype
-real, intent(in) :: smpd
+        real, intent(in) :: smpd
         character(len=:),allocatable :: curdir
         integer,intent(out):: io_stat
+
         call exec_cmdline("[ -d SimpleImport ] && rm -rf SimpleImport; "//&
             "simple_exec prg=new_project projname=SimpleImport;",exitstat=io_stat)
         call simple_chdir( 'SimpleImport', curdir, status=io_stat)
@@ -192,15 +130,17 @@ real, intent(in) :: smpd
             " startype="//trim(startype)//" smpd="//real2str(smpd),exitstat=io_stat)
         call simple_chdir(curdir, status=io_stat)
         if(io_stat/=0) THROW_HARD("simple_chdir failed")
+
     end subroutine runimport
 
     subroutine createtest(f, starfile,smpd,startype)
         character(len=*), intent(in) :: f, starfile, startype
-real, intent(in) :: smpd
+        real, intent(in) :: smpd
         character(len=:),allocatable :: curdir
+        integer :: fid, io_stat
 
-        integer :: fid
-        call fopen(fid,trim(f))
+        call fopen(fid, trim(f), iostat=io_stat)
+        if(io_stat/=0) THROW_HARD(" createtest failed to open file ")
         write(fid,*)"[ -d SimpleImport ] && rm -rf SimpleImport; "
         write(fid,*) "simple_exec prg=new_project projname=SimpleImport;"
         write(fid,*) "[ ! -d SimpleImport] && exit 1; cd SimpleImport"
@@ -208,6 +148,8 @@ real, intent(in) :: smpd
             " startype="//trim(startype)//" smpd="//real2str(smpd)
         write(fid,*) "simple_exec prg=print_project_info"
         call fclose(fid)
+        call exec_cmdline("chmod +x "//trim(f),exitstat=io_stat)
+
     end subroutine createtest
 
     subroutine create_relion_starfile
@@ -370,7 +312,7 @@ real, intent(in) :: smpd
             ! if hit EOR reading is complete unless backslash ends the line
             !print *, ier == iostat_eor, ier == iostat_end, buffer
             !call fileiochk("readline isopened failed", ier)
-           if(is_iostat_eor(ier))then
+            if(is_iostat_eor(ier))then
                 last=len(line)
                 ! if(last.ne.0)then
                 !     ! if line ends in backslash it is assumed a continued line
