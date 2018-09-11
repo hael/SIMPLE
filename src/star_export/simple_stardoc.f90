@@ -55,6 +55,7 @@ contains
     procedure,public :: read_header
     procedure,public :: read_data_lines
     procedure,public :: setdoprint
+    procedure        :: get_project_root_dir
     procedure        :: print
     procedure        :: write
     procedure        :: get_header
@@ -577,7 +578,7 @@ contains
                         endif
                         !! Try experiment root directory on first data set
                         if(.not. allocated(self%project_root_dir))then
-                           self%project_root_dir = self%get_project_root_dir()
+                           self%project_root_dir = self%get_project_root_dir(trim(imgfilename))
                             if(.not. allocated(self%project_root_dir)) THROW_HARD("Stardoc root project not found")
                             DebugPrint " Project STARFILE       : ", trim(self%current_starfile)
                             DebugPrint " Project root dir found : ", trim(self%project_root_dir)
@@ -913,11 +914,12 @@ contains
     end function get_str
 
     !> Find and return the STAR project's root folder
-    function get_project_root_dir(self, imgfile) return(project_root_dir)
+    function get_project_root_dir(self, imgfile) result(project_root_dir)
         class(stardoc),intent(inout) :: self
-        character(len=*) intent(in)  :: imgfile
-        character(len=:),allocatable :: project_root_dir, imgfile_rootdir
-        imgfile_rootdir = get_fpath(imgfile)
+        character(len=*), intent(in)  :: imgfile
+        character(len=:),allocatable :: project_root_dir, imgfile_rootdir, experiment_rootdir
+        imgfile_rootdir = get_fpath(trim(imgfile))
+        experiment_rootdir= get_fpath(trim(self%current_starfile))
         if( dir_exists(trim(imgfile_rootdir))) then
            !! Check the current working directory, using the relative imgfile's directory
            project_root_dir = simple_abspath(PATH_HERE)
