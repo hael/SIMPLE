@@ -55,10 +55,10 @@ contains
     procedure,public :: read_header
     procedure,public :: read_data_lines
     procedure,public :: setdoprint
-    procedure        :: get_project_root_dir
     procedure        :: print
     procedure        :: write
     procedure        :: get_header
+    procedure        :: get_project_root_dir
     procedure        :: get_data
     procedure        :: get_r4
     procedure        :: get_i4
@@ -175,7 +175,6 @@ contains
             call self%read_data_lines()
         end if
     end subroutine open4import
-
 
     subroutine close( self )
         class(stardoc), intent(inout) :: self !< instance
@@ -915,25 +914,27 @@ contains
 
     !> Find and return the STAR project's root folder
     function get_project_root_dir(self, imgfile) result(project_root_dir)
-        class(stardoc),intent(inout) :: self
+        class(stardoc), intent(inout) :: self
         character(len=*), intent(in)  :: imgfile
         character(len=:),allocatable :: project_root_dir, imgfile_rootdir, experiment_rootdir
+
         imgfile_rootdir = get_fpath(trim(imgfile))
-        experiment_rootdir= get_fpath(trim(self%current_starfile))
         if( dir_exists(trim(imgfile_rootdir))) then
            !! Check the current working directory, using the relative imgfile's directory
-           project_root_dir = simple_abspath(PATH_HERE)
-
-        else if( dir_exists(trim(experiment_rootdir)) .and. &
-             dir_exists(filepath(trim(experiment_rootdir), trim(imgfile_rootdir)))) then
+            project_root_dir = simple_abspath(PATH_HERE)
+            return
+       endif
+       experiment_rootdir = get_fpath(self%current_starfile)
+       if( dir_exists(trim(experiment_rootdir)) .and. &
+           dir_exists(filepath(trim(experiment_rootdir), trim(imgfile_rootdir)))) then
 
            !! The files are where we expected them to be
            project_root_dir = simple_abspath(trim(experiment_rootdir))
-           
+
         else if( dir_exists(filepath(trim(experiment_rootdir),PATH_PARENT)) .and. &
              dir_exists(filepath(trim(experiment_rootdir), PATH_PARENT, &
              trim(imgfile_rootdir)))) then
-           
+
            !! The files are in parent directory to starfile
            project_root_dir = simple_abspath(&
                 filepath(trim(experiment_rootdir),PATH_PARENT))
@@ -945,7 +946,7 @@ contains
            !! The files are in parent directory to starfile
            project_root_dir = simple_abspath(&
                 filepath(trim(experiment_rootdir), PATH_PARENT,PATH_PARENT))
-           
+
         endif
       end function get_project_root_dir
 
