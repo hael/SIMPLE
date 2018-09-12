@@ -631,7 +631,6 @@ class Module {
 				for(var line of lines){
 					var elements = line.split((/[ ]+/))
 					if(elements[3]){
-						console.log(elements[3], elements[3].replace("motion_correct", "ctf_estimate").replace("thumb.jpg", "ctf_estimate_diag.jpg"), elements[4], elements[5], elements[6], elements[7], elements[8], elements[9], elements[10])
 						preproc.push([elements[3], elements[3].replace("motion_correct", "ctf_estimate").replace("thumb.jpg", "ctf_estimate_diag.jpg"), elements[4], elements[5], elements[6], elements[7], elements[8], elements[9], elements[10]])
 					}
 				}

@@ -217,6 +217,18 @@ class Viewer {
 			selectedmenu.style.display = "block"
 		}
 	}
+	
+	showHideThumbnails(element, target){
+		var images = document.querySelectorAll('.dynimg.' + target)
+		for(var image of images){
+			var parent = image.parentElement
+			if(element.checked){
+				parent.style.display = "inline-block"
+			}else{
+				parent.style.display = "none"
+			}
+		}
+	}
 		
 }
 

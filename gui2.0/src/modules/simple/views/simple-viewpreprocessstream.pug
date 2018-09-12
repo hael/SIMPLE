@@ -7,6 +7,10 @@ div
 	
 div#subheader
 	label#micrographcounter
+	img#refresh(
+		onclick="history2.viewOutput('{\"mod\":\"simple\",\"fnc\":\"viewPreprocessStream\"}','" + folder + "','running')"
+		src="../img/refresh.png"
+	)
 	
 div#preproc
 	div.thumbnails
@@ -24,13 +28,6 @@ div#preproc
 				onclick="viewer.toggleSelect(this); simple.sumMicrographs('preproc')"
 				title="DFX : " + element[2] + ", DFY : " + element[3] + ", Angast : "+ element[4] + ", CTF Estimate CC : "+ element[5] + ", Defocus Error : "+ element[6] + ", CTF Score : "+ element[7] + ", CC90 : "+ element[8]
 			)
-				div.dynimgcontainer
-					img.dynimg.pspec(
-						data-sprite=element[0]
-						data-spritewidth=2
-						data-spriteid=0
-						data-frame="0"
-					)
 				div.dynimgcontainer
 					img.dynimg.micrograph(
 						data-sprite=element[0]
@@ -65,6 +62,25 @@ div#preproc
 			onclick="simple.saveMicsSelection()"
 		)="Save"
 		
+	div.scrollmenu#view
+		h="View"
+		label(
+			for="viewmic"
+		)="Micrographs"
+		input#viewmic(
+			type="checkbox"
+			onchange="viewer.showHideThumbnails(this, 'micrograph')"
+			checked
+		)
+		label(
+			for="viewctf"
+		)="CTF Fit"
+		input#viewctf(
+			type="checkbox"
+			onchange="viewer.showHideThumbnails(this, 'ctffit')"
+			checked
+		)
+
 	div.scrollmenu#sort
 		h="Sort"
 		label(
@@ -184,9 +200,6 @@ div#preproc
 			label(for='contrast') Target:
 			select#target
 				option(
-					value="pspec"
-				)="Power Spectrum"
-				option(
 					value="micrograph"
 				)="Micrograph"
 				option(
@@ -231,6 +244,12 @@ div#preproc
 				step="10"
 				value="200"
 				onchange="viewer.scaleImages('preproc')"
+			)
+		div
+			img(
+				src="../img/eye.png"
+				onclick="viewer.toggleScrollMenu('preproc', 'view')"
+				title="Sort"
 			)
 		div
 			img(
