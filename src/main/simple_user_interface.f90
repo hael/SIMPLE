@@ -1052,10 +1052,11 @@ contains
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
         &'simple_exec',&                                                        ! executable
-        &1, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &2, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call extract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
+        call extract%set_input('img_ios', 1, mkdir_)
+        call extract%set_input('img_ios', 2, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
         ! parameter input/output
         call extract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
         call extract%set_input('parm_ios', 2, pcontrast)

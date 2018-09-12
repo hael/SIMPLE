@@ -27,7 +27,9 @@ type(opt_spec)        :: ospec_de                ! optimiser specification diffe
 type(opt_de)          :: diffevol                ! DE search object
 logical, allocatable  :: cc_msk(:,:,:)           ! corr mask
 logical               :: l_phaseplate = .false.  ! Volta phase-plate flag
+integer               :: ldim(3)      = 0        ! logical dimensions
 integer               :: ndim         = 3        ! # optimisation dims
+real                  :: smpd         = 0.       ! sampling distance
 real                  :: df_min       = 0.5      ! close 2 focus limit
 real                  :: df_max       = 5.0      ! far from focus limit
 real                  :: df_step      = 0.045    ! defocus step for grid search
@@ -42,12 +44,12 @@ integer, parameter :: IARES = 5, NSTEPS = 100
 
 contains
 
-    subroutine ctf_estimate_init( pspec_all, pspec_lower, pspec_upper, smpd, kV, Cs,&
+    subroutine ctf_estimate_init( pspec_all, pspec_lower, pspec_upper, smpd_in, kV, Cs,&
         &amp_contr, dfrange, resrange, astigtol_in, l_phplate, corr90deg )
         class(image), target, intent(inout) :: pspec_all   !< all micrograph powerspec
         class(image), target, intent(inout) :: pspec_lower !< lower half of micrograph powerspec
         class(image), target, intent(inout) :: pspec_upper !< upper half of micrograph powerspec
-        real,                 intent(in)    :: smpd        !< sampling distance
+        real,                 intent(in)    :: smpd_in     !< sampling distance
         real,                 intent(in)    :: kV          !< acceleration voltage
         real,                 intent(in)    :: Cs          !< constant
         real,                 intent(in)    :: amp_contr   !< amplitude contrast
@@ -57,8 +59,8 @@ contains
         logical,              intent(in)    :: l_phplate   !< Volta phase-plate images (yes|no)
         real,                 intent(out)   :: corr90deg   !< corr for validation
         type(image) :: ppspec_all_rot90 ! 90 deg rotated all pspec
-        integer     :: ldim(3)
         ! set constants
+        smpd         = smpd_in
         l_phaseplate = l_phplate
         ppspec_all   => pspec_all
         ppspec_lower => pspec_lower
@@ -134,11 +136,11 @@ contains
         real,             intent(out) :: dfx, dfy, angast, phshift, dferr, cc, ctfscore
         character(len=*), intent(in)  :: diagfname
         real, allocatable :: corrs(:)
-        type(image)       :: pspec_half_n_half
+        type(image)       :: pspec_half_n_half, tmp
         real              :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
         real              :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
-        real              :: cc_lower, cc_upper, df_avg
-        integer           :: filtsz, hpfind, lpfind
+        real              :: cc_lower, cc_upper, df_avg, lp4viz
+        integer           :: filtsz, hpfind, lpfind, pad_dim
         ! determine parameters based on lower half of micrograph
         call init_srch( ppspec_lower, pspec_lower_roavg )
         call grid_srch(   dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
@@ -187,9 +189,18 @@ contains
         call pspec_ctf%norm()
         call ppspec_ref%norm()
         call pspec_ctf%mul(imgmsk)
+        ! writing jpeg up to 2.5Angs shell as per Joe's request
+        lp4viz  = max(2.5,2.*smpd)
+        pad_dim = round2even(real(ldim(1)**2)/2./real(calc_fourier_index(lp4viz,ldim(1),smpd)))
+        call tmp%new([pad_dim,pad_dim,1], smpd*real(pad_dim)/real(ldim(1)))
         pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
+        call pspec_half_n_half%fft
+        call pspec_half_n_half%pad(tmp,backgr=0.)
+        call tmp%ifft
+        call tmp%clip(pspec_half_n_half)
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
         call pspec_half_n_half%kill
+        call tmp%kill
         ! calculate CTF score diagnostic
         df_avg = dfx + dfy / 2.0
         call ctf2pspecimg(tfun, pspec_ctf_roavg, df_avg, df_avg, 0.)

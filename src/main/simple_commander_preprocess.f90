@@ -94,7 +94,7 @@ contains
         endif
         ! read in movies
         call spproj%read( params%projfile )
-        if( spproj%get_nmovies() == 0 ) THROW_HARD('No movie to process!')
+        if( spproj%get_nmovies()==0 .and. spproj%get_nmics()==0 ) THROW_HARD('No movie/micrograph to process!')
         ! output directories & naming
         output_dir_ctf_estimate   = PATH_HERE
         output_dir_motion_correct = PATH_HERE
@@ -144,26 +144,33 @@ contains
             ! fetch movie orientation
             o_mov = spproj%os_mic%get_ori(imovie)
             ! sanity check
-            if( .not.o_mov%isthere('imgkind') )cycle
-            if( .not.o_mov%isthere('movie')   )cycle
+            if(.not.o_mov%isthere('imgkind') )cycle
+            if(.not.o_mov%isthere('movie') .and. .not.o_mov%isthere('intg'))cycle
             call o_mov%getter('imgkind', imgkind)
-            if( trim(imgkind).ne.'movie' )cycle
-            call o_mov%getter('movie', moviename)
-            if( .not.file_exists(moviename)) cycle
-            ! motion_correct
-            ctfvars = spproj%get_micparams(imovie)
-            if( cline%defined('gainref') )then
-                call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
-                    &output_dir_motion_correct, gainref_fname=params%gainref)
-            else
-                call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
-                    &output_dir_motion_correct)
-            endif
+            select case(trim(imgkind))
+                case('movie')
+                    ! motion_correct
+                    ctfvars = spproj%get_micparams(imovie)
+                    call o_mov%getter('movie', moviename)
+                    if( .not.file_exists(moviename)) cycle
+                    if( cline%defined('gainref') )then
+                        call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                            &output_dir_motion_correct, gainref_fname=params%gainref)
+                    else
+                        call mciter%iterate(cline, ctfvars, o_mov, fbody, frame_counter, moviename,&
+                            &output_dir_motion_correct)
+                    endif
+                    moviename_forctf = mciter%get_moviename('forctf')
+                case('mic')
+                    ctfvars = spproj%get_micparams(imovie)
+                    call o_mov%getter('intg', moviename_forctf)
+                case DEFAULT
+                    cycle
+            end select
             ! ctf_estimate
-            moviename_forctf = mciter%get_moviename('forctf')
             params_glob%hp   = params%hp_ctf_estimate
             params_glob%lp   = max(params%fny, params%lp_ctf_estimate)
-            call cfiter%iterate( ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
+            call cfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
@@ -189,7 +196,7 @@ contains
             endif
         end do
         if( params%stream .eq. 'yes' )then
-            if( .not.l_pick ) call spproj%write_segment_inside(params%oritype)
+            if( .not.l_pick )call spproj%write_segment_inside(params%oritype)
         else
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
@@ -583,7 +590,7 @@ contains
         ! input directory
         if( cline%defined('dir_box') )then
             dir_box = trim(params%dir_box)
-            if( params%mkdir.eq.'yes' ) dir_box= trim(filepath(PATH_PARENT,dir_box))
+            if( params%mkdir.eq.'yes' ) dir_box=trim(filepath(PATH_PARENT,dir_box))
             if( file_exists(dir_box) )then
                 call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
                 if(.not.allocated(boxfiles))then

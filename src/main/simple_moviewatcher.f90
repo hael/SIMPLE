@@ -23,6 +23,7 @@ type moviewatcher
 contains
     ! doers
     procedure          :: watch
+    procedure          :: add_to_history
     procedure, private :: is_past
     procedure, private :: add2history
     ! destructor
@@ -39,11 +40,9 @@ integer, parameter :: FAIL_TIME   = 7200 ! 2 hours
 contains
 
     !>  \brief  is a constructor
-    function constructor( report_time, prev_movies )result( self )
-        integer,                                intent(in) :: report_time  ! in seconds
-        character(len=LONGSTRLEN), allocatable, intent(in) :: prev_movies(:)
-        type(moviewatcher) :: self
-        integer            :: i
+    function constructor( report_time )result( self )
+        integer, intent(in) :: report_time  ! in seconds
+        type(moviewatcher)  :: self
         call self%kill
         if( .not. file_exists(trim(adjustl(params_glob%dir_movies))) )then
             print *, 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
@@ -54,12 +53,19 @@ contains
         self%report_time = report_time
         self%ext         = trim(adjustl(params_glob%ext))
         self%fbody       = trim(adjustl(params_glob%fbody))
-        if( allocated(prev_movies) )then
-            do i=1,size(prev_movies)
-                call self%add2history( trim(prev_movies(i)) )
+    end function constructor
+
+    !>  \brief  append to history of previously processed movies/micrographs
+    subroutine add_to_history(self, list)
+        class(moviewatcher),                    intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(in)    :: list(:)
+        integer :: i
+        if( allocated(list) )then
+            do i=1,size(list)
+                call self%add2history(trim(list(i)))
             enddo
         endif
-    end function constructor
+    end subroutine add_to_history
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )

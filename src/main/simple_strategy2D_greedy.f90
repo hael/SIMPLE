@@ -36,7 +36,7 @@ contains
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            corr = self%s%prev_corr
+            corr = -1.
             do iref=1,self%s%nrefs
                 if( s2D%cls_chunk(iref) /= self%s%chunk_id )cycle
                 if( s2D%cls_pops(iref) == 0 )cycle

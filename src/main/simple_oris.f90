@@ -634,70 +634,84 @@ contains
     end subroutine expand_classes
 
     !>  \brief  is for filling empty classes from a stochastically selected highly populated one
-    subroutine fill_empty_classes( self, ncls, fromtocls, ncls_per_chunk )
+    subroutine fill_empty_classes( self, ncls, chunk, fromtocls)
         class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: ncls
+        integer,              intent(in)    :: ncls, chunk
         integer, allocatable, intent(out)   :: fromtocls(:,:)
-        integer, optional,    intent(out)   :: ncls_per_chunk
-        integer, allocatable :: inds2split(:), cls_chunk(:), pops(:), pops_chunk(:), fromtoall(:,:)
+        integer, allocatable :: inds2split(:), pops(:), fromtoall(:,:)
         real,    allocatable :: probs(:), corrs(:)
-        logical, allocatable :: mask(:), chunk_mask(:)
+        logical, allocatable :: chunk_mask(:), ptcl_mask(:)
         integer              :: cnt, n_incl, pop, i, icls, ncls_here, iptcl
-        integer              :: ichunk, cls2split, halfpop
+        integer              :: cls2split, halfpop, fromto(2)
+        if(allocated(fromtocls))deallocate(fromtocls)
         ncls_here = max(self%get_n('class'), ncls)
-        call self%get_pops(pops, 'class', consider_w=.true., maxn=ncls_here)
+        allocate(pops(ncls_here),fromtoall(ncls,2),source=0)
+        ! chunks & populations
+        allocate(ptcl_mask(self%n),chunk_mask(ncls_here),source=.false.)
+        fromto(1) = huge(fromto(1))
+        fromto(2) = -huge(fromto(2))
+        do iptcl=1,self%n
+            if( self%get(iptcl,'state') < 0.5 ) cycle
+            if( nint(self%get(iptcl,'chunk')) == chunk )then
+                icls = nint(self%get(iptcl,'class'))
+                if( icls<1 .or. icls>ncls_here ) cycle
+                ptcl_mask(iptcl) = .true.
+                pops(icls)       = pops(icls)+1
+                chunk_mask(icls) = .true.
+                fromto(1)        = min(fromto(1),icls)
+                fromto(2)        = max(fromto(2),icls)
+            endif
+        enddo
         if(count(pops==0) == 0)then
-            deallocate(pops)
+            deallocate(pops,fromtoall,chunk_mask,ptcl_mask)
             return
         endif
-        if(allocated(fromtocls))deallocate(fromtocls)
-        allocate(fromtoall(ncls,2),cls_chunk(ncls),source=0)
-        allocate(probs(ncls), source=0.)
-        allocate(mask(ncls), chunk_mask(ncls), source=.false.)
-        where( pops>0 )mask = .true.
-        ! determines class chunk membership
-        if( present(ncls_per_chunk) )then
-            do icls=1,ncls
-                cls_chunk(icls) = ceiling(real(icls)/real(ncls_per_chunk))
-            enddo
-            ! takes care of empty chunks
-            do ichunk=1,maxval(cls_chunk)
-                pops_chunk = pops
-                where(cls_chunk/=ichunk) pops_chunk=0
-                if(all(pops_chunk==0))then
-                    where(cls_chunk==ichunk) cls_chunk=0
-                endif
-            enddo
-            deallocate(pops_chunk)
-        else
-            cls_chunk = 1
-        endif
-        ! splitting
-        do icls = 1, ncls
-            if( pops(icls) /= 0 )cycle
-            if( cls_chunk(icls) == 0 )cycle
+        ! temptatively assign empty classes to chunks
+        chunk_mask(fromto(1):fromto(2)) = .true.
+        ! randomly reassign lowly populated classes
+        do icls=fromto(1),fromto(2)
             if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
+            if( .not.chunk_mask(icls) ) cycle
+            if( pops(icls)>2 .or. pops(icls)==0 ) cycle
+            call self%get_pinds(icls, 'class', inds2split, consider_w=.false.)
+            do i=1,size(inds2split)
+                iptcl = inds2split(i)
+                cnt   = irnd_uni(ncls)
+                do while( .not.chunk_mask(cnt) )
+                    cnt = irnd_uni(ncls)
+                enddo
+                pops(cnt)  = pops(cnt)+1
+                call self%set(iptcl,'class',real(cnt))
+            enddo
+            pops(icls) = 0
+            deallocate(inds2split)
+        enddo
+        ! splitting
+        do icls = 1,ncls_here
+            if( maxval(pops) <= 2*MINCLSPOPLIM ) exit
+            if( .not.chunk_mask(icls) ) cycle
+            if( pops(icls) > 0 )cycle
+            ! full remapping for empty classes
+            chunk_mask(icls) = .false. ! exclude
             ! split class preferentially with high population
+            allocate(probs(ncls))
             probs = real(pops - 2*MINCLSPOPLIM)
-            ! within mask and chunk
-            chunk_mask = cls_chunk == cls_chunk(icls)
-            where(probs<0. .or. .not.mask .or. .not.chunk_mask)probs=0.
-            probs           = probs/sum(probs)
-            cls2split       = multinomal(probs)
-            mask(cls2split) = .false. ! making sure we are not drawing twice from the same
-            pop             = pops(cls2split)
+            where( probs<0. .or. .not.chunk_mask ) probs=0.
+            probs     = probs/sum(probs)
+            cls2split = multinomal(probs)
+            pop       = pops(cls2split)
             if( pop <= 2*MINCLSPOPLIM )exit
             ! migration: the worst moves
-            call self%get_pinds(cls2split, 'class', inds2split, consider_w=.false.) ! needs to be false
+            call self%get_pinds(cls2split, 'class', inds2split, consider_w=.false.)
             allocate(corrs(pop),source=-1.)
             do i=1,pop
                 corrs(i) = self%get(inds2split(i),'corr')
             enddo
             call hpsort(corrs,inds2split)
-            deallocate(corrs)
             halfpop = floor(real(pop)/2.)
             do i=1,halfpop
                 iptcl = inds2split(i)
+                if(.not.ptcl_mask(iptcl))cycle
                 ! updates populations
                 call self%o(iptcl)%set('class', real(icls))
                 pops(icls)      = pops(icls) + 1
@@ -707,7 +721,7 @@ contains
             fromtoall(icls,1) = cls2split
             fromtoall(icls,2) = icls
             ! cleanup
-            deallocate(inds2split)
+            deallocate(corrs,inds2split,probs)
         enddo
         ! updates classes migration
         n_incl = count(fromtoall(:,1)>0)
@@ -722,10 +736,10 @@ contains
             enddo
         endif
         ! cleanup
-        deallocate(fromtoall,pops,probs,mask,chunk_mask,cls_chunk)
+        deallocate(fromtoall,pops,ptcl_mask,chunk_mask)
     end subroutine fill_empty_classes
 
-    !>  \brief  for remapping clusters after exclusion
+    !>  \brief  for remapping clusters
     subroutine remap_cls( self )
         class(oris), intent(inout) :: self
         integer :: ncls, clsind_remap, pop, icls, iptcl, old_cls

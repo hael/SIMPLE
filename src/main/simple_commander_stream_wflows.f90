@@ -79,7 +79,11 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(1,stream=.true. )
         ! movie watcher init
-        movie_buff = moviewatcher(LONGTIME, prev_movies)
+        movie_buff = moviewatcher(LONGTIME)
+        call spproj%get_movies_table(prev_movies)
+        call movie_buff%add_to_history(prev_movies)
+        call spproj%get_mics_table(prev_movies)
+        call movie_buff%add_to_history(prev_movies)
         ! start watching
         prev_stacksz = 0
         nmovies      = 0
@@ -104,14 +108,14 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(*,'(A,I5)')'>>> MOVIES TO PROCESS: ', stacksz
+                write(*,'(A,I5)')'>>> MOVIES/MICROGRAPHS TO PROCESS: ', stacksz
             endif
             ! completed jobs update the current project
             if( qenv%qscripts%get_done_stacksz() > 0 )then
                 ! append new processed movies to project
                 call qenv%qscripts%get_stream_done_stack( completed_jobs_clines )
                 nptcls_prev = spproj%get_nptcls()
-                nmovs_prev  = spproj%get_nmovies()
+                nmovs_prev  = spproj%os_mic%get_noris()
                 do icline=1,size(completed_jobs_clines)
                     stream_spprojfile = completed_jobs_clines(icline)%get_carg('projfile')
                     call stream_spproj%read( stream_spprojfile )
@@ -121,7 +125,7 @@ contains
                     deallocate(stream_spprojfile)
                 enddo
                 nptcls = spproj%get_nptcls()
-                nmovs  = spproj%get_nmovies()
+                nmovs  = spproj%os_mic%get_noris()
                 ! write
                 if( nmovs == 0 )then
                     ! first write
@@ -206,8 +210,8 @@ contains
                 ctfvars%fraca        = params%fraca
                 ctfvars%l_phaseplate = params%phaseplate.eq.'yes'
                 call spproj_here%add_single_movie(trim(movie), ctfvars)
-                call spproj_here%write()
-                call spproj_here%kill()
+                call spproj_here%write
+                call spproj_here%kill
                 call cline%set('projname', trim(projname))
                 call cline%set('projfile', trim(projfile))
             end subroutine create_individual_project
@@ -569,7 +573,7 @@ contains
                     endif
                 enddo
                 if( chunk2merge > 1 )then
-                    ! REJECTION MUST HAPPEn HERE
+                    ! REJECTION MUST HAPPEN HERE
                     work_proj_has_changed = .true.
                     write(*,'(A,I6)')'>>> MERGING CHUNK: ',chunk2merge
                     do iptcl=i,maxnptcls
@@ -602,11 +606,19 @@ contains
             ! update
             call work_proj%kill
             call work_proj%read(trim(WORK_PROJFILE))
+            call work_proj%os_ptcl2D%write('ptcl2d_after_'//int2str(iter)//'.txt')
+            call work_proj%os_cls2D%write('cls2d_after_'//int2str(iter)//'.txt')
             ! current references file name
             refs_glob = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             ! remap zero-population classes
             work_proj_has_changed = .false.
-            if( .not.l_maxed ) call remap_empty_classes
+            if( l_maxed )then
+                if( buffer_exists )call remap_empty_classes(maxnchunks+1)
+            else
+                do ichunk=1,nchunks
+                    call remap_empty_classes(ichunk)
+                enddo
+            endif
             if( work_proj_has_changed )call work_proj%write_segment_inside('ptcl2D',trim(WORK_PROJFILE))
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
@@ -887,15 +899,15 @@ contains
             end subroutine scale_stks
 
             !>  empty classes re-mapping, commits the project to disk
-            subroutine remap_empty_classes
+            subroutine remap_empty_classes(chunk)
+                integer,   intent(in) :: chunk
                 type(projection_frcs) :: frcs
                 type(image)           :: img_cavg
                 integer,  allocatable :: fromtocls(:,:)
                 character(len=STDLEN) :: stk
                 real                  :: smpd,res05,res0143
                 integer               :: icls, ind, state
-                call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, fromtocls,&
-                    &ncls_per_chunk=params_glob%ncls_start)
+                call work_proj%os_ptcl2D%fill_empty_classes(ncls_glob, chunk, fromtocls)
                 if( allocated(fromtocls) )then
                     ! updates document later
                     work_proj_has_changed = .true.

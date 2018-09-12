@@ -46,6 +46,7 @@ contains
     procedure          :: add_single_movie
     procedure          :: add_movies
     procedure          :: get_movies_table
+    procedure          :: get_mics_table
     procedure          :: get_micparams
     ! os_stk related methods
     procedure          :: add_stk
@@ -601,6 +602,28 @@ contains
             endif
         enddo
     end subroutine get_movies_table
+
+    subroutine get_mics_table( self, micstab )
+        class(sp_project),                      intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(out)   :: micstab(:)
+        character(len=:), allocatable :: imgkind, mic
+        integer :: i,n,cnt
+        if(allocated(micstab))deallocate(micstab)
+        n = self%get_nmics()
+        if( n==0 )return
+        allocate(micstab(n))
+        cnt = 0
+        do i=1,self%os_mic%get_noris()
+            if(self%os_mic%isthere('imgkind'))then
+                call self%os_mic%getter(i,'imgkind',imgkind)
+                if( trim(imgkind).eq.'mic' )then
+                    cnt = cnt + 1
+                    call self%os_mic%getter(i,'intg',mic)
+                    micstab(cnt) = trim(mic)
+                endif
+            endif
+        enddo
+    end subroutine get_mics_table
 
     function get_micparams( self, imic ) result( ctfvars )
         class(sp_project), intent(inout) :: self
