@@ -292,10 +292,11 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        real,             allocatable :: fsc(:), optlp(:), res(:)
-        real             :: width, fsc05, fsc0143
+        type(parameters)  :: params
+        type(builder)     :: build
+        real, allocatable :: fsc(:), optlp(:), res(:)
+        real              :: width, fsc05, fsc0143
+        integer           :: find
         width = 10.
         if( cline%defined('stk') )then
             ! 2D
@@ -340,6 +341,9 @@ contains
                     call build%vol%bp(params%hp, params%lp, width=width)
                 else if( cline%defined('hp') )then
                     call build%vol%bp(params%hp, 0., width=width)
+                else if( params%tophat .eq. 'yes' .and. cline%defined('lp') )then
+                    find = calc_fourier_index(params%lp, params%box, params%smpd)
+                    call build%vol%tophat(find)
                 else if( cline%defined('lp') )then
                     call build%vol%bp(0., params%lp, width=width)
                 ! real-space

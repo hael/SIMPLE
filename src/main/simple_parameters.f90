@@ -83,6 +83,7 @@ type :: parameters
     character(len=3)      :: taper_edges='no'     !< self-explanatory
     character(len=3)      :: test='no'
     character(len=3)      :: tomo='no'            !< tomography mode(yes|no){no}
+    character(len=3)      :: tophat='no'          !< tophat filter(yes|no){no}
     character(len=3)      :: time='no'
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
@@ -181,7 +182,7 @@ type :: parameters
     character(len=STDLEN) :: wfun='kb'
     ! special integer kinds
     integer(kind(ENUM_ORISEG)) :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN)) :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+    integer(kind(ENUM_OBJFUN)) :: cc_objfun=OBJFUN_CC    !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -194,7 +195,6 @@ type :: parameters
     integer :: box_original
     integer :: box_extract
     integer :: boxpd=0
-!    integer :: cc_objfun=OBJFUN_CC !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
@@ -338,7 +338,6 @@ type :: parameters
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
-    ! real    :: lp_dyn=20.
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
@@ -557,6 +556,7 @@ contains
         call check_carg('time',           self%time)
         call check_carg('tomo',           self%tomo)
         call check_carg('tomoseries',     self%tomoseries)
+        call check_carg('tophat',         self%tophat)
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)

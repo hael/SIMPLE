@@ -119,4 +119,108 @@ contains
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight
 
+    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
+        use simple_image, only: image
+        class(image),         intent(inout) :: even, odd, mskimg
+        real,                 intent(in)    :: corr_thres
+        integer, allocatable, intent(out)   :: locres_finds(:,:,:)
+        integer, optional,    intent(in)    :: half_winsz
+        logical, allocatable :: l_mask(:,:,:)
+        real,    allocatable :: rmat_even(:,:,:), rmat_odd(:,:,:)
+        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind
+        logical     :: is2d
+        type(image) :: ecopy, ocopy
+        real        :: smpd, cc
+        ! set parameters
+        hwinsz = 3
+        if( present(half_winsz) ) hwinsz = half_winsz
+        ldim   = even%get_ldim()
+        is2d   = ldim(3) == 1
+        filtsz = even%get_filtsz()
+        smpd   = even%get_smpd()
+        l_mask = mskimg%bin2logical()
+        ! to avoid allocation in the loop
+        call ecopy%new(ldim, smpd)
+        call ocopy%new(ldim, smpd)
+        if( allocated(locres_finds) ) deallocate(locres_finds)
+        allocate(locres_finds(ldim(1),ldim(2),ldim(3)), source=0)
+        allocate(rmat_even(ldim(1),ldim(2),ldim(3)), rmat_odd(ldim(1),ldim(2),ldim(3)))
+        call even%fft
+        call odd%fft
+        ! loop over resolution shells
+        do kind=1,filtsz
+            call ecopy%copy(even)
+            call ocopy%copy(odd)
+            call ecopy%tophat(k)
+            call ocopy%tophat(k)
+            call ecopy%ifft
+            call ocopy%ifft
+            call ecopy%get_rmat_sub(rmat_even)
+            call ocopy%get_rmat_sub(rmat_odd)
+            do k=1,ldim(3)
+                do j=1,ldim(2)
+                    do i=1,ldim(1)
+                        if( l_mask(i,j,k) )then
+                            cc = neigh_cc([i,j,k])
+                            if( cc >= corr_thres ) locres_finds(i,j,k) = kind
+                        endif
+                    end do
+                end do
+            end do
+        end do
+        ! make sure no 0 elements
+        where( l_mask )
+            where(locres_finds == 0) locres_finds = filtsz
+        end where
+        ! return e/o images in real-space
+        call even%ifft
+        call odd%ifft
+        ! destruct
+        deallocate(l_mask, rmat_even, rmat_odd)
+        call ecopy%kill
+        call ocopy%kill
+
+        contains
+
+            function neigh_cc( loc ) result( cc )
+                integer, intent(in) :: loc(3)
+                integer :: lb(3), ub(3), npix
+                real    :: ae, ao, diffe, diffo, see, soo, seo, cc
+                ! set bounds
+                lb = loc - hwinsz
+                where(lb < 1) lb = 1
+                ub = loc + hwinsz
+                where(ub > ldim ) ub = ldim
+                if( is2d )then
+                    lb(3) = 1
+                    ub(3) = 1
+                endif
+                ! calc avgs
+                npix = product(ub - lb + 1)
+                ae   = sum(rmat_even(lb(1):ub(1),lb(2):ub(2),lb(2):ub(3))) / real(npix)
+                ao   = sum(rmat_odd(lb(1):ub(1),lb(2):ub(2),lb(2):ub(3))) / real(npix)
+                see  = 0.
+                soo  = 0.
+                seo  = 0.
+                ! calc corr
+                do k=lb(3),ub(3)
+                    do j=lb(2),ub(2)
+                        do i=lb(1),ub(1)
+                            diffe = rmat_even(i,j,k) - ae
+                            diffo = rmat_odd(i,j,k)  - ao
+                            see   = see + diffe * diffe
+                            soo   = soo + diffo * diffo
+                            seo   = seo + diffe * diffo
+                        end do
+                    end do
+                end do
+                if( see > 0. .and. soo > 0. )then
+                    cc = seo / sqrt(see * soo)
+                else
+                    cc = 0.
+                endif
+            end function neigh_cc
+
+    end subroutine local_res
+
 end module simple_estimate_ssnr

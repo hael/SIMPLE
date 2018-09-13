@@ -60,6 +60,7 @@ contains
     procedure          :: cyci
     procedure          :: get
     procedure          :: get_rmat
+    procedure          :: get_rmat_sub
     procedure          :: get_cmat
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
@@ -225,6 +226,7 @@ contains
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
     procedure          :: apply_bfac
     procedure          :: bp
+    procedure          :: tophat
     procedure, private :: apply_filter_1
     procedure, private :: apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
@@ -1157,6 +1159,12 @@ contains
         allocate(rmat(ldim(1),ldim(2),ldim(3)), source=self%rmat(:ldim(1),:ldim(2),:ldim(3)), stat=alloc_stat)
         if (alloc_stat /= 0)call allocchk("simple_image::get_rmat ",alloc_stat)
     end function get_rmat
+
+    subroutine get_rmat_sub( self, rmat )
+        class(image), intent(in)  :: self
+        real,         intent(out) :: rmat(self%ldim(1),self%ldim(2),self%ldim(3))
+        rmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))
+    end subroutine get_rmat_sub
 
     function get_rmat_at_1( self, logi ) result( val )
         class(image), intent(in)  :: self
@@ -3855,6 +3863,59 @@ contains
         endif
         if( didft ) call self%ifft()
     end subroutine bp
+
+    !> \brief bp  is for tophat band-pass filtering an image
+    subroutine tophat( self, shell, halfwidth )
+        class(image),   intent(inout) :: self
+        integer,        intent(in)    :: shell
+        real, optional, intent(in)    :: halfwidth
+        integer :: h, k, l, lims(3,2), phys(3)
+        logical :: didft
+        real    :: freq, hplim_freq, lplim_freq, hwdth
+        hwdth = 1.0
+        if( present(halfwidth) ) hwdth = halfwidth
+        didft = .false.
+        if( .not. self%ft )then
+            call self%fft()
+            didft = .true.
+        endif
+        hplim_freq = max(0., real(shell) - hwdth)
+        lplim_freq = real(shell) + hwdth
+        lims = self%fit%loop_lims(2)
+        if( self%wthreads )then
+            !$omp parallel do private(h,k,l,freq,phys) default(shared)&
+            !$omp collapse(3) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        freq = hyp(real(h),real(k),real(l))
+                        phys = self%comp_addr_phys([h,k,l])
+                        if(freq .lt. hplim_freq) then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        else if(freq .gt. lplim_freq) then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        else
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        freq = hyp(real(h),real(k),real(l))
+                        phys = self%comp_addr_phys([h,k,l])
+                        if(freq .lt. hplim_freq) then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        else if(freq .gt. lplim_freq) then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        endif
+                    end do
+                end do
+            end do
+        endif
+        if( didft ) call self%ifft()
+    end subroutine tophat
 
     !> \brief apply_filter_1  is for application of an arbitrary 1D filter function
     subroutine apply_filter_1( self, filter )
