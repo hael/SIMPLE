@@ -127,18 +127,8 @@ contains
                 nptcls = spproj%get_nptcls()
                 nmovs  = spproj%os_mic%get_noris()
                 ! write
-                if( nmovs == 0 )then
-                    ! first write
-                    call spproj%write
-                else
-                    ! write inside
-                    call spproj%write_segment_inside('mic', fromto=[nmovs_prev+1, nmovs])
-                    if( l_pick )then
-                        call spproj%write_segment_inside('stk',    fromto=[nmovs_prev+1, nmovs])
-                        call spproj%write_segment_inside('ptcl2D', fromto=[nptcls_prev+1, nptcls])
-                        call spproj%write_segment_inside('ptcl3D', fromto=[nptcls_prev+1, nptcls])
-                    endif
-                endif
+                call spproj%write
+                ! update for 2d streaming
                 call update_projects_list
                 deallocate(completed_jobs_clines)
             endif

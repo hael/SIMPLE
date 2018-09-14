@@ -1164,10 +1164,10 @@ contains
                 enddo
                 deallocate(files)
                 ! FSC print outs
-                src  = filepath( dirs(s), 'RESOLUTION_STATE'//one)
-                dest = 'RESOLUTION_STATE'//str_state
-                stat = simple_rename(src, dest)
                 if( params%eo.ne.'no')then
+                    src  = filepath( dirs(s), 'RESOLUTION_STATE'//one)
+                    dest = 'RESOLUTION_STATE'//str_state
+                    stat = simple_rename(src, dest)
                     do it = 1,final_it
                         str_iter = '_iter'//int2str_pad(it,3)
                         str_iter = '_ITER'//int2str_pad(it,3)

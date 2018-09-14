@@ -93,6 +93,7 @@ contains
                 else
                     call msker%mask_from_pdb( pdb, build%vol)
                 endif
+                call build%spproj%write_segment_inside(params%oritype,params%projfile)
                 call build%spproj_field%write(params%outfile)
                 call build%vol%write(params%outvol)
                 call msker%write('maskfile'//params%ext)
