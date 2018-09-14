@@ -222,21 +222,25 @@ contains
                 cnt = 0
                 kk  = -hwinsz
                 do k=lb(3),ub(3)
-                    if( k < 1 .or. k > ldim(3) ) cycle
-                    jj = -hwinsz
-                    do j=lb(2),ub(2)
-                        if( j < 1 .or. j > ldim(2) ) cycle
-                        ii = -hwinsz
-                        do i=lb(1),ub(1)
-                            if( i < 1 .or. i > ldim(1) ) cycle
-                            if( kk*kk + jj*jj + ii*ii > hwinszsq ) cycle
-                            cnt       = cnt + 1
-                            vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
-                            vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
-                            ii        = ii + 1
+                    if( k >= 1 .and. k <= ldim(3) )then
+                        jj = -hwinsz
+                        do j=lb(2),ub(2)
+                            if( j >= 1 .and. j <= ldim(2) )then
+                                ii = -hwinsz
+                                do i=lb(1),ub(1)
+                                    if( i >= 1 .and. i <= ldim(1) )then
+                                        if( kk*kk + jj*jj + ii*ii <= hwinszsq )then
+                                            cnt       = cnt + 1
+                                            vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
+                                            vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
+                                        endif
+                                    endif
+                                    ii = ii + 1
+                                enddo
+                            endif
+                            jj = jj + 1
                         enddo
-                        jj = jj + 1
-                    enddo
+                    endif
                     kk = kk + 1
                 enddo
                 ! correlate
