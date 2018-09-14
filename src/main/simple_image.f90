@@ -186,8 +186,8 @@ contains
     procedure          :: bin_kmeans
     procedure          :: cendist
     procedure          :: masscen
-    procedure          :: center
-    procedure          :: center_serial
+    procedure          :: calc_shiftcen
+    procedure          :: calc_shiftcen_serial
     procedure          :: bin_inv
     procedure          :: grow_bin
     procedure          :: grow_bins
@@ -319,7 +319,6 @@ contains
     procedure          :: noise_norm
     procedure          :: edges_norm
     procedure          :: norm_bin
-    procedure          :: sigmoid
     procedure          :: roavg
     procedure          :: rtsq
     procedure          :: rtsq_serial
@@ -2624,15 +2623,11 @@ contains
         if( self%ldim(3) == 1 ) xyz(3) = 0.
     end subroutine masscen
 
-    !>  \brief center is for centering an image based on center of mass
-    !! \param lp low-pass cut-off freq
-    !! \param msk mask
-    !! \return xyz shift
-    !!
-    function center( self, lp, msk ) result( xyz )
-        class(image),   intent(inout)      :: self
-        real,           intent(in)         :: lp
-        real, optional, intent(in)         :: msk
+    !>  \brief is for estimating the center of an image based on center of mass
+    function calc_shiftcen( self, lp, msk ) result( xyz )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: lp
+        real, optional, intent(in)    :: msk
         type(image) :: tmp
         real        :: xyz(3), rmsk
         call tmp%copy(self)
@@ -2643,13 +2638,15 @@ contains
         else
             rmsk = real( self%ldim(1) )/2. - 5. ! 5 pixels outer width
         endif
-        call tmp%norm_bin
         call tmp%mask(rmsk, 'hard')
+        ! such that norm_bin will neglect everything < 0. and preserve zero
+        where(tmp%rmat < TINY) tmp%rmat=0.
+        call tmp%norm_bin
         call tmp%masscen(xyz)
         call tmp%kill
-    end function center
+    end function calc_shiftcen
 
-    function center_serial( self, lp, msk ) result( xyz )
+    function calc_shiftcen_serial( self, lp, msk ) result( xyz )
         class(image), intent(inout) :: self
         real,         intent(in)    :: lp
         real,         intent(in)    :: msk
@@ -2663,10 +2660,11 @@ contains
         call thread_safe_tmp_imgs(ithr)%fft()
         call thread_safe_tmp_imgs(ithr)%bp(0., lp)
         call thread_safe_tmp_imgs(ithr)%ifft()
-        call thread_safe_tmp_imgs(ithr)%norm_bin
         call thread_safe_tmp_imgs(ithr)%mask(msk, 'hard')
+        where(thread_safe_tmp_imgs(ithr)%rmat < TINY) thread_safe_tmp_imgs(ithr)%rmat = 0.
+        call thread_safe_tmp_imgs(ithr)%norm_bin
         call thread_safe_tmp_imgs(ithr)%masscen(xyz)
-    end function center_serial
+    end function calc_shiftcen_serial
 
     !>  \brief bin_inv inverts a binary image
     subroutine bin_inv( self )
@@ -6781,18 +6779,6 @@ contains
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
             &(exp(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))-1.) / (exp(1.)-1.)
     end subroutine norm_bin
-
-    !>  \brief  applies sigmoid function, shifts zero back & sets negative values to zero
-    subroutine sigmoid( self )
-        class(image), intent(inout) :: self
-        if( self%ft ) THROW_HARD('image assumed to be real not FTed; sigmoid')
-        where(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))>=0.)
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-                &1./(1.+exp(-self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))) - 0.5
-        elsewhere
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = 0.
-        end where
-    end subroutine sigmoid
 
     !> \brief roavg  is for creating a rotation average of self
     !! \param angstep angular step

@@ -506,7 +506,7 @@ contains
                     call img_in%shift2Dserial(xyz_in(1:2))
                 endif
             else
-                xyz = img_in%center_serial(params_glob%cenlp, params_glob%msk)
+                xyz = img_in%calc_shiftcen_serial(params_glob%cenlp, params_glob%msk)
                 sharg = arg(xyz)
                 if( sharg > CENTHRESH )then
                     ! apply shift and update the corresponding class parameters
@@ -708,7 +708,7 @@ contains
             return
         endif
         call build_glob%vol%read(volfname)
-        xyz = build_glob%vol%center(params_glob%cenlp,params_glob%msk) ! find center of mass shift
+        xyz = build_glob%vol%calc_shiftcen(params_glob%cenlp,params_glob%msk)
         if( params_glob%pgrp .ne. 'c1' ) xyz(1:2) = 0.     ! shifts only along z-axis for C2 and above
         if( arg(xyz) <= CENTHRESH )then
             do_center = .false.

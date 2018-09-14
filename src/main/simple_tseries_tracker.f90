@@ -127,7 +127,7 @@ contains
         if( mod(iframe,CENRATE) == 0 )then
             ! center the reference
             if( l_neg ) call reference%neg()
-            xyz = reference%center(cenlp)
+            xyz = reference%calc_shiftcen(cenlp)
             if( l_neg ) call reference%neg()
         endif
     end subroutine update_reference

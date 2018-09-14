@@ -560,7 +560,7 @@ contains
         do i=1,n
             call progress(i,n)
             call img%read(fname2masscen, i)
-            xyz = img%center(lp, msk)
+            xyz = img%calc_shiftcen(lp, msk)
             call img%shift(xyz)
             call img%write(fname, i)
         end do

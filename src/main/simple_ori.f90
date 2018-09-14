@@ -829,9 +829,7 @@ contains
     !!          the image after projection
     subroutine mirror2d( self )
         class(ori), intent(inout) :: self
-        type(ori) :: old
         real      :: euls(3), rmat(3,3), euls_mirr(3)
-        old = self
         euls = self%get_euler()
         euls_mirr(1) = euls(1)
         euls_mirr(2) = 180. + euls(2)

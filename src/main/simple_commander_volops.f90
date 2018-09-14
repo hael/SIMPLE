@@ -152,7 +152,7 @@ contains
         allocate(shvec(params%nstates,3))
         do istate=1,params%nstates
             call build%vol%read(params%vols(istate))
-            shvec(istate,:) = build%vol%center(params%cenlp, params%msk)
+            shvec(istate,:) = build%vol%calc_shiftcen(params%cenlp, params%msk)
             call build%vol%shift([shvec(istate,1),shvec(istate,2),shvec(istate,3)])
             call build%vol%write('shifted_vol_state'//int2str(istate)//params%ext)
             ! transfer the 3D shifts to 2D
@@ -633,19 +633,23 @@ contains
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
         character(len=STDLEN)        :: fname_finished
-        type(parameters) :: params
-        type(builder)    :: build
-        type(ori)        :: symaxis
-        type(oris)       :: symaxis4write
-        type(sym)        :: syme
-        real             :: shvec(3)
+        type(parameters)      :: params
+        type(builder)         :: build
+        type(ori)             :: symaxis
+        type(oris)            :: symaxis4write
+        type(sym)             :: syme
+        character(len=STDLEN) :: fbody
+        real                  :: shvec(3)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! center volume
         call build%vol%read(params%vols(1))
         shvec = 0.
         if( params%center.eq.'yes' )then
-            shvec = build%vol%center(params%cenlp,params%msk)
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            call build%vol%shift(shvec)
+            fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            call build%vol%write(trim(fbody)//'_centred.mrc')
         endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
@@ -704,15 +708,21 @@ contains
         use simple_symanalyzer
         class(symmetry_test_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        real :: shvec(3)
+        type(parameters)      :: params
+        type(builder)         :: build
+        character(len=STDLEN) :: fbody
+        real                  :: shvec(3)
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! center volume
         call build%vol%read(params%vols(1))
         shvec = 0.
-        if( params%center.eq.'yes' ) shvec = build%vol%center(params%cenlp,params%msk)
+        if( params%center.eq.'yes' )then
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            call build%vol%shift(shvec)
+            fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            call build%vol%write(trim(fbody)//'_centred.mrc')
+        endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! run test
