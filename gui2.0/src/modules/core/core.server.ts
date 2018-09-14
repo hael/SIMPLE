@@ -97,7 +97,11 @@ class Module {
 	
 	getImage(arg) {
 		if(arg['stackfile'].includes(".mrc")){
-			return(this.mrc.toJPEG(arg))
+			if(arg['boxfile']){
+				return(this.mrc.toJPEGwithBoxes(arg))
+			} else {
+				return(this.mrc.toJPEG(arg))
+			}
 		} else if(arg['stackfile'].includes(".jpg")){
 			return(this.jpg.toJPEG(arg))
 		}

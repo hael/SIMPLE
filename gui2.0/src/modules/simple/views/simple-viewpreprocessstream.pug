@@ -28,6 +28,11 @@ div#preproc
 				onclick="viewer.toggleSelect(this); simple.sumMicrographs('preproc')"
 				title="DFX : " + element[2] + ", DFY : " + element[3] + ", Angast : "+ element[4] + ", CTF Estimate CC : "+ element[5] + ", Defocus Error : "+ element[6] + ", CTF Score : "+ element[7] + ", CC90 : "+ element[8]
 			)
+				if boxfiles
+					img.viewptcls(
+						src="../img/eye.png"
+						onclick="simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "')"
+					)
 				div.dynimgcontainer
 					img.dynimg.micrograph(
 						data-sprite=element[0]
@@ -269,5 +274,14 @@ div#preproc
 				onclick="viewer.toggleScrollMenu('preproc', 'save')"
 				title="Save"
 			)
-
+			
+div#boxesviewer
+	div#boxesviewergauze
+	div
+		h="View Boxes"
+		img#closebutton(
+			src="img/close.png"
+			onclick="simple.hideViewBoxes()"
+		)
+	img#boxviewmicrograph
 

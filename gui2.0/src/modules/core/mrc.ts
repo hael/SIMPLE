@@ -84,5 +84,33 @@ export default class MRC{
 				return({image : image})
 			})
 	}
+	
+	toJPEGwithBoxes(arg){
+		var json = toPixels(arg['stackfile'], arg['frame'])
+		var scale = Number(arg['width']) / json['nx'];
+		var svg = "<svg width='" + Math.floor(json['nx'] * scale) + "' height='" + Math.floor(json['ny'] * scale) + "'>"
+		var boxes = fs.readFileSync(arg['boxfile'], {encoding : 'utf8'})
+		var lines = boxes.split("\n")
+		for(var line of lines){
+			var elements = line.split((/[ , \t]+/))
+			if(elements.length > 2){
+				svg += "<rect style='fill:none;stroke:magenta;stroke-width:1' x='" + Number(elements[1]) * scale + "' y='" + Number(elements[2]) * scale + "' height='" + Number(elements[3]) * scale + "' width='" + Number(elements[3]) * scale + "'/>"
+			}
+		}
+		svg += '</svg>'
+		
+		return sharp(json['pixbuf'], { raw : {
+			width : json['nx'],
+			height : json['ny'],
+			channels : 1
+		}})
+			.overlayWith(Buffer.from(svg), {})
+			.resize(Number(arg['width']))
+			.jpeg()
+			.toBuffer()
+			.then(function (image) {
+				return({image : image})
+			})
+	}
 
 }

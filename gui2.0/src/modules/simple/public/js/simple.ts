@@ -404,6 +404,25 @@ class Simple {
 		}
 		counter.innerHTML = "Selected " + selected + " of " + total + " micrographs"
 	}
+	
+	viewBoxes(boxfile, micrograph, xdim, ydim){
+		var boxesviewer = document.getElementById('boxesviewer')
+		boxesviewer.style.display = "block"
+		var img = <HTMLImageElement>document.getElementById('boxviewmicrograph')
+		if(img.clientWidth != 0){
+			img.src = "/image?stackfile=" + micrograph + "&frame=0&width=" + img.clientWidth + "&boxfile=" + boxfile
+		}else{
+			img.src = "/image?stackfile=" + micrograph + "&frame=0&width=500&boxfile=" + boxfile
+		}
+		
+	}
+	
+	hideViewBoxes(){
+		var boxesviewer = document.getElementById('boxesviewer')
+		boxesviewer.style.display = "none"
+	}
+	
+	
 }
 
 var simple
