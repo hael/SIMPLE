@@ -130,7 +130,7 @@ contains
         real,     allocatable :: fsc(:), res(:)
         real(dp), allocatable :: vec1(:), vec2(:)
         integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind
-        integer     :: vecsz, find_hres, find_lres, cnt, npix
+        integer     :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq
         logical     :: is2d
         type(image) :: ecopy, ocopy
         real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143
@@ -138,10 +138,11 @@ contains
         if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
         if( .not. odd%is_ft()  ) THROW_HARD('odd vol not FTed; local_res')
         ! set parameters
-        hwinsz = 3
+        hwinsz   = 3
         if( present(half_winsz) ) hwinsz = half_winsz
-        ldim   = even%get_ldim()
-        is2d   = ldim(3) == 1
+        hwinszsq = hwinsz * hwinsz
+        ldim     = even%get_ldim()
+        is2d     = ldim(3) == 1
         if( is2d )then
             vecsz = (2 * hwinsz + 1)**2
         else
@@ -208,7 +209,7 @@ contains
 
             function neigh_cc( loc ) result( cc )
                 integer, intent(in) :: loc(3)
-                integer  :: lb(3), ub(3), i, j, k, cnt
+                integer  :: lb(3), ub(3), i, j, k, cnt, ii, jj, kk
                 real     :: cc
                 ! set bounds
                 lb = loc - hwinsz
@@ -217,20 +218,28 @@ contains
                     lb(3) = 1
                     ub(3) = 1
                 endif
-                ! extract components
+                ! extract components wihin sphere/circle
                 cnt = 0
+                kk  = -hwinsz
                 do k=lb(3),ub(3)
                     if( k < 1 .or. k > ldim(3) ) cycle
+                    jj = -hwinsz
                     do j=lb(2),ub(2)
                         if( j < 1 .or. j > ldim(2) ) cycle
+                        ii = -hwinsz
                         do i=lb(1),ub(1)
                             if( i < 1 .or. i > ldim(1) ) cycle
+                            if( kk*kk + jj*jj + ii*ii > hwinszsq ) cycle
                             cnt       = cnt + 1
                             vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
                             vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
+                            ii        = ii + 1
                         enddo
+                        jj = jj + 1
                     enddo
+                    kk = kk + 1
                 enddo
+                ! correlate
                 cc = pearsn_serial_8(cnt, vec1(:cnt), vec2(:cnt))
             end function neigh_cc
 
