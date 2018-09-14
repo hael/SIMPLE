@@ -129,7 +129,8 @@ contains
         logical,  allocatable :: l_mask(:,:,:)
         real,     allocatable :: fsc(:), res(:)
         real(dp), allocatable :: vec1(:), vec2(:)
-        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, vecsz, find_hres, find_lres
+        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind
+        integer     :: vecsz, find_hres, find_lres, cnt, npix
         logical     :: is2d
         type(image) :: ecopy, ocopy
         real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143
@@ -142,13 +143,14 @@ contains
         ldim   = even%get_ldim()
         is2d   = ldim(3) == 1
         if( is2d )then
-            vecsz = (2*hwinsz + 1)**2
+            vecsz = (2 * hwinsz + 1)**2
         else
-            vecsz = (2*hwinsz + 1)**3
+            vecsz = (2 * hwinsz + 1)**3
         endif
         filtsz = even%get_filtsz()
         smpd   = even%get_smpd()
         l_mask = mskimg%bin2logical()
+        npix   = count(l_mask)
         res    = even%get_res()
         ! to avoid allocation in the loop
         call ecopy%new(ldim, smpd)
@@ -156,9 +158,10 @@ contains
         if( allocated(locres_finds) ) deallocate(locres_finds)
         allocate(locres_finds(ldim(1),ldim(2),ldim(3)), vec1(vecsz), vec2(vecsz), fsc(filtsz))
         locres_finds = 0
+        fsc          = 0.
         ! loop over resolution shells
         do kind=1,filtsz
-            ! call progress(kind, filtsz)
+            call progress(kind, filtsz)
             call ecopy%copy(even)
             call ocopy%copy(odd)
             call ecopy%tophat(kind)
@@ -166,9 +169,10 @@ contains
             call ecopy%ifft
             call ocopy%ifft
             ccavg = 0.
+            cnt   = 0
             ! parallel section needs to start here as the above steps are threaded as well
             !$omp parallel do collapse(3) default(shared) private(i,j,k,cc)&
-            !$omp schedule(static) proc_bind(close) reduction(+:ccavg)
+            !$omp schedule(static) proc_bind(close) reduction(+:ccavg,cnt)
             do k=1,ldim(3)
                 do j=1,ldim(2)
                     do i=1,ldim(1)
@@ -176,13 +180,15 @@ contains
                         cc = neigh_cc([i,j,k])
                         ccavg = ccavg + cc
                         if( cc >= corr_thres ) locres_finds(i,j,k) = kind
+                        if( cc >= 0.143 ) cnt = cnt + 1
                     end do
                 end do
             end do
             !$omp end parallel do
-            ccavg     = ccavg / real(count(l_mask))
+            ccavg     = ccavg / real(npix)
             fsc(kind) = ccavg
             write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind)
+            if( cnt == 0 ) exit ! save the compute
         end do
         call get_resolution(fsc, res, res_fsc05, res_fsc0143)
         write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
@@ -191,10 +197,8 @@ contains
         find_lres = minval(locres_finds, l_mask .and. locres_finds > 0)
         write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_hres)
         write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_lres)
-        ! make sure no 0 elements
-        where( l_mask )
-            where(locres_finds == 0) locres_finds = filtsz
-        end where
+        ! make sure no 0 elements within the mask
+        where( l_mask .and. locres_finds == 0 ) locres_finds = filtsz
         ! destruct
         deallocate(l_mask)
         call ecopy%kill
@@ -221,13 +225,13 @@ contains
                         if( j < 1 .or. j > ldim(2) ) cycle
                         do i=lb(1),ub(1)
                             if( i < 1 .or. i > ldim(1) ) cycle
-                            cnt = cnt + 1
+                            cnt       = cnt + 1
                             vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
                             vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
                         enddo
                     enddo
                 enddo
-                cc = pearsn_serial_8(vec1(:cnt), vec2(:cnt))
+                cc = pearsn_serial_8(cnt, vec1(:cnt), vec2(:cnt))
             end function neigh_cc
 
     end subroutine local_res

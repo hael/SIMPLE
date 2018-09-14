@@ -176,7 +176,7 @@ contains
                 call odd%mul(mskvol)
                 have_mask_file = .true.
             else
-                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_fsc')
+                THROW_HARD('mskfile: '//trim(params%mskfile)//' does not exist in cwd; exec_local_res')
             endif
         else
             ! spherical masking

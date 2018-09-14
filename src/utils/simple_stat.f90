@@ -324,15 +324,15 @@ contains
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array
     !! \param y input test array
-    function pearsn_serial_8( x, y ) result( r )
+    function pearsn_serial_8( n, x, y ) result( r )
+        integer,  intent(in) :: n
         real(dp), intent(in) :: x(:),y(:)
-        real(dp) :: ax,ay,sxx,syy,sxy,xt,yt,prod
+        real(dp) :: ax,ay,sxx,syy,sxy,xt,yt,prod,dn
         real     :: r
-        integer  :: j, n
-        n = size(x)
-        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_serial_8')
-        ax  = sum(x)/dble(n)
-        ay  = sum(y)/dble(n)
+        integer  :: j
+        dn  = dble(n)
+        ax  = sum(x)/dn
+        ay  = sum(y)/dn
         sxx = 0.d0
         syy = 0.d0
         sxy = 0.d0
@@ -344,7 +344,7 @@ contains
             sxy = sxy + xt * yt
         end do
         prod = sxx * syy
-        r = 0.
+        r    = 0.
         if( prod > 0.d0 ) r = real(max(-1.d0,min(1.d0,sxy/sqrt(prod))),kind=4)
     end function pearsn_serial_8
 
