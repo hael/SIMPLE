@@ -7,7 +7,7 @@ implicit none
 
 public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
-public :: robust_z_scores, robust_normalization
+public :: robust_z_scores, robust_normalization, pearsn_serial_8
 private
 #include "simple_local_flags.inc"
 
@@ -320,6 +320,33 @@ contains
         !$omp end parallel do
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_1
+
+    !>    calculates Pearson's correlation coefficient
+    !! \param x input reference array
+    !! \param y input test array
+    function pearsn_serial_8( x, y ) result( r )
+        real(dp), intent(in) :: x(:),y(:)
+        real(dp) :: ax,ay,sxx,syy,sxy,xt,yt,prod
+        real     :: r
+        integer  :: j, n
+        n = size(x)
+        if( size(y) /= n ) THROW_HARD('arrays not equal size in pearsn_serial_8')
+        ax  = sum(x)/dble(n)
+        ay  = sum(y)/dble(n)
+        sxx = 0.d0
+        syy = 0.d0
+        sxy = 0.d0
+        do j=1,n
+            xt  = x(j) - ax
+            yt  = y(j) - ay
+            sxx = sxx + xt * xt
+            syy = syy + yt * yt
+            sxy = sxy + xt * yt
+        end do
+        prod = sxx * syy
+        r = 0.
+        if( prod > 0.d0 ) r = real(max(-1.d0,min(1.d0,sxy/sqrt(prod))),kind=4)
+    end function pearsn_serial_8
 
     !>    calculates Pearson's correlation coefficient
     !! \param x input reference array

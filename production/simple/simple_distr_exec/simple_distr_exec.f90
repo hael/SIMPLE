@@ -55,7 +55,10 @@ call cmdline_err( cmdstat, cmdlen, args, pos )
 prg = args(pos+1:) ! this is the program name
 ! make UI
 call make_user_interface
-if( str_has_substr(entire_line, 'prg=list') ) call list_distr_prgs_in_ui
+if( str_has_substr(entire_line, 'prg=list') )then
+    call list_distr_prgs_in_ui
+    stop
+endif
 
 select case(prg)
 

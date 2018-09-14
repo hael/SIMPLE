@@ -341,9 +341,8 @@ contains
                     call build%vol%bp(params%hp, params%lp, width=width)
                 else if( cline%defined('hp') )then
                     call build%vol%bp(params%hp, 0., width=width)
-                else if( params%tophat .eq. 'yes' .and. cline%defined('lp') )then
-                    find = calc_fourier_index(params%lp, params%box, params%smpd)
-                    call build%vol%tophat(find)
+                else if( params%tophat .eq. 'yes' .and. cline%defined('find') )then
+                    call build%vol%tophat(params%find)
                 else if( cline%defined('lp') )then
                     call build%vol%bp(0., params%lp, width=width)
                 ! real-space

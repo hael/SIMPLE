@@ -1,8 +1,8 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 include 'simple_lib.f08'
-use simple_user_interface, only:  make_user_interface ,list_shmem_prgs_in_ui, write_ui_json
-use simple_cmdline, only: cmdline, cmdline_err
+use simple_user_interface, only: make_user_interface ,list_shmem_prgs_in_ui, write_ui_json
+use simple_cmdline,        only: cmdline, cmdline_err
 use simple_spproj_hlev
 use simple_commander_project
 use simple_commander_checks
@@ -49,6 +49,7 @@ type(postprocess_commander)          :: xpostprocess
 ! IMAGE PROCESSING
 type(mask_commander)                 :: xmask
 type(fsc_commander)                  :: xfsc
+type(local_res_commander)            :: xlocal_res
 type(centervol_commander)            :: xcenter
 type(reproject_commander)            :: xreproject
 type(volops_commander)               :: xvolops
@@ -93,7 +94,10 @@ call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 ! make UI
 call make_user_interface
-if( str_has_substr(entire_line, 'prg=list') ) call list_shmem_prgs_in_ui
+if( str_has_substr(entire_line, 'prg=list') )then
+    call list_shmem_prgs_in_ui
+    stop
+endif
 
 select case(prg)
 
@@ -182,11 +186,14 @@ select case(prg)
     case( 'fsc' )
         call cline%parse()
         call xfsc%execute(cline)
+    case( 'local_resolution' )
+        call cline%parse()
+        call xlocal_res%execute(cline)
     case( 'center' )
         call cline%parse()
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         call xcenter%execute(cline)
-    case( 'reproject' ) !! posible renaming to reproject
+    case( 'reproject' )
         call cline%parse()
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)

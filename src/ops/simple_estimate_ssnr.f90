@@ -1,11 +1,10 @@
 ! spectral signal-to-noise ratio estimation routines
 module simple_estimate_ssnr
-use simple_defs
-use simple_error, only: allocchk, simple_exception
-use simple_math,  only: find
+include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, acc_dose2filter, dose_weight
+public :: local_res
 private
 #include "simple_local_flags.inc"
 
@@ -13,8 +12,8 @@ contains
 
     !> \brief  converts the FSC to SSNR (the 2.* is because of the division of the data)
     function fsc2ssnr( corrs ) result( ssnr )
-        real, intent(in)  :: corrs(:) !<  instrument FSC
-        real, allocatable :: ssnr(:) !<  instrument SSNR
+        real, intent(in)  :: corrs(:) !< instrument FSC
+        real, allocatable :: ssnr(:)  !< instrument SSNR
         integer :: nyq, k
         real    :: fsc
         nyq = size(corrs)
@@ -119,64 +118,85 @@ contains
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight
 
+    ! even odd images assumed to be appropriately masked before calling this routine
+    ! mskimg should be a hard mask (real-space)
     subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
         use simple_image, only: image
         class(image),         intent(inout) :: even, odd, mskimg
         real,                 intent(in)    :: corr_thres
         integer, allocatable, intent(out)   :: locres_finds(:,:,:)
         integer, optional,    intent(in)    :: half_winsz
-        logical, allocatable :: l_mask(:,:,:)
-        real,    allocatable :: rmat_even(:,:,:), rmat_odd(:,:,:)
-        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind
+        logical,  allocatable :: l_mask(:,:,:)
+        real,     allocatable :: fsc(:), res(:)
+        real(dp), allocatable :: vec1(:), vec2(:)
+        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, vecsz, find_hres, find_lres
         logical     :: is2d
         type(image) :: ecopy, ocopy
-        real        :: smpd, cc
+        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143
+        ! check input
+        if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
+        if( .not. odd%is_ft()  ) THROW_HARD('odd vol not FTed; local_res')
         ! set parameters
         hwinsz = 3
         if( present(half_winsz) ) hwinsz = half_winsz
         ldim   = even%get_ldim()
         is2d   = ldim(3) == 1
+        if( is2d )then
+            vecsz = (2*hwinsz + 1)**2
+        else
+            vecsz = (2*hwinsz + 1)**3
+        endif
         filtsz = even%get_filtsz()
         smpd   = even%get_smpd()
         l_mask = mskimg%bin2logical()
+        res    = even%get_res()
         ! to avoid allocation in the loop
         call ecopy%new(ldim, smpd)
         call ocopy%new(ldim, smpd)
         if( allocated(locres_finds) ) deallocate(locres_finds)
-        allocate(locres_finds(ldim(1),ldim(2),ldim(3)), source=0)
-        allocate(rmat_even(ldim(1),ldim(2),ldim(3)), rmat_odd(ldim(1),ldim(2),ldim(3)))
-        call even%fft
-        call odd%fft
+        allocate(locres_finds(ldim(1),ldim(2),ldim(3)), vec1(vecsz), vec2(vecsz), fsc(filtsz))
+        locres_finds = 0
         ! loop over resolution shells
         do kind=1,filtsz
+            ! call progress(kind, filtsz)
             call ecopy%copy(even)
             call ocopy%copy(odd)
-            call ecopy%tophat(k)
-            call ocopy%tophat(k)
+            call ecopy%tophat(kind)
+            call ocopy%tophat(kind)
             call ecopy%ifft
             call ocopy%ifft
-            call ecopy%get_rmat_sub(rmat_even)
-            call ocopy%get_rmat_sub(rmat_odd)
+            ccavg = 0.
+            ! parallel section needs to start here as the above steps are threaded as well
+            !$omp parallel do collapse(3) default(shared) private(i,j,k,cc)&
+            !$omp schedule(static) proc_bind(close) reduction(+:ccavg)
             do k=1,ldim(3)
                 do j=1,ldim(2)
                     do i=1,ldim(1)
-                        if( l_mask(i,j,k) )then
-                            cc = neigh_cc([i,j,k])
-                            if( cc >= corr_thres ) locres_finds(i,j,k) = kind
-                        endif
+                        if( .not. l_mask(i,j,k) ) cycle
+                        cc = neigh_cc([i,j,k])
+                        ccavg = ccavg + cc
+                        if( cc >= corr_thres ) locres_finds(i,j,k) = kind
                     end do
                 end do
             end do
+            !$omp end parallel do
+            ccavg     = ccavg / real(count(l_mask))
+            fsc(kind) = ccavg
+            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind)
         end do
+        call get_resolution(fsc, res, res_fsc05, res_fsc0143)
+        write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        find_hres = maxval(locres_finds, l_mask)
+        find_lres = minval(locres_finds, l_mask .and. locres_finds > 0)
+        write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_hres)
+        write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_lres)
         ! make sure no 0 elements
         where( l_mask )
             where(locres_finds == 0) locres_finds = filtsz
         end where
-        ! return e/o images in real-space
-        call even%ifft
-        call odd%ifft
         ! destruct
-        deallocate(l_mask, rmat_even, rmat_odd)
+        deallocate(l_mask)
         call ecopy%kill
         call ocopy%kill
 
@@ -184,41 +204,30 @@ contains
 
             function neigh_cc( loc ) result( cc )
                 integer, intent(in) :: loc(3)
-                integer :: lb(3), ub(3), npix
-                real    :: ae, ao, diffe, diffo, see, soo, seo, cc
+                integer  :: lb(3), ub(3), i, j, k, cnt
+                real     :: cc
                 ! set bounds
                 lb = loc - hwinsz
-                where(lb < 1) lb = 1
                 ub = loc + hwinsz
-                where(ub > ldim ) ub = ldim
                 if( is2d )then
                     lb(3) = 1
                     ub(3) = 1
                 endif
-                ! calc avgs
-                npix = product(ub - lb + 1)
-                ae   = sum(rmat_even(lb(1):ub(1),lb(2):ub(2),lb(2):ub(3))) / real(npix)
-                ao   = sum(rmat_odd(lb(1):ub(1),lb(2):ub(2),lb(2):ub(3))) / real(npix)
-                see  = 0.
-                soo  = 0.
-                seo  = 0.
-                ! calc corr
+                ! extract components
+                cnt = 0
                 do k=lb(3),ub(3)
+                    if( k < 1 .or. k > ldim(3) ) cycle
                     do j=lb(2),ub(2)
+                        if( j < 1 .or. j > ldim(2) ) cycle
                         do i=lb(1),ub(1)
-                            diffe = rmat_even(i,j,k) - ae
-                            diffo = rmat_odd(i,j,k)  - ao
-                            see   = see + diffe * diffe
-                            soo   = soo + diffo * diffo
-                            seo   = seo + diffe * diffo
-                        end do
-                    end do
-                end do
-                if( see > 0. .and. soo > 0. )then
-                    cc = seo / sqrt(see * soo)
-                else
-                    cc = 0.
-                endif
+                            if( i < 1 .or. i > ldim(1) ) cycle
+                            cnt = cnt + 1
+                            vec1(cnt) = dble(ecopy%get_rmat_at(i,j,k))
+                            vec2(cnt) = dble(ocopy%get_rmat_at(i,j,k))
+                        enddo
+                    enddo
+                enddo
+                cc = pearsn_serial_8(vec1(:cnt), vec2(:cnt))
             end function neigh_cc
 
     end subroutine local_res

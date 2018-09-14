@@ -107,7 +107,6 @@ contains
         call self%odd%set_ft(.true.)
         call self%eosum%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%eosum%alloc_rho( spproj, expand=.false.)
-
         ! set existence
         self%exists = .true.
     end subroutine new
