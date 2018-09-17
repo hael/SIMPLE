@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, acc_dose2filter, dose_weight
-public :: local_res
+public :: local_res, local_res_lp
 private
 #include "simple_local_flags.inc"
 
@@ -120,20 +120,22 @@ contains
 
     ! even odd images assumed to be appropriately masked before calling this routine
     ! mskimg should be a hard mask (real-space)
-    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
+    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz, fbody )
         use simple_image, only: image
-        class(image),         intent(inout) :: even, odd, mskimg
-        real,                 intent(in)    :: corr_thres
-        integer, allocatable, intent(out)   :: locres_finds(:,:,:)
-        integer, optional,    intent(in)    :: half_winsz
+        class(image),               intent(inout) :: even, odd, mskimg
+        real,                       intent(in)    :: corr_thres
+        integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
+        integer,          optional, intent(in)    :: half_winsz
+        character(len=*), optional, intent(in)    :: fbody
+        character(len=:), allocatable :: fname_resmap, fname_finds
         logical,  allocatable :: l_mask(:,:,:)
         real,     allocatable :: fsc(:), res(:)
         real(dp), allocatable :: vec1(:), vec2(:)
-        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind
+        integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
         integer     :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq
         logical     :: is2d
-        type(image) :: ecopy, ocopy
-        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143
+        type(image) :: ecopy, ocopy, resmap
+        real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
         ! check input
         if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
         if( .not. odd%is_ft()  ) THROW_HARD('odd vol not FTed; local_res')
@@ -162,7 +164,6 @@ contains
         fsc          = 0.
         ! loop over resolution shells
         do kind=1,filtsz
-            call progress(kind, filtsz)
             call ecopy%copy(even)
             call ocopy%copy(odd)
             call ecopy%tophat(kind)
@@ -178,18 +179,20 @@ contains
                 do j=1,ldim(2)
                     do i=1,ldim(1)
                         if( .not. l_mask(i,j,k) ) cycle
-                        cc = neigh_cc([i,j,k])
+                        cc    = neigh_cc([i,j,k])
                         ccavg = ccavg + cc
                         if( cc >= corr_thres ) locres_finds(i,j,k) = kind
-                        if( cc >= 0.143 ) cnt = cnt + 1
+                        if( cc >= 0.5 ) cnt = cnt + 1
                     end do
                 end do
             end do
             !$omp end parallel do
             ccavg     = ccavg / real(npix)
             fsc(kind) = ccavg
-            write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind)
-            if( cnt == 0 ) exit ! save the compute
+            frac_nccs = real(cnt) / real(npix) * 100.
+            write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
+            &'>>> % NEIGH_CCS >= 0.5', frac_nccs
+            if( frac_nccs < 1. ) exit ! save the compute
         end do
         call get_resolution(fsc, res, res_fsc05, res_fsc0143)
         write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
@@ -200,10 +203,37 @@ contains
         write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_lres)
         ! make sure no 0 elements within the mask
         where( l_mask .and. locres_finds == 0 ) locres_finds = filtsz
+        ! make sure background at lowest estimated local resolution
+        where( locres_finds == 0 ) locres_finds = find_lres
         ! destruct
         deallocate(l_mask)
         call ecopy%kill
         call ocopy%kill
+        ! create resmap
+        call resmap%new(ldim, smpd)
+        do k=1,ldim(3)
+            do j=1,ldim(2)
+                do i=1,ldim(1)
+                    call resmap%set([i,j,k], 1./even%get_lp(locres_finds(i,j,k)))
+                enddo
+            enddo
+        enddo
+        ! write output
+        if( present(fbody) )then
+            fname_resmap = trim(fbody)//'.mrc'
+            fname_finds  = trim(fbody)//'_finds.bin'
+        else
+            fname_resmap = 'locresmap.mrc'
+            fname_finds  = 'locresmap_finds.bin'
+        endif
+        call resmap%write(fname_resmap)
+        call fopen(funit, fname_finds, access='STREAM', action='WRITE',&
+            &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
+        call fileiochk('local_res, file: '//fname_finds, io_stat)
+        write(unit=funit,pos=1) locres_finds
+        call fclose(funit)
+        ! destruct
+        call resmap%kill
 
         contains
 
@@ -248,5 +278,40 @@ contains
             end function neigh_cc
 
     end subroutine local_res
+
+    ! filtering of the map according to local resolution estimates
+    subroutine local_res_lp( locres_finds, img2filter )
+        use simple_image, only: image
+        integer,      intent(in)    :: locres_finds(:,:,:)
+        class(image), intent(inout) :: img2filter
+        real, allocatable :: rmat_filt(:,:,:), rmat_lp(:,:,:)
+        type(image) :: resimg
+        integer     :: ldim_finds(3), ldim(3), k, kstart, kstop
+        real        :: smpd, lp
+        ! sanity checks
+        if( any(locres_finds == 0 ) ) THROW_HARD('zero Fourier indices not allowed in locres_finds; local_res_lp')
+        ldim_finds(1) = size(locres_finds,1)
+        ldim_finds(2) = size(locres_finds,2)
+        ldim_finds(3) = size(locres_finds,3)
+        ldim = img2filter%get_ldim()
+        if( .not. all(ldim_finds == ldim) ) THROW_HARD('nonconforming dims of img2filter and locres_finds; local_res_lp')
+        ! fetch params
+        smpd   = img2filter%get_smpd()
+        kstart = minval(locres_finds)
+        kstop  = maxval(locres_finds)
+        ! to avoid allocation in the loop
+        call resimg%new(ldim, smpd)
+        allocate(rmat_filt(ldim(1),ldim(2),ldim(3)), rmat_lp(ldim(1),ldim(2),ldim(3)), source=0.)
+        ! loop over shells
+        do k=kstart,kstop
+            lp = calc_lowpass_lim(k, ldim(1), smpd)
+            call resimg%copy(img2filter)
+            call resimg%bp(0.,lp, width=6.0)
+            call resimg%get_rmat_sub(rmat_lp)
+            where( locres_finds == k ) rmat_filt = rmat_lp
+        enddo
+        call img2filter%set_rmat(rmat_filt)
+        call resimg%kill
+    end subroutine local_res_lp
 
 end module simple_estimate_ssnr

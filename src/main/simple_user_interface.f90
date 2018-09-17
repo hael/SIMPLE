@@ -1519,11 +1519,12 @@ contains
         &'Estimate local resolution in map',&                           ! descr_short
         &'is a program for estimating local resolution based on neighbourhood correlation analysis in e/o maps',& ! descr_long
         &'simple_exec',&                                                ! executable
-        &2, 1, 0, 0, 0, 2, 1, .false.)                                  ! # entries in each group, requires sp_project
+        &3, 1, 0, 0, 1, 2, 1, .false.)                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call local_resolution%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
         call local_resolution%set_input('img_ios', 2, 'vol2', 'file', 'Even volume', 'Even volume', 'vol2.mrc file', .true., '')
+        call local_resolution%set_input('img_ios', 3, 'vol3', 'file', 'Volume to filter', 'Volume to filter', 'vol3.mrc file', .false., '')
         ! parameter input/output
         call local_resolution%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -1531,7 +1532,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call local_resolution%set_input('filt_ctrls', 1, lplim_crit)
         ! mask controls
         call local_resolution%set_input('mask_ctrls', 1, msk)
         call local_resolution%set_input('mask_ctrls', 2, mskfile)

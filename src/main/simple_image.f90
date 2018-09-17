@@ -3786,9 +3786,9 @@ contains
         class(image), intent(inout) :: self
         real, intent(in)            :: hplim, lplim
         real, intent(in), optional  :: width
-        integer                     :: h, k, l, lims(3,2), phys(3)
-        logical                     :: didft, dohp, dolp
-        real                        :: freq, hplim_freq, lplim_freq, wwidth, w
+        integer :: h, k, l, lims(3,2), phys(3)
+        logical :: didft, dohp, dolp
+        real    :: freq, hplim_freq, lplim_freq, wwidth, w
         wwidth =10.
         if( present(width) ) wwidth = width
         didft = .false.
@@ -3870,7 +3870,7 @@ contains
         integer :: h, k, l, lims(3,2), phys(3)
         logical :: didft
         real    :: freq, hplim_freq, lplim_freq, hwdth
-        hwdth = 1.0
+        hwdth = 0.5
         if( present(halfwidth) ) hwdth = halfwidth
         didft = .false.
         if( .not. self%ft )then

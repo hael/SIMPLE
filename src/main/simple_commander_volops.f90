@@ -146,17 +146,18 @@ contains
 
     !> calculates local resolution from Even/Odd Volume pairs
     subroutine exec_local_res( self, cline )
-        use simple_estimate_ssnr, only: local_res
+        use simple_estimate_ssnr, only: local_res, local_res_lp
         class(local_res_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         type(parameters)     :: params
-        type(image)          :: even, odd
+        type(image)          :: even, odd, vol2filter
         type(masker)         :: mskvol
         integer              :: j, find_plate
         real                 :: res_fsc05, res_fsc0143
         logical              :: have_mask_file
         integer, allocatable :: locres_finds(:,:,:)
         real,    allocatable :: res(:), corrs(:)
+        if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.5)
         call params%new(cline)
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
@@ -198,8 +199,17 @@ contains
             call mskvol%disc([params%box,params%box,params%box], params%smpd, params%msk)
         endif
         call local_res(even, odd, mskvol, params%lplim_crit, locres_finds)
+        ! destruct
         call even%kill
         call odd%kill
+        ! filter inputted vol3
+        if( cline%defined('vol3') )then
+            call vol2filter%new([params%box,params%box,params%box], params%smpd)
+            call vol2filter%read(params%vols(1))
+            call local_res_lp(locres_finds, vol2filter)
+            call vol2filter%write('map_locres_lp.mrc')
+            call vol2filter%kill
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_LOCAL_RES NORMAL STOP ****')
     end subroutine exec_local_res
