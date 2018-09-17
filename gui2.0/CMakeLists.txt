@@ -1,6 +1,6 @@
 project(simple_gui)
 
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.2)
 set(BUILD_GUI TRUE)
 
 if(${BUILD_GUI})
@@ -31,12 +31,12 @@ if(${BUILD_GUI})
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/public/css
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/public/img
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/dist/public/js
-		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src ${CMAKE_CURRENT_BINARY_DIR}/src
-		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/external ${CMAKE_CURRENT_BINARY_DIR}/external
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/tsconfig.json ${CMAKE_CURRENT_BINARY_DIR}
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/package.json ${CMAKE_CURRENT_BINARY_DIR}
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/binding.gyp ${CMAKE_CURRENT_BINARY_DIR}
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/concat.sh ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/gui2.0/src ${CMAKE_CURRENT_BINARY_DIR}/src
+		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/gui2.0/external ${CMAKE_CURRENT_BINARY_DIR}/external
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/tsconfig.json ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/package.json ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/binding.gyp ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/concat.sh ${CMAKE_CURRENT_BINARY_DIR}
 		COMMAND ${NPM_PATH} install
 		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/build/modules ${CMAKE_CURRENT_BINARY_DIR}/dist/modules
 		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_BINARY_DIR}/build/server ${CMAKE_CURRENT_BINARY_DIR}/dist/server
@@ -46,10 +46,10 @@ if(${BUILD_GUI})
 		COMMAND ${NPM_PATH} run concat
 		COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/src
 		COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_CURRENT_BINARY_DIR}/build
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/users.htpasswd ${CMAKE_CURRENT_BINARY_DIR}/dist/server
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/simple.sqlite ${CMAKE_CURRENT_BINARY_DIR}/dist
-		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/src/modules/simple/simple_user_interface.json ${CMAKE_CURRENT_BINARY_DIR}/dist/modules/simple
-		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/src/bin ${CMAKE_CURRENT_BINARY_DIR}/dist/bin
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/users.htpasswd ${CMAKE_CURRENT_BINARY_DIR}/dist/server
+		#COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/simple.sqlite ${CMAKE_CURRENT_BINARY_DIR}/dist
+		COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/gui2.0/src/modules/simple/simple_user_interface.json ${CMAKE_CURRENT_BINARY_DIR}/dist/modules/simple
+		COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/gui2.0/src/bin ${CMAKE_BINARY_DIR}/bin
 		COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/concat.sh
 		COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/tsconfig.json
 		COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_CURRENT_BINARY_DIR}/package.json

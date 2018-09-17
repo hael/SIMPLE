@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 SOURCE="$( dirname "${BASH_SOURCE[0]}" )"
-cd $SOURCE
-cd ..
-node inferno.js simple multiuser
+cd $SOURCE/gui2.0/dist
+# $1 is multiuser
+node inferno.js simple $1

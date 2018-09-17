@@ -17,7 +17,7 @@ div.thumbnails
 					)
 					img.viewptcls(
 						src="../img/eye.png"
-						onclick="simple.viewParticles2D('" + cavgarray[index]['class'] + "','" + projectfile + "')"
+						onclick="event.stopPropagation(); simple.viewParticles2D('" + cavgarray[index]['class'] + "','" + projectfile + "')"
 					)
 		else
 			div.thumbnail

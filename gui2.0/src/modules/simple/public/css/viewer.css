@@ -138,8 +138,10 @@
 	display: none;
 }
 
-img.viewparticles{
-	position: absolute;
+.viewer .viewptcls {
+	position: relative;
+	bottom: 32px;
+	left: 0px;
 }
 
 .viewer #boxviewmicrograph {

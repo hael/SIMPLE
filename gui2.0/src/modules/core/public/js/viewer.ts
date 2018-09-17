@@ -24,15 +24,57 @@ class Viewer {
 	}
 	
 	loadImages(element) {
-		var images = document.getElementById(element).getElementsByClassName('dynimg') 
+		var images = document.getElementById(element).getElementsByClassName('dynimg')
+		const workerblob = new Blob([`
+			var loadQueue = []
+			self.onmessage = (msg) => {
+				var sources = msg.data;
+				for(var source in sources){
+					loadQueue.push([sources[source], source])
+				}
+				processQueue();
+				processQueue();
+				processQueue();
+			};
+			
+			function processQueue(){
+				var queueElement = loadQueue[0]
+				loadQueue.shift()
+				return fetch("http://localhost:8090" + queueElement[0], {credentials: 'include'})
+					.then(() => {
+						postMessage({id : queueElement[1], source : queueElement[0]})
+						return
+					})
+					.then(() => {
+						processQueue()
+					})
+			};
+		`]);
+		
+		const worker = new Worker(window.URL.createObjectURL(workerblob));
+		worker.onmessage = (event) =>{
+			var image = <HTMLImageElement>images[Number(event.data['id'])]
+			if(image.dataset.path){
+				image.src = event.data['source']
+			} else if(image.dataset.sprite){
+				image.style.background = "url(" + event.data['source'] + ")" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spriteid)  + "px 0px"
+			}
+        };
+		
+		var sources = []
 		for (var image of images){
 			if((<HTMLImageElement>image).dataset.path){
-				(<HTMLImageElement>image).src = "/image?stackfile=" + (<HTMLImageElement>image).dataset.path + "&frame=" + (<HTMLImageElement>image).dataset.frame + "&width=" + (<HTMLImageElement>image).clientWidth
+				sources.push("/image?stackfile=" + (<HTMLImageElement>image).dataset.path + "&frame=" + (<HTMLImageElement>image).dataset.frame + "&width=" + (<HTMLImageElement>image).clientWidth)
+				//(<HTMLImageElement>image).src = "/image?stackfile=" + (<HTMLImageElement>image).dataset.path + "&frame=" + (<HTMLImageElement>image).dataset.frame + "&width=" + (<HTMLImageElement>image).clientWidth
 			}else if((<HTMLImageElement>image).dataset.sprite){
-				(<HTMLImageElement>image).style.background = "url(/image?stackfile=" + (<HTMLImageElement>image).dataset.sprite + "&frame=0&width=" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spritewidth) + ") " + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spriteid)  + "px 0px"
-
+				sources.push("/image?stackfile=" + (<HTMLImageElement>image).dataset.sprite + "&frame=0&width=" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spritewidth))
+			//	(<HTMLImageElement>image).style.background = "url(/image?stackfile=" + (<HTMLImageElement>image).dataset.sprite + "&frame=0&width=" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spritewidth) + ") " + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spriteid)  + "px 0px"
 			}
 		}
+		
+		
+		worker.postMessage(sources)
+		
 	}
 	
 	modifyImages(element) {

@@ -176,6 +176,8 @@ class Module {
 			arg['view'] = { mod : "simple", fnc : "viewParticles" }
 		}else if(type == "preprocess_stream") {
 			arg['view'] = { mod : "simple", fnc : "viewPreprocessStream" }
+		}else if(type == "preprocess") {
+			arg['view'] = { mod : "simple", fnc : "viewPreprocessStream" }
 		}
 		
 		

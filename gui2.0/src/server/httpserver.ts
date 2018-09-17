@@ -101,6 +101,8 @@ export default class HTTPServer {
 		
 		/* Start listening */
 		this.server.listen(port)
+		console.log("HTTP server is running on port " + port);
+		console.log("Connect by pointing you browser ( only firefox supported ) at localhost:8090");
 		
 	}
 	

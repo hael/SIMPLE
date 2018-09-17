@@ -28,10 +28,13 @@ div#preproc
 				onclick="viewer.toggleSelect(this); simple.sumMicrographs('preproc')"
 				title="DFX : " + element[2] + ", DFY : " + element[3] + ", Angast : "+ element[4] + ", CTF Estimate CC : "+ element[5] + ", Defocus Error : "+ element[6] + ", CTF Score : "+ element[7] + ", CC90 : "+ element[8]
 			)
-				if boxfiles
-					img.viewptcls(
-						src="../img/eye.png"
-						onclick="simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "')"
+				
+				div.dynimgcontainer
+					img.dynimg.pspec(
+						data-sprite=element[0]
+						data-spritewidth=2
+						data-spriteid=0
+						data-frame="0"
 					)
 				div.dynimgcontainer
 					img.dynimg.micrograph(
@@ -40,6 +43,11 @@ div#preproc
 						data-spriteid=1
 						data-frame="0"
 					)
+					if boxfiles
+						img.viewptcls(
+							src="../img/eye.png"
+							onclick="event.stopPropagation(); simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "')"
+						)
 				div.dynimgcontainer
 					img.dynimg.ctffit(
 						data-path=element[1]
@@ -69,6 +77,14 @@ div#preproc
 		
 	div.scrollmenu#view
 		h="View"
+		label(
+			for="viewpspec"
+		)="Power Spectrum"
+		input#viewpspec(
+			type="checkbox"
+			onchange="viewer.showHideThumbnails(this, 'pspec')"
+			checked
+		)
 		label(
 			for="viewmic"
 		)="Micrographs"

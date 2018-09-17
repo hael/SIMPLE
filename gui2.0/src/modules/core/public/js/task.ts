@@ -58,8 +58,24 @@ class TaskSelector {
 		tasktext.innerHTML = ""
 	}
 	
-	refineTasks(){
-		(<HTMLInputElement>document.getElementById('inputpath')).value = browser.selection
+	refineTasks(moduletitle){
+		document.getElementById('taskdescription').innerHTML = ""
+		for(var task of document.querySelectorAll(".task,.taskdisplay")){
+			task.className="task"
+		}
+		
+		for(var module of document.querySelectorAll(".tasklistmodules.tasklistmodulesselected")){
+			module.className = "tasklistmodules"
+		}
+		
+		if(moduletitle){
+			(<HTMLDivElement>document.querySelector(".tasklistmodules[data-module='" + moduletitle + "']")).className = "tasklistmodules tasklistmodulesselected";	
+			(<HTMLDivElement>document.querySelector("#showalltasks[data-module='" + moduletitle + "']")).className = "taskdisplay";	
+		}
+		
+		
+		
+		(<HTMLInputElement>document.getElementById('inputpath')).value = browser.selection;
 		var request = {
 			mod : "core",
 			fnc : "refineTasks",
@@ -79,25 +95,18 @@ class TaskSelector {
 			})
 	}
 	
-	showAllTasks(module){
-		for (var task of document.querySelectorAll('[data-module]')){
-			if(task.className == "advanced" || task.className == "advanceddisplay" || task.className == "advancedselected"){
-				task.className = "task"
-			}
-		}
-		//for(var task of document.querySelectorAll('[data-module='+ module + ']')){
-		for(var task of document.querySelectorAll('[data-module]')){
+	showAllTasks(element, module){
+		for (var task of document.querySelectorAll(".task[data-module='" + module +"']")){
 			task.className = "taskdisplay"
 		}
+		element.className = "task"
 	}
 	
 	select(element){
-		for (var task of document.querySelectorAll('[data-task]')){
-			if(task.className == "taskselected"){
-				task.className = "taskdisplay"
-			}
+		for (var task of document.querySelectorAll('.taskselected[data-task]')){
+			task.className = "taskdisplay"
 		}
-		element.className = "taskselected"
+		element.className = "taskdisplay taskselected"
 		document.getElementById('taskdescription').innerHTML =  element.getAttribute('data-description')
 		this.selectedtask = element.getAttribute('data-task')
 		this.selectedmodule = element.getAttribute('data-modulename')

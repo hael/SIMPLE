@@ -6,20 +6,21 @@ div
 	)
 
 div
-	p.inputlabel="Input File or Folder"
+	p.inputlabel="Input File (*.simple)"
 	div
 		input#inputpath(type="text")
 		img(
 			src="img/folder.png"
-			onclick="browser.show({buttons : [{ name : 'select', action : 'taskselector.refineTasks'}], path : '" + folder + "', gauze : false})"
+			onclick="browser.show({buttons : [{ name : 'select', action : 'taskselector.refineTasks'}], path : '" + folder + "', filter : '.simple'})"
 		)
 
 div
 	div.tasklist
 		b.tasklisttitle="Package"
 		each module in tasks
-			div(
+			div.tasklistmodules(
 				onclick="taskselector.refineTasks('" + module['moduletitle'] +"')"
+				data-module=module['moduletitle']
 			)=module['moduletitle']
 	div.tasklist
 		b.tasklisttitle="Task"
@@ -33,8 +34,10 @@ div
 						data-description=task['descr_short']
 						onclick="taskselector.select(this)"
 					)=task['name']
-				div.showalltasks(
-					onclick="taskselector.showAllTasks('" + module['moduletitle'] +"')"
+				button.task#showalltasks(
+					data-module=module['moduletitle']
+					data-modulename=module['modulename']
+					onclick="taskselector.showAllTasks(this, '" + module['moduletitle'] +"')"
 				)="Show All"
 				
 div

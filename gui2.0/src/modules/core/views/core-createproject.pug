@@ -55,11 +55,12 @@ div
 
 div.inputaccordion
 	div.inputpage
-		div.inputheader
+		div.inputheader(
+			onclick="tasksetup.toggleAdvanced(this)"
+		)
 			h="Project Information"
 			img.advancedbutton(
-				src="img/gear.png"
-				onclick="tasksetup.toggleAdvanced(this)"
+				src="img/plus.png"
 			)
 		table
 			tr.required
@@ -86,11 +87,12 @@ div.inputaccordion
 					"required": true
 				})
 	div.inputpage
-		div.inputheader
+		div.inputheader(
+			onclick="tasksetup.toggleAdvanced(this)"
+		)
 			h="Queuing System Information"
 			img.advancedbutton(
-				src="img/gear.png"
-				onclick="tasksetup.toggleAdvanced(this)"
+				src="img/plus.png"
 			)
 		table
 			tr.advanced

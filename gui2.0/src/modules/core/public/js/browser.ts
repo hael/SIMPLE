@@ -1,7 +1,6 @@
 class Browser {
 	
 	private popup
-	//private	gauze
 	private args
 	public selection
 	
@@ -26,6 +25,8 @@ class Browser {
 		}
 		if(document.getElementById('filter')){
 			request['arg']['filter'] = (<HTMLInputElement>document.getElementById('filter')).value
+		} else if (this.args['filter']){
+			request['arg']['filter'] = this.args['filter']
 		}
 		postAjaxPromise(request)
 			.then(response => response.json())
