@@ -19,6 +19,7 @@ use simple_commander_sim
 use simple_commander_star
 use simple_commander_volops
 use simple_commander_tseries
+use simple_commander_resolest
 use simple_projection_frcs
 implicit none
 #include "simple_local_flags.inc"

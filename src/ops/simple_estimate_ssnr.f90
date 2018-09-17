@@ -118,6 +118,139 @@ contains
         dose_weight = exp(-acc_dose/(2.0*critical_exp))
     end function dose_weight
 
+    subroutine local_res2D( even_imgs, odd_imgs, mskrad, corr_thres, locres_finds, half_winsz, fbody )
+        use simple_image, only: image
+        class(image),               intent(inout) :: even_imgs(:), odd_imgs(:)
+        real,                       intent(in)    :: mskrad, corr_thres
+        integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
+        integer,          optional, intent(in)    :: half_winsz
+        character(len=*), optional, intent(in)    :: fbody
+        character(len=:), allocatable :: fname_finds
+        logical,     allocatable :: l_mask(:,:,:)
+        real,        allocatable :: frc(:), res(:)
+        real(dp),    allocatable :: vec1(:), vec2(:)
+        type(image), allocatable :: eimgs_copy(:), oimgs_copy(:)
+        type(image) :: mskimg
+        integer :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat, iptcl
+        integer :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq, nptcls
+        real    :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
+        nptcls = size(even_imgs)
+        if( nptcls /= size(odd_imgs) ) THROW_HARD('Nonconforming image array sizes; local_res2D')
+        do iptcl=1,nptcls
+            if( .not. even_imgs(iptcl)%is_ft() ) THROW_HARD('even imgs not FTed; local_res')
+            if( .not. odd_imgs(iptcl)%is_ft()  ) THROW_HARD('odd imgs not FTed; local_res')
+        enddo
+        ! set parameters
+        hwinsz   = 3
+        if( present(half_winsz) ) hwinsz = half_winsz
+        hwinszsq = hwinsz * hwinsz
+        ldim     = even_imgs(1)%get_ldim()
+        vecsz    = (2 * hwinsz + 1)**2
+        filtsz   = even_imgs(1)%get_filtsz()
+        smpd     = even_imgs(1)%get_smpd()
+        call mskimg%disc(ldim, smpd, mskrad)
+        l_mask   = mskimg%bin2logical()
+        call mskimg%kill
+        npix     = count(l_mask)
+        res      = even_imgs(1)%get_res()
+        ! to avoid allocation in the loop
+        if( allocated(locres_finds) ) deallocate(locres_finds)
+        allocate(locres_finds(nptcls,ldim(1),ldim(2)), vec1(vecsz), vec2(vecsz),&
+            &eimgs_copy(nptcls), oimgs_copy(nptcls))
+        locres_finds = 0
+        do iptcl=1,nptcls
+            call eimgs_copy(iptcl)%new(ldim, smpd, wthreads=.false.)
+            call oimgs_copy(iptcl)%new(ldim, smpd, wthreads=.false.)
+        end do
+        ! loop over resolution shells
+        do kind=1,filtsz
+            !$omp parallel do default(shared) private(iptcl,i,j,cc) proc_bind(close) schedule(static) reduction(+:ccavg,cnt)
+            do iptcl=1,nptcls
+                ! tophat filter out the shell
+                call eimgs_copy(iptcl)%copy(even_imgs(iptcl))
+                call oimgs_copy(iptcl)%copy(odd_imgs(iptcl))
+                call eimgs_copy(iptcl)%tophat(kind)
+                call oimgs_copy(iptcl)%tophat(kind)
+                call eimgs_copy(iptcl)%ifft
+                call oimgs_copy(iptcl)%ifft
+                ! neighborhood correlation analysis
+                do j=1,ldim(2)
+                    do i=1,ldim(1)
+                        if( .not. l_mask(i,j,1) ) cycle
+                        cc    = neigh_cc([i,j])
+                        ccavg = ccavg + cc
+                        if( cc >= corr_thres ) locres_finds(iptcl,i,j) = kind
+                        if( cc >= 0.5 ) cnt = cnt + 1
+                    enddo
+                enddo
+            end do
+            !$omp end parallel do
+            ccavg     = ccavg / real(npix * nptcls)
+            frac_nccs = real(cnt) / real(npix * nptcls) * 100.
+            write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', ccavg,&
+            &'>>> % NEIGH_CCS >= 0.5', frac_nccs
+            if( frac_nccs < 1. ) exit ! save the compute
+        end do
+        find_hres = maxval(locres_finds, l_mask)
+        find_lres = minval(locres_finds, l_mask .and. locres_finds > 0)
+        write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_hres)
+        write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_lres)
+        ! make sure no 0 elements within the mask
+        where( l_mask .and. locres_finds == 0 ) locres_finds = filtsz
+        ! make sure background at lowest estimated local resolution
+        where( locres_finds == 0 ) locres_finds = find_lres
+        ! destruct
+        do iptcl=1,nptcls
+            call eimgs_copy(iptcl)%kill
+            call oimgs_copy(iptcl)%kill
+        end do
+        deallocate(l_mask, eimgs_copy, oimgs_copy)
+        ! write output
+        if( present(fbody) )then
+            fname_finds  = trim(fbody)//'_finds.bin'
+        else
+            fname_finds  = 'locresmap_finds.bin'
+        endif
+        call fopen(funit, fname_finds, access='STREAM', action='WRITE',&
+            &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
+        call fileiochk('local_res, file: '//fname_finds, io_stat)
+        write(unit=funit,pos=1) locres_finds
+        call fclose(funit)
+
+        contains
+
+            function neigh_cc( loc ) result( cc )
+                integer, intent(in) :: loc(2)
+                integer  :: lb(2), ub(2), i, j, cnt, ii, jj
+                real     :: cc
+                ! set bounds
+                lb = loc - hwinsz
+                ub = loc + hwinsz
+                ! extract components wihin circle
+                cnt = 0
+                jj  = -hwinsz
+                do j=lb(2),ub(2)
+                    if( j >= 1 .and. j <= ldim(2) )then
+                        ii = -hwinsz
+                        do i=lb(1),ub(1)
+                            if( i >= 1 .and. i <= ldim(1) )then
+                                if( jj*jj + ii*ii <= hwinszsq )then
+                                    cnt       = cnt + 1
+                                    vec1(cnt) = dble(eimgs_copy(iptcl)%get_rmat_at(i,j,1))
+                                    vec2(cnt) = dble(oimgs_copy(iptcl)%get_rmat_at(i,j,1))
+                                endif
+                            endif
+                            ii = ii + 1
+                        enddo
+                    endif
+                    jj = jj + 1
+                enddo
+                ! correlate
+                cc = pearsn_serial_8(cnt, vec1(:cnt), vec2(:cnt))
+            end function neigh_cc
+
+    end subroutine local_res2D
+
     ! even odd images assumed to be appropriately masked before calling this routine
     ! mskimg should be a hard mask (real-space)
     subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz, fbody )
@@ -127,14 +260,13 @@ contains
         integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
         integer,          optional, intent(in)    :: half_winsz
         character(len=*), optional, intent(in)    :: fbody
-        character(len=:), allocatable :: fname_resmap, fname_finds
+        character(len=:), allocatable :: fname_finds
         logical,  allocatable :: l_mask(:,:,:)
         real,     allocatable :: fsc(:), res(:)
         real(dp), allocatable :: vec1(:), vec2(:)
         integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
         integer     :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq
-        logical     :: is2d
-        type(image) :: ecopy, ocopy, resmap
+        type(image) :: ecopy, ocopy
         real        :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
         ! check input
         if( .not. even%is_ft() ) THROW_HARD('even vol not FTed; local_res')
@@ -144,12 +276,8 @@ contains
         if( present(half_winsz) ) hwinsz = half_winsz
         hwinszsq = hwinsz * hwinsz
         ldim     = even%get_ldim()
-        is2d     = ldim(3) == 1
-        if( is2d )then
-            vecsz = (2 * hwinsz + 1)**2
-        else
-            vecsz = (2 * hwinsz + 1)**3
-        endif
+        if( ldim(3) == 1 )  THROW_HARD('not intended for 2D images; local_res')
+        vecsz = (2 * hwinsz + 1)**3
         filtsz = even%get_filtsz()
         smpd   = even%get_smpd()
         l_mask = mskimg%bin2logical()
@@ -164,12 +292,14 @@ contains
         fsc          = 0.
         ! loop over resolution shells
         do kind=1,filtsz
+            ! tophat filter out the shell
             call ecopy%copy(even)
             call ocopy%copy(odd)
             call ecopy%tophat(kind)
             call ocopy%tophat(kind)
             call ecopy%ifft
             call ocopy%ifft
+            ! neighborhood correlation analysis
             ccavg = 0.
             cnt   = 0
             ! parallel section needs to start here as the above steps are threaded as well
@@ -209,31 +339,17 @@ contains
         deallocate(l_mask)
         call ecopy%kill
         call ocopy%kill
-        ! create resmap
-        call resmap%new(ldim, smpd)
-        do k=1,ldim(3)
-            do j=1,ldim(2)
-                do i=1,ldim(1)
-                    call resmap%set([i,j,k], 1./even%get_lp(locres_finds(i,j,k)))
-                enddo
-            enddo
-        enddo
         ! write output
         if( present(fbody) )then
-            fname_resmap = trim(fbody)//'.mrc'
             fname_finds  = trim(fbody)//'_finds.bin'
         else
-            fname_resmap = 'locresmap.mrc'
             fname_finds  = 'locresmap_finds.bin'
         endif
-        call resmap%write(fname_resmap)
         call fopen(funit, fname_finds, access='STREAM', action='WRITE',&
             &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
         call fileiochk('local_res, file: '//fname_finds, io_stat)
         write(unit=funit,pos=1) locres_finds
         call fclose(funit)
-        ! destruct
-        call resmap%kill
 
         contains
 
@@ -244,11 +360,7 @@ contains
                 ! set bounds
                 lb = loc - hwinsz
                 ub = loc + hwinsz
-                if( is2d )then
-                    lb(3) = 1
-                    ub(3) = 1
-                endif
-                ! extract components wihin sphere/circle
+                ! extract components wihin sphere
                 cnt = 0
                 kk  = -hwinsz
                 do k=lb(3),ub(3)
