@@ -118,8 +118,9 @@ class Simple {
 			if(thumbnail.getAttribute('data-selected') == "true"){
 				state = 1
 			}
-			sorted.push(state)
+			sorted.push([Number(thumbnail.getAttribute('data-class')), state])
 		}
+		sorted.sort((x,y) => { return x[0] - y[0] })
 		
 		var request = {
 			mod : "simple",
@@ -128,8 +129,10 @@ class Simple {
 		}
 		request['arg']['file'] = (<HTMLInputElement>document.getElementById('savefolder')).value + "/" + (<HTMLInputElement>document.getElementById('savefilename')).value
 		request['arg']['projectfile'] = (<HTMLInputElement>document.getElementById('saveprojectfile')).value
-		request['arg']['selection'] = sorted
-		
+		request['arg']['selection'] = []
+		for (var element of sorted){
+			request['arg']['selection'].push(element[1])
+		}
 		return postAjaxPromise(request)
 			.then(response => response.json())
 			.then ((json) => {
