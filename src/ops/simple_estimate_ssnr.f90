@@ -304,11 +304,13 @@ contains
         allocate(rmat_filt(ldim(1),ldim(2),ldim(3)), rmat_lp(ldim(1),ldim(2),ldim(3)), source=0.)
         ! loop over shells
         do k=kstart,kstop
-            lp = calc_lowpass_lim(k, ldim(1), smpd)
-            call resimg%copy(img2filter)
-            call resimg%bp(0.,lp, width=6.0)
-            call resimg%get_rmat_sub(rmat_lp)
-            where( locres_finds == k ) rmat_filt = rmat_lp
+            if( any(locres_finds == k ) )then
+                lp = calc_lowpass_lim(k, ldim(1), smpd)
+                call resimg%copy(img2filter)
+                call resimg%bp(0.,lp, width=6.0)
+                call resimg%get_rmat_sub(rmat_lp)
+                where( locres_finds == k ) rmat_filt = rmat_lp
+            endif
         enddo
         call img2filter%set_rmat(rmat_filt)
         call resimg%kill
