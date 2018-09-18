@@ -51,6 +51,7 @@ type(postprocess_commander)          :: xpostprocess
 type(mask_commander)                 :: xmask
 type(fsc_commander)                  :: xfsc
 type(local_res_commander)            :: xlocal_res
+type(local_res2D_commander)          :: xlocal_res2D
 type(centervol_commander)            :: xcenter
 type(reproject_commander)            :: xreproject
 type(volops_commander)               :: xvolops
@@ -190,6 +191,9 @@ select case(prg)
     case( 'local_resolution' )
         call cline%parse()
         call xlocal_res%execute(cline)
+    case( 'local_resolution2D' )
+        call cline%parse()
+        call xlocal_res2D%execute(cline)
     case( 'center' )
         call cline%parse()
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)

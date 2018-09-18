@@ -11,6 +11,7 @@ implicit none
 
 public :: fsc_commander
 public :: local_res_commander
+public :: local_res2D_commander
 private
 #include "simple_local_flags.inc"
 
@@ -22,6 +23,10 @@ type, extends(commander_base) :: local_res_commander
   contains
     procedure :: execute      => exec_local_res
 end type local_res_commander
+type, extends(commander_base) :: local_res2D_commander
+  contains
+    procedure :: execute      => exec_local_res2D
+end type local_res2D_commander
 
 contains
 
@@ -93,7 +98,6 @@ contains
         type(parameters)     :: params
         type(image)          :: even, odd, vol2filter
         type(masker)         :: mskvol
-        integer              :: j, find_plate
         real                 :: res_fsc05, res_fsc0143
         logical              :: have_mask_file
         integer, allocatable :: locres_finds(:,:,:)
@@ -154,5 +158,64 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_LOCAL_RES NORMAL STOP ****')
     end subroutine exec_local_res
+
+    !> calculates local resolution from Even/Odd class averages
+    subroutine exec_local_res2D( self, cline )
+        use simple_estimate_ssnr, only: local_res2D, local_res2D_lp
+        class(local_res2D_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters)         :: params
+        type(image), allocatable :: even_avgs(:), odd_avgs(:), avgs2filter(:)
+        integer              :: iptcl
+        real                 :: res_fsc05, res_fsc0143
+        logical              :: have_mask_file
+        integer, allocatable :: locres_finds(:,:,:)
+        real,    allocatable :: res(:), corrs(:)
+        if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.5)
+        call params%new(cline)
+        ! read even/odd pairs, mask, FFT
+        allocate(even_avgs(params%nptcls), odd_avgs(params%nptcls))
+        do iptcl=1,params%nptcls
+            ! read
+            call even_avgs(iptcl)%new([params%box,params%box,1], params%smpd)
+            call odd_avgs(iptcl)%new([params%box,params%box,1], params%smpd)
+            call even_avgs(iptcl)%read(params%stk, iptcl)
+            call odd_avgs(iptcl)%read(params%stk2, iptcl)
+            ! mask
+            if( params%l_innermsk )then
+                call even_avgs(iptcl)%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+                call odd_avgs(iptcl)%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+            else
+                call even_avgs(iptcl)%mask(params%msk, 'soft')
+                call odd_avgs(iptcl)%mask(params%msk, 'soft')
+            endif
+            ! forward FT
+            call even_avgs(iptcl)%fft()
+            call odd_avgs(iptcl)%fft()
+        end do
+        call local_res2D(even_avgs, odd_avgs, params%msk, params%lplim_crit, locres_finds)
+        ! destruct
+        do iptcl=1,params%nptcls
+            call even_avgs(iptcl)%kill
+            call odd_avgs(iptcl)%kill
+        enddo
+        ! filter inputted stk3
+        if( cline%defined('stk3') )then
+            ! read the averages to be filtered
+            allocate(avgs2filter(params%nptcls))
+            do iptcl=1,params%nptcls
+                call avgs2filter(iptcl)%new([params%box,params%box,1], params%smpd)
+                call avgs2filter(iptcl)%read(params%stk3, iptcl)
+            end do
+            call local_res2D_lp(locres_finds, avgs2filter)
+            ! write and destruct
+            do iptcl=1,params%nptcls
+                call avgs2filter(iptcl)%write('map_locres2D_lp.mrc', iptcl)
+                call avgs2filter(iptcl)%kill
+            end do
+        endif
+        ! end gracefully
+        call simple_end('**** SIMPLE_LOCAL_RES2D NORMAL STOP ****')
+    end subroutine exec_local_res2D
 
 end module simple_commander_resolest

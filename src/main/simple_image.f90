@@ -62,6 +62,7 @@ contains
     procedure          :: get_rmat
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
+    procedure          :: get_cmat_sub
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
     generic            :: get_cmat_at => get_cmat_at_1, get_cmat_at_2
@@ -1185,6 +1186,13 @@ contains
         complex, allocatable :: cmat(:,:,:)
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
+
+    !>  \brief   get_cmat get the image object's complex matrix
+    pure subroutine get_cmat_sub( self, cmat )
+        class(image), intent(in)  :: self
+        complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
+        cmat=self%cmat
+    end subroutine get_cmat_sub
 
     !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
     function get_cmatfull( self , llims) result( cmat )

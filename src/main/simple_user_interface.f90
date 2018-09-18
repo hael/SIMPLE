@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(61)
+type(simple_prg_ptr) :: prg_ptr_array(62)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -90,6 +90,7 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: local_resolution
+type(simple_program), target :: local_resolution2D
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
@@ -241,6 +242,7 @@ contains
         call new_import_particles
         call new_import_starproject
         call new_local_resolution
+        call new_local_resolution2D
         call new_make_cavgs
         call new_make_oris
         call new_make_pickrefs
@@ -308,45 +310,46 @@ contains
         prg_ptr_array(20)%ptr2prg => import_particles
         prg_ptr_array(21)%ptr2prg => import_starproject
         prg_ptr_array(22)%ptr2prg => local_resolution
-        prg_ptr_array(23)%ptr2prg => make_cavgs
-        prg_ptr_array(24)%ptr2prg => make_oris
-        prg_ptr_array(25)%ptr2prg => make_pickrefs
-        prg_ptr_array(26)%ptr2prg => mask
-        prg_ptr_array(27)%ptr2prg => motion_correct
-        prg_ptr_array(28)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(29)%ptr2prg => new_project
-        prg_ptr_array(30)%ptr2prg => normalize_
-        prg_ptr_array(31)%ptr2prg => orisops
-        prg_ptr_array(32)%ptr2prg => oristats
-        prg_ptr_array(33)%ptr2prg => pick
-        prg_ptr_array(34)%ptr2prg => postprocess
-        prg_ptr_array(35)%ptr2prg => powerspecs
-        prg_ptr_array(36)%ptr2prg => preprocess
-        prg_ptr_array(37)%ptr2prg => preprocess_stream
-        prg_ptr_array(38)%ptr2prg => print_fsc
-        prg_ptr_array(39)%ptr2prg => print_magic_boxes
-        prg_ptr_array(40)%ptr2prg => print_project_info
-        prg_ptr_array(41)%ptr2prg => print_project_field
-        prg_ptr_array(42)%ptr2prg => reproject
-        prg_ptr_array(43)%ptr2prg => reconstruct3D
-        prg_ptr_array(44)%ptr2prg => refine3D
-        prg_ptr_array(45)%ptr2prg => refine3D_init
-        prg_ptr_array(46)%ptr2prg => scale
-        prg_ptr_array(47)%ptr2prg => scale_project
-        prg_ptr_array(48)%ptr2prg => select_
-        prg_ptr_array(49)%ptr2prg => shift
-        prg_ptr_array(50)%ptr2prg => simulate_movie
-        prg_ptr_array(51)%ptr2prg => simulate_noise
-        prg_ptr_array(52)%ptr2prg => simulate_particles
-        prg_ptr_array(53)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(54)%ptr2prg => stack
-        prg_ptr_array(55)%ptr2prg => stackops
-        prg_ptr_array(56)%ptr2prg => symaxis_search
-        prg_ptr_array(57)%ptr2prg => symmetry_test
-        prg_ptr_array(58)%ptr2prg => tseries_track
-        prg_ptr_array(59)%ptr2prg => update_project
-        prg_ptr_array(60)%ptr2prg => vizoris
-        prg_ptr_array(61)%ptr2prg => volops
+        prg_ptr_array(23)%ptr2prg => local_resolution2D
+        prg_ptr_array(24)%ptr2prg => make_cavgs
+        prg_ptr_array(25)%ptr2prg => make_oris
+        prg_ptr_array(26)%ptr2prg => make_pickrefs
+        prg_ptr_array(27)%ptr2prg => mask
+        prg_ptr_array(28)%ptr2prg => motion_correct
+        prg_ptr_array(29)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(30)%ptr2prg => new_project
+        prg_ptr_array(31)%ptr2prg => normalize_
+        prg_ptr_array(32)%ptr2prg => orisops
+        prg_ptr_array(33)%ptr2prg => oristats
+        prg_ptr_array(34)%ptr2prg => pick
+        prg_ptr_array(35)%ptr2prg => postprocess
+        prg_ptr_array(36)%ptr2prg => powerspecs
+        prg_ptr_array(37)%ptr2prg => preprocess
+        prg_ptr_array(38)%ptr2prg => preprocess_stream
+        prg_ptr_array(39)%ptr2prg => print_fsc
+        prg_ptr_array(40)%ptr2prg => print_magic_boxes
+        prg_ptr_array(41)%ptr2prg => print_project_info
+        prg_ptr_array(42)%ptr2prg => print_project_field
+        prg_ptr_array(43)%ptr2prg => reproject
+        prg_ptr_array(44)%ptr2prg => reconstruct3D
+        prg_ptr_array(45)%ptr2prg => refine3D
+        prg_ptr_array(46)%ptr2prg => refine3D_init
+        prg_ptr_array(47)%ptr2prg => scale
+        prg_ptr_array(48)%ptr2prg => scale_project
+        prg_ptr_array(49)%ptr2prg => select_
+        prg_ptr_array(50)%ptr2prg => shift
+        prg_ptr_array(51)%ptr2prg => simulate_movie
+        prg_ptr_array(52)%ptr2prg => simulate_noise
+        prg_ptr_array(53)%ptr2prg => simulate_particles
+        prg_ptr_array(54)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(55)%ptr2prg => stack
+        prg_ptr_array(56)%ptr2prg => stackops
+        prg_ptr_array(57)%ptr2prg => symaxis_search
+        prg_ptr_array(58)%ptr2prg => symmetry_test
+        prg_ptr_array(59)%ptr2prg => tseries_track
+        prg_ptr_array(60)%ptr2prg => update_project
+        prg_ptr_array(61)%ptr2prg => vizoris
+        prg_ptr_array(62)%ptr2prg => volops
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -398,6 +401,8 @@ contains
                 ptr2prg => import_starproject
             case('local_resolution')
                 ptr2prg => local_resolution
+            case('local_resolution2D')
+                ptr2prg => local_resolution2D
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -522,6 +527,7 @@ contains
         write(*,'(A)') import_particles%name
         write(*,'(A)') import_starproject%name
         write(*,'(A)') local_resolution%name
+        write(*,'(A)') local_resolution2D%name
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
@@ -1539,6 +1545,33 @@ contains
         ! computer controls
         call local_resolution%set_input('comp_ctrls', 1, nthr)
     end subroutine new_local_resolution
+
+    subroutine new_local_resolution2D
+        ! PROGRAM SPECIFICATION
+        call local_resolution2D%new(&
+        &'local_resolution2D',&                                         ! name
+        &'Estimate local resolution in class averages',&                ! descr_short
+        &'is a program for estimating local resolution based on neighbourhood correlation analysis in e/o cavgs',& ! descr_long
+        &'simple_exec',&                                                ! executable
+        &3, 1, 0, 0, 1, 1, 1, .false.)                                  ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call local_resolution2D%set_input('img_ios', 1, 'stk',  'file', 'Odd cavgs',  'Odd cavgs',  'cavgs_odd.mrc file', .true., '')
+        call local_resolution2D%set_input('img_ios', 2, 'stk2', 'file', 'Even cavgs', 'Even cavgs', 'cavgs_even.mrc file', .true., '')
+        call local_resolution2D%set_input('img_ios', 3, 'stk3', 'file', 'Cavgs to filter', 'Cavgs to filter', 'cavgs2filter.mrc file', .false., '')
+        ! parameter input/output
+        call local_resolution2D%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call local_resolution2D%set_input('filt_ctrls', 1, lplim_crit)
+        ! mask controls
+        call local_resolution2D%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call local_resolution2D%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_local_resolution2D
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
