@@ -24,6 +24,7 @@
 #define CGD_IMAGE_PNG                    cgd_image_png_
 #define CGD_IMAGE_GD                     cgd_image_gd_
 #define CGD_IMAGE_JPEG                   cgd_image_jpeg_
+#define CGD_IMAGE_TIFF                   cgd_image_tiff_
 #define CGD_IMAGE_XPM                    cgd_image_xpm_
 #define CGD_FONT_TINY                    cgd_font_tiny_
 #define CGD_FONT_SMALL                   cgd_font_small_
@@ -85,6 +86,7 @@
 #define CGD_EDGED                        cgd_edged_
 #define CGD_ANTI_ALIASED                 cgd_anti_aliased_
 #define CGD_IMAGE_COMPARE                cgd_image_compare_
+#define CGD_IMAGE_TIFF_BUFFER_PUT        cgd_image_tiff_buffer_put_
 #define CGD_IMAGE_JPEG_BUFFER_PUT        cgd_image_jpeg_buffer_put_
 #define CGD_IMAGE_JPEG_BUFFER_GET        cgd_image_jpeg_buffer_get_
 #include <sys/types.h>
@@ -420,6 +422,55 @@ void CGD_IMAGE_CREATE_FROM_JPEG(const char *file, gdImagePtr *ptr)
     return;
 }
 
+void CGD_IMAGE_TIFF(gdImagePtr *ptr, const char *file, int *quality)
+{
+    if(0 == strcmp(file, "-")) {
+        gdImageTiff(*ptr, stdout);
+    } else {
+        FILE *f;
+        f = fopen(file, "wb");
+        if(f == NULL) {
+            *ptr = 0;
+        } else {
+            gdImageTiff(*ptr, f);
+            (void)fclose(f);
+        }
+    }
+#ifdef _DEBUG
+    FILE*in = fopen(file, "rb");
+    if(!in) {
+        fprintf(stderr, "Can't open file test/gdtest.tif.\n");
+        exit(1);
+    }
+    gdImagePtr im2 = gdImageCreateFromTiff(in);
+    fclose(in);
+    if(!im2) {
+        fprintf(stderr, "gdImageCreateFromTiff failed.\n");
+        exit(1);
+    }
+    gdImageDestroy(im2);
+#endif
+    return;
+}
+
+void CGD_IMAGE_CREATE_FROM_TIFF(const char *file, gdImagePtr *ptr)
+{
+    FILE *f;
+    f = fopen(file, "rb");
+    if(f == NULL) {
+        *ptr = 0;
+    } else {
+        *ptr = gdImageCreateFromTiff(f);
+        if(!*ptr) {
+            fprintf(stderr, "gdImageCreateFromTiff failed. Attempted to open %s\n", file);
+            exit(1);
+        }
+        (void)fclose(f);
+    }
+    return;
+}
+
+
 /******************************************************************************/
 void CGD_IMAGE_CREATE_FROM_XBM(const char *file, gdImagePtr *ptr)
 {
@@ -715,6 +766,14 @@ void CGD_IMAGE_PNG_BUFFER_GET(gdImagePtr *ptr, int  *size,  int **array)
     status = gdGetBuf(tmp, *size, ctx);
     *array = *((int *)tmp);
 }
+
+void CGD_IMAGE_TIFF_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
+{
+    gdIOCtx *ctx; const void * tmp =  *array;
+    gdImageTiffCtx(*ptr, ctx);
+    gdPutBuf(tmp, *size, ctx);
+}
+
 
 void CGD_IMAGE_JPEG_BUFFER_PUT(gdImagePtr *ptr, int  *size,  int **array)
 {

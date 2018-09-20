@@ -540,8 +540,16 @@ else()
 endif()
 
 
-
-
+if(USE_LIBTIFF)
+  find_package(TIFF)
+  if(TIFF_FOUND)
+    add_definitions("-DUSING_TIFF=1")
+    include_directories(${TIFF_INCLUDE_DIR})
+    set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY})
+  else()
+    set(USE_LIBTIFF OFF)
+endif()
+endif()
 
 #############################################
 ## COMPLER SPECIFIC SETTINGS

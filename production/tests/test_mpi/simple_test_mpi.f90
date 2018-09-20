@@ -4,6 +4,22 @@
 !! source add2.bashrc
 !! mpiexec -np 4 simple_test_mpi
 
+!! http://www.fortran90.org/src/best-practices.html#fortran-style-guide
+! MPI
+! There are three ways of including MPI in a fortran program:
+
+! Fortran version	Method	Comments
+! Fortran 08	use mpi_f08	Consistent with F08 standard, good type-checking; highly recommended
+! Fortran 90	use mpi	Not consistent with standard, so-so type-checking; not recommended
+! Fortran 77	include "mpif.h"	Not consistent with standard, no type-checking; strongly discouraged
+
+! On infrastructures where use mpi_f08 is not available, one should fallback to use mpi.
+! The use of include "mpif.h" is strongly discouraged, as it does not check at all the
+! types of the argument or that the function calls provide the good arguments. For
+! example, you don’t get any compiler warnings if you call a subroutine and forget a
+! parameter, add an extra parameter, or pass a parameter of the wrong type. It may also
+! lead to silent data corruption.
+
 program simple_test_mpi
 include 'simple_lib.f08'
 #if defined( USE_MPIF08_MODULE )

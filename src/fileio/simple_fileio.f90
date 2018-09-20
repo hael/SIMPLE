@@ -464,7 +464,21 @@ contains
         call str2int(nrstr, istat, fname2iter)
     end function fname2iter
 
-    !> strip directory from filenames
+    !> strip extention from filenames
+    pure function strip_extention( fname ) result( fnoext)
+        character(len=*), intent(in)  :: fname     !< abs filename
+        character(len=:), allocatable :: fnoext
+        integer :: length, pos
+        length = len_trim(fname)
+        pos = scan(fname(1:length),'.',back=.true.)
+        if( pos == 0 )then
+            allocate(fnoext, source=trim(fname))
+        else
+            allocate(fnoext, source=trim(fname(1:pos-1)))
+        endif
+    end function strip_extention
+
+    !> strip directory from filenames (POSIX basename)
     pure function basename( fname ) result( new_fname)
         character(len=*), intent(in)  :: fname     !< abs filename
         character(len=:), allocatable :: new_fname
@@ -478,7 +492,7 @@ contains
         endif
     end function basename
 
-    !> get path from file name
+    !> get path from file name  (POSIX dirname)
     pure function get_fpath( fname ) result( path )
         character(len=*), intent(in)  :: fname !< abs filename
         character(len=:), allocatable :: path

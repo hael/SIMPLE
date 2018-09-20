@@ -3,6 +3,8 @@ program simple_test_jpg_export
 include 'simple_lib.f08'
 use simple_jpg, only : test_jpg_export
 use simple_test_export_jpg, only : test_jpg_image
+use simple_tifflib
+use simple_tifflib_test
 use simple_cmdline, only: cmdline
 implicit none
 #include "simple_local_flags.inc"
@@ -29,13 +31,20 @@ if( command_argument_count() > 0 )then
 endif
 call seed_rnd
 call date_and_time(date=datestr)
-folder = trim('SIMPLE_TEST_JPGEXPORT_'//datestr)
+folder = trim('SIMPLE_TEST_IMGEXPORT_'//datestr)
 call simple_mkdir(folder)
 call simple_chdir(folder, olddir)
 
-
+call create_raw_png_tmp
 call test_jpg_image(.true.)
 call test_jpg_export
+
+call test_tiff_write1
+call test_tiff_write2
+call test_tiff_write3
+call test_bigtiff_write
+call test_bigtiff_write2
+
 
 contains
         subroutine create_raw_png_tmp
@@ -49,8 +58,8 @@ contains
         !        open(NEWUNIT=fid,FILE="bbb.raw",ACCESS='STREAM',STATUS="REPLACE",IOSTAT=ios)!,FORM='UNFORMATTED')
         if (ios/=0) return
         write(fid) INT(Z'474e5089',4), INT(Z'0a1a0a0d',4), INT(Z'0d000000',4), INT(Z'52444849',4)
-        write(fid) INT(Z'4b000000',4), INT(Z'4b000000',4), INT(Z'00000208',4), INT(Z'0ed2cb700',4)
-        write(fid) INT(Z'000000bd',4), INT(Z'4d416704',4), INT(Z'0b1000041',4), INT(Z'61fc0b8f',4)
+        write(fid) INT(Z'4b000000',4), INT(Z'4b000000',4), INT(Z'00000208',4), INT(Z'ed2cb700',4)
+        write(fid) INT(Z'000000bd',4), INT(Z'4d416704',4), INT(Z'b1000041',4), INT(Z'61fc0b8f',4)
         write(fid) INT(Z'00000005',4), INT(Z'474b6206',4), INT(Z'00ff0044',4), INT(Z'a0ff00ff',4)
         write(fid) INT(Z'0093a7bd',4), INT(Z'70090000',4), INT(Z'00735948',4), INT(Z'00120b00',4)
         write(fid) INT(Z'01120b00',4), INT(Z'fc7eddd2',4), INT(Z'07000000',4), INT(Z'454d4974',4)

@@ -11,6 +11,8 @@ include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
 implicit none
 
+#ifdef USE_LIBGD
+
 !*** cptr should be have the same size as a c pointer
 !*** It doesn't matter whether it is an integer or a real
 integer, parameter :: cptr = kind(5)
@@ -37,7 +39,7 @@ contains
         integer, intent(out), optional   :: status
         integer                          :: width,height, i,j, colorval,black,white
         type(base_img)                   :: image
-#ifdef _LIBGD
+
 
         if (present(status)) then
             call create_img_from_png(file_name,image,status)

@@ -47,9 +47,13 @@ message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
 file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" PARENT_SCOPE)
 file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
 list(APPEND JPG_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
+if(USE_LIBTIFF)
+list(APPEND JPG_src
+  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/write-bigtiff.c"
+  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/write_tiff.cpp"
   )
-
+endif()
 ########################################################################
 # main folder
 ##########################################################################

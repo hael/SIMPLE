@@ -533,9 +533,6 @@ contains
         endif
     end subroutine simple_file_stat
 
-
-
-
     logical function is_io(unit)
         integer, intent(in) :: unit
         is_io=.false.
