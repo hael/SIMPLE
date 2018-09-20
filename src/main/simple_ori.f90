@@ -123,7 +123,7 @@ contains
     !>  \brief  is a parameterized constructor
     subroutine ori_from_rotmat( self, rotmat )
         class(ori), intent(inout) :: self
-        real, intent(in)          :: rotmat(3,3) !< rotation matrix
+        real,       intent(in)    :: rotmat(3,3) !< rotation matrix
         real :: euls(3)
         call self%new
         euls = m2euler(rotmat)

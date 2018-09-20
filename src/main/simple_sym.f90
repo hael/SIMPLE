@@ -51,7 +51,8 @@ type sym
     procedure, private :: make_c_and_d
     procedure, private :: make_t
     procedure, private :: make_o
-    procedure, private :: make_i
+    procedure, private :: make_i_spider
+    procedure, private :: make_i_relion
     procedure, private :: within_asymunit
     procedure, private :: within_platonic_asymunit
     ! destructor
@@ -68,6 +69,7 @@ integer, parameter          :: nico   = 60 ! # icosahedral symmetry operations
 double precision, parameter :: delta2 = 180.d0
 double precision, parameter :: delta3 = 120.d0
 double precision, parameter :: delta5 = 72.d0
+double precision, parameter :: deltan = 36.d0
 double precision, parameter :: gamma  = 54.735610317245346d0
 real,             parameter :: tet_theta_lim = 70.52877936550931
 real,             parameter :: oct_theta_lim = real(gamma)
@@ -124,7 +126,7 @@ contains
             if( self%pgrp(1:1).eq.'I' ) self%pgrp(1:1) = 'i'
             self%n = nico
             call self%e_sym%new(self%n)
-            call self%make_i
+            call self%make_i_relion
         else
             write(*,'(a)') 'symmetry not supported; new; simple_sym', pgrp
             stop
@@ -704,40 +706,824 @@ contains
     end subroutine make_t
 
     !>  \brief  SPIDER code for making icosahedral symmetry
-    subroutine make_i( self )
+    subroutine make_i_spider( self )
         class(sym), intent(inout) :: self
-        double precision :: deltan, psi, theta, phi
+        double precision :: psi, theta, phi
         integer   :: i, j, cnt
-        deltan = 36.0d0
         cnt = 0
         do i=0,1
             do j=0,4
-                cnt   = cnt+1
+                cnt   = cnt + 1
                 psi   = 0.d0
-                theta = dble(i)*delta2
-                phi   = dble(j)*delta5
+                theta = dble(i) * delta2
+                phi   = dble(j) * delta5
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
         theta = 63.43494882292201d0
         do i=0,4
             do j=0,4
-                cnt = cnt+1
-                psi = i*delta5
-                phi = j*delta5+deltan
+                cnt = cnt + 1
+                psi = dble(i) * delta5
+                phi = dble(j) * delta5 + deltan
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
         theta = 116.56505117707799d0
         do i=0,4
             do j=0,4
-                cnt = cnt+1
-                psi = i*delta5+deltan
-                phi = j*delta5
+                cnt = cnt + 1
+                psi = dble(i) * delta5 + deltan
+                phi = dble(j) * delta5
                 call self%e_sym%set_euler(cnt, real([psi,theta,phi]))
             end do
         end do
-    end subroutine make_i
+    end subroutine make_i_spider
+
+    subroutine make_i_relion( self )
+        class(sym), intent(inout) :: self
+        real :: rmat(3,3)
+        type(ori) :: o
+        ! Symmetry operation: 1
+        rmat(1,1) = 1
+        rmat(1,2) = 0
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 1
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 0
+        rmat(3,3) = 1
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(1, o)
+
+        ! Symmetry operation: 2
+        rmat(1,1) = -1
+        rmat(1,2) = 0
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = -1
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 0
+        rmat(3,3) = 1
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(2, o)
+
+        ! Symmetry operation: 3
+        rmat(1,1) = 0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(3, o)
+
+        ! Symmetry operation: 4
+        rmat(1,1) = -0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(4, o)
+
+        ! Symmetry operation: 5
+        rmat(1,1) = -0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(5, o)
+
+        ! Symmetry operation: 6
+        rmat(1,1) = 0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(6, o)
+
+        ! Symmetry operation: 7
+        rmat(1,1) = -0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(7, o)
+
+        ! Symmetry operation: 8
+        rmat(1,1) = -0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(8, o)
+
+        ! Symmetry operation: 9
+        rmat(1,1) = -0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(9, o)
+
+        ! Symmetry operation: 10
+        rmat(1,1) = 0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(10, o)
+
+        ! Symmetry operation: 11
+        rmat(1,1) = 0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(11, o)
+
+        ! Symmetry operation: 12
+        rmat(1,1) = 0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(12, o)
+
+        ! Symmetry operation: 13
+        rmat(1,1) = 0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(13, o)
+
+        ! Symmetry operation: 14
+        rmat(1,1) = -0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(14, o)
+
+        ! Symmetry operation: 15
+        rmat(1,1) = -0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(15, o)
+
+        ! Symmetry operation: 16
+        rmat(1,1) = 0
+        rmat(1,2) = 0
+        rmat(1,3) = 1
+        rmat(2,1) = 1
+        rmat(2,2) = 0
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 1
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(16, o)
+
+        ! Symmetry operation: 17
+        rmat(1,1) = 0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(17, o)
+
+        ! Symmetry operation: 18
+        rmat(1,1) = 0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(18, o)
+
+        ! Symmetry operation: 19
+        rmat(1,1) = 0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = 0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(19, o)
+
+        ! Symmetry operation: 20
+        rmat(1,1) = 0
+        rmat(1,2) = 1
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 0
+        rmat(2,3) = 1
+        rmat(3,1) = 1
+        rmat(3,2) = 0
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(20, o)
+
+        ! Symmetry operation: 21
+        rmat(1,1) = 0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(21, o)
+
+        ! Symmetry operation: 22
+        rmat(1,1) = 0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(22, o)
+
+        ! Symmetry operation: 23
+        rmat(1,1) = 0
+        rmat(1,2) = 0
+        rmat(1,3) = 1
+        rmat(2,1) = -1
+        rmat(2,2) = 0
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = -1
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(23, o)
+
+        ! Symmetry operation: 24
+        rmat(1,1) = -0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(24, o)
+
+        ! Symmetry operation: 25
+        rmat(1,1) = -0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(25, o)
+
+        ! Symmetry operation: 26
+        rmat(1,1) = 0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(26, o)
+
+        ! Symmetry operation: 27
+        rmat(1,1) = 0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(27, o)
+
+        ! Symmetry operation: 28
+        rmat(1,1) = 0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(28, o)
+
+        ! Symmetry operation: 29
+        rmat(1,1) = 0
+        rmat(1,2) = -1
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 0
+        rmat(2,3) = -1
+        rmat(3,1) = 1
+        rmat(3,2) = 0
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(29, o)
+
+        ! Symmetry operation: 30
+        rmat(1,1) = -0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(30, o)
+
+        ! Symmetry operation: 31
+        rmat(1,1) = -0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(31, o)
+
+        ! Symmetry operation: 32
+        rmat(1,1) = -0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = 0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(32, o)
+
+        ! Symmetry operation: 33
+        rmat(1,1) = 0
+        rmat(1,2) = 0
+        rmat(1,3) = -1
+        rmat(2,1) = -1
+        rmat(2,2) = 0
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 1
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(33, o)
+
+        ! Symmetry operation: 34
+        rmat(1,1) = -0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = 0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(34, o)
+
+        ! Symmetry operation: 35
+        rmat(1,1) = -0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(35, o)
+
+        ! Symmetry operation: 36
+        rmat(1,1) = 0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(36, o)
+
+        ! Symmetry operation: 37
+        rmat(1,1) = 0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(37, o)
+
+        ! Symmetry operation: 38
+        rmat(1,1) = -0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(38, o)
+
+        ! Symmetry operation: 39
+        rmat(1,1) = -0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = 0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(39, o)
+
+        ! Symmetry operation: 40
+        rmat(1,1) = -0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = 0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(40, o)
+
+        ! Symmetry operation: 41
+        rmat(1,1) = 0
+        rmat(1,2) = 0
+        rmat(1,3) = -1
+        rmat(2,1) = 1
+        rmat(2,2) = 0
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = -1
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(41, o)
+
+        ! Symmetry operation: 42
+        rmat(1,1) = 0
+        rmat(1,2) = -1
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 0
+        rmat(2,3) = 1
+        rmat(3,1) = -1
+        rmat(3,2) = 0
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(42, o)
+
+        ! Symmetry operation: 43
+        rmat(1,1) = -0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(43, o)
+
+        ! Symmetry operation: 44
+        rmat(1,1) = -0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = 0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = 0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(44, o)
+
+        ! Symmetry operation: 45
+        rmat(1,1) = -0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = 0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = 0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(45, o)
+
+        ! Symmetry operation: 46
+        rmat(1,1) = 0
+        rmat(1,2) = 1
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 0
+        rmat(2,3) = -1
+        rmat(3,1) = -1
+        rmat(3,2) = 0
+        rmat(3,3) = 0
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(46, o)
+
+        ! Symmetry operation: 47
+        rmat(1,1) = -0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(47, o)
+
+        ! Symmetry operation: 48
+        rmat(1,1) = 0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(48, o)
+
+        ! Symmetry operation: 49
+        rmat(1,1) = 0.80902
+        rmat(1,2) = 0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = -0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = -0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = 0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(49, o)
+
+        ! Symmetry operation: 50
+        rmat(1,1) = 0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(50, o)
+
+        ! Symmetry operation: 51
+        rmat(1,1) = 0.80902
+        rmat(1,2) = -0.30902
+        rmat(1,3) = -0.5
+        rmat(2,1) = 0.30902
+        rmat(2,2) = -0.5
+        rmat(2,3) = 0.80902
+        rmat(3,1) = -0.5
+        rmat(3,2) = -0.80902
+        rmat(3,3) = -0.30902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(51, o)
+
+        ! Symmetry operation: 52
+        rmat(1,1) = 0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(52, o)
+
+        ! Symmetry operation: 53
+        rmat(1,1) = -0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = 0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(53, o)
+
+        ! Symmetry operation: 54
+        rmat(1,1) = 1
+        rmat(1,2) = 0
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = -1
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 0
+        rmat(3,3) = -1
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(54, o)
+
+        ! Symmetry operation: 55
+        rmat(1,1) = 0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = -0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = 0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(55, o)
+
+        ! Symmetry operation: 56
+        rmat(1,1) = 0.30902
+        rmat(1,2) = -0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = -0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = 0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = 0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(56, o)
+
+        ! Symmetry operation: 57
+        rmat(1,1) = -0.5
+        rmat(1,2) = -0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = -0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = 0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = 0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(57, o)
+
+        ! Symmetry operation: 58
+        rmat(1,1) = -0.5
+        rmat(1,2) = 0.80902
+        rmat(1,3) = -0.30902
+        rmat(2,1) = 0.80902
+        rmat(2,2) = 0.30902
+        rmat(2,3) = -0.5
+        rmat(3,1) = -0.30902
+        rmat(3,2) = -0.5
+        rmat(3,3) = -0.80902
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(58, o)
+
+        ! Symmetry operation: 59
+        rmat(1,1) = 0.30902
+        rmat(1,2) = 0.5
+        rmat(1,3) = -0.80902
+        rmat(2,1) = 0.5
+        rmat(2,2) = -0.80902
+        rmat(2,3) = -0.30902
+        rmat(3,1) = -0.80902
+        rmat(3,2) = -0.30902
+        rmat(3,3) = -0.5
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(59, o)
+
+        ! Symmetry operation: 60
+        rmat(1,1) = -1
+        rmat(1,2) = 0
+        rmat(1,3) = 0
+        rmat(2,1) = 0
+        rmat(2,2) = 1
+        rmat(2,3) = 0
+        rmat(3,1) = 0
+        rmat(3,2) = 0
+        rmat(3,3) = -1
+        call o%ori_from_rotmat(rmat)
+        call self%e_sym%set_ori(60, o)
+    end subroutine make_i_relion
 
     !>  \brief Sets the array of subgroups (character identifier) including itself
     subroutine set_subgrps( self )

@@ -161,7 +161,7 @@ contains
         if( allocated(locres_finds) ) deallocate(locres_finds)
         allocate(locres_finds(nptcls,ldim(1),ldim(2)), vec1(vecsz), vec2(vecsz),&
             &eimgs_copy(nptcls), oimgs_copy(nptcls), cmat(cmdims(1),cmdims(2),cmdims(3)))
-        locres_finds = 2 ! lowest resolution allowed
+        locres_finds = 0
         do iptcl=1,nptcls
             call eimgs_copy(iptcl)%new(ldim, smpd, wthreads=.false.)
             call oimgs_copy(iptcl)%new(ldim, smpd, wthreads=.false.)
@@ -208,7 +208,7 @@ contains
                             mm = mm + 1
                         enddo
                         ! correlate
-                        cc = pearsn_serial_8(ivec, vec1(:ivec), vec2(:ivec))
+                        cc    = pearsn_serial_8(ivec, vec1(:ivec), vec2(:ivec))
                         ccavg = ccavg + cc
                         if( cc >= corr_thres ) locres_finds(iptcl,i,j) = kind
                         if( cc >= 0.5 ) cnt = cnt + 1
@@ -266,7 +266,7 @@ contains
         use simple_image, only: image
         integer,      intent(in)    :: locres_finds(:,:,:)
         class(image), intent(inout) :: imgs2filter(:)
-        real,         allocatable   :: rmats_filt(:,:,:,:), rmats_lp(:,:,:,:)
+        real,         allocatable   :: rmats_filt(:,:,:,:), rmat_lp(:,:,:), rmat(:,:,:)
         type(image),  allocatable   :: resimgs(:)
         integer :: ldim_finds(3), ldim(3), k, kstart, kstop, nptcls, iptcl
         real    :: smpd, lp
@@ -284,22 +284,23 @@ contains
         kstart = minval(locres_finds)
         kstop  = maxval(locres_finds)
         ! to avoid allocation in the loop
-        allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1), rmats_lp(nptcls,ldim(1),ldim(2),1))
+        allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1), rmat_lp(ldim(1),ldim(2),1), rmat(ldim(1),ldim(2),1))
         do iptcl=1,nptcls
             call resimgs(iptcl)%new(ldim, smpd, wthreads=.false.)
         end do
         rmats_filt = 0.
-        rmats_lp   = 0.
+        rmat_lp    = 0.
         ! loop over shells
         do k=kstart,kstop
-            !omp parallel do default(shared) private(iptcl,lp) proc_bind(close) schedule(static)
+            !omp parallel do default(shared) private(iptcl,lp,rmat,rmat_lp) proc_bind(close) schedule(static)
             do iptcl=1,nptcls
                 if( any(locres_finds(iptcl,:,:) == k ) )then
                     lp = calc_lowpass_lim(k, ldim(1), smpd)
-                    call resimgs(iptcl)%copy(imgs2filter(iptcl))
+                    call imgs2filter(iptcl)%get_rmat_sub(rmat)
+                    call resimgs(iptcl)%set_rmat(rmat)
                     call resimgs(iptcl)%bp(0., lp, width=6.0)
-                    call resimgs(iptcl)%get_rmat_sub(rmats_lp(iptcl,:,:,:))
-                    where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmats_lp(iptcl,:,:,1)
+                    call resimgs(iptcl)%get_rmat_sub(rmat_lp)
+                    where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmat_lp(:,:,1)
                 endif
             end do
             !omp end parallel do
@@ -347,7 +348,7 @@ contains
         call ocopy%new(ldim, smpd)
         if( allocated(locres_finds) ) deallocate(locres_finds)
         allocate(locres_finds(ldim(1),ldim(2),ldim(3)), fsc(filtsz))
-        locres_finds = 2 ! lowest resolution allowed
+        locres_finds = 0
         fsc          = 0.
         ! loop over resolution shells
         do kind=1,filtsz

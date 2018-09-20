@@ -585,7 +585,7 @@ contains
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
             fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            call build%vol%write(trim(fbody)//'_centred.mrc')
+            call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
@@ -626,11 +626,19 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
+        real             :: shvec(3)
+        character(len=:), allocatable :: fbody
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not. cline%defined('outvol') ) params%outvol = 'symmetrized_map'//params%ext
-        ! mask volume
         call build%vol%read(params%vols(1))
+        if( params%center.eq.'yes' )then
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            call build%vol%shift(shvec)
+            fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            call build%vol%write(trim(fbody)//'_centered.mrc')
+        endif
+        ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! symmetrize
         call symmetrize_map(build%vol, params%pgrp, params%hp, params%lp, build%vol2)
@@ -657,7 +665,7 @@ contains
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
             fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            call build%vol%write(trim(fbody)//'_centred.mrc')
+            call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
