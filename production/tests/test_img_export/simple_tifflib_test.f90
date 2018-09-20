@@ -1,5 +1,6 @@
 
 module simple_tifflib_test
+#ifdef USING_TIFF
 use simple_tifflib
 implicit none
 private
@@ -73,5 +74,5 @@ contains
         deallocate(img)
     end subroutine test_bigtiff_write2
 
-
+#endif
 end module simple_tifflib_test

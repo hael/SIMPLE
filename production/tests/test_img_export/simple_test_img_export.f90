@@ -3,8 +3,10 @@ program simple_test_jpg_export
 include 'simple_lib.f08'
 use simple_jpg, only : test_jpg_export
 use simple_test_export_jpg, only : test_jpg_image
+#ifdef USING_TIFF
 use simple_tifflib
 use simple_tifflib_test
+#endif
 use simple_cmdline, only: cmdline
 implicit none
 #include "simple_local_flags.inc"
@@ -38,13 +40,13 @@ call simple_chdir(folder, olddir)
 call create_raw_png_tmp
 call test_jpg_image(.true.)
 call test_jpg_export
-
+#ifdef USING_TIFF
 call test_tiff_write1
 call test_tiff_write2
 call test_tiff_write3
 call test_bigtiff_write
 call test_bigtiff_write2
-
+#endif
 
 contains
         subroutine create_raw_png_tmp
