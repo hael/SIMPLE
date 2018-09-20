@@ -134,7 +134,7 @@ contains
         type(image), allocatable :: eimgs_copy(:), oimgs_copy(:)
         type(image) :: mskimg
         integer :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat, iptcl, cmdims(3)
-        integer :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq, nptcls, find
+        integer :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq, nptcls, find_min, find_max
         integer ::  lb(2), ub(2), m, ivec, kk, mm
         real    :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
         nptcls = size(even_imgs)
@@ -220,25 +220,30 @@ contains
             frac_nccs = real(cnt) / real(npix * nptcls) * 100.
             write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', ccavg,&
             &'>>> % NEIGH_CCS >= 0.5', frac_nccs
+            if( ccavg < 0.01 ) exit
         end do
         ! identify highest and lowest local resolution
         do iptcl=1,nptcls
-            find = maxval(locres_finds(iptcl,:,:), l_mask(:,:,1))
+            find_max = maxval(locres_finds(iptcl,:,:), l_mask(:,:,1))
             if( iptcl == 1 )then
-                find_hres = find
-            else if( find > find_hres )then
-                find_hres = find
+                find_hres = find_max
+            else if( find_max > find_hres )then
+                find_hres = find_max
             endif
-            find = minval(locres_finds(iptcl,:,:), l_mask(:,:,1) .and. locres_finds(iptcl,:,:) > 0)
+            if( count(l_mask(:,:,1) .and. locres_finds(iptcl,:,:) > 0) > 0 )then
+                find_min = minval(locres_finds(iptcl,:,:), l_mask(:,:,1) .and. locres_finds(iptcl,:,:) > 0)
+            else
+                find_min = 2
+            endif
             if( iptcl == 1 )then
-                find_lres = max(find,2)
-            else if( find < find_lres )then
-                find_lres = max(find,2)
+                find_lres = max(find_min,2)
+            else if( find_min < find_lres )then
+                find_lres = max(find_min,2)
             endif
             ! make sure no 0 elements within the mask
-            where( l_mask(:,:,1) .and. locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = filtsz
-            ! make sure background at lowest estimated local resolution
-            where( locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = find
+            where( l_mask(:,:,1)       .and. locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = filtsz
+            ! make sure background at highest estimated local resolution
+            where( .not. l_mask(:,:,1) .and. locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = max(2,find_max)
         end do
         write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_hres)
         write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_lres)
@@ -266,7 +271,7 @@ contains
         use simple_image, only: image
         integer,      intent(in)    :: locres_finds(:,:,:)
         class(image), intent(inout) :: imgs2filter(:)
-        real,         allocatable   :: rmats_filt(:,:,:,:), rmat_lp(:,:,:), rmat(:,:,:)
+        real,         allocatable   :: rmats_filt(:,:,:,:), rmats_lp(:,:,:,:), rmats(:,:,:,:)
         type(image),  allocatable   :: resimgs(:)
         integer :: ldim_finds(3), ldim(3), k, kstart, kstop, nptcls, iptcl
         real    :: smpd, lp
@@ -278,32 +283,34 @@ contains
         nptcls = size(imgs2filter)
         if( nptcls /= ldim_finds(1) ) THROW_HARD('nonconforming dim 1 of imgs2filter and locres_finds; local_res2D_lp')
         ldim = imgs2filter(1)%get_ldim()
-        if( .not. all(ldim_finds(2:3) == ldim(1:2)) ) THROW_HARD('nonconforming dims 2-3 locres_finds vs imgs2filter; local_res_lp')
+        if( .not. all(ldim_finds(2:3) == ldim(1:2)) ) THROW_HARD('nonconforming dims 2-3 locres_finds vs imgs2filter; local_res2D_lp')
         ! fetch params
         smpd   = imgs2filter(1)%get_smpd()
         kstart = minval(locres_finds)
         kstop  = maxval(locres_finds)
         ! to avoid allocation in the loop
-        allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1), rmat_lp(ldim(1),ldim(2),1), rmat(ldim(1),ldim(2),1))
+        allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1),&
+            &rmats_lp(nptcls,ldim(1),ldim(2),1), rmats(nptcls,ldim(1),ldim(2),1))
         do iptcl=1,nptcls
             call resimgs(iptcl)%new(ldim, smpd, wthreads=.false.)
         end do
         rmats_filt = 0.
-        rmat_lp    = 0.
+        rmats_lp    = 0.
         ! loop over shells
         do k=kstart,kstop
-            !omp parallel do default(shared) private(iptcl,lp,rmat,rmat_lp) proc_bind(close) schedule(static)
+            call progress(k,kstop)
+            !$omp parallel do default(shared) private(iptcl,lp) proc_bind(close) schedule(static)
             do iptcl=1,nptcls
                 if( any(locres_finds(iptcl,:,:) == k ) )then
                     lp = calc_lowpass_lim(k, ldim(1), smpd)
-                    call imgs2filter(iptcl)%get_rmat_sub(rmat)
-                    call resimgs(iptcl)%set_rmat(rmat)
+                    call imgs2filter(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                    call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
                     call resimgs(iptcl)%bp(0., lp, width=6.0)
-                    call resimgs(iptcl)%get_rmat_sub(rmat_lp)
-                    where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmat_lp(:,:,1)
+                    call resimgs(iptcl)%get_rmat_sub(rmats_lp(iptcl,:,:,:))
+                    where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmats_lp(iptcl,:,:,1)
                 endif
             end do
-            !omp end parallel do
+            !$omp end parallel do
         enddo
         ! set the filtered images and destroy resimgs
         do iptcl=1,nptcls
@@ -382,7 +389,7 @@ contains
             frac_nccs = real(cnt) / real(npix) * 100.
             write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
             &'>>> % NEIGH_CCS >= 0.5', frac_nccs
-            if( frac_nccs < 1. ) exit ! save the compute
+            if( frac_nccs < 1. .or. ccavg < 0.01 ) exit ! save the compute
         end do
         call get_resolution(fsc, res, res_fsc05, res_fsc0143)
         write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
