@@ -9,13 +9,13 @@
 #include <memory.h>
 #include <string.h>
 #include <math.h>
-
+#include <tiff.h>
 #include <tiffio.h>
 
 #define BIGTIFF_WRITE bigtiff_write_
 
 int
-bigtiff_write (char * fname, int*nx, int*ny, int*nz, float *mnval, float *mxval, void*imgptr)
+bigtiff_write (int*nx, int*ny, int*nz, float *mnval, float *mxval, void*imgptr, char * fname ,int* charStringLen , size_t ivf_CharStringLen)
 {
 	int width = *nx;
 	int height = *ny;
@@ -77,3 +77,183 @@ bigtiff_write (char * fname, int*nx, int*ny, int*nz, float *mnval, float *mxval,
 
 	return 0;
 }
+
+static void
+swapBytesInScanline(void *buf, uint32 width, TIFFDataType dtype)
+{
+	switch (dtype) {
+		case TIFF_SHORT:
+		case TIFF_SSHORT:
+			TIFFSwabArrayOfShort((uint16*)buf,
+                                             (unsigned long)width);
+			break;
+		case TIFF_LONG:
+		case TIFF_SLONG:
+			TIFFSwabArrayOfLong((uint32*)buf,
+                                            (unsigned long)width);
+			break;
+		/* case TIFF_FLOAT: */	/* FIXME */
+		case TIFF_DOUBLE:
+			TIFFSwabArrayOfDouble((double*)buf,
+                                              (unsigned long)width);
+			break;
+		default:
+			break;
+	}
+}
+
+/* static	uint16 compression = (uint16) -1; */
+/* static	int jpegcolormode = JPEGCOLORMODE_RGB; */
+/* static	int quality = 75;		/\* JPEG quality *\/ */
+/* static	uint16 predictor = 0; */
+/* int */
+/* raw2tiff(float*in,  int* width_, int*length_, int*slices_, */
+/*          char* outfilename, */
+/*          int* charStringLen, */
+/*          size_t ivf_CharStringLen) */
+/* { */
+/* 	uint32 slices, linebytes, bufsize,	width = 0, length = 0; */
+/* 	uint32	nbands = 1;		    /\* number of bands in input image*\/ */
+/* 	_TIFF_off_t hdr_size = 0;	    /\* size of the header to skip *\/ */
+/* 	TIFFDataType dtype = TIFF_FLOAT; */
+/* 	int16	depth = 3;		    /\* bytes per pixel in input image *\/ */
+/* 	int	swab = 0;		    /\* byte swapping flag *\/ */
+/* 	InterleavingType interleaving = 0;  /\* interleaving type flag *\/ */
+/* 	uint32  rowsperstrip = (uint32) -1; */
+/* 	uint16	photometric = PHOTOMETRIC_MINISBLACK; */
+/* 	uint16	config = PLANARCONFIG_CONTIG; */
+/* 	uint16	fillorder = FILLORDER_LSB2MSB; */
+/* 	int	fd; */
+/* 	char	*outfilename = NULL; */
+/* 	TIFF	*out; */
+
+/* 	uint32 row, col, band; */
+/* 	int	c; */
+/* 	unsigned char *buf = NULL, *buf1 = NULL; */
+/*   width=* width_; */
+/*   length=*length_; */
+/*   slices=*slices_; */
+/* 	out = TIFFOpen(outfilename, "w"); */
+/* 	if (out == NULL) { */
+/* 		fprintf(stderr, "raw2tiff: %s: Cannot open file for output.\n", outfilename); */
+/* 		return (-1); */
+/* 	} */
+
+/* 	TIFFSetField(out, TIFFTAG_IMAGEWIDTH, width); */
+/* 	TIFFSetField(out, TIFFTAG_IMAGELENGTH, length); */
+/* 	TIFFSetField(out, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT); */
+/* 	TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, nbands); */
+/* 	TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, depth * 8); */
+/* 	TIFFSetField(out, TIFFTAG_FILLORDER, fillorder); */
+/* 	TIFFSetField(out, TIFFTAG_PLANARCONFIG, config); */
+/* 	TIFFSetField(out, TIFFTAG_PHOTOMETRIC, photometric); */
+/* 	switch (dtype) { */
+/* 	case TIFF_BYTE: */
+/* 	case TIFF_SHORT: */
+/* 	case TIFF_LONG: */
+/* 		TIFFSetField(out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT); */
+/* 		break; */
+/* 	case TIFF_SBYTE: */
+/* 	case TIFF_SSHORT: */
+/* 	case TIFF_SLONG: */
+/* 		TIFFSetField(out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_INT); */
+/* 		break; */
+/* 	case TIFF_FLOAT: */
+/* 	case TIFF_DOUBLE: */
+/* 		TIFFSetField(out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_IEEEFP); */
+/* 		break; */
+/* 	default: */
+/* 		TIFFSetField(out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_VOID); */
+/* 		break; */
+/* 	} */
+/* 	if (compression == (uint16) -1) */
+/* 		compression = COMPRESSION_PACKBITS; */
+/* 	TIFFSetField(out, TIFFTAG_COMPRESSION, compression); */
+/* 	switch (compression) { */
+/* 	case COMPRESSION_JPEG: */
+/* 		if (photometric == PHOTOMETRIC_RGB */
+/* 		    && jpegcolormode == JPEGCOLORMODE_RGB) */
+/* 			photometric = PHOTOMETRIC_YCBCR; */
+/* 		TIFFSetField(out, TIFFTAG_JPEGQUALITY, quality); */
+/* 		TIFFSetField(out, TIFFTAG_JPEGCOLORMODE, jpegcolormode); */
+/* 		break; */
+/* 	case COMPRESSION_LZW: */
+/* 	case COMPRESSION_DEFLATE: */
+/* 		if (predictor != 0) */
+/* 			TIFFSetField(out, TIFFTAG_PREDICTOR, predictor); */
+/* 		break; */
+/* 	} */
+/* 	switch(interleaving) { */
+/* 	case BAND:				/\* band interleaved data *\/ */
+/* 		linebytes = width * depth; */
+/* 		buf = (unsigned char *)_TIFFmalloc(linebytes); */
+/* 		break; */
+/* 	case PIXEL:				/\* pixel interleaved data *\/ */
+/* 	default: */
+/* 		linebytes = width * nbands * depth; */
+/* 		break; */
+/* 	} */
+/* 	bufsize = width * nbands * depth; */
+/* 	buf1 = (unsigned char *)_TIFFmalloc(bufsize); */
+
+/* 	rowsperstrip = TIFFDefaultStripSize(out, rowsperstrip); */
+/* 	if (rowsperstrip > length) { */
+/* 		rowsperstrip = length; */
+/* 	} */
+/* 	TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, rowsperstrip ); */
+
+/* 	_TIFF_lseek_f(fd, hdr_size, SEEK_SET);		/\* Skip the file header *\/ */
+/* 	for (row = 0; row < length; row++) { */
+/* 		switch(interleaving) { */
+/* 		case BAND:			/\* band interleaved data *\/ */
+/* 			for (band = 0; band < nbands; band++) { */
+/* 				if (_TIFF_lseek_f(fd, */
+/*                                           hdr_size + (length*band+row)*linebytes, */
+/*                                           SEEK_SET) == (_TIFF_off_t)-1) { */
+/*                                         fprintf(stderr, */
+/*                                                 "%s: %s: scanline %lu: seek error.\n", */
+/*                                                 argv[0], argv[optind], */
+/*                                                 (unsigned long) row); */
+/*                                         break; */
+/*                                 } */
+/* 				if (read(fd, buf, linebytes) < 0) { */
+/* 					fprintf(stderr, */
+/*                                                 "%s: %s: scanline %lu: Read error.\n", */
+/*                                                 argv[0], argv[optind], */
+/*                                                 (unsigned long) row); */
+/*                                         break; */
+/* 				} */
+/* 				if (swab)	/\* Swap bytes if needed *\/ */
+/* 					swapBytesInScanline(buf, width, dtype); */
+/* 				for (col = 0; col < width; col++) */
+/* 					memcpy(buf1 + (col*nbands+band)*depth, */
+/* 					       buf + col * depth, depth); */
+/* 			} */
+/* 			break; */
+/* 		case PIXEL:			/\* pixel interleaved data *\/ */
+/* 		default: */
+/* 			if (read(fd, buf1, bufsize) < 0) { */
+/* 				fprintf(stderr, */
+/* 					"%s: %s: scanline %lu: Read error.\n", */
+/* 					argv[0], argv[optind], */
+/* 					(unsigned long) row); */
+/* 				break; */
+/* 			} */
+/* 			if (swab)		/\* Swap bytes if needed *\/ */
+/* 				swapBytesInScanline(buf1, width, dtype); */
+/* 			break; */
+/* 		} */
+
+/* 		if (TIFFWriteScanline(out, buf1, row, 0) < 0) { */
+/* 			fprintf(stderr,	"%s: %s: scanline %lu: Write error.\n", */
+/* 				argv[0], outfilename, (unsigned long) row); */
+/* 			break; */
+/* 		} */
+/* 	} */
+/* 	if (buf) */
+/* 		_TIFFfree(buf); */
+/* 	if (buf1) */
+/* 		_TIFFfree(buf1); */
+/* 	TIFFClose(out); */
+/* 	return (0); */
+/* } */

@@ -8,7 +8,10 @@
 #include "tiffio.h"
 
 
-void Tifflib_readRGBA(char * fname, float*realimg, int*width, int*height)
+void Tifflib_readRGBA( float*realimg, int*width, int*height,
+                       char * fname,
+                       int* charStringLen,
+                       size_t ivf_CharStringLen)
 {
   TIFF* tif = TIFFOpen(fname, "r");
   if (tif) {
@@ -35,7 +38,11 @@ void Tifflib_readRGBA(char * fname, float*realimg, int*width, int*height)
   }
   TIFFClose(tif);
 }
-void Tifflib_readScanline(char * fname, float*realimg, int*width, int*height)
+
+void Tifflib_readScanline(float*realimg, int*width, int*height,
+                          char * fname,
+                          int* charStringLen,
+                          size_t ivf_CharStringLen)
 {
   TIFF* tif = TIFFOpen(fname, "r");
   if (tif) {
@@ -44,7 +51,8 @@ void Tifflib_readScanline(char * fname, float*realimg, int*width, int*height)
     uint32 row;
     TIFFGetField(tif, TIFFTAG_IMAGEWIDTH, &imagewidth);
     TIFFGetField(tif, TIFFTAG_IMAGELENGTH, &imagelength);
-    *height = (int) imagelength;*width= (int) imagewidth;
+    *height = (int) imagelength;
+    *width= (int) imagewidth;
     buf = _TIFFmalloc(TIFFScanlineSize(tif));
     for (row = 0; row < imagelength; row++){
       TIFFReadScanline(tif, buf, row,0);
@@ -53,6 +61,7 @@ void Tifflib_readScanline(char * fname, float*realimg, int*width, int*height)
     _TIFFfree(buf);
     TIFFClose(tif);
   }
+
 }
 
 void Tifflib_readTiledImage(char * fname, float*realimg, int*width, int*height, int*xtiles, int*ytiles)

@@ -74,78 +74,85 @@ interface
         integer(c_int), intent(in) :: str_len
     end function isdir
 
-    function makedir(dirname) bind(C, name="makedir")
+    function makedir(dirname, str_len) bind(C, name="makedir")
         import
         integer(c_int) :: makedir
         character(c_char),dimension(*),intent(in)  ::  dirname
+       integer(c_int), intent(in) :: str_len
     end function makedir
 
-    function removedir(dirname,len, count) bind(C, name="remove_directory")
+    function removedir(dirname,str_len, count) bind(C, name="remove_directory")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: removedir
         character(c_char),dimension(*),intent(in)  ::  dirname
-        integer(c_int), intent(in) :: len
-        integer(c_int), intent(in) :: count
+        integer(c_int), intent(in) :: str_len
+        integer(c_int), intent(inout) :: count
     end function removedir
 
-    function recursive_delete(dirname,len, count) bind(C, name="recursive_delete")
+    function recursive_delete(dirname,str_len, count) bind(C, name="recursive_delete")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: recursive_delete
         character(c_char),dimension(*),intent(in)  ::  dirname
-        integer(c_int), intent(in) :: len
-        integer(c_int), intent(in) :: count
+        integer(c_int), intent(in) :: str_len
+        integer(c_int), intent(inout) :: count
     end function recursive_delete
 
-    function get_file_list(path,  ext, count) bind(c,name="get_file_list")
+    function get_file_list(path,str_len, ext, count) bind(c,name="get_file_list")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: get_file_list                           !> return success
         character(kind=c_char,len=1),dimension(*),intent(in)   :: path
+        integer(c_int), intent(in) :: str_len
         character(kind=c_char,len=1),dimension(*),intent(in)   :: ext
         integer(c_int), intent(inout) :: count                    !> number of elements in results
     end function get_file_list
 
-    function get_file_list_modified(path, ext, count, flag) bind(c,name="get_file_list_modified")
+    function get_file_list_modified(path,  str_len, ext, count, flag) bind(c,name="get_file_list_modified")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: get_file_list_modified                  !> return success
         character(kind=c_char,len=1),dimension(*),intent(in)   :: path
+        integer(c_int), intent(in) :: str_len
         character(kind=c_char,len=1),dimension(3),intent(in)   :: ext
         integer(c_int), intent(inout)     :: count                !> number of elements in results
         integer(c_int), intent(in), value :: flag                 !> 1st bit reverse, 2nd bit alphanumeric sort or modified time
     end function get_file_list_modified
 
-    function glob_file_list(av, count, flag) bind(c,name="glob_file_list")
+    function glob_file_list(av, count, flag, str_len) bind(c,name="glob_file_list")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: glob_file_list                           !> return success
         character(kind=c_char,len=1),dimension(*),intent(in):: av  !> glob string
         integer(c_int), intent(inout) :: count                     !> number of elements in results
         integer(c_int), intent(in)    :: flag                      !> flag 1=time-modified reverse
+         integer(c_int), intent(in) :: str_len
     end function glob_file_list
 
-    function glob_rm_all(av, count) bind(c,name="glob_rm_all")
+    function glob_rm_all(av, str_len, count) bind(c,name="glob_rm_all")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: glob_rm_all                              !> return success
         character(kind=c_char,len=1),dimension(*),intent(in):: av  !> glob string
         integer(c_int), intent(inout) :: count                     !> number of elements in results
+         integer(c_int), intent(in) :: str_len
     end function glob_rm_all
 
-    function list_dirs(path,  count) bind(c,name="list_dirs")
+    function list_dirs(path, str_len, count) bind(c,name="list_dirs")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: list_dirs                                 !> return success
         character(kind=c_char,len=1),dimension(*),intent(in):: path !> input pathname
+        integer(c_int), intent(in) :: str_len                       !> input pathname string length
         integer(c_int), intent(inout) :: count                      !> return number of elements in results
     end function list_dirs
 
-    subroutine show_dir_content_recursive(path) bind(c,name="show_dir_content_recursive")
+    subroutine show_dir_content_recursive(path, str_len) bind(c,name="show_dir_content_recursive")
         use, intrinsic :: iso_c_binding
         implicit none
         character(kind=c_char,len=1),dimension(*),intent(in) :: path
+        integer(c_int), intent(in) :: str_len
     end subroutine show_dir_content_recursive
 
     function subprocess(cmd, cmdlen) bind(c,name="subprocess")
@@ -199,19 +206,23 @@ interface
         integer(c_long), intent(inout) :: peakBuf            !> this process's peak RAM usage
     end function get_sysinfo
 
-    function regexp_match(source, regex) bind(C,name="regexp_match")
+    function regexp_match(source,src_len, regex,rgx_len) bind(C,name="regexp_match")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: regexp_match
         character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
+        integer(c_int), intent(in) :: src_len
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
+        integer(c_int), intent(in) :: rgx_len
     end function
-    function regexp_multi(source, regex) bind(C,name="regexp_multi")
+    function regexp_multi(source,src_len, regex,rgx_len) bind(C,name="regexp_multi")
         use, intrinsic :: iso_c_binding
         implicit none
         integer(c_int) :: regexp_multi
         character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
+        integer(c_int), intent(in) :: src_len
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
+        integer(c_int), intent(in) :: rgx_len
     end function
 
 end interface
@@ -707,7 +718,7 @@ contains
 #if defined(INTEL)
             call pxfmkdir( trim(adjustl(path)), len_trim(path), INT(o'777'), io_status )
 #else
-            io_status = makedir(trim(adjustl(path)))
+            io_status = makedir(trim(adjustl(path)), len_trim(tmpdir))
 #endif
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
@@ -787,7 +798,7 @@ contains
         character(kind=c_char,len=:), allocatable :: pathhere
         integer :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
-        stat = list_dirs(trim(pathhere), num_dirs)
+        stat = list_dirs(trim(pathhere),len_trim(pathhere), num_dirs)
         if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
         if(present(outfile)) call syslib_copy_file('__simple_filelist__', trim(outfile))
         open(newunit = luntmp, file = '__simple_filelist__')
@@ -901,7 +912,7 @@ contains
             if(tr) time_sorted_flag = 1
         end if
         if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
-        status = glob_file_list(trim(thisglob), num_files, time_sorted_flag)
+        status = glob_file_list(trim(thisglob), num_files, time_sorted_flag, len_trim(thisglob))
         if(status/=0)THROW_ERROR("failed to process file list "//trim(thisglob))
         if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
         if(file_exists(trim(outfile))) call del_file(trim(outfile))
@@ -937,7 +948,7 @@ contains
             thisglob='*'//c_null_char
         endif
         !! glob must be protected by c_null char
-        iostatus =  glob_file_list(trim(thisglob), glob_elems, 0)  ! simple_posix.c
+        iostatus =  glob_file_list(trim(thisglob), glob_elems, 0, len_trim(thisglob))  ! simple_posix.c
         if(status/=0) THROW_ERROR("glob failed")
         !! Read temp filelist
         open(newunit=luntmp, file='__simple_filelist__')
@@ -984,7 +995,7 @@ contains
         endif
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
+        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob), glob_elems)  ! simple_posix.c
         if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
@@ -1022,7 +1033,7 @@ contains
         endif
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), glob_elems)  ! simple_posix.c
+        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob), glob_elems)  ! simple_posix.c
         if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
@@ -1369,7 +1380,7 @@ contains
         character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
         source_c = trim(source)//achar(0)
         regex_c = trim(regex)//achar(0)
-        res = regexp_match(source_c,regex_c)
+        res = regexp_match(source_c,len_trim(source),  regex_c, len_trim(regex))
         RE_match = INT(res)
     end function RE_match
     integer function RE_multi(source, regex)
@@ -1380,7 +1391,7 @@ contains
         RE_multi = 0
         source_c = trim(source)//achar(0)
         regex_c = trim(regex)//achar(0)
-        res = regexp_multi(source_c,regex_c)
+        res = regexp_multi(source_c,len_trim(source),  regex_c, len_trim(regex))
         if(res > 0) RE_multi = INT(res)
     end function RE_multi
 

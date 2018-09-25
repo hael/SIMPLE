@@ -183,9 +183,6 @@ contains
         real, allocatable, intent(in) :: img(:,:)
         character(kind=c_char,len=STDLEN)    :: outfilename_c
 
-
-
-
     end subroutine write_openslide
 
 

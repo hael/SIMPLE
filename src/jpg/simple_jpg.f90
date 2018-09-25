@@ -57,7 +57,8 @@ interface
 #ifdef HAVE_LIBJPEG
 
     subroutine setup_jpeg ( width, height, in, out ) bind ( c, name="setup_jpeg" )
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         integer(C_INT), intent(in), value            :: width
         integer(C_INT), intent(in), value            :: height
         integer(C_INT), dimension(*), intent(out)    :: in
@@ -65,7 +66,8 @@ interface
     end subroutine setup_jpeg
 
     subroutine read_jpeg (file_name, img, width, height, colorspec, status ) bind ( c, name="read_jpeg" )
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         character(c_char), dimension(*), intent(in)  :: file_name
         type(C_PTR), value            :: img
         integer(c_int), intent(inout)                :: width
@@ -75,7 +77,8 @@ interface
     end subroutine read_jpeg
 
     subroutine write_jpeg (img, file_name, width, height, quality, colorspec, status ) bind ( c, name="write_jpeg" )
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         type (C_PTR), VALUE             :: img
         character(c_char),dimension(*),intent(in)    :: file_name
         integer(c_int), intent(in), VALUE            :: width
@@ -88,7 +91,8 @@ interface
 #endif
 
     integer function stbi_write_jpg (file_name, w, h, comp, data, quality ) bind ( c, name="stbi_write_jpg" )
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         character(c_char),dimension(*),intent(in)    :: file_name
         integer(c_int), intent(in), VALUE            :: w
         integer(c_int), intent(in), VALUE            :: h
@@ -99,7 +103,8 @@ interface
     end function stbi_write_jpg
 
     integer function stbi_write_png (file_name, w, h, comp, data ) bind ( c, name="stbi_write_jpg" )
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         character(c_char),dimension(*),intent(in)    :: file_name
         integer(c_int), intent(in), VALUE            :: w
         integer(c_int), intent(in), VALUE            :: h
@@ -109,7 +114,7 @@ interface
     end function stbi_write_png
 
     integer function stbi_read_jpg (file_name, data, w, h, comp ) bind ( c, name="stbi_read_jpg" )
-        use,intrinsic                                        :: iso_c_binding
+        use,intrinsic :: iso_c_binding
         implicit none
         character(c_char),dimension(*),intent(in)    :: file_name
         type (C_PTR)             :: data ! (const void *)

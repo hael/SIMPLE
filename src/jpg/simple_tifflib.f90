@@ -1,9 +1,10 @@
 !! Fortran wrapper for libtiff
 module simple_tifflib
+include 'simple_lib.f08'
 use, intrinsic :: iso_c_binding
 implicit none
 private
-
+#include "simple_local_flags.inc"
 public :: write_tiff
 public :: write_bigtiff
 public :: write_tiff2
@@ -12,7 +13,8 @@ public :: write_tiff_bigimg
 
 interface
     integer(C_INT) function bigtiff_write (fname, nx, ny, nz, min_val, max_val,img) bind(C, name="bigtiff_write")
-        import
+        use,intrinsic :: iso_c_binding
+        implicit none
         character(len=1, kind=c_char), dimension(*), intent(in) :: fname
         integer(C_INT), intent(in) :: nx,ny,nz
         real(C_FLOAT), intent(in) :: min_val, max_val
@@ -419,6 +421,10 @@ end interface
             type(C_PTR) :: buf ! (void*)
             integer(C_INT), intent(in) :: sz
         end function TIFFWriteRawStrip
+        integer(C_INT) function TIFFWriteDirectory(tif) bind(C, name="TIFFWriteDirectory")
+            import
+            type(C_PTR) :: tif  ! (TIFF*)
+        end function TIFFWriteDirectory
         !! TIFFReadTile  returns  -1  if  it  detects  an  error; otherwise the number of bytes in the decoded tile is returned.
         integer(C_INT) function TIFFReadTile(tif, buffer, x, y, z, sample) bind(C, name="TIFFReadTile")
             import
@@ -427,6 +433,12 @@ end interface
             integer(C_INT32_T), intent(in) :: x,y,z  ! uint32
             integer(C_INT16_T), intent(in) :: sample ! default =0
         end function TIFFReadTile
+          integer(C_INT) function TIFFComputeTile(tif,  x, y, z, sample) bind(C, name="TIFFComputeTile")
+            import
+            type(C_PTR) :: tif  ! (TIFF*)
+            integer(C_INT32_T), intent(in) :: x,y,z  ! uint32
+            integer(C_INT16_T), intent(in) :: sample ! default =0
+        end function TIFFComputeTile
         integer(C_INT64_T) function TIFFTileSize(tif) bind(C, name="TIFFTileSize")
             import
             type(C_PTR) :: tif  ! (TIFF*)
@@ -439,7 +451,7 @@ end interface
         end function TIFFCheckTile
         function TIFFmalloc(sz) bind(C,name="_TIFFmalloc")
             import
-            type(C_PTR) ::  TIFFmalloc
+            type(C_PTR) :: TIFFmalloc
             integer(C_INT64_T), intent(in) :: sz
         end function TIFFmalloc
         subroutine TIFFmemcpy(pdata, cdata, sz) bind(C, name="_TIFFfree")
@@ -577,11 +589,14 @@ contains
          type(c_ptr) :: tif
          character(kind=C_CHAR, len=1), allocatable :: filename(:)
          integer(C_INT32_T) :: imageWidth, imageLength
-         integer(C_INT32_T) :: tileWidth, tileLength
+         integer(C_INT32_T) :: tileWidth, tileLength, ntiles
          integer(C_INT32_T) :: x, y,z
          type(c_ptr) :: buf   !  tdata_t == (void*)
-         integer(C_INT32_T) ::  npixels, ret
+         integer, pointer :: bufint(:)
+         integer(C_INT32_T) ::  npixels, ret, tilenumber
+         integer(C_INT64_T) :: bufsize
          integer(C_INT16_T) :: sample =0
+         integer :: itile
          filename =trim(adjustl(fname))//achar(0)
          tif = TIFFOpen(fname, "r")
          if ( c_associated(tif) ) then
@@ -589,13 +604,27 @@ contains
              ret= TIFFGetField(tif, TIFFTAG_IMAGELENGTH, imageLength)
              ret= TIFFGetField(tif, TIFFTAG_TILEWIDTH,   tileWidth)
              ret= TIFFGetField(tif, TIFFTAG_TILELENGTH,  tileLength)
-             buf = TIFFmalloc(TIFFTileSize(tif))
-             npixels = tileWidth*tileLength
-             do y = 0, imageLength, tileLength
-                 do x = 0, imageWidth, tileWidth
-                     ret  = TIFFReadTile(tif, buf, x, y, z, sample)
- !! fixme                    for(register int i=0; i<npixels;i=i+1) realimg[(y*imageWidth)+x+i] = (float) buf[i];
+             bufsize=TIFFTileSize(tif)
+             buf = TIFFmalloc(bufsize)
+             if(.not. c_associated(buf)) then
+                 write(*,*) "Error: insufficient memory", trim(fname)
+                 call TIFFClose(tif)
+                 return
+             endif
 
+             xtiles = NINT(REAL(imageWidth)/REAL(tileWidth))
+             allocate(img(tileWidth,tileLength,xtiles))
+             npixels = tileWidth*tileLength
+             itile = 1
+             do y = 0, imageLength, tileLength
+
+                 do x = 0, imageWidth, tileWidth
+                     tilenumber= TIFFComputeTile(tif, x, y, 0, sample)
+                     ret  = TIFFReadTile(tif, buf, x, y, z, sample)
+                     !! fixme                    for(register int i=0; i<npixels;i=i+1) realimg[(y*imageWidth)+x+i] = (float) buf[i];
+                     call c_f_pointer(buf, bufint, [bufsize])
+                     img(1:tileWidth,1:tileLength,itile) = reshape(bufint, shape=(/ tileWidth, tileLength /))
+                     itile= itile+1
                  end do
              end do
              call TIFFfree(buf);
@@ -964,7 +993,7 @@ contains
          out = TIFFOpen("image.tiff", "w")
          if( .not. c_associated(out) )then
              write(*,'(a)') "Unable to write tif file "
-             return
+             THROW_HARD("  write_tiff3 failed ")
          endif
          width = size(arg,1)
          height = size(arg,2)
@@ -989,7 +1018,7 @@ contains
              stop
          endif
 
-         call TIFFWriteDirectory(out)
+        iret = TIFFWriteDirectory(out)
          call TIFFClose(out)
          deallocate(im_data)
      end subroutine write_tiff3

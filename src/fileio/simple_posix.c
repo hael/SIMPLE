@@ -174,7 +174,9 @@ int isdir(char* pathname, int* len, size_t ivf_pathname)
 }
 
 // Recursive make directory
-int makedir(char *path, size_t ivf_path)
+int makedir(char *path,
+    int* charLen,
+    size_t ivf_path)
 {
     /* https://gist.github.com/JonathonReinhart/8c0d90191c38af2dcadb102c4e202950 */
     /* Adapted from http://stackoverflow.com/a/2336245/119527 */
@@ -224,20 +226,28 @@ int makedir(char *path, size_t ivf_path)
       ENOTDIR pathname is relative and dirfd is a file descriptor referring to a
       file other than a directory.
     */
-
-    const size_t len = strlen(path);
+    char *cpath = F90toCstring(path, *charLen);
+    fprintf(stderr, "makedir  %d  %d %s  %s\n",  *charLen, strlen(path), path, cpath);
+    if(cpath == NULL) {
+        printf("%d %s\n makedir failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
+        perror("Failed : simple_posix.c::remove_dir ");
+        return -2;
+    }
     char _path[LONGSTRLEN];
     char *p;
     extern int errno;
     errno = 0;
 
     /* Copy string so its mutable */
-    if(len > sizeof(_path) - 1) {
+    if(*charLen > sizeof(_path) - 1) {
         errno = ENAMETOOLONG;
+        free(cpath);
         return -1;
     }
-    strcpy(_path, path);
 
+    strcpy(_path, cpath);
+    fprintf(stderr, "makedir %d [%s]\n" , strlen(_path), _path);
+    free(cpath);
     /* Iterate the string */
     for(p = _path + 1; *p; p++) {
         if(*p == '/') {
@@ -246,8 +256,8 @@ int makedir(char *path, size_t ivf_path)
 
             if(mkdir(_path, S_IRWXU) != 0) {
                 if(errno != EEXIST) {
-                    fprintf(stderr, "mkdir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
-                    perror("Failed : rmdir in simple_posix::makedir");
+                    fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
+                    perror("Failed : mkdir in simple_posix::makedir");
                     return -1;
                 }
             }
@@ -256,8 +266,8 @@ int makedir(char *path, size_t ivf_path)
     }
     if(mkdir(_path, S_IRWXU) != 0) {
         if(errno != EEXIST) {
-            fprintf(stderr, "mkdir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
-            perror("Failed : rmdir in simple_posix::makedir");
+            fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
+            perror("Failed : mkdir in simple_posix::makedir");
             return -1;
         }
     }
@@ -362,9 +372,9 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
 }
 
 /* let us make a recursive function to print the content of a given folder */
-void show_dir_content_recursive(char * path, size_t ivf_path)
+void show_dir_content_recursive(char * path, int*len, size_t ivf_path)
 {
-    char *cpath = F90toCstring(path, strlen(path));
+    char *cpath = F90toCstring(path, *len);
     if(cpath == NULL) {
         printf("%d %s\n show_dir_content_recursive failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c:: show_dir_content_recursive ");
@@ -383,7 +393,7 @@ void show_dir_content_recursive(char * path, size_t ivf_path)
             printf("%s%s\n", "\x1B[32m", dir->d_name); // print its name in green
             char d_path[255]; // here I am using sprintf which is safer than strcat
             sprintf(d_path, "%s/%s", path, dir->d_name);
-            show_dir_content_recursive(d_path, ivf_path); // recall with the new path
+            show_dir_content_recursive(d_path, strlen(d_path), ivf_path); // recall with the new path
         }
     }
     closedir(d); // finally close the directory
@@ -397,9 +407,9 @@ void show_dir_content_recursive(char * path, size_t ivf_path)
  *  \param path Directory string
  *  \return success status
  */
-int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
+int get_file_list(char * path, int*len, char * ext, int *count, size_t ivf_path)
 {
-    char *cpath = F90toCstring(path, strlen(path));
+    char *cpath = F90toCstring(path, *len);
     if(cpath == NULL) {
         printf("%d %s\nget_file_list failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c::get_file_list ");
@@ -476,7 +486,7 @@ int get_file_list(char * path, char * ext, int *count, size_t ivf_path)
  *  \param flag dictates [reverse order] | [last modified time or alphanumeric sort]
  *  \return return status success=0
  */
-int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t ivf_path)
+int get_file_list_modified(char * path, int*len, char* ext, int* count, int flag, size_t ivf_path)
 {
     /*equivalent to 'ls -tr path' */
     struct dirent **namelist;
@@ -591,9 +601,9 @@ int get_file_list_modified(char * path, char* ext, int* count, int flag, size_t 
  *  \param count return ptr for number of dirss found
  *  \return return status success=0
  */
-int list_dirs(char * path, int* count, size_t ivf_path)
+int list_dirs(char * path, int*len, int* count, size_t ivf_path)
 {
-    char *cpath = F90toCstring(path, strlen(path));
+    char *cpath = F90toCstring(path, *len);
     if(cpath == NULL) {
         printf("%d %s\nlist_dirs failed to open convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c::list_dirs ");
@@ -742,7 +752,7 @@ void quicksort_glob(glob_t*globlist, int start, int count)
  *  \param sort_by_time flag that dictates last modified time or alphanumeric sorting
  *  \return return status success=0
  */
-int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
+int glob_file_list(char *match,  int*count, int* sort_by_time, int*len, size_t ivf_match)
 {
     *count=0;
     /* Check input char pointer */
@@ -757,7 +767,7 @@ int glob_file_list(char *match,  int*count, int* sort_by_time, size_t ivf_match)
         perror("Failed : simple_posix.c::glob_file_list 1");
         return -1;
     }
-    glob_t        globlist;
+    glob_t globlist;
     int err,n;
     err = 0;n=0;
 
@@ -981,10 +991,9 @@ int fcopy(char* file1,  int*len1, char* file2, int*len2, size_t ivf_file1, size_
         flag = 1;
     } else {
         dgprintf(stderr, "In fcopy opening files\n");
-        FILE *f1, *f2;
-        f1 = fopen(buffer1, "r");
+        FILE *f1 = fopen(buffer1, "r");
         if(f1) {
-            f2 = fopen(buffer2, "w");
+            FILE *f2 = fopen(buffer2, "w");
             if(f2) {
                 char            buffer[1024];
                 size_t          n;
@@ -1140,7 +1149,7 @@ int  get_absolute_pathname(char* in, int* inlen, char* out, int* outlen)
     if (*outlen > LONGSTRLEN){
       fprintf(stderr, "get_absolute_path: lrealpath returned string longer than str max (%d): \nstrlen %d  \npath:%s \n",LONGSTRLEN, *outlen, resolved);
     }
-    strncpy(out, resolved, *outlen); 
+    strncpy(out, resolved, *outlen);
     out[*outlen] = '\0';
 
     c2fstr(resolved, out, *outlen, sizeof(resolved));
@@ -1203,8 +1212,8 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
     mach_port_t mach_port;
     mach_msg_type_number_t count;
     vm_statistics64_data_t vm_stats;
-    long long free_memory;
-    long long used_memory;
+    long long free_memory = 0;
+    long long used_memory = 0;
     mach_port = mach_host_self();
     count = sizeof(vm_stats) / sizeof(natural_t);
     if(KERN_SUCCESS == host_page_size(mach_port, &page_size) &&
@@ -1219,11 +1228,11 @@ int get_sysinfo(long* HWMusage, long*totalram, long* sharedram, long* bufferram,
     }
 
 
-    *totalram =  physical_memory;          /* Total usable main memory size (bytes)*/
-    *sharedram = t_info.virtual_size;     /* Amount of shared memory */
-    *bufferram = t_info.resident_size;    /* Memory used by buffers */
+    *totalram =  physical_memory;           /* Total usable main memory size (bytes)*/
+    *sharedram = t_info.virtual_size;       /* Amount of shared memory */
+    *bufferram = t_info.resident_size;      /* Memory used by buffers */
     *totalhigh = free_memory + used_memory; /* Total high water mark memory size */
-    *HWMusage =  used_memory;             /* high memory size used */
+    *HWMusage =  used_memory;               /* high memory size used */
 
 #else
     struct sysinfo s;
@@ -1437,15 +1446,16 @@ int recursive_delete(char *dir, int*len, int*count)
  *  \param count return ptr for number of files/dirs found
  *  \return return status success=0
  */
-int glob_rm_all(char *match,  int*count, size_t ivf_match)
+int glob_rm_all(char *match, int*len,  int*count, size_t ivf_match)
 {
     /* Check input char pointer */
-    if(match == NULL || strlen(match) <= 0) {
-        fprintf(stderr, "simple_posix.c::glob_rm_all match string null .. Failing\n");
-        return -1;
+    size_t slen =  strlen(match);
+    if( (*len) <= 0 || (*len) != slen ) {
+      fprintf(stderr, "simple_posix.c::glob_rm_all match string length /= strlen (%d, %D).. Failing\n",(*len) , slen);
+      return -1;
     }
     extern int errno;
-    char *cmatch = F90toCstring(match, strlen(match));
+    char *cmatch = F90toCstring(match, *len);
     if(cmatch == NULL) {
         printf("%d %s\n glob_rm_all failed to convert string (unprotected) %s\n", errno, strerror(errno), match);
         perror("Failed : simple_posix.c::glob_rm_all 1");
@@ -1578,22 +1588,24 @@ int touch(char* path, int*len)
 
 
 /* POSIX regular expression */
-int regexp_match(const char* srcstr, const char* regstr )
+int regexp_match(char* srcstr,  int*srclen, char* regexString , int*rgxlen)
 {
-  printf("Regexp_match:\nsrcstr:%s\nregex:%s\n", srcstr, regstr);
+  printf("Regexp_match:\nsrcstr:%s\nregex:%s\n", srcstr, regexString);
   regex_t regex;
   int reti;
   char msgbuf[100];
-
+  char*rgxstr = F90toCstring(regexString, *rgxlen);
   /* Compile regular expression */
-  reti = regcomp(&regex, regstr, REG_EXTENDED|REG_ICASE|REG_NOSUB);
+  reti = regcomp(&regex, rgxstr, REG_EXTENDED|REG_ICASE|REG_NOSUB);
   if (reti) {
     fprintf(stderr, "Could not compile regex\n");
+    free(rgxstr);
     return -1;
   }
 
+  char*instr = F90toCstring(srcstr, *srclen);
   /* Execute regular expression */
-  reti = regexec(&regex, srcstr, 0, NULL, 0);
+  reti = regexec(&regex, instr, 0, NULL, 0);
   if (!reti) {
     puts("Match");
   }
@@ -1603,35 +1615,39 @@ int regexp_match(const char* srcstr, const char* regstr )
   else {
     regerror(reti, &regex, msgbuf, sizeof(msgbuf));
     fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+    free(rgxstr);
+    free(instr);
     return -1;
   }
 
   /* Free memory allocated to the pattern buffer by regcomp() */
   regfree(&regex);
+  free(rgxstr);
+  free(instr);
   return reti;
 }
 
-int regexp_multi(char * source, char* regexString)
+int regexp_multi(char * source, int*sourcelen, char* regexString, int*rgxlen)
 {
   printf("Regexp_multi:\nsrc:%s\nregex:%s\n", source, regexString);
-
   size_t maxMatches = 2;
   size_t maxGroups = 3;
-  
+
   regex_t regexCompiled;
   regmatch_t groupArray[maxGroups];
   unsigned int m;
   char * cursor;
 
-
-  if (regcomp(&regexCompiled, regexString, REG_EXTENDED))
+  char*rgxstr = F90toCstring(regexString, *rgxlen);
+  if (regcomp(&regexCompiled, rgxstr, REG_EXTENDED))
     {
       printf("Could not compile regular expression.\n");
+      free(rgxstr);
       return 1;
     };
-
+  char*sourcestr = F90toCstring(source, *sourcelen);
   m = 0;
-  cursor = source;
+  cursor = sourcestr;
   for (m = 0; m < maxMatches; m ++)
     {
       if (regexec(&regexCompiled, cursor, maxGroups, groupArray, 0))
@@ -1658,6 +1674,7 @@ int regexp_multi(char * source, char* regexString)
     }
 
   regfree(&regexCompiled);
-
+  free(sourcestr);
+  free(rgxstr);
   return 0;
 }
