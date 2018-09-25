@@ -12,7 +12,6 @@ private
 public :: star_project
 #include "simple_local_flags.inc"
 
-
 type star_project
     type(stardoc) :: doc
 contains
@@ -1251,7 +1250,6 @@ contains
         end if
     end function exporttype2star
 
-
     subroutine print_valid_import_startypes(self)
         class(star_project) :: self
         write (*,*) " import_starproject valid startypes:                                      "
@@ -1260,8 +1258,6 @@ contains
         write (*,*) "                     p|ptcl|particles|stack   ==> import particles        "
         write (*,*) "                     cavgs|class2D|class3D    ==> import class averages   "
     end subroutine print_valid_import_startypes
-
-
 
     subroutine kill(self,keeptabs)
         class(star_project), intent(inout):: self

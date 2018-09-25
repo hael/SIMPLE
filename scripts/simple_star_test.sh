@@ -15,7 +15,7 @@ simple_exec prg=new_project projname=micrographs_test1
 cd micrographs_test1
 simple_exec prg=importstar_project starfile=../../micrographs_all_gctf.star
 simple_exec prg=print_project_info
-simple_exec prg=exportstar_project export_type=micrographs starfile=simple_exported.star
+simple_exec prg=export_starproject export_type=micrographs starfile=simple_exported.star
 
 cd ..
 simple_exec prg=new_project projname=micrographs_test2
@@ -33,7 +33,7 @@ cd cryosparc_movies
 echo "../../cryosparc_exp000325_002.mrc" > filetab.txt
 simple_exec prg=import_movies filetab=filetab.txt cs=2.7 kv=300 fraca=0.1 smpd=1 ctf=yes
 simple_exec prg=print_project_info
-simple_exec prg=exportstar_project export_type=micrographs starfile=simple_exported.star
+simple_exec prg=export_starproject export_type=micrographs starfile=simple_exported.star
 
        
 

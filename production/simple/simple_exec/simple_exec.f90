@@ -25,56 +25,56 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT
-type(new_project_commander)          :: xnew_project
-type(update_project_commander)       :: xupdate_project
-type(print_project_info_commander)   :: xprint_project_info
-type(print_project_field_commander)  :: xprint_project_field
-type(import_movies_commander)        :: ximport_movies
-type(import_boxes_commander)         :: ximport_boxes
-type(import_particles_commander)     :: ximport_particles
-type(import_cavgs_commander)         :: ximport_cavgs
+type(new_project_commander)         :: xnew_project
+type(update_project_commander)      :: xupdate_project
+type(print_project_info_commander)  :: xprint_project_info
+type(print_project_field_commander) :: xprint_project_field
+type(import_movies_commander)       :: ximport_movies
+type(import_boxes_commander)        :: ximport_boxes
+type(import_particles_commander)    :: ximport_particles
+type(import_cavgs_commander)        :: ximport_cavgs
 
 ! STAR PROJECT SUPPORT
-type(export_star_project_commander)     :: xexportstar_project
-type(import_star_project_commander)     :: ximport_starproject
-type(print_star_project_info_commander) :: xprint_star_project_info
+type(export_starproject_commander)     :: xexport_starproject
+type(import_starproject_commander)     :: ximport_starproject
+type(print_starproject_info_commander) :: xprint_starproject_info
 
 ! PART OF SP WORKFLOW
-type(make_pickrefs_commander)        :: xmake_pickrefs
-type(extract_commander)              :: xextract
-type(cluster_cavgs_commander)        :: xcluster_cavgs
-type(symaxis_search_commander)       :: xsymsrch
-type(symmetry_test_commander)        :: xsymtst
-type(postprocess_commander)          :: xpostprocess
+type(make_pickrefs_commander)  :: xmake_pickrefs
+type(extract_commander)        :: xextract
+type(cluster_cavgs_commander)  :: xcluster_cavgs
+type(symaxis_search_commander) :: xsymsrch
+type(symmetry_test_commander)  :: xsymtst
+type(postprocess_commander)    :: xpostprocess
 
 ! IMAGE PROCESSING
-type(mask_commander)                 :: xmask
-type(fsc_commander)                  :: xfsc
-type(local_res_commander)            :: xlocal_res
-type(local_res2D_commander)          :: xlocal_res2D
-type(centervol_commander)            :: xcenter
-type(reproject_commander)            :: xreproject
-type(volops_commander)               :: xvolops
-type(convert_commander)              :: xconvert
-type(ctfops_commander)               :: xctfops
-type(filter_commander)               :: xfilter
-type(normalize_commander)            :: xnormalize
-type(scale_commander)                :: xscale
-type(stack_commander)                :: xstack
-type(stackops_commander)             :: xstackops
-type(shift_commander)                :: xshift
+type(mask_commander)           :: xmask
+type(fsc_commander)            :: xfsc
+type(local_res_commander)      :: xlocal_res
+type(local_res2D_commander)    :: xlocal_res2D
+type(centervol_commander)      :: xcenter
+type(reproject_commander)      :: xreproject
+type(volops_commander)         :: xvolops
+type(convert_commander)        :: xconvert
+type(ctfops_commander)         :: xctfops
+type(filter_commander)         :: xfilter
+type(normalize_commander)      :: xnormalize
+type(scale_commander)          :: xscale
+type(stack_commander)          :: xstack
+type(stackops_commander)       :: xstackops
+type(shift_commander)          :: xshift
 
 ! ORIENTATION PROCESSING
-type(make_oris_commander)            :: xmake_oris
-type(orisops_commander)              :: xorisops
-type(oristats_commander)             :: xoristats
-type(vizoris_commander)              :: xvizoris
+type(make_oris_commander)         :: xmake_oris
+type(orisops_commander)           :: xorisops
+type(oristats_commander)          :: xoristats
+type(vizoris_commander)           :: xvizoris
 
 ! PRINT INFO
-type(info_image_commander)           :: xinfo_image
-type(info_stktab_commander)          :: xinfo_stktab
-type(print_fsc_commander)            :: xprint_fsc
-type(print_magic_boxes_commander)    :: xprint_magic_boxes
+type(info_image_commander)        :: xinfo_image
+type(info_stktab_commander)       :: xinfo_stktab
+type(print_fsc_commander)         :: xprint_fsc
+type(print_magic_boxes_commander) :: xprint_magic_boxes
 
 ! SIMULATORS
 type(simulate_noise_commander)       :: xsimulate_noise
@@ -132,18 +132,18 @@ select case(prg)
 
     ! STAR SUPPORT
 
-    case( 'exportstar_project' )
+    case( 'export_starproject' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
-        call xexportstar_project%execute(cline)
+        call xexport_starproject%execute(cline)
     case( 'import_starproject' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call ximport_starproject%execute(cline)
-    case( 'print_star_project_info' )
+    case( 'print_starproject_info' )
         call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
-        call xprint_star_project_info%execute(cline)
+        call xprint_starproject_info%execute(cline)
 
     ! PART OF SP WORKFLOW
 

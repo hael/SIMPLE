@@ -77,7 +77,7 @@ type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
-type(simple_program), target :: exportstar_project
+type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
@@ -230,7 +230,7 @@ contains
         call new_ctf_estimate
         call new_ctfops
         call new_extract
-        call new_exportstar_project
+        call new_export_starproject
         call new_filter
         call new_fsc
         call new_info_image
@@ -298,7 +298,7 @@ contains
         prg_ptr_array(8)%ptr2prg  => ctf_estimate
         prg_ptr_array(9)%ptr2prg  => ctfops
         prg_ptr_array(10)%ptr2prg => extract
-        prg_ptr_array(11)%ptr2prg => exportstar_project
+        prg_ptr_array(11)%ptr2prg => export_starproject
         prg_ptr_array(12)%ptr2prg => filter
         prg_ptr_array(13)%ptr2prg => fsc
         prg_ptr_array(14)%ptr2prg => info_image
@@ -377,8 +377,8 @@ contains
                 ptr2prg => ctfops
             case('extract')
                 ptr2prg => extract
-            case('exportstar_project')
-                ptr2prg => exportstar_project
+            case('export_starproject')
+                ptr2prg => export_starproject
             case('filter')
                 ptr2prg => filter
             case('fsc')
@@ -515,7 +515,7 @@ contains
         write(*,'(A)') cluster_cavgs%name
         write(*,'(A)') convert%name
         write(*,'(A)') ctfops%name
-        write(*,'(A)') exportstar_project%name
+        write(*,'(A)') export_starproject%name
         write(*,'(A)') extract%name
         write(*,'(A)') filter%name
         write(*,'(A)') fsc%name
@@ -1492,10 +1492,10 @@ contains
         !       call  import_starproject%set_input('comp_ctrls', 7, job_memory_per_task)
     end subroutine new_import_starproject
 
-    subroutine new_exportstar_project
+    subroutine new_export_starproject
         ! PROGRAM SPECIFICATION
-        call exportstar_project%new(&
-        &'exportstar_project',&                                       ! name
+        call export_starproject%new(&
+        &'export_starproject',&                                       ! name
         &'Import STAR project ',&                                     ! descr_short
         &'is a program for importing STAR-formatted EM project files to the project and saving as SIMPLE project',&
         &'simple_exec',&                                            ! executable
@@ -1504,9 +1504,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call exportstar_project%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted project filename for export',&
+        call export_starproject%set_input('parm_ios', 1, 'starfile', 'file', 'STAR-formatted project filename for export',&
             'Export filename (*.star) with STAR-formatting', 'e.g. myproj.star', .false., '')
-        call exportstar_project%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
+        call export_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
             'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. micrographs or class2D', .false., '')
         ! search controls
         ! <empty>
@@ -1516,7 +1516,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_exportstar_project
+    end subroutine new_export_starproject
 
     subroutine new_local_resolution
         ! PROGRAM SPECIFICATION

@@ -10,29 +10,29 @@ use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters, params_glob
 implicit none
 
-public :: export_star_project_commander
-public :: import_star_project_commander
-public :: print_star_project_info_commander
+public :: export_starproject_commander
+public :: import_starproject_commander
+public :: print_starproject_info_commander
 private
 
-type, extends(commander_base) :: export_star_project_commander
+type, extends(commander_base) :: export_starproject_commander
 contains
-    procedure :: execute      => exec_export_star_project
-end type export_star_project_commander
-type, extends(commander_base) :: import_star_project_commander
+    procedure :: execute      => exec_export_starproject
+end type export_starproject_commander
+type, extends(commander_base) :: import_starproject_commander
 contains
-    procedure :: execute      => exec_import_star_project
-end type import_star_project_commander
-type, extends(commander_base) ::  print_star_project_info_commander
+    procedure :: execute      => exec_import_starproject
+end type import_starproject_commander
+type, extends(commander_base) ::  print_starproject_info_commander
 contains
-    procedure :: execute      => exec_print_star_project_info
-end type print_star_project_info_commander
+    procedure :: execute      => exec_print_starproject_info
+end type print_starproject_info_commander
 #include "simple_local_flags.inc"
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
-    subroutine exec_export_star_project( self, cline )
-        class(export_star_project_commander), intent(inout) :: self
+    subroutine exec_export_starproject( self, cline )
+        class(export_starproject_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters)  :: params
         type(oris)        :: os
@@ -44,7 +44,7 @@ contains
         if( params%starfile == 'NONE')then
             ppos = scan(trim(params%projfile),".", BACK= .true.)
             if ( ppos <= 0 )then
-                THROW_HARD("exportstar_project must be within a valid SIMPLE project. Projfile failed.")
+                THROW_HARD("export_starproject must be within a valid SIMPLE project. Projfile failed.")
             end if
             allocate(this_starfile, source=params%projfile(1:ppos)//'star')
         else
@@ -58,7 +58,7 @@ contains
         end if
 
         if( params%startype  == 'NONE')then
-            write (*,*) " exportstar_project must have a valid startype."
+            write (*,*) " export_starproject must have a valid startype."
             write (*,*) " Accepted values are micrographs|mcmicrographs|ctf_estimation|select|extract|class2d|init3dmodel|refine3d|post or all."
             write (*,*) "    movies:         for raw micrographs"
             write (*,*) "    micrographs:    for non-dose weighted micrographs"
@@ -72,7 +72,7 @@ contains
             write (*,*) "    extract:        for extract dose-weighted particles"
             write (*,*) "    refine3d:       for refined 3D particles"
             write (*,*) "    post:           for post-processing"
-            THROW_HARD("exportstar_project failed due to incorrect startype arg")
+            THROW_HARD("export_starproject failed due to incorrect startype arg")
         end if
         !! Prepare project
         !        call starproj%prepare(spproj,  params, this_starfile)
@@ -102,7 +102,7 @@ contains
         case('all')
             call starproj%export_all(spproj,  params%starfile)
         case default
-            THROW_HARD("exportstar_project must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos|all.")
+            THROW_HARD("export_starproject must have a valid startype. Accepted values are micrograph|select|extract|class2d|initmodel|refine3d|pos|all.")
         end select
 
 
@@ -117,16 +117,16 @@ contains
         call spproj%write(params%starfile)
 
         call spproj%kill
-        call simple_end('**** EXPORTSTAR_PROJECT NORMAL STOP ****')
+        call simple_end('**** export_starproject NORMAL STOP ****')
 
-    end subroutine exec_export_star_project
+    end subroutine exec_export_starproject
 
     !> for importing STAR formatted project files to *.simple
-    subroutine exec_import_star_project( self, cline )
+    subroutine exec_import_starproject( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
         use simple_binoris_io ! use all in there
-        class(import_star_project_commander), intent(inout) :: self
+        class(import_starproject_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -269,12 +269,12 @@ contains
         call spproj%write
         call spproj%kill
         call simple_end('**** import_starproject NORMAL STOP ****')
-    end subroutine exec_import_star_project
+    end subroutine exec_import_starproject
 
 
     !> convert binary (.simple) oris doc to text (.txt)
-    subroutine exec_print_star_project_info( self, cline )
-        class(print_star_project_info_commander), intent(inout) :: self
+    subroutine exec_print_starproject_info( self, cline )
+        class(print_starproject_info_commander), intent(inout) :: self
         class(cmdline),                           intent(inout) :: cline
         type(parameters) :: params
         type(star_project) :: starproj
@@ -284,7 +284,7 @@ contains
         call starproj%print_info
         call starproj%kill
         call simple_end('**** PRINT_PROJECT_STAR_INFO NORMAL STOP ****')
-    end subroutine exec_print_star_project_info
+    end subroutine exec_print_starproject_info
 
 
 
