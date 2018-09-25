@@ -46,7 +46,7 @@ contains
         self%betasq = self%beta * self%beta
         self%twooW  = 2.0 / self%W
         self%oneoW  = 1.0 / self%W
-        self%threshInstr = self%betasq/(self%piW ** 2) - TINY**2
+        self%threshInstr = self%beta/(self%piW) - TINY**2
     end subroutine new
 
     pure real function get_winsz( self )
@@ -155,7 +155,7 @@ contains
         real(dp) :: y,x,xsq
         x=xin
         if (x > 0.5) then
-            y = (exp(x) - exp(-x)) / 2
+            y = (exp(x) - exp(-x)) / (2. * xin)
         else
             xsq = x * x
             y = (((P3*xsq+P2)*xsq+P1)*xsq + P0)
