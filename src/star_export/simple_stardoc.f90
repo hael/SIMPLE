@@ -144,9 +144,10 @@ contains
         self%doprint=.true.
     end subroutine setdoprint
 
-    subroutine open4import(self, filename)
+    subroutine open4import(self, filename, ignore_checks)
         class(stardoc), intent(inout) :: self
         character(len=*),intent(inout) :: filename
+        logical, intent(inout), optional :: ignore_checks
         integer :: io_stat, tmpunit
         integer(8) :: filesz
         if(self%l_open) call self%close
@@ -172,7 +173,7 @@ contains
 
         call self%read_header()
         if(self%num_data_elements > 0 )then
-            call self%read_data_lines()
+            call self%read_data_lines( ignore_checks)
         end if
     end subroutine open4import
 
@@ -447,8 +448,9 @@ contains
 
     end subroutine read_header
 
-    subroutine read_data_lines(self)
+    subroutine read_data_lines(self, ignore_checks)
         class(stardoc), intent(inout) :: self
+        logical, intent(in), optional :: ignore_checks
         character(len=STDLEN),allocatable :: lineparts(:)
         character(len=:),allocatable      :: sline, line, experiment_rootdir
         character(len=:),allocatable      :: imgfile_rootdir, imgfilename,tmpfilename
@@ -456,9 +458,9 @@ contains
         integer              :: n, cnt, ios, lenstr, pos1, i, nargsOnDataline, nDataline, nargsParsed
         logical, allocatable :: imgfilenameselected(:)
         integer              :: filetabunit, oritabunit, filetabunit2, imagenamefunit,ctfimagefunit
-        logical :: inData, inHeader
+        logical :: inData, inHeader, ignore_file_checks
         real :: tmpval
-
+        ignore_file_checks = .false.
         inHeader        = .false.
         inData          = .false.
         n               = 0
@@ -466,7 +468,7 @@ contains
         ios             = 0
         nDataline       = 0
         nargsOnDataline = 0
-
+        if(present(ignore_checks))ignore_file_checks=ignore_checks
         if(.not.self%l_open)then
             THROW_HARD('stardoc module read_header file not opened')
         endif
@@ -577,42 +579,49 @@ contains
                         endif
                         !! Try experiment root directory on first data set
                         if(.not. allocated(self%project_root_dir))then
-                           self%project_root_dir = self%get_project_root_dir(trim(imgfilename))
+                            if(.not. ignore_file_checks)then
+                            self%project_root_dir = self%get_project_root_dir(trim(imgfilename))
                             if(.not. allocated(self%project_root_dir)) THROW_HARD("Stardoc root project not found")
                             DebugPrint " Project STARFILE       : ", trim(self%current_starfile)
                             DebugPrint " Project root dir found : ", trim(self%project_root_dir)
-                        end if
-                        DebugPrint " Parsing file param : ", trim(imgfilename)
-                        if( file_exists (trim(imgfilename)) )then
-                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)
-
-                        else if( file_exists (trim(imgfilename)//"s") )then
-                            !! Account for MRCS extension
-                            print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)//"s"
-                            imgfilename = trim(imgfilename)//"s"
-
-                        else
-                            if ( allocated(self%project_root_dir)) then
-                                tmpfilename = filepath(trim(self%project_root_dir), trim(imgfilename))
-                                if( file_exists (trim(tmpfilename)) )then
-
-                                    print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)
-                                    imgfilename = trim(tmpfilename)
-
-                                else if( file_exists (trim(tmpfilename)//"s") )then
-                                    !! Account for MRCS extension
-                                    print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)//"s"
-                                    imgfilename = trim(tmpfilename)//"s"
-
-                                else
-                                    print *," Unable to find file in path of project "//trim(tmpfilename)
-                                    THROW_HARD(" Unable to find file "//trim(tmpfilename) )
-                                endif
-                            else
-                                print *," Unable to find file in path of current star file "//trim(imgfilename)
-                                THROW_HARD(" Unable to find file "//trim(imgfilename) )
                             endif
+                        end if
+                        if(.not. ignore_file_checks)then
+                            DebugPrint " Parsing file param : ", trim(imgfilename)
+                            if( file_exists (trim(imgfilename)) )then
+                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)
+
+                            else if( file_exists (trim(imgfilename)//"s") )then
+                                !! Account for MRCS extension
+                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)//"s"
+                                imgfilename = trim(imgfilename)//"s"
+
+                            else
+                                if ( allocated(self%project_root_dir)) then
+                                    tmpfilename = filepath(trim(self%project_root_dir), trim(imgfilename))
+                                    if( file_exists (trim(tmpfilename)) )then
+
+                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)
+                                        imgfilename = trim(tmpfilename)
+
+                                    else if( file_exists (trim(tmpfilename)//"s") )then
+                                        !! Account for MRCS extension
+                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)//"s"
+                                        imgfilename = trim(tmpfilename)//"s"
+
+                                    else
+                                        print *," Unable to find file in path of project "//trim(tmpfilename)
+                                        THROW_HARD(" Unable to find file "//trim(tmpfilename) )
+                                    endif
+                                else
+                                    print *," Unable to find file in path of current star file "//trim(imgfilename)
+                                    THROW_HARD(" Unable to find file "//trim(imgfilename) )
+                                endif
+                            endif
+                        else
+                            print*, " Ignoring file check: ", trim(imgfilename)
                         endif
+
                         if(self%param_labels(i)%str == "CtfImage")then
                             write(ctfimagefunit,'(A)') trim(imgfilename)
                         else if (.not.imgfilenameselected(nDataline))then

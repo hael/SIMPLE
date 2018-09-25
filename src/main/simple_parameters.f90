@@ -129,6 +129,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=LONGSTRLEN) :: refs_even=''
     character(len=LONGSTRLEN) :: refs_odd=''
+    character(len=LONGSTRLEN) :: star_datadir=''      !< STAR-generated data directory
     character(len=LONGSTRLEN) :: starfile=''          !< STAR-formatted EM file (proj.star)
     character(len=LONGSTRLEN) :: stk=''               !< particle stack with all images(ptcls.ext)
     character(len=LONGSTRLEN) :: stktab=''            !< list of per-micrograph stacks
@@ -591,6 +592,7 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
+        call check_file('star_datadir',   self%star_datadir)
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')

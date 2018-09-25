@@ -139,7 +139,7 @@ contains
         !       character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         integer :: nStarfiles, ndatlines,nrecs
         !       integer :: istar,i, nboxf, nmovf
-        logical :: l_starfile, inputted_oritab ,inputted_smpd, inputted_startype
+        logical :: l_starfile, l_datadir, inputted_oritab ,inputted_smpd, inputted_startype
         call params%new(cline)
 
         ! parameter input management
@@ -177,6 +177,14 @@ contains
             call starproj%print_valid_import_startypes
             THROW_HARD('import_starproject; `startype` argument empty or not set.')
         end if
+        l_datadir=cline%defined('star_datadir')
+        if( l_datadir)then
+            if(.not.dir_exists(params%star_datadir))then
+                THROW_HARD('Importing star project must have a valid datadir if it is defined, star_datadir=<directory>')
+            else
+                call starproj%set_datadir(params%star_datadir)
+            end if
+        endif
 
         !! Get SMPD
         inputted_smpd = cline%defined('smpd')
@@ -195,7 +203,8 @@ contains
         call spproj%read(params%projfile)
 
         ! Prepare STAR project module
-        call starproj%prepareimport( spproj, params, starfiles(1))
+        call starproj%prepareimport( spproj, params, starfiles(1),  l_datadir) ! if datadir present don't perform image file checks
+
         ndatlines = starproj%get_ndatalines()
         nrecs     = starproj%get_nrecs_per_line()
         call starproj%check_temp_files("importstar commander")

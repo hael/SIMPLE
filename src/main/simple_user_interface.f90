@@ -196,6 +196,7 @@ type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
 type(simple_input_param) :: shift_cc_jacob
 type(simple_input_param) :: smpd
+type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
 type(simple_input_param) :: startit
 type(simple_input_param) :: startype
@@ -654,8 +655,10 @@ contains
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
+        call set_param(star_datadir,       'star_datadir',       'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
         call set_param(starfile,       'starfile',       'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,    'startype',    'str',   'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
+
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1433,6 +1436,8 @@ contains
         call import_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
             'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. m|micrographs or ctf|ctf_estimation or p|ptcl|particles or cavgs|classaverages', .false., '')
         import_starproject%parm_ios(2)%required = .true.
+        call import_starproject%set_input('parm_ios', 1, 'star_datadir', 'file', 'Pathname of STAR data/image files',&
+            'Pathname of STAR generated data files or micrographs ', 'e.g. Micrographs/ ', .false., 'NONE')
         call import_starproject%set_input('parm_ios', 3, smpd) !! default required
         call import_starproject%set_input('parm_ios', 4, kv)
         call import_starproject%set_input('parm_ios', 5, cs)

@@ -21,6 +21,7 @@ contains
     procedure :: get_ndatalines
     procedure :: get_nrecs_per_line
     procedure :: check_temp_files
+    procedure :: set_datadir
     procedure :: read
     procedure :: print_info
     procedure :: print_valid_import_startypes
@@ -82,16 +83,17 @@ contains
         endif
     end subroutine new
 
-    subroutine prepareimport(self, sp, p, filename)
+    subroutine prepareimport(self, sp, p, filename, ignore_checks)
         class(star_project), intent(inout) :: self
         class(sp_project), intent(inout)   :: sp
         class(parameters), intent(inout) :: p
         character(len=*),intent(inout) :: filename
+        logical, intent(inout), optional :: ignore_checks
         if( .not. file_exists(trim(filename)) )then
             THROW_HARD('file: '//trim(filename)//' not in cwd; prepare')
         endif
         !! import mode
-        call self%doc%open4import(filename)
+        call self%doc%open4import(filename, ignore_checks)
         call self%doc%close()
     end subroutine prepareimport
 
@@ -100,6 +102,12 @@ contains
         class(sp_project), intent(inout)   :: sp
         character(len=*), intent(inout)       :: filename
     end subroutine readfile
+
+    subroutine set_datadir(self, datadir)
+        class(star_project), intent(inout) :: self
+        character(len=*), intent(inout)    :: datadir
+        allocate(self%doc%project_root_dir, source=trim(datadir))
+    end subroutine set_datadir
 
     function get_ndatalines(self) result(n)
         class(star_project), intent(inout) :: self
