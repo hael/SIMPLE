@@ -12,14 +12,14 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PRE-PROCESSING
-type(preprocess_distr_commander)          :: xpreprocess
-type(preprocess_stream_commander)         :: xpreprocess_stream
-type(motion_correct_distr_commander)      :: xmotion_correct_distr
-type(motion_correct_tomo_distr_commander) :: xmotion_correct_tomo_distr
-type(powerspecs_distr_commander)          :: xpowerspecs_distr
-type(ctf_estimate_distr_commander)        :: xctf_estimate_distr
-type(pick_distr_commander)                :: xpick_distr
-type(pick_extract_stream_distr_commander) :: xpick_extract_stream_distr
+type(preprocess_distr_commander)            :: xpreprocess
+type(preprocess_stream_commander)           :: xpreprocess_stream
+type(motion_correct_distr_commander)        :: xmotion_correct_distr
+type(gen_pspecs_and_thumbs_distr_commander) :: xgen_pspecs_and_thumbs
+type(motion_correct_tomo_distr_commander)   :: xmotion_correct_tomo_distr
+type(ctf_estimate_distr_commander)          :: xctf_estimate_distr
+type(pick_distr_commander)                  :: xpick_distr
+type(pick_extract_stream_distr_commander)   :: xpick_extract_stream_distr
 
 ! CLUSTER2D
 type(make_cavgs_distr_commander)          :: xmake_cavgs_distr
@@ -98,6 +98,9 @@ select case(prg)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     8.)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call xmotion_correct_distr%execute(cline)
+    case( 'gen_pspecs_and_thumbs' )
+        call cline%parse()
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
     case( 'motion_correct_tomo' )
         call cline%parse()
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
@@ -106,14 +109,6 @@ select case(prg)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',    'yes')
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',   'yes')
         call xmotion_correct_tomo_distr%execute(cline)
-    case( 'powerspecs' )
-        call cline%parse()
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        6.)
-        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',  'yes')
-        call xpowerspecs_distr%execute(cline)
     case( 'ctf_estimate' )
         call cline%parse()
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz',   512.)

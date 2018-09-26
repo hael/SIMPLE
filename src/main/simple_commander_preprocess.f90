@@ -10,8 +10,8 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: preprocess_commander
-public :: powerspecs_commander
 public :: motion_correct_commander
+public :: gen_pspecs_and_thumbs_commander
 public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
@@ -24,14 +24,14 @@ type, extends(commander_base) :: preprocess_commander
   contains
     procedure :: execute      => exec_preprocess
 end type preprocess_commander
-type, extends(commander_base) :: powerspecs_commander
- contains
-   procedure :: execute       => exec_powerspecs
-end type powerspecs_commander
 type, extends(commander_base) :: motion_correct_commander
   contains
     procedure :: execute      => exec_motion_correct
 end type motion_correct_commander
+type, extends(commander_base) :: gen_pspecs_and_thumbs_commander
+  contains
+    procedure :: execute      => exec_gen_pspecs_and_thumbs
+end type gen_pspecs_and_thumbs_commander
 type, extends(commander_base) :: ctf_estimate_commander
   contains
     procedure :: execute      => exec_ctf_estimate
@@ -205,95 +205,6 @@ contains
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess
 
-    subroutine exec_powerspecs( self, cline )
-        use simple_image,               only: image
-        class(powerspecs_commander), intent(inout) :: self
-        class(cmdline),              intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: imgnames(:)
-        type(parameters) :: params
-        type(builder)    :: build
-        type(image)      :: powspec, tmp, mask
-        integer          :: iimg, nimgs, ldim(3), iimg_start, iimg_stop, ifoo
-        if( cline%defined('stk') .and. cline%defined('filetab') )then
-            THROW_HARD('stk and filetab cannot both be defined; input either or!')
-        endif
-        if( .not. cline%defined('stk') .and. .not. cline%defined('filetab') )then
-            THROW_HARD('either stk or filetab need to be defined!')
-        endif
-        call cline%set('oritype', 'stk')
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
-        ! create mask
-        call tmp%new([params%clip,params%clip,1],  params%smpd)
-        call mask%new([params%clip,params%clip,1], params%smpd)
-        tmp = cmplx(1.,0.)
-        call tmp%bp(0.,params%lp,0.)
-        call tmp%ft2img('real', mask)
-        if( params%l_distr_exec )then
-            if( params%part == 1 ) call mask%write('resolution_mask.mrc', 1)
-        else
-            call mask%write('resolution_mask.mrc', 1)
-        endif
-        ! do the work
-        if( cline%defined('stk') )then
-            if( params%l_distr_exec )then
-                THROW_HARD('stk input incompatible with distributed exection; powerspecs')
-            endif
-            call build%img%new(params%ldim, params%smpd) ! img re-generated (to account for possible non-square)
-            tmp = 0.0
-            do iimg=1,params%nptcls
-                call build%img%read(params%stk, iimg)
-                powspec = build%img%mic2spec(params%pspecsz, trim(adjustl(params%speckind)))
-                call powspec%clip(tmp)
-                call tmp%write(trim(adjustl(params%fbody))//params%ext, iimg)
-                call progress(iimg, params%nptcls)
-            end do
-        else
-            call read_filetable(params%filetab, imgnames)
-            nimgs = size(imgnames)
-            DebugPrint  'read the img filenames'
-            if( cline%defined('numlen') )then
-                ! nothing to do
-            else
-                params%numlen = len(int2str(nimgs))
-            endif
-            ! get logical dimension of micrographs
-            call find_ldim_nptcls(imgnames(1), ldim, ifoo)
-            ldim(3) = 1 ! to correct for the stupid 3:d dim of mrc stacks
-            DebugPrint  'logical dimension: ', ldim
-            call build%img%new(ldim, params%smpd) ! img re-generated (to account for possible non-square)
-            ! determine loop range
-            if( params%l_distr_exec )then
-                iimg_start = params%fromp
-                iimg_stop  = params%top
-            else
-                iimg_start = 1
-                if( cline%defined('startit') ) iimg_start = params%startit
-                iimg_stop  = nimgs
-            endif
-            DebugPrint  'fromto: ', iimg_start, iimg_stop
-            ! do it
-            tmp = 0.0
-            do iimg=iimg_start,iimg_stop
-                if( .not. file_exists(imgnames(iimg)) )then
-                    write(*,*) 'inputted img file does not exist: ', trim(adjustl(imgnames(iimg)))
-                endif
-                call build%img%read(imgnames(iimg), 1)
-                powspec = build%img%mic2spec(params%pspecsz, trim(adjustl(params%speckind)))
-                call powspec%clip(tmp)
-                if( params%l_distr_exec )then
-                    call tmp%write(trim(adjustl(params%fbody))//'_pspec'//int2str_pad(iimg,params%numlen)//params%ext)
-                    call progress(iimg, nimgs)
-                else
-                    call tmp%write(trim(adjustl(params%fbody))//params%ext, iimg)
-                    call progress(iimg, nimgs)
-                endif
-            end do
-        endif
-        call qsys_job_finished(  'simple_commander_preprocess :: exec_powerspecs' )
-        ! end gracefully
-        call simple_end('**** SIMPLE_POWERSPECS NORMAL STOP ****')
-    end subroutine exec_powerspecs
-
     subroutine exec_motion_correct( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_binoris_io,          only: binwrite_oritab
@@ -384,6 +295,63 @@ contains
         call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
+
+    subroutine exec_gen_pspecs_and_thumbs( self, cline )
+        use simple_sp_project,       only: sp_project
+        use simple_binoris_io,       only: binwrite_oritab
+        use simple_ori,              only: ori
+        use simple_pspec_thumb_iter, only: pspec_thumb_iter
+        class(gen_pspecs_and_thumbs_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline !< command line input
+        character(len=LONGSTRLEN), allocatable :: imgnames(:)
+        type(parameters)              :: params
+        type(pspec_thumb_iter)        :: iiiter
+        type(ctfparams)               :: ctfvars
+        type(sp_project)              :: spproj
+        type(ori)                     :: o
+        character(len=:), allocatable :: output_dir, moviename_intg, imgkind, fbody
+        integer :: nintgs, fromto(2), iintg, ntot, cnt
+        call cline%set('oritype', 'mic')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ! sanity check
+        nintgs = spproj%get_nintgs()
+        if( nintgs == 0 )then
+            THROW_HARD('No integrated movies to process!')
+        endif
+        ! output directory
+        output_dir = PATH_HERE
+        ! determine loop range & fetch movies oris object
+        if( params%l_distr_exec )then
+            if( cline%defined('fromp') .and. cline%defined('top') )then
+                fromto = [params%fromp, params%top]
+            else
+                THROW_HARD('fromp & top args need to be defined in parallel execution; gen_pspecs_and_thumbs')
+            endif
+        else
+            fromto = [1,nintgs]
+        endif
+        ntot = fromto(2) - fromto(1) + 1
+        ! align
+        cnt = 0
+        do iintg=fromto(1),fromto(2)
+            o = spproj%os_mic%get_ori(iintg)
+            if( o%isthere('imgkind').and.o%isthere('intg') )then
+                cnt = cnt + 1
+                call o%getter('imgkind', imgkind)
+                if( imgkind.ne.'intg' )cycle
+                call o%getter('intg', moviename_intg)
+                call iiiter%iterate(o, moviename_intg, trim(output_dir))
+                call spproj%os_mic%set_ori(iintg, o)
+                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
+            endif
+        end do
+        ! output
+        call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        ! end gracefully
+        call qsys_job_finished('simple_commander_preprocess :: exec_gen_pspecs_and_thumbs')
+        call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
+    end subroutine exec_gen_pspecs_and_thumbs
 
     subroutine exec_ctf_estimate( self, cline )
         use simple_sp_project,          only: sp_project

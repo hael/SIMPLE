@@ -81,6 +81,7 @@ type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
 type(simple_program), target :: fsc
+type(simple_program), target :: gen_pspecs_and_thumbs
 type(simple_program), target :: import_boxes
 type(simple_program), target :: import_cavgs
 type(simple_program), target :: import_movies
@@ -104,7 +105,6 @@ type(simple_program), target :: oristats
 type(simple_program), target :: pick
 type(simple_program), target :: pick_extract_stream
 type(simple_program), target :: postprocess
-type(simple_program), target :: powerspecs
 type(simple_program), target :: preprocess
 type(simple_program), target :: preprocess_stream
 type(simple_program), target :: print_fsc
@@ -233,6 +233,7 @@ contains
         call new_export_starproject
         call new_filter
         call new_fsc
+        call new_gen_pspecs_and_thumbs
         call new_info_image
         call new_info_stktab
         call new_initial_3Dmodel
@@ -256,7 +257,6 @@ contains
         call new_pick
         call new_pick_extract_stream
         call new_postprocess
-        call new_powerspecs
         call new_preprocess
         call new_preprocess_stream
         call new_print_fsc
@@ -301,29 +301,29 @@ contains
         prg_ptr_array(11)%ptr2prg => export_starproject
         prg_ptr_array(12)%ptr2prg => filter
         prg_ptr_array(13)%ptr2prg => fsc
-        prg_ptr_array(14)%ptr2prg => info_image
-        prg_ptr_array(15)%ptr2prg => info_stktab
-        prg_ptr_array(16)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(17)%ptr2prg => import_boxes
-        prg_ptr_array(18)%ptr2prg => import_cavgs
-        prg_ptr_array(19)%ptr2prg => import_movies
-        prg_ptr_array(20)%ptr2prg => import_particles
-        prg_ptr_array(21)%ptr2prg => import_starproject
-        prg_ptr_array(22)%ptr2prg => local_resolution
-        prg_ptr_array(23)%ptr2prg => local_resolution2D
-        prg_ptr_array(24)%ptr2prg => make_cavgs
-        prg_ptr_array(25)%ptr2prg => make_oris
-        prg_ptr_array(26)%ptr2prg => make_pickrefs
-        prg_ptr_array(27)%ptr2prg => mask
-        prg_ptr_array(28)%ptr2prg => motion_correct
-        prg_ptr_array(29)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(30)%ptr2prg => new_project
-        prg_ptr_array(31)%ptr2prg => normalize_
-        prg_ptr_array(32)%ptr2prg => orisops
-        prg_ptr_array(33)%ptr2prg => oristats
-        prg_ptr_array(34)%ptr2prg => pick
-        prg_ptr_array(35)%ptr2prg => postprocess
-        prg_ptr_array(36)%ptr2prg => powerspecs
+        prg_ptr_array(14)%ptr2prg => gen_pspecs_and_thumbs
+        prg_ptr_array(15)%ptr2prg => info_image
+        prg_ptr_array(16)%ptr2prg => info_stktab
+        prg_ptr_array(17)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(18)%ptr2prg => import_boxes
+        prg_ptr_array(19)%ptr2prg => import_cavgs
+        prg_ptr_array(20)%ptr2prg => import_movies
+        prg_ptr_array(21)%ptr2prg => import_particles
+        prg_ptr_array(22)%ptr2prg => import_starproject
+        prg_ptr_array(23)%ptr2prg => local_resolution
+        prg_ptr_array(24)%ptr2prg => local_resolution2D
+        prg_ptr_array(25)%ptr2prg => make_cavgs
+        prg_ptr_array(26)%ptr2prg => make_oris
+        prg_ptr_array(27)%ptr2prg => make_pickrefs
+        prg_ptr_array(28)%ptr2prg => mask
+        prg_ptr_array(29)%ptr2prg => motion_correct
+        prg_ptr_array(30)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(31)%ptr2prg => new_project
+        prg_ptr_array(32)%ptr2prg => normalize_
+        prg_ptr_array(33)%ptr2prg => orisops
+        prg_ptr_array(34)%ptr2prg => oristats
+        prg_ptr_array(35)%ptr2prg => pick
+        prg_ptr_array(36)%ptr2prg => postprocess
         prg_ptr_array(37)%ptr2prg => preprocess
         prg_ptr_array(38)%ptr2prg => preprocess_stream
         prg_ptr_array(39)%ptr2prg => print_fsc
@@ -383,6 +383,8 @@ contains
                 ptr2prg => filter
             case('fsc')
                 ptr2prg => fsc
+            case('gen_pspecs_and_thumbs')
+                ptr2prg => gen_pspecs_and_thumbs
             case('info_image')
                 ptr2prg => info_image
             case('info_stktab')
@@ -429,8 +431,6 @@ contains
                 ptr2prg => pick_extract_stream
             case('postprocess')
                 ptr2prg => postprocess
-            case('powerspecs')
-                ptr2prg => powerspecs
             case('preprocess')
                 ptr2prg => preprocess
             case('preprocess_stream')
@@ -494,13 +494,13 @@ contains
         write(*,'(A)') cluster3D%name
         write(*,'(A)') cluster3D_refine%name
         write(*,'(A)') ctf_estimate%name
+        write(*,'(A)') gen_pspecs_and_thumbs%name
         write(*,'(A)') initial_3Dmodel%name
         write(*,'(A)') make_cavgs%name
         write(*,'(A)') motion_correct%name
         write(*,'(A)') motion_correct_tomo%name
         write(*,'(A)') pick%name
         write(*,'(A)') pick_extract_stream%name
-        write(*,'(A)') powerspecs%name
         write(*,'(A)') preprocess%name
         write(*,'(A)') preprocess_stream%name
         write(*,'(A)') reconstruct3D%name
@@ -1151,6 +1151,33 @@ contains
         ! computer controls
         call fsc%set_input('comp_ctrls', 1, nthr)
     end subroutine new_fsc
+
+    subroutine new_gen_pspecs_and_thumbs
+        ! PROGRAM SPECIFICATION
+        call gen_pspecs_and_thumbs%new(&
+        &'gen_pspecs_and_thumbs', &                                              ! name
+        &'Motion correction of movies',&                                         ! descr_short
+        &'is a distributed workflow for generating power spectra and thumbnails&
+        & for imported integrated movies',&                                       ! descr_long
+        &'simple_distr_exec',&                                                   ! executable
+        &0, 1, 0, 0, 0, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call gen_pspecs_and_thumbs%set_input('parm_ios', 1, pspecsz)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call gen_pspecs_and_thumbs%set_input('comp_ctrls', 1, nparts)
+        call gen_pspecs_and_thumbs%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_gen_pspecs_and_thumbs
 
     subroutine new_info_image
         ! PROGRAM SPECIFICATION
@@ -1957,39 +1984,6 @@ contains
         ! computer controls
         call postprocess%set_input('comp_ctrls', 1, nthr)
     end subroutine new_postprocess
-
-    subroutine new_powerspecs
-        ! PROGRAM SPECIFICATION
-        call powerspecs%new(&
-        &'powerspecs', &                                                              ! name
-        &'Calculate powerspectra from micrographs',&                                  ! descr_short
-        &'is a program for generating powerspectra from a filetable of micrographs',& ! descr_long
-        &'simple_distr_exec',&                                                        ! executable
-        &0, 6, 2, 0, 1, 0, 2, .false.)                                                ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call powerspecs%set_input('parm_ios', 1, smpd)
-        call powerspecs%set_input('parm_ios', 2, 'fbody', 'string', 'Template output powerspec name',&
-        &'Template output powerspec name', 'e.g. spec_', .false., '')
-        call powerspecs%set_input('parm_ios', 3, pspecsz)
-        call powerspecs%set_input('parm_ios', 4, 'speckind', 'multi', 'Power spectrum kind', 'Power spectrum kind(real|power|sqrt|log|phase){sqrt}', '(real|power|sqrt|log|phase){sqrt}', .false., 'sqrt')
-        call powerspecs%set_input('parm_ios', 5, clip)
-        call powerspecs%set_input('parm_ios', 6, mkdir_)
-        ! alternative inputs
-        call powerspecs%set_input('alt_ios', 1, stk)
-        call powerspecs%set_input('alt_ios', 2, 'filetab', 'file', 'List of micrograph files', 'List of micrograph files to generate powerspectra from', 'e.g. filetab.txt', .true., '')
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call powerspecs%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit of resolution mask', 'Low-pass resolution limit of resolution mask', 'low-pass limit in Angstroms', .false., 6.)
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call powerspecs%set_input('comp_ctrls', 1, nparts)
-        call powerspecs%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_powerspecs
 
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION

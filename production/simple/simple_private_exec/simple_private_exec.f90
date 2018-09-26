@@ -19,13 +19,13 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PRE-PROCESSING PROGRAMS
-type(preprocess_commander)           :: xpreprocess
-type(powerspecs_commander)           :: xpowerspecs
-type(motion_correct_commander)       :: xmotion_correct
-type(ctf_estimate_commander)         :: xctf_estimate
-type(map_cavgs_selection_commander)  :: xmap_cavgs_selection
-type(pick_extract_commander)         :: xpick_extract
-type(pick_commander)                 :: xpick
+type(preprocess_commander)            :: xpreprocess
+type(motion_correct_commander)        :: xmotion_correct
+type(gen_pspecs_and_thumbs_commander) :: xgen_pspecs_and_thumbs
+type(ctf_estimate_commander)          :: xctf_estimate
+type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
+type(pick_extract_commander)          :: xpick_extract
+type(pick_commander)                  :: xpick
 
 ! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)           :: xmake_cavgs
@@ -146,30 +146,11 @@ select case(prg)
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',        512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate', 30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         call xpreprocess%execute(cline)
-    case( 'powerspecs' )
-        ! for generating powerspectra from a stack or filetable
-        keys_required(1) = 'smpd'
-        keys_required(2) = 'fbody'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'stk'
-        keys_optional(3) = 'filetab'
-        keys_optional(4) = 'pspecsz'
-        keys_optional(5) = 'speckind'
-        keys_optional(6) = 'startit'
-        keys_optional(7) = 'lp'
-        keys_optional(8) = 'clip'
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:8))
-        ! set defaults
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('clip')    ) call cline%set('clip',    256.)
-        call xpowerspecs%execute(cline)
     case( 'motion_correct' )
         ! for movie alignment
         keys_required(1)  = 'projfile'
@@ -196,6 +177,15 @@ select case(prg)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
         call xmotion_correct%execute(cline)
+    case( 'gen_pspecs_and_thumbs' )
+        ! for generating power spectra and thumbnails
+        keys_required(1)  = 'projfile'
+        ! set optional keys
+        keys_optional(1)  = 'nthr'
+        keys_optional(2)  = 'pspecsz'
+        keys_optional(3)  = 'dir'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:3))
+        call xgen_pspecs_and_thumbs%execute(cline)
     case( 'ctf_estimate' )
         ! for fitting the CTF
         keys_required(1)  = 'projfile'
@@ -211,9 +201,8 @@ select case(prg)
         keys_optional(9) = 'dir'
         call cline%parse_oldschool(keys_required(:1), keys_optional(:9))
         ! set defaults
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        if( .not. cline%defined('hp') ) call cline%set('hp', 30.)
+        if( .not. cline%defined('lp') ) call cline%set('lp',  5.)
         call xctf_estimate%execute(cline)
     case( 'map_cavgs_selection' )
         ! for mapping class average selection to project

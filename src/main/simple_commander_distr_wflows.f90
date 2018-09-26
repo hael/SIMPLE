@@ -12,8 +12,8 @@ implicit none
 
 public :: preprocess_distr_commander
 public :: motion_correct_distr_commander
+public :: gen_pspecs_and_thumbs_distr_commander
 public :: motion_correct_tomo_distr_commander
-public :: powerspecs_distr_commander
 public :: ctf_estimate_distr_commander
 public :: pick_distr_commander
 public :: make_cavgs_distr_commander
@@ -34,14 +34,14 @@ type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
 end type motion_correct_distr_commander
+type, extends(commander_base) :: gen_pspecs_and_thumbs_distr_commander
+  contains
+    procedure :: execute      => exec_gen_pspecs_and_thumbs_distr
+end type gen_pspecs_and_thumbs_distr_commander
 type, extends(commander_base) :: motion_correct_tomo_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_tomo_distr
 end type motion_correct_tomo_distr_commander
-type, extends(commander_base) :: powerspecs_distr_commander
-  contains
-    procedure :: execute      => exec_powerspecs_distr
-end type powerspecs_distr_commander
 type, extends(commander_base) :: ctf_estimate_distr_commander
   contains
     procedure :: execute      => exec_ctf_estimate_distr
@@ -141,7 +141,7 @@ contains
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
         if( spproj%get_nmovies() ==0 )then
-            THROW_HARD('no movie to process! exec_preprocess_distr')
+            THROW_HARD('no movie to process! exec_motion_correct_distr')
         endif
         call spproj%kill
         ! setup the environment for distributed execution
@@ -159,6 +159,39 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct_distr
+
+    subroutine exec_gen_pspecs_and_thumbs_distr( self, cline )
+        class(gen_pspecs_and_thumbs_distr_commander), intent(inout) :: self
+        class(cmdline),                               intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        call cline%set('oritype', 'mic')
+        call params%new(cline)
+        params%numlen = len(int2str(params%nparts))
+        call cline%set('numlen', real(params%numlen))
+        ! sanity check
+        call spproj%read_segment(params%oritype, params%projfile)
+        if( spproj%get_nintgs() ==0 )then
+            THROW_HARD('no integrated movies to process! exec_gen_pspecs_and_thumbs_distr')
+        endif
+        call spproj%kill
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        ! merge docs
+        call spproj%read(params%projfile)
+        call spproj%merge_algndocs(params%nptcls, params%nparts, 'mic', ALGN_FBODY)
+        call spproj%kill
+        ! clean
+        call qsys_cleanup
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
+    end subroutine exec_gen_pspecs_and_thumbs_distr
 
     subroutine exec_motion_correct_tomo_distr( self, cline )
         use simple_oris, only: oris
@@ -216,30 +249,6 @@ contains
         call qsys_cleanup
         call simple_end('**** SIMPLE_DISTR_MOTION_CORRECT_TOMO NORMAL STOP ****')
     end subroutine exec_motion_correct_tomo_distr
-
-    subroutine exec_powerspecs_distr( self, cline )
-        class(powerspecs_distr_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        type(parameters) :: params
-        type(qsys_env)   :: qenv
-        type(chash)      :: job_descr
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
-        call params%new(cline)
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        params%nptcls = nlines(params%filetab)
-        if( params%nparts > params%nptcls ) THROW_HARD('nr of partitions (nparts) mjust be < number of entries in filetable')
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs(job_descr)
-        ! clean
-        call qsys_cleanup
-        ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_POWERSPECS NORMAL STOP ****')
-    end subroutine exec_powerspecs_distr
 
     subroutine exec_ctf_estimate_distr( self, cline )
         class(ctf_estimate_distr_commander), intent(inout) :: self
