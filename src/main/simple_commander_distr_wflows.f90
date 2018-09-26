@@ -167,14 +167,20 @@ contains
         type(sp_project) :: spproj
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        integer          :: nintgs
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
         call cline%set('numlen', real(params%numlen))
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
-        if( spproj%get_nintgs() ==0 )then
+        nintgs = spproj%get_nintgs()
+        if( nintgs ==0 )then
             THROW_HARD('no integrated movies to process! exec_gen_pspecs_and_thumbs_distr')
+        endif
+        if( params%nparts > nintgs )then
+            call cline%set('nparts', real(nintgs))
+            params%nparts = nintgs
         endif
         call spproj%kill
         ! setup the environment for distributed execution

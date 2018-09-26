@@ -305,7 +305,7 @@ contains
         class(cmdline),                         intent(inout) :: cline !< command line input
         character(len=LONGSTRLEN), allocatable :: imgnames(:)
         type(parameters)              :: params
-        type(pspec_thumb_iter)        :: iiiter
+        type(pspec_thumb_iter)        :: ptiter
         type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
@@ -339,9 +339,9 @@ contains
             if( o%isthere('imgkind').and.o%isthere('intg') )then
                 cnt = cnt + 1
                 call o%getter('imgkind', imgkind)
-                if( imgkind.ne.'intg' )cycle
+                if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', moviename_intg)
-                call iiiter%iterate(o, moviename_intg, trim(output_dir))
+                call ptiter%iterate(o, moviename_intg, trim(output_dir))
                 call spproj%os_mic%set_ori(iintg, o)
                 write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
             endif
