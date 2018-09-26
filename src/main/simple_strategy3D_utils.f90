@@ -55,6 +55,7 @@ contains
                 call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
             endif
             call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(ref)))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'inpl',  real(inpl))
             call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
             call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
             call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)

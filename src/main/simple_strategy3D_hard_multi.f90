@@ -133,6 +133,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'ow',        1.0)
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.0)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.0)
         DebugPrint   '>>> strategy3D_hard_multi :: EXECUTED oris_assign_hard_multi'

@@ -120,6 +120,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'corr',      corr)
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(1,'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))

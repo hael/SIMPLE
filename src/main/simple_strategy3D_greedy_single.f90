@@ -59,6 +59,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
     end subroutine oris_assign_greedy_single
