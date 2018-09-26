@@ -7,7 +7,7 @@ use simple_micops
 use simple_image
 use simple_stackops
 use simple_math
-use simple_test_chiara_try_mod
+!use simple_test_chiara_try_mod
 use simple_edge_detector, only : automatic_thresh_sobel
 use simple_parameters, only: parameters
 use simple_cmdline,    only: cmdline
