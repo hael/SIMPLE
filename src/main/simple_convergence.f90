@@ -21,6 +21,8 @@ type convergence
     real :: mi_proj   = 0. !< projection parameter distribution overlap
     real :: mi_state  = 0. !< state parameter distribution overlap
     real :: spread    = 0. !< angular spread
+    real :: shwmean   = 0. !< shift increment, weighted mean
+    real :: shwstdev  = 0. !< shift increment, weighted std deviation    
     real :: bfac      = 0. !< average per-particle B-factor (search)
     real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
   contains
@@ -116,6 +118,8 @@ contains
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
         self%spread    = build_glob%spproj_field%get_avg('spread',    mask=mask)
+        self%shwmean   = build_glob%spproj_field%get_avg('shwmean',   mask=mask)
+        self%shwstdev  = build_glob%spproj_field%get_avg('shwstdev',  mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
         self%bfac_rec  = 0.
         bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
@@ -135,6 +139,8 @@ contains
         write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
         write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
         write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD (DEG):              ', self%spread
+        write(*,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCREMENT:      ', self%shwmean
+        write(*,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCR STDEV:     ', self%shwstdev
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &

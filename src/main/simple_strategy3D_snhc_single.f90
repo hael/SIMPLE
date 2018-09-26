@@ -77,9 +77,11 @@ contains
 
     subroutine oris_assign_snhc_single( self )
         use simple_ori,  only: ori
+        use simple_strategy3D_utils, only: estimate_shift_increment
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym
         real       :: dist_inpl, corr, frac, euldist, bfac
+        real       :: shwmean, shwstdev        
         integer    :: ref, roind
         ! orientation parameters
         ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
@@ -100,6 +102,7 @@ contains
             bfac  = pftcc_glob%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
             call build_glob%spproj_field%set(self%s%iptcl, 'bfac',  bfac )
         endif
+        call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
@@ -122,6 +125,8 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(1,'proj'))
         call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(1,'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)        
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc

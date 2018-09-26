@@ -21,11 +21,12 @@ contains
 
     subroutine oris_assign_single( self )
         use simple_ori,  only: ori
-        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread
+        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread, estimate_shift_increment
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac,  ang_spread, dist_inpl, euldist
+        real      :: shwmean, shwstdev
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
         ! extract peak info
@@ -34,6 +35,7 @@ contains
         call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr )
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
+        call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
@@ -59,8 +61,10 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'specscore', self%s%specscore)
         call build_glob%spproj_field%set(self%s%iptcl, 'ow',        s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'ow'))
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
-        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))        
-        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)
+        call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
+        call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)        
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint   '>>> STRATEGY3D_SINGLE :: EXECUTED ORIS_ASSIGN_SINGLE'
     end subroutine oris_assign_single

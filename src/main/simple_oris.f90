@@ -36,6 +36,7 @@ type :: oris
     procedure          :: get_mat
     procedure          :: get_normal
     procedure          :: get_2Dshift
+    procedure          :: get_2Dshift_incr
     procedure          :: get_state
     procedure, private :: isthere_1
     procedure, private :: isthere_2
@@ -75,6 +76,7 @@ type :: oris
     procedure          :: delete_2Dclustering
     procedure          :: set_euler
     procedure          :: set_shift
+    procedure          :: set_shift_incr
     procedure          :: e1set
     procedure          :: e2set
     procedure          :: e3set
@@ -340,6 +342,13 @@ contains
         real :: shvec(2)
         shvec = self%o(i)%get_2Dshift()
     end function get_2Dshift
+
+    function get_2Dshift_incr( self, i )  result(shvec)
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real :: shvec(2)
+        shvec = self%o(i)%get_2Dshift_incr()
+    end function get_2Dshift_incr
 
     integer function get_state( self, i )
         class(oris), intent(inout) :: self
@@ -1281,6 +1290,13 @@ contains
         real,        intent(in)    :: vec(2)
         call self%o(i)%set_shift(vec)
     end subroutine set_shift
+
+    subroutine set_shift_incr( self, i, vec )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        real,        intent(in)    :: vec(2)
+        call self%o(i)%set_shift_incr(vec)
+    end subroutine set_shift_incr
 
     subroutine e1set( self, i, e1 )
         class(oris), intent(inout) :: self

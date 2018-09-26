@@ -32,6 +32,7 @@ type :: ori
     procedure          :: e3set
     procedure          :: swape1e3
     procedure          :: set_shift
+    procedure          :: set_shift_incr
     procedure, private :: set_1
     procedure, private :: set_2
     generic            :: set => set_1, set_2
@@ -57,6 +58,7 @@ type :: ori
     generic            :: getter => getter_1, getter_2
     procedure          :: get_2Dshift
     procedure          :: get_3Dshift
+    procedure          :: get_2Dshift_incr
     procedure          :: get_state
     procedure          :: hash_size
     procedure          :: isthere
@@ -137,6 +139,7 @@ contains
         class(ori), intent(inout) :: self
         call self%set_euler([0., 0., 0.])
         call self%set_shift([0., 0.])
+        call self%set_shift_incr([0., 0.])
         call self%htab%set('state', 0.)
         if( self%isthere('corr') )     call self%htab%set('corr',     -1.)
         if( self%isthere('specscore') )call self%htab%set('specscore', 0.)
@@ -229,6 +232,14 @@ contains
         call self%htab%set( 'x', shvec(1) )
         call self%htab%set( 'y', shvec(2) )
     end subroutine set_shift
+
+    !>  \brief  is a setter
+    subroutine set_shift_incr( self, shvec )
+        class(ori), intent(inout) :: self
+        real,       intent(in)    :: shvec(2) !< shift vector
+        call self%htab%set( 'xincr', shvec(1) )
+        call self%htab%set( 'yincr', shvec(2) )
+    end subroutine set_shift_incr
 
     !>  \brief  is a setter
     subroutine set_1( self, key, val )
@@ -467,6 +478,14 @@ contains
         vec(2) = self%htab%get('z')
     end function get_3Dshift
 
+    !>  \brief  is a getter
+    function get_2Dshift_incr( self ) result( vec )
+        class(ori), intent(inout) :: self
+        real :: vec(2)
+        vec(1) = self%htab%get('xincr')
+        vec(2) = self%htab%get('yincr')
+    end function get_2Dshift_incr
+    
     !>  \brief  is a getter
     integer function get_state( self )
         class(ori), intent(inout) :: self

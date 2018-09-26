@@ -104,18 +104,21 @@ contains
 
     subroutine oris_assign_hard_multi( self )
         use simple_ori,  only: ori
+        use simple_strategy3D_utils, only: estimate_shift_increment
         class(strategy3D_hard_multi), intent(inout) :: self
         type(ori) :: osym
         real      :: dist_inpl, euldist, updatecnt
+        real      :: shwmean, shwstdev
         integer   :: best_loc(1)
         ! extract peak info
         updatecnt = build_glob%spproj_field%get(self%s%iptcl, 'updatecnt')
         call prob_select_peak( self%s, updatecnt )
         best_loc(1) = 1 ! by definition
+        call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
-        ! generate convergence stats
+        ! generate convergence stats        
         call set_state_overlap(self%s, best_loc)
         ! set the distances before we update the orientation
         if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
@@ -135,6 +138,8 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'proj',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'proj'))
         call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.0)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)        
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.0)
         DebugPrint   '>>> strategy3D_hard_multi :: EXECUTED oris_assign_hard_multi'
     end subroutine oris_assign_hard_multi

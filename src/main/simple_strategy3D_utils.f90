@@ -8,7 +8,7 @@ use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
 public :: extract_peaks, prob_select_peak, corrs2softmax_weights, states_reweight
-public :: estimate_ang_spread, set_state_overlap, sort_corrs
+public :: estimate_ang_spread, estimate_shift_increment, set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
@@ -19,7 +19,7 @@ contains
         real,                   intent(out)   :: corrs(s%npeaks)
         logical, optional,      intent(in)    :: multistates
         integer :: ipeak, cnt, ref, inpl, state
-        real    :: shvec(2)
+        real    :: shvec(2), shvec_incr(2)
         logical :: l_multistates
         if( present(multistates) )then
             l_multistates = multistates
@@ -41,8 +41,12 @@ contains
             inpl = s3D%proj_space_inplinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
             cnt = cnt + 1
             ! add shift
-            shvec = s%prev_shvec
-            if( s%doshift ) shvec = shvec + s3D%proj_space_shift(s%ithr,ref,inpl,1:2)
+            shvec      = s%prev_shvec
+            shvec_incr = 0.
+            if( s%doshift ) then
+                shvec_incr = s3D%proj_space_shift(s%ithr,ref,inpl,1:2)
+                shvec      = shvec + shvec_incr
+            end if
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
@@ -59,6 +63,7 @@ contains
             call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
             call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
             call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
+            call s3D%o_peaks(s%iptcl)%set_shift_incr(cnt, shvec_incr)
         enddo
     end subroutine extract_peaks
 
@@ -324,6 +329,58 @@ contains
         ang_spread = 0.
         if( var > 0. ) ang_spread = sqrt(var)
     end function estimate_ang_spread
+
+    subroutine estimate_shift_increment( s, shwmean, shwstdev )
+        class(strategy3D_srch), intent(inout) :: s
+        real,                   intent(out)   :: shwmean, shwstdev        
+        integer    :: ipeak, states(s3D%o_peaks(s%iptcl)%get_noris())
+        integer    :: best_state, loc(1), npeaks, cnt, i
+        real       :: ws(s3D%o_peaks(s%iptcl)%get_noris()), dev, dev_w, var, var_w
+        real       :: shift_incrs(s3D%o_peaks(s%iptcl)%get_noris()), ws_here(s3D%o_peaks(s%iptcl)%get_noris())
+        logical    :: multi_states
+        npeaks     = s3D%o_peaks(s%iptcl)%get_noris()
+        if( npeaks < 1 ) return ! need at least 1
+        ! gather weights & states
+        do ipeak=1,npeaks
+            ws(ipeak)     = s3D%o_peaks(s%iptcl)%get(ipeak, 'ow')
+            states(ipeak) = s3D%o_peaks(s%iptcl)%get_state(ipeak)
+        enddo
+        if( count(ws > TINY) < 1 ) return ! need at least 1
+        ! multi-states or not?
+        multi_states = .false.
+        if( s%nstates > 1 ) multi_states = .true.
+        ! best state is?
+        loc = maxloc(ws)
+        best_state = states(loc(1))
+        if( multi_states )then
+            if( count(states == best_state) < 1 ) return ! need at least 1
+        endif
+        ! loop over valid peaks and find shift increment
+        cnt = 0
+        do ipeak = 1, npeaks - 1
+            ! take care of ow > 0. requirement
+            if( ws(ipeak) <= TINY ) cycle
+            ! take care of multi-state case
+            if( multi_states )then
+                if( states(ipeak) /= best_state ) cycle
+            endif
+            ! incr shift increment counter
+            cnt = cnt + 1
+            ws_here(cnt)     = ws(ipeak)
+            shift_incrs(cnt) = arg(s3D%o_peaks(s%iptcl)%get_2Dshift_incr(ipeak))
+        enddo
+        if( cnt < 1 ) return ! need at least 1
+        ! calculate standard deviation of distances as measure of angular spread
+        shwmean = sum(shift_incrs(:cnt)*ws_here(:cnt)) / sum(ws_here(:cnt))
+        var_w   = 0.
+        do i=1,cnt
+            dev_w = shift_incrs(i) - shwmean
+            var_w = var_w + ws_here(i) * dev_w * dev_w
+        end do
+        var_w    = (var_w)/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
+        shwstdev = 0.
+        if( var_w > 0. ) shwstdev = sqrt(var_w)
+    end subroutine estimate_shift_increment
 
     subroutine set_state_overlap( s, best_loc )
         class(strategy3D_srch), intent(inout) :: s
