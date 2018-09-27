@@ -1,33 +1,40 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftcc_shsrch_grad
-include 'simple_lib.f08'
-use simple_opt_spec,         only: opt_spec
-use simple_polarft_corrcalc, only: pftcc_glob
-use simple_optimizer,        only: optimizer
-implicit none
+    include 'simple_lib.f08'
+    use simple_opt_spec,         only: opt_spec
+    use simple_polarft_corrcalc, only: pftcc_glob
+    use simple_optimizer,        only: optimizer
+    implicit none
 
-public :: pftcc_shsrch_grad
-private
-
-type :: pftcc_shsrch_grad
+    public :: pftcc_shsrch_grad
     private
-    type(opt_spec)            :: ospec                  !< optimizer specification object
-    class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
-    integer                   :: reference    = 0       !< reference pft
-    integer                   :: particle     = 0       !< particle pft
-    integer                   :: nrots        = 0       !< # rotations
-    integer                   :: maxits       = 100     !< max # iterations
-    logical                   :: shbarr       = .true.  !< shift barrier constraint or not
-    integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-    integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
-    real                      :: max_shift    = 0.      !< maximal shift
-    logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
-  contains
-    procedure :: new         => grad_shsrch_new
-    procedure :: set_indices => grad_shsrch_set_indices
-    procedure :: minimize    => grad_shsrch_minimize
-    procedure :: kill        => grad_shsrch_kill
-end type pftcc_shsrch_grad
+#include "simple_local_flags.inc"
+
+    logical,  parameter :: perform_coarse   = .false. 
+    real(dp), parameter :: coarse_range     = 2.5_dp  !range for coarse search (negative to positive)
+    integer,  parameter :: coarse_num_steps = 5       !no. of coarse search steps in x AND y (hence real no. is its square)
+    
+    type :: pftcc_shsrch_grad
+        private
+        type(opt_spec)            :: ospec                  !< optimizer specification object
+        class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
+        integer                   :: reference    = 0       !< reference pft
+        integer                   :: particle     = 0       !< particle pft
+        integer                   :: nrots        = 0       !< # rotations
+        integer                   :: maxits       = 100     !< max # iterations
+        logical                   :: shbarr       = .true.  !< shift barrier constraint or not
+        integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
+        integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
+        real                      :: max_shift    = 0.      !< maximal shift
+        logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
+    contains
+        procedure :: new         => grad_shsrch_new
+        procedure :: set_indices => grad_shsrch_set_indices
+        procedure :: minimize    => grad_shsrch_minimize
+        procedure :: kill        => grad_shsrch_kill
+        procedure :: coarse_search
+        procedure :: coarse_search_opt_angle
+    end type pftcc_shsrch_grad
 
 contains
 
@@ -69,11 +76,10 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         select type(self)
-            class is (pftcc_shsrch_grad)
-                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
-            class default
-                write (*,*) 'error in grad_shsrch_costfun: unknown type'
-                stop
+        class is (pftcc_shsrch_grad)
+            cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+        class default
+            THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
     end function grad_shsrch_costfun
 
@@ -84,13 +90,12 @@ contains
         real(dp), intent(out)   :: grad(D)
         real(dp)                :: corrs_grad(2)
         select type(self)
-            class is (pftcc_shsrch_grad)
-                call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-                grad = - corrs_grad
-            class default
-                write (*,*) 'error in grad_shsrch_gcostfun: unknown type'
-                grad = 0.
-                stop
+        class is (pftcc_shsrch_grad)
+            call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+            grad = - corrs_grad
+        class default
+            THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
+            grad = 0.
         end select
     end subroutine grad_shsrch_gcostfun
 
@@ -103,14 +108,13 @@ contains
         real(dp)                :: corrs_grad(2)
         select type(self)
         class is (pftcc_shsrch_grad)
-             call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+            call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
             f    = - corrs
             grad = - corrs_grad
         class default
-            write (*,*) 'error in grad_shsrch_fdfcostfun: unknown type'
+            THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
             f = 0.
             grad = 0.
-            stop
         end select
     end subroutine grad_shsrch_fdfcostfun
 
@@ -128,7 +132,7 @@ contains
         select type(self)
         class is (pftcc_shsrch_grad)
             call grad_shsrch_optimize_angle(self)
-        class default
+            class default
             write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
             stop
         end select
@@ -148,14 +152,21 @@ contains
         integer,                  intent(inout) :: irot
         real    :: corrs(self%nrots), cxy(3)
         real    :: lowest_cost, lowest_cost_overall, lowest_shift(2)
-        integer :: loc(1), i, lowest_rot
+        integer :: loc(1), i, lowest_rot, init_rot
         logical :: found_better
+        real(dp) :: init_xy(2)
         found_better      = .false.
         if( self%opt_angle )then
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-            loc               = maxloc(corrs)
-            self%cur_inpl_idx = loc(1)
+            loc                 = maxloc(corrs)
+            self%cur_inpl_idx   = loc(1)
             lowest_cost_overall = -corrs(self%cur_inpl_idx)
+            if (perform_coarse) then
+                call self%coarse_search_opt_angle(init_xy, init_rot)
+                self%ospec%x_8    = init_xy
+                self%ospec%x      = real(init_xy)
+                self%cur_inpl_idx = init_rot
+            end if
             ! shift search / in-plane rot update
             do i = 1,self%max_evals
                 call self%nlopt%minimize(self%ospec, self, lowest_cost)
@@ -184,6 +195,11 @@ contains
         else
             self%cur_inpl_idx   = irot
             lowest_cost_overall = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [0.d0,0.d0], self%cur_inpl_idx)
+            if (perform_coarse) then
+                call self%coarse_search(init_xy)
+                self%ospec%x_8 = init_xy
+                self%ospec%x   = real(init_xy)
+            end if
             ! shift search
             call self%nlopt%minimize(self%ospec, self, lowest_cost)
             if( lowest_cost < lowest_cost_overall )then
@@ -199,8 +215,72 @@ contains
             else
                 irot = 0 ! to communicate that a better solution was not found
             endif
-        endif
+        end if
     end function grad_shsrch_minimize
+
+    subroutine coarse_search(self, init_xy)
+        class(pftcc_shsrch_grad), intent(inout) :: self
+        real(dp),                 intent(out)   :: init_xy(2)
+        real(dp)                                :: x, y
+        real(dp)                                :: lowest_cost, cost
+        real(dp)                                :: xy_step
+        integer                                 :: ix, iy
+        if (coarse_num_steps .le. 1) then
+            THROW_HARD('coarse_num_steps too small; coarse_search')
+        end if
+        if (coarse_range .lt. 0._dp) then
+            THROW_HARD('coarse_range not positive; coarse_search')
+        end if
+        xy_step = 2._dp * coarse_range / real(coarse_num_steps-1,kind=dp)
+        lowest_cost = HUGE(lowest_cost)
+        do ix = 1, coarse_num_steps
+            x = -coarse_range + (ix-1) * xy_step
+            do iy = 1,coarse_num_steps
+                y = -coarse_range + (iy-1) * xy_step
+                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x, y], self%cur_inpl_idx)
+                if (cost < lowest_cost) then
+                    lowest_cost = cost
+                    init_xy(1) = x
+                    init_xy(2) = y
+                end if
+            end do
+        end do
+    end subroutine coarse_search
+
+    subroutine coarse_search_opt_angle(self, init_xy, irot)
+        class(pftcc_shsrch_grad), intent(inout) :: self
+        real(dp),                 intent(out)   :: init_xy(2)
+        integer,                  intent(out)   :: irot
+        real(dp)                                :: x, y
+        real(dp)                                :: lowest_cost, cost
+        real(dp)                                :: xy_step
+        integer                                 :: ix, iy
+        real    :: corrs(self%nrots)
+        integer :: loc(1)
+        if (coarse_num_steps .le. 1) then
+            THROW_HARD('coarse_num_steps too small; coarse_search')
+        end if
+        if (coarse_range .lt. 0._dp) then
+            THROW_HARD('coarse_range not positive; coarse_search')
+        end if
+        xy_step = 2._dp * coarse_range / real(coarse_num_steps-1,kind=dp)
+        lowest_cost = HUGE(lowest_cost)
+        do ix = 1, coarse_num_steps
+            x = -coarse_range + (ix-1) * xy_step
+            do iy = 1,coarse_num_steps
+                y = -coarse_range + (iy-1) * xy_step
+                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+                loc  = maxloc(corrs)
+                cost = - corrs(loc(1))
+                if (cost < lowest_cost) then
+                    lowest_cost = cost
+                    irot        = loc(1)
+                    init_xy(1)  = x
+                    init_xy(2)  = y
+                end if
+            end do
+        end do
+    end subroutine coarse_search_opt_angle
 
     subroutine grad_shsrch_kill( self )
         class(pftcc_shsrch_grad), intent(inout) :: self
