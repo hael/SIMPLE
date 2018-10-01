@@ -550,6 +550,7 @@ contains
         call check_carg('shift_cc_jacob', self%shift_cc_jacob)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
+        call check_carg('star_datadir',   self%star_datadir)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('subtr_backgr',   self%subtr_backgr)
@@ -592,7 +593,6 @@ contains
         call check_file('projfile',       self%projfile,     'O')
         call check_file('projfile_target',self%projfile_target,'O')
         call check_file('refs',           self%refs,         notAllowed='T')
-        call check_file('star_datadir',   self%star_datadir)
         call check_file('starfile',       self%starfile,     'R')  ! R for relion, S taken by SPIDER
         call check_file('stk',            self%stk,          notAllowed='T')
         call check_file('stktab',         self%stktab,       'T')
