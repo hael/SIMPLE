@@ -72,7 +72,7 @@ void tifflib_readrgba( float*realimg, int*width, int*height,
   }
   TIFFClose(tif);
 }
-
+/*
 
 void tifflib_readscanline(float*realimg, int*width, int*height,
                           char * fname,
@@ -98,7 +98,7 @@ void tifflib_readscanline(float*realimg, int*width, int*height,
   }
 
 }
-/*
+
 void tifflib_readtiledimage(char * fname, float*realimg, int*width, int*height, int*xtiles, int*ytiles,
                        int* charStringLen,
                        size_t ivf_CharStringLen)
