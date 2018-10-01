@@ -542,11 +542,30 @@ endif()
 
 if(USE_LIBTIFF)
   find_package(TIFF)
+  # Big TIFF  is dependent on Jbig Jpeg, Lzma, Zip and Libm
   if(TIFF_FOUND)
-    add_definitions("-DUSING_TIFF=1")
-    include_directories(${TIFF_INCLUDE_DIR})
-    message(STATUS "FOUND libtiff -- ${TIFF_LIBRARY}")
-    set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY} -ljbig -ljpeg -llzma -lz -lm )
+    find_package(JBIG)
+    find_package(JPEG9)
+    find_package(LibLZMA)
+    find_package(ZLIB)
+
+    if(JBIG_FOUND AND JPEG9_FOUND AND ZLIB_FOUND AND LIBLZMA_FOUND)
+
+      add_definitions("-DUSING_JBIG=1")
+      add_definitions("-DUSING_TIFF=1")
+      include_directories(${TIFF_INCLUDE_DIR})
+      message(STATUS "FOUND libtiff -- ${TIFF_LIBRARY}")
+
+      set(EXTRA_LIBS ${EXTRA_LIBS} ${TIFF_LIBRARY}
+        ${JBIG_LIBRARIES}
+        ${JPEG9_LIBRARY}
+        ${LIBLZMA_LIBRARY}
+        ${ZLIB_LIBRARY} -lm )
+
+    else()
+      set(USE_LIBTIFF OFF)
+      message(STATUS "LibTIFF unable to be used due to dependent libraries JBIG/JPEG-9/LZMA/ZLIB not found ")
+    endif()
   else()
     set(USE_LIBTIFF OFF)
 endif()
