@@ -655,8 +655,8 @@ contains
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
-        call set_param(star_datadir,       'star_datadir',       'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
-        call set_param(starfile,       'starfile',       'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
+        call set_param(star_datadir,   'star_datadir',  'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
+        call set_param(starfile,       'starfile',      'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,    'startype',    'str',   'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
 
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -1411,7 +1411,7 @@ contains
             &'Import STAR file to SIMPLE project ',& ! descr_short
             &'is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project',&
             &'simple_exec',&                         ! executable
-            &0, 15, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
+            &0, 16, 2, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
 
         ! &3, &                                    ! # entries in image input/output
         ! &26, &                                   ! # entries in parameters
@@ -1436,28 +1436,28 @@ contains
         call import_starproject%set_input('parm_ios', 2, 'startype', 'str', 'Export type for STAR project',&
             'STAR export type that sets tabulated export parameters: dfx, dfy, angast, phshift', 'e.g. m|micrographs or ctf|ctf_estimation or p|ptcl|particles or cavgs|classaverages', .false., '')
         import_starproject%parm_ios(2)%required = .true.
-        call import_starproject%set_input('parm_ios', 1, 'star_datadir', 'file', 'Pathname of STAR data/image files',&
+        call import_starproject%set_input('parm_ios', 3, 'star_datadir', 'file', 'Pathname of STAR data/image files',&
             'Pathname of STAR generated data files or micrographs ', 'e.g. Micrographs/ ', .false., 'NONE')
-        call import_starproject%set_input('parm_ios', 3, smpd) !! default required
-        call import_starproject%set_input('parm_ios', 4, kv)
-        call import_starproject%set_input('parm_ios', 5, cs)
-        call import_starproject%set_input('parm_ios', 6, fraca)
-        call import_starproject%set_input('parm_ios', 7, ctf)
+        call import_starproject%set_input('parm_ios', 4, smpd) !! default required
+        call import_starproject%set_input('parm_ios', 5, kv)
+        call import_starproject%set_input('parm_ios', 6, cs)
+        call import_starproject%set_input('parm_ios', 7, fraca)
+        call import_starproject%set_input('parm_ios', 8, ctf)
         import_starproject%parm_ios(7)%required = .false.
-        call import_starproject%set_input('parm_ios', 8, phaseplate)
-        call import_starproject%set_input('parm_ios', 9, oritab)
-        call import_starproject%set_input('parm_ios', 10, deftab)
-        call import_starproject%set_input('parm_ios', 11, 'plaintexttab', 'file', &
+        call import_starproject%set_input('parm_ios', 9, phaseplate)
+        call import_starproject%set_input('parm_ios', 10, oritab)
+        call import_starproject%set_input('parm_ios', 11, deftab)
+        call import_starproject%set_input('parm_ios', 12, 'plaintexttab', 'file', &
             'Plain text file of input parameters',&
             'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', &
             'e.g. params.txt', .false., ' params-star.txt')
-        call import_starproject%set_input('parm_ios', 12, 'boxtab', 'file', 'List of box files', &
+        call import_starproject%set_input('parm_ios', 13, 'boxtab', 'file', 'List of box files', &
             'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
-        call import_starproject%set_input('parm_ios', 13,  'dose_rate', 'num', 'Dose rate', &
+        call import_starproject%set_input('parm_ios', 14,  'dose_rate', 'num', 'Dose rate', &
             'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
-        call import_starproject%set_input('parm_ios', 14,  'exp_time', 'num', 'Exposure time', &
+        call import_starproject%set_input('parm_ios', 15,  'exp_time', 'num', 'Exposure time', &
             'Exposure time in seconds', 'in seconds', .false., 10.)
-        call import_starproject%set_input('parm_ios', 15,  'scale', 'num', 'Down-scaling factor', &
+        call import_starproject%set_input('parm_ios', 16,  'scale', 'num', 'Down-scaling factor', &
             'Down-scaling factor to apply to the movies', '(0-1)', .false., 1.0)
 
         ! call import_starproject%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')

@@ -1,40 +1,40 @@
 ! rotational origin shift alignment of band-pass limited polar projections in the Fourier domain, gradient based minimizer
 module simple_pftcc_shsrch_grad
-    include 'simple_lib.f08'
-    use simple_opt_spec,         only: opt_spec
-    use simple_polarft_corrcalc, only: pftcc_glob
-    use simple_optimizer,        only: optimizer
-    implicit none
+include 'simple_lib.f08'
+use simple_opt_spec,         only: opt_spec
+use simple_polarft_corrcalc, only: pftcc_glob
+use simple_optimizer,        only: optimizer
+implicit none
 
-    public :: pftcc_shsrch_grad
-    private
+public :: pftcc_shsrch_grad
+private
 #include "simple_local_flags.inc"
 
-    logical,  parameter :: perform_coarse   = .false. 
-    real(dp), parameter :: coarse_range     = 2.5_dp  !range for coarse search (negative to positive)
-    integer,  parameter :: coarse_num_steps = 5       !no. of coarse search steps in x AND y (hence real no. is its square)
-    
-    type :: pftcc_shsrch_grad
-        private
-        type(opt_spec)            :: ospec                  !< optimizer specification object
-        class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
-        integer                   :: reference    = 0       !< reference pft
-        integer                   :: particle     = 0       !< particle pft
-        integer                   :: nrots        = 0       !< # rotations
-        integer                   :: maxits       = 100     !< max # iterations
-        logical                   :: shbarr       = .true.  !< shift barrier constraint or not
-        integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
-        integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
-        real                      :: max_shift    = 0.      !< maximal shift
-        logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
-    contains
-        procedure :: new         => grad_shsrch_new
-        procedure :: set_indices => grad_shsrch_set_indices
-        procedure :: minimize    => grad_shsrch_minimize
-        procedure :: kill        => grad_shsrch_kill
-        procedure :: coarse_search
-        procedure :: coarse_search_opt_angle
-    end type pftcc_shsrch_grad
+logical,  parameter :: perform_coarse   = .false.
+real(dp), parameter :: coarse_range     = 2.5_dp  !range for coarse search (negative to positive)
+integer,  parameter :: coarse_num_steps = 5       !no. of coarse search steps in x AND y (hence real no. is its square)
+
+type :: pftcc_shsrch_grad
+    private
+    type(opt_spec)            :: ospec                  !< optimizer specification object
+    class(optimizer), pointer :: nlopt        =>null()  !< optimizer object
+    integer                   :: reference    = 0       !< reference pft
+    integer                   :: particle     = 0       !< particle pft
+    integer                   :: nrots        = 0       !< # rotations
+    integer                   :: maxits       = 100     !< max # iterations
+    logical                   :: shbarr       = .true.  !< shift barrier constraint or not
+    integer                   :: cur_inpl_idx = 0       !< index of inplane angle for shift search
+    integer                   :: max_evals    = 5       !< max # inplrot/shsrch cycles
+    real                      :: max_shift    = 0.      !< maximal shift
+    logical                   :: opt_angle    = .true.  !< optimise in-plane angle with callback flag
+contains
+    procedure :: new         => grad_shsrch_new
+    procedure :: set_indices => grad_shsrch_set_indices
+    procedure :: minimize    => grad_shsrch_minimize
+    procedure :: kill        => grad_shsrch_kill
+    procedure :: coarse_search
+    procedure :: coarse_search_opt_angle
+end type pftcc_shsrch_grad
 
 contains
 
