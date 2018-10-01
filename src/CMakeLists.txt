@@ -48,6 +48,9 @@ file(GLOB MAIN_src "${CMAKE_CURRENT_SOURCE_DIR}/main/*(^commander)*.f[90][08]" P
 file(GLOB JPG_src "${CMAKE_CURRENT_SOURCE_DIR}/jpg/*.f[90][08]" PARENT_SCOPE)
 list(APPEND JPG_src
   "${CMAKE_CURRENT_SOURCE_DIR}/jpg/stb_image_write.c")
+list(REMOVE_ITEM JPG_src
+  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/simple_openslide.f90"
+  )
 if(USE_LIBTIFF)
 list(APPEND JPG_src
   "${CMAKE_CURRENT_SOURCE_DIR}/jpg/write-bigtiff.c"
