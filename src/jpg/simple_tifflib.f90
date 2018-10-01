@@ -9,17 +9,36 @@ public :: write_tiff
 public :: write_bigtiff
 public :: write_tiff2
 public :: write_tiff3
+public :: write_tiff4
 public :: write_tiff_bigimg
-
+public :: write_bigtiff2
+public :: write_bigtiff3
 interface
     integer(C_INT) function bigtiff_write (fname, nx, ny, nz, min_val, max_val,img) bind(C, name="bigtiff_write")
         use,intrinsic :: iso_c_binding
         implicit none
-        character(len=1, kind=c_char), dimension(*), intent(in) :: fname
+        character(len=1,kind=C_CHAR), dimension(*), intent(in) :: fname
         integer(C_INT), intent(in) :: nx,ny,nz
         real(C_FLOAT), intent(in) :: min_val, max_val
         type(C_PTR), intent(in) :: img
     end function bigtiff_write
+    integer(C_INT) function tiffwriter (fname, nx, ny, nz, imgptr) bind(C, name="tiffwriter")
+        use,intrinsic :: iso_c_binding
+        implicit none
+        character(len=1,kind=C_CHAR), dimension(*), intent(in) :: fname
+        integer(C_INT), intent(in) :: nx,ny,nz
+        type(C_PTR), intent(in) :: imgptr
+    end function tiffwriter
+
+    subroutine tifflib_writergba(imgptr, nx, ny, bytesperpixel, fname, fnamesz) bind(C, name="tifflib_writergba")
+        use,intrinsic :: iso_c_binding
+        implicit none
+        type(C_PTR), intent(in) :: imgptr
+        integer(C_INT), intent(in) :: nx,ny, bytesperpixel
+       ! real(C_FLOAT), intent(in) :: scale
+        character(kind=C_CHAR,len=1), dimension(*), intent(in) :: fname
+        integer(C_INT), intent(in) :: fnamesz
+    end subroutine tifflib_writergba
 end interface
 
     ! interface
@@ -363,19 +382,31 @@ end interface
              type(C_PTR), intent(inout) :: tif
              integer(C_INT), intent(in), value :: flag       !! ttag_t is unsigned int
              integer(C_INT), intent(in) :: val
-        end function TIFFSetField
-        ! subroutine TIFFSetFieldf(tif, flag, val) bind(C,name="TIFFSetField")
+         end function TIFFSetField
+          integer(C_INT) function TIFFSetField2(tif, flag, val1, val2) bind(C,name="TIFFSetField")
+             import
+             type(C_PTR), intent(inout) :: tif
+             integer(C_INT), intent(in), value :: flag       !! ttag_t is unsigned int
+             integer(C_INT), intent(in) :: val1, val2
+         end function TIFFSetField2
+         ! subroutine TIFFSetINT16Field(tif, flag, val) bind(C,name="TIFFSetField")
+         !     import
+         !     type(C_PTR), intent(inout) :: tif
+         !     integer(C_INT), intent(in) :: flag
+         !     integer(C_INT16_T), intent(in) :: val
+         ! end subroutine TIFFSetField_uint16
+        ! subroutine TIFFSetField_float(tif, flag, val) bind(C,name="TIFFSetField")
         !     import
         !     type(C_PTR), intent(inout) :: tif
         !     integer(C_INT), intent(in) :: flag
         !     real(C_FLOAT), intent(in) :: val
-        ! end subroutine TIFFSetFieldf
-        ! subroutine TIFFSetFieldc(tif, flag, val) bind(C,name="TIFFSetField")
+        ! end subroutine TIFFSetField_float
+        ! subroutine TIFFSetField_char(tif, flag, val) bind(C,name="TIFFSetField")
         !     import
         !     type(C_PTR), intent(inout) :: tif
         !     integer(C_INT), intent(in) :: flag
         !     character(kind=C_CHAR, len=1), dimension(*), intent(in) :: val
-        ! end subroutine TIFFSetFieldc
+        ! end subroutine TIFFSetField_Char
         integer(C_INT) function TIFFGetField(tif, flag, val) bind(C,name="TIFFGetField")
             import
             type(C_PTR), intent(inout) :: tif
@@ -468,8 +499,13 @@ end interface
             import
             type(C_PTR), intent(inout) :: tif
         end subroutine TIFFClose
-
-    end interface
+        integer(C_INT) function TIFFDefaultStripSize(tif, sz) bind(C, name="TIFFDefaultStripSize")
+            use,intrinsic :: iso_c_binding
+            implicit none
+            type(C_PTR) :: tif  ! (TIFF*)
+            integer(C_INT32_T), intent(in) :: sz  ! uint32
+        end function TIFFDefaultStripSize
+        end interface
 
 interface
     ! Ignore the return value of strncpy -> subroutine
@@ -481,6 +517,23 @@ interface
       integer(c_size_t), value, intent(in) :: n
     end subroutine strncpy
 end interface
+
+type TiffParams
+    real  :: resolution(2)    ! 2 elements vector specifying X and Y resolution
+    real  :: resolutionUnit ! unit of measurement for resolution (none, inch, centimeter)
+    real, allocatable ::  colormap(:)     ! colormap used. Empty array if none
+    integer :: compression    ! compression scheme used
+    logical :: isRGB=.false.          ! true if the image is RGB. The user has to specify it
+                    ! to distinguish between RGB images or grayscale images
+                    ! with 3 stacks. Default is false
+    logical :: isBig=.false.          !true if the data to write is bigger than 4Gb
+    integer :: bitsPerSample;  !number of bits used to represent one pixel
+    logical :: checkExistence =.false. ! before writing data, checks if the file exists
+end type TiffParams
+
+
+integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
+integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
 
 contains
 
@@ -597,8 +650,8 @@ contains
          integer(C_INT64_T) :: bufsize
          integer(C_INT16_T) :: sample =0
          integer :: itile
-         filename =trim(adjustl(fname))//achar(0)
-         tif = TIFFOpen(fname, "r")
+         filename=trim(adjustl(fname))//achar(0)
+         tif = TIFFOpen(filename, "r")
          if ( c_associated(tif) ) then
              ret= TIFFGetField(tif, TIFFTAG_IMAGEWIDTH,  imageWidth)
              ret= TIFFGetField(tif, TIFFTAG_IMAGELENGTH, imageLength)
@@ -917,7 +970,8 @@ contains
          real :: rn(2)
          real, allocatable, target :: img_ptr(:)
          type(c_ptr) :: cptr
-         allocate(c_fname(len(fname)+1), source=trim(fname)//C_NULL_CHAR)
+       !  allocate(c_fname(len(fname)+1), source=trim(fname)//C_NULL_CHAR)
+         c_fname=trim(fname)//achar(0)
          d(1:2) = size(img)
          d(3) = 1
          rn(1) = minval(img)
@@ -932,16 +986,71 @@ contains
          deallocate(img_ptr)
      end subroutine write_bigtiff
 
+     subroutine write_bigtiff2(fname , img)
+         character(len=*), intent(in) :: fname
+         real, intent(in) :: img(:,:)
+         integer :: status, d(3)
+         character(len=1, kind=c_char), allocatable :: c_fname(:)
+         real :: rn(2)
+         real, allocatable, target :: img_ptr(:)
+         type(c_ptr) :: cptr
+         !allocate(c_fname(len(fname)+1), source=trim(fname)//C_NULL_CHAR)
+         c_fname=trim(fname)//achar(0)
+         d(1:2) = size(img)
+         d(3) = 1
+         rn(1) = minval(img)
+         rn(2) = maxval(img)
+         allocate(img_ptr(product(d(1:2))))
+         img_ptr = pack(img, .true.)
+         cptr=c_loc(img_ptr(1))
+         status = tiffwriter(c_fname, d(1), d(2), d(3), cptr)
+         if(status/=0) then
+             write(*,'(a)') "simple_tifflib write_bigtiff2 failed"
+         endif
+         deallocate(img_ptr)
+     end subroutine write_bigtiff2
+
+   subroutine write_bigtiff3(fname , img)
+         character(len=*), intent(in) :: fname
+         real, intent(in) :: img(:,:)
+         integer :: status, w, l, lenstr, imsz
+         character(len=:), allocatable :: fname_here
+         character(len=:), allocatable :: c_fname
+         real :: rn(2)
+         real, allocatable, target :: img_ptr(:)
+         type(c_ptr) :: cptr
+          fname_here = trim(adjustl(fname))
+         print*, " write_bigtiff3 fname:", trim(fname_here)
+         !allocate(c_fname(len(fname)+1), source=trim(fname)//C_NULL_CHAR)
+         !c_fname=trim(fname)//achar(0)
+         allocate(c_fname, source=trim(fname_here)//c_null_char)
+         w = size(img,1)
+         l = size(img,2)
+         write(*,*) " write_bigtiff3 img size", w,l
+         imsz= size(img,1) * size(img,2)
+         img_ptr = ImgExportBuffer(img, 3)
+         cptr=c_loc(img_ptr)
+         lenstr =len(c_fname)
+         write(*,*) " Calling  tifflib_writergba ", c_fname, lenstr
+         write(*,*) " Calling  tifflib_writergba ", w, l, img_ptr(1)
+         call tifflib_writergba(cptr, w, l,3, c_fname, lenstr)
+         if(status/=0) then
+             write(*,'(a)') "simple_tifflib write_bigtiff3 failed"
+         endif
+         deallocate(img_ptr)
+     end subroutine write_bigtiff3
+
+
      subroutine write_tiff2(filename, image_data, dims)
          character(len=*), intent(in) :: filename
          integer, intent(in) :: image_data(:), dims(2)
          type(c_ptr) :: out, bufptr
-         character(kind=C_char, len=1), allocatable :: filename_c
+         character(kind=C_char, len=1), allocatable :: filename_c(:)
          integer(1), pointer :: buf(:)
          integer(C_INT32_T) :: imagelength, imagewidth,row, col, n
          integer(C_INT16_T) :: nsamples
          integer :: istat, temp
-         filename_c = trim(filename)//C_NULL_CHAR
+         filename_c=trim(filename)//achar(0)
          out = TIFFOpen(filename_c,"w")
          if (.not. c_associated(out))then  ! out /= C_NULL_PTR
              write(*,'(a)') "Unable to write tif file "
@@ -985,12 +1094,13 @@ contains
          character(len=*), intent(in) :: filename
          real, intent(in) :: arg(:,:)
          type(c_ptr) :: out, cptr
-         character(kind=C_char, len=1), allocatable :: filename_c
+         character(kind=C_char, len=1), allocatable :: filename_c(:)
          integer(1), pointer :: im_data(:)
          integer :: iret
          integer(C_INT32_T) :: width, height,image_s, imgBytes
          !! Open the TIFF file
-         out = TIFFOpen("image.tiff", "w")
+         filename_c=trim(filename)//achar(0)
+         out = TIFFOpen( filename_c, "w")
          if( .not. c_associated(out) )then
              write(*,'(a)') "Unable to write tif file "
              THROW_HARD("  write_tiff3 failed ")
@@ -1047,6 +1157,105 @@ contains
          end do
 
      end function float2Dto8bitint
+
+
+     subroutine write_tiff4 (filename, imgarg)
+         character(len=*), intent(in) :: filename
+         real, intent(in) :: imgarg(:,:,:)
+         type(c_ptr) :: out, cptr
+         character(kind=C_char, len=1), allocatable :: filename_c(:)
+         real, pointer :: data(:)
+         integer :: imagesize(3), page, iret
+         integer(C_INT8_t), pointer :: buf(:)
+         integer(C_INT32_T) :: row, col, n, pixel,imagelength,imagewidth,npages
+         integer(C_INT16_T) :: nsamples = 3
+         filename_c=trim(filename)//achar(0)
+         out = TIFFOpen(filename_c,"w")
+
+         imagesize= size(imgarg)
+         if (c_associated(out))then
+             imagewidth = imagesize(1)
+             imagelength = imagesize(2)
+             npages =  imagesize(3)
+             do page = 1, imagesize(3)
+                 iret= TIFFSetField(out, TIFFTAG_IMAGELENGTH, imagelength)
+                 iret= TIFFSetField(out, TIFFTAG_IMAGEWIDTH, imagewidth)
+                 iret= TIFFSetField(out, TIFFTAG_PLANARCONFIG,PLANARCONFIG_CONTIG)
+                 iret= TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, 3)
+                 iret= TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW)
+                 iret= TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8)
+                 iret= TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, imagewidth*nsamples))
+
+                 ! We are writing single page of the multipage file
+                 iret= TIFFSetField(out, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE)
+                 iret= TIFFSetField2(out, TIFFTAG_PAGENUMBER, page, NPAGES)
+
+                 write(*,'("writing ",I0," x ",I0,", nsamples ",I0)') imagesize(1), imagesize(2), nsamples
+
+                 allocate(buf(imagewidth*nsamples))
+                 do row = 1, imagelength
+                     do col=1, imagewidth
+                         pixel = INT( imgarg(col, row, page), C_INT32_T)
+                         do n = nsamples, 1, -1
+                             buf((col-1)*nsamples + (nsamples -n) + 1 ) = INT(IAND(ISHFT(pixel,(n-1)*8 - 16 ), 255) , C_INT8_T)
+                         end do
+                     enddo
+                     cptr = c_loc(buf(1))
+                     if (TIFFWriteScanline(out, cptr, row, 0_2) /= 1 ) then
+                         print *,"Unable to write a row"
+                         exit
+                     endif
+                 enddo
+                 iret = TIFFWriteDirectory(out)
+                 deallocate(buf)
+             enddo
+             call TIFFClose(out)
+         end if
+
+     end subroutine write_tiff4
+
+     function ImgExportBuffer( in_buffer, colorspec ) result(img_buffer)
+         real,              intent(in)    :: in_buffer(:,:)
+         integer, optional, intent(in)    :: colorspec
+         integer(kind=1), allocatable     :: img_buffer(:)
+         real(8)                          :: lo, hi
+         integer                       :: status, w, h,c, i, j
+         integer(c_int)                :: pixel
+        ! img_buffer => NULL()
+         w = size(in_buffer,1)
+         h = size(in_buffer,2)
+         if(w == 0 .or. h == 0) return
+         lo = minval(in_buffer)
+         hi = maxval(in_buffer)
+         if(allocated(img_buffer))deallocate(img_buffer)
+         allocate(img_buffer(w*h*3))
+         DebugPrint " ImgExportBuffer ", w, h, lo, hi
+         do j=1,h
+             do i=1,w
+                 if  (colorspec == 4) then
+                     c=4
+                     pixel = NINT( REAL((2_8**31)-1,8) * REAL(in_buffer(i,j)-lo,8)/REAL(hi-lo,8),kind=4)
+                     img_buffer((i-1)*c + (j-1)*w*c + 1) = INT( IAND( ISHFT( pixel, -24), boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 2) = INT( IAND( ISHFT( pixel, -16), boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 3) = INT( IAND( ISHFT( pixel, -8) , boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 4) = INT( IAND( pixel             , boz_00ff), kind=1)
+                 else if  (colorspec == 3) then
+                     c=3
+                     pixel = NINT( real(2_8**24,8) * real(in_buffer(i,j) - lo,8)/real(hi-lo,8),kind=4)
+                     !DebugPrint " ImgExportBuffer ", j, i, pixel,  INT( IAND( pixel             , boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 1) = INT( IAND( ISHFT( pixel, -16), boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 2) = INT( IAND( ISHFT( pixel, -8) , boz_00ff), kind=1)
+                     img_buffer((i-1)*c + (j-1)*w*c + 3) = INT( IAND( pixel             , boz_00ff), kind=1)
+                 else
+                     c=1
+                     pixel =  INT( REAL( 256 - 1)*REAL( (in_buffer(i+1,j+1)-lo)/REAL(hi - lo) ) ,kind=c_int)
+                     pixel =  IAND( pixel , boz_ffff)
+                     img_buffer(i*c + (j*w*c) + 1) = INT(pixel,kind=1)
+                 end if
+
+             end do
+         end do
+     end function ImgExportBuffer
 
 
  end module simple_tifflib

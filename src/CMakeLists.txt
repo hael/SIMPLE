@@ -52,6 +52,7 @@ if(USE_LIBTIFF)
 list(APPEND JPG_src
   "${CMAKE_CURRENT_SOURCE_DIR}/jpg/write-bigtiff.c"
   "${CMAKE_CURRENT_SOURCE_DIR}/jpg/write_tiff.cpp"
+  "${CMAKE_CURRENT_SOURCE_DIR}/jpg/ctif.c"
   )
 endif()
 ########################################################################

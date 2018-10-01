@@ -255,4 +255,33 @@ contains
     end function dssim
 
 
+    function  compute_entropy(img) result(entropy)
+        integer(dp), intent(in) :: img(:,:,:)
+        real(dp) :: entropy, tsum, temp
+        integer(8) :: maximg, ncount, i,j,k
+        integer(dp), allocatable :: pimg
+        ncount = product(size(img))
+        maximg = maxval(img)
+        allocate(pimg(maximg+1), source=0_dp)
+
+        do i = 1, size(img,1)
+            do j= 1, size(img,2)
+                do k = 1, size(img,3)
+                    pimg(img(i,j,k)) = pimg(img(i,j,k)) + 1
+                enddo
+            end do
+        end do
+
+        do i = 1, maximg + 1
+            temp = real(pimg(i),dp) / real(ncount,dp)
+            if (temp > 0.0) then
+                tsum = tsum - temp * log(temp)
+            end if
+        end do
+
+        entropy = tsum / log(2.0);
+    end function compute_entropy
+
+
+
 end module simple_ssim

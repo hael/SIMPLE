@@ -102,6 +102,63 @@ swapBytesInScanline(void *buf, uint32 width, TIFFDataType dtype)
 	}
 }
 
+// Multi page tiff writer based on
+// https://raymondlo84.blogspot.com/2015/09/how-to-write-multipage-tiff-file.html
+int tiffwriter(char*fname, int *dim1, int *dim2, int *dim3, float * imgptr)
+{
+    TIFF *out = TIFFOpen(fname,"w") ;
+    uint32 imagelength = *dim1;
+    uint32 imagewidth = *dim2;
+
+    if (out)
+    {
+        int NPAGES = *dim3;
+        int page;
+        for (page = 0; page < NPAGES; page++){
+            uint8 * buf;
+            uint32 row, col, n, pixel;
+            uint16 config, nsamples = 3;
+            config = PLANARCONFIG_CONTIG ;
+
+            TIFFSetField(out, TIFFTAG_IMAGELENGTH, imagelength);
+            TIFFSetField(out, TIFFTAG_IMAGEWIDTH, imagewidth);
+            TIFFSetField(out, TIFFTAG_PLANARCONFIG, config);
+            TIFFSetField(out, TIFFTAG_SAMPLESPERPIXEL, nsamples);
+            TIFFSetField(out, TIFFTAG_COMPRESSION, COMPRESSION_LZW) ;
+            TIFFSetField(out, TIFFTAG_BITSPERSAMPLE, 8) ;
+            TIFFSetField(out, TIFFTAG_ROWSPERSTRIP, TIFFDefaultStripSize(out, imagewidth*nsamples));
+
+            /* We are writing single page of the multipage file */
+            TIFFSetField(out, TIFFTAG_SUBFILETYPE, FILETYPE_PAGE);
+            TIFFSetField(out, TIFFTAG_PAGENUMBER, page, NPAGES);
+
+            printf("writing %d x %d, nsamples %d", imagewidth, imagelength, nsamples);
+
+            buf = _TIFFmalloc(imagewidth*nsamples);
+
+            for (row = 0; row < imagelength; row++){
+
+                for(col=0; col < imagewidth; col++){
+                  pixel = (uint32) imgptr[page*imagelength*imagewidth + row*imagewidth+ col];
+                  for(n = 0 ; n < nsamples ; ++n)
+                    {
+
+                      buf[col*nsamples+n] = (uint8) ( ( pixel >> (24 - n*8) ) & 255);
+                    }
+                }
+                if (TIFFWriteScanline(out, buf, row, 0) != 1 )
+                {
+                    printf("Unable to write a row\n") ;
+                    break ;
+                }
+            }
+            TIFFWriteDirectory(out);
+            _TIFFfree(buf);
+        }
+        TIFFClose(out);
+    }
+}
+
 /* static	uint16 compression = (uint16) -1; */
 /* static	int jpegcolormode = JPEGCOLORMODE_RGB; */
 /* static	int quality = 75;		/\* JPEG quality *\/ */
