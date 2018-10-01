@@ -995,7 +995,7 @@ contains
         endif
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob), glob_elems)  ! simple_posix.c
+        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob)-1, glob_elems)  ! simple_posix.c
         if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
@@ -1033,7 +1033,7 @@ contains
         endif
         call del_file('__simple_filelist__')
         !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob), glob_elems)  ! simple_posix.c
+        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob)-1, glob_elems)  ! simple_posix.c
         if(iostatus/=0) THROW_ERROR("glob failed")
         open(newunit = luntmp, file = '__simple_filelist__')
         allocate( list(glob_elems) )
