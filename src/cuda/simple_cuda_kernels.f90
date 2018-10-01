@@ -124,6 +124,31 @@ interface
     end subroutine mulgaussKernel
 end interface
 
+
+!! xcorr
+interface
+
+    subroutine kernel_correlation(U,V,corr, dimGrid, dimBlk, N) bind(C, name="kernelrcorr")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3
+        type (c_ptr), value ::U,V
+        type(c_ptr) :: corr ! return value (float)
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+    end subroutine kernel_correlation
+    subroutine  kernel_sumcsq(A,sumcsq, dimGrid, dimBlk, N) bind(C, name=" kernelsumcsq")
+        use, intrinsic :: ISO_C_BINDING
+        use CUDA, only : dim3
+        type (c_ptr), value ::A
+        type(c_ptr) :: sumsqr  ! return value (float)
+        type (dim3) :: dimGrid
+        type (dim3) :: dimBlk
+        integer(c_int), value :: N
+    end subroutine kernel_sumcsq
+end interface
+
+
 contains
 
 
