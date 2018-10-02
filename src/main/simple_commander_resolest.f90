@@ -210,7 +210,7 @@ contains
             call local_res2D_lp(locres_finds, avgs2filter)
             ! write and destruct
             do iptcl=1,params%nptcls
-                call avgs2filter(iptcl)%write('map_locres2D_lp.mrc', iptcl)
+                call avgs2filter(iptcl)%write('cavgs_locres2D_lp.mrc', iptcl)
                 call avgs2filter(iptcl)%kill
             end do
         endif

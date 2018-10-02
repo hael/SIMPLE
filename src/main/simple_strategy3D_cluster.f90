@@ -41,7 +41,7 @@ contains
         integer,                     intent(in)    :: ithr
         integer :: sym_projs(self%s%nstates), loc(1), iproj, iref, isym, state
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
-        real    :: shvec(2), corr, mi_state, frac, mi_proj, bfac, score4extr, corr_valid
+        real    :: shvec(2), corr, mi_state, frac, mi_proj, bfac, score4extr!, corr_valid
         logical :: hetsym
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
@@ -54,11 +54,11 @@ contains
             self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr')
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
-            if( params_glob%l_eo )then
-                call pftcc_glob%gencorrs_cc_valid(self%s%prev_ref, self%s%iptcl, params_glob%kfromto_valid, corrs_inpl)
-                corr_valid = max(0.,maxval(corrs))
-                call build_glob%spproj_field%set(self%s%iptcl, 'corr_valid', corr_valid)
-            endif
+            ! if( params_glob%l_eo )then
+            !     call pftcc_glob%gencorrs_cc_valid(self%s%prev_ref, self%s%iptcl, params_glob%kfromto_valid, corrs_inpl)
+            !     corr_valid = max(0.,maxval(corrs))
+            !     call build_glob%spproj_field%set(self%s%iptcl, 'corr_valid', corr_valid)
+            ! endif
             ! extremal optimization score
             score4extr = self%s%prev_corr
             ! B-factor memoization

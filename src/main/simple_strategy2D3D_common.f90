@@ -100,10 +100,10 @@ contains
                 if(build_glob%spproj%is_virgin_field(params_glob%oritype)) &
                     all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
                 ! Fourier index range for corr_valid
-                params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, &
-                    params_glob%boxmatch, params_glob%smpd)
-                params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, &
-                    params_glob%boxmatch, params_glob%smpd), k_nyq)
+                ! params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, &
+                !     params_glob%boxmatch, params_glob%smpd)
+                ! params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, &
+                !     params_glob%boxmatch, params_glob%smpd), k_nyq)
                 ! set low-pass Fourier index limit
                 if( all_fsc_bin_exist )then
                     resarr = build_glob%img%get_res()
@@ -160,7 +160,7 @@ contains
                 ! low-pass limit equals interpolation limit for correlation search
                 params_glob%kstop = params_glob%kfromto(2)
                 ! possible extension of interpolation limit to accomodate corr_valid
-                params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
+                ! params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
                 ! for the euclidean distance case all frequencies need to be extracted
                 if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) params_glob%kfromto(2) = k_nyq
                 ! set high-pass Fourier index limit
@@ -198,10 +198,10 @@ contains
         ! Nyqvist index
         k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
         ! Fourier index range for corr_valid
-        params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, &
-            params_glob%boxmatch, params_glob%smpd)
-        params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, &
-            params_glob%boxmatch, params_glob%smpd), k_nyq)
+        ! params_glob%kfromto_valid(1) = calc_fourier_index(HP_CORR_VALID, &
+        !     params_glob%boxmatch, params_glob%smpd)
+        ! params_glob%kfromto_valid(2) = min(calc_fourier_index(LP_CORR_VALID, &
+        !     params_glob%boxmatch, params_glob%smpd), k_nyq)
         ! High-pass index
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, &
             params_glob%boxmatch, params_glob%smpd))
@@ -211,7 +211,7 @@ contains
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             params_glob%kstop      = params_glob%kfromto(2)
             ! possible extension of interpolation limit to accomodate corr_valid
-            params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
+            ! params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%projfrcs%estimate_lp_for_align()
@@ -231,7 +231,7 @@ contains
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
             params_glob%kstop = params_glob%kfromto(2)
             ! possible extension of interpolation limit to accomodate corr_valid
-            params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
+            ! params_glob%kfromto(2) = max(params_glob%kfromto(2), params_glob%kfromto_valid(2))
             call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'

@@ -227,7 +227,7 @@ int makedir(char *path,
       file other than a directory.
     */
     char *cpath = F90toCstring(path, *charLen);
-    fprintf(stderr, "makedir  %d  %d %s  %s\n",  *charLen, strlen(path), path, cpath);
+    // fprintf(stderr, "makedir  %d  %d %s  %s\n",  *charLen, strlen(path), path, cpath);
     if(cpath == NULL) {
         printf("%d %s\n makedir failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
         perror("Failed : simple_posix.c::remove_dir ");
@@ -246,7 +246,7 @@ int makedir(char *path,
     }
 
     strcpy(_path, cpath);
-    fprintf(stderr, "makedir %d [%s]\n" , strlen(_path), _path);
+    // fprintf(stderr, "makedir %d [%s]\n" , strlen(_path), _path);
     free(cpath);
     /* Iterate the string */
     for(p = _path + 1; *p; p++) {

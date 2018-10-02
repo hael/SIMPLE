@@ -11,8 +11,9 @@ private
 #include "simple_local_flags.inc"
 
 logical,  parameter :: perform_coarse   = .false.
-real(dp), parameter :: coarse_range     = 2.5_dp  !range for coarse search (negative to positive)
-integer,  parameter :: coarse_num_steps = 5       !no. of coarse search steps in x AND y (hence real no. is its square)
+logical,  parameter :: perform_rndstart = .false.
+real(dp), parameter :: coarse_range     = 2.0_dp  ! range for coarse search (negative to positive)
+integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 
 type :: pftcc_shsrch_grad
     private
@@ -157,6 +158,8 @@ contains
         real(dp) :: init_xy(2)
         found_better      = .false.
         if( self%opt_angle )then
+            self%ospec%x   = [0.,0.]
+            self%ospec%x_8 = [0.d0,0.d0]
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
             loc                 = maxloc(corrs)
             self%cur_inpl_idx   = loc(1)
@@ -193,6 +196,15 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         else
+            if( perform_rndstart )then
+                init_xy(1) = ran3() * coarse_range * 2.d0 - coarse_range
+                init_xy(2) = ran3() * coarse_range * 2.d0 - coarse_range
+                self%ospec%x_8 = init_xy
+                self%ospec%x   = real(init_xy)
+            else
+                self%ospec%x   = [0.,0.]
+                self%ospec%x_8 = [0.d0,0.d0]
+            endif
             self%cur_inpl_idx   = irot
             lowest_cost_overall = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [0.d0,0.d0], self%cur_inpl_idx)
             if (perform_coarse) then
