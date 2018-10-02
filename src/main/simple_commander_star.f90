@@ -163,10 +163,10 @@ contains
         if(inputted_startype)then
             write (*,*) "Testing for valid startype:", trim(params%startype)
             ! Use regular expression to find startype
-            if( RE_match(params%startype,        &
-                '(m|movies|micrographs|'//       &
-                'ctf|ctf_estimation|ctfparams|'//&
-                'p|ptcl|particles|'//            &
+            if( RE_match(params%startype, '(basic|'// &
+                'm|movies|micrographs|'//            &
+                'ctf|ctf_estimation|ctfparams|'//     &
+                'p|ptcl|ptcls|particles|'//           &
                 'cavg|classaverages)') /=0 )then
 
                 inputted_startype=.false.
@@ -223,7 +223,10 @@ contains
         endif
 
         select case(params%startype)
-            !! #IMPORT MICROGRAPHS
+        case('basic')
+           ! do nothing 
+
+           !! #IMPORT MICROGRAPHS
         case('m')
             call  starproj%import_micrographs(spproj, params, cline, params%starfile)
         case('movies')
@@ -234,6 +237,8 @@ contains
             !         call  starproj%import_motion_corrected_micrographs(spproj, params, cline, params%starfile)
 
             !! #IMPORT MICROGRAPHS AND CTF PARAMS
+        case('c')
+            call starproj%import_ctf_estimation(spproj, params, cline, params%starfile)
         case('ctf')
             call starproj%import_ctf_estimation(spproj, params, cline, params%starfile)
         case('ctf_estimation')
@@ -256,6 +261,8 @@ contains
             !! # IMPORT PARTICLES
         case('p')
             call starproj%import_particles(spproj, params, cline, params%starfile)
+        case('ptcl')
+            call starproj%import_particles(spproj, params, cline, params%starfile)
         case('ptcls')
             call starproj%import_particles(spproj, params, cline, params%starfile)
         case('particles')
@@ -266,7 +273,9 @@ contains
             THROW_HARD("import_starproject must have a valid startype. ")
         end select
 
-        call starproj%print_info
+        ! The sp project should be returned with STAR info imported
+ !        call spproj%print_info
+
 
         ! Import STAR filename
         ! do istar=1, nStarfiles
@@ -277,6 +286,8 @@ contains
 
         call spproj%write
         call spproj%kill
+        
+        call starproj%kill
         call simple_end('**** import_starproject NORMAL STOP ****')
     end subroutine exec_import_starproject
 

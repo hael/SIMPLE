@@ -144,7 +144,7 @@ contains
 
     subroutine print_info( self )
         class(star_project), intent(inout)     :: self
-        call self%doc%print()
+        call self%doc%print_info()
     end subroutine print_info
 
     subroutine check_temp_files(self,msg)
@@ -283,12 +283,12 @@ contains
 
         call params%new(cline)
 
-        ndatlines = binread_nlines(params%oritab)
+        ndatlines = binread_nlines(params%deftab)
         if(ndatlines /= self%doc%num_data_lines)then
             THROW_HARD('star_project; import_ctf_estimation binread_nlines does not match num_data_lines from starfile')
         endif
         call os%new(ndatlines)
-        call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
+        call binread_oritab(params%deftab, spproj, os, [1,ndatlines])
         !!       call spproj%kill ! for safety
 
          !! load ctf information into sp%os_stk
@@ -315,6 +315,9 @@ contains
 
          !!Insert oris into sp project
          call spproj%set_sp_oris(params%oritype, os)
+
+
+!!FIXME!!
 
         ! call params%new(cline)
         ! ! parameter input management
@@ -370,6 +373,11 @@ contains
         ! !         call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
         ! !     end do
         ! ! endif
+
+        call spproj%print_info
+        call spproj%write
+        call spproj%kill
+
 
     end subroutine import_ctf_estimation
 
@@ -1029,6 +1037,10 @@ contains
         call spproj%update_compenv( cline )
 
         !! write spproj in commander_star; import_starproject
+        call spproj%print_info
+        call spproj%write
+        call spproj%kill
+
     end subroutine import_cavgs
 
     subroutine import_particles (self, spproj, params, cline, filename)
@@ -1052,19 +1064,16 @@ contains
         call cline%set('oritype','ptcl2D')
         !! make sure starfile has been parsed and temporary files are in current dir
         call self%check_temp_files('import_particles')
+        !! Use the extracted datalines in oritab-stardoc, unless the user has used oritab on command line
+        inputted_oritab = cline%defined('oritab')
+        if (.not. inputted_oritab .and. file_exists('oritab-stardoc.txt')) then
+            call cline%set('oritab', 'oritab-stardoc.txt')
+        endif
 
         call params%new(cline)
         ! PARAMETER INPUT MANAGEMENT
-        ! parameter input flags
-        inputted_oritab       = cline%defined('oritab')
-        inputted_deftab       = cline%defined('deftab')
-        inputted_plaintexttab = cline%defined('plaintexttab')
-        n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
 
         ! exceptions
-        if( n_ori_inputs > 1 )then
-            THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_import_particles')
-        endif
         if( cline%defined('stk') .and. cline%defined('stktab') )then
             THROW_HARD('stk and stktab are both defined on command line, use either or; exec_import_particles')
         endif
@@ -1199,19 +1208,21 @@ contains
 
         ! UPDATE FIELDS
         ! add stack if present
-        ! if( cline%defined('stk') )then
-        !     if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
-        !         ! get number of particles from stack
-        !         call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
-        !         call os%new(params%nptcls)
-        !         call os%set_all2single('state', 1.0)
-        !     endif
+         if( cline%defined('stk') )then
+             if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
+                 ! get number of particles from stack
+                 call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
+                 call os%new(params%nptcls)
+                 call os%set_all2single('state', 1.0)
+             endif
             call spproj%add_single_stk(params%stk, ctfvars, os)
-!        endif
+        endif
         ! add list of stacks (stktab) if present
 !        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
 
-
+        call spproj%print_info
+        call spproj%write
+        call spproj%kill
 
     end subroutine import_particles
 

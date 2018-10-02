@@ -55,7 +55,7 @@ contains
     procedure,public :: read_header
     procedure,public :: read_data_lines
     procedure,public :: setdoprint
-    procedure        :: print
+    procedure        :: print_info
     procedure        :: write
     procedure        :: get_header
     procedure        :: get_project_root_dir
@@ -818,7 +818,7 @@ contains
         call fclose(starfd)
     end subroutine read
 
-    subroutine print (self)
+    subroutine print_info (self)
         class(stardoc), intent(inout) :: self
         integer :: i
         write(*,*) " Star formatted project information "
@@ -840,7 +840,7 @@ contains
                 end if
             end do
         end if
-    end subroutine print
+      end subroutine print_info
 
 
     subroutine putdata(self, strarr)
