@@ -712,6 +712,7 @@ contains
         corr = -1.
         do
             iter = iter + 1
+            params%which_iter = iter            
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
@@ -733,6 +734,8 @@ contains
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
             call cline%set('extr_iter', real(params%extr_iter))
+            call job_descr%set('which_iter', trim(int2str(params%which_iter)))
+            call cline%set('which_iter', real(params%which_iter))
             call job_descr%set( 'startit', trim(int2str(iter)))
             call cline%set('startit', real(iter))
             ! FRCs
