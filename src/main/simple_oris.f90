@@ -251,10 +251,25 @@ contains
         euls = self%o(i)%get_euler()
     end function get_euler
 
-    pure function get_noris( self ) result( n )
-        class(oris), intent(in) :: self
-        integer :: n
-        n = self%n
+    pure function get_noris( self, consider_state ) result( n )
+        class(oris),       intent(in) :: self
+        logical, optional, intent(in) :: consider_state
+        integer :: i, n
+        logical :: consider_state_here
+        consider_state_here = .false.
+        if(present(consider_state)) consider_state_here = consider_state
+        if( consider_state_here )then
+            n = 0
+            do i=1,n
+                if( self%o(i)%isthere('state') )then
+                    if( self%o(i)%get('state') > 0.5 ) n = n+1
+                else
+                    n = n+1 ! included by default
+                endif
+            enddo
+        else
+            n = self%n
+        endif
     end function get_noris
 
     function get_ori( self, i ) result( o )
@@ -269,8 +284,8 @@ contains
         o = self%o(i)
     end function get_ori
 
-    function get( self, i, key ) result( val )
-        class(oris),      intent(inout) :: self
+    pure function get( self, i, key ) result( val )
+        class(oris),      intent(in) :: self
         integer,          intent(in)    :: i
         character(len=*), intent(in)    :: key
         real :: val
@@ -304,9 +319,9 @@ contains
 
     !>  \brief  is for getting an array of 'key' values
     function get_all( self, key, fromto ) result( arr )
-        class(oris),       intent(inout) :: self
-        character(len=*),  intent(in)    :: key
-        integer, optional, intent(in)    :: fromto(2)
+        class(oris),       intent(in) :: self
+        character(len=*),  intent(in) :: key
+        integer, optional, intent(in) :: fromto(2)
         real, allocatable :: arr(:)
         integer :: i, ffromto(2)
         ffromto(1) = 1
@@ -350,16 +365,16 @@ contains
         shvec = self%o(i)%get_2Dshift_incr()
     end function get_2Dshift_incr
 
-    integer function get_state( self, i )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: i
+    pure integer function get_state( self, i )
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
         get_state = self%o(i)%get_state()
     end function get_state
 
     !>  \brief  is for checking if parameter is present
-    function isthere_1( self, key ) result( is )
-        class(oris),      intent(inout) :: self
-        character(len=*), intent(in)    :: key
+    pure function isthere_1( self, key ) result( is )
+        class(oris),      intent(in) :: self
+        character(len=*), intent(in) :: key
         logical :: is
         integer :: i
         is = .false.
@@ -370,10 +385,10 @@ contains
     end function isthere_1
 
     !>  \brief  is for checking if parameter is present
-    function isthere_2( self, i, key ) result( is )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        character(len=*),  intent(in)    :: key
+    pure function isthere_2( self, i, key ) result( is )
+        class(oris),       intent(in) :: self
+        integer,           intent(in) :: i
+        character(len=*),  intent(in) :: key
         logical :: is
         is = self%o(i)%isthere(key)
     end function isthere_2

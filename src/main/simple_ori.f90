@@ -429,8 +429,8 @@ contains
     end function get_mat
 
     !>  \brief  is a getter
-    function get( self, key ) result( val )
-        class(ori), intent(inout)    :: self
+    pure function get( self, key ) result( val )
+        class(ori),       intent(in) :: self
         character(len=*), intent(in) :: key
         real :: val
         val = self%htab%get(key)
@@ -455,7 +455,7 @@ contains
 
     !>  \brief  is a getter
     subroutine getter_2( self, key, val )
-        class(ori),       intent(inout) :: self
+        class(ori),       intent(in)    :: self
         character(len=*), intent(in)    :: key
         real,             intent(inout) :: val
         val = self%htab%get(key)
@@ -485,10 +485,10 @@ contains
         vec(1) = self%htab%get('xincr')
         vec(2) = self%htab%get('yincr')
     end function get_2Dshift_incr
-    
+
     !>  \brief  is a getter
-    integer function get_state( self )
-        class(ori), intent(inout) :: self
+    pure integer function get_state( self )
+        class(ori), intent(in) :: self
         get_state = nint(self%htab%get('state'))
     end function get_state
 
@@ -500,9 +500,9 @@ contains
     end function hash_size
 
     !>  \brief  check for presence of key in the ori hash
-    function isthere( self, key ) result( found )
-        class(ori),        intent(inout) :: self
-        character(len=*),  intent(in)    :: key
+    pure function isthere( self, key ) result( found )
+        class(ori),        intent(in) :: self
+        character(len=*),  intent(in) :: key
         logical :: hash_found, chash_found, found
         hash_found  = self%htab%isthere(key)
         chash_found = self%chtab%isthere(key)

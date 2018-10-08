@@ -269,9 +269,9 @@ contains
     ! GETTERS
 
     !>  \brief  check for presence of key in the chash
-    function isthere( self, key ) result( found )
-        class(chash),     intent(inout) :: self
-        character(len=*), intent(in)    :: key
+    pure function isthere( self, key ) result( found )
+        class(chash),     intent(in) :: self
+        character(len=*), intent(in) :: key
         integer :: i
         logical :: found
         found = .false.

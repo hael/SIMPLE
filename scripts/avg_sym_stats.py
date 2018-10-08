@@ -48,8 +48,41 @@ class sym_avger:
 		scores  = np.zeros(n)
 		zscores = np.zeros(n)
 		corrs   = np.zeros(n)
+		# orders output
+		pgrps = []
+		ordered_pgrps = []
 		for ipgrp in range(n):
 			pgrp = self.collection[0].pgrp[ipgrp]
+			pgrps.append(pgrp)
+		# C-symmetries
+		symorder = []
+		for pgrp in pgrps:
+			if pgrp[0] == 'c':
+				symorder.append(int(pgrp[1:]))
+		symorder = np.sort(np.array(symorder))
+		maxc     = symorder[-1]
+		for isym in range(2,maxc+1):
+			ordered_pgrps.append('c'+str(isym))
+		# D-symmetries
+		symorder = []
+		for pgrp in pgrps:
+			if pgrp[0] == 'd':
+				symorder.append(int(pgrp[1:]))
+		if len(symorder) > 0:
+			symorder = np.sort(np.array(symorder))
+			maxd     = symorder[-1]
+			for isym in range(2,maxd+1):
+				ordered_pgrps.append('d'+str(isym))
+		# platonic
+		if 't' in pgrps:
+			ordered_pgrps.append('t')
+		if 'o' in pgrps:
+			ordered_pgrps.append('o')
+		if 'i' in pgrps:
+			ordered_pgrps.append('i')
+		# display
+		for ipgrp in range(n):
+			pgrp    = ordered_pgrps[ipgrp]
 			ranks   = np.zeros(nobjs)
 			scores  = np.zeros(nobjs)
 			zscores = np.zeros(nobjs)
@@ -67,7 +100,7 @@ class sym_avger:
 files = []
 nfiles = len(sys.argv)-1
 if nfiles==1:
-	print 'you do not need this script for on file'
+	print 'you do not need this script for one file'
 	sys.exit(0)
 
 avger = sym_avger()
