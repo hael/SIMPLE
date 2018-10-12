@@ -260,7 +260,7 @@ contains
         if(present(consider_state)) consider_state_here = consider_state
         if( consider_state_here )then
             n = 0
-            do i=1,n
+            do i=1,self%n
                 if( self%o(i)%isthere('state') )then
                     if( self%o(i)%get('state') > 0.5 ) n = n+1
                 else

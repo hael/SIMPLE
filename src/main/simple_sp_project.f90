@@ -40,7 +40,7 @@ contains
     procedure          :: append_project
     procedure          :: append_job_descr2jobproc
     ! index management
-    procedure, private :: map_ptcl_ind2stk_ind
+    procedure          :: map_ptcl_ind2stk_ind
     procedure          :: map_cavgs_selection
     ! os_mic related methods
     procedure          :: add_single_movie
