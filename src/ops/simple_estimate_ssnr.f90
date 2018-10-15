@@ -267,14 +267,18 @@ contains
     end subroutine local_res2D
 
     ! filtering of the class averages according to local resolution estimates
-    subroutine local_res2D_lp( locres_finds, imgs2filter )
+    subroutine local_res2D_lp( locres_finds, imgs2filter, shellnorm )
         use simple_image, only: image
-        integer,      intent(in)    :: locres_finds(:,:,:)
-        class(image), intent(inout) :: imgs2filter(:)
+        integer,           intent(in)    :: locres_finds(:,:,:)
+        class(image),      intent(inout) :: imgs2filter(:)
+        logical, optional, intent(in)    :: shellnorm
         real,         allocatable   :: rmats_filt(:,:,:,:), rmats_lp(:,:,:,:), rmats(:,:,:,:)
         type(image),  allocatable   :: resimgs(:)
         integer :: ldim_finds(3), ldim(3), k, kstart, kstop, nptcls, iptcl
         real    :: smpd, lp
+        logical :: sshellnorm
+        sshellnorm = .false.
+        if( present(shellnorm) ) sshellnorm = shellnorm
         ! sanity checks
         if( any(locres_finds == 0 ) ) THROW_HARD('zero Fourier indices not allowed in locres_finds; local_res2D_lp')
         ldim_finds(1) = size(locres_finds,1)
@@ -303,6 +307,7 @@ contains
             do iptcl=1,nptcls
                 if( any(locres_finds(iptcl,:,:) == k ) )then
                     lp = calc_lowpass_lim(k, ldim(1), smpd)
+                    if( sshellnorm ) call imgs2filter(iptcl)%shellnorm
                     call imgs2filter(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
                     call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
                     call resimgs(iptcl)%bp(0., lp, width=6.0)

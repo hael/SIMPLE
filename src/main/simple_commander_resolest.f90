@@ -204,7 +204,7 @@ contains
             ! read the averages to be filtered
             allocate(avgs2filter(params%nptcls))
             do iptcl=1,params%nptcls
-                call avgs2filter(iptcl)%new([params%box,params%box,1], params%smpd)
+                call avgs2filter(iptcl)%new([params%box,params%box,1], params%smpd, wthreads=.false.)
                 call avgs2filter(iptcl)%read(params%stk3, iptcl)
             end do
             call local_res2D_lp(locres_finds, avgs2filter)

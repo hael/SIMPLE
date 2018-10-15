@@ -3552,25 +3552,44 @@ contains
         ! calculate the expectation value of the signal power in each shell
         call self%spectrum('power',expec_pow)
         ! normalise
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    if( sh > lfny )then
-                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                    else
-                        if( sh == 0 ) cycle
-                        if( expec_pow(sh) > 0. )then
-                            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/sqrt(expec_pow(sh))
+        if( self%wthreads )then
+            !$omp parallel do collapse(3) default(shared) private(h,k,l,sh,phys)&
+            !$omp schedule(static) proc_bind(close)
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        if( sh > lfny )then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        else
+                            if( sh == 0 ) cycle
+                            if( expec_pow(sh) > 0. )then
+                                self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/sqrt(expec_pow(sh))
+                            endif
                         endif
-                    endif
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
+            !$omp end parallel do
+        else
+            do h=lims(1,1),lims(1,2)
+                do k=lims(2,1),lims(2,2)
+                    do l=lims(3,1),lims(3,2)
+                        sh = nint(hyp(real(h),real(k),real(l)))
+                        phys = self%fit%comp_addr_phys([h,k,l])
+                        if( sh > lfny )then
+                            self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        else
+                            if( sh == 0 ) cycle
+                            if( expec_pow(sh) > 0. )then
+                                self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/sqrt(expec_pow(sh))
+                            endif
+                        endif
+                    end do
+                end do
+            end do
+        endif
         ! take care of the central spot
         phys  = self%fit%comp_addr_phys([0,0,0])
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))

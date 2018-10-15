@@ -52,8 +52,9 @@ logical                        :: l_is_class    = .true.        !< for prime2D o
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
 logical                        :: exists        = .false.       !< to flag instance existence
 
-integer, parameter      :: BATCHTHRSZ = 50
-logical, parameter      :: L_BENCH    = .false.
+integer, parameter      :: BATCHTHRSZ   = 50
+logical, parameter      :: L_BENCH      = .false.
+real,    parameter      :: LOCRES_THRES = 0.5
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname
@@ -96,18 +97,18 @@ contains
             istart = 1
             iend   = params_glob%nptcls
         endif
-        partsz = count(pptcl_mask)
+        partsz     = count(pptcl_mask)
         ! CTF logics
-        ctfflag = build_glob%spproj%get_ctfflag_type('ptcl2D')
+        ctfflag    = build_glob%spproj%get_ctfflag_type('ptcl2D')
         ! set phaseplate flag
         phaseplate = build_glob%spproj%has_phaseplate('ptcl2D')
         ! smpd
-        smpd          = params_glob%smpd
+        smpd       = params_glob%smpd
         ! set ldims
-        ldim          = [params_glob%box,params_glob%box,1]
-        ldim_pd       = [params_glob%boxpd,params_glob%boxpd,1]
-        ldim_pd(3)    = 1
-        filtsz        = build_glob%img%get_filtsz()
+        ldim       = [params_glob%box,params_glob%box,1]
+        ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
+        ldim_pd(3) = 1
+        filtsz     = build_glob%img%get_filtsz()
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -570,11 +571,17 @@ contains
     end subroutine cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
-        character(len=*), intent(in) :: fname
+    subroutine cavger_calc_and_write_frcs_and_eoavg( fname, do_locres )
+        use simple_estimate_ssnr, only: local_res2D, local_res2D_lp
+        character(len=*),  intent(in) :: fname
+        logical, optional, intent(in) :: do_locres
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
-        integer ::  icls, find, find_plate
+        integer,     allocatable     :: locres_finds(:,:,:)
+        logical :: ddo_locres
+        integer :: icls, find, find_plate
+        ddo_locres = .false.
+        if( do_locres ) ddo_locres = do_locres
         ! serial code for allocation/copy
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
@@ -608,14 +615,45 @@ contains
             call cavgs_merged(icls)%ifft()
             call cavgs_even(icls)%ifft()
             call cavgs_odd(icls)%ifft()
-            ! destruct
-            call even_imgs(icls)%kill
-            call odd_imgs(icls)%kill
         end do
         !$omp end parallel do
         ! write FRCs
         call build_glob%projfrcs%write(fname)
+        ! local resolution filtering of 2D references
+        if( ddo_locres )then
+            ! need to copy again to get the ones with lowres merged inserted
+            do icls=1,ncls
+                call even_imgs(icls)%copy(cavgs_even(icls))
+                call odd_imgs(icls)%copy(cavgs_odd(icls))
+                if( params_glob%l_innermsk )then
+                    call even_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+                    call odd_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
+                else
+                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
+                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
+                endif
+                call even_imgs(icls)%fft()
+                call odd_imgs(icls)%fft()
+            end do
+            ! estimate local resolution (this routine is OpenMP parallel)
+            call local_res2D(even_imgs, odd_imgs, params_glob%msk, LOCRES_THRES, locres_finds)
+            ! copy images to be filtered
+            do icls=1,ncls
+                call even_imgs(icls)%copy(cavgs_merged(icls))
+            end do
+            ! filter (this routine is OpenMP parallel)
+            call local_res2D_lp(locres_finds, even_imgs, params_glob%l_match_filt)
+            ! write 2 disk
+            do icls=1,ncls
+                call even_imgs(icls)%write(REFERENCES_2DLOCRES//params_glob%ext, icls)
+            end do
+            deallocate(locres_finds)
+        endif
         ! destruct
+        do icls=1,ncls
+            call even_imgs(icls)%kill
+            call odd_imgs(icls)%kill
+        end do
         deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
