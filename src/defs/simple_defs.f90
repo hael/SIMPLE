@@ -132,10 +132,6 @@ integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iteration
 real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
 real,    parameter :: BSC3D                = 20.       !< for shell-weighted 3D reconstruction (shellw), used in B-factor calculation
 real,    parameter :: BSC2D                = 15.       !< for shell-weighted 2D reconstruction (shellw), used in B-factor calculation
-! real,    parameter :: HP_CORR_VALID        = 20.       !< high-pass limit for validation corr calculation
-                                                       !! 20 A is where domain structure starts
-! real,    parameter :: LP_CORR_VALID        = 8.        !< low-pass limit for validation corr calculation
-                                                       !! signal is strong out to A with DDDs and 2ndary structure appears here
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

@@ -22,25 +22,25 @@ type(pick_distr_commander)                  :: xpick_distr
 type(pick_extract_stream_distr_commander)   :: xpick_extract_stream_distr
 
 ! CLUSTER2D
-type(make_cavgs_distr_commander)          :: xmake_cavgs_distr
-type(cluster2D_autoscale_commander)       :: xcluster2D_distr
-type(cluster2D_stream_distr_commander)    :: xcluster2D_stream_distr
+type(make_cavgs_distr_commander)            :: xmake_cavgs_distr
+type(cluster2D_autoscale_commander)         :: xcluster2D_distr
+type(cluster2D_stream_distr_commander)      :: xcluster2D_stream_distr
 
 ! REFINE3D
-type(refine3D_init_distr_commander)       :: xrefine3D_init_distr
-type(refine3D_distr_commander)            :: xprime3D_distr
-type(reconstruct3D_distr_commander)       :: xreconstruct3D_distr
+type(refine3D_init_distr_commander)         :: xrefine3D_init_distr
+type(refine3D_distr_commander)              :: xprime3D_distr
+type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 
 ! HIGH-LEVEL WORKFLOWS
-type(initial_3Dmodel_commander)           :: xinitial_3Dmodel
-type(cluster3D_commander)                 :: xcluster3D
-type(cluster3D_refine_commander)          :: xcluster3D_refine
+type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
+type(cluster3D_commander)                   :: xcluster3D
+type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES WORKFLOWS
-type(tseries_track_distr_commander)       :: xtseries_track_distr
+type(tseries_track_distr_commander)         :: xtseries_track_distr
 
 ! SUPORTING DISTRIBUTED WORKFLOWS
-type(scale_project_distr_commander)       :: xscale_project
+type(scale_project_distr_commander)         :: xscale_project
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line

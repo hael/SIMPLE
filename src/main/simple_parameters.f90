@@ -176,7 +176,6 @@ type :: parameters
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
-    character(len=STDLEN) :: shift_cc_jacob='no'  !< use Jacobian for cc-based shift search
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
     character(len=STDLEN) :: stk_part=''
@@ -219,7 +218,6 @@ type :: parameters
     integer :: jptcl=1
     integer :: jumpsz=0            !< size of contigous segment
     integer :: kfromto(2)
-    ! integer :: kfromto_valid(2)
     integer :: kstop=0
     integer :: ldim(3)=0
     integer :: maxits=500          !< maximum # iterations
@@ -398,7 +396,6 @@ type :: parameters
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
-    logical :: l_shift_cc_jacob = .false.
     logical :: l_eo             = .false.
     logical :: sp_required      = .false.
   contains
@@ -547,7 +544,6 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
-        call check_carg('shift_cc_jacob', self%shift_cc_jacob)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
         call check_carg('star_datadir',   self%star_datadir)
@@ -1290,8 +1286,6 @@ contains
                 self%l_match_filt = .true.
             end select
         endif
-        ! Jacobian for cc-based shift search
-        if ( self%shift_cc_jacob .eq. 'yes' ) self%l_shift_cc_jacob = .true.
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.

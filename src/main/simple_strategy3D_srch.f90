@@ -71,7 +71,7 @@ contains
         integer,                 intent(in)    :: iptcl, pftcc_pind
         integer   :: prev_state, prev_roind, prev_proj, prev_ref
         type(ori) :: o_prev
-        real      :: bfac, specscore, corrs(pftcc%get_nrots())!, corr_valid
+        real      :: bfac, specscore, corrs(pftcc%get_nrots())
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
@@ -87,12 +87,6 @@ contains
         ! update spproj_field
         call build_glob%spproj_field%set(iptcl, 'bfac',       bfac)
         call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
-        ! calc validation corr
-        ! if( params_glob%l_eo )then
-        !     call pftcc%gencorrs_cc_valid(prev_ref, pftcc_pind, params_glob%kfromto_valid, corrs)
-        !     corr_valid = max(0.,maxval(corrs))
-        !     call build_glob%spproj_field%set(iptcl, 'corr_valid', corr_valid)
-        ! endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
@@ -137,7 +131,7 @@ contains
         integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static)
         integer   :: i, istate
         type(ori) :: o_prev
-        real      :: corrs(self%nrots), corr, bfac!, corr_valid
+        real      :: corrs(self%nrots), corr, bfac
         if( self%neigh )then
             if( .not. present(nnmat) )&
             &THROW_HARD('need optional nnmat to be present for refine=neigh modes; prep4srch')
@@ -181,12 +175,6 @@ contains
             corr = max(0.,maxval(corrs))
         endif
         self%prev_corr = corr
-        ! calc validation corr
-        ! if( params_glob%l_eo )then
-        !     call pftcc_glob%gencorrs_cc_valid(self%prev_ref, self%iptcl, params_glob%kfromto_valid, corrs)
-        !     corr_valid = max(0.,maxval(corrs))
-        !     call build_glob%spproj_field%set(self%iptcl, 'corr_valid', corr_valid)
-        ! endif
         DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
 
