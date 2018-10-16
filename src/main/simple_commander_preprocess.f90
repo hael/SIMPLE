@@ -94,7 +94,7 @@ contains
         endif
         ! read in movies
         call spproj%read( params%projfile )
-        if( spproj%get_nmovies()==0 .and. spproj%get_nmics()==0 ) THROW_HARD('No movie/micrograph to process!')
+        if( spproj%get_nmovies()==0 .and. spproj%get_nintgs()==0 ) THROW_HARD('No movie/micrograph to process!')
         ! output directories & naming
         output_dir_ctf_estimate   = PATH_HERE
         output_dir_motion_correct = PATH_HERE

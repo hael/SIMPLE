@@ -351,7 +351,7 @@ contains
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
             imic = 0
-            if(stream_proj%get_nmics()>0)then
+            if(stream_proj%get_nintgs()>0)then
                 ! builds movies list
                 do i=1,stream_proj%os_mic%get_noris()
                     call stream_proj%os_mic%getter(i,'imgkind',imgkind)
@@ -820,7 +820,7 @@ contains
                     enddo
                 endif
                 ! mics
-                if( n_stks>n_spprojs .and. stream_proj%get_nmics()>0 )then
+                if( n_stks>n_spprojs .and. stream_proj%get_nintgs()>0 )then
                     if(allocated(mic_list))deallocate(mic_list)
                     allocate(mic_list(n))
                     cnt  = 0
@@ -978,7 +978,7 @@ contains
         integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,               parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
         integer,               parameter   :: MAX_NCLS_LIM        = 200   ! maximum # of classes
-        integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 900   ! 15mins, Frequency at which the original project file should be updated
+        integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 90    ! 15mins, Frequency at which the original project file should be updated
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'mics_sel.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
@@ -987,21 +987,20 @@ contains
         type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer
         type(cmdline)                      :: cline_make_cavgs
-        type(sp_project)                   :: orig_proj, stream_proj
-        type(sp_project)                   :: buffer_proj, pool_proj
+        type(sp_project)                   :: orig_proj, stream_proj, buffer_proj, pool_proj
         type(ctfparams)                    :: ctfvars
         type(oris)                         :: os_stk
         type(ori)                          :: o_stk
-        character(LONGSTRLEN), allocatable :: spproj_list(:), stk_list(:), mic_list(:)
-        character(len=:),      allocatable :: spproj_list_fname, stk, imgkind, orig_projfile
+        character(LONGSTRLEN), allocatable :: spproj_list(:), stk_list(:)
+        character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk, buffer_dir
         character(len=STDLEN)              :: str_iter, refs_glob
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
-        integer :: i, iter, icls, orig_box, box, nptcls_glob, iproj, n_new_spprojs, imic
-        integer :: nptcls_glob_prev, n_spprojs, n_spprojs_prev, n_new_ptcls, orig_nparts, nparts
+        integer :: iter, icls, orig_box, box, nptcls_glob, iproj
+        integer :: nptcls_glob_prev, n_spprojs, n_new_ptcls, orig_nparts, nparts
         integer :: iptcl, ncls_glob, tnow, last_injection, n_transfers
         integer :: origproj_time, max_ncls
         integer :: nptcls_per_buffer, buffer_ptcls_range(2)
-        logical :: do_autoscale, l_ccres, l_maxed, buffer_exists
+        logical :: do_autoscale, l_maxed, buffer_exists
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -1021,10 +1020,6 @@ contains
         ! init
         do_autoscale = params%autoscale.eq.'yes'
         allocate(WORK_PROJFILE, source='cluster2D_stream_tmproj.simple')
-        l_ccres = .false.
-        if( cline%defined('objfun') )then
-            if( trim(params%objfun).eq.'ccres' )l_ccres = .true.
-        endif
         orig_nparts       = params%nparts
         max_ncls          = floor(real(MAX_NCLS_LIM)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
         nptcls_per_buffer = params%nptcls_per_cls*params%ncls_start         ! # of particles in each buffer
@@ -1037,23 +1032,24 @@ contains
         if(.not.cline%defined('time_inactive'))params%time_inactive = 12*3600
         ! init command-lines
         cline_cluster2D         = cline
-        cline_make_cavgs        = cline
         cline_cluster2D_buffer  = cline
+        cline_make_cavgs        = cline
         call cline_cluster2D%set('prg',       'cluster2D')
-        call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('autoscale', 'no')
         call cline_cluster2D%set('extr_iter', 100.) ! variable neighbourhood size de-activated
         call cline_cluster2D%set('refine',    'snhc')
         call cline_cluster2D%set('trs',       MINSHIFT)
-        call cline_cluster2D%delete('frac_update')
-        call cline_cluster2D%set('projfile', trim(PROJFILE_POOL))
-        call cline_cluster2D%set('projname', trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%delete('autoscale')
+        call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
+        call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
+        if(.not.cline%defined('frac_update')) call cline_cluster2D%set('frac_update',0.5)
         call cline_cluster2D_buffer%set('prg',       'cluster2D')
         call cline_cluster2D_buffer%set('projfile',  trim(PROJFILE_BUFFER))
         call cline_cluster2D_buffer%set('projname',  trim(get_fbody(trim(PROJFILE_BUFFER),trim('simple'))))
-        ! wait for the first stacks
+        call cline_cluster2D_buffer%set('objfun',    'cc') ! always
+        call cline_cluster2D_buffer%delete('frac_update')
+        call cline_make_cavgs%set('prg',    'make_cavgs')
+        call cline_make_cavgs%delete('autoscale')
+        ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
             if( file_exists(spproj_list_fname) )then
@@ -1095,28 +1091,11 @@ contains
             msk  = orig_msk
             scale_factor = 1.
         endif
-        ! prep for new stacks
-        allocate(stk_list(n_spprojs),mic_list(n_spprojs))
-        call os_stk%new(n_spprojs) ! for original project stktab import
+        ! FIRST IMPORT
+        allocate(stk_list(n_spprojs))
+        call os_stk%new(n_spprojs)
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
-            imic = 0
-            if(stream_proj%get_nmics()>0)then
-                ! builds movies list
-                do i=1,stream_proj%os_mic%get_noris()
-                    call stream_proj%os_mic%getter(i,'imgkind',imgkind)
-                    if(trim(imgkind).eq.'mic')then
-                        imic = i
-                        exit
-                    endif
-                enddo
-                if(imic==0)then
-                    THROW_HARD('Missing micrograph; simple_commander_stream_wflows')
-                else
-                    mic_list(iproj) = stream_proj%os_mic%get_static(imic,'intg')
-                endif
-            endif
-            ! builds stk list
             o_stk           = stream_proj%os_stk%get_ori(1)
             ctfvars         = stream_proj%get_ctfparams('ptcl2D', 1)
             ctfvars%smpd    = smpd
@@ -1125,23 +1104,13 @@ contains
             call o_stk%set_ctfvars(ctfvars)
             call os_stk%set_ori(iproj, o_stk)
         enddo
-        ! scale all stacks
-        call scale_stks( stk_list )
-        ! updates pool project
+        ! updates & scales stacks
+        call scale_stks( stk_list ) ! must come first as names updated
         call write_filetable('stktab.txt', stk_list)
         call pool_proj%add_stktab('stktab.txt', os_stk)
-        ! if(imic/=0)then
-        !     call write_filetable('mictab.txt', mic_list)
-        !     ctfvars = stream_proj%get_micparams(imic)
-        !     call pool_proj%add_movies('mictab.txt', ctfvars)
-        !     do iproj=1,n_spprojs
-        !         call pool_proj%os_stk%set(iproj,'micind',real(iproj))
-        !     enddo
-        !     call del_file('mictab.txt')
-        ! endif
         nptcls_glob = pool_proj%get_nptcls()
         call updates_pool_with_selection
-        call pool_proj%write
+        call pool_proj%write !!
         ! generates buffer project
         buffer_ptcls_range = 0
         call gen_buffer_from_pool
@@ -1154,90 +1123,146 @@ contains
             if( buffer_exists )then
                 ! ten iterations of the buffer
                 call classify_buffer
-                ! rejection here !!
-                ! book-keeping
+                ! particles selection
+                call reject_from_buffer
+                ! book keeping
                 call transfer_buffer_to_pool
                 call pool_proj%write
                 buffer_exists = .false.
                 ! cleanup
                 call buffer_proj%kill
-                call simple_rmdir('1_cluster2D')
+                !call simple_rmdir(buffer_dir)
             endif
             ! one iteration of the whole dataset
             !if( cline_cluster2D%get_carg('converged') .ne. 'yes' )then
                 call classify_pool
                 call pool_proj%read(PROJFILE_POOL)
             !endif
+            ! termination and/or pause
+            do while( file_exists(trim(PAUSE_STREAM)) )
+                if( file_exists(trim(TERM_STREAM)) ) exit
+                write(*,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
+                call simple_sleep(WAIT_WATCHER)
+            enddo
+            if( file_exists(trim(TERM_STREAM)) )then
+                write(*,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
+                exit
+            endif
             call simple_sleep(WAIT_WATCHER)
             ! detect new project files
-            if( .not.is_file_open(spproj_list_fname) )then
-                n_spprojs_prev = n_spprojs
-                n_spprojs      = nlines(spproj_list_fname)
-                n_new_spprojs  = n_spprojs - n_spprojs_prev
-                if( n_new_spprojs > 0 )then
-                    ! fetch new stacks
-                    n_new_ptcls = 0
-                    if(allocated(spproj_list))deallocate(spproj_list)
-                    if(allocated(stk_list))   deallocate(stk_list)
-                    allocate(stk_list(n_new_spprojs))
-                    call read_filetable(spproj_list_fname, spproj_list)
-                    do iproj=n_spprojs_prev+1,n_spprojs
-                        call stream_proj%read(spproj_list(iproj))
-                        n_new_ptcls = n_new_ptcls + stream_proj%get_nptcls()
-                        stk = stream_proj%get_stkname(1)
-                        stk_list(iproj-n_spprojs_prev) = trim(stk)
-                    enddo
-                    if( n_new_ptcls > 0 )then
-                        call scale_stks( stk_list )
-                        ! update project with new images
-                        nptcls_glob = pool_proj%get_nptcls() + n_new_ptcls
-                        do iproj=n_spprojs_prev+1,n_spprojs
-                            call stream_proj%read(spproj_list(iproj))
-                            ctfvars      = stream_proj%get_ctfparams('ptcl2D', 1)
-                            ctfvars%smpd = smpd
-                            call pool_proj%add_stk(stk_list(iproj-n_spprojs_prev), ctfvars)
-                        enddo
-                        do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
-                            call pool_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
-                        enddo
-                        call pool_proj%write
-                        write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
-                        last_injection = simple_gettime()
-                    endif
-                endif
-            endif
+            call append_new_mics
             ! optionally builds new buffer
             call gen_buffer_from_pool
-            !     ! update original project
-            !     if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
-            !         write(*,'(A,A)')'>>> UPDATING PROJECT FILE ', trim(params%projfile)
-            !         call update_orig_proj
-            !         origproj_time = simple_gettime()
-            !     endif
-            ! wait
+            ! update original project
+            if( simple_gettime()-origproj_time > ORIGPROJ_WRITEFREQ )then
+                call update_orig_proj
+                origproj_time = simple_gettime()
+            endif
         enddo
 
-
-        ! ! cleanup
-        ! call qsys_cleanup
-        ! ! updates original project
-        ! n_spprojs_prev = n_spprojs
-        ! call update_orig_proj
+        call qsys_cleanup
+        ! updates original project
+        call update_orig_proj
         ! ! class averages at original sampling
-        ! if ( do_autoscale )then
-        !     call cline_make_cavgs%set('ncls', real(ncls_glob))
-        !     call cline_make_cavgs%set('refs', refs_glob)
-        !     call xmake_cavgs%execute(cline_make_cavgs) ! need be distributed
-        ! endif
-        ! call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
-        ! call orig_proj%write_segment_inside('out',fromto=[1,1])
-        ! ! cleanup
-        ! call qsys_cleanup
-        ! ! end gracefully
-        ! call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
-        !
+        if ( do_autoscale )then
+            call cline_make_cavgs%set('ncls', real(ncls_glob))
+            call cline_make_cavgs%set('refs', refs_glob)
+            call xmake_cavgs%execute(cline_make_cavgs) ! need be distributed
+        endif
+        call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
+        call orig_proj%write
+        ! cleanup
+        call qsys_cleanup
+        ! end gracefully
+        call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
+
         contains
 
+            subroutine reject_from_buffer
+                type(image)          :: img
+                logical, allocatable :: cls_mask(:)
+                character(STDLEN)    :: refs_buffer
+                integer              :: nptcls_rejected, ncls_rejected, iptcl
+                integer              :: boxmatch, icls, endit, ncls_here
+                ncls_rejected   = 0
+                nptcls_rejected = 0
+                ncls_here       = buffer_proj%os_cls2D%get_noris()
+                boxmatch        = find_boxmatch(box, msk)
+                allocate(cls_mask(ncls_here), source=.true.)
+                call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask)
+                if( any(cls_mask) )then
+                    ncls_rejected = count(.not.cls_mask)
+                    do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
+                        if( buffer_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
+                        icls = nint(buffer_proj%os_ptcl2D%get(iptcl,'class'))
+                        if( cls_mask(icls) ) cycle
+                        nptcls_rejected = nptcls_rejected+1
+                        call buffer_proj%os_ptcl2D%set(iptcl,'state',0.)
+                    enddo
+                    call img%new([box,box,1],smpd)
+                    endit       = nint(cline_cluster2D_buffer%get_rarg('endit'))
+                    refs_buffer = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
+                    do icls=1,ncls_here
+                        if( cls_mask(icls) ) cycle
+                        call img%read(refs_buffer,icls)
+                        call img%write('rejected_'//int2str(iter)//'.mrc',icls)
+                        img = 0.
+                        call img%write(refs_buffer,icls)
+                        call buffer_proj%os_cls2D%set(icls,'pop',0.)
+                    enddo
+                    call img%read(refs_buffer, params%ncls_start)
+                    call img%write(refs_buffer,params%ncls_start)
+                    deallocate(cls_mask)
+                    call img%kill
+                endif
+                write(*,'(A,I4,A,I6,A)')'>>> REJECTED ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+            end subroutine reject_from_buffer
+
+            subroutine append_new_mics
+                integer :: n_spprojs_prev, n_new_spprojs, cnt
+                if( .not.is_file_open(spproj_list_fname) )then
+                    n_spprojs_prev = n_spprojs
+                    n_spprojs      = nlines(spproj_list_fname)
+                    n_new_spprojs  = n_spprojs - n_spprojs_prev
+                    if( n_new_spprojs > 0 )then
+                        ! fetch new stacks
+                        n_new_ptcls = 0
+                        if(allocated(spproj_list))deallocate(spproj_list)
+                        if(allocated(stk_list))   deallocate(stk_list)
+                        allocate(stk_list(n_new_spprojs))
+                        call read_filetable(spproj_list_fname, spproj_list)
+                        cnt = 0
+                        do iproj=n_spprojs_prev+1,n_spprojs
+                            cnt = cnt + 1
+                            call stream_proj%read(spproj_list(iproj))
+                            n_new_ptcls   = n_new_ptcls + stream_proj%get_nptcls()
+                            stk           = stream_proj%get_stkname(1)
+                            stk_list(cnt) = trim(stk)
+                        enddo
+                        if( n_new_ptcls > 0 )then
+                            call scale_stks( stk_list )
+                            ! update project with new images
+                            nptcls_glob = pool_proj%get_nptcls() + n_new_ptcls
+                            cnt = 0
+                            do iproj=n_spprojs_prev+1,n_spprojs
+                                cnt = cnt + 1
+                                call stream_proj%read(spproj_list(iproj))
+                                ctfvars      = stream_proj%get_ctfparams('ptcl2D', 1)
+                                ctfvars%smpd = smpd
+                                call pool_proj%add_stk(stk_list(cnt), ctfvars)
+                            enddo
+                            do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
+                                call pool_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
+                            enddo
+                            call pool_proj%write
+                            write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
+                            last_injection = simple_gettime()
+                        endif
+                    endif
+                endif
+            end subroutine append_new_mics
+
+            !>  runs iterations of cluster2D for the buffer in a separate folder
             subroutine classify_buffer
                 integer :: nptcls, tailsz, i
                 write(*,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
@@ -1263,7 +1288,7 @@ contains
                 call cline_cluster2D_buffer%set('mkdir',     'yes')
                 call cline_cluster2D_buffer%set('stream',    'no')
                 call cline_cluster2D_buffer%set('startit',   1.)
-                call cline_cluster2D_buffer%set('maxits',    5.)
+                call cline_cluster2D_buffer%set('maxits',    10.)
                 call cline_cluster2D_buffer%set('ncls',      real(params%ncls_start))
                 call cline_cluster2D_buffer%set('nparts',    real(nparts))
                 call cline_cluster2D_buffer%set('autoscale', 'no')
@@ -1275,6 +1300,7 @@ contains
                 call cline_cluster2D_buffer%delete('endit')
                 params_glob%nptcls = nptcls
                 call xcluster2D_distr%execute(cline_cluster2D_buffer)
+                buffer_dir = trim(params_glob%cwd)
                 call rename(PROJFILE_BUFFER, '../'//trim(PROJFILE_BUFFER))
                 call chdir('..')
                 call buffer_proj%read(PROJFILE_BUFFER)
@@ -1282,9 +1308,9 @@ contains
                 params_glob%projfile = trim(orig_projfile)
             end subroutine classify_buffer
 
+            !>  runs one iteration of cluster2D for the merged buffers in the cwd
             subroutine classify_pool
                 integer :: nptcls, nptcls_sel, tailsz, i
-                call pool_proj%os_ptcl2D%write('ptcl2d_'//int2str_pad(iter,3)//'.txt')
                 call pool_proj%os_cls2D%write('cls2d_'//int2str_pad(iter,3)//'.txt')
                 nptcls_sel = pool_proj%os_ptcl2D%get_noris(consider_state=.true.)
                 write(*,'(A,I8,A,I4,A)')'>>> 2D CLASSIFICATION OF POOL: ',nptcls_sel,' PARTICLES IN ',ncls_glob,' CLUSTERS'
@@ -1303,6 +1329,16 @@ contains
                 enddo
                 ! cluster2d execution
                 params_glob%projfile = trim(PROJFILE_POOL)
+                select case(trim(cline%get_carg('objfun')))
+                case('cc')
+                    call cline_cluster2D%set('objfun','cc')
+                case DEFAULT
+                    if( nptcls_sel>CCRES_NPTCLS_LIM )then
+                        call cline_cluster2D%set('objfun','ccres')
+                    else
+                        call cline_cluster2D%set('objfun','cc')
+                    endif
+                end select
                 call cline_cluster2D%set('stream',    'no')
                 call cline_cluster2D%set('startit',   real(iter))
                 call cline_cluster2D%set('maxits',    real(iter))
@@ -1320,6 +1356,7 @@ contains
                 refs_glob            = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
             end subroutine classify_pool
 
+            !>  append the classified buffer to the pool
             subroutine transfer_buffer_to_pool
                 type(projection_frcs)         :: frcs_glob, frcs_buffer, frcs_prev
                 type(image)                   :: img
@@ -1344,7 +1381,9 @@ contains
                         call pool_proj%os_cls2D%reallocate(ncls_here)
                         do icls=1,params%ncls_start
                             ind = ncls_glob+icls
-                            call pool_proj%os_cls2D%set_ori(ind,buffer_proj%os_cls2D%get_ori(icls))
+                            o   = buffer_proj%os_cls2D%get_ori(icls)
+                            call o%set('class',real(ind))
+                            call pool_proj%os_cls2D%set_ori(ind,o)
                         enddo
                     endif
                 endif
@@ -1374,7 +1413,7 @@ contains
                 enddo
                 ! transfer references to pool
                 endit       = nint(cline_cluster2D_buffer%get_rarg('endit'))
-                refs_buffer = '1_cluster2D/cavgs_iter'//int2str_pad(endit,3)//params%ext
+                refs_buffer = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
                 if( .not.l_maxed )then
                     if( ncls_glob == 0 )then
                         ! first time
@@ -1386,7 +1425,7 @@ contains
                         stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
                         stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
                         call simple_copy_file(stkin,stkout)
-                        call simple_copy_file('1_cluster2D/'//trim(FRCS_FILE),FRCS_FILE)
+                        call simple_copy_file(trim(buffer_dir)//'/'//trim(FRCS_FILE),FRCS_FILE)
                     else
                         ! class averages &
                         call img%new([box,box,1],smpd)
@@ -1415,7 +1454,7 @@ contains
                         call frcs_buffer%new(params%ncls_start, box, smpd, state)
                         call frcs_glob%new(ncls_here, box, smpd, state)
                         call frcs_prev%read(FRCS_FILE)
-                        call frcs_buffer%read('1_cluster2D/'//trim(FRCS_FILE))
+                        call frcs_buffer%read(trim(buffer_dir)//'/'//trim(FRCS_FILE))
                         do icls=1,ncls_glob
                             call frcs_glob%set_frc(icls,frcs_prev%get_frc(icls, box, state), state)
                         enddo
@@ -1595,61 +1634,62 @@ contains
                 endif
                 return
             end function is_timeout
-        !
-        !     subroutine update_orig_proj
-        !         integer :: i,imic,n_stks,n,cnt
-        !         ! assumes work_proj is to correct dimension
-        !         call orig_proj%read(params%projfile)
-        !         n_stks = orig_proj%os_stk%get_noris()
-        !         n      = n_spprojs-(n_stks+1)
-        !         ! stacks
-        !         if( n > 0 )then
-        !             do iproj=n_stks+1,n_spprojs
-        !                 call stream_proj%read(spproj_list(iproj))
-        !                 stk     = stream_proj%get_stkname(1)
-        !                 ctfvars = stream_proj%get_ctfparams('ptcl2D', 1)
-        !                 call orig_proj%add_stk(stk, ctfvars)
-        !             enddo
-        !         endif
-        !         ! mics
-        !         if( n_stks>n_spprojs .and. stream_proj%get_nmics()>0 )then
-        !             if(allocated(mic_list))deallocate(mic_list)
-        !             allocate(mic_list(n))
-        !             cnt  = 0
-        !             imic = 0
-        !             do iproj=n_stks+1,n_spprojs
-        !                 call stream_proj%read(spproj_list(iproj))
-        !                 do i=1,stream_proj%os_mic%get_noris()
-        !                     call stream_proj%os_mic%getter(i,'imgkind',imgkind)
-        !                     if(trim(imgkind).eq.'mic')then
-        !                         imic = i
-        !                         exit
-        !                     endif
-        !                 enddo
-        !                 if(imic==0)then
-        !                     THROW_HARD('Missing micrograph; simple_commander_stream_wflows')
-        !                 else
-        !                     cnt = cnt + 1
-        !                     mic_list(cnt) = stream_proj%os_mic%get_static(imic,'intg')
-        !                 endif
-        !             enddo
-        !             call write_filetable('mictab.txt', mic_list)
-        !             ctfvars = stream_proj%get_micparams(imic)
-        !             call orig_proj%add_movies('mictab.txt', ctfvars)
-        !             do iproj=n_stks+1,n_spprojs
-        !                 call orig_proj%os_stk%set(iproj,'micind',real(iproj))
-        !             enddo
-        !             call del_file('mictab.txt')
-        !         endif
-        !         ! updates 2D & wipes 3D segment
-        !         orig_proj%os_cls2D  = work_proj%os_cls2D
-        !         orig_proj%os_ptcl2D = work_proj%os_ptcl2D
-        !         if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
-        !         orig_proj%os_ptcl3D = work_proj%os_ptcl3D ! to wipe the 3d segment
-        !         call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
-        !         call orig_proj%write()
-        !     end subroutine update_orig_proj
-        !
+
+            subroutine update_orig_proj
+                type(ori)                          :: o
+                type(oris)                         :: o_stks
+                type(ctfparams)                    :: ctfparms
+                character(LONGSTRLEN), allocatable :: stk_list(:), mic_list(:)
+                integer                            :: nprev, n2append, cnt
+                logical                            :: has_mics
+                write(*,'(A,A)')'>>> UPDATING PROJECT AT: ',cast_time_char(simple_gettime())
+                call orig_proj%read(orig_projfile)
+                nprev    = orig_proj%os_stk%get_noris()
+                n2append = n_spprojs-nprev
+                has_mics = .false.
+                if( n2append > 0 )then
+                    allocate(stk_list(n2append),mic_list(n2append))
+                    call o_stks%new(n2append)
+                    cnt = 0
+                    do iproj=nprev+1,n_spprojs
+                        cnt = cnt + 1
+                        ! stk
+                        call stream_proj%read(spproj_list(iproj))
+                        o             = stream_proj%os_stk%get_ori(1)
+                        stk_list(cnt) = trim(stream_proj%get_stkname(1))
+                        ctfparms      = stream_proj%get_ctfparams('ptcl2D', 1)
+                        ctfparms%smpd = smpd
+                        call o%set_ctfvars(ctfparms)
+                        call o_stks%set_ori(cnt,o)
+                        ! mic
+                        if( stream_proj%get_nintgs() == 1 )then
+                            has_mics      = .true.
+                            ctfparms      = stream_proj%get_micparams(1)
+                            mic_list(cnt) = trim(stream_proj%os_mic%get_static(1,'intg'))
+                        endif
+                    enddo
+                    call write_filetable('stktab.txt', stk_list)
+                    call orig_proj%add_stktab('stktab.txt', o_stks)
+                    call del_file('stktab.txt')
+                    if( has_mics )then
+                        call write_filetable('mictab.txt', mic_list)
+                        call orig_proj%add_movies('mictab.txt', ctfparms)
+                        call del_file('mictab.txt')
+                    endif
+                    ! updates 2D, os_out not updated as not correct scale
+                    orig_proj%os_cls2D  = pool_proj%os_cls2D
+                    orig_proj%os_ptcl2D = pool_proj%os_ptcl2D
+                    if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+                    call orig_proj%write
+                    call orig_proj%kill
+                endif
+                ! cleanup
+                call o%kill
+                call o_stks%kill
+                if(allocated(mic_list))deallocate(mic_list)
+                if(allocated(stk_list))deallocate(stk_list)
+            end subroutine update_orig_proj
+
             subroutine scale_stks( stk_fnames )
                 character(len=*), allocatable, intent(inout) :: stk_fnames(:)
                 character(len=*), parameter :: SCALE_FILETAB = 'stkscale.txt'

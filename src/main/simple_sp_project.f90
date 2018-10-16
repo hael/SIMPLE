@@ -70,7 +70,6 @@ contains
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_smpd
-    procedure          :: get_nmics
     procedure          :: get_nmovies
     procedure          :: get_nintgs
     procedure          :: get_ctfflag
@@ -609,7 +608,7 @@ contains
         character(len=:), allocatable :: imgkind, mic
         integer :: i,n,cnt
         if(allocated(micstab))deallocate(micstab)
-        n = self%get_nmics()
+        n = self%get_nintgs()
         if( n==0 )return
         allocate(micstab(n))
         cnt = 0
@@ -684,24 +683,12 @@ contains
         call self%os_stk%set(n_os_stk, 'imgkind', 'ptcl')
         call self%os_stk%set(n_os_stk, 'state',   1.0) ! default on import
         select case(ctfvars%ctfflag)
-            case(CTFFLAG_NO)
-                call self%os_stk%set(n_os_stk, 'ctf', 'no')
-            case(CTFFLAG_YES)
-                call self%os_stk%set(n_os_stk, 'ctf', 'yes')
-            case(CTFFLAG_FLIP)
-                call self%os_stk%set(n_os_stk, 'ctf', 'flip')
+            case(CTFFLAG_NO,CTFFLAG_YES,CTFFLAG_FLIP)
+                call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
             case DEFAULT
                 THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_stk')
         end select
-        call self%os_stk%set(n_os_stk, 'smpd',    ctfvars%smpd)
-        call self%os_stk%set(n_os_stk, 'kv',      ctfvars%kv)
-        call self%os_stk%set(n_os_stk, 'cs',      ctfvars%cs)
-        call self%os_stk%set(n_os_stk, 'fraca',   ctfvars%fraca)
-        if( ctfvars%l_phaseplate )then
-            call self%os_stk%set(n_os_stk, 'phaseplate', 'yes')
-        else
-            call self%os_stk%set(n_os_stk, 'phaseplate', 'no')
-        endif
+        call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
         ! preprocessing / streaming adds pairs: one micrograph and one stack
         ! so this keeps track of the index in this setting
         if( self%os_mic%get_noris() == n_os_stk )then
@@ -1526,17 +1513,6 @@ contains
         endif
         get_smpd = self%os_stk%get(1,'smpd')
     end function get_smpd
-
-    integer function get_nmics( self )
-        class(sp_project), target, intent(inout) :: self
-        character(len=:), allocatable :: imgkind
-        integer :: i
-        get_nmics = 0
-        do i=1,self%os_mic%get_noris()
-            call self%os_mic%getter(i,'imgkind',imgkind)
-            if( trim(imgkind).eq.'mic' ) get_nmics = get_nmics + 1
-        enddo
-    end function get_nmics
 
     integer function get_nmovies( self )
         class(sp_project), target, intent(inout) :: self

@@ -115,6 +115,7 @@ type :: oris
     procedure          :: partition_eo
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
+    procedure          :: set_ctfvars
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -1817,6 +1818,13 @@ contains
         call o_tmp%kill
     end subroutine str2ori_ctfparams_state_eo
 
+    subroutine set_ctfvars( self, i, ctfvars )
+        class(oris),     intent(inout) :: self
+        integer,         intent(in)    :: i
+        type(ctfparams), intent(in)    :: ctfvars
+        call self%o(i)%set_ctfvars(ctfvars)
+    end subroutine set_ctfvars
+
     ! I/O
 
     !>  \brief  reads orientation info from file
@@ -2373,8 +2381,7 @@ contains
             corr_threshold = 0.
         endif
         do icls=1,self%n
-            if( rfinds(icls) < res_threshold  ) cls_mask(icls) = .false.
-            if( corrs(icls)  < corr_threshold ) cls_mask(icls) = .false.
+            if( rfinds(icls)<res_threshold  .and. corrs(icls)<corr_threshold) cls_mask(icls) = .false.
         enddo
         deallocate(rfinds,corrs)
     end subroutine find_best_classes
