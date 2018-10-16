@@ -1,0 +1,96 @@
+div#widgetgauze
+div
+	h="Create Filetab Widget"
+	img#closebutton(
+		src="img/close.png"
+		onclick="filetabgeneratorwidget.hide()"
+	)
+
+div.inputpage
+	
+	table
+		tr
+			td="Folder"
+			td
+				input(
+					id="filetabfolder"
+					type="text"
+					value=folder
+				)
+			td
+				img(
+					src="img/folder.png"
+					onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"filetabfolder\")'}], path : 'selectedfolder', gauze : true})"
+				)
+			td
+				img(
+					src="img/help.png"
+					onclick="taskselector.showHelp('Path to folder containing input files')"
+				)
+		tr
+			td="Filter"
+			td
+				input(
+					id="filetabfilter"
+					type="text"
+					value=filter
+				)
+		tr
+			td
+				button(
+					onclick="filetabgeneratorwidget.search()"
+				)="Search"	
+
+div.filespage
+	table#filestable
+		tr
+			th
+			th="Filename"
+		each file in files
+			tr
+				td
+					input.filecheck(
+						type="checkbox"
+						value=file
+					)
+				td=file
+	button(
+		onclick="filetabgeneratorwidget.selectAll()"
+	)="Select All"
+
+
+div.outputpage
+	table
+		tr
+			td="Folder"
+			td
+				input(
+					id="filetaboutputfolder"
+					type="text"
+				)
+			td
+				img(
+					src="img/folder.png"
+					onclick="browser.show({buttons : [{ name : 'select', action : 'tasksetup.setValue(\"filetaboutputfolder\")'}], path : 'selectedfolder', gauze : true})"
+				)
+			td
+				img(
+					src="img/help.png"
+					onclick="taskselector.showHelp('Path to folder where output is to be written')"
+				)
+		tr
+			td="Filename"
+			td
+				input(
+					id="filetaboutputfilename"
+					type="text"
+				)
+			td
+			td
+				img(
+					src="img/help.png"
+					onclick="taskselector.showHelp('Name of file to be written')"
+				)
+	button(
+		onclick="filetabgeneratorwidget.save()"
+	)="Generate Filetab"

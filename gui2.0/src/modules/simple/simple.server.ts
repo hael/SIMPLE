@@ -16,6 +16,7 @@ class Module {
 	private autopicktrainingwidget
 	private makepickrefswidget
 	private preprocessstreamview
+	private filetabgeneratorwidget
 	
 	public metadata = {
 			"moduletitle" :"Simple",
@@ -45,6 +46,40 @@ class Module {
 			this.metadata['tasks'][commandkeys[0]] = task
 		}
 		
+		// Attach compenv
+		for(var simpletask of Object.keys(this.metadata.tasks)){
+			for (var taskpage of this.metadata['tasks'][simpletask]['pages']){
+				if(taskpage['title'] == "computer controls"){
+					taskpage['keys'].push({"key": "envuser_email", "keytype": "str", "descr_short": "Your e-mail address", "descr_long": "Your e-mail address; e.g. myname@uni.edu", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envjob_memory_per_task", "keytype": "num", "descr_short": "Memory per part", "descr_long": "Memory per part; MB per part{1600}", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envqsys_partition", "keytype": "str", "descr_short": " Name of SLURM/PBS partition", "descr_long": " Name of SLURM/PBS partition; give part name", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envqsys_qos", "keytype": "str", "descr_short": "Schedule priority", "descr_long": "Schedule priority; give priority", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envqsys_reservation", "keytype": "str", "descr_short": "Name of reserved partition", "descr_long": "Name of reserved partition; give yourpart", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envtime_per_image", "keytype": "num", "descr_short": "Time per image", "descr_long": "Time per image; in seconds{100}", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envuser_account", "keytype": "str", "descr_short": "User account name in SLURM/PBS", "descr_long": "User account name in SLURM/PBS; e.g. Account084", "descr_placeholder": "", "required": false})
+					taskpage['keys'].push({"key": "envuser_project", "keytype": "str", "descr_short": "User project name in SLURM/PBS", "descr_long": "User project name in SLURM/PBS; e.g. Project001", "descr_placeholder": "", "required": false})
+				}
+			}
+		}
+	
+		// Attach import
+		var importtask = {}
+		importtask["name"]  =  "import",
+		importtask["descr_short"] = "Import an external simple job into the gui",
+		importtask["descr_long"] = "Import an external simple job into the gui to view its output",
+		importtask["executable"] = "simple_import"
+		importtask['pages'] = [] 
+		var page = {}
+		page['title'] = "parameter input/output"
+		page['keys'] = []
+		var options = []
+		for(var simpletask of Object.keys(this.metadata.tasks)){
+			options.push(this.metadata['tasks'][simpletask]['name'])
+		}
+		page['keys'].push({"key": "job_type", "keytype": "multi", "descr_short": "Job Type", "descr_long": "", "descr_placeholder": "", "required": true, "options": options})
+		importtask['pages'].push(page)
+		this.metadata['tasks']['import'] = importtask
+		
 		// Attach widgets
 		for(var widgetpage of this.metadata['tasks']['postprocess']['pages']){
 			for(var widgetkeys of widgetpage['keys']){
@@ -72,6 +107,16 @@ class Module {
 			
 		}
 		
+		for(var widgetpage of this.metadata['tasks']['import_movies']['pages']){
+			for(var widgetkeys of widgetpage['keys']){
+				if(widgetkeys['key'] == "filetab"){
+					widgetkeys['keytype'] = "widget"
+					widgetkeys['widget'] = "filetabgeneratorwidget.view('keyfiletab')"
+				}
+			}
+			
+		}
+		
 		const pug = require('pug')
 		this.pack = require("../../../external/DensityServer/pack/main.js")
 		this.view2dview = pug.compileFile('views/simple-view2d.pug')
@@ -86,12 +131,13 @@ class Module {
 		this.autopicktrainingwidget = pug.compileFile('views/simple-autopicktrainingwidget.pug')
 		this.makepickrefswidget = pug.compileFile('views/simple-makepickrefswidget.pug')
 		this.preprocessstreamview = pug.compileFile('views/simple-viewpreprocessstream.pug')
+		this.filetabgeneratorwidget = pug.compileFile('views/simple-filetabgeneratorwidget.pug')
 		process.stdout.write("Done\n")
 	}
 	
 	public refineSelection(file){
 		var spawn = require('child-process-promise').spawn
-		var stat = fs.lstatSync(file)
+		var stat = fs.statSync(file)
 		if(stat.isFile()){
 			if(file.includes(".simple")){
 				var command = "simple_exec"
@@ -123,7 +169,7 @@ class Module {
 						}else{
 							taskarray.push("")
 						}
-						if(result.stdout.includes("per-cluster  2D")){
+						if(result.stdout.includes("per-cluster 2D")){
 							taskarray.push("initial_3Dmodel")
 						}else{
 							taskarray.push("")
@@ -140,18 +186,34 @@ class Module {
 		}
 	}
 	
+	public getCompEnv(modules, arg){
+		var spawn = require('child-process-promise').spawn
+		var stat = fs.statSync(arg['projfile'])
+		if(stat.isFile() && arg['projfile'].includes(".simple")){
+			var command = "simple_exec"
+			var commandargs = []
+			commandargs.push("prg=print_project_field")
+			commandargs.push("projfile=" + arg['projfile'])
+		}
+	}
+	
 	public execute(modules, arg){
 		var spawn = require('child_process').spawn
+		var spawnPromise = require('child-process-promise').spawn
+		var path = require('path')
 		var command = arg['executable']
-		var type = arg['type']
+		
 		var inputpath = arg['inputpath']
+
 		var keys = arg['keys']
 		var keynames = Object.keys(keys);
 		var commandargs = []
+		var compenvargs = ['prg=update_project', 'projname=project']
 		commandargs.push("prg=" + type)
 		commandargs.push("mkdir=no")
+		console.log(arg)
 		for(var key of keynames){
-			if(keys[key] != ""){
+			if(keys[key] != "" && ! key.includes('keyenv')){
 				if(keys[key] == "true"){
 					commandargs.push(key.replace('key', '') + "=yes")
 				}else if(keys[key] == "false"){
@@ -159,11 +221,17 @@ class Module {
 				}else{
 					commandargs.push(key.replace('key', '') + "=" + keys[key])
 				}
+			} else if (keys[key] != "" && key.includes('keyenv')){
+				compenvargs.push(key.replace('keyenv', '') + "=" + keys[key])
 			}
 		}
 		
 		arg['view'] = null
-	
+		var type = arg['type']
+		if(type == "import"){
+			type = arg['keys']['keyjob_type']
+		}
+		
 		if(type == "cluster2D") {
 			arg['view'] = {mod : "simple", fnc : "view2d"}
 		}else if(type == "initial_3Dmodel") {
@@ -180,102 +248,55 @@ class Module {
 			arg['view'] = { mod : "simple", fnc : "viewPreprocessStream" }
 		}
 		
-		
 		console.log(command, commandargs)
 		
+		var JSON 
 		return modules['available']['core']['taskCreate'](modules, arg)
-			.then((json) => {
-				if(inputpath != undefined){
-					fs.copyFileSync(inputpath, json['jobfolder'] + "/project.simple")
-				}
-				const out = fs.openSync(json['jobfolder'] + '/task.log', 'a')
-				const err = fs.openSync(json['jobfolder'] + '/task.log', 'a')
-				var executeprocess = spawn(command, commandargs, {detached: true, cwd: json['jobfolder'], stdio: [ 'ignore', out, err ]})
+		.then((json) => {
+			JSON = json
+			if(command == "simple_import"){
+				var rootname = path.basename(inputpath, ".simple")
+				fs.rmdirSync(json['jobfolder'])
+				fs.symlinkSync(path.dirname(inputpath), json['jobfolder'])
+				fs.mkdirSync(json['jobfolder'] + "/" + rootname)
+				fs.copyFileSync(inputpath, json['jobfolder'] + "/" + rootname + "/" + rootname + ".simple")
+				compenvargs.push('projfile=' + rootname + "/" + rootname + ".simple")
+				return spawnPromise("simple_exec", compenvargs, {cwd: json['jobfolder'], capture: ['stdout']})
+			} else {
+				fs.mkdirSync(json['jobfolder'] + "/project")
+				fs.copyFileSync(inputpath, json['jobfolder'] + "/project/project.simple")
+				
+				console.log(compenvargs)
+				return spawnPromise("simple_exec", compenvargs, {cwd: json['jobfolder'], capture: ['stdout']})
+			}
+		})
+		.then((result) => {
+			if(command == "simple_import"){
+				var rootname = path.basename(inputpath, ".simple")
+				fs.renameSync(JSON['jobfolder'] + "/" + rootname + "/project.simple", JSON['jobfolder'] + "/project.simple")
+				modules['available']['core']['updateStatus'](arg['projecttable'], JSON['jobid'], "Finished")
+			}else{
+				fs.renameSync(JSON['jobfolder'] + "/project/project.simple", JSON['jobfolder'] + "/project.simple")
+				const out = fs.openSync(JSON['jobfolder'] + '/task.log', 'a')
+				const err = fs.openSync(JSON['jobfolder'] + '/task.log', 'a')
+				var executeprocess = spawn(command, commandargs, {detached: true, cwd: JSON['jobfolder'], stdio: [ 'ignore', out, err ]})
 				executeprocess.on('exit', function(code){
 				console.log(`child process exited with code ${code}`);
 					if(code !== null){
-						modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Finished")
+						modules['available']['core']['updateStatus'](arg['projecttable'], JSON['jobid'], "Finished")
 					}
 				})
 				executeprocess.on('error', function(error){
 					console.log(`child process exited with error ${error}`)
-					modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Error")
+					modules['available']['core']['updateStatus'](arg['projecttable'], JSON['jobid'], "Error")
 				})
 				
 				console.log(`Spawned child pid: ${executeprocess.pid}`)
-				modules['available']['core']['updatePid'](arg['projecttable'], json['jobid'], executeprocess.pid)
-				
-				return({folder:json['jobfolder']})
-			})
-	}
-	
-	public executeOld(modules, arg){
-		var spawn = require('child_process').spawn
-		var command = arg['executable']
-		var type = arg['type']
-		var inputpath = arg['inputpath']
-		var keys = arg['keys']
-		var keynames = Object.keys(keys);
-		var commandargs = []
-		commandargs.push("prg=" + type)
-		//if(inputpath != undefined){
-			//commandargs.push("projfile=" + inputpath)
-		//}
-		commandargs.push("mkdir=no")
-		for(var key of keynames){
-			if(keys[key] != ""){
-				if(keys[key] == "true"){
-					commandargs.push(key.replace('key', '') + "=yes")
-				}else if(keys[key] == "false"){
-					commandargs.push(key.replace('key', '') + "=no")
-				}else{
-					commandargs.push(key.replace('key', '') + "=" + keys[key])
-				}
+				modules['available']['core']['updatePid'](arg['projecttable'], JSON['jobid'], executeprocess.pid)
 			}
-		}
-		
-		arg['view'] = null
-	
-		if(type == "cluster2D") {
-			arg['view'] = {mod : "simple", fnc : "view2d"}
-		}else if(type == "initial_3Dmodel") {
-			arg['view'] = {mod : "simple", fnc : "viewini3d"}
-		}else if(type == "import_movies" || type == "motion_correct") {
-			arg['view'] = { mod : "simple", fnc : "viewImportMovies" }
-		}else if(type == "ctf_estimate") {
-			arg['view'] = { mod : "simple", fnc : "viewCTFEstimate" }
-		}else if(type == "import_particles" || type == "extract") {
-			arg['view'] = { mod : "simple", fnc : "viewParticles" }
-		}
-		
-		console.log(command, commandargs)
-		
-		return modules['available']['core']['taskCreate'](modules, arg)
-			.then((json) => {
-				if(inputpath != undefined){
-					fs.copyFileSync(inputpath, json['jobfolder'] + "/project.simple")
-				}
-				var executeprocess = spawn(command, commandargs, {detached: true, cwd: json['jobfolder']})
-				executeprocess.on('exit', function(code){
-					console.log(`child process exited with code ${code}`);
-					modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Finished")
-				})
-				executeprocess.stdout.on('data', (data) => {
-					console.log(`child stdout:\n${data}`)
-				})
-				executeprocess.stderr.on('data', (data) => {
-					console.log(`child stderr:\n${data}`)
-				})
-				executeprocess.on('error', function(error){
-					console.log(`child process exited with error ${error}`)
-					modules['available']['core']['updateStatus'](arg['projecttable'], json['jobid'], "Error")
-				})
-				
-				console.log(`Spawned child pid: ${executeprocess.pid}`)
-				modules['available']['core']['updatePid'](arg['projecttable'], json['jobid'], executeprocess.pid)
-				
-				return({folder:json['jobfolder']})
-			})
+			return({folder:JSON['jobfolder']})
+		})
+
 	}
 	
 	public view2d (modules, arg) {
@@ -505,6 +526,35 @@ class Module {
 			})
 	}
 	
+	private writeMicsStar(projfile){
+		var spawn = require('child-process-promise').spawn
+		var command = "simple_private_exec"
+		var commandargs = []
+		var starcontents = ""
+		commandargs.push("prg=print_project_vals")
+		commandargs.push("projfile=" + projfile)
+		commandargs.push("oritype=mic")
+		commandargs.push("keys=movie,intg,dfx,dfy,angast,ctfscore")
+		
+		return spawn(command, commandargs, {capture: ['stdout']})
+			.then((result) => {
+				var lines = result.stdout.split("\n")
+				for(var line of lines){
+					var elements = line.split((/[ ]+/))
+					if(elements[2] == 1){
+						starcontents += elements[3] + " "
+						starcontents += elements[4] + " "
+						starcontents += elements[5] + " "
+						starcontents += elements[6] + " "
+						starcontents += elements[7] + " "
+						starcontents += elements[8] + "\n"
+					}
+				}
+				console.log(starcontents)
+				return 
+			})
+	}
+	
 	public viewParticles2D(modules, arg){
 		var spawn = require('child-process-promise').spawn
 		var command = "simple_private_exec"
@@ -641,7 +691,7 @@ class Module {
 				commandargs.push("prg=print_project_vals")
 				commandargs.push("projfile=" + projectfile)
 				commandargs.push("oritype=mic")
-				commandargs.push("keys=boxfile,intg,xdim,ydim")
+				commandargs.push("keys=boxfile,intg,xdim,ydim,thumb")
 				return spawn(command, commandargs, {capture: ['stdout']})
 			})
 			.then((result) => {
@@ -651,7 +701,7 @@ class Module {
 					for(var line of lines){
 						var elements = line.split((/[ ]+/))
 						if(elements[3]){
-							boxfiles.push([elements[3], elements[4], elements[5], elements[6]])
+							boxfiles.push([elements[3], elements[4], elements[5], elements[6], elements[7]])
 						}
 					}
 				}
@@ -740,6 +790,55 @@ class Module {
 		})
 	}
 	
+	public getFileTabGeneratorWidget(modules, arg){
+		return new Promise((resolve, reject) => {
+			var files = []
+			if(arg['folder'] != undefined && arg['folder'] != ""){
+				var contents = fs.readdirSync(arg['folder'])
+				for (var object of contents){
+					if(object.charAt(0) != "."){
+						var stat = fs.statSync(arg['folder'] + "/" + object)
+						if(stat.isFile()){
+							if(arg['filter'] != undefined && arg['filter'] != ""){
+								if(object.includes(arg['filter'])){
+									files.push(object)
+								}
+							}else{
+								files.push(object)
+							}
+						}
+					}
+				}
+				files.sort()
+			}
+			var view = {}
+			view['files'] = files
+			if(arg['folder'] != undefined ){
+				view['folder'] = arg['folder']
+			}else{
+				view['folder'] = ""
+			}
+			if(arg['filter'] != undefined ){
+				view['filter'] = arg['filter']
+			}else{
+				view['filter'] = ""
+			}
+			resolve({html : this.filetabgeneratorwidget(view)})
+		})
+	}
+	
+	public saveFileTabGeneratorWidget(modules, arg){
+		return new Promise((resolve, reject) => {
+			var selection = ""
+			for (var file of arg['files']){
+				selection += arg['folder'] + "/" + file + '\n'
+			}
+
+			fs.writeFileSync(arg['filename'], selection)
+			resolve({status : "success"})
+		})
+	}
+
 	public calculateGuinier(modules, arg){
 		var spawn = require('child-process-promise').spawn
 		var command = "simple_exec"

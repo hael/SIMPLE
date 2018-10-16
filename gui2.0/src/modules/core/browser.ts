@@ -1,5 +1,7 @@
 import * as fs from 'fs'
 
+
+
 export default class Browser{
 
 	private browser
@@ -16,7 +18,8 @@ export default class Browser{
 			var contents = fs.readdirSync(arg['path'])
 			for (var object of contents){
 				if(object.charAt(0) != "."){
-					var stat = fs.lstatSync(arg['path'] + "/" + object)
+				//	var stat = fs.lstatSync(arg['path'] + "/" + object)
+					var stat = fs.statSync(arg['path'] + "/" + object)
 					if(stat.isFile()){
 						if(arg['filter'] != undefined){
 							if(object.includes(arg['filter'])){
@@ -41,4 +44,6 @@ export default class Browser{
 			resolve({html : this.browser(view)})
 		})
 	}
+	
+	
 }

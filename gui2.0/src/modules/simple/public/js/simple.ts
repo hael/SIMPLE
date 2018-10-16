@@ -24,8 +24,8 @@ class Simple {
 			.then((response) => response.json())
 			.then ((json) => {
 				document.getElementById('cavgs').innerHTML = json.html
-				viewer.sortThumbnails()
-				viewer.loadImages('cavgs')
+				viewer.sortThumbnails('cavgs')
+			//	viewer.loadImages('cavgs')
 				simple.sumParticles2D('cavgs')
 			})
 	}
@@ -408,15 +408,15 @@ class Simple {
 		counter.innerHTML = "Selected " + selected + " of " + total + " micrographs"
 	}
 	
-	viewBoxes(boxfile, micrograph, xdim, ydim){
+	viewBoxes(boxfile, micrograph, xdim, ydim, thumb){
 		var boxesviewer = document.getElementById('boxesviewer')
 		boxesviewer.style.display = "block"
 		var img = <HTMLImageElement>document.getElementById('boxviewmicrograph')
-		if(img.clientWidth != 0){
-			img.src = "/image?stackfile=" + micrograph + "&frame=0&width=" + img.clientWidth + "&boxfile=" + boxfile
-		}else{
-			img.src = "/image?stackfile=" + micrograph + "&frame=0&width=500&boxfile=" + boxfile
-		}
+	//	if(img.clientWidth != 0){
+	//		img.src = "/image?stackfile=" + micrograph + "&frame=0&width=" + img.clientWidth + "&boxfile=" + boxfile
+	//	}else{
+			img.src = "/image?stackfile=" + micrograph + "&frame=0&width=500&boxfile=" + boxfile + "&thumb=" + thumb
+	//	}
 		
 	}
 	

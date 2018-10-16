@@ -62,8 +62,10 @@ class ManualPickingWidget {
 	}
 	
 	public plotCoordinates() {
-		var r = this.radius.value
-		var l = this.boxsize.value
+		//var r = this.radius.value
+		//var l = this.boxsize.value   
+		var r = this.radius.value / this.ratio;
+        var l = this.boxsize.value / this.ratio;
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 		this.ctx.drawImage(this.img, 0, 0);
 		
@@ -96,12 +98,14 @@ class ManualPickingWidget {
 		var y = event.offsetY;
 		var xclick = x
 		var yclick = y
-		var r = this.radius.value
-		var l = this.boxsize.value
-		
-		x = this.ratio * x
-		y = this.ratio * y
-		
+		//var r = this.radius.value
+		//var l = this.boxsize.value
+		var r = Math.floor(this.radius.value / this.ratio);
+        var l = Math.floor(this.boxsize.value / this.ratio);
+	//	x = this.ratio * x
+	//	y = this.ratio * y
+		x = x * 1000 / this.canvas.scrollWidth;
+        y = y * 1000 / this.canvas.scrollWidth;
 		var arrayLength = this.coords.length;
 		var totalCoords = this.allCoords.length;
 
@@ -184,8 +188,8 @@ class ManualPickingWidget {
 					fakecontour[0]['coordinates'][0] = calccontours[0]['coordinates'][i]
 					var area = path.area(fakecontour[0])
 					var centroid = path.centroid(fakecontour[0])
-					var radius = 80
-					if(area < 1000){
+					var radius = 25
+					if(area < 100){
 						calccontours[0]['coordinates'][i] = []	
 						}else if ( Math.pow((centroid[0]-(l/2)) , 2) + Math.pow((centroid[1]-(l/2)), 2) > Math.pow(radius, 2)) { 
 						calccontours[0]['coordinates'][i] = []
@@ -243,8 +247,8 @@ class ManualPickingWidget {
 					fakecontour[0]['coordinates'][0] = calccontours[0]['coordinates'][i]
 					var area = path.area(fakecontour[0])
 					var centroid = path.centroid(fakecontour[0])
-					var radius = 60
-					if(area < 1000){
+					var radius = 25
+					if(area < 100){
 						calccontours[0]['coordinates'][i] = []	
 					}else if ( Math.pow((centroid[0]-(l/2)) , 2) + Math.pow((centroid[1]-(l/2)), 2) > Math.pow(radius, 2)) { 
 						calccontours[0]['coordinates'][i] = []
@@ -285,10 +289,13 @@ class ManualPickingWidget {
 	public changeMicrograph(path, xdim, ydim, micrographname){
 		
 		//canvas dimensions defined here
-		this.canvas.width = xdim
-		this.canvas.height = ydim
+		//this.canvas.width = xdim
+		//this.canvas.height = ydim
+		this.canvas.width = 1000
+		this.canvas.height = 1000;
 		this.micrographName = micrographname
-		this.img.src = "/image?stackfile=" + path + "&frame=0&width=" + xdim
+		//this.img.src = "/image?stackfile=" + path + "&frame=0&width=" + xdim
+		this.img.src = "/image?stackfile=" + path + "&frame=0&width=1000"
 		
 		//find previous boxes
 		this.coords = []

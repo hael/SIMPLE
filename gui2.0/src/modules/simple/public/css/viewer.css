@@ -14,7 +14,15 @@
 
 .scrollmenu {
 	display: none;
-	height: 300px;
+	min-height: 170px;
+	background-color: #f4f4f4;
+	margin-top: 7px;
+	padding: 10px;
+}
+
+.scrollmenu label{
+	display: inline-block;
+	width: 100px;
 }
 
 #cavgs {
@@ -61,10 +69,10 @@
 	overflow-y: scroll;
 }
 
-#ptclsviewer .scrollmenu {
-	display: none;
-	height: 300px;
-}
+//#ptclsviewer .scrollmenu {
+//	display: none;
+//	height: 300px;
+//}
 
 #ptcls {
 	display: flex;
@@ -128,13 +136,12 @@
 
 .viewer #boxesviewer {
 	position: absolute;
-	top: 100px;
-	width: 60vw;
-	left: 15vw;
+	top: 125px;
+	width: 510px;
+	left: calc(50vw - 360px);
 	background-color: white;
 	border-radius: 6px;
 	padding: 10px;
-	min-height: 65vh;
 	display: none;
 }
 

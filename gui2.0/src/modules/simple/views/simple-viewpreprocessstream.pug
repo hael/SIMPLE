@@ -46,7 +46,7 @@ div#preproc
 					if boxfiles
 						img.viewptcls(
 							src="../img/eye.png"
-							onclick="event.stopPropagation(); simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "')"
+							onclick="event.stopPropagation(); simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "','" + boxfiles[index][4] + "')"
 						)
 				div.dynimgcontainer
 					img.dynimg.ctffit(
@@ -64,156 +64,159 @@ div#preproc
 			type="hidden"
 			value=projectfile
 		)
-		label(
-			for="savefilename"
-		)="Filename"
-		input#savefilename(
-			type="text"
-			placeholder="e.g. selected_ctf.simple"
-		)
+		div
+			label(
+				for="savefilename"
+			)="Filename"
+			input#savefilename(
+				type="text"
+				placeholder="e.g. selected_ctf.simple"
+			)
 		button(
 			onclick="simple.saveMicsSelection()"
 		)="Save"
 		
 	div.scrollmenu#view
 		h="View"
-		label(
-			for="viewpspec"
-		)="Power Spectrum"
-		input#viewpspec(
-			type="checkbox"
-			onchange="viewer.showHideThumbnails(this, 'pspec')"
-			checked
-		)
-		label(
-			for="viewmic"
-		)="Micrographs"
-		input#viewmic(
-			type="checkbox"
-			onchange="viewer.showHideThumbnails(this, 'micrograph')"
-			checked
-		)
-		label(
-			for="viewctf"
-		)="CTF Fit"
-		input#viewctf(
-			type="checkbox"
-			onchange="viewer.showHideThumbnails(this, 'ctffit')"
-			checked
-		)
+		div
+			label(
+				for="viewpspec"
+			)="Power Spectrum"
+			input#viewpspec(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'pspec')"
+				checked
+			)
+			div
+			label(
+				for="viewmic"
+			)="Micrographs"
+			input#viewmic(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'micrograph')"
+				checked
+			)
+		div
+			label(
+				for="viewctf"
+			)="CTF Fit"
+			input#viewctf(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'ctffit')"
+				checked
+			)
 
 	div.scrollmenu#sort
 		h="Sort"
-		label(
-			for="sortattribute"
-		)="Attribute"
-		select#sortattribute
-			option(
-				value="dfx"
-			)="Defocus X"
-			option(
-				value="dfy"
-			)="Defocus Y"
-			option(
-				value="angast"
-				selected
-			)="Angle of Astigmatism"
-			option(
-				value="ctf_estimatecc"
-			)="CTF Estimate CC"
-			option(
-				value="dferr"
-			)="Defocus Error"
-			option(
-				value="ctfscore"
-			)="CTF Score"
-			option(
-				value="cc90"
-			)="CC90"
-			
-		label(
-			for="sortorder"
-		)="Order"
-		select#sortorder
-			option(
-				value="ascending"
-			)="Ascending"
-			option(
-				value="descending"
-			)="Descending"
+		div
+			label(
+				for="sortattribute"
+			)="Attribute"
+			select#sortattribute
+				option(
+					value="dfx"
+				)="Defocus X"
+				option(
+					value="dfy"
+				)="Defocus Y"
+				option(
+					value="angast"
+					selected
+				)="Angle of Astigmatism"
+				option(
+					value="ctf_estimatecc"
+				)="CTF Estimate CC"
+				option(
+					value="dferr"
+				)="Defocus Error"
+				option(
+					value="ctfscore"
+				)="CTF Score"
+				option(
+					value="cc90"
+				)="CC90"
+		div
+			label(
+				for="sortorder"
+			)="Order"
+			select#sortorder
+				option(
+					value="ascending"
+				)="Ascending"
+				option(
+					value="descending"
+				)="Descending"
 		button(
-			onclick="viewer.sortThumbnails()"
+			onclick="viewer.sortThumbnails('preproc')"
 		)="Apply"
 
 	div.scrollmenu#plot
 		h="Plot"
-		label(
-			for="plottype"
-		)="Type"
-		select#plottype
-			option(
-				value="mic:dfx:scatter"
-			)="Micrograph vs X Defocus"
-			option(
-				value="mic:dfy:scatter"
-			)="Micrograph vs Y Defocus"
-			option(
-				value="mic:angast:scatter"
-			)="Micrograph vs Astigmatism Angle"
-			option(
-				value="mic:ctf_estimatecc:scatter"
-			)="Micrograph vs CTF Estimate CC"
-			option(
-				value="mic:dferr:scatter"
-			)="Micrograph vs Defocus Error"
-			option(
-				value="mic:ctfscore:scatter"
-			)="Micrograph vs CTF Score"
-			option(
-				value="mic:cc90:scatter"
-			)="Micrograph vs CC90"
-			option(
-				value="dfx:dfy:scatter"
-			)="X Defocus vs Y Defocus"
-			option(
-				value="cc90:ctf_estimatecc:scatter"
-			)="CC90 vs CTF Estimate CC"
-			option(
-				value="cc90:dferr:scatter"
-			)="CC90 vs Defocus Error"
-			option(
-				value="cc90:ctfscore:scatter"
-			)="CC90 vs CTF Score"
-			option(
-				value="ctfscore:ctf_estimatecc:scatter"
-			)="CTF Score vs CTF Estimate CC"
-			option(
-				value="ctfscore:dferr:scatter"
-			)="CTF Score vs Defocus Error"
-			option(
-				value="ctfscore:cc90:scatter"
-			)="CTF Score vs CC90"
-			option(
-				value="dferr:ctf_estimatecc:scatter"
-			)="Defocus Error vs CTF Estimate CC"
-			option(
-				value="dferr:ctfscore:scatter"
-			)="Defocus Error vs CTF Score"
-			option(
-				value="dferr:cc90:scatter"
-			)="Defocus Error vs CC90"
-			option(
-				value="ctf_estimatecc:dferr:scatter"
-			)="CTF Estimate CC vs Defocus Error"
-			option(
-				value="ctf_estimatecc:ctfscore:scatter"
-			)="CTF Estimate CC vs CTF Score"
-			option(
-				value="ctf_estimatecc:cc90:scatter"
-			)="CTF Estimate CC vs CC90"
-		button(
-			onclick="simple.plot2Dptcls('preproc')"
-		)="Apply"
+		div
+			select#plottype
+				option(
+					value="mic:dfx:scatter"
+				)="Micrograph vs X Defocus"
+				option(
+					value="mic:dfy:scatter"
+				)="Micrograph vs Y Defocus"
+				option(
+					value="mic:angast:scatter"
+				)="Micrograph vs Astigmatism Angle"
+				option(
+					value="mic:ctf_estimatecc:scatter"
+				)="Micrograph vs CTF Estimate CC"
+				option(
+					value="mic:dferr:scatter"
+				)="Micrograph vs Defocus Error"
+				option(
+					value="mic:ctfscore:scatter"
+				)="Micrograph vs CTF Score"
+				option(
+					value="mic:cc90:scatter"
+				)="Micrograph vs CC90"
+				option(
+					value="dfx:dfy:scatter"
+				)="X Defocus vs Y Defocus"
+				option(
+					value="cc90:ctf_estimatecc:scatter"
+				)="CC90 vs CTF Estimate CC"
+				option(
+					value="cc90:dferr:scatter"
+				)="CC90 vs Defocus Error"
+				option(
+					value="cc90:ctfscore:scatter"
+				)="CC90 vs CTF Score"
+				option(
+					value="ctfscore:ctf_estimatecc:scatter"
+				)="CTF Score vs CTF Estimate CC"
+				option(
+					value="ctfscore:dferr:scatter"
+				)="CTF Score vs Defocus Error"
+				option(
+					value="ctfscore:cc90:scatter"
+				)="CTF Score vs CC90"
+				option(
+					value="dferr:ctf_estimatecc:scatter"
+				)="Defocus Error vs CTF Estimate CC"
+				option(
+					value="dferr:ctfscore:scatter"
+				)="Defocus Error vs CTF Score"
+				option(
+					value="dferr:cc90:scatter"
+				)="Defocus Error vs CC90"
+				option(
+					value="ctf_estimatecc:dferr:scatter"
+				)="CTF Estimate CC vs Defocus Error"
+				option(
+					value="ctf_estimatecc:ctfscore:scatter"
+				)="CTF Estimate CC vs CTF Score"
+				option(
+					value="ctf_estimatecc:cc90:scatter"
+				)="CTF Estimate CC vs CC90"
+			button(
+				onclick="simple.plot2Dptcls('preproc')"
+			)="Apply"
 		div#ptcls2Dchart
 
 	div.viewertoolbar
@@ -267,27 +270,27 @@ div#preproc
 				onchange="viewer.scaleImages('preproc')"
 			)
 		div
-			img(
+			img.scrollmenubutton(
 				src="../img/eye.png"
-				onclick="viewer.toggleScrollMenu('preproc', 'view')"
+				onclick="viewer.toggleScrollMenu('preproc', 'view', this)"
 				title="Sort"
 			)
 		div
-			img(
+			img.scrollmenubutton(
 				src="../img/sort.png"
-				onclick="viewer.toggleScrollMenu('preproc', 'sort')"
+				onclick="viewer.toggleScrollMenu('preproc', 'sort', this)"
 				title="Sort"
 			)
 		div
-			img(
+			img.scrollmenubutton(
 				src="img/plot.png"
-				onclick="viewer.toggleScrollMenu('preproc', 'plot')"
+				onclick="viewer.toggleScrollMenu('preproc', 'plot', this)"
 				title="Plot"
 			)
 		div
-			img(
+			img.scrollmenubutton(
 				src="img/save.png"
-				onclick="viewer.toggleScrollMenu('preproc', 'save')"
+				onclick="viewer.toggleScrollMenu('preproc', 'save', this)"
 				title="Save"
 			)
 			

@@ -65,10 +65,11 @@ export default class HTTPServer {
 		
 		this.server.get('/image', (req, res) => {
 			modules['available']['core']['getImage'](req.query).then((result) => {
-				res.contentType('jpeg')
+				res.contentType('jpg')
 				res.send(result.image)
 				}) // add catch send error
 		})
+		
 		
 		this.server.post('/', function (req, res) {
 			var fnc = req.body.fnc

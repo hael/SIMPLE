@@ -1,0 +1,72 @@
+.filetabgeneratorwidgetpopup {
+	width: 90vw;
+	height: 80vh;
+	font-size: 11px;
+	position: absolute;
+	left: 5vw;
+	top: 120px;
+	background-color: white;
+	padding: 10px;
+	z-index: 1;
+	border-radius: 6px;
+}
+
+.filetabgeneratorwidgetpopup h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+.filetabgeneratorwidgetpopup button{
+	width: 80px;
+	border-radius: 8px;
+	border-style: none;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}
+
+.filetabgeneratorwidgetpopup #filestable{
+	width: 100%;
+}
+
+.filetabgeneratorwidgetpopup .filespage{
+	width: 100%; 
+	height: calc(80vh - 290px);
+}
+
+.filetabgeneratorwidgetpopup #filestable tr:nth-child(odd){
+	background-color: #D4DAED;
+}
+
+.filetabgeneratorwidgetpopup #filestable tr{
+	color: #58708d;
+	height: 20px;
+}
+.filetabgeneratorwidgetpopup #filestable td:nth-child(1){
+	text-align: center;
+	width: 20px;
+}
+
+.filetabgeneratorwidgetpopup #filestable td:nth-child(2){
+	padding-left: 10px;
+}
+.filetabgeneratorwidgetpopup #filestable tr:first-child{
+	color: black;
+}
+
+.filetabgeneratorwidgetpopup #filestable tr:hover{
+	background-color: lightgrey;
+}
+
+.filetabgeneratorwidgetpopup #selectorbuttons{
+	display: flex;
+	justify-content: space-between;
+	margin-left: 20%;
+	margin-right: 20%;
+}
+
+.filetabgeneratorwidgetpopup #closebutton {
+	height: 12px;
+	float: right;
+}
+

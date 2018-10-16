@@ -203,6 +203,9 @@ class TaskSetup {
 				request['arg']['keys'][argument.id] = argument.value
 			}
 		}
+		request['arg']['compenv'] = {}
+		request['arg']['compenv']['compenvqsys_name'] = "eclipse_test"
+		
 		console.log(request)
 		postAjaxPromise(request).then(function(response){
 			return response.text()

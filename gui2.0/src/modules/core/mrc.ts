@@ -86,27 +86,34 @@ export default class MRC{
 	}
 	
 	toJPEGwithBoxes(arg){
-		var json = toPixels(arg['stackfile'], arg['frame'])
-		var scale = Number(arg['width']) / json['nx'];
-		var svg = "<svg width='" + Math.floor(json['nx'] * scale) + "' height='" + Math.floor(json['ny'] * scale) + "'>"
+		//var json = toPixels(arg['stackfile'], arg['frame'])
+		var json = getHeader(arg['stackfile'])
+		//var scale = Number(arg['width']) / json['nx'];
+		var scale = 512 / json['nx'];
+		var padding = Math.floor((json['nx'] - json['ny']) * scale / 2)
+	//	var svg = "<svg width='" + Math.floor(json['nx'] * scale) + "' height='" + Math.floor(json['ny'] * scale) + "'>"
+		var svg = "<svg width='512' height='512'>"
 		var boxes = fs.readFileSync(arg['boxfile'], {encoding : 'utf8'})
 		var lines = boxes.split("\n")
 		for(var line of lines){
 			var elements = line.split((/[ , \t]+/))
 			if(elements.length > 2){
-				svg += "<rect style='fill:none;stroke:magenta;stroke-width:1' x='" + Number(elements[1]) * scale + "' y='" + Number(elements[2]) * scale + "' height='" + Number(elements[3]) * scale + "' width='" + Number(elements[3]) * scale + "'/>"
+				svg += "<rect style='fill:none;stroke:magenta;stroke-width:1' x='" + Number(elements[1]) * scale + "' y='" + ((Number(elements[2]) * scale) + padding) + "' height='" + Number(elements[3]) * scale + "' width='" + Number(elements[3]) * scale + "'/>"
 			}
 		}
 		svg += '</svg>'
 		
-		return sharp(json['pixbuf'], { raw : {
+	/*	return sharp(json['pixbuf'], { raw : {
 			width : json['nx'],
 			height : json['ny'],
 			channels : 1
-		}})
+		}})*/
+		return sharp(arg['thumb'])
+			.extract({left:511, top:0, width:512, height:512})
 			.overlayWith(Buffer.from(svg), {})
-			.resize(Number(arg['width']))
-			.jpeg()
+		//	.resize(Number(arg['width']))
+		//	.jpeg()
+			.sharpen()
 			.toBuffer()
 			.then(function (image) {
 				return({image : image})

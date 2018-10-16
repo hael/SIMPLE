@@ -5,6 +5,7 @@ class Viewer {
 	private popup
 	private	gauze
 	private plugin
+	private loaderworker
 	
 	constructor() {
 		this.popup = document.getElementById('browserpopup')
@@ -25,34 +26,34 @@ class Viewer {
 	
 	loadImages(element) {
 		var images = document.getElementById(element).getElementsByClassName('dynimg')
-		const workerblob = new Blob([`
-			var loadQueue = []
-			self.onmessage = (msg) => {
-				var sources = msg.data;
-				for(var source in sources){
-					loadQueue.push([sources[source], source])
-				}
-				processQueue();
-				processQueue();
-				processQueue();
-			};
-			
-			function processQueue(){
-				var queueElement = loadQueue[0]
-				loadQueue.shift()
-				return fetch("http://localhost:8090" + queueElement[0], {credentials: 'include'})
-					.then(() => {
-						postMessage({id : queueElement[1], source : queueElement[0]})
-						return
-					})
-					.then(() => {
-						processQueue()
-					})
-			};
-		`]);
+		var blobjs = `var loadQueue = []
+				self.onmessage = (msg) => {
+					var sources = msg.data;
+					for(var source in sources){
+						loadQueue.push([sources[source], source])
+					}
+					processQueue();
+					processQueue();
+					processQueue();
+				};
+				
+				function processQueue(){
+					var queueElement = loadQueue[0]
+					loadQueue.shift()
+					return fetch('` + window.location.origin  + `' + queueElement[0], {credentials: 'include'})
+						.then(() => {
+							postMessage({id : queueElement[1], source : queueElement[0]})
+							return
+						})
+						.then(() => {
+							processQueue()
+						})
+				};
+		`;
 		
-		const worker = new Worker(window.URL.createObjectURL(workerblob));
-		worker.onmessage = (event) =>{
+		const workerblob = new Blob([blobjs]);
+		this.loaderworker = new Worker(window.URL.createObjectURL(workerblob));
+		this.loaderworker.onmessage = (event) =>{
 			var image = <HTMLImageElement>images[Number(event.data['id'])]
 			if(image.dataset.path){
 				image.src = event.data['source']
@@ -71,9 +72,8 @@ class Viewer {
 			//	(<HTMLImageElement>image).style.background = "url(/image?stackfile=" + (<HTMLImageElement>image).dataset.sprite + "&frame=0&width=" + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spritewidth) + ") " + Number((<HTMLImageElement>image).clientWidth) * Number((<HTMLImageElement>image).dataset.spriteid)  + "px 0px"
 			}
 		}
-		
-		
-		worker.postMessage(sources)
+	
+		this.loaderworker.postMessage(sources)
 		
 	}
 	
@@ -97,6 +97,7 @@ class Viewer {
 	}
 	
 	scaleImages(element) {
+		this.loaderworker.terminate()
 		var scale = document.getElementById(element).querySelector('[id=scale]') as HTMLInputElement
 		var containers = document.getElementById(element).getElementsByClassName('dynimgcontainer') 
 		for (var container of containers){
@@ -187,7 +188,10 @@ class Viewer {
 		}
 	}
 
-	sortThumbnails() {
+	sortThumbnails(thumbcontainer) {
+		if (this.loaderworker != undefined){
+			this.loaderworker.terminate()
+		}
 		var attribute = (<HTMLInputElement>document.getElementById('sortattribute')).value
 		var order = (<HTMLInputElement>document.getElementById('sortorder')).value
 		var thumbnails = document.getElementsByClassName('thumbnail')
@@ -209,7 +213,7 @@ class Viewer {
 		for(var element of sorted){
 			container.appendChild(element[1])
 		}	
-		
+		this.loadImages(thumbcontainer)
 	}
 	
 	selectThumbnails() {
@@ -248,7 +252,11 @@ class Viewer {
 		
 	}
 	
-	toggleScrollMenu(parentname, menuname) {
+	toggleScrollMenu(parentname, menuname, element) {
+		for (var button of document.getElementsByClassName('scrollmenubutton')){
+			(<HTMLElement>button).style.backgroundColor = null;
+		}
+		
 		var menus = document.getElementById(parentname).getElementsByClassName('scrollmenu')
 		var selectedmenu = document.getElementById(parentname).querySelector("[id=" + menuname + "]") as HTMLElement
 		var current = selectedmenu.style.display
@@ -257,6 +265,9 @@ class Viewer {
 		}
 		if(current != "block"){
 			selectedmenu.style.display = "block"
+			element.style.backgroundColor = "#1A7DA4";
+		}else{
+			element.style.backgroundColor = null;
 		}
 	}
 	
