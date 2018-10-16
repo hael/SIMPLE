@@ -581,7 +581,7 @@ contains
         logical :: ddo_locres
         integer :: icls, find, find_plate
         ddo_locres = .false.
-        if( do_locres ) ddo_locres = do_locres
+        if( present(do_locres) ) ddo_locres = do_locres
         ! serial code for allocation/copy
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
