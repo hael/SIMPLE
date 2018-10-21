@@ -32,7 +32,7 @@ character(len=STDLEN)   :: benchfname
 contains
 
     !>  \brief  is the prime2D algorithm
-    subroutine cluster2D_exec( cline, which_iter, l_stream )
+    subroutine cluster2D_exec( cline, which_iter )
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d
@@ -44,7 +44,6 @@ contains
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         class(cmdline),        intent(inout) :: cline
         integer,               intent(in)    :: which_iter
-        logical,               intent(in)    :: l_stream
         integer, allocatable :: pinds(:)
         logical, allocatable :: ptcl_mask(:)
         !---> The below is to allow particle-dependent decision about which 2D strategy to use
@@ -57,9 +56,8 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        logical               :: cls_mask(params_glob%ncls)
-        real                  :: frac_srch_space, bfactor, score
-        integer               :: iptcl, i, fnr, cnt, updatecnt, prev_class
+        real                  :: frac_srch_space, bfactor
+        integer               :: iptcl, i, fnr, cnt, updatecnt
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
         l_partial_sums = .false.
         l_snhc         = .false.
@@ -73,28 +71,21 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
-        if( l_stream )then
-            ! streaming: no fractional update
-            l_frac_update  = .false.
+        if( params_glob%extr_iter == 1 )then
+            ! greedy start
             l_partial_sums = .false.
+            l_snhc         = .false.
+            l_frac_update  = .false.
+        else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
+            ! extremal opt without fractional update
+            l_partial_sums = .false.
+            l_snhc         = .true.
+            l_frac_update  = .false.
         else
-            ! default
-            if( params_glob%extr_iter == 1 )then
-                ! greedy start
-                l_partial_sums = .false.
-                l_snhc         = .false.
-                l_frac_update  = .false.
-            else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
-                ! extremal opt without fractional update
-                l_partial_sums = .false.
-                l_snhc         = .true.
-                l_frac_update  = .false.
-            else
-                ! optional fractional update, no snhc opt
-                l_partial_sums = params_glob%l_frac_update
-                l_snhc         = .false.
-                l_frac_update  = params_glob%l_frac_update
-            endif
+            ! optional fractional update, no snhc opt
+            l_partial_sums = params_glob%l_frac_update
+            l_snhc         = .false.
+            l_frac_update  = params_glob%l_frac_update
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -113,53 +104,18 @@ contains
 
         ! SNHC LOGICS
         if( l_snhc )then
-            if( l_stream )then
-                snhc_sz = 0.
-                call build_glob%spproj%os_cls2D%find_best_classes(params_glob%boxmatch,params_glob%smpd, cls_mask)
-                do iptcl=params_glob%fromp, params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if(updatecnt>=2 .and. updatecnt<=10)then
-                            prev_class = nint(build_glob%spproj_field%get(iptcl,'class'))
-                            if( cls_mask(prev_class) )then
-                                snhc_sz(iptcl) = max(0.,SNHC2D_INITFRAC-real(updatecnt-1)*.05)
-                            else
-                                snhc_sz(iptcl) = 0.
-                            endif
-                            if( .not.build_glob%spproj_field%isthere(iptcl,'rank') )call build_glob%spproj_field%set(iptcl,'rank',0.)
-                            if( cls_mask(prev_class) )then
-                                score = build_glob%spproj_field%get(iptcl,'rank')*real(updatecnt-1)
-                                score = min(1.,(score+1.)/real(updatecnt))
-                                call build_glob%spproj_field%set(iptcl,'rank', score)
-                            endif
-                        else
-                            snhc_sz(iptcl) = 0.
-                        endif
-                    endif
-                enddo
-            else
-                ! factorial decay, -2 because first step is always greedy
-                snhc_sz = min(SNHC2D_INITFRAC,&
-                    &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
-                write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
-                    &100.*(1.-snhc_sz(params_glob%fromp))
-            endif
+            ! factorial decay, -2 because first step is always greedy
+            snhc_sz = min(SNHC2D_INITFRAC,&
+                &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
+            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
+                &100.*(1.-snhc_sz(params_glob%fromp))
         else
             snhc_sz = 0.  ! full neighbourhood
         endif
 
-        ! streaming chunks
-        if( l_stream )then
-            if(.not.build_glob%spproj_field%isthere('chunk'))then
-                THROW_HARD('CHUNK field not found; simple_strategy2D_matcher :: cluster2d_exec')
-            endif
-            do iptcl=params_glob%fromp,params_glob%top
-                chunk_id(iptcl) = nint(build_glob%spproj_field%get(iptcl,'chunk'))
-            enddo
-            where( chunk_id<0 )chunk_id = 0
-        else
-            chunk_id = 1
-        endif
+        ! CHUNKS
+        ! TODO
+        chunk_id = 1
 
         ! B-FACTOR
         if( params_glob%cc_objfun == OBJFUN_RES )then
@@ -223,7 +179,7 @@ contains
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
         write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! array allocation for strategy2D
-        call prep_strategy2D( ptcl_mask, which_iter, l_stream )
+        call prep_strategy2D( ptcl_mask, which_iter )
         DebugPrint ' cluster2D_exec;     prep_strategy2D                        ',toc(t_init)
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))

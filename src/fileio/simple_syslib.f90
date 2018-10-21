@@ -245,7 +245,7 @@ contains
         character(len=*),  intent(in)  :: cmdline
         logical, optional, intent(in)  :: waitflag, suppress_errors
         integer, optional, intent(out) :: exitstat
-        character(len=:), allocatable  :: cmdstr, tmp
+        character(len=:), allocatable  :: cmdstr
         character(len=100) ::errmsg
         integer ::  cstat, exec_stat
         logical :: l_doprint, wwait, l_suppress_errors
@@ -401,7 +401,7 @@ contains
     subroutine syslib_copy_file(fname1, fname2, status)
         character(len=*),  intent(in)  :: fname1, fname2 !< input filenames
         integer, optional, intent(out) :: status
-        integer(dp),      parameter   :: MAXBUFSZ = 1e8  ! 100 MB max buffer size
+        integer(dp),      parameter   :: MAXBUFSZ = nint(1e8)  ! 100 MB max buffer size
         character(len=1), allocatable :: byte_buffer(:)
         integer(dp) :: sz, nchunks, leftover, bufsz, bytepos, in, out, ichunk
         integer     :: ioerr
@@ -515,7 +515,6 @@ contains
         logical, optional,    intent(in)    :: doprint
         logical :: l_print, currently_opened
         integer :: funit
-        character(len=STDLEN) :: io_message
         l_print = .false.
         currently_opened=.false.
 #if defined(GNU)
@@ -1307,7 +1306,6 @@ contains
     function simple_abspath_1 (infile, absolute_name,  check_exists) result(status)
         character(len=*),              intent(in)  :: infile
         character(len=:), allocatable, intent(out) :: absolute_name
-       ! character(len=*), optional,    intent(in)  :: errmsg
         logical,          optional,    intent(in)  :: check_exists
         type(c_ptr)                          :: cstring
         character(len=LINE_MAX_LEN), target  :: fstr
@@ -1327,8 +1325,6 @@ contains
         infilename_c = trim(infile)//achar(0)
         status       = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
         call syslib_c2fortran_string(outfilename_c)
-        if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
-        if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
@@ -1361,8 +1357,6 @@ contains
         infilename_c = trim(infile)//achar(0)
         status_here  = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
         call syslib_c2fortran_string(outfilename_c)
-        if(global_debug) print *, " out string "//trim(outfilename_c(1:lengthout))
-        if(global_debug) print *, " length outfile  ", lengthout, len_trim(outfilename_c)
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))

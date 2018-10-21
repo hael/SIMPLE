@@ -2364,7 +2364,7 @@ contains
             enddo
             ave  = sum(rfinds)/real(self%n)
             sdev = sqrt(sum((rfinds-ave)**2.)/real(self%n))
-            res_threshold = ave-0.5*sdev
+            res_threshold = ave-1.0*sdev
         else
             allocate(rfinds(self%n), source=huge(res_threshold))
             res_threshold = 0.
@@ -2374,7 +2374,7 @@ contains
             corrs_msk = corrs>0.0001
             ave  = sum(corrs,mask=corrs_msk) / real(count(corrs_msk))
             sdev = sqrt(sum((corrs-ave)**2., mask=corrs_msk)/real(count(corrs_msk)))
-            corr_threshold = ave-0.5*sdev
+            corr_threshold = ave-1.0*sdev
             deallocate(corrs_msk)
         else
             allocate(corrs(self%n), source=huge(corr_threshold))

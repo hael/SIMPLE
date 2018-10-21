@@ -6182,6 +6182,8 @@ contains
             l_mask = bin2logical(maskimg)
             corrs(k) = self1%real_corr(self2, l_mask)
         end do
+        call maskimg%kill
+        deallocate(l_mask)
     end subroutine frc_pspec
 
     !>  \brief  an image shifter to prepare for Fourier transformation
