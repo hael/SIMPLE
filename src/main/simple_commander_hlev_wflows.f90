@@ -91,10 +91,12 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            if( cline%get_carg('objfun').eq.'euclid' )then
-                call cline_cluster2D_stage1%set('objfun', 'euclid')
-            else
-                call cline_cluster2D_stage1%set('objfun', 'cc')
+            if( cline%defined('objfun') )then
+                if( cline%get_carg('objfun').eq.'euclid' )then
+                    ! nothing to do
+                else
+                    call cline_cluster2D_stage1%set('objfun', 'cc')
+                endif
             endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
@@ -148,8 +150,8 @@ contains
             !          learning for acceleration, objective function is resolution weighted
             !          cross-correlation with automtic fitting of B-factors
             cline_cluster2D_stage2 = cline
-            if( cline%get_carg('objfun').eq.'euclid' )then
-                call cline_cluster2D_stage2%set('objfun', 'euclid')
+            if( cline%defined('objfun') )then
+                ! nothing to do
             else
                 call cline_cluster2D_stage2%set('objfun', 'ccres')
             endif
