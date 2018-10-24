@@ -217,7 +217,7 @@ contains
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
         integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
-        integer,               parameter   :: WAIT_WATCHER        = 60    ! seconds prior to new stack detection
+        integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         integer,               parameter   :: MAX_NCLS_LIM        = 400   ! maximum # of classes
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         ! dev settings
@@ -244,8 +244,8 @@ contains
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
-        integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2)
-        logical :: do_autoscale, l_maxed, buffer_exists, do_reject, do_wait
+        integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter
+        logical :: do_autoscale, l_maxed, buffer_exists, do_reject, do_wait, first_import
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -270,6 +270,7 @@ contains
         buffer_exists     = .false.                                         ! whether the buffer exists
         l_maxed           = .false.                                         ! whether all chunks have been merged
         do_wait           = .true.
+        first_import      = .true.
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ncls_glob         = 0
         n_transfers       = 0
@@ -372,8 +373,11 @@ contains
         do_reject      = .true.
         last_injection = simple_gettime()
         origproj_time  = last_injection
-        do iter = 1,999
-            str_iter = int2str_pad(iter,3)
+        pool_iter      = 1
+        do iter = 1,9999
+            str_iter  = int2str_pad(iter,3)
+            pool_iter = min(999,pool_iter)
+            write(*,'(A,I3)')'>>> WAIT CYCLE ',iter
             if( is_timeout(simple_gettime()) )exit
             if( buffer_exists )then
                 ! ten iterations of the buffer
@@ -387,19 +391,23 @@ contains
                 do_reject     = .true.
                 ! cleanup
                 call buffer_proj%kill
+                !debug
                 !call simple_rmdir(buffer_dir)
+                !end debug
             endif
-            ! one iteration of the whole dataset
-            if( cline_cluster2D%get_carg('converged').ne.'yes' )then
+            ! one iteration of the whole dataset when not converged,
+            ! or after transfer from buffer or each 5 iterations
+            if( .not.cline_cluster2D%defined('converged') .or. mod(iter,5)==0 )then
                 call classify_pool
+                pool_iter = pool_iter+1
                 call pool_proj%read(PROJFILE_POOL)
-                ! rejection every 5 iterations
-                if( do_reject .and. mod(iter,5)==0 )then
+                first_import  = .false.
+                ! rejection after transfer from buffer and every 5 iterations
+                if( do_reject .or. mod(iter,5)==0 )then
                     call reject_from_pool
                     do_reject = .false.
                 endif
             endif
-            exit
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
@@ -576,7 +584,7 @@ contains
                             write_project = .true.
                             write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                             last_injection = simple_gettime()
-                            call cline_cluster2D%set('converged','no')
+                            call cline_cluster2D%delete('converged') ! reactivates pool classification
                         endif
                     endif
                     ! updates pool with selection
@@ -694,8 +702,8 @@ contains
                     endif
                 end select
                 call cline_cluster2D%set('stream',    'no')
-                call cline_cluster2D%set('startit',   real(iter))
-                call cline_cluster2D%set('maxits',    real(iter))
+                call cline_cluster2D%set('startit',   real(pool_iter))
+                call cline_cluster2D%set('maxits',    real(pool_iter))
                 call cline_cluster2D%set('ncls',      real(ncls_glob))
                 call cline_cluster2D%set('nparts',    real(nparts))
                 call cline_cluster2D%set('box',      real(box))
@@ -746,7 +754,7 @@ contains
                 do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
                     o = buffer_proj%os_ptcl2D%get_ori(iptcl)
                     ! greedy search
-                    call o%set('updatecnt', 1.)
+                    if(.not.first_import) call o%set('updatecnt', 1.)
                     ! updates class
                     if( l_maxed )then
                         icls = irnd_uni(ncls_glob)

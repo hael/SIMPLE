@@ -568,7 +568,6 @@ contains
         class(cmdline),                  intent(inout) :: cline
         character(len=32), parameter :: SYMSHTAB   = 'sym_3dshift'//trim(TXT_EXT)
         character(len=32), parameter :: SYMAXISTAB = 'sym_axis'//trim(TXT_EXT)
-        character(len=STDLEN)        :: fname_finished
         type(parameters)      :: params
         type(builder)         :: build
         type(ori)             :: symaxis

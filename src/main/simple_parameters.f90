@@ -36,7 +36,6 @@ type :: parameters
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
-    character(len=3)      :: dryrun='no'          !< no 3D search and reconstruction, for profiling only
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -486,7 +485,6 @@ contains
         call check_carg('dihedral',       self%dihedral)
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
-        call check_carg('dryrun',         self%dryrun)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)

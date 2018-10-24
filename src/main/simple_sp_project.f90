@@ -1153,23 +1153,36 @@ contains
         call self%os_out%set(ind, 'box',     real(box))
     end subroutine add_fsc2os_out
 
-    subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind )
+    subroutine add_vol2os_out( self, vol, smpd, state, which_imgkind, box )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: vol, which_imgkind
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
+        integer, optional, intent(in)    :: box
         character(len=:), allocatable :: vol_abspath, imgkind
         integer :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
-            case('vol_cavg','vol','vol_filt','vol_msk')
-                ! all good
+            case('vol_cavg','vol','vol_msk')
+                ! full path and existence check
+                vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
+                ! find_dimension of inputted volume
+                call find_ldim_nptcls(vol_abspath, ldim, ifoo)
+                if(present(box))then
+                    if( ldim(1) /= box )then
+                        THROW_HARD('invalid dimensions for volume: '//trim(vol)//'; add_vol2os_out 1')
+                    endif
+                endif
+            case('vol_filt')
+                if(.not.present(box))then
+                    THROW_HARD('Missing dimensions for volume: '//trim(vol)//'; add_vol2os_out 2')
+                else
+                    ldim = box
+                endif
+                ! full path and existence check
+                vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out')
         end select
-        ! full path and existence check
-        vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
-        ! find_dimension of inputted volume
-        call find_ldim_nptcls(vol_abspath, ldim, ifoo)
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then

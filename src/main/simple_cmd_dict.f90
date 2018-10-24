@@ -79,7 +79,6 @@ contains
         call chdict%push('dockmode',      'mode of docking(rot|shift|rotshift|refine){rotshift}')
         call chdict%push('doprint',       'whether to print(yes|no){no}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
-        call chdict%push('dryrun',        'dry 3D search')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')
         call chdict%push('e1',            'Euler 1 (in degrees){0}')
         call chdict%push('e2',            'Euler 2 (in degrees){0}')

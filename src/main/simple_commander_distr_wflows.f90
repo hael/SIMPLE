@@ -712,7 +712,7 @@ contains
         corr = -1.
         do
             iter = iter + 1
-            params%which_iter = iter            
+            params%which_iter = iter
             str_iter = int2str_pad(iter,3)
             write(*,'(A)')   '>>>'
             write(*,'(A,I6)')'>>> ITERATION ', iter
@@ -749,84 +749,94 @@ contains
             ! ASSEMBLE ALIGNMENT DOCS
             call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
             ! ASSEMBLE VOLUMES
-            if( params%eo.ne.'no' )then
-                call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
-            else
-                call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
-            endif
-            do state = 1,params%nstates
-                str_state = int2str_pad(state,2)
-                if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
-                call cline_volassemble%set( 'state', real(state) )
-                if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-                if( params%eo .ne. 'no' )then
-                    call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
-                    &'simple_script_state'//trim(str_state), volassemble_output)
+            select case(trim(params%refine))
+            case('eval')
+                ! nothing to do
+            case DEFAULT
+                if( params%eo.ne.'no' )then
+                    call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
                 else
-                    call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
-                    &'simple_script_state'//trim(str_state))
+                    call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
-            end do
-            call qsys_watcher(state_assemble_finished)
-            ! rename & add volumes to project & update job_descr
-            call build%spproj_field%get_pops(state_pops, 'state')
-            do state = 1,params%nstates
-                str_state = int2str_pad(state,2)
-                if( state_pops(state) == 0 )then
-                    ! cleanup for empty state
-                    vol = 'vol'//trim(int2str(state))
-                    call cline%delete( vol )
-                    call job_descr%delete( trim(vol) )
-                else
-                    ! rename state volume
-                    vol = trim(VOL_FBODY)//trim(str_state)//params%ext
-                    if( params%refine .eq. 'snhc' )then
-                        vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
-                    else
-                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
-                    endif
-                    iostat = simple_rename( trim(vol), trim(vol_iter) )
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    call cline_volassemble%set( 'state', real(state) )
+                    if( params%nstates>1 )call cline_volassemble%set('part', real(state))
                     if( params%eo .ne. 'no' )then
-                        vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                        vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                        vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
-                        vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
-                        iostat        = simple_rename( trim(vol_even), trim(vol_iter_even) )
-                        iostat        = simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
-                        fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                        optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
-                        ! add filters to os_out
-                        call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
-                        call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt')
+                        call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                        &'simple_script_state'//trim(str_state), volassemble_output)
+                    else
+                        call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                        &'simple_script_state'//trim(str_state))
                     endif
-                    ! add state volume to os_out
-                    call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol')
-                    ! updates cmdlines & job description
-                    vol = 'vol'//trim(int2str(state))
-                    call job_descr%set( trim(vol), trim(vol_iter) )
-                    call cline%set( trim(vol), trim(vol_iter) )
-                endif
-            enddo
-            ! volume mask, one for all states
-            if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
-            ! writes os_out
-            call build%spproj%write_segment_inside('out')
-            ! per state post-process
-            do state = 1,params%nstates
-                if( state_pops(state) == 0 )cycle
-                call cline_postprocess%set('state', real(state))
-                call cline_postprocess%set('lp', params%lp)
-                if( params%eo .ne. 'no' )call cline_postprocess%delete('lp')
-                call xpostprocess%execute(cline_postprocess)
-            enddo
+                end do
+                call qsys_watcher(state_assemble_finished)
+                ! rename & add volumes to project & update job_descr
+                call build%spproj_field%get_pops(state_pops, 'state')
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    if( state_pops(state) == 0 )then
+                        ! cleanup for empty state
+                        vol = 'vol'//trim(int2str(state))
+                        call cline%delete( vol )
+                        call job_descr%delete( trim(vol) )
+                    else
+                        ! rename state volume
+                        vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+                        if( params%refine .eq. 'snhc' )then
+                            vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
+                        else
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
+                        endif
+                        iostat = simple_rename( trim(vol), trim(vol_iter) )
+                        if( params%eo .ne. 'no' )then
+                            vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                            vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                            vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
+                            vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
+                            iostat        = simple_rename( trim(vol_even), trim(vol_iter_even) )
+                            iostat        = simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
+                            fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                            optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
+                            ! add filters to os_out
+                            call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
+                            call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
+                        endif
+                        ! add state volume to os_out
+                        call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol')
+                        ! updates cmdlines & job description
+                        vol = 'vol'//trim(int2str(state))
+                        call job_descr%set( trim(vol), trim(vol_iter) )
+                        call cline%set( trim(vol), trim(vol_iter) )
+                    endif
+                enddo
+                ! volume mask, one for all states
+                if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                ! writes os_out
+                call build%spproj%write_segment_inside('out')
+                ! per state post-process
+                do state = 1,params%nstates
+                    if( state_pops(state) == 0 )cycle
+                    call cline_postprocess%set('state', real(state))
+                    call cline_postprocess%set('lp', params%lp)
+                    if( params%eo .ne. 'no' )call cline_postprocess%delete('lp')
+                    call xpostprocess%execute(cline_postprocess)
+                enddo
+            end select
             ! CONVERGENCE
             converged = .false.
-            if( str_has_substr(params%refine,'cluster')) call cline_check_3Dconv%delete('update_res')
-            call xcheck_3Dconv%execute(cline_check_3Dconv)
-            if( iter >= params%startit + 2 )then
-                ! after a minimum of 2 iterations
-                if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
-            endif
+            select case(trim(params%refine))
+                case('eval')
+                    ! nothing to do
+                case DEFAULT
+                    if( str_has_substr(params%refine,'cluster')) call cline_check_3Dconv%delete('update_res')
+                    call xcheck_3Dconv%execute(cline_check_3Dconv)
+                    if( iter >= params%startit + 2 )then
+                        ! after a minimum of 2 iterations
+                        if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
+                    endif
+            end select
             if( iter >= params%maxits ) converged = .true.
             if( converged )then
                 ! safest to write the whole thing here as multiple fields updated

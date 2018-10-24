@@ -30,7 +30,7 @@ use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
 use simple_strategy3D_hard_multi,    only: strategy3D_hard_multi
 use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
-use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats
+use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,              only: convergence
 use simple_euclid_sigma,             only: euclid_sigma
 implicit none
@@ -85,10 +85,6 @@ contains
             t_tot  = t_init
         endif
 
-        if( params_glob%dryrun.eq.'yes' )then
-            ! TBD
-        endif
-
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
         if( params_glob%eo .ne. 'no' )then
             if( build_glob%spproj_field%get_nevenodd() == 0 ) &
@@ -102,7 +98,7 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single')
+        case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 npeaks = 1
             case('hard_single','hard_multi')
                 npeaks = 40
@@ -276,22 +272,29 @@ contains
                             &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
                     endif
                 end do
+            case('eval')
+                ! nothing to do
             case DEFAULT
                 THROW_HARD('refinement mode: '//trim(params_glob%refine)//' unsupported')
         end select
         ! construct search objects
-        do iptcl=params_glob%fromp,params_glob%top
-            if( ptcl_mask(iptcl) )then
-                ! search spec
-                strategy3Dspec%iptcl     =  iptcl
-                strategy3Dspec%szsn      =  params_glob%szsn
-                strategy3Dspec%extr_score_thresh = extr_score_thresh
-                if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
-                if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
-                ! search object
-                call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
-            endif
-        end do
+        select case(trim(params_glob%refine))
+            case('eval')
+                ! nothing to do
+            case DEFAULT
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        ! search spec
+                        strategy3Dspec%iptcl     =  iptcl
+                        strategy3Dspec%szsn      =  params_glob%szsn
+                        strategy3Dspec%extr_score_thresh = extr_score_thresh
+                        if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
+                        if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
+                        ! search object
+                        call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
+                    endif
+                end do
+        end select
         if( DEBUG_HERE ) print *, '*** strategy3D_matcher ***: search object construction, DONE'
         ! memoize CTF matrices
         if( trim(params_glob%oritype) .eq. 'ptcl3D' )then
@@ -304,18 +307,24 @@ contains
         call pftcc%memoize_ffts
 
         ! SEARCH
-        if( params_glob%dryrun.eq.'yes' )then
-            ! TBD
-        else
-            if( L_BENCH ) t_align = tic()
-            !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
-            do i=1,nptcls2update
-                iptcl = pinds(i)
-                ithr  = omp_get_thread_num() + 1
-                call strategy3Dsrch(iptcl)%ptr%srch(ithr)
-            end do
-            !$omp end parallel do
-        endif
+        select case(trim(params_glob%refine))
+            case('eval')
+                !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+                do i=1,nptcls2update
+                    iptcl = pinds(i)
+                    call eval_ptcl(pftcc, pinds(i), pinds(i))
+                end do
+                !$omp end parallel do
+            case DEFAULT
+                if( L_BENCH ) t_align = tic()
+                !$omp parallel do default(shared) private(i,iptcl,ithr) schedule(static) proc_bind(close)
+                do i=1,nptcls2update
+                    iptcl = pinds(i)
+                    ithr  = omp_get_thread_num() + 1
+                    call strategy3Dsrch(iptcl)%ptr%srch(ithr)
+                end do
+                !$omp end parallel do
+        end select
 
         if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
@@ -325,39 +334,49 @@ contains
         call calc_ptcl_stats
 
         ! O_PEAKS I/O & CONVERGENCE STATS
-        if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
-            ! write an empty one to be filled in
-            call write_empty_o_peaks_file(params_glob%o_peaks_file, [params_glob%fromp,params_glob%top])
-        endif
-        call open_o_peaks_io(trim(params_glob%o_peaks_file))
-        do iptcl=params_glob%fromp,params_glob%top
-            if( ptcl_mask(iptcl) )then
-                state = build_glob%spproj_field%get_state(iptcl)
-                call read_o_peak(o_peak_prev, [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                if( n_nozero == 0 )then
-                    ! there's nothing to compare, set overlap to zero
-                    call build_glob%spproj_field%set(iptcl, 'mi_proj', 0.)
-                else
-                    mi_proj = s3D%o_peaks(iptcl)%overlap(o_peak_prev, 'proj', state)
-                    call build_glob%spproj_field%set(iptcl, 'mi_proj', mi_proj)
+        select case(trim(params_glob%refine))
+            case('eval')
+                ! nothing to do
+            case DEFAULT
+                if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
+                    ! write an empty one to be filled in
+                    call write_empty_o_peaks_file(params_glob%o_peaks_file, [params_glob%fromp,params_glob%top])
                 endif
-                ! replace the peak on disc
-                call write_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl)
-            endif
-        end do
-        call close_o_peaks_io
+                call open_o_peaks_io(trim(params_glob%o_peaks_file))
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        state = build_glob%spproj_field%get_state(iptcl)
+                        call read_o_peak(o_peak_prev, [params_glob%fromp,params_glob%top], iptcl, n_nozero)
+                        if( n_nozero == 0 )then
+                            ! there's nothing to compare, set overlap to zero
+                            call build_glob%spproj_field%set(iptcl, 'mi_proj', 0.)
+                        else
+                            mi_proj = s3D%o_peaks(iptcl)%overlap(o_peak_prev, 'proj', state)
+                            call build_glob%spproj_field%set(iptcl, 'mi_proj', mi_proj)
+                        endif
+                        ! replace the peak on disc
+                        call write_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl)
+                    endif
+                end do
+                call close_o_peaks_io
+        end select
 
         ! clean
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
-        do iptcl = params_glob%fromp,params_glob%top
-            if( ptcl_mask(iptcl) )then
-                call strategy3Dsrch(iptcl)%ptr%kill
-                strategy3Dsrch(iptcl)%ptr => null()
-            endif
-        end do
+        select case(trim(params_glob%refine))
+            case('eval')
+                ! nothing to do
+            case DEFAULT
+                do iptcl = params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        call strategy3Dsrch(iptcl)%ptr%kill
+                        strategy3Dsrch(iptcl)%ptr => null()
+                    endif
+                end do
+        end select
         deallocate(strategy3Dsrch)
         if( L_BENCH ) rt_align = toc(t_align)
         if( allocated(symmat)   ) deallocate(symmat)
@@ -377,73 +396,78 @@ contains
         params_glob%oritab = params_glob%outfile
 
         ! VOLUMETRIC 3D RECONSTRUCTION
-        if( L_BENCH ) t_rec = tic()
-        ! make the gridding prepper
-        if( params_glob%eo .ne. 'no' )then
-            kbwin = build_glob%eorecvols(1)%get_kbwin()
-        else
-            kbwin = build_glob%recvols(1)%get_kbwin()
-        endif
-        ! init volumes
-        call preprecvols
-        ! prep rec imgs
-        allocate(rec_imgs(MAXIMGBATCHSZ))
-        do i=1,MAXIMGBATCHSZ
-            call rec_imgs(i)%new([params_glob%boxpd, params_glob%boxpd, 1], params_glob%smpd)
-        end do
-        ! prep batch imgs
-        call prepimgbatch( MAXIMGBATCHSZ)
-        ! make mask image
-        call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
-        ! gridding batch loop
-        do i_batch=1,nptcls2update,MAXIMGBATCHSZ
-            batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
-            call read_imgbatch( nptcls2update, pinds, batchlims)
-            !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
-            do i=batchlims(1),batchlims(2)
-                ibatch = i - batchlims(1) + 1
-                call build_glob%imgbatch(ibatch)%norm_subtr_backgr_pad_serial(mskimg, rec_imgs(ibatch))
-            end do
-            !$omp end parallel do
-            ! gridding
-            do i=batchlims(1),batchlims(2)
-                iptcl       = pinds(i)
-                ibatch      = i - batchlims(1) + 1
-                orientation = build_glob%spproj_field%get_ori(iptcl)
-                ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
-                if( orientation%isstatezero() ) cycle
-                if( eucl_sigma%sigma2_exists( iptcl ))then
-                    call eucl_sigma%set_do_divide(.true.)
-                    call eucl_sigma%set_divide_by(iptcl)
-                end if
-                select case(trim(params_glob%refine))
-                    case('clustersym')
-                        ! always C1 reconstruction
-                        call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
-                    case('hard_multi', 'hard_single')
-                        ! npeaks > 1 but only one is selected for reconstruction by probabilistic logic
-                        call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
-                    case DEFAULT
-                        call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
-                end select
-            end do
-        end do
-        ! normalise structure factors
-        if( params_glob%eo .ne. 'no' )then
-            call eonorm_struct_facts( cline, which_iter)
-        else
-            call norm_struct_facts( which_iter)
-        endif
-        ! destruct
-        call killrecvols()
-        do ibatch=1,MAXIMGBATCHSZ
-            call rec_imgs(ibatch)%kill
-            call match_imgs(ibatch)%kill_polarizer
-            call match_imgs(ibatch)%kill
-        end do
-        deallocate(rec_imgs, match_imgs, build_glob%imgbatch)
-        call mskimg%kill
-        if( L_BENCH ) rt_rec = toc(t_rec)
+        select case(trim(params_glob%refine))
+            case('eval')
+                ! no reconstruction
+            case DEFAULT
+                if( L_BENCH ) t_rec = tic()
+                ! make the gridding prepper
+                if( params_glob%eo .ne. 'no' )then
+                    kbwin = build_glob%eorecvols(1)%get_kbwin()
+                else
+                    kbwin = build_glob%recvols(1)%get_kbwin()
+                endif
+                ! init volumes
+                call preprecvols
+                ! prep rec imgs
+                allocate(rec_imgs(MAXIMGBATCHSZ))
+                do i=1,MAXIMGBATCHSZ
+                    call rec_imgs(i)%new([params_glob%boxpd, params_glob%boxpd, 1], params_glob%smpd)
+                end do
+                ! prep batch imgs
+                call prepimgbatch( MAXIMGBATCHSZ)
+                ! make mask image
+                call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
+                ! gridding batch loop
+                do i_batch=1,nptcls2update,MAXIMGBATCHSZ
+                    batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
+                    call read_imgbatch( nptcls2update, pinds, batchlims)
+                    !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
+                    do i=batchlims(1),batchlims(2)
+                        ibatch = i - batchlims(1) + 1
+                        call build_glob%imgbatch(ibatch)%norm_subtr_backgr_pad_serial(mskimg, rec_imgs(ibatch))
+                    end do
+                    !$omp end parallel do
+                    ! gridding
+                    do i=batchlims(1),batchlims(2)
+                        iptcl       = pinds(i)
+                        ibatch      = i - batchlims(1) + 1
+                        orientation = build_glob%spproj_field%get_ori(iptcl)
+                        ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
+                        if( orientation%isstatezero() ) cycle
+                        if( eucl_sigma%sigma2_exists( iptcl ))then
+                            call eucl_sigma%set_do_divide(.true.)
+                            call eucl_sigma%set_divide_by(iptcl)
+                        end if
+                        select case(trim(params_glob%refine))
+                            case('clustersym')
+                                ! always C1 reconstruction
+                                call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
+                            case('hard_multi', 'hard_single')
+                                ! npeaks > 1 but only one is selected for reconstruction by probabilistic logic
+                                call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
+                            case DEFAULT
+                                call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
+                        end select
+                    end do
+                end do
+                ! normalise structure factors
+                if( params_glob%eo .ne. 'no' )then
+                    call eonorm_struct_facts( cline, which_iter)
+                else
+                    call norm_struct_facts( which_iter)
+                endif
+                ! destruct
+                call killrecvols()
+                do ibatch=1,MAXIMGBATCHSZ
+                    call rec_imgs(ibatch)%kill
+                    call match_imgs(ibatch)%kill_polarizer
+                    call match_imgs(ibatch)%kill
+                end do
+                deallocate(rec_imgs, match_imgs, build_glob%imgbatch)
+                call mskimg%kill
+                if( L_BENCH ) rt_rec = toc(t_rec)
+        end select
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
