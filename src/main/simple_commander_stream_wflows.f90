@@ -716,7 +716,7 @@ contains
                 call xcluster2D_distr%execute(cline_cluster2D)
                 params_glob%nparts   = orig_nparts
                 params_glob%projfile = trim(orig_projfile)
-                refs_glob            = trim(CAVGS_ITER_FBODY)//trim(str_iter)//trim(params%ext)
+                refs_glob            = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
             end subroutine classify_pool
 
             !>  append the classified buffer to the pool
