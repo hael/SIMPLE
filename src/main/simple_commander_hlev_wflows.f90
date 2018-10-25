@@ -1278,7 +1278,7 @@ contains
         integer,          allocatable :: labels(:), final_labels(:), states(:), tmp_iarr(:)
         real     :: lp_cls3D, corr, prev_corr
         integer  :: rename_stat, ncls, nptcls, iptcl, istate, state2keep, nstates
-        logical  :: fall_over, cavgs_import
+        logical  :: fall_over, cavgs_import, has_corr
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -1422,7 +1422,8 @@ contains
             str_state = int2str_pad(istate,2)
             ! Generate labels
             if( istate == 1 )then
-                if( nstates==2 .and. os%isthere('corr') )then
+                has_corr = os%isthere('corr')
+                if( has_corr )then
                     call gen_labelling(os, nstates, 'squared')
                 else
                     call gen_labelling(os, nstates, 'uniform')
@@ -1497,11 +1498,9 @@ contains
                 if( final_labels(iptcl)<=istate ) cycle
                 prev_corr = os%get(iptcl,'corr')
                 corr      = work_proj%os_ptcl3D%get(iptcl,'corr')
-                if( corr > prev_corr )then
-                    call os%set(iptcl,'corr',corr)
-                else
-                    call work_proj%os_ptcl3D%set(iptcl,'corr',prev_corr)
-                endif
+                corr = max(corr, prev_corr)
+                call os%set(iptcl,'corr',corr)
+                call work_proj%os_ptcl3D%set(iptcl,'corr',corr)
             enddo
         enddo
         call os%kill
@@ -1524,10 +1523,13 @@ contains
             vol = 'vol_state'//str_state//params%ext
             call stash_rec
         enddo
-        call work_proj%kill
         ! updates original document
         call spproj%read(params%projfile)
-        call spproj%os_ptcl3D%set_all('state',real(final_labels))
+        do iptcl=1,nptcls
+            if( final_labels(iptcl) == 0 ) cycle
+            call spproj%os_ptcl3D%set(iptcl,'corr',work_proj%os_ptcl3D%get(iptcl,'corr'))
+            call spproj%os_ptcl3D%set(iptcl,'state',real(final_labels(iptcl)))
+        enddo
         ! debug
         call spproj%os_ptcl3D%write('states.txt')
         ! end debug
@@ -1541,6 +1543,7 @@ contains
         enddo
         call spproj%write
         ! cleanup
+        call work_proj%kill
         call spproj%kill
         deallocate(final_labels)
         call del_file(WORK_PROJFILE)

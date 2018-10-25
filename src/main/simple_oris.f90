@@ -2346,44 +2346,61 @@ contains
         endif
     end subroutine calc_bfac_srch
 
-    subroutine find_best_classes( self, box, smpd, cls_mask )
+    subroutine find_best_classes( self, box, smpd, cls_mask, ndev )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: box
-        real,        intent(in)    :: smpd
+        real,        intent(in)    :: smpd, ndev
         logical,     intent(inout) :: cls_mask(1:self%n)
         real,    allocatable :: rfinds(:), corrs(:)
-        logical, allocatable :: corrs_msk(:)
+        logical, allocatable :: msk(:)
         real    :: ave, sdev, res, res_threshold, corr_threshold
-        integer :: icls
-        cls_mask = .true.
+        integer :: icls, nincl
+        logical :: has_corr
+        allocate(msk(self%n), source=.true.)
+        if( self%isthere('pop') )then
+            do icls=1,self%n
+                if(self%get(icls,'pop')<0.5) msk(icls) = .false.
+            enddo
+        endif
+        has_corr = self%isthere('corr')
+        if( has_corr )then
+            do icls=1,self%n
+                if(self%get(icls,'corr') < 0.0001) msk(icls) = .false.
+            enddo
+        endif
+        nincl    = count(msk)
+        cls_mask = msk
+
         if( self%isthere('res') )then
             allocate(rfinds(self%n), source=0.)
             do icls=1,self%n
                 res = self%get(icls, 'res')
                 rfinds(icls) = real(calc_fourier_index(res,box,smpd))
             enddo
-            ave  = sum(rfinds)/real(self%n)
-            sdev = sqrt(sum((rfinds-ave)**2.)/real(self%n))
-            res_threshold = ave-1.0*sdev
+            ave  = sum(rfinds,mask=msk)/real(nincl)
+            sdev = sqrt(sum((rfinds-ave)**2.,mask=msk)/real(nincl))
+            res_threshold = ave-ndev*sdev
         else
             allocate(rfinds(self%n), source=huge(res_threshold))
             res_threshold = 0.
         endif
-        if( self%isthere('corr') )then
-            corrs     = self%get_all('corr')
-            corrs_msk = corrs>0.0001
-            ave  = sum(corrs,mask=corrs_msk) / real(count(corrs_msk))
-            sdev = sqrt(sum((corrs-ave)**2., mask=corrs_msk)/real(count(corrs_msk)))
-            corr_threshold = ave-1.0*sdev
-            deallocate(corrs_msk)
+        if( has_corr )then
+            corrs = self%get_all('corr')
+            ave   = sum(corrs,mask=msk) / real(nincl)
+            sdev  = sqrt(sum((corrs-ave)**2., mask=msk)/real(nincl))
+            corr_threshold = ave-ndev*sdev
         else
             allocate(corrs(self%n), source=huge(corr_threshold))
             corr_threshold = 0.
         endif
         do icls=1,self%n
-            if( rfinds(icls)<res_threshold  .and. corrs(icls)<corr_threshold) cls_mask(icls) = .false.
+            if( cls_mask(icls) )then
+                if(rfinds(icls)<res_threshold .and. corrs(icls)<corr_threshold)then
+                    cls_mask(icls) = .false.
+                endif
+            endif
         enddo
-        deallocate(rfinds,corrs)
+        deallocate(msk,rfinds,corrs)
     end subroutine find_best_classes
 
     !>  \brief  calculates hard weights based on ptcl ranking

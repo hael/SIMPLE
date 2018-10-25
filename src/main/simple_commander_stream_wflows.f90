@@ -218,7 +218,7 @@ contains
         class(cmdline),                          intent(inout) :: cline
         integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
-        integer,               parameter   :: MAX_NCLS_LIM        = 400   ! maximum # of classes
+        integer,               parameter   :: MAX_NCLS_LIM        = 300   ! maximum # of classes
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         ! dev settings
         ! integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
@@ -228,6 +228,7 @@ contains
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
+        character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
         type(parameters)                   :: params
         type(cluster2D_distr_commander)    :: xcluster2D_distr
         type(make_cavgs_distr_commander)   :: xmake_cavgs
@@ -245,7 +246,7 @@ contains
         integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
         integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter
-        logical :: do_autoscale, l_maxed, buffer_exists, do_reject, do_wait, first_import
+        logical :: do_autoscale, l_maxed, buffer_exists, do_wait
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -270,13 +271,13 @@ contains
         buffer_exists     = .false.                                         ! whether the buffer exists
         l_maxed           = .false.                                         ! whether all chunks have been merged
         do_wait           = .true.
-        first_import      = .true.
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ncls_glob         = 0
         n_transfers       = 0
-        ! for microscopes that don't work too good, automatically turned off after 12 hours
-        if(.not.cline%defined('time_inactive'))params%time_inactive = 12*3600
+        ! for microscopes that don't work too good, automatically turned off after 2 hours
+        if(.not.cline%defined('time_inactive'))params%time_inactive = 2*3600
         ! init command-lines
+        call cline%delete('lp') ! gold-standard refinement
         cline_cluster2D         = cline
         cline_cluster2D_buffer  = cline
         cline_make_cavgs        = cline
@@ -365,12 +366,11 @@ contains
                 call pool_proj%os_stk%set(iproj,'state',1.)
             enddo
         endif
-        call pool_proj%write !!
+        call pool_proj%write
         ! generates buffer project
         buffer_ptcls_range = 0
         call gen_buffer_from_pool
         ! MAIN LOOP
-        do_reject      = .true.
         last_injection = simple_gettime()
         origproj_time  = last_injection
         pool_iter      = 1
@@ -386,27 +386,20 @@ contains
                 call reject_from_buffer
                 ! book keeping
                 call transfer_buffer_to_pool
-                call pool_proj%write
                 buffer_exists = .false.
-                do_reject     = .true.
                 ! cleanup
                 call buffer_proj%kill
-                !debug
-                !call simple_rmdir(buffer_dir)
-                !end debug
+                call simple_rmdir(buffer_dir)
             endif
             ! one iteration of the whole dataset when not converged,
             ! or after transfer from buffer or each 5 iterations
             if( .not.cline_cluster2D%defined('converged') .or. mod(iter,5)==0 )then
+                call pool_proj%write
                 call classify_pool
                 pool_iter = pool_iter+1
                 call pool_proj%read(PROJFILE_POOL)
-                first_import  = .false.
-                ! rejection after transfer from buffer and every 5 iterations
-                if( do_reject .or. mod(iter,5)==0 )then
-                    call reject_from_pool
-                    do_reject = .false.
-                endif
+                ! rejection each 5 iterations
+                if( mod(iter,5)==0 ) call reject_from_pool
             endif
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
@@ -445,6 +438,9 @@ contains
         call orig_proj%write
         ! cleanup
         call qsys_cleanup
+        call simple_rmdir(SCALE_DIR)
+        call del_file(PROJFILE_POOL)
+        call del_file(PROJFILE_BUFFER)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
 
@@ -461,7 +457,7 @@ contains
                 ncls_here       = buffer_proj%os_cls2D%get_noris()
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_here), source=.true.)
-                call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask)
+                call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask, 2.)
                 if( any(cls_mask) )then
                     ncls_rejected = count(.not.cls_mask)
                     do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
@@ -506,8 +502,8 @@ contains
                 nptcls_rejected = 0
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_glob), source=.true.)
-                call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask)
-                if( any(cls_mask) )then
+                call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask, 2.)
+                if( .not.all(cls_mask) )then
                     ncls_rejected = count(.not.cls_mask)
                     do iptcl=1,pool_proj%os_ptcl2D%get_noris()
                         if( pool_proj%os_ptcl2D%get_state(iptcl) == 0 )cycle
@@ -692,14 +688,14 @@ contains
                 ! cluster2d execution
                 params_glob%projfile = trim(PROJFILE_POOL)
                 select case(trim(cline%get_carg('objfun')))
-                case('cc')
-                    call cline_cluster2D%set('objfun','cc')
-                case DEFAULT
-                    if( nptcls_sel>CCRES_NPTCLS_LIM )then
-                        call cline_cluster2D%set('objfun','ccres')
-                    else
+                    case('cc')
                         call cline_cluster2D%set('objfun','cc')
-                    endif
+                    case DEFAULT
+                        if( nptcls_sel>CCRES_NPTCLS_LIM )then
+                            call cline_cluster2D%set('objfun','ccres')
+                        else
+                            call cline_cluster2D%set('objfun','cc')
+                        endif
                 end select
                 call cline_cluster2D%set('stream',    'no')
                 call cline_cluster2D%set('startit',   real(pool_iter))
@@ -726,7 +722,7 @@ contains
                 type(ori)                     :: o
                 character(len=:), allocatable :: refs_buffer, stkout, stkin
                 integer,          allocatable :: cls_pop(:), cls_buffer_pop(:), pinds(:)
-                integer                       :: endit, iptcl, ind, state, ncls_here, icls, i, cnt
+                integer                       :: endit, iptcl, ind, state, ncls_here, icls, i, cnt, stat
                 real                          :: stkind
                 n_transfers = n_transfers+1
                 write(*,'(A,I4)')'>>> TRANSFER BUFFER PARTICLES CLASSIFICATION TO POOL #',n_transfers
@@ -754,7 +750,7 @@ contains
                 do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
                     o = buffer_proj%os_ptcl2D%get_ori(iptcl)
                     ! greedy search
-                    if(.not.first_import) call o%set('updatecnt', 1.)
+                    call o%set('updatecnt', 1.)
                     ! updates class
                     if( l_maxed )then
                         icls = irnd_uni(ncls_glob)
@@ -896,6 +892,8 @@ contains
                         call img%kill
                     endif
                 endif
+                ! preserve buffer
+                stat = rename(refs_buffer,'cavgs_buffer'//int2str_pad(n_transfers,4)//params%ext)
                 ! cleanup
                 call o%kill
                 if(allocated(cls_pop))deallocate(cls_pop)
@@ -1081,7 +1079,6 @@ contains
             subroutine scale_stks( stk_fnames )
                 character(len=*), allocatable, intent(inout) :: stk_fnames(:)
                 character(len=*), parameter :: SCALE_FILETAB = 'stkscale.txt'
-                character(len=*), parameter :: SCALE_DIR     = './scaled_stks/'
                 character(len=:), allocatable :: fname
                 type(qsys_env) :: qenv
                 type(cmdline)  :: cline_scale
