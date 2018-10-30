@@ -163,16 +163,11 @@ contains
         DebugPrint  '>>> STRATEGY3D_SRCH :: CONSTRUCTED NEW STRATEGY3D_SRCH OBJECT'
     end subroutine new
 
-    subroutine prep4srch( self, nnmat )
+    subroutine prep4srch( self )
         class(strategy3D_srch), intent(inout) :: self
-        integer, optional,      intent(in)    :: nnmat(self%nprojs,self%nnn_static)
         integer   :: i, istate
         type(ori) :: o_prev
         real      :: corrs(self%nrots), corr, bfac
-        if( self%neigh )then
-            if( .not. present(nnmat) )&
-            &THROW_HARD('need optional nnmat to be present for refine=neigh modes; prep4srch')
-        endif
         ! previous parameters
         o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
         self%prev_state = o_prev%get_state()                                ! state index
@@ -184,6 +179,8 @@ contains
         call prep_strategy3D_thread(self%ithr)
         ! search order
         if( self%neigh )then
+            if( .not. allocated(build_glob%nnmat) )&
+                &THROW_HARD('need optional nnmat to be present for refine=neigh modes; prep4srch')
             do istate = 0, self%nstates - 1
                 i = istate * self%nnn + 1
                 s3D%srch_order(self%ithr,i:i+self%nnn-1) = build_glob%nnmat(self%prev_proj,:) + istate*self%nprojs

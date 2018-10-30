@@ -45,13 +45,11 @@ contains
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
+            ! prep
+            call self%s%prep4srch
             if( self%s%neigh )then
-                ! initialize
-                call self%s%prep4srch(build_glob%nnmat)
                 nrefs = self%s%nnnrefs
             else
-                ! initialize
-                call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
             ! initialize, ctd
@@ -118,7 +116,7 @@ contains
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
-        ! generate convergence stats        
+        ! generate convergence stats
         call set_state_overlap(self%s, best_loc)
         ! set the distances before we update the orientation
         if( build_glob%spproj_field%isthere(self%s%iptcl,'dist') )then
@@ -139,7 +137,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.0)
         call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)        
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.0)
         DebugPrint   '>>> strategy3D_hard_multi :: EXECUTED oris_assign_hard_multi'
     end subroutine oris_assign_hard_multi

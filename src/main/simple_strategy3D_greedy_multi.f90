@@ -44,12 +44,11 @@ contains
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
+            ! prep
+            call self%s%prep4srch
             if( self%s%neigh )then
-                call self%s%prep4srch(build_glob%nnmat)
                 nrefs = self%s%nnnrefs
             else
-                ! initialize
-                call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
             ! search
@@ -150,7 +149,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(best_loc(1),'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    ang_spread)
         call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)        
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
         DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
     end subroutine oris_assign_greedy_multi

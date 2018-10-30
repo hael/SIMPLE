@@ -332,13 +332,15 @@ contains
 
     subroutine estimate_shift_increment( s, shwmean, shwstdev )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(out)   :: shwmean, shwstdev        
+        real,                   intent(out)   :: shwmean, shwstdev
         integer    :: ipeak, states(s3D%o_peaks(s%iptcl)%get_noris())
         integer    :: best_state, loc(1), npeaks, cnt, i
         real       :: ws(s3D%o_peaks(s%iptcl)%get_noris()), dev, dev_w, var, var_w
         real       :: shift_incrs(s3D%o_peaks(s%iptcl)%get_noris()), ws_here(s3D%o_peaks(s%iptcl)%get_noris())
         logical    :: multi_states
-        npeaks     = s3D%o_peaks(s%iptcl)%get_noris()
+        shwmean  = 0.
+        shwstdev = 0.
+        npeaks   = s3D%o_peaks(s%iptcl)%get_noris()
         if( npeaks < 1 ) return ! need at least 1
         ! gather weights & states
         do ipeak=1,npeaks
@@ -378,7 +380,6 @@ contains
             var_w = var_w + ws_here(i) * dev_w * dev_w
         end do
         var_w    = (var_w)/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
-        shwstdev = 0.
         if( var_w > 0. ) shwstdev = sqrt(var_w)
     end subroutine estimate_shift_increment
 

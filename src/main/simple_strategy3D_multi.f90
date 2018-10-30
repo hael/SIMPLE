@@ -44,12 +44,11 @@ contains
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             ! set thread index
             self%s%ithr = ithr
+            ! prep
+            call self%s%prep4srch
             if( self%s%neigh )then
-                call self%s%prep4srch(build_glob%nnmat)
                 nrefs = self%s%nnnrefs
             else
-                ! initialize
-                call self%s%prep4srch()
                 nrefs = self%s%nrefs
             endif
             ! initialize, ctd
