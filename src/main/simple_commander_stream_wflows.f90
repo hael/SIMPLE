@@ -230,7 +230,6 @@ contains
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
         type(parameters)                   :: params
-        type(cluster2D_distr_commander)    :: xcluster2D_distr
         type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer
         type(cmdline)                      :: cline_make_cavgs
@@ -645,6 +644,7 @@ contains
 
             !>  runs iterations of cluster2D for the buffer in a separate folder
             subroutine classify_buffer
+                type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
                 write(*,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
                 nptcls   = buffer_proj%get_nptcls()
@@ -680,6 +680,7 @@ contains
 
             !>  runs one iteration of cluster2D for the merged buffers in the cwd
             subroutine classify_pool
+                type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nptcls_sel, nparts
                 nptcls_sel = pool_proj%os_ptcl2D%get_noris(consider_state=.true.)
                 write(*,'(A,I8,A,I4,A)')'>>> 2D CLASSIFICATION OF POOL: ',nptcls_sel,' PARTICLES IN ',ncls_glob,' CLUSTERS'
