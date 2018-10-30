@@ -149,7 +149,7 @@ type :: parameters
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny)     !!!!!!!!ADDED BY CHIARAA
+    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny|bin)     !!!!!!!!ADDED BY CHIARAA
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -297,6 +297,7 @@ type :: parameters
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
+    real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: ctfreslim=8.
@@ -689,6 +690,7 @@ contains
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
         call check_rarg('bfacerr',        self%bfacerr)
+        call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
         call check_rarg('cs',             self%cs)
         call check_rarg('ctfreslim',      self%ctfreslim)

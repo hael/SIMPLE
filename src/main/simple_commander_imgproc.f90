@@ -125,10 +125,10 @@ contains
     subroutine exec_edge_detector( self, cline )
         use simple_image, only: image
         class(edge_detector_commander), intent(inout) :: self
-        class(cmdline),            intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        integer :: iptcl
+        integer          :: igrow, iptcl
         ! error check
         if( .not. cline%defined('stk') )then
             THROW_HARD('ERROR! stk needs to be present; simple_edge_detector')
@@ -160,68 +160,78 @@ contains
         if( cline%defined('thres') .and. params%detector .eq. 'canny') then
             THROW_HARD('canny needs double thresholding; simple_edge_detector')
         endif
-        if( cline%defined('thres_low') .and. params%detector .eq. 'sobel') then
-            THROW_HARD('sobel needs just one threshold; simple_edge_detector')
-        endif
-        if( cline%defined('thres_up') .and. params%detector .eq. 'sobel') then
-            THROW_HARD('sobel needs just one threshold; simple_edge_detector')
-        endif
+
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         do iptcl=1,params%nptcls
+            call build%img%new([params%box,params%box,1],params%smpd,wthreads=.false.)
             call build%img%read(params%stk, iptcl)
             call doit(build%img)
             call build%img%write(params%outstk, iptcl)
+            call build%img%kill
         end do
         ! end gracefully
         call simple_end('**** SIMPLE_EDGE_DETECTOR NORMAL STOP ****')
 
     contains
 
-        subroutine doit( img )
-            use simple_edge_detector
-            class(image), intent(inout) :: img
-            real, allocatable  :: grad(:,:,:)
-            real    :: thresh(1)
-            integer :: ldim(3)
-            select case ( params%detector )
-            case ('sobel')
-                if( cline%defined('thres') )then
-                    thresh(1) = params%thres
-                    call sobel(img,thresh)
-                else if( cline%defined('npix') )then
-                    ldim = img%get_ldim()
-                    call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
-                elseif( params%automatic .eq. 'yes') then
-                    call img%calc_gradient(grad)
-                    thresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
-                    call sobel(img,thresh)
-                    deallocate(grad)
-                else
-                    THROW_HARD('ERROR!; simple_edge_detector ')
-                endif
-            case ('canny')
-                if( cline%defined('npix')) then
-                    THROW_HARD('parameter npix non compatible with canny; simple_edge_detector')
-                endif
-                if( params%automatic .eq. 'no' ) then
-                    if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                        THROW_HARD('both upper and lower threshold needed; simple_edge_detector')
+            subroutine doit( img )
+                use simple_edge_detector
+                class(image), intent(inout) :: img
+                real, allocatable  :: grad(:,:,:)
+                real    :: thresh(1), ave, sdev, maxv, minv, lp(1)
+                integer :: ldim(3)
+                thresh = 0. !initialise
+                if(cline%defined('lp')) lp(1) = params%lp
+                select case ( params%detector )
+                case ('sobel')
+                    if( cline%defined('thres') )then
+                        thresh(1) = params%thres
+                        call sobel(img,thresh)
+                    else if( cline%defined('npix') )then
+                        ldim = img%get_ldim()
+                        call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
+                    elseif( params%automatic .eq. 'yes') then
+                        call img%scale_pixels([0.,255.])
+                        call img%calc_gradient(grad)
+                        call img%stats( ave, sdev, maxv, minv )
+                        thresh(1) = ave + 0.7*sdev
+                        print *, 'Selected threshold: ', thresh
+                        call sobel(img,thresh)
+                        deallocate(grad)
                     else
                         call canny(img,[params%thres_low, params%thres_up])
                     endif
-                elseif( params%automatic .eq. 'yes') then
-                    if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                        THROW_HARD('cannot define thresholds in automatic mode; simple_edge_detector')
+                    if( params%automatic .eq. 'no' ) then
+                        if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
+                            THROW_HARD('both upper and lower threshold needed; simple_edge_detector')
+                        else
+                            if( cline%defined('lp')) then
+                                call canny(img,[params%thres_low, params%thres_up],lp(1))
+                            else
+                                call canny(img,[params%thres_low, params%thres_up])
+                            endif
+                        endif
+                    elseif( params%automatic .eq. 'yes') then
+                        if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
+                            THROW_HARD('cannot define thresholds in automatic mode; simple_edge_detector')
+                        else
+                            if( cline%defined('lp')) then
+                                call canny(img,lp = lp(1))
+                            else
+                                call canny(img)
+                            endif
+                        endif
                     else
                         call canny(img)
                     endif
-                else
-                    THROW_HARD('ERROR!; simple_edge_detector ')
-                endif
-            case DEFAULT
-                THROW_HARD('Unknown detector argument; simple_edge_detector')
-            end select
-        end subroutine doit
+                case ('bin')
+                  call img%stats( ave, sdev, maxv, minv )
+                  call img%bin(ave+.7*sdev)
+                case DEFAULT
+                    THROW_HARD('Unknown detector argument; simple_edge_detector')
+               end select
+            end subroutine
+
     end subroutine exec_edge_detector
 
     !> for converting between SPIDER and MRC formats

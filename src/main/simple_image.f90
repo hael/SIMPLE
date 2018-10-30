@@ -200,9 +200,10 @@ contains
     procedure          :: bin2logical
     procedure          :: collage
     procedure, private :: enumerate_white_pixels
-    procedure, private :: enumerate_connected_comps  !!!!!!!!!ADDED BY CHIARA
+    procedure, private :: enumerate_connected_comps
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
+    procedure          :: is_cc_closed                !!!!!!!!!ADDED BY CHIARA
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc                     !!!!!!!!!ADDED BY CHIARA
     procedure          :: dilatation                  !!!!!!!!!ADDED BY CHIARA
@@ -3181,6 +3182,36 @@ contains
         enddo
     end function size_connected_comps
 
+    ! This function takes in input a connected component (cc) image and the label
+    ! and the label of one of its cc. It returns true if the cc is closed, false
+    ! otherwise.
+    function is_cc_closed(self,label) result(yes_no)
+        class(image), intent(inout) :: self
+        integer, intent(in) :: label
+        logical :: yes_no
+        integer :: i, j, n
+        real, allocatable :: neigh_8(:)
+        yes_no = .true.
+        if(any(abs(self%rmat-real(label)) < TINY)) then   !if the label is present
+            do i = 1, self%ldim(1)
+              do j = 1, self%ldim(2)
+                      if(abs(self%get([i,j,1])-real(label)) < TINY) then        !just pixels in the selected cc
+                          call self%calc_neigh_8([i,j,1],neigh_8)
+                          n = count(abs(neigh_8(:size(neigh_8)-1)-real(label)) < TINY) !do not consider the pixel itself
+                          if(n < 2) then
+                              yes_no = .false.
+                              return
+                          endif
+                      endif
+              enddo
+            enddo
+        else
+            write(*,*) 'label ', label, 'cc selected not present; is_cc_closed'
+            yes_no = .false.
+            return
+        endif
+    end function is_cc_closed
+
     ! This function takes in input a connected component image and modifies
     ! it in order to prepare the centering process.
     ! Notation: cc = connected component.
@@ -4793,7 +4824,7 @@ contains
     !!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
-    ! starting from any 4-neigh. It doesn't consider the pixel itself.
+    ! starting from any 8-neigh. It doesn't consider the pixel itself.
     subroutine calc_neigh_8_2(self, px, neigh_8)
         class(image),         intent(in)   :: self
         integer,              intent(in)   :: px(3)
@@ -5821,7 +5852,7 @@ contains
       if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
       if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
       &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
-        print *, 'The window is put of the bborder of the image!'
+        print *, 'The window is out of the border of the image!'
         return    !Do not throw error, just do not draw
       endif
       ! Edges of the window
@@ -7107,7 +7138,7 @@ contains
         integer           :: i, j, k
         if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
         if(self%ldim(3) /= 1) THROW_HARD("the image has to be 2D!")
-        theta = (/ (deg2rad(real(i)),i=1,360) /)
+        theta = (/ (deg2rad(real(i)),i=1,360,2) /)
         do k = 1,size(theta)
             do i = 1, self%ldim(1)
                 do j = 1,self%ldim(2)
@@ -7116,6 +7147,10 @@ contains
                     &  abs(real(j) - center(1) - axis(1)*cos(theta(k))*sin(deg2rad(rot))&
                                              & - axis(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
                         call self%set([i,j,1], 1.)
+                        call self%set([i+1,j+1,1], 0.)
+                        call self%set([i-1,j-1,1], 0.)
+                        call self%set([i+2,j+2,1], 0.)
+                        call self%set([i-2,j-2,1], 0.)
                     end if
                 enddo
             enddo

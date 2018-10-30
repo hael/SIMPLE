@@ -33,7 +33,6 @@ call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
 call set_box(BOX, box_shrunken)
 ! extracting with an offset of pixels
 call extract_boxes2file(OFFSET, 'extracted_windows.mrc', n_images, BOFFSET)
-print*, 'nimages ', n_images
 
 ! generate vectors for compression
 mskrad = (real(BOX)/2.)/SHRINK

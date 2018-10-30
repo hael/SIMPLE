@@ -91,43 +91,50 @@ contains
         deallocate(grad)
     end subroutine automatic_thresh_sobel
 
-    ! Canny edge detection.
-    ! Performs canny edge detection on img_in and saves the result in img_out.
-    ! PARAMETERS:
-    !     -) 'thresh': optional.
-    !                 If present the algorithm performs canny
-    !                 with thresh as double threshold. If thresh
-    !                 isn't present, then the double threshold for
-    !                 is automatically selected.
-    ! Note: 'sigma'.
-    !        It is meaningful when the threshold has to be automatically
-    !        selected. It determines 'how much' has to be detected.
-    !        It could be changed by the user, but in this version of
-    !        the algorithm it is fixed to its default value (= 0.33)
-    !        as suggested in the source.
-    ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
-    subroutine canny(img_in,thresh)
-        type(image),    intent(inout) :: img_in
-        real, optional, intent(in)    :: thresh(2)
-        real                       :: tthresh(2),  sigma, m
-        real, allocatable          :: grad(:,:,:), vector(:)
-        integer                    :: ldim(3)
-        if(present(thresh)) then
-            call canny_edge(img_in,thresh)
-            return
-        endif
-        sigma = 0.33
-        call img_in%scale_pixels([0.,255.])
-        ldim = img_in%get_ldim()
-        call img_in%calc_gradient(grad)
-        allocate(vector(size(grad)), source = pack(grad, .true.))
-        m = median(vector) !Use the gradient, the source talks about the image itself
-        !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-        tthresh(1) = max(0.   ,(1-sigma)*m) !lower
-        tthresh(2) = min(255., (1+sigma)*m) !upper
-        call canny_edge(img_in,tthresh)
-        deallocate(vector)
-    end subroutine canny
+  ! Canny edge detection.
+  ! Performs canny edge detection on img_in and saves the result in img_out.
+  ! PARAMETERS:
+  !     -) 'thresh': optional.
+  !                 If present the algorithm performs canny
+  !                 with thresh as double threshold. If thresh
+  !                 isn't present, then the double threshold for
+  !                 is automatically selected.
+  ! Note: 'sigma'.
+  !        It is meaningful when the threshold has to be automatically
+  !        selected. It determines 'how much' has to be detected.
+  !        It could be changed by the user, but in this version of
+  !        the algorithm it is fixed to its default value (= 0.33)
+  !        as suggested in the source.
+  ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
+  subroutine canny(img_in,thresh,lp)
+      type(image),    intent(inout) :: img_in
+      real, optional, intent(in)    :: thresh(2)
+      real, optional, intent(in)    :: lp(1)
+      real                       :: tthresh(2),  sigma, m
+      real, allocatable          :: grad(:,:,:), vector(:)
+      integer                    :: ldim(3)
+      ldim = img_in%get_ldim()
+      call img_in%scale_pixels([1.,real(ldim(1))*2.+1.])
+      ! call img_in%scale_pixels([0.,255.])  !to be coherent with the other case
+      if(present(thresh)) then
+         call canny_edge(img_in,thresh)
+         return
+      endif
+      sigma = 0.33
+      call img_in%calc_gradient(grad)
+      allocate(vector(size(grad)), source = pack(grad, .true.))
+      m = median(vector) !Use the gradient, the source talks about the image itself
+      !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+      tthresh(1) = max(0.   ,(1-sigma)*m) !lower
+      tthresh(2) = min(255., (1+sigma)*m) !upper
+      print *, 'Selected thresholds: ', tthresh
+      if (present(lp)) then
+          call canny_edge(img_in,tthresh,lp)
+      else
+          call canny_edge(img_in,tthresh)
+      endif
+      deallocate(vector)
+  end subroutine canny
 
     ! NON_MAX_SUPPRESSION
     ! using the estimates of the Gx and Gy image gradients and the edge direction angle
@@ -210,21 +217,27 @@ contains
         deallocate(tmp)
     end subroutine double_thresh
 
-    ! Canny routine for edge detection, in its classical verison.
-    ! It requires a double threshold.
-    subroutine canny_edge(img_in, thresh)
-        type(image), intent(inout) :: img_in                              !input and output image
-        real,        intent(in)    :: thresh(2)                                     !low and high thresholds
+  ! Canny routine for edge detection, in its classical verison.
+  ! It requires a double threshold.
+  subroutine canny_edge(img_in, thresh, lp)
+        type(image),    intent(inout) :: img_in     !input and output image
+        real,           intent(in)    :: thresh(2)  !low and high thresholds
+        real, optional, intent(in)    :: lp(1)        !lp filtering
         type(image) :: Gr !gradient image
         integer     :: ldim(3), s(3), r(3), k, i, j                        !just for implementation
         real,    allocatable :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)   !derivates, gradient
-        integer, allocatable :: neigh_8(:,:,:)                                      !8-neighborhoods of a pixel
+        integer, allocatable :: neigh_8(:,:,:) !8-neighborhoods of a pixel
+        real :: smpd, llp(1)
         ldim = img_in%get_ldim()
+        smpd = img_in%get_smpd()
         if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
-        call      Gr%new(ldim,1.)
+        call Gr%new(ldim,smpd)
         !STEP 1: SMOOTHING
-        !Apply a Gaussian filter to reduce noise
-
+        !Apply a lp to reduce noise (traditionally it would be Gaussian Filter)
+        llp = 10.
+        if(present(lp)) llp = lp
+        call img_in%bp(0.,llp(1))   !threshold selected in order to facilitate particle picking
+        call img_in%ifft()
         !STEP 2: FINDING GRADIENTS
         allocate(dir_mat(ldim(1),ldim(2),1), source = 0.)
         call img_in%calc_gradient(grad, Dc, Dr)

@@ -1,22 +1,23 @@
-program simple_test_chiara_pick_edge
+program simple_test_chiara_try1
   include 'simple_lib.f08'
-  use simple_picker_chiara
+  use simple_picker_chiara, only : extract_particles_NOmasscen
   use simple_micops
-  use simple_image
+  use simple_image,         only : image
   use simple_stackops
   use simple_math
-  use simple_edge_detector, only: automatic_thresh_sobel
+  use simple_edge_detector, only: sobel, canny
   use simple_parameters,    only: parameters
   use simple_cmdline,       only: cmdline
   type(cmdline)      :: cline
   type(parameters)   :: params
-  type(image)        :: mic_shrunken, mic_bin, mic_lp, mic_copy, mic_closed
-  type(image)        :: imgcc, imgwin, img_thresh
-  integer            :: ldim_shrunken(3), box_shrunken,  xind, yind, min_sz, max_sz
-  real               :: part_radius
+  type(image)        :: mic_shrunken, mic_lp, mic_copy
+  type(image)        :: imgcc, imgwin
+  integer            :: ldim_shrunken(3), box_shrunken, min_sz, max_sz
+  real               :: smpd_shrunken, part_radius
   real,    parameter :: SHRINK = 4.
-  real               :: smpd_shrunken, lp, sobel_thresh(1), ave, sdev, maxv, minv
-  logical            :: outside, discard, picked
+  real               :: lp, thresh(1), ave, sdev, maxv, minv
+
+
   ! In this new approach I don't extract any window, I just work directly on the entire
   ! micrograph using edge detection.
 
@@ -29,18 +30,19 @@ program simple_test_chiara_pick_edge
 
   ! As a test use
   !      fname = '/home/lenovoc30/Desktop/MassCenter/NegativeStaining/16.06.34 CCD Acquire_0000_1.mrc'
-  !      smpd  = 1.
+  !      smpd        = 1.
   !      part_radius = 15.
-  !      part_concentration = 0.2
+  !      detector    = bin
 
-  if( command_argument_count() < 3 )then
-      write(*,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)]'
+  if( command_argument_count() < 4 )then
+      write(*,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)] [detector= <binarisation method> (sobel|canny|bin)]'
       stop
   endif
   call cline%parse_oldschool
   call cline%checkvar('fname', 1)
   call cline%checkvar('smpd', 2)
   call cline%checkvar('part_radius', 3)
+  call cline%checkvar('detector', 4)
   !Set defaults
   call params%new(cline)  !<read cline parameters
   ! 0) Reading and saving original micrograph
@@ -48,11 +50,11 @@ program simple_test_chiara_pick_edge
   ! 1) Shrink and high pass filtering
   part_radius = params%part_radius
   call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-  call set_box(int(SHRINK*(4*part_radius+10)), box_shrunken)
+  call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
   call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
   call mic_shrunken%read('shrunken_hpassfiltered.mrc')
   ! 2) Low pass filtering
-  lp = 35.
+  lp = 40. !35
   call mic_copy%copy(mic_shrunken) !work on a copy not to modify the original mic
   call mic_copy%bp(0.,lp)
   call mic_copy%ifft()
@@ -60,33 +62,50 @@ program simple_test_chiara_pick_edge
   call mic_lp%bp(0.,20.)
   call mic_lp%ifft()
   call mic_lp%write('LowPassFiltered.mrc')
+  ! 3) Edge Detection
+  call mic_copy%stats( ave, sdev, maxv, minv )
+  if(params%detector .eq. 'sobel') then
+    thresh(1) = ave+.5*sdev  !0.7
+    call sobel(mic_copy,thresh)
+  else if (params%detector .eq. 'bin') then
+    call mic_copy%bin(ave+.8*sdev) !(ave+.7*sdev)
+  else if (params%detector .eq. 'canny') then
+    call canny(mic_copy)
+  endif
+  call mic_copy%write('Bin1.mrc')
+  call mic_copy%real_space_filter(5,'median') !median filtering allows easy calculation of cc
+  call mic_copy%write('Bin1Median.mrc')
 
-  !
-  ! ! 3) Edge Detection
-  ! call mic_copy%stats( ave, sdev, maxv, minv )
-  ! call mic_copy%bin(ave+.7*sdev)
-  ! call mic_copy%write('Bin1.mrc')
-  ! call mic_copy%real_space_filter(4, 'median') !median filtering allows easy calculation of cc
-  ! call mic_copy%write('Bin1Median.mrc')
-  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! ! call mic_bin%morpho_opening()
-  ! ! call mic_bin%morpho_closing()
-  ! ! call mic_bin%write('MorphoOpenedClosed.mrc')
-  ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! ! 5) Connected components (cc) identification
-  ! call imgcc%new(ldim_shrunken, smpd_shrunken)
-  ! call mic_copy%find_connected_comps(imgcc)
-  ! call imgcc%write('ConnectedComponents.mrc')
-  ! ! 6) cc filtering
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! call mic_copy%morpho_opening()
+  ! call mic_copy%morpho_closing()
+  ! call mic_copy%write('MorphoOpenedClosed.mrc')
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-
+  ! 5) Connected components (cc) identification
   call imgcc%new(ldim_shrunken, smpd_shrunken)
-  call imgcc%read('/home/lenovoc30/Desktop/MassCenter/try1/ConnectedComponents.mrc')
-
-  !min_sz =  int((15/100)*3*part_radius**2)   !15% of the size of the particle (suppose it's circular)
-  min_sz = 10*int(part_radius+5)
-  max_sz = 70*int(part_radius)
+  call mic_copy%find_connected_comps(imgcc)
+  call imgcc%write('ConnectedComponents.mrc')
+  ! 6) cc filtering
+  min_sz = 20*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
+  max_sz = 150*int(part_radius)
   call imgcc%elim_cc([min_sz,max_sz])
   call imgcc%write('ConnectedComponentsElimin.mrc')
   call extract_particles_NOmasscen(mic_lp, imgcc, int(part_radius))
-end program simple_test_chiara_pick_edge
+  open(unit = 17, file = "PickerInfo.txt")
+  write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
+  write(unit = 17, fmt = '(a)') ''
+  write(unit = 17, fmt = "(a,f0.0)")  'Mic Shrunken by factor ', SHRINK
+  write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dim after shrink ', ldim_shrunken
+  write(unit = 17, fmt = "(a,f0.0)")  'Smpd after shrink ', smpd_shrunken
+  write(unit = 17, fmt = "(a,i0)")  'Hp box ', int(SHRINK*( 4*part_radius+10 ))
+  write(unit = 17, fmt = "(a,f0.0)")  'Lp  ', lp
+  write(unit = 17, fmt = "(a,i0,tr1, i0)")  'Connected Components size filtering  ', min_sz, max_sz
+  write(unit = 17, fmt = '(a)') ''
+  write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
+  write(unit = 17, fmt = '(a)') ''
+  write(unit = 17, fmt = "(a,tr1,f0.0)")  'smpd ', params%smpd
+  write(unit = 17, fmt = "(a,tr1,f0.0)")  'part_radius  ', params%part_radius
+  write(unit = 17, fmt = "(a,a)")  'detector  ', params%detector
+  close(17, status = "keep")
+end program simple_test_chiara_try1

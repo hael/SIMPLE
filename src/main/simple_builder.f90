@@ -227,7 +227,7 @@ contains
             ! boxmatch-sized ones
             call self%img_tmp%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             call self%img_msk%new([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
-            call self%mskimg%new([params%boxmatch, params%boxmatch, 1],params%smpd,  wthreads=.false.)
+            call self%mskimg%new ([params%boxmatch,params%boxmatch,1],params%smpd,   wthreads=.false.)
             ! boxpd-sized ones
             call self%img_pad%new([params%boxpd,params%boxpd,1],params%smpd)
             if( ddo3d )then

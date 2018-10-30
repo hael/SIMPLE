@@ -26,6 +26,7 @@ type(ctf_estimate_commander)          :: xctf_estimate
 type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
 type(pick_extract_commander)          :: xpick_extract
 type(pick_commander)                  :: xpick
+type(pick_commander_chiara)           :: xpickchiara
 
 ! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)           :: xmake_cavgs
@@ -149,6 +150,7 @@ select case(prg)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate', 30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         call xpreprocess%execute(cline)
     case( 'motion_correct' )
@@ -176,6 +178,7 @@ select case(prg)
         if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         call xmotion_correct%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         ! for generating power spectra and thumbnails
@@ -252,6 +255,7 @@ select case(prg)
         if( .not. cline%defined('pscpecsz')        ) call cline%set('pscpecsz',       512.)
         if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
+        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         call xpreprocess%execute(cline)
     case( 'pick_extract' )
         ! for template-based particle picking
@@ -279,6 +283,19 @@ select case(prg)
         keys_optional(4) = 'ndev'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         call xpick%execute(cline)
+    case ('pick_chiara')
+      ! for image segmentation-based particle picking
+      keys_required(1) = 'fname' !micrograph
+      keys_required(2) = 'smpd'
+      keys_required(3) = 'part_radius'
+      keys_required(4) = 'detector'
+      ! set optional keys
+       keys_optional(1) = 'lp'
+       keys_optional(2) = 'winsz'
+       keys_optional(3) = 'thres'
+       keys_optional(4) = 'part_concentration'
+      call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
+      call xpickchiara%execute(cline)
 
     ! CLUSTER2D PROGRAMS
 
@@ -624,20 +641,21 @@ select case(prg)
         keys_optional(8)  = 'neg'
         keys_optional(9)  = 'outvol'
         keys_optional(10) = 'outstk'
-        keys_optional(11) = 'ndev'
-        call cline%parse_oldschool(keys_optional=keys_optional(:11))
+        call cline%parse_oldschool(keys_optional=keys_optional(:10))
         call xbinarise%execute(cline)
     case('edge_detect')
-        keys_required(1) = 'detector'
-        keys_required(2) = 'stk'
-        keys_required(3) = 'automatic'
-        keys_optional(1) = 'outstk'
-        keys_optional(2) = 'thres'
-        keys_optional(3) = 'npix'
-        keys_optional(4) = 'thres_low'
-        keys_optional(5) = 'thres_up'
-        call cline%parse_oldschool(keys_required(:3),keys_optional(:5))
-        call xdetector%execute(cline)
+         keys_required(1) = 'detector'
+         keys_required(2) = 'stk'
+         keys_required(3) = 'automatic'
+         keys_required(4) = 'smpd'
+         keys_optional(1) = 'outstk'
+         keys_optional(2) = 'thres'
+         keys_optional(3) = 'bw_ratio'
+         keys_optional(4) = 'thres_low'
+         keys_optional(5) = 'thres_up'
+         keys_optional(6) = 'lp'
+         call cline%parse_oldschool(keys_required(:4),keys_optional(:6))
+         call xdetector%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
 
