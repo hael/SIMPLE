@@ -191,14 +191,14 @@ contains
         class(sp_project), intent(inout) :: self
         class(cmdline),    intent(in)    :: cline
         character(len=STDLEN)            :: env_var
-        character(len=:), allocatable    :: projname
+        character(len=:), allocatable    :: projname, qsnam
         integer :: iostat
         if( self%compenv%get_noris() == 1 )then
             ! no need to construct field
         else
             call self%compenv%new(1)
         endif
-        ! compenv has to be filled as strings as it is used as a string only dictionnary
+        ! compenv has to be filled as strings as it is used as a string only dictionary
         ! get from environment
         iostat  = simple_getenv('SIMPLE_PATH', env_var)
         if( iostat /= 0 )then
@@ -208,13 +208,15 @@ contains
         else
             call self%compenv%set(1, 'simple_path', trim(env_var))
         endif
-        iostat  = simple_getenv('SIMPLE_QSYS', env_var)
-        if( iostat /= 0 )then
-            THROW_HARD('SIMPLE_QSYS is not defined in your environment')
+        if( cline%defined('qsys_name') )then
+            qsnam = cline%get_carg('qsys_name')
+            call self%compenv%set(1, 'qsys_name', trim(qsnam))
+            iostat = 0
         else
-            iostat  = simple_getenv('SIMPLE_QSYS', env_var)
-            call self%compenv%set(1, 'qsys_name', trim(env_var))
+            iostat = simple_getenv('SIMPLE_QSYS', env_var)
+            if( iostat == 0 ) call self%compenv%set(1, 'qsys_name', trim(env_var))
         endif
+        if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment')
         iostat = simple_getenv('SIMPLE_EMAIL', env_var)
         if( iostat/=0 ) env_var = 'my.name@uni.edu'
         ! get from command line

@@ -112,8 +112,6 @@ print MODULE  "    self%args(".$j.") = 'simple_path'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'time_per_image'\n";
 $j++;
-print MODULE  "    self%args(".$j.") = 'qsys_name'\n";
-$j++;
 print MODULE  "    self%args(".$j.") = 'user_account'\n";
 $j++;
 print MODULE  "    self%args(".$j.") = 'user_email'\n";

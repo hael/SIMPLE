@@ -189,6 +189,7 @@ type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projname
 type(simple_input_param) :: pspecsz
+type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
@@ -626,6 +627,7 @@ contains
         call set_param(eo,            'eo',            'binary', 'Gold-standard FSC for filtering and resolution estimation', 'Gold-standard FSC for &
         &filtering and resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(job_memory_per_task, 'job_memory_per_task','str', 'Memory per part', 'Memory in MB per part in distributed execution{16000}', 'MB per part{16000}', .false., 16000.)
+        call set_param(qsys_name,     'qsys_name',     'multi',  'Queue system kind', 'Queue system kind(local|slurm|pbs)', '(local|slurm|pbs)', .false., 'local')
         call set_param(qsys_partition,'qsys_partition','str',    'Name of SLURM/PBS partition', 'Name of target partition of distributed computer system (SLURM/PBS)', 'give part name', .false., '')
         call set_param(qsys_qos,      'qsys_qos',      'str',    'Schedule priority', 'Job scheduling priority (SLURM/PBS)', 'give priority', .false., '')
         call set_param(qsys_reservation, 'qsys_reservation', 'str', 'Name of reserved partition', 'Name of reserved target partition of distributed computer system (SLURM/PBS)', 'give yourpart', .false., '')
@@ -1904,7 +1906,7 @@ contains
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
         &meta-data I/O required for execution of SIMPLE',& ! descr_longg
         &'simple_exec',&                     ! executable
-        &0, 2, 0, 0, 0, 0, 7, .false.)       ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1927,6 +1929,7 @@ contains
         call new_project%set_input('comp_ctrls', 5, qsys_qos)
         call new_project%set_input('comp_ctrls', 6, qsys_reservation)
         call new_project%set_input('comp_ctrls', 7, job_memory_per_task)
+        call new_project%set_input('comp_ctrls', 8, qsys_name)
     end subroutine new_new_project
 
     subroutine new_pick
@@ -3011,7 +3014,7 @@ contains
         &'Update an existing project',&      ! descr_short
         &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
         &'simple_exec',&                     ! executable
-        &0, 2, 0, 0, 0, 0, 7, .false.)       ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3034,6 +3037,7 @@ contains
         call update_project%set_input('comp_ctrls', 5, qsys_qos)
         call update_project%set_input('comp_ctrls', 6, qsys_reservation)
         call update_project%set_input('comp_ctrls', 7, job_memory_per_task)
+        call update_project%set_input('comp_ctrls', 8, qsys_name)
     end subroutine new_update_project
 
     subroutine new_vizoris
