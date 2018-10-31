@@ -228,6 +228,7 @@ contains
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
+        character(len=STDLEN), parameter   :: PROJFILE2D          = 'cluster2D.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
         type(parameters)                   :: params
         type(make_cavgs_distr_commander)   :: xmake_cavgs
@@ -283,8 +284,8 @@ contains
         call cline_cluster2D%set('prg',       'cluster2D')
         call cline_cluster2D%set('autoscale', 'no')
         call cline_cluster2D%set('extr_iter', 100.) ! variable neighbourhood size de-activated
-        call cline_cluster2D%set('refine',    'snhc')
         call cline_cluster2D%set('trs',       MINSHIFT)
+        call cline_cluster2D%set('stream',    'no')
         call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D_buffer%set('prg',       'cluster2D')
@@ -393,12 +394,13 @@ contains
             ! one iteration of the whole dataset when not converged,
             ! or after transfer from buffer or each 5 iterations
             if( .not.cline_cluster2D%defined('converged') .or. mod(iter,5)==0 )then
-                call pool_proj%write
                 call classify_pool
                 pool_iter = pool_iter+1
-                call pool_proj%read(PROJFILE_POOL)
                 ! rejection each 5 iterations
-                if( mod(iter,5)==0 ) call reject_from_pool
+                if( mod(iter,5)==0 )then
+                    call reject_from_pool
+                    call pool_proj%write
+                endif
             endif
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
@@ -440,6 +442,7 @@ contains
         call simple_rmdir(SCALE_DIR)
         call del_file(PROJFILE_POOL)
         call del_file(PROJFILE_BUFFER)
+        call del_file(PROJFILE2D)
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
 
@@ -488,7 +491,7 @@ contains
                     call img%kill
                     !!! END DEBUG
                     deallocate(cls_mask)
-                    write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                    write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                 endif
             end subroutine reject_from_buffer
 
@@ -532,17 +535,15 @@ contains
                         call img%kill
                         !!! END DEBUG
                         deallocate(cls_mask)
-                        write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                        write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                     endif
                 endif
             end subroutine reject_from_pool
 
             subroutine append_new_mics
                 integer :: n_spprojs_prev, n_new_spprojs, cnt, iptcl, n_new_ptcls
-                logical :: write_project
                 if( .not.is_file_open(spproj_list_fname) )then
                     do_wait        = .false.
-                    write_project  = .false.
                     n_spprojs_prev = n_spprojs
                     n_spprojs      = nlines(spproj_list_fname)
                     n_new_spprojs  = n_spprojs - n_spprojs_prev
@@ -576,7 +577,6 @@ contains
                             do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
                                 call pool_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
                             enddo
-                            write_project = .true.
                             write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                             last_injection = simple_gettime()
                             call cline_cluster2D%delete('converged') ! reactivates pool classification
@@ -584,8 +584,6 @@ contains
                     endif
                     ! updates pool with selection
                     if( file_exists(MICS_SELECTION_FILE) ) call flag_selection
-                    ! writes project
-                    if( write_project ) call pool_proj%write
                 else
                     do_wait = .true.
                 endif
@@ -647,7 +645,7 @@ contains
                 type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
                 write(*,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
-                nptcls   = buffer_proj%get_nptcls()
+                nptcls = buffer_proj%get_nptcls()
                 nparts = calc_nparts(buffer_proj, nptcls)
                 call buffer_proj%kill
                 ! cluster2d execution
@@ -680,12 +678,37 @@ contains
 
             !>  runs one iteration of cluster2D for the merged buffers in the cwd
             subroutine classify_pool
-                type(cluster2D_distr_commander) :: xcluster2D_distr
-                integer :: nptcls, nptcls_sel, nparts
-                nptcls_sel = pool_proj%os_ptcl2D%get_noris(consider_state=.true.)
+                type(cluster2D_distr_commander)  :: xcluster2D_distr
+                type(sp_project)                 :: spproj2D
+                integer :: iptcl, nptcls, nptcls_sel, istk, nstks, nptcls_glob
+                ! transfer from pool
+                call cline_cluster2D%set('projfile',  trim(PROJFILE2D))
+                call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE2D),trim('simple'))))
+                spproj2D%projinfo = pool_proj%projinfo
+                spproj2D%compenv  = pool_proj%compenv
+                if( pool_proj%jobproc%get_noris()>0 ) spproj2D%jobproc = pool_proj%jobproc
+                call spproj2D%projinfo%delete_entry('projname')
+                call spproj2D%projinfo%delete_entry('projfile')
+                call spproj2D%update_projinfo(cline_cluster2D)
+                nptcls_glob = pool_proj%get_nptcls()
+                do iptcl=nptcls_glob,1,-1
+                    if( pool_proj%os_ptcl2D%get_state(iptcl) == 1 )exit
+                enddo
+                nstks  = nint(pool_proj%os_ptcl2D%get(iptcl, 'stkind'))
+                nptcls = nint(pool_proj%os_stk%get(nstks, 'top'))
+                call spproj2D%os_stk%new(nstks)
+                call spproj2D%os_ptcl2D%new(nptcls)
+                do iptcl=1,nptcls
+                    call spproj2D%os_ptcl2D%set_ori(iptcl, pool_proj%os_ptcl2D%get_ori(iptcl))
+                enddo
+                do istk=1,nstks
+                    call spproj2D%os_stk%set_ori(istk, pool_proj%os_stk%get_ori(istk))
+                enddo
+                spproj2D%os_cls2D = pool_proj%os_cls2D
+                spproj2D%os_out   = pool_proj%os_out
+                call spproj2D%write(PROJFILE2D)
+                nptcls_sel = spproj2D%os_ptcl2D%get_noris(consider_state=.true.)
                 write(*,'(A,I8,A,I4,A)')'>>> 2D CLASSIFICATION OF POOL: ',nptcls_sel,' PARTICLES IN ',ncls_glob,' CLUSTERS'
-                nptcls = pool_proj%get_nptcls()
-                nparts = calc_nparts(pool_proj, nptcls)
                 ! cluster2d execution
                 params_glob%projfile = trim(PROJFILE_POOL)
                 select case(trim(cline%get_carg('objfun')))
@@ -698,22 +721,32 @@ contains
                             call cline_cluster2D%set('objfun','cc')
                         endif
                 end select
-                call cline_cluster2D%set('stream',    'no')
-                call cline_cluster2D%set('startit',   real(pool_iter))
-                call cline_cluster2D%set('maxits',    real(pool_iter))
-                call cline_cluster2D%set('ncls',      real(ncls_glob))
-                call cline_cluster2D%set('nparts',    real(nparts))
-                call cline_cluster2D%set('box',      real(box))
-                call cline_cluster2D%set('msk',      real(msk))
-                call cline_cluster2D%set('refs', trim(refs_glob))
-                call cline_cluster2D%set('frcs', trim(FRCS_FILE))
+                call cline_cluster2D%set('startit', real(pool_iter))
+                call cline_cluster2D%set('maxits',  real(pool_iter))
+                call cline_cluster2D%set('ncls',    real(ncls_glob))
+                call cline_cluster2D%set('box',     real(box))
+                call cline_cluster2D%set('msk',     real(msk))
+                call cline_cluster2D%set('refs',    trim(refs_glob))
+                call cline_cluster2D%set('frcs',    trim(FRCS_FILE))
                 call cline_cluster2D%delete('endit')
                 call cline_cluster2D%delete('converged')
                 params_glob%nptcls = nptcls
                 call xcluster2D_distr%execute(cline_cluster2D)
-                params_glob%nparts   = orig_nparts
                 params_glob%projfile = trim(orig_projfile)
                 refs_glob            = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter,3))//trim(params%ext)
+                params_glob%nptcls   = nptcls_glob
+                ! transfer back to pool
+                call spproj2D%read(PROJFILE2D)
+                do iptcl=1,nptcls
+                    call pool_proj%os_ptcl2D%set_ori(iptcl, spproj2D%os_ptcl2D%get_ori(iptcl))
+                enddo
+                do istk=1,nstks
+                    call pool_proj%os_stk%set_ori(istk, spproj2D%os_stk%get_ori(istk))
+                enddo
+                pool_proj%os_cls2D = spproj2D%os_cls2D
+                pool_proj%os_out   = spproj2D%os_out
+                ! cleanup
+                call spproj2D%kill
             end subroutine classify_pool
 
             !>  append the classified buffer to the pool

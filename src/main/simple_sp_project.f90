@@ -882,7 +882,7 @@ contains
             call o_ptcl%set('dfx',     o_stk%get('dfx'))
             call o_ptcl%set('dfy',     o_stk%get('dfy'))
             call o_ptcl%set('angast',  o_stk%get('angast'))
-            call o_ptcl%set('phshift', o_stk%get('phshift'))
+            if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
             call o_ptcl%set('stkind', real(stk_ind))
             call o_ptcl%set('state',1.) ! default on import
             do i=1,nptcls_arr(istk)
