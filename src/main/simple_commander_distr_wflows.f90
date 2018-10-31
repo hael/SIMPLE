@@ -343,7 +343,7 @@ contains
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_cavgassemble%set('projfile', trim(params%projfile))
-        call cline_cavgassemble%delete('nthr') ! to ensure the use of all resources in assembly
+        call cline_cavgassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! schedule
         call qenv%gen_scripts_and_schedule_jobs( job_descr)
         ! assemble class averages
@@ -399,7 +399,7 @@ contains
         cline_make_cavgs   = cline ! ncls is transferred here
         ! initialise static command line parameters and static job description parameters
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_cavgassemble%delete('nthr') ! to ensure use of all resources in assembly
+        call cline_cavgassemble%set('nthr', 0.) ! to ensure use of all resources in assembly
         call cline_make_cavgs%set('prg',   'make_cavgs')
         ! execute initialiser
         if( .not. cline%defined('refs') )then
@@ -519,7 +519,7 @@ contains
             call cline_volassemble%set( 'eo', 'no')
             call cline_volassemble%set( 'prg', 'volassemble')
         endif
-        call cline_volassemble%delete('nthr') ! to ensure use of all resources in assembly
+        call cline_volassemble%set('nthr', 0.) ! to ensure use of all resources in assembly
         call qenv%gen_scripts_and_schedule_jobs( job_descr)
         call qenv%exec_simple_prg_in_queue(cline_volassemble, 'VOLASSEMBLE_FINISHED')
         call qsys_cleanup
@@ -589,7 +589,7 @@ contains
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
         call cline_postprocess%set('imgkind','vol')
-        call cline_volassemble%delete('nthr')  ! to ensure use of all resources in assembly
+        call cline_volassemble%set('nthr', 0.)  ! to ensure use of all resources in assembly
         ! for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
         if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
@@ -919,7 +919,7 @@ contains
         else
             call cline_volassemble%set('prg', 'volassemble')
         endif
-        call cline_volassemble%delete('nthr') ! to ensure the use of all resources in assembly
+        call cline_volassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! parallel assembly
         do state = 1, params%nstates
             str_state = int2str_pad(state,2)

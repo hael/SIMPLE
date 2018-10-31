@@ -425,7 +425,8 @@ contains
         type(sp_project) :: spproj
         type(ori)        :: o
         real             :: smpd
-        integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate, idir, nsp_files, box, nptcls
+        integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
+        integer          :: idir, nsp_files, box, nptcls, nthr
         logical          :: nparts_set, ssilent
         ssilent = .false.
         if( present(silent) ) ssilent = silent
@@ -1071,10 +1072,16 @@ contains
         endif
         ! OpenMP threads
         if( cline%defined('nthr') )then
-            !$          call omp_set_num_threads(self%nthr)
+            nthr = nint(cline%get_rarg('nthr'))
+            if( nthr == 0 )then
+                !$ self%nthr = omp_get_max_threads()
+                !$ call omp_set_num_threads(self%nthr)
+            else
+                !$ call omp_set_num_threads(self%nthr)
+            endif
         else
-            !$          self%nthr = omp_get_max_threads()
-            !$          call omp_set_num_threads(self%nthr)
+            !$ self%nthr = omp_get_max_threads()
+            !$ call omp_set_num_threads(self%nthr)
         endif
         nthr_glob = self%nthr
         !<<< END, PARALLELISATION-RELATED
