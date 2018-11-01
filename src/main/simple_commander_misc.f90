@@ -295,7 +295,6 @@ contains
         call simple_end('**** SIMPLE_SHIFT NORMAL STOP ****')
     end subroutine exec_shift
 
-    !> for converting between SPIDER and MRC formats
     subroutine exec_stk_corr( self, cline )
         class(stk_corr_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
@@ -327,6 +326,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
     end subroutine exec_stk_corr
-
 
 end module simple_commander_misc

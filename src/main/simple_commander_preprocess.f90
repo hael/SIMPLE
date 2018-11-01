@@ -741,8 +741,10 @@ contains
                 params%box = nint(boxdata(1,3))
             endif
         enddo
+        ! write project if neeeded
         if( spproj_modified )call spproj%write()
         call spproj%kill
+        ! sanity checking
         if( nmics == 0 )     THROW_HARD('No particles to extract! exec_extract')
         if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
         ! init
@@ -818,7 +820,7 @@ contains
                 if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
                     ! phase flip micrograph
                     tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                    call micrograph%edges_norm
+                    call micrograph%zero_edgeavg
                     call micrograph%fft
                     call tfun%apply_serial(micrograph, 'flip', ctfparms)
                     ! update stack ctf flag, mic flag unchanged
@@ -837,8 +839,7 @@ contains
                     particle_position = boxdata(iptcl,1:2)
                     call micrograph%window(nint(particle_position), params%box, build%img, noutside)
                     if( params%pcontrast .eq. 'black' ) call build%img%neg()
-                    call build%img%norm()
-                    call build%img%edges_norm()
+                    call build%img%noise_norm(build%lmsk)
                     call build%img%write(trim(adjustl(stack)), cnt)
                 endif
             end do

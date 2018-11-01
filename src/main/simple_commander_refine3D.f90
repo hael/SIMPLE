@@ -83,7 +83,6 @@ contains
                 type(ran_tabu)       :: rt
                 type(ori)            :: orientation
                 type(ctfparams)      :: ctfvars
-                type(image)          :: mskimg
                 integer, allocatable :: sample(:)
                 integer              :: i, nsamp, ind, eo
                 ! init volumes
@@ -112,14 +111,13 @@ contains
                     forall(i=1:nsamp) sample(i) = i
                 endif
                 write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
-                call mskimg%disc(build%img%get_ldim(), params%smpd, params%msk)
                 do i=1,nsamp
                     call progress(i, nsamp)
                     ind         = sample(i) + params%fromp - 1
                     orientation = build%spproj_field%get_ori(ind)
                     ctfvars     = build%spproj%get_ctfparams(params%oritype, ind)
                     call read_img(ind)
-                    call build%img%norm_subtr_backgr_pad_fft(mskimg, build%img_pad)
+                    call build%img%noise_norm_pad_fft(build%lmsk, build%img_pad)
                     if( params%l_eo )then
                         eo = nint(orientation%get('eo'))
                         call build%eorecvols(1)%grid_fplane(build%pgrpsyms, orientation, ctfvars, build%img_pad, eo, pwght=1.)
@@ -140,7 +138,6 @@ contains
                     ! update the spproj on disk
                     call build%spproj%write_segment_inside(params%oritype)
                 endif
-                call mskimg%kill
             end subroutine gen_random_model
 
     end subroutine exec_refine3D_init

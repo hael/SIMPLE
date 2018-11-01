@@ -48,6 +48,7 @@ type :: builder
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
+    logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
@@ -136,8 +137,6 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical :: read_spproj
-        integer(timer_int_kind) :: t1
-        t1=tic()
         ! create object for orientations
         ! b%a is now a pointer to a field in b%spproj
         select case(params%spproj_iseg)
@@ -182,7 +181,6 @@ contains
         endif
         if( .not. associated(build_glob) ) build_glob => self
         write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
-        DebugPrint ' build_spproj took                                           ', toc(t1), ' secs'
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d )
@@ -190,11 +188,9 @@ contains
         class(parameters),      intent(inout) :: params
         class(cmdline),         intent(inout) :: cline
         logical, optional,      intent(in)    :: do3d
-        integer :: lfny, cyc_lims(3,2)
-        logical :: ddo3d
-        integer(timer_int_kind) ::t1
-        DebugPrint   'in build_general_tbox'
-        t1= tic()
+        type(image) :: mskimg
+        integer     :: lfny, cyc_lims(3,2)
+        logical     :: ddo3d
         call self%kill_general_tbox
         ddo3d = .true.
         if( present(do3d) ) ddo3d = do3d
@@ -202,7 +198,6 @@ contains
         call self%pgrpsyms%new(trim(params%pgrp))
         params%nsym    = self%pgrpsyms%get_nsym()
         params%eullims = self%pgrpsyms%get_eullims()
-        DebugPrint ' did setup symmetry functionality                            ', toc()
         ! build spproj
         call self%build_spproj(params, cline)
         ! states exception
@@ -244,6 +239,9 @@ contains
             if( .not. cline%defined('amsklp') .and. cline%defined('lp') )then
                 params%amsklp = self%img%get_lp(self%img%get_find(params%lp)-2)
             endif
+            ! generate logical circular 2D mask
+            call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, self%lmsk)
+            call mskimg%kill
         endif
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
@@ -274,6 +272,7 @@ contains
             call self%vol2%kill
             call self%mskimg%kill
             if( allocated(self%fsc)  ) deallocate(self%fsc)
+            if( allocated(self%lmsk) ) deallocate(self%lmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox
@@ -281,8 +280,6 @@ contains
     subroutine build_rec_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
-        integer(timer_int_kind):: t
-        t= tic()
         call self%kill_rec_tbox
         call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
         call self%recvol%alloc_rho(self%spproj)

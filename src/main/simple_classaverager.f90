@@ -287,7 +287,7 @@ contains
         use simple_strategy2D3D_common, only: read_img
         logical,           intent(in) :: do_frac_update
         type(kbinterpol)              :: kbwin
-        type(image)                   :: cls_imgsum_even, cls_imgsum_odd, mskimg
+        type(image)                   :: cls_imgsum_even, cls_imgsum_odd
         type(image), allocatable      :: batch_imgs(:), cgrid_imgs(:)
         complex,     allocatable      :: cmat_even(:,:,:), cmat_odd(:,:,:)
         real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
@@ -335,8 +335,6 @@ contains
             call batch_imgs(i)%new(ldim, params_glob%smpd,    wthreads=.false.)
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         end do
-        ! mask image
-        call mskimg%disc(ldim, params_glob%smpd, params_glob%msk)
         ! limits
         lims_small = batch_imgs(1)%loop_lims(2)
         lims       = cgrid_imgs(1)%loop_lims(2)
@@ -428,7 +426,7 @@ contains
                     end select
                     ! reverse FFT and prepare for gridding
                     call batch_imgs(i)%ifft()
-                    call batch_imgs(i)%norm_subtr_backgr_pad_fft_serial(mskimg, cgrid_imgs(i))
+                    call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! rotation
                     mat = rotmat2d( -precs(iprec)%e3s(iori) )
                     ! Fourier components loop
@@ -512,7 +510,6 @@ contains
             deallocate(ptcls_inds, batches, iprecs, ioris)
         enddo ! class loop
         ! batch cleanup
-        call mskimg%kill
         call cls_imgsum_even%kill
         call cls_imgsum_odd%kill
         do i=1,batchsz_max

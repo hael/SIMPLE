@@ -73,7 +73,6 @@ contains
         type(sym)             :: c1_symop
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
-        type(image)           :: mskimg
         type(oris)            :: o_peak_prev
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj
         integer :: iptcl, iextr_lim, i, zero_pop, fnr, i_batch, ithr
@@ -416,8 +415,6 @@ contains
                 end do
                 ! prep batch imgs
                 call prepimgbatch( MAXIMGBATCHSZ)
-                ! make mask image
-                call mskimg%disc([params_glob%box,params_glob%box,1], params_glob%smpd, params_glob%msk)
                 ! gridding batch loop
                 do i_batch=1,nptcls2update,MAXIMGBATCHSZ
                     batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
@@ -425,7 +422,7 @@ contains
                     !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
                     do i=batchlims(1),batchlims(2)
                         ibatch = i - batchlims(1) + 1
-                        call build_glob%imgbatch(ibatch)%norm_subtr_backgr_pad_serial(mskimg, rec_imgs(ibatch))
+                        call build_glob%imgbatch(ibatch)%noise_norm_pad(build_glob%lmsk, rec_imgs(ibatch))
                     end do
                     !$omp end parallel do
                     ! gridding
@@ -465,7 +462,6 @@ contains
                     call match_imgs(ibatch)%kill
                 end do
                 deallocate(rec_imgs, match_imgs, build_glob%imgbatch)
-                call mskimg%kill
                 if( L_BENCH ) rt_rec = toc(t_rec)
         end select
 

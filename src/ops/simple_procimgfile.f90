@@ -433,17 +433,18 @@ contains
     subroutine noise_norm_imgfile( fname2norm, msk, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname
         real,             intent(in) :: msk, smpd
-        type(image)      :: img
-        integer          :: i, n, ldim(3)
+        type(image)          :: img
+        integer              :: i, n, ldim(3)
+        logical, allocatable :: lmsk(:,:,:)
         call find_ldim_nptcls(fname2norm, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
-        call img%new(ldim,smpd)
+        call img%disc(ldim, smpd, msk, lmsk)
         write(*,'(a)') '>>> NOISE NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
-            call img%noise_norm(msk)
+            call img%noise_norm(lmsk)
             call img%write(fname, i)
         end do
         call img%kill

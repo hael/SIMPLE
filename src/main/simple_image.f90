@@ -34,7 +34,9 @@ contains
     ! CONSTRUCTORS
     procedure          :: new
     procedure          :: construct_thread_safe_tmp_imgs
-    procedure          :: disc
+    procedure, private :: disc_1
+    procedure, private :: disc_2
+    generic            :: disc => disc_1, disc_2
     procedure          :: ring
     procedure          :: copy
     procedure          :: mic2spec
@@ -290,9 +292,8 @@ contains
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
-    procedure          :: norm_subtr_backgr_pad_fft
-    procedure          :: norm_subtr_backgr_pad_fft_serial
-    procedure          :: norm_subtr_backgr_pad_serial
+    procedure          :: noise_norm_pad_fft
+    procedure          :: noise_norm_pad
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: draw_picked  !!!!!ADDED BY CHIARA
@@ -319,7 +320,7 @@ contains
     procedure, private :: norm4viz
     procedure          :: norm_ext
     procedure          :: noise_norm
-    procedure          :: edges_norm
+    procedure          :: zero_edgeavg
     procedure          :: norm_bin
     procedure          :: roavg
     procedure          :: rtsq
@@ -471,7 +472,7 @@ contains
     end subroutine construct_thread_safe_tmp_imgs
 
     !>  \brief disc constructs a binary disc of given radius and returns the number of 1:s
-    subroutine disc( self, ldim, smpd, radius, npix )
+    subroutine disc_1( self, ldim, smpd, radius, npix )
         class(image),      intent(inout) :: self
         integer,           intent(in)    :: ldim(3)
         real,              intent(in)    :: smpd, radius
@@ -483,8 +484,28 @@ contains
         else where
             self%rmat = 0.
         end where
-        if( present(npix) )npix = count(self%rmat>0.5)
-    end subroutine disc
+        if( present(npix) ) npix = count(self%rmat>0.5)
+    end subroutine disc_1
+
+    subroutine disc_2( self, ldim, smpd, radius, lmsk, npix )
+        class(image),         intent(inout) :: self
+        integer,              intent(in)    :: ldim(3)
+        real,                 intent(in)    :: smpd, radius
+        logical, allocatable, intent(out)   :: lmsk(:,:,:)
+        integer, optional,    intent(inout) :: npix
+        call self%new(ldim, smpd)
+        call self%cendist
+        if( allocated(lmsk) ) deallocate(lmsk)
+        allocate(lmsk(ldim(1),ldim(2),ldim(3)))
+        where(self%rmat(:ldim(1),:ldim(2),:ldim(3)) <= radius)
+            self%rmat = 1.
+            lmsk      = .true.
+        else where
+            self%rmat = 0.
+            lmsk      = .false.
+        end where
+        if( present(npix) ) npix = count(lmsk)
+    end subroutine disc_2
 
     !>  \brief disc constructs a binary ring and returns the number of 1:s
     subroutine ring( self, ldim, smpd, outer_radius, inner_radius, npix )
@@ -537,7 +558,7 @@ contains
             do yind=0,self%ldim(2)-box,box/2
                 call self%window([xind,yind],box,tmp)
                 call tmp%norm()
-                call tmp%edges_norm
+                call tmp%zero_edgeavg
                 call tmp%fft()
                 call tmp%ft2img(speckind, tmp2)
                 call img_out%add(tmp2)
@@ -588,7 +609,7 @@ contains
                 cnt = cnt + 1
                 call self%window_slim([xind,yind],box,tmp,outside)
                 call tmp%norm()
-                call tmp%edges_norm
+                call tmp%zero_edgeavg
                 call tmp%fft()
                 if( cnt <= neven_lim )then
                     neven = neven + 1
@@ -5532,96 +5553,37 @@ contains
         if(abs(med) > TINY) self%rmat = self%rmat - med
     end subroutine zero_background
 
-    subroutine norm_subtr_backgr_pad_fft( self, mskimg, self_out )
+    subroutine noise_norm_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
-        class(image), intent(in)    :: mskimg
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3), npix
-        real    :: med, ave, ep, var
-        npix   = product(self%ldim)
-        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
-        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
-        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
-        if( is_a_number(var) )then
-            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
-        endif
-        pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med = median_nocopy(pixels)
-        starts      = (self_out%ldim - self%ldim) / 2 + 1
-        stops       = self_out%ldim - starts + 1
-        self_out%ft = .false.
-        !$omp parallel workshare proc_bind(close)
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
-        self_out%rmat = 0.
-        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
-            &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        !$omp end parallel workshare
-        call self_out%fft()
-    end subroutine norm_subtr_backgr_pad_fft
-
-    subroutine norm_subtr_backgr_pad_fft_serial( self, mskimg, self_out )
-        class(image), intent(inout) :: self
-        class(image), intent(in)    :: mskimg
-        class(image), intent(inout) :: self_out
-        real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3), npix
-        real    :: med, ave, ep, var
-        npix   = product(self%ldim)
-        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
-        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
-        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
-        if( is_a_number(var) )then
-            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
-        endif
-        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med           = median_nocopy(pixels)
+        integer :: starts(3), stops(3)
+        call self%noise_norm(lmsk)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
         stops         = self_out%ldim - starts + 1
         self_out%ft   = .false.
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        call self_out%fft()
-    end subroutine norm_subtr_backgr_pad_fft_serial
+        call self_out%fft
+    end subroutine noise_norm_pad_fft
 
-    subroutine norm_subtr_backgr_pad_serial( self, mskimg, self_out )
+    subroutine noise_norm_pad( self, lmsk, self_out )
         class(image), intent(inout) :: self
-        class(image), intent(in)    :: mskimg
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
         real, allocatable :: pixels(:)
-        integer :: starts(3), stops(3), npix
-        real    :: med, ave, ep, var
-        npix   = product(self%ldim)
-        ave    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / real(npix)
-        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
-        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0)
-        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
-        if( is_a_number(var) )then
-            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
-        endif
-        pixels   = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            &mask=mskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med         = median_nocopy(pixels)
-        starts      = (self_out%ldim - self%ldim) / 2 + 1
-        stops       = self_out%ldim - starts + 1
-        self_out%ft = .false.
-        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - med
+        integer :: starts(3), stops(3)
+        call self%noise_norm(lmsk)
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%ft   = .false.
         self_out%rmat = 0.
         self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
-    end subroutine norm_subtr_backgr_pad_serial
+        call self_out%fft
+    end subroutine noise_norm_pad
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)
@@ -6768,51 +6730,24 @@ contains
         if( sdev     > 0.   ) self%rmat = self%rmat / sdev
     end subroutine norm_ext
 
-    !> \brief noise_norm  normalizes the image according to the background noise
-    !! \param msk Mask value
-    !! \param errout error flag
-    subroutine noise_norm( self, msk, errout )
-        class(image),      intent(inout) :: self
-        real,              intent(in)    :: msk
-        logical, optional, intent(out)   :: errout
-        type(image)       :: maskimg
-        integer           :: npix,nbackgr,npix_tot
-        real              :: med,ave,sdev,var
-        real, allocatable :: pixels(:)
-        logical           :: err
-        if( self%ft )then
-            THROW_WARN('cannot normalize FTs; noise_norm')
-            return
-        endif
-        call maskimg%disc(self%ldim, self%smpd, msk, npix)
-        npix_tot = product(self%ldim)
-        nbackgr = npix_tot-npix
-        ! possible realloc
-        pixels = pack( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            &maskimg%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) < 0.5 )
-        med = median_nocopy(pixels)
-        call moment(pixels, ave, sdev, var, err)
-        deallocate(pixels)
-        if( err )then
-            call self%norm()
-        else
-            ! we subtract the pixel values with this ruboust estimate of the background average
-            self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-            (self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))-med)
-            if( present(errout) )then
-                errout = err
-            else
-                if( err ) THROW_WARN('variance zero; noise_norm')
-            endif
-            if( sdev > 1e-6 )then
-                self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) =&
-                    self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))/sdev
-            endif
+    subroutine noise_norm( self, lmsk )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        integer :: npix
+        real    :: ave, var, ep
+        npix = product(self%ldim) - count(lmsk) ! # background pixels
+        ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! # background average
+        if( abs(ave) > TINY ) self%rmat = self%rmat - ave
+        ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
+        var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)
+        var    = (var-ep**2./real(npix))/(real(npix)-1.) ! corrected two-pass formula
+        if( is_a_number(var) )then
+            if( var > 0. ) self%rmat = self%rmat / sqrt(var)
         endif
     end subroutine noise_norm
 
     !>  \brief  putting the edge around the image to zero (necessary for avoiding FT artefacts)
-    subroutine edges_norm( self )
+    subroutine zero_edgeavg( self )
         class(image), intent(inout) :: self
         real :: edges_sum, edges_ave
         if( self%ft )           THROW_HARD('not for Fted images; edge_norm')
@@ -6823,7 +6758,7 @@ contains
         edges_sum = edges_sum + sum(self%rmat(self%ldim(1),1:self%ldim(2),1))
         edges_ave = edges_sum / real( 2*(self%ldim(1)+self%ldim(2)) )
         if( abs(edges_ave) > TINY )self%rmat = self%rmat - edges_ave
-    end subroutine edges_norm
+    end subroutine zero_edgeavg
 
     !>  \brief  is for [0,1] interval normalization of an image
     subroutine norm_bin( self )

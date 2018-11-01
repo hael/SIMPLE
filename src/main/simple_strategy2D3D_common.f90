@@ -348,7 +348,7 @@ contains
     end subroutine grid_ptcl_2
 
     !>  \brief  prepares all particle images for alignment
-    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, is3D,  ptcl_mask )
+    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, is3D, ptcl_mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -403,7 +403,7 @@ contains
         ! CTF parameters
         ctfparms = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
         ! normalise
-        call img_in%norm()
+        call img_in%noise_norm(build_glob%lmsk)
         ! move to Fourier space
         call img_in%fft()
         ! shell normalization & filter
