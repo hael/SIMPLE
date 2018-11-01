@@ -6736,7 +6736,7 @@ contains
         integer :: npix
         real    :: ave, var, ep
         npix = product(self%ldim) - count(lmsk) ! # background pixels
-        ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! # background average
+        ave  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=.not. lmsk) / real(npix) ! background average
         if( abs(ave) > TINY ) self%rmat = self%rmat - ave
         ep     = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),      mask=.not. lmsk)
         var    = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))**2.0, mask=.not. lmsk)

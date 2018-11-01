@@ -151,8 +151,7 @@ contains
         vecsz    = (2 * hwinsz + 1)**2
         filtsz   = even_imgs(1)%get_filtsz()
         smpd     = even_imgs(1)%get_smpd()
-        call mskimg%disc(ldim, smpd, mskrad)
-        l_mask   = mskimg%bin2logical()
+        call mskimg%disc(ldim, smpd, mskrad, l_mask)
         call mskimg%kill
         npix     = count(l_mask)
         res      = even_imgs(1)%get_res()

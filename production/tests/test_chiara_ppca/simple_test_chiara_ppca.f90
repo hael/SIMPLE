@@ -37,8 +37,7 @@ call extract_boxes2file(OFFSET, 'extracted_windows.mrc', n_images, BOFFSET)
 ! generate vectors for compression
 mskrad = (real(BOX)/2.)/SHRINK
 if(.not. do_overlap) mskrad = (real(BOX)/2.)/SHRINK  !Biggest radius possible
-call img_msk%disc([box_shrunken,box_shrunken,1], 1., mskrad)
-l_mask = img_msk%bin2logical()
+call img_msk%disc([box_shrunken,box_shrunken,1], 1., mskrad, l_mask)
 if(.not. do_discextract ) then
   l_mask = .true.                 !extract every pixel in the window
  matrix = logical2bin(l_mask)

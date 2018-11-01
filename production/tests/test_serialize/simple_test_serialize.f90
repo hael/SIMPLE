@@ -19,9 +19,8 @@ real                 :: mskrad, smpd_shrunken
 call img%new([box,box,1], 1.0)
 call img_rev%new([box,box,1], 1.0)
 call img%square(60)
-call img_msk%disc([box,box,1], 1.0, 80.)
+call img_msk%disc([box,box,1], 1.0, 80., l_mask)
 call img_msk%vis
-l_mask = img_msk%bin2logical()
 call img%vis
 pcavec = img%serialize(l_mask)
 call img_rev%unserialize(l_mask, pcavec)
