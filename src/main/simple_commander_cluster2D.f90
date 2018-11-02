@@ -146,7 +146,7 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
         endif
-        call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
+        call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%l_locres)
         ! classdoc gen needs to be after calc of FRCs
         call gen2Dclassdoc
         ! write references

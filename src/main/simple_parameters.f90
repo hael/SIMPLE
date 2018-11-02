@@ -43,6 +43,7 @@ type :: parameters
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
+    character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
     character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
     character(len=3)      :: merge='no'
@@ -393,6 +394,7 @@ type :: parameters
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
     logical :: l_innermsk       = .false.
+    logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
@@ -504,6 +506,7 @@ contains
         call check_carg('kmeans',         self%kmeans)
         call check_carg('label',          self%label)
         call check_carg('local',          self%local)
+        call check_carg('locres',         self%locres)
         call check_carg('masscen',        self%masscen)
         call check_carg('match_filt',     self%match_filt)
         call check_carg('merge',          self%merge)
@@ -1295,6 +1298,9 @@ contains
                 self%l_match_filt = .true.
             end select
         endif
+        ! local resolution for filtering or  not
+        self%l_locres = .false.
+        if( trim(self%locres) .eq. 'yes' ) self%l_locres = .true.
         ! B-factor weighted corr or not
         self%l_cc_bfac = .false.
         if( cline%defined('bfac') ) self%l_cc_bfac = .true.
@@ -1303,7 +1309,7 @@ contains
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.
         ! sanity check imgkind
         select case(trim(self%imgkind))
-        case('movie', 'mic','ptcl', 'cavg', 'vol', 'vol_cavg')
+        case('movie','mic','ptcl','cavg','vol','vol_cavg')
             ! alles gut!
         case DEFAULT
             write(*,*) 'imgkind: ', trim(self%imgkind)
@@ -1315,8 +1321,8 @@ contains
         else
             self%o_peaks_file = O_PEAKS_FBODY//int2str(self%part)//BIN_EXT
         endif
-
         !>>> END, IMAGE-PROCESSING-RELATED
+
         ! set global pointer to instance
         ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self

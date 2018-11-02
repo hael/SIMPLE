@@ -570,15 +570,12 @@ contains
     !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname, do_locres )
         use simple_estimate_ssnr, only: local_res2D, local_res2D_lp
-        character(len=*),  intent(in) :: fname
-        logical, optional, intent(in) :: do_locres
+        character(len=*), intent(in) :: fname
+        logical,          intent(in) :: do_locres
         type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
         integer,     allocatable     :: locres_finds(:,:,:)
-        logical :: ddo_locres
         integer :: icls, find, find_plate
-        ddo_locres = .false.
-        if( present(do_locres) ) ddo_locres = do_locres
         ! serial code for allocation/copy
         allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
@@ -617,24 +614,31 @@ contains
         ! write FRCs
         call build_glob%projfrcs%write(fname)
         ! local resolution filtering of 2D references
-        if( ddo_locres )then
+        if( do_locres )then
             ! need to copy again to get the ones with lowres merged inserted
             do icls=1,ncls
                 call even_imgs(icls)%copy(cavgs_even(icls))
                 call odd_imgs(icls)%copy(cavgs_odd(icls))
-                if( params_glob%l_innermsk )then
-                    call even_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
-                    call odd_imgs(icls)%mask(params_glob%msk, 'soft', inner=params_glob%inner, width=params_glob%width)
-                else
-                    call even_imgs(icls)%mask(params_glob%msk, 'soft')
-                    call odd_imgs(icls)%mask(params_glob%msk, 'soft')
-                endif
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
             end do
             ! estimate local resolution (this routine is OpenMP parallel)
-            call local_res2D(even_imgs, odd_imgs, params_glob%msk, LOCRES_THRES, locres_finds)
-            ! copy images to be filtered
+            call local_res2D(even_imgs, odd_imgs, LOCRES_THRES, locres_finds)
+            ! reverse FFT for filtering
+            do icls=1,ncls
+                call even_imgs(icls)%ifft
+                call odd_imgs(icls)%ifft
+            end do
+            ! filter the even ones (this routine is OpenMP parallel)
+            call local_res2D_lp(locres_finds, even_imgs, params_glob%l_match_filt)
+            ! filter the odd ones (this routine is OpenMP parallel)
+            call local_res2D_lp(locres_finds, odd_imgs, params_glob%l_match_filt)
+            ! write 2 disk
+            do icls=1,ncls
+                call even_imgs(icls)%write(REFERENCES_2DLOCRES//'_even'//params_glob%ext, icls)
+                call odd_imgs(icls)%write(REFERENCES_2DLOCRES//'_odd'//params_glob%ext, icls)
+            end do
+            ! copy the merged ones for filtering
             do icls=1,ncls
                 call even_imgs(icls)%copy(cavgs_merged(icls))
             end do

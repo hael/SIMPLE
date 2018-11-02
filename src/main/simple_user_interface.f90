@@ -751,7 +751,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 1, 0, 10, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 1, 0, 10, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -790,6 +790,8 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, shellw)
+        call cluster2D%set_input('filt_ctrls', 8, 'locres', 'binary', 'Iterative local resolution estimation and filtering in last phase',&
+        &'Iterative local resolution estimation and filtering in last phase(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)

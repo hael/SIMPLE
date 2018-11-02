@@ -109,6 +109,7 @@ contains
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
+            if( params%l_locres ) call cline_cluster2D_stage1%delete('locres') ! no local resolution estimation in stage 1
             ! Scaling
             call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
@@ -158,7 +159,11 @@ contains
             if( cline%defined('objfun') )then
                 ! nothing to do
             else
-                call cline_cluster2D_stage2%set('objfun', 'ccres')
+                if( params%l_locres )then
+                    call cline_cluster2D_stage2%set('objfun', 'cc')
+                else
+                    call cline_cluster2D_stage2%set('objfun', 'ccres')
+                endif
             endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))

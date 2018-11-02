@@ -119,23 +119,22 @@ contains
     end function dose_weight
 
     ! local resolution estimation for class averages
-    subroutine local_res2D( even_imgs, odd_imgs, mskrad, corr_thres, locres_finds, half_winsz, fbody )
+    subroutine local_res2D( even_imgs, odd_imgs, corr_thres, locres_finds, half_winsz, fbody )
         use simple_image, only: image
         class(image),               intent(inout) :: even_imgs(:), odd_imgs(:)
-        real,                       intent(in)    :: mskrad, corr_thres
+        real,                       intent(in)    :: corr_thres
         integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
         integer,          optional, intent(in)    :: half_winsz
         character(len=*), optional, intent(in)    :: fbody
         character(len=:), allocatable :: fname_finds
-        logical,     allocatable :: l_mask(:,:,:)
+        integer,     allocatable :: locres_finds_filt(:,:), vec_finds(:)
         real,        allocatable :: frc(:), res(:)
         complex,     allocatable :: cmat(:,:,:)
         real(dp),    allocatable :: vec1(:), vec2(:)
         type(image), allocatable :: eimgs_copy(:), oimgs_copy(:)
-        type(image) :: mskimg
         integer :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat, iptcl, cmdims(3)
         integer :: vecsz, find_hres, find_lres, cnt, npix, hwinszsq, nptcls, find_min, find_max
-        integer ::  lb(2), ub(2), m, ivec, kk, mm
+        integer :: lb(2), ub(2), m, ivec, kk, mm, find_avg_backgr
         real    :: smpd, cc, ccavg, res_fsc05, res_fsc0143, frac_nccs
         nptcls = size(even_imgs)
         if( nptcls /= size(odd_imgs) ) THROW_HARD('Nonconforming image array sizes; local_res2D')
@@ -144,22 +143,21 @@ contains
             if( .not. odd_imgs(iptcl)%is_ft()  ) THROW_HARD('odd imgs not FTed; local_res2D')
         enddo
         ! set parameters
-        hwinsz   = 3
+        hwinsz = 5
         if( present(half_winsz) ) hwinsz = half_winsz
         hwinszsq = hwinsz * hwinsz
         ldim     = even_imgs(1)%get_ldim()
         vecsz    = (2 * hwinsz + 1)**2
         filtsz   = even_imgs(1)%get_filtsz()
         smpd     = even_imgs(1)%get_smpd()
-        call mskimg%disc(ldim, smpd, mskrad, l_mask)
-        call mskimg%kill
-        npix     = count(l_mask)
+        npix     = product(ldim)
         res      = even_imgs(1)%get_res()
         cmdims   = even_imgs(1)%get_array_shape()
         ! to avoid allocation in the loop
         if( allocated(locres_finds) ) deallocate(locres_finds)
-        allocate(locres_finds(nptcls,ldim(1),ldim(2)), vec1(vecsz), vec2(vecsz),&
-            &eimgs_copy(nptcls), oimgs_copy(nptcls), cmat(cmdims(1),cmdims(2),cmdims(3)))
+        allocate(locres_finds(nptcls,ldim(1),ldim(2)),locres_finds_filt(ldim(1),ldim(2)),&
+                 vec1(vecsz), vec2(vecsz), vec_finds(vecsz),&
+                &eimgs_copy(nptcls), oimgs_copy(nptcls), cmat(cmdims(1),cmdims(2),cmdims(3)))
         locres_finds = 0
         do iptcl=1,nptcls
             call eimgs_copy(iptcl)%new(ldim, smpd, wthreads=.false.)
@@ -183,7 +181,6 @@ contains
                 ! neighborhood correlation analysis
                 do j=1,ldim(2)
                     do i=1,ldim(1)
-                        if( .not. l_mask(i,j,1) ) cycle
                         ! set bounds
                         lb   = [i,j] - hwinsz
                         ub   = [i,j] + hwinsz
@@ -221,28 +218,22 @@ contains
             &'>>> % NEIGH_CCS >= 0.5', frac_nccs
             if( ccavg < 0.01 ) exit
         end do
-        ! identify highest and lowest local resolution
+        ! make sure no 0 elements
+        where( locres_finds == 0 ) locres_finds = 2
         do iptcl=1,nptcls
-            find_max = maxval(locres_finds(iptcl,:,:), l_mask(:,:,1))
+            find_max = maxval(locres_finds(iptcl,:,:))
             if( iptcl == 1 )then
                 find_hres = find_max
             else if( find_max > find_hres )then
                 find_hres = find_max
             endif
-            if( count(l_mask(:,:,1) .and. locres_finds(iptcl,:,:) > 0) > 0 )then
-                find_min = minval(locres_finds(iptcl,:,:), l_mask(:,:,1) .and. locres_finds(iptcl,:,:) > 0)
-            else
-                find_min = 2
-            endif
+            ! find min (lowest resolution)
+            find_min = minval(locres_finds(iptcl,:,:), locres_finds(iptcl,:,:) > 2)
             if( iptcl == 1 )then
-                find_lres = max(find_min,2)
+                find_lres = find_min
             else if( find_min < find_lres )then
-                find_lres = max(find_min,2)
+                find_lres = find_min
             endif
-            ! make sure no 0 elements within the mask
-            where( l_mask(:,:,1)       .and. locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = filtsz
-            ! make sure background at highest estimated local resolution
-            where( .not. l_mask(:,:,1) .and. locres_finds(iptcl,:,:) == 0 ) locres_finds(iptcl,:,:) = max(2,find_max)
         end do
         write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_hres)
         write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_lres)
@@ -251,7 +242,7 @@ contains
             call eimgs_copy(iptcl)%kill
             call oimgs_copy(iptcl)%kill
         end do
-        deallocate(l_mask, eimgs_copy, oimgs_copy)
+        deallocate(eimgs_copy, oimgs_copy)
         ! write output
         if( present(fbody) )then
             fname_finds  = trim(fbody)//'_finds.bin'
@@ -298,7 +289,7 @@ contains
             call resimgs(iptcl)%new(ldim, smpd, wthreads=.false.)
         end do
         rmats_filt = 0.
-        rmats_lp    = 0.
+        rmats_lp   = 0.
         ! loop over shells
         do k=kstart,kstop
             call progress(k,kstop)
@@ -323,8 +314,6 @@ contains
         end do
     end subroutine local_res2D_lp
 
-    ! even odd images assumed to be appropriately masked before calling this routine
-    ! mskimg should be a hard mask (real-space)
     subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz, fbody )
         use simple_image, only: image
         class(image),               intent(inout) :: even, odd, mskimg

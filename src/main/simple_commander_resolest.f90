@@ -181,19 +181,11 @@ contains
             call odd_avgs(iptcl)%new([params%box,params%box,1], params%smpd)
             call even_avgs(iptcl)%read(params%stk, iptcl)
             call odd_avgs(iptcl)%read(params%stk2, iptcl)
-            ! mask
-            if( params%l_innermsk )then
-                call even_avgs(iptcl)%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-                call odd_avgs(iptcl)%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-            else
-                call even_avgs(iptcl)%mask(params%msk, 'soft')
-                call odd_avgs(iptcl)%mask(params%msk, 'soft')
-            endif
             ! forward FT
             call even_avgs(iptcl)%fft()
             call odd_avgs(iptcl)%fft()
         end do
-        call local_res2D(even_avgs, odd_avgs, params%msk, params%lplim_crit, locres_finds)
+        call local_res2D(even_avgs, odd_avgs, params%lplim_crit, locres_finds)
         ! destruct
         do iptcl=1,params%nptcls
             call even_avgs(iptcl)%kill

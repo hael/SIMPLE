@@ -13,13 +13,9 @@ implicit none
 public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
-#if _DEBUG
-logical, parameter      :: L_BENCH           = .true.
-logical, parameter      :: L_BENCH_CLUSTER2D = .true.
-#else
+
 logical, parameter      :: L_BENCH           = .false.
 logical, parameter      :: L_BENCH_CLUSTER2D = .false.
-#endif
 
 type(polarft_corrcalc)  :: pftcc
 integer                 :: nptcls2update
@@ -100,7 +96,6 @@ contains
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top], mask=ptcl_mask)
             nptcls2update = count(ptcl_mask)
         endif
-        DebugPrint ' cluster2D_exec;  INDEX SAMPLING                             ', toc(t_init)
 
         ! SNHC LOGICS
         if( l_snhc )then
@@ -110,7 +105,7 @@ contains
             write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
                 &100.*(1.-snhc_sz(params_glob%fromp))
         else
-            snhc_sz = 0.  ! full neighbourhood
+            snhc_sz = 0. ! full neighbourhood
         endif
 
         ! CHUNKS
@@ -130,7 +125,13 @@ contains
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             THROW_HARD('no eo partitioning available; cluster2D_exec')
         endif
-        if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
+        if( which_iter > 1 .and. params_glob%l_locres )then
+            params_glob%refs      = REFERENCES_2DLOCRES//params_glob%ext
+            params_glob%refs_even = REFERENCES_2DLOCRES//'_even'//params_glob%ext
+            params_glob%refs_odd  = REFERENCES_2DLOCRES//'_odd'//params_glob%ext
+        else
+            if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
+        endif
         if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')
         call cavger_read(params_glob%refs, 'merged')
         if( file_exists(params_glob%refs_even) )then
@@ -143,7 +144,6 @@ contains
         else
             call cavger_read(params_glob%refs, 'odd')
         endif
-        DebugPrint ' cluster2D_exec;   PREP REFERENCES                           ', toc(t_init)
 
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
@@ -154,7 +154,6 @@ contains
         else
             call build_glob%spproj_field%set_all2single('w', 1.0)
         endif
-        DebugPrint ' cluster2D_exec;   SETUP WEIGHTS                             ', toc(t_init)
 
         ! B-FACTOR
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
@@ -165,22 +164,18 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
-        DebugPrint ' cluster2D_exec;    READ FOURIER RING CORRELATIONS ', toc(t_init)
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)
-        DebugPrint ' cluster2D_exec;   SET FOURIER INDEX RANGE                   ', rt_init
         ! GENERATE REFERENCE & PARTICLE POLAR FTs
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align( which_iter )
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
-        DebugPrint ' cluster2D_exec;   GENERATE REFERENCE & PARTICLE POLAR FTs   ', rt_prep_pftcc
 
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
         write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! array allocation for strategy2D
         call prep_strategy2D( ptcl_mask, which_iter )
-        DebugPrint ' cluster2D_exec;     prep_strategy2D                        ',toc(t_init)
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
         select case(trim(params_glob%neigh))
@@ -192,7 +187,9 @@ contains
             do iptcl=params_glob%fromp,params_glob%top
                 if( ptcl_mask(iptcl) )then
                     updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                    if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                    if( params_glob%l_locres )then
+                        allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                    else if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
                         allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                     else
                         allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
@@ -201,7 +198,6 @@ contains
                 endif
             enddo
         end select
-        DebugPrint ' cluster2D_exec;    srch constructed                         ', toc(t_init)
         ! actual construction
         cnt = 0
         do iptcl = params_glob%fromp, params_glob%top
@@ -217,14 +213,11 @@ contains
                 call strategy2Dsrch(iptcl)%ptr%new(strategy2Dspec)
             endif
         end do
-        DebugPrint ' cluster2D_exec;    actual construction                      ', toc(t_init)
         ! memoize CTF matrices
         if( build_glob%spproj%get_ctfflag('ptcl2D').ne.'no' ) &
             &call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
-        DebugPrint ' cluster2D_exec;    memoize CTF matrices                     ', toc(t_init)
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
-        DebugPrint ' cluster2D_exec;    memoize FFTs                             ', toc(t_init)
         ! SEARCH
         if( L_BENCH ) t_align = tic()
         if( L_BENCH_CLUSTER2D )then
@@ -239,11 +232,9 @@ contains
             call strategy2Dsrch(iptcl)%ptr%srch
         end do
         !$omp end parallel do
-        DebugPrint ' cluster2D_exec;   strategy2Dsrch ', toc(t_init)
 
         ! CLEAN-UP
         call clean_strategy2D
-        DebugPrint ' cluster2D_exec;   clean_strategy2D ', toc(t_init)
         call pftcc%kill
         do i=1,nptcls2update
             iptcl = pinds(i)
@@ -252,27 +243,20 @@ contains
         end do
         deallocate( strategy2Dsrch, pinds, ptcl_mask )
         if( L_BENCH ) rt_align = toc(t_align)
-        DebugPrint ' strategy2D_matcher; completed alignment                     ', toc(t_init)
 
         ! OUTPUT ORIENTATIONS
         call binwrite_oritab(params_glob%outfile, build_glob%spproj, build_glob%spproj_field, &
             &[params_glob%fromp,params_glob%top], isegment=PTCL2D_SEG)
         params_glob%oritab = params_glob%outfile
-        DebugPrint ' strategy2D_matcher;  write to file                          ', toc(t_init)
+
         ! WIENER RESTORATION OF CLASS AVERAGES
         if( L_BENCH ) t_cavg = tic()
-
         call cavger_transf_oridat( build_glob%spproj )
-        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 1 ', toc(t_init)
         call cavger_assemble_sums( l_partial_sums )
         ! write results to disk
-        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 2  ', toc(t_init)
         call cavger_readwrite_partial_sums('write')
-        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 3 ', toc(t_init)
         call cavger_kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
-        DebugPrint ' strategy2D_matcher;  WIENER RESTORATION OF CLASS AVERAGES 4 ', toc(t_init)
-        ! call qsys_job_finished( 'simple_strategy2D_matcher :: cluster2D_exec')
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
             rt_tot  = toc(t_tot)
@@ -314,7 +298,6 @@ contains
                 write(fnr,'(a,1x,f9.2)') 'in-plane: ', (rt_inpl_sum/rt_tot_sum)         * 100.
             endif
         endif
-        DebugPrint ' strategy2D_matcher;  completed                              ', toc(t_init)
     end subroutine cluster2D_exec
 
     !>  \brief  prepares the polarft corrcalc object for search

@@ -500,7 +500,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( params_glob%l_match_filt )then
+        if( params_glob%l_match_filt .and. .not. params_glob%l_locres )then
             ! anisotropic matched filter
             call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, &
                 params_glob%l_phaseplate, frc)
