@@ -207,10 +207,12 @@ contains
             endif
         endif
         ! generate discrete projection direction spaces
-        call self%eulspace%new(params%nspace)
-        call self%pgrpsyms%build_refspiral(self%eulspace)
-        call self%eulspace_red%new(NSPACE_REDUCED)
-        call self%pgrpsyms%build_refspiral(self%eulspace_red)
+        if( ddo3d )then
+            call self%eulspace%new(params%nspace)
+            call self%pgrpsyms%build_refspiral(self%eulspace)
+            call self%eulspace_red%new(NSPACE_REDUCED)
+            call self%pgrpsyms%build_refspiral(self%eulspace_red)
+        endif
         if( params%box > 0 )then
             ! build image objects
             ! box-sized ones

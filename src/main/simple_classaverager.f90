@@ -6,7 +6,7 @@ use simple_ctf,        only: ctf
 use simple_image,      only: image
 implicit none
 
-public :: cavger_new, cavger_transf_oridat, cavger_assemble_sums,&
+public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
 cavger_merge_eos_and_norm, cavger_calc_and_write_frcs_and_eoavg, cavger_write, cavger_read,&
 cavger_readwrite_partial_sums, cavger_assemble_sums_from_parts, cavger_kill, cavgs_even, cavgs_odd, cavgs_merged
 private
@@ -191,6 +191,55 @@ contains
             endif
         end do
     end subroutine cavger_transf_oridat
+
+    !>  \brief prepares a 2D class document with class index, resolution,
+    !!         poulation, average correlation and weight
+    subroutine cavger_gen2Dclassdoc( spproj )
+        use simple_sp_project, only: sp_project
+        class(sp_project), intent(inout) :: spproj
+        integer :: pops(params_glob%ncls)
+        real    :: corrs(params_glob%ncls), ws(params_glob%ncls)
+        real    :: frc05, frc0143, rstate
+        integer :: iptcl, icls, pop, nptcls
+        if( spproj%os_cls2D%get_noris() /= params_glob%ncls )then
+            call spproj%os_cls2D%new(params_glob%ncls)
+        endif
+        nptcls = spproj%os_ptcl2D%get_noris()
+        pops   = 0
+        corrs  = 0.
+        ws     = 0.
+        do iptcl=1,nptcls
+            rstate = spproj%os_ptcl2D%get(iptcl,'state')
+            if( rstate < 0.5 )cycle
+            icls = nint(spproj%os_ptcl2D%get(iptcl,'class'))
+            if( icls<1 .or. icls>params_glob%ncls )cycle
+            pops(icls)  = pops(icls)+1
+            corrs(icls) = corrs(icls)+spproj%os_ptcl2D%get(iptcl,'corr')
+            ws(icls)    = ws(icls)+spproj%os_ptcl2D%get(iptcl,'w')
+        enddo
+        where(pops>1)
+            corrs = corrs / real(pops)
+            ws    = ws / real(pops)
+        elsewhere
+            corrs = -1.
+            ws    = 0.
+        end where
+        do icls=1,params_glob%ncls
+            pop = pops(icls)
+            call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
+            call spproj%os_cls2D%set(icls, 'class', real(icls))
+            call spproj%os_cls2D%set(icls, 'pop',   real(pop))
+            call spproj%os_cls2D%set(icls, 'res',   frc0143)
+            call spproj%os_cls2D%set(icls, 'corr', corrs(icls))
+            call spproj%os_cls2D%set(icls, 'w',    ws(icls))
+            if( pop > 0 )then
+                call spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
+            else
+                call spproj%os_cls2D%set(icls, 'state', 0.0) ! exclusion
+            endif
+        end do
+    end subroutine cavger_gen2Dclassdoc
+
 
     !>  \brief  is for initialization of the sums
     subroutine init_cavgs_sums

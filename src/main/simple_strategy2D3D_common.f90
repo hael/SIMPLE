@@ -9,7 +9,7 @@ implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
 &eonorm_struct_facts, norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
-&prep2Dref, gen2Dclassdoc, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
+&prep2Dref, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
 private
 #include "simple_local_flags.inc"
@@ -524,40 +524,6 @@ contains
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
-
-    !>  \brief prepares a 2D class document with class index, resolution,
-    !!         poulation, average correlation and weight
-    subroutine gen2Dclassdoc
-        integer, allocatable :: pops(:)
-        integer    :: icls, pop
-        real       :: frc05, frc0143
-        if( build_glob%spproj%os_cls2D%get_noris() /= params_glob%ncls )then
-            call build_glob%spproj%os_cls2D%new(params_glob%ncls)
-        endif
-        call build_glob%spproj_field%get_pops(pops, 'class', maxn=params_glob%ncls)
-        do icls=1,params_glob%ncls
-            call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
-            pop = pops(icls)
-            call build_glob%spproj%os_cls2D%set(icls, 'class', real(icls))
-            call build_glob%spproj%os_cls2D%set(icls, 'pop',   real(pop))
-            call build_glob%spproj%os_cls2D%set(icls, 'res',   frc0143)
-            if( pop > 0 )then
-                call build_glob%spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
-            else
-                call build_glob%spproj%os_cls2D%set(icls, 'state', 0.0) ! exclusion
-            endif
-            if( pop > 1 )then
-                call build_glob%spproj%os_cls2D%set(icls, 'corr',  &
-                    build_glob%spproj_field%get_avg('corr', class=icls))
-                call build_glob%spproj%os_cls2D%set(icls, 'w',     &
-                    build_glob%spproj_field%get_avg('w',    class=icls))
-            else
-                call build_glob%spproj%os_cls2D%set(icls, 'corr', -1.0)
-                call build_glob%spproj%os_cls2D%set(icls, 'w',     0.0)
-            endif
-        end do
-        deallocate(pops)
-    end subroutine gen2Dclassdoc
 
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( wcluster )

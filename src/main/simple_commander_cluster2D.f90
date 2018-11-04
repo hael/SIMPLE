@@ -127,7 +127,6 @@ contains
 
     subroutine exec_cavgassemble( self, cline )
         use simple_classaverager
-        use simple_strategy2D3D_common, only: gen2Dclassdoc
         class(cavgassemble_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
         type(parameters) :: params
@@ -148,7 +147,7 @@ contains
         endif
         call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%l_locres)
         ! classdoc gen needs to be after calc of FRCs
-        call gen2Dclassdoc
+        call cavger_gen2Dclassdoc(build%spproj)
         ! write references
         call cavger_write(trim(params%refs),      'merged')
         call cavger_write(trim(params%refs_even), 'even'  )
