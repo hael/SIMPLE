@@ -61,7 +61,7 @@ contains
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
         character(len=:), allocatable :: finished_fname, recname, volname
-        character(len=32)             :: eonames(2), resmskname, benchfname
+        character(len=LONGSTRLEN)     :: eonames(2), resmskname, benchfname
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
@@ -122,14 +122,14 @@ contains
             allocate(volname, source=recname//params%ext)
             eonames(1) = trim(recname)//'_even'//params%ext
             eonames(2) = trim(recname)//'_odd'//params%ext
-            resmskname = 'resmask'//params%ext
+            resmskname = params%mskfile
             if( L_BENCH ) t_sum_eos = tic()
             call build%eorecvol%sum_eos
             if( L_BENCH )then
                 rt_sum_eos               = rt_sum_eos + toc(t_sum_eos)
                 t_sampl_dens_correct_eos = tic()
             endif
-            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), resmskname, find4eoavg)
+            call build%eorecvol%sampl_dens_correct_eos(state, eonames(1), eonames(2), find4eoavg)
             if( L_BENCH )then
                 rt_sampl_dens_correct_eos = rt_sampl_dens_correct_eos + toc(t_sampl_dens_correct_eos)
                 t_gen_projection_frcs     = tic()

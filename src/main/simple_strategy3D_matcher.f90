@@ -74,9 +74,10 @@ contains
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
         type(oris)            :: o_peak_prev
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj
-        integer :: iptcl, iextr_lim, i, zero_pop, fnr, i_batch, ithr
-        integer :: ibatch, npeaks, batchlims(2), updatecnt, state, n_nozero
+        real, allocatable     :: resarr(:)
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
+        integer :: iptcl, i, fnr, i_batch, ithr, updatecnt, state, n_nozero
+        integer :: ibatch, npeaks, iextr_lim, lpind_anneal, lpind_start, batchlims(2)
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -140,24 +141,30 @@ contains
         if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec
 
         ! EXTREMAL LOGICS
-        do_extr = .false.
+        do_extr           = .false.
+        extr_score_thresh = -huge(extr_score_thresh)
         select case(trim(params_glob%refine))
             case('cluster','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-                zero_pop          = count(.not.build_glob%spproj_field%included(consider_w=.false.))
-                extr_score_thresh = -huge(extr_score_thresh)
-                if( params_glob%l_frac_update )then
-                    ptcl_mask = .true.
-                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)) * (2.-params_glob%update_frac))
-                    if(which_iter==1 .or.(frac_srch_space <= 99. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
-                else
-                    iextr_lim = ceiling(2.*log(real(params_glob%nptcls-zero_pop)))
-                    if(which_iter==1 .or.(frac_srch_space <= 98. .and. params_glob%extr_iter <= iextr_lim)) do_extr = .true.
-                endif
+                if( params_glob%l_frac_update ) ptcl_mask = .true.
+                call build_glob%spproj_field%set_extremal_vars(params_glob%extr_init, params_glob%extr_iter,&
+                    &which_iter, frac_srch_space, do_extr, iextr_lim, update_frac=params_glob%update_frac)
                 if( do_extr )then
-                    extr_thresh       = params_glob%extr_init * cos(PI/2. * real(params_glob%extr_iter-1)/real(iextr_lim))
+                    anneal_ratio      = max(0., cos(PI/2.*real(params_glob%extr_iter-1)/real(iextr_lim)))
+                    extr_thresh       = params_glob%extr_init * anneal_ratio
                     extr_score_thresh = build_glob%spproj_field%extremal_bound(extr_thresh, 'corr')
+                    if( cline%defined('lpstart') )then
+                        ! resolution limit update
+                        lpind_start       = calc_fourier_index(params_glob%lpstart,params_glob%boxmatch,params_glob%smpd)
+                        lpind_anneal      = nint(real(lpind_start) + (1.-anneal_ratio)*real(params_glob%kstop-lpind_start))
+                        params_glob%kstop = min(lpind_anneal, params_glob%kstop)
+                        resarr            = build_glob%img%get_res()
+                        params_glob%lp    = resarr(params_glob%kstop)
+                        if( params_glob%cc_objfun .ne. OBJFUN_EUCLID ) params_glob%kfromto(2) = params_glob%kstop
+                        call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
+                        deallocate(resarr)
+                    endif
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
@@ -167,8 +174,6 @@ contains
                     call build_glob%eulspace%spiral
                     call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
                 endif
-            case DEFAULT
-                ! nothing to do
         end select
         if( L_BENCH ) rt_init = toc(t_init)
 
@@ -284,11 +289,11 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         ! search spec
-                        strategy3Dspec%iptcl     =  iptcl
-                        strategy3Dspec%szsn      =  params_glob%szsn
+                        strategy3Dspec%iptcl =  iptcl
+                        strategy3Dspec%szsn  =  params_glob%szsn
                         strategy3Dspec%extr_score_thresh = extr_score_thresh
-                        if( allocated(het_mask) )  strategy3Dspec%do_extr =  het_mask(iptcl)
-                        if( allocated(symmat) )    strategy3Dspec%symmat  => symmat
+                        if( allocated(het_mask) ) strategy3Dspec%do_extr =  het_mask(iptcl)
+                        if( allocated(symmat) )   strategy3Dspec%symmat  => symmat
                         ! search object
                         call strategy3Dsrch(iptcl)%ptr%new(strategy3Dspec, npeaks)
                     endif

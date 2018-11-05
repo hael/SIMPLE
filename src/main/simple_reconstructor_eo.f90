@@ -97,7 +97,6 @@ contains
         if( self%automsk )then
             call self%envmask%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
             call self%envmask%read(params_glob%mskfile)
-            call self%envmask%resmask()
         endif
         call self%even%new([params_glob%boxpd,params_glob%boxpd,params_glob%boxpd], params_glob%smpd)
         call self%even%alloc_rho( spproj)
@@ -334,11 +333,10 @@ contains
     end subroutine expand_exp
 
     !> \brief  for sampling density correction of the eo pairs
-    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, resmskname, find4eoavg )
+    subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
-        character(len=*),        intent(in)    :: resmskname            !< resolution mask name
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         real, allocatable :: res(:), corrs(:)
         type(image)       :: even, odd
@@ -363,7 +361,6 @@ contains
             call odd%zero_background
             call even%mul(self%envmask)
             call odd%mul(self%envmask)
-            call self%envmask%write(resmskname)
         else
             ! spherical masking
             if( self%inner > 1. )then

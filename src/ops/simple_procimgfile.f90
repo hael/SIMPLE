@@ -894,7 +894,7 @@ contains
             call progress(i,n)
             call img%read(fname2mask, i)
             call img%norm()
-            call img%mask(mskrad, which, inner, width)
+            call img%mask(mskrad, which, inner=inner, width=width)
             call img%write(fname, i)
         end do
         call img%kill

@@ -807,7 +807,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                                                            ! executable
-        &0, 2, 0, 7, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
+        &0, 2, 0, 8, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -832,6 +832,8 @@ contains
         call cluster2D_stream%set_input('srch_ctrls', 6, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
             &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 7, remap_cls)
+        call cluster2D_stream%set_input('srch_ctrls', 8, ncls)
+        cluster2D_stream%srch_ctrls(8)%required = .true.
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -857,7 +859,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 2, 0, 8, 5, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 2, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -884,6 +886,7 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
         call cluster3D%set_input('filt_ctrls', 5, eo)
+        call cluster3D%set_input('filt_ctrls', 6, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
@@ -1310,7 +1313,8 @@ contains
         &'Initial point-group symmetry(cn|dn|t|o|i){c1}', 'point-group(cn|dn|t|o|i){c1}', .false., 'c1')
         ! filter controls
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
-        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass limit', 'low-pass limit in Angstroms', .false., 0.)
+        call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
+            &'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
         initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){yes}'

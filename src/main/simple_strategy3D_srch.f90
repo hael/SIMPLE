@@ -126,7 +126,6 @@ contains
         DebugPrint  '>>> STRATEGY3D_SRCH :: eval_ptcl'
     end subroutine eval_ptcl
 
-
     subroutine new( self, spec, npeaks )
         class(strategy3D_srch), intent(inout) :: self
         class(strategy3D_spec), intent(in)    :: spec
@@ -156,7 +155,7 @@ contains
         lims_init(:,1)    = -SHC_INPL_TRSHWDTH
         lims_init(:,2)    =  SHC_INPL_TRSHWDTH
         call self%grad_shsrch_obj%new(lims, lims_init=lims_init,&
-            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.not. self%dowinpl)
+            &shbarrier=params_glob%shbarrier, maxits=MAXITS, opt_angle=.not.self%dowinpl)
         ! create all df:s search object
         call self%grad_orisrch_obj%new
         self%exists = .true.

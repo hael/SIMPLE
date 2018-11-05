@@ -362,9 +362,9 @@ contains
     end function resang
 
      !>   checking for is_a_number
-    pure logical function is_a_number_1( number ) 
+    pure logical function is_a_number_1( number )
         real, intent(in) :: number  !< input variable for checking
-        
+
         is_a_number_1 = .true.
         if( number > 0. )then
         else if( number <= 0. )then
@@ -374,16 +374,16 @@ contains
     end function is_a_number_1
 
     !>   validity check of complex number (so that it is not nan)
-    pure logical function is_a_number_2( complex_number ) 
+    pure logical function is_a_number_2( complex_number )
         complex, intent(in) :: complex_number !< input variable for checking
-    
+
         is_a_number_2 = is_a_number_1(real(complex_number)) .and. is_a_number_1(aimag(complex_number))
     end function is_a_number_2
 
      !>   checking for is_a_number
-    pure logical function is_a_number_3( number ) 
+    pure logical function is_a_number_3( number )
         real(dp), intent(in) :: number  !< input variable for checking
-      
+
         is_a_number_3 = .true.
         if( number > 0. )then
         else if( number <= 0. )then
@@ -393,9 +393,9 @@ contains
     end function is_a_number_3
 
     !>   validity check of complex number (so that it is not nan)
-    pure logical function is_a_number_4( complex_number ) 
+    pure logical function is_a_number_4( complex_number )
         complex(dp), intent(in) :: complex_number !< input variable for checking
-     
+
         is_a_number_4 = is_a_number_3(real(complex_number)) .and. is_a_number_3(aimag(complex_number))
     end function is_a_number_4
 
@@ -1982,7 +1982,7 @@ contains
     end function logical2bin
 
     ! This function takes in input arraya and gives as output arrayb
-    ! which is the same as arraya, but with NO repetition in the elements.
+    ! which is the same as array, but with NO repetition in the elements.
     subroutine elim_dup(arraya, arrayb)
         real,              intent(in)  :: arraya(:)
         real, allocatable, intent(out) :: arrayb(:)
@@ -2036,4 +2036,5 @@ contains
             print *, mat(j,:,1)
         enddo
     end subroutine vis_3Dinteger_mat
+
 end module simple_math

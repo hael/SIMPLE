@@ -208,8 +208,8 @@ contains
         hpfind = pspec_all_roavg%get_find(hp)
         lpfind = pspec_all_roavg%get_find(lp)
         filtsz = pspec_lower_roavg%get_filtsz()
-        call pspec_all_roavg%mask(real(lpfind), 'soft', real(hpfind))
-        call pspec_ctf_roavg%mask(real(lpfind), 'soft', real(hpfind))
+        call pspec_all_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
+        call pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
         call pspec_all_roavg%norm_bin
         call pspec_ctf_roavg%norm_bin
         allocate(corrs(filtsz))

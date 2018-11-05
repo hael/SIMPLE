@@ -160,6 +160,7 @@ type :: oris
     procedure          :: nearest_proj_neighbors
     procedure          :: find_angres
     procedure          :: extremal_bound
+    procedure          :: set_extremal_vars
     procedure          :: find_npeaks_from_athres
     procedure, private :: map3dshift22d_1
     procedure, private :: map3dshift22d_2
@@ -2580,6 +2581,35 @@ contains
         score_bound = scores_incl(thresh_ind)
         deallocate(scores, incl, scores_incl)
     end function extremal_bound
+
+    !>  \brief  utility function for setting extremal optimization parameters
+    subroutine set_extremal_vars(self, extr_init, extr_iter, iter, frac_srch_space,&
+            &do_extr, iextr_lim, update_frac)
+        class(oris),       intent(in) :: self
+        real,              intent(in)    :: extr_init
+        integer,           intent(in)    :: extr_iter, iter
+        real,              intent(in)    :: frac_srch_space
+        logical,           intent(out)   :: do_extr
+        integer,           intent(out)   :: iextr_lim
+        real,    optional, intent(in)    :: update_frac
+        real    :: extr_thresh
+        integer :: zero_pop
+        logical :: l_update_frac
+        do_extr           = .false.
+        l_update_frac     = .false.
+        if( present(update_frac) )then
+            if( update_frac > 0.001 ) l_update_frac = .true.
+        endif
+        zero_pop  = self%n - self%get_noris(consider_state=.true.)
+        iextr_lim = ceiling(2.*log(real(self%n-zero_pop)) * (2.-update_frac))
+        if( l_update_frac )then
+            iextr_lim = ceiling(2.*log(real(self%n-zero_pop)) * (2.-update_frac))
+            if(iter==1 .or.(frac_srch_space <= 99. .and. extr_iter <= iextr_lim)) do_extr = .true.
+        else
+            iextr_lim = ceiling(2.*log(real(self%n-zero_pop)))
+            if(iter==1 .or.(frac_srch_space <= 98. .and. extr_iter <= iextr_lim)) do_extr = .true.
+        endif
+    end subroutine set_extremal_vars
 
     !>  \brief  find number of peaks from angular threshold
     function find_npeaks_from_athres( self, athres ) result( npeaks )

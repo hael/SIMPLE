@@ -75,13 +75,13 @@ contains
     subroutine set_bp_range( cline )
         class(cmdline), intent(inout) :: cline
         real, allocatable     :: resarr(:), fsc_arr(:)
-        real                  :: fsc0143, fsc05, mapres(params_glob%nstates)
+        real                  :: fsc0143, fsc05
+        real                  :: mapres(params_glob%nstates)
         integer               :: s, loc(1), lp_ind, k_nyq
         character(len=STDLEN) :: fsc_fname
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         ! Nyqvist index
-        k_nyq = calc_fourier_index(2.*params_glob%smpd, &
-            params_glob%boxmatch, params_glob%smpd)
+        k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
         select case(params_glob%eo)
             case('yes','aniso')
                 ! check all fsc_state*.bin exist
@@ -131,8 +131,7 @@ contains
                             lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5) ! more conservative limit @ start
                         endif
                     else
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), &
-                            params_glob%lplim_crit)
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                     endif
                     ! interpolation limit is NOT Nyqvist in correlation search
                     params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), &
@@ -161,7 +160,6 @@ contains
                 ! re-set the low-pass limit
                 params_glob%lp = calc_lowpass_lim(params_glob%kstop, &
                     params_glob%boxmatch, params_glob%smpd)
-                call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case('no')
                 ! set Fourier index range
                 params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, &
@@ -174,10 +172,10 @@ contains
                         params_glob%boxmatch, params_glob%smpd))
                 endif
                 params_glob%kstop = params_glob%kfromto(2)
-                call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
             case DEFAULT
                 THROW_HARD('Unsupported eo flag')
         end select
+        call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
 
@@ -743,7 +741,7 @@ contains
             if( params_glob%boxmatch < params_glob%box )&
                 call mskvol%clip_inplace(&
                 [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
-            call build_glob%vol%zero_background
+            call build_glob%vol%zero_env_background(mskvol)
             call build_glob%vol%mul(mskvol)
             call mskvol%kill
         else
@@ -819,7 +817,6 @@ contains
         integer               :: s, find4eoavg
         real                  :: res05s(params_glob%nstates), res0143s(params_glob%nstates)
         character(len=STDLEN) :: pprocvol
-        character(len=32)     :: resmskname
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol2%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         ! init
@@ -845,12 +842,11 @@ contains
                 endif
                 params_glob%vols_even(s) = add2fbody(params_glob%vols(s), params_glob%ext, '_even')
                 params_glob%vols_odd(s)  = add2fbody(params_glob%vols(s), params_glob%ext, '_odd')
-                resmskname         = 'resmask'//params_glob%ext
                 call build_glob%eorecvols(s)%sum_eos
                 call build_glob%eorecvols(s)%sampl_dens_correct_eos(s, params_glob%vols_even(s), &
-                    &params_glob%vols_odd(s), resmskname, find4eoavg)
+                    &params_glob%vols_odd(s), find4eoavg)
                 call gen_projection_frcs(cline,  params_glob%vols_even(s), params_glob%vols_odd(s), &
-                    resmskname, s, build_glob%projfrcs)
+                    params_glob%mskfile, s, build_glob%projfrcs)
                 call build_glob%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
                 call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, &
                     build_glob%eulspace_red, s, params_glob%pgrp, params_glob%hpind_fsc, &
@@ -950,7 +946,7 @@ contains
                 if( cline%defined('mskfile') )then
                     ! mask provided
                     call mskvol%read(resmskname)
-                    call vol%zero_background
+                    call vol%zero_env_background(mskvol)
                     call vol%mul(mskvol)
                 else
                     ! circular masking

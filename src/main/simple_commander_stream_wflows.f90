@@ -218,12 +218,10 @@ contains
         class(cmdline),                          intent(inout) :: cline
         integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
-        integer,               parameter   :: MAX_NCLS_LIM        = 300   ! maximum # of classes
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         ! dev settings
         ! integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         ! integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
-        ! integer,               parameter   :: MAX_NCLS_LIM        = 100   ! maximum # of classes
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 60    ! 10mins, Frequency at which the original project file should be updated
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
@@ -266,7 +264,7 @@ contains
         ! init
         do_autoscale      = params%autoscale.eq.'yes'
         orig_nparts       = params%nparts
-        max_ncls          = floor(real(MAX_NCLS_LIM)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
+        max_ncls          = floor(real(params%ncls)/real(params%ncls_start))*params%ncls_start ! effective maximum # of classes
         nptcls_per_buffer = params%nptcls_per_cls*params%ncls_start         ! # of particles in each buffer
         buffer_exists     = .false.                                         ! whether the buffer exists
         l_maxed           = .false.                                         ! whether all chunks have been merged
@@ -537,6 +535,8 @@ contains
                         deallocate(cls_mask)
                         write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                     endif
+                else
+                    write(*,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
                 endif
             end subroutine reject_from_pool
 
@@ -680,6 +680,7 @@ contains
             subroutine classify_pool
                 type(cluster2D_distr_commander)  :: xcluster2D_distr
                 type(sp_project)                 :: spproj2D
+                character(len=:), allocatable    :: prev_refs
                 integer :: iptcl, nptcls, nptcls_sel, istk, nstks, nptcls_glob
                 ! transfer from pool
                 call cline_cluster2D%set('projfile',  trim(PROJFILE2D))
@@ -745,6 +746,13 @@ contains
                 enddo
                 pool_proj%os_cls2D = spproj2D%os_cls2D
                 pool_proj%os_out   = spproj2D%os_out
+                ! removes previous references
+                if(pool_iter>1)then
+                    prev_refs = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-1,3))//trim(params%ext)
+                    call del_file(prev_refs)
+                    call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
+                    call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
+                endif
                 ! cleanup
                 call spproj2D%kill
             end subroutine classify_pool
@@ -1044,6 +1052,7 @@ contains
                 if(time_now-last_injection > params%time_inactive)then
                     write(*,'(A,A)')'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
                     is_timeout = .true.
+                    if( .not.cline_cluster2D%defined('converged') )is_timeout = .false.
                 else if(time_now-last_injection > 3600)then
                     write(*,'(A,A)')'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
                     call flush(6)

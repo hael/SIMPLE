@@ -401,11 +401,14 @@ contains
         top   = nint(self%os_stk%get(stkind, 'top'))
         if( iptcl < fromp .or. iptcl > top )then
             print *, 'iptcl            : ', iptcl
+            print *, 'stkind           : ', stkind
             print *, 'prange for micstk: ', fromp, top
             THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
         endif
         ! output index in stack
         ind_in_stk = iptcl - fromp + 1
+        ! cleanup
+        nullify(ptcl_field)
     end subroutine map_ptcl_ind2stk_ind
 
     subroutine map_cavgs_selection( self, states )
@@ -1974,6 +1977,7 @@ contains
             if( allocated(os_strings(i)%str) ) deallocate(os_strings(i)%str)
         end do
         deallocate(os_strings)
+        nullify(os)
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
     end subroutine merge_algndocs

@@ -81,6 +81,8 @@ contains
         call self%cos_edge(winsz)
         ! mask with spherical sof mask
         call self%mask(params_glob%msk, 'soft')
+        ! clean-up
+        call distimg%kill
     end subroutine resmask
 
     subroutine mask_from_pdb( self,  pdb, vol_inout, os, pdbout)

@@ -292,6 +292,7 @@ contains
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
+    procedure          :: zero_env_background
     procedure          :: noise_norm_pad_fft
     procedure          :: noise_norm_pad
     procedure          :: salt_n_pepper
@@ -854,8 +855,8 @@ contains
         integer               :: last_slice, ii
         real                  :: smpd
         logical               :: isvol
-        ldim          = self%ldim
-        smpd          = self%smpd
+        ldim  = self%ldim
+        smpd  = self%smpd
         isvol = .true. ! assume volume by default
         ii    = 1      ! default location
         if( present(i) )then
@@ -5553,6 +5554,40 @@ contains
         if(abs(med) > TINY) self%rmat = self%rmat - med
     end subroutine zero_background
 
+    ! substracts median of background defined by an enveloppe mask (eg 0< <1)
+    subroutine zero_env_background( self, volmsk )
+        class(image), intent(inout) :: self, volmsk
+        real, allocatable :: vals(:)
+        real              :: med
+        integer           :: cnt, npix, npix_env, i,j,k
+        logical           :: env_mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        npix = product(self%ldim)
+        where( volmsk%rmat>0.0001 .and. volmsk%rmat<0.9999 )
+            env_mask = .true.
+        else where
+            env_mask = .false.
+        end where
+        npix_env = count(env_mask)
+        if( npix_env==0 .or. npix_env==npix )then
+            THROW_HARD('Volume mask is not a volume mask; simple_image :: zero_env_background')
+        endif
+        allocate(vals(npix_env))
+        cnt = 0
+        do i=1,self%ldim(1)
+            do j=1,self%ldim(2)
+                do k=1,self%ldim(3)
+                    if(env_mask(i,j,k))then
+                        cnt = cnt + 1
+                        vals(cnt) = self%rmat(i,j,k)
+                    endif
+                enddo
+            enddo
+        enddo
+        med = median_nocopy(vals)
+        if(abs(med) > TINY) self%rmat = self%rmat - med
+        deallocate(vals)
+    end subroutine zero_env_background
+
     subroutine noise_norm_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -6333,11 +6368,11 @@ contains
     !! \param which mask type
     !! \param inner include cosine edge material
     !! \param width width of inner patch
-    subroutine mask( self, mskrad, which, inner, width )
+    subroutine mask( self, mskrad, which, inner, width, backgr )
         class(image),     intent(inout) :: self
         real,             intent(in)    :: mskrad
         character(len=*), intent(in)    :: which
-        real, optional,   intent(in)    :: inner, width
+        real, optional,   intent(in)    :: inner, width, backgr
         real    :: e, wwidth
         real    :: cis(self%ldim(1)), cjs(self%ldim(2)), cks(self%ldim(3))
         integer :: i, j, k, minlen, ir, jr, kr
@@ -6365,13 +6400,19 @@ contains
         ! soft/hard
         soft  = .true.
         select case(trim(which))
-        case('soft')
-            soft  = .true.
-            call self%zero_background
-        case('hard')
-            soft  = .false.
-        case DEFAULT
-            THROW_HARD('undefined which parameter; mask')
+            case('soft')
+                soft  = .true.
+                if(present(backgr))then
+                    self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
+                        &self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) - backgr
+                else
+                    call self%zero_background
+                endif
+            case('hard')
+                soft  = .false.
+                if(present(backgr))THROW_HARD('no backround subtraction with hard masking; simple_image :: mask')
+            case DEFAULT
+                THROW_HARD('undefined which parameter; simple_image :: mask')
         end select
         ! init center as origin
         forall(i=1:self%ldim(1)) cis(i) = -real(self%ldim(1))/2. + real(i-1)
@@ -6387,10 +6428,10 @@ contains
                     do j=1,self%ldim(2)/2
                         jr = self%ldim(2)+1-j
                         do k=1,self%ldim(3)/2
-                            kr = self%ldim(3)+1-k
                             e = cosedge(cis(i),cjs(j),cks(k),minlen,mskrad)
                             if( doinner )e = e * cosedge_inner(cis(i),cjs(j),cks(k),wwidth,inner)
                             if(e > 0.9999) cycle
+                            kr = self%ldim(3)+1-k
                             self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                             self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
                             self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
@@ -6407,10 +6448,10 @@ contains
                 do i=1,self%ldim(1)/2
                     ir = self%ldim(1)+1-i
                     do j=1,self%ldim(2)/2
-                        jr = self%ldim(2)+1-j
                         e = cosedge(cis(i),cjs(j),minlen,mskrad)
                         if( doinner )e = e * cosedge_inner(cis(i),cjs(j),wwidth,inner)
                         if(e > 0.9999)cycle
+                        jr = self%ldim(2)+1-j
                         self%rmat(i,j,1)   = e * self%rmat(i,j,1)
                         self%rmat(i,jr,1)  = e * self%rmat(i,jr,1)
                         self%rmat(ir,j,1)  = e * self%rmat(ir,j,1)
@@ -6427,9 +6468,9 @@ contains
                     do j=1,self%ldim(2)/2
                         jr = self%ldim(2)+1-j
                         do k=1,self%ldim(3)/2
-                            kr = self%ldim(3)+1-k
                             e = hardedge(cis(i),cjs(j),cks(k),mskrad)
                             if( doinner )e = e * hardedge_inner(cis(i),cjs(j),cks(k),inner)
+                            kr = self%ldim(3)+1-k
                             self%rmat(i,j,k)    = e * self%rmat(i,j,k)
                             self%rmat(i,j,kr)   = e * self%rmat(i,j,kr)
                             self%rmat(i,jr,k)   = e * self%rmat(i,jr,k)
