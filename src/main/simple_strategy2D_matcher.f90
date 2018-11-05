@@ -126,9 +126,9 @@ contains
             THROW_HARD('no eo partitioning available; cluster2D_exec')
         endif
         if( which_iter > 1 .and. params_glob%l_locres )then
-            params_glob%refs      = REFERENCES_2DLOCRES//params_glob%ext
-            params_glob%refs_even = REFERENCES_2DLOCRES//'_even'//params_glob%ext
-            params_glob%refs_odd  = REFERENCES_2DLOCRES//'_odd'//params_glob%ext
+            params_glob%refs      = REFS_2DLOCRES//params_glob%ext
+            params_glob%refs_even = REFS_2DLOCRES//'_even'//params_glob%ext
+            params_glob%refs_odd  = REFS_2DLOCRES//'_odd'//params_glob%ext
         else
             if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
         endif

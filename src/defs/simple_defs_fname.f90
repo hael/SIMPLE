@@ -21,14 +21,15 @@ character(len=*), parameter :: INTGMOV_SUFFIX       = '_intg'
 character(len=*), parameter :: FORCTF_SUFFIX        = '_forctf'
 character(len=*), parameter :: POWSPEC_SUFFIX       = '_pspec'
 character(len=*), parameter :: PPROC_SUFFIX         = '_pproc'
-! stack part related and file format constants
+! STACK PART RELATED AND FILE FORMAT CONSTANTS
 character(len=*), parameter :: STKPARTSDIR          = 'stack_parts'
 character(len=*), parameter :: STKPARTFBODY         = trim(STKPARTSDIR)//'/stack_part'
 character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
-character(len=*), parameter :: REFERENCES_2DLOCRES  = 'refs_2Dlocres'
+character(len=*), parameter :: REFS_2DLOCRES        = 'refs_2Dlocres'
+character(len=*), parameter :: CAVGS_2DLOCRES       = 'cavgs_2Dlocres'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
@@ -41,6 +42,9 @@ character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: FRCS_FBODY           = 'frcs_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
+! LOCAL RESOLUTION
+character(len=*), parameter :: LOCRESMAP2D_FILE     = 'locresmap2D_finds.bin'
+character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 ! EXTRACT
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'

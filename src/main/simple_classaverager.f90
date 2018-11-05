@@ -621,12 +621,12 @@ contains
         use simple_estimate_ssnr, only: local_res2D, local_res2D_lp
         character(len=*), intent(in) :: fname
         logical,          intent(in) :: do_locres
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
+        type(image), allocatable     :: even_imgs(:), odd_imgs(:), shnorm_imgs(:)
         real,        allocatable     :: frc(:)
         integer,     allocatable     :: locres_finds(:,:,:)
         integer :: icls, find, find_plate
         ! serial code for allocation/copy
-        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
+        allocate(even_imgs(ncls), odd_imgs(ncls), shnorm_imgs(ncls), frc(filtsz))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
@@ -671,31 +671,65 @@ contains
                 call even_imgs(icls)%fft()
                 call odd_imgs(icls)%fft()
             end do
-            ! estimate local resolution (this routine is OpenMP parallel)
+            ! estimate local resolution
             call local_res2D(even_imgs, odd_imgs, LOCRES_THRES, locres_finds)
-            ! reverse FFT for filtering
+            ! reverse FFT for filtering & copy images for shellnorm if needed
             do icls=1,ncls
                 call even_imgs(icls)%ifft
                 call odd_imgs(icls)%ifft
+                if( params_glob%l_match_filt ) call shnorm_imgs(icls)%copy(even_imgs(icls))
             end do
-            ! filter the even ones (this routine is OpenMP parallel)
-            call local_res2D_lp(locres_finds, even_imgs, params_glob%l_match_filt)
-            ! filter the odd ones (this routine is OpenMP parallel)
-            call local_res2D_lp(locres_finds, odd_imgs, params_glob%l_match_filt)
+            ! filter the even ones
+            if( params_glob%l_match_filt )then
+                call local_res2D_lp(locres_finds, even_imgs, shnorm_imgs)
+            else
+                call local_res2D_lp(locres_finds, even_imgs)
+            endif
             ! write 2 disk
             do icls=1,ncls
-                call even_imgs(icls)%write(REFERENCES_2DLOCRES//'_even'//params_glob%ext, icls)
-                call odd_imgs(icls)%write(REFERENCES_2DLOCRES//'_odd'//params_glob%ext, icls)
+                if( params_glob%l_match_filt )then
+                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//'_even'//params_glob%ext, icls)
+                    call even_imgs(icls)%write(CAVGS_2DLOCRES//'_even'//params_glob%ext, icls)
+                else
+                    call even_imgs(icls)%write(REFS_2DLOCRES//'_even'//params_glob%ext, icls)
+                endif
             end do
-            ! copy the merged ones for filtering
+            ! filter the odd ones
+            if( params_glob%l_match_filt )then
+                do icls=1,ncls
+                    call shnorm_imgs(icls)%copy(odd_imgs(icls))
+                end do
+                call local_res2D_lp(locres_finds, odd_imgs, shnorm_imgs)
+            else
+                call local_res2D_lp(locres_finds, odd_imgs)
+            endif
+            ! write 2 disk
+            do icls=1,ncls
+                if( params_glob%l_match_filt )then
+                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//'_odd'//params_glob%ext, icls)
+                    call odd_imgs(icls)%write(CAVGS_2DLOCRES//'_odd'//params_glob%ext, icls)
+                else
+                    call odd_imgs(icls)%write(REFS_2DLOCRES//'_odd'//params_glob%ext, icls)
+                endif
+            end do
+            ! filter the merged ones
             do icls=1,ncls
                 call even_imgs(icls)%copy(cavgs_merged(icls))
+                if( params_glob%l_match_filt ) call shnorm_imgs(icls)%copy(cavgs_merged(icls))
             end do
-            ! filter (this routine is OpenMP parallel)
-            call local_res2D_lp(locres_finds, even_imgs, params_glob%l_match_filt)
+            if( params_glob%l_match_filt )then
+                call local_res2D_lp(locres_finds, even_imgs, shnorm_imgs)
+            else
+                call local_res2D_lp(locres_finds, even_imgs)
+            endif
             ! write 2 disk
             do icls=1,ncls
-                call even_imgs(icls)%write(REFERENCES_2DLOCRES//params_glob%ext, icls)
+                if( params_glob%l_match_filt )then
+                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//params_glob%ext, icls)
+                    call even_imgs(icls)%write(CAVGS_2DLOCRES//params_glob%ext, icls)
+                else
+                    call even_imgs(icls)%write(REFS_2DLOCRES//params_glob%ext, icls)
+                endif
             end do
             deallocate(locres_finds)
         endif
@@ -703,8 +737,9 @@ contains
         do icls=1,ncls
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
+            call shnorm_imgs(icls)%kill
         end do
-        deallocate(even_imgs, odd_imgs, frc)
+        deallocate(even_imgs, odd_imgs, shnorm_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     ! I/O

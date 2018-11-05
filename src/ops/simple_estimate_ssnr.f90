@@ -119,14 +119,12 @@ contains
     end function dose_weight
 
     ! local resolution estimation for class averages
-    subroutine local_res2D( even_imgs, odd_imgs, corr_thres, locres_finds, half_winsz, fbody )
+    subroutine local_res2D( even_imgs, odd_imgs, corr_thres, locres_finds, half_winsz )
         use simple_image, only: image
         class(image),               intent(inout) :: even_imgs(:), odd_imgs(:)
         real,                       intent(in)    :: corr_thres
         integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
         integer,          optional, intent(in)    :: half_winsz
-        character(len=*), optional, intent(in)    :: fbody
-        character(len=:), allocatable :: fname_finds
         integer,     allocatable :: locres_finds_filt(:,:), vec_finds(:)
         real,        allocatable :: frc(:), res(:)
         complex,     allocatable :: cmat(:,:,:)
@@ -244,31 +242,26 @@ contains
         end do
         deallocate(eimgs_copy, oimgs_copy)
         ! write output
-        if( present(fbody) )then
-            fname_finds  = trim(fbody)//'_finds.bin'
-        else
-            fname_finds  = 'locresmap2D_finds.bin'
-        endif
-        call fopen(funit, fname_finds, access='STREAM', action='WRITE',&
+        call fopen(funit, LOCRESMAP2D_FILE, access='STREAM', action='WRITE',&
             &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
-        call fileiochk('local_res, file: '//fname_finds, io_stat)
+        call fileiochk('local_res, file: '//LOCRESMAP2D_FILE, io_stat)
         write(unit=funit,pos=1) locres_finds
         call fclose(funit)
     end subroutine local_res2D
 
     ! filtering of the class averages according to local resolution estimates
-    subroutine local_res2D_lp( locres_finds, imgs2filter, shellnorm )
+    subroutine local_res2D_lp( locres_finds, imgs2filter, imgs2filter_shnorm )
         use simple_image, only: image
-        integer,           intent(in)    :: locres_finds(:,:,:)
-        class(image),      intent(inout) :: imgs2filter(:)
-        logical, optional, intent(in)    :: shellnorm
-        real,         allocatable   :: rmats_filt(:,:,:,:), rmats_lp(:,:,:,:), rmats(:,:,:,:)
-        type(image),  allocatable   :: resimgs(:)
+        integer,                intent(in)    :: locres_finds(:,:,:)
+        class(image),           intent(inout) :: imgs2filter(:)
+        class(image), optional, intent(inout) :: imgs2filter_shnorm(:)
+        real,         allocatable :: rmats_filt(:,:,:,:)
+        real,         allocatable :: rmats(:,:,:,:), rmats_shnorm_filt(:,:,:,:)
+        type(image),  allocatable :: resimgs(:)
         integer :: ldim_finds(3), ldim(3), k, kstart, kstop, nptcls, iptcl
         real    :: smpd, lp
-        logical :: sshellnorm
-        sshellnorm = .false.
-        if( present(shellnorm) ) sshellnorm = shellnorm
+        logical :: shellnorm
+        shellnorm = present(imgs2filter_shnorm)
         ! sanity checks
         if( any(locres_finds == 0 ) ) THROW_HARD('zero Fourier indices not allowed in locres_finds; local_res2D_lp')
         ldim_finds(1) = size(locres_finds,1)
@@ -283,45 +276,70 @@ contains
         kstart = minval(locres_finds)
         kstop  = maxval(locres_finds)
         ! to avoid allocation in the loop
-        allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1),&
-            &rmats_lp(nptcls,ldim(1),ldim(2),1), rmats(nptcls,ldim(1),ldim(2),1))
+        if( shellnorm )then
+            allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1),&
+                &rmats(nptcls,ldim(1),ldim(2),1), rmats_shnorm_filt(nptcls,ldim(1),ldim(2),1))
+        else
+            allocate(resimgs(nptcls), rmats_filt(nptcls,ldim(1),ldim(2),1),&
+                &rmats(nptcls,ldim(1),ldim(2),1))
+        endif
         do iptcl=1,nptcls
             call resimgs(iptcl)%new(ldim, smpd, wthreads=.false.)
         end do
         rmats_filt = 0.
-        rmats_lp   = 0.
         ! loop over shells
         do k=kstart,kstop
             call progress(k,kstop)
-            !$omp parallel do default(shared) private(iptcl,lp) proc_bind(close) schedule(static)
-            do iptcl=1,nptcls
-                if( any(locres_finds(iptcl,:,:) == k ) )then
-                    lp = calc_lowpass_lim(k, ldim(1), smpd)
-                    if( sshellnorm ) call imgs2filter(iptcl)%shellnorm
-                    call imgs2filter(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
-                    call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
-                    call resimgs(iptcl)%bp(0., lp, width=6.0)
-                    call resimgs(iptcl)%get_rmat_sub(rmats_lp(iptcl,:,:,:))
-                    where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmats_lp(iptcl,:,:,1)
-                endif
-            end do
-            !$omp end parallel do
+            if( shellnorm )then
+                !$omp parallel do default(shared) private(iptcl,lp) proc_bind(close) schedule(static)
+                do iptcl=1,nptcls
+                    if( any(locres_finds(iptcl,:,:) == k ) )then
+                        lp = calc_lowpass_lim(k, ldim(1), smpd)
+                        ! without pre-withening of power spectrum
+                        call imgs2filter(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%bp(0., lp, width=6.0)
+                        call resimgs(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmats(iptcl,:,:,1)
+                        ! with pre-withening of power spectrum
+                        call imgs2filter_shnorm(iptcl)%shellnorm
+                        call imgs2filter_shnorm(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%bp(0., lp, width=6.0)
+                        call resimgs(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        where( locres_finds(iptcl,:,:) == k ) rmats_shnorm_filt(iptcl,:,:,1) = rmats(iptcl,:,:,1)
+                    endif
+                end do
+                !$omp end parallel do
+            else
+                !$omp parallel do default(shared) private(iptcl,lp) proc_bind(close) schedule(static)
+                do iptcl=1,nptcls
+                    if( any(locres_finds(iptcl,:,:) == k ) )then
+                        lp = calc_lowpass_lim(k, ldim(1), smpd)
+                        call imgs2filter(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%set_rmat(rmats(iptcl,:,:,:))
+                        call resimgs(iptcl)%bp(0., lp, width=6.0)
+                        call resimgs(iptcl)%get_rmat_sub(rmats(iptcl,:,:,:))
+                        where( locres_finds(iptcl,:,:) == k ) rmats_filt(iptcl,:,:,1) = rmats(iptcl,:,:,1)
+                    endif
+                end do
+                !$omp end parallel do
+            endif
         enddo
         ! set the filtered images and destroy resimgs
         do iptcl=1,nptcls
             call imgs2filter(iptcl)%set_rmat(rmats_filt(iptcl,:,:,:))
+            if( shellnorm ) call imgs2filter_shnorm(iptcl)%set_rmat(rmats_shnorm_filt(iptcl,:,:,:))
             call resimgs(iptcl)%kill
         end do
     end subroutine local_res2D_lp
 
-    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz, fbody )
+    subroutine local_res( even, odd, mskimg, corr_thres, locres_finds, half_winsz )
         use simple_image, only: image
         class(image),               intent(inout) :: even, odd, mskimg
         real,                       intent(in)    :: corr_thres
         integer, allocatable,       intent(out)   :: locres_finds(:,:,:)
         integer,          optional, intent(in)    :: half_winsz
-        character(len=*), optional, intent(in)    :: fbody
-        character(len=:), allocatable :: fname_finds
         logical,  allocatable :: l_mask(:,:,:)
         real,     allocatable :: fsc(:), res(:)
         integer     :: hwinsz, filtsz, ldim(3), i, j, k, kind, funit, io_stat
@@ -400,14 +418,9 @@ contains
         call ecopy%kill
         call ocopy%kill
         ! write output
-        if( present(fbody) )then
-            fname_finds  = trim(fbody)//'_finds.bin'
-        else
-            fname_finds  = 'locresmap_finds.bin'
-        endif
-        call fopen(funit, fname_finds, access='STREAM', action='WRITE',&
+        call fopen(funit, LOCRESMAP3D_FILE, access='STREAM', action='WRITE',&
             &status='REPLACE', form='UNFORMATTED', iostat=io_stat)
-        call fileiochk('local_res, file: '//fname_finds, io_stat)
+        call fileiochk('local_res, file: '//LOCRESMAP3D_FILE, io_stat)
         write(unit=funit,pos=1) locres_finds
         call fclose(funit)
 
