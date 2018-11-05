@@ -660,7 +660,7 @@ contains
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, dir_box
         integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
-        integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state
+        integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob
         real                      :: particle_position(2)
         logical                   :: spproj_modified
         call cline%set('oritype', 'mic')
@@ -754,6 +754,7 @@ contains
         noutside  = 0
         box_first = 0
         ! main loop
+        iptcl_glob = 0 ! extracted particle index among ALL stacks
         do imic = 1, ntot
             if( .not.mics_mask(imic) )cycle
             ! fetch micrograph
@@ -845,6 +846,14 @@ contains
             end do
             ! IMPORT INTO PROJECT
             call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
+            ! add coordinates to ptcl2D field
+            do iptcl=1,nptcls
+                if( .not.oris_mask(iptcl) )cycle
+                iptcl_glob = iptcl_glob + 1
+                particle_position = boxdata(iptcl,1:2)
+                call build%spproj%os_ptcl2D%set(iptcl_glob,'xpos',boxdata(iptcl,1))
+                call build%spproj%os_ptcl2D%set(iptcl_glob,'ypos',boxdata(iptcl,2))
+            end do
             ! clean
             call boxfile%kill()
         enddo
