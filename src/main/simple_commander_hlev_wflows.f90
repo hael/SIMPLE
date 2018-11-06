@@ -741,7 +741,7 @@ contains
         integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
         integer  :: iter, startit, rename_stat, ncls
-        logical  :: fall_over, cavgs_import
+        logical  :: fall_over, cavgs_import, do_continue
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -753,6 +753,9 @@ contains
         ! prep project
         cavgs_import = .false.
         fall_over    = .false.
+        do_continue  = params%continue.eq.'yes'
+        call cline%set('continue', 'no')
+        params%continue = 'no'
         select case(trim(params%oritype))
             case('ptcl3D')
                 call work_proj%read(params%projfile)
@@ -816,12 +819,14 @@ contains
         ! fetch project oris
         call work_proj%get_sp_oris('ptcl3D', os)
         ! wipe previous states
-        labels = nint(os%get_all('state'))
-        if( any(labels > 1) )then
-            where(labels > 0) labels = 1
-            call os%set_all('state', real(labels))
+        if( .not.do_continue )then
+            labels = nint(os%get_all('state'))
+            if( any(labels > 1) )then
+                where(labels > 0) labels = 1
+                call os%set_all('state', real(labels))
+            endif
+            deallocate(labels)
         endif
-        deallocate(labels)
         ! e/o partition
         if( params%eo.eq.'no' )then
             call os%set_all2single('eo', -1.)
@@ -913,8 +918,10 @@ contains
         write(*,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
 
         ! randomize state labels
-        write(*,'(A)') '>>>'
-        call gen_labelling(os, params%nstates, 'uniform')
+        if( .not.do_continue )then
+            write(*,'(A)') '>>>'
+            call gen_labelling(os, params%nstates, 'uniform')
+        endif
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
         work_proj%os_ptcl3D = os
@@ -1215,8 +1222,8 @@ contains
                         src = trim(FSC_FBODY)//str_state//BIN_EXT
                         call spproj_master%add_fsc2os_out(trim(src), s, params%box)
                         src  = trim(ANISOLP_FBODY)//str_state//params%ext
-                        call  spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol_filt', box=params%box)
-                        src  = trim(FRCS_FBODY)//str_state//params%ext
+                        call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol_filt', box=params%box)
+                        src  = trim(FRCS_FBODY)//str_state//BIN_EXT
                         call  spproj_master%add_frcs2os_out(trim(src),'frc3D')
                     endif
                 endif
@@ -1295,11 +1302,11 @@ contains
         type(oris)                    :: os
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: cavg_stk, vol, str_state
-        real,             allocatable :: res(:), tmp_rarr(:)
+        real,             allocatable :: res(:), tmp_rarr(:), final_corrs(:)
         integer,          allocatable :: labels(:), final_labels(:), states(:), tmp_iarr(:)
-        real     :: lp_cls3D, corr, prev_corr
+        real     :: lp_cls3D, corr
         integer  :: rename_stat, ncls, nptcls, iptcl, istate, state2keep, nstates
-        logical  :: fall_over, cavgs_import, has_corr
+        logical  :: fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -1391,6 +1398,7 @@ contains
             call os%set_all('state', real(labels))
         endif
         final_labels = labels
+        allocate(final_corrs(nptcls),source=-1.)
         ! e/o partition
         if( params%eo.eq.'no' )then
             call os%set_all2single('eo', -1.)
@@ -1420,14 +1428,14 @@ contains
 
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> RECONSTRUCTING MIXED MODEL'
-        write(*,'(A)') '>>>'
-        work_proj%os_ptcl3D = os
-        call work_proj%write
-        call xreconstruct3D_distr%execute(cline_reconstruct3D)
-        rename_stat = rename(trim(VOL_FBODY)//one//params%ext,trim(CLUSTER3D_VOL)//params%ext)
         if( params%eo .ne. 'no' )then
+            write(*,'(A)') '>>>'
+            write(*,'(A)') '>>> RECONSTRUCTING MIXED MODEL'
+            write(*,'(A)') '>>>'
+            work_proj%os_ptcl3D = os
+            call work_proj%write
+            call xreconstruct3D_distr%execute(cline_reconstruct3D)
+            rename_stat = rename(trim(VOL_FBODY)//one//params%ext,trim(CLUSTER3D_VOL)//params%ext)
             rename_stat = rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
             rename_stat = rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
             rename_stat = rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
@@ -1436,51 +1444,48 @@ contains
         endif
 
         ! MAIN LOOP
-        do istate=1,nstates-1
+        do istate=1,nstates
             write(*,'(A)')    '>>>'
             write(*,'(A,I3)') '>>> STATE ', istate
             write(*,'(A)')    '>>>'
             str_state = int2str_pad(istate,2)
             ! Generate labels
-            if( istate == 1 )then
-                has_corr = os%isthere('corr')
-                if( has_corr )then
-                    call gen_labelling(os, nstates, 'squared')
-                else
-                    call gen_labelling(os, nstates, 'uniform')
-                endif
+            if( istate == nstates )then
+                ! nothing to do
             else
-                call gen_labelling(os, nstates-istate+1, 'squared')
-            endif
-            labels = nint(os%get_all('state'))
-            ! Book-keeping
-            if( nstates == 2 )then
-                final_labels = labels
-                exit
-            endif
-            ! book keeping solution
-            labels = nint(os%get_all('state'))
-            if( istate == 1 )then
-                state2keep = 1
-            else
-                state2keep = 2 ! furthest away from reference
-            endif
-            where(labels == 0)
-                ! no update!!
-            else where(labels == state2keep)
-                final_labels = istate
-            else where
-                final_labels = nstates
-            end where
-            if( istate == nstates-1 )exit
-            ! book keeping for next draw
-            do iptcl=1,nptcls
-                if( final_labels(iptcl) == nstates )then
-                    call os%set(iptcl, 'state', 1.)
+                if( nstates == 2 )then
+                    call gen_labelling(os, 1, 'single_power_high', 4.)
                 else
-                    call os%set(iptcl, 'state', 0.)
+                    if( istate == 1 )then
+                        call gen_labelling(os, nstates, 'uniform')
+                    else if( istate == 2 )then
+                        call gen_labelling(os, nstates-istate+1, 'single_power_high', 4.)
+                    else
+                        call gen_labelling(os, nstates-istate+1, 'single_power_low')
+                    endif
                 endif
-            enddo
+                labels = nint(os%get_all('state'))
+                ! book keeping solution
+                state2keep = 1 ! always
+                where(labels == 0)
+                    ! no update!!
+                else where(labels == state2keep)
+                    final_labels = istate
+                else where
+                    ! so last state is already sampled
+                    final_labels = nstates
+                end where
+                ! book keeping for next draw
+                if( istate < nstates-1 )then
+                    do iptcl=1,nptcls
+                        if( final_labels(iptcl) == nstates )then
+                            call os%set(iptcl, 'state', 1.)
+                        else
+                            call os%set(iptcl, 'state', 0.)
+                        endif
+                    enddo
+                endif
+            endif
             ! book keeping reconstruction
             do iptcl=1,nptcls
                 if( final_labels(iptcl) == istate )then
@@ -1503,7 +1508,7 @@ contains
             write(*,'(A,I3)') '>>> EVALUATING STATE ', istate
             write(*,'(A)')    '>>>'
             do iptcl=1,nptcls
-                if( final_labels(iptcl) <= istate )then
+                if( final_labels(iptcl) < istate )then
                     call work_proj%os_ptcl3D%set(iptcl, 'state', 0.)
                 else
                     call work_proj%os_ptcl3D%set(iptcl, 'state', 1.)
@@ -1516,39 +1521,24 @@ contains
             call work_proj%read(WORK_PROJFILE)
             ! Correlation update
             do iptcl=1,nptcls
-                if( final_labels(iptcl)<=istate ) cycle
-                prev_corr = os%get(iptcl,'corr')
-                corr      = work_proj%os_ptcl3D%get(iptcl,'corr')
-                corr = max(corr, prev_corr)
-                call os%set(iptcl,'corr',corr)
-                call work_proj%os_ptcl3D%set(iptcl,'corr',corr)
+                if( final_labels(iptcl) == istate )then
+                    final_corrs(iptcl) = work_proj%os_ptcl3D%get(iptcl,'corr')
+                else if( final_labels(iptcl) > istate )then
+                    corr = work_proj%os_ptcl3D%get(iptcl,'corr')
+                    corr = max(corr, os%get(iptcl,'corr'))
+                    call os%set(iptcl,'corr',corr)
+                    call work_proj%os_ptcl3D%set(iptcl,'corr',corr)
+                endif
             enddo
         enddo
         call os%kill
+        call work_proj%kill
         deallocate(labels)
-        ! reconstruction of the last 2 states
-        do istate=nstates-1,nstates
-            write(*,'(A)')    '>>>'
-            write(*,'(A,I3)') '>>> RECONSTRUCTING STATE ', istate
-            write(*,'(A)')    '>>>'
-            str_state = int2str_pad(istate,2)
-            do iptcl=1,nptcls
-                if(final_labels(iptcl)==istate)then
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 1.)
-                else
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 0.)
-                endif
-            enddo
-            call work_proj%write
-            call xreconstruct3D_distr%execute(cline_reconstruct3D)
-            vol = 'vol_state'//str_state//params%ext
-            call stash_rec
-        enddo
         ! updates original document
         call spproj%read(params%projfile)
         do iptcl=1,nptcls
             if( final_labels(iptcl) == 0 ) cycle
-            call spproj%os_ptcl3D%set(iptcl,'corr',work_proj%os_ptcl3D%get(iptcl,'corr'))
+            call spproj%os_ptcl3D%set(iptcl,'corr',final_corrs(iptcl))
             call spproj%os_ptcl3D%set(iptcl,'state',real(final_labels(iptcl)))
         enddo
         ! debug
@@ -1564,9 +1554,8 @@ contains
         enddo
         call spproj%write
         ! cleanup
-        call work_proj%kill
         call spproj%kill
-        deallocate(final_labels)
+        deallocate(final_labels, final_corrs)
         call del_file(WORK_PROJFILE)
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D_INIT NORMAL STOP ****')
@@ -1576,9 +1565,9 @@ contains
             subroutine stash_rec
                 rename_stat = rename(trim(VOL_FBODY)//one//params%ext,vol)
                 if( params%eo .ne. 'no' )then
-                    call simple_copy_file(trim(ANISOLP_FBODY)//one//params%ext,trim(ANISOLP_FBODY)//str_state//params%ext)
                     call simple_copy_file(trim(VOL_FBODY)//one//'_even'//params%ext,'vol_state'//str_state//'_even'//params%ext)
                     call simple_copy_file(trim(VOL_FBODY)//one//'_odd'//params%ext,'vol_state'//str_state//'_odd'//params%ext)
+                    ! call simple_copy_file(trim(ANISOLP_FBODY)//one//params%ext,trim(ANISOLP_FBODY)//str_state//params%ext)
                     ! restore low-pass limit etc for evaluation
                     call simple_copy_file(trim(CLUSTER3D_VOL)//'_even'//params%ext,trim(VOL_FBODY)//one//'_even'//params%ext)
                     call simple_copy_file(trim(CLUSTER3D_VOL)//'_odd'//params%ext, trim(VOL_FBODY)//one//'_odd'//params%ext)

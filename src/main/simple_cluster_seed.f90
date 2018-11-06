@@ -15,11 +15,13 @@ integer, allocatable :: states(:)       !< states for all particles
 
 contains
 
-    subroutine gen_labelling( os, nclasses, method )
-        type(oris),       intent(inout) :: os
-        integer,          intent(in)    :: nclasses
-        character(len=*), intent(in)    :: method
+    subroutine gen_labelling( os, nclasses, method, power)
+        type(oris),        intent(inout) :: os
+        integer,           intent(in)    :: nclasses
+        character(len=*),  intent(in)    :: method
+        real, optional,    intent(in)    :: power
         character(len=STDLEN) :: method_here
+        real                  :: power_here
         if(nclasses<=1) THROW_HARD('Inconstsistent number of classes; gen_labelling')
         ! init
         call seed_rnd
@@ -35,17 +37,19 @@ contains
         else
             method_here = trim(method)
         endif
+        power_here = 2.
+        if( present(power) )power_here = power
         select case(trim(method))
             case('uniform')
                 call draw_uniform
             case('uniform_corr')
                 call draw_uniform_corr(os)
             case('squared')
-                call draw_squared(os)
-            case('squared_uniform')
-                call draw_squared_uniform(os)
-            case('squared_uniform2')
-                call draw_squared_uniform2(os)
+                call draw_squared(os, 2.)
+            case('single_power_high')
+                call draw_single_power(os, .false., power_here)
+            case('single_power_low')
+                call draw_single_power(os, .true., power_here)
             case('ranked_uniform')
                 call draw_ranked_uniform(os)
             case DEFAULT
@@ -107,141 +111,9 @@ contains
         call rt%kill
     end subroutine draw_uniform_corr
 
-    !  Bottom half randomization followed by squared distribution sampling for the top half
-    subroutine draw_squared_uniform(os)
-        type(oris), intent(inout) :: os
-        real     :: dists(nptcls), dists_part(nptcls)
-        integer  :: inds(nptcls), pops(nlabels), config(nptcls)
-        logical  :: mask(nptcls)
-        real     :: areal
-        integer  :: i,iptcl, s, n_drawn, ind, n_avail, half_pop
-        write(*,'(A)') '>>> GENERATING MIXED UNIFORM & SKEWED LABELLING'
-        mask   = (states > 0) .and. (states <= nlabels)
-        dists  = 1. - os%get_all('corr')
-        config = 0
-        ! assign uniformly the bottom half worst scoring particles
-        ! this is only for consistency with the first iteration of extremal optimization
-        half_pop   = ceiling(real(nincl_ptcls)/2.)
-        inds       = (/(iptcl, iptcl=1,nptcls)/)
-        dists_part = -huge(areal)
-        where(mask) dists_part = dists
-        call hpsort(dists_part,inds) ! highest distances last
-        s = irnd_uni(nlabels)
-        do i=nptcls,half_pop,-1
-            iptcl         = inds(i)
-            config(iptcl) = s
-            mask(iptcl)   = .false.
-            s = s + 1
-            if(s > nlabels) s = 1
-        enddo
-        ! even partitions for the top half
-        n_avail = count(mask)
-        pops    = floor(real(n_avail)/real(nlabels))
-        do s=1,nlabels
-            if(sum(pops)==n_avail)exit
-            pops(s) = pops(s)+1
-        enddo
-        ! draw following squared distribution for the bottom half
-        do s=1,nlabels-1
-            n_avail    = count(mask)
-            inds       = (/(iptcl, iptcl=1,nptcls)/)
-            dists_part = huge(areal)
-            if( s==1 )then
-                ! first partition: sample lowest distances
-                where(mask) dists_part = dists
-            else
-                ! other partitions: sample highest distances
-                where(mask) dists_part = 1. - dists
-            endif
-            call hpsort(dists_part,inds)
-            n_drawn = 0
-            do while(n_drawn < pops(s))
-                ind   = ceiling(ran3()**2.*real(n_avail))
-                iptcl = inds(ind)
-                if(mask(iptcl))then
-                    mask(iptcl)   = .false.
-                    n_drawn       = n_drawn + 1
-                    config(iptcl) = s
-                endif
-            enddo
-        enddo
-        ! last partition: leftovers
-        where(mask)config = nlabels
-        ! updates states
-        where((states > 0) .and. (states <= nlabels)) states = config
-    end subroutine draw_squared_uniform
-
-    !  Bottom half randomization followed by squared distribution sampling for the top half
-    !  This one leaves one partition completely random
-    subroutine draw_squared_uniform2(os)
-        type(oris), intent(inout) :: os
-        real     :: dists(nptcls), dists_part(nptcls)
-        integer  :: inds(nptcls), pops(nlabels), config(nptcls)
-        logical  :: mask(nptcls)
-        real     :: areal
-        integer  :: i,iptcl, s, n_drawn, ind, n_avail, half_pop
-        write(*,'(A)') '>>> GENERATING MIXED UNIFORM & SKEWED LABELLING'
-        mask   = (states > 0) .and. (states <= nlabels)
-        dists  = 1. - os%get_all('corr')
-        config = 0
-        ! assign uniformly the bottom half worst scoring particles
-        ! this is only for consistency with the first iteration of extremal optimization
-        half_pop   = floor(real(nincl_ptcls)/2.)
-        inds       = (/(iptcl, iptcl=1,nptcls)/)
-        dists_part = -huge(areal)
-        where(mask) dists_part = dists
-        call hpsort(dists_part,inds) ! highest distances last
-        s = irnd_uni(nlabels)
-        do i=nptcls,half_pop,-1
-            iptcl         = inds(i)
-            config(iptcl) = s
-            mask(iptcl)   = .false.
-            s = s + 1
-            if(s > nlabels) s = 1
-        enddo
-        ! even partitions for the top half
-        n_avail = count(mask)
-        pops    = floor(real(n_avail)/real(nlabels))
-        do s=1,nlabels
-            if(sum(pops)==n_avail)exit
-            pops(s) = pops(s)+1
-        enddo
-        ! first partition is random
-        n_drawn = 0
-        do while(n_drawn < pops(1))
-            iptcl = ceiling(ran3()*real(nincl_ptcls))
-            if(mask(iptcl))then
-                n_drawn       = n_drawn + 1
-                mask(iptcl)   = .false.
-                config(iptcl) = 1
-            endif
-        enddo
-        ! draw following squared distribution for the bottom half minus one patition
-        do s=2,nlabels-1
-            n_avail    = count(mask)
-            inds       = (/(iptcl, iptcl=1,nptcls)/)
-            dists_part = huge(areal)
-            where(mask) dists_part = 1. - dists
-            call hpsort(dists_part,inds)
-            n_drawn = 0
-            do while(n_drawn < pops(s))
-                ind   = ceiling(ran3()**6.*real(n_avail))
-                iptcl = inds(ind)
-                if(mask(iptcl))then
-                    mask(iptcl)   = .false.
-                    n_drawn       = n_drawn + 1
-                    config(iptcl) = s
-                endif
-            enddo
-        enddo
-        ! last partition: leftovers
-        where(mask)config = nlabels
-        ! updates states
-        where((states > 0) .and. (states <= nlabels)) states = config
-    end subroutine draw_squared_uniform2
-
     ! Loose adaptation of k++ seeding procedure
-    subroutine draw_squared(os)
+    subroutine draw_squared(os, power)
+        real,       intent(in)    :: power
         type(oris), intent(inout) :: os
         real     :: dists(nptcls), dists_part(nptcls)
         integer  :: inds(nptcls), pops(nlabels), config(nptcls)
@@ -273,7 +145,7 @@ contains
             call hpsort(dists_part,inds)
             n_drawn = 0
             do while(n_drawn < pops(s))
-                ind   = ceiling(ran3()**2.*real(n_avail))
+                ind   = ceiling((ran3()**power)*real(n_avail))
                 iptcl = inds(ind)
                 if(mask(iptcl))then
                     mask(iptcl)   = .false.
@@ -287,6 +159,56 @@ contains
         ! updates states
         where((states > 0) .and. (states <= nlabels)) states = config
     end subroutine draw_squared
+
+    ! Loose adaptation of k++ seeding procedure, reurns one partition only
+    ! state=1: drawned
+    ! state=nstates: not drawned
+    subroutine draw_single_power(os, high, power)
+        real,       intent(in)    :: power
+        logical,    intent(in)    :: high ! whether to sample high or low distances
+        type(oris), intent(inout) :: os
+        real    :: dists(nptcls), dists_part(nptcls)
+        integer :: inds(nptcls), pops(nlabels), config(nptcls)
+        logical :: mask(nptcls)
+        real    :: areal
+        integer :: iptcl, s, n_drawn, ind, n_avail
+        write(*,'(A)') '>>> SAMPLING FROM DISTANCES'
+        mask   = (states > 0) .and. (states <= nlabels)
+        dists  = 1. - os%get_all('corr')
+        config = 0
+        ! even partitions
+        pops = floor(real(nincl_ptcls)/real(nlabels))
+        do s=1,nlabels
+            if(sum(pops)==nincl_ptcls)exit
+            pops(s) = pops(s)+1
+        enddo
+        ! draw following powered distribution
+        n_avail    = count(mask)
+        inds       = (/(iptcl, iptcl=1,nptcls)/)
+        dists_part = huge(areal)
+        if( .not.high )then
+            ! sample lowest distances
+            where(mask) dists_part = dists
+        else
+            ! sample highest distances
+            where(mask) dists_part = 1. - dists
+        endif
+        call hpsort(dists_part,inds)
+        n_drawn = 0
+        do while(n_drawn < pops(1))
+            ind   = ceiling((ran3()**power)*real(n_avail))
+            iptcl = inds(ind)
+            if(mask(iptcl))then
+                mask(iptcl)   = .false.
+                n_drawn       = n_drawn + 1
+                config(iptcl) = 1
+            endif
+        enddo
+        ! leftovers
+        where(mask) config = nlabels
+        ! updates states
+        where((states > 0) .and. (states <= nlabels)) states = config
+    end subroutine draw_single_power
 
     ! Bottom half randomization followed by sorted assignment for the top half
     subroutine draw_ranked_uniform(os)
