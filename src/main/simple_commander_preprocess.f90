@@ -175,7 +175,7 @@ contains
             ! ctf_estimate
             params_glob%hp   = params%hp_ctf_estimate
             params_glob%lp   = max(params%fny, params%lp_ctf_estimate)
-            call cfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate)
+            call cfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
             ! picker
@@ -372,6 +372,7 @@ contains
         type(ori)                     :: o
         character(len=:), allocatable :: intg_forctf, output_dir, imgkind
         integer                       :: fromto(2), imic, ntot, cnt, state
+        logical                       :: l_gen_thumb
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call spproj%read(params%projfile)
@@ -410,8 +411,9 @@ contains
                 else
                     THROW_HARD('no image available (forctf|intg) for CTF fittings :: exec_ctf_estimate')
                 endif
-                ctfvars = o%get_ctfvars()
-                call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir))
+                l_gen_thumb = .not. o%isthere('thumb')
+                ctfvars     = o%get_ctfvars()
+                call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
                 call spproj%os_mic%set_ori(imic, o)
             endif
             write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
