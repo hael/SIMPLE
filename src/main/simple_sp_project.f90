@@ -1070,12 +1070,18 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd)
-        class(sp_project),     intent(inout) :: self
-        character(len=*),      intent(in)    :: stk
-        real,                  intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=:), allocatable :: stk_abspath
+    subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
+        class(sp_project),          intent(inout) :: self
+        character(len=*),           intent(in)    :: stk
+        real,                       intent(in)    :: smpd ! sampling distance of images in stk
+        character(len=*), optional, intent(in)    :: imgkind
+        character(len=:), allocatable :: stk_abspath, iimgkind
         integer :: ldim(3), nptcls, ind
+        if( present(imgkind) )then
+            allocate(iimgkind, source=trim(imgkind))
+        else
+            allocate(iimgkind, source='cavg')
+        endif
         ! full path and existence check
         stk_abspath = simple_abspath(stk,errmsg='sp_project :: add_cavgs2os_out')
         ! find dimension of inputted stack
@@ -1090,7 +1096,7 @@ contains
         call self%os_out%set(ind, 'top',     real(nptcls))
         call self%os_out%set(ind, 'smpd',    real(smpd))
         call self%os_out%set(ind, 'stkkind', 'single')
-        call self%os_out%set(ind, 'imgkind', 'cavg')
+        call self%os_out%set(ind, 'imgkind', iimgkind)
         call self%os_out%set(ind, 'ctf',     'no')
         ! add congruent os_cls2D
         call self%os_cls2D%new(nptcls)
@@ -1273,15 +1279,21 @@ contains
         endif
     end subroutine add_entry2os_out
 
-    subroutine get_cavgs_stk( self, stkname, ncls, smpd, fail )
+    subroutine get_cavgs_stk( self, stkname, ncls, smpd, imgkind, fail )
         class(sp_project),             intent(inout) :: self
         character(len=:), allocatable, intent(inout) :: stkname
         integer,                       intent(out)   :: ncls
         real,                          intent(out)   :: smpd
+        character(len=*), optional,    intent(in)    :: imgkind
         logical,          optional,    intent(in)    :: fail
-        character(len=:), allocatable :: imgkind
+        character(len=:), allocatable :: ikind, iimgkind
         integer :: n_os_out, ind, i, cnt
         logical :: fail_here
+        if( present(imgkind) )then
+            allocate(iimgkind, source=trim(imgkind))
+        else
+            allocate(iimgkind, source='cavg')
+        endif
         fail_here = .true.
         if( present(fail) )fail_here = fail
         ! check if field is empty
@@ -1292,16 +1304,16 @@ contains
         cnt = 0
         do i=1,n_os_out
             if( self%os_out%isthere(i,'imgkind') )then
-                imgkind = trim(self%os_out%get_static(i,'imgkind'))
-                if(trim(imgkind).eq.'cavg')then
+                ikind = trim(self%os_out%get_static(i,'imgkind'))
+                if(trim(ikind).eq.trim(iimgkind))then
                     ind = i
                     cnt = cnt + 1
                 endif
             endif
         end do
         if( fail_here )then
-            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind=cavg, aborting... get_cavgs_stk')
-            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind=cavg identified, aborting... get_cavgs_stk')
+            if( cnt > 1 )  THROW_HARD('multiple os_out entries with imgkind='//iimgkind//', aborting... get_cavgs_stk')
+            if( cnt == 0 ) THROW_HARD('no os_out entry with imgkind='//iimgkind//' identified, aborting... get_cavgs_stk')
             ! set return values
             if( allocated(stkname) ) deallocate(stkname)
             stkname = trim(self%os_out%get_static(ind,'stk'))

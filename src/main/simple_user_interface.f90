@@ -1292,7 +1292,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class'&
         &' averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 1, 0, 7, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 1, 0, 7, 6, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1321,6 +1321,8 @@ contains
         initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){yes}'
         initial_3Dmodel%filt_ctrls(4)%cval_default      = 'yes'
         call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, 'locres', 'binary', 'Use class averages filtered according to local resolution estimation',&
+        &'Use class averages filtered according to local resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
