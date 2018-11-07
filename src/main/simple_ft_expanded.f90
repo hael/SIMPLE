@@ -9,11 +9,11 @@ private
 public :: ft_expanded, ft_exp_reset_tmp_pointers
 #include "simple_local_flags.inc"
 
-complex(dp), parameter     :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
-real(dp),    parameter     :: denom = 0.00075_dp ! denominator for rescaling of cost function
-real(dp),    allocatable   :: ft_exp_tmpmat_re_2d(:,:,:)
-real(dp),    allocatable   :: ft_exp_tmpmat_im_2d(:,:,:)
-complex(dp), allocatable   :: ft_exp_tmp_cmat12(:,:,:)
+complex(dp), parameter   :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
+real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of cost function
+real(dp),    allocatable :: ft_exp_tmpmat_re_2d(:,:,:)
+real(dp),    allocatable :: ft_exp_tmpmat_im_2d(:,:,:)
+complex(dp), allocatable :: ft_exp_tmp_cmat12(:,:,:)
 
 type :: ft_expanded
     private
@@ -29,22 +29,17 @@ type :: ft_expanded
     logical              :: existence=.false.  !< existence
   contains
     ! constructors
-    procedure          :: new_1
-    procedure          :: new_2
-    procedure          :: new_3
+    procedure, private :: new_1
+    procedure, private :: new_2
+    procedure, private :: new_3
     generic            :: new => new_1, new_2, new_3
-   procedure           :: copy
-    ! checkers
-    procedure          :: exists
-    procedure, private :: same_dims
-    generic            :: operator(.eqdims.) => same_dims
     ! getters
-    procedure          :: get_ldim
     procedure          :: get_flims
-    procedure          :: get_lims
+    procedure          :: get_cmat
+    ! setters
+    procedure          :: set_cmat
+    procedure          :: zero
     ! arithmetics
-    procedure, private :: assign
-    generic            :: assignment(=) => assign
     procedure          :: add
     procedure          :: subtr
     ! modifiers
@@ -70,7 +65,6 @@ contains
 
     ! CONSTRUCTORS
 
-    !>  \brief  is a constructor
     subroutine new_1( self, img, hp, lp )
         class(ft_expanded), intent(inout) :: self
         class(image),       intent(inout) :: img
@@ -162,7 +156,6 @@ contains
         self%existence = .true.
     end subroutine new_1
 
-    !>  \brief  is a constructor
     subroutine new_2( self, ldim, smpd, hp, lp )
         class(ft_expanded), intent(inout) :: self
         integer,            intent(in)    :: ldim(3)
@@ -176,7 +169,6 @@ contains
         call img%kill
     end subroutine new_2
 
-    !>  \brief  is a constructor
     subroutine new_3( self, self_in )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self_in
@@ -188,67 +180,35 @@ contains
         endif
     end subroutine new_3
 
-    !>  \brief  is a constructor that copies the input object
-    subroutine copy( self, self_in )
-        class(ft_expanded), intent(inout) :: self
-        class(ft_expanded), intent(in)    :: self_in
-        if( self_in%existence )then
-            call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
-            self%cmat = self_in%cmat
-        else
-            THROW_HARD('self_in does not exists; copy')
-        endif
-    end subroutine copy
-
-    ! CHECKERS
-
-    !>  \brief  checks if an instance exists
-    pure function exists( self ) result( yep )
-        class(ft_expanded), intent(in) :: self
-        logical :: yep
-        yep = self%existence
-    end function exists
-
-    !>  \brief  checks for same dimensions, overloaded as (.eqdims.)
-    pure function same_dims( self1, self2 ) result( yep )
-        class(ft_expanded), intent(in) :: self1, self2
-        logical :: yep
-        yep = all(self1%lims == self2%lims)
-    end function same_dims
-
     ! GETTERS
 
-    !>  \brief  is a getter
-    pure function get_ldim( self ) result( ldim )
-        class(ft_expanded), intent(in) :: self
-        integer :: ldim(3)
-        ldim = self%ldim
-    end function get_ldim
-
-    !>  \brief  is a getter
     pure function get_flims( self ) result( flims)
         class(ft_expanded), intent(in) :: self
         integer :: flims(3,2)
         flims = self%flims
     end function get_flims
 
-    !>  \brief  is a getter
-    pure function get_lims( self ) result( lims)
+    pure subroutine get_cmat( self, cmat )
         class(ft_expanded), intent(in) :: self
-        integer :: lims(3,2)
-        lims = self%lims
-    end function get_lims
+        complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
+        cmat = self%cmat
+    end subroutine get_cmat
+
+    ! SETTERS
+
+    pure subroutine set_cmat( self, cmat )
+        class(ft_expanded), intent(inout) :: self
+        complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
+        self%cmat = cmat
+    end subroutine set_cmat
+
+    pure subroutine zero( self )
+        class(ft_expanded), intent(inout) :: self
+        self%cmat = cmplx(0.,0.)
+    end subroutine zero
 
     ! ARITHMETICS
 
-    !>  \brief  polymorphic assignment (=)
-    subroutine assign( selfout, selfin )
-        class(ft_expanded), intent(inout) :: selfout
-        class(ft_expanded), intent(in)    :: selfin
-        call selfout%copy(selfin)
-    end subroutine assign
-
-    !>  \brief  is for ft_expanded summation
     subroutine add( self, self2add, w )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2add
@@ -256,21 +216,9 @@ contains
         real :: ww
         ww =1.0
         if( present(w) ) ww = w
-        if( self%existence )then
-            if( self.eqdims.self2add )then
-                !$omp parallel workshare proc_bind(close)
-                self%cmat = self%cmat + self2add%cmat*ww
-                !$omp end parallel workshare
-            else
-                THROW_HARD('cannot sum ft_expanded objects of different dims; add')
-            endif
-        else
-            self = self2add
-            self%cmat = self%cmat*ww
-        endif
+        if( ww > 0. ) self%cmat = self%cmat + self2add%cmat*ww
     end subroutine add
 
-    !>  \brief is for image subtraction,  not overloaded
     subroutine subtr( self, self2subtr, w )
         class(ft_expanded), intent(inout) :: self
         class(ft_expanded), intent(in)    :: self2subtr
@@ -278,60 +226,31 @@ contains
         real :: ww
         ww = 1.0
         if( present(w) ) ww = w
-        if( self%existence )then
-            if( self.eqdims.self2subtr )then
-                !$omp parallel workshare proc_bind(close)
-                self%cmat = self%cmat-ww*self2subtr%cmat
-                !$omp end parallel workshare
-            else
-                THROW_HARD('cannot subtract ft_expanded objects of different dims; subtr')
-            endif
-        else
-            THROW_HARD('the object to subtract from does not exist; subtr')
-        endif
+        if( ww > 0. ) self%cmat = self%cmat-ww*self2subtr%cmat
     end subroutine subtr
 
     ! MODIFIERS
 
-    !>  \brief  is 4 shifting an ft_expanded instance
     subroutine shift( self, shvec, self_out )
         class(ft_expanded), intent(in)    :: self
         real,               intent(in)    :: shvec(3)
         class(ft_expanded), intent(inout) :: self_out
         integer :: hind,kind,lind
         real    :: shvec_here(3), arg
-        if( self%existence )then
-            if( self_out%existence )then
-                if( self.eqdims.self_out )then
-                    shvec_here = shvec
-                    if( self%ldim(3) == 1 ) shvec_here(3) = 0.
-                    !$omp parallel do collapse(3) schedule(static) default(shared) &
-                    !$omp private(hind,kind,lind,arg) proc_bind(close)
-                    do hind=self%flims(1,1),self%flims(1,2)
-                        do kind=self%flims(2,1),self%flims(2,2)
-                            do lind=self%flims(3,1),self%flims(3,2)
-                                arg = sum(shvec_here*self%transfmat(hind,kind,lind,:))
-                                self_out%cmat(hind,kind,lind) = self%cmat(hind,kind,lind)*cmplx(cos(arg),sin(arg))
-                            end do
-                        end do
-                    end do
-                    !$omp end parallel do
-                else
-                    write(*,*) 'self     lims: ', self%lims
-                    write(*,*) 'self_out lims: ', self_out%lims
-                    THROW_HARD('input/output objects have nonconforming dims; shift')
-                endif
-            else
-                THROW_HARD('output object does not exist; shift')
-            endif
-        else
-            THROW_HARD('cannot shift non-existent object; shift')
-        endif
+        shvec_here    = shvec
+        shvec_here(3) = 0. ! only for 2D images, see constructor (new_1)
+        do hind=self%flims(1,1),self%flims(1,2)
+            do kind=self%flims(2,1),self%flims(2,2)
+                do lind=self%flims(3,1),self%flims(3,2)
+                    arg = sum(shvec_here*self%transfmat(hind,kind,lind,:))
+                    self_out%cmat(hind,kind,lind) = self%cmat(hind,kind,lind) * cmplx(cos(arg),sin(arg))
+                end do
+            end do
+        end do
     end subroutine shift
 
     ! CALCULATORS
 
-    !>  \brief  is a correlation calculator
     function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(in) :: self1, self2
         real :: r,sumasq,sumbsq
@@ -348,109 +267,51 @@ contains
         endif
     end function corr
 
-    !>  \brief  is a correlation calculator with origin shift of self2, double precision
     function corr_shifted_8( self1, self2, shvec ) result( r )
         class(ft_expanded), intent(inout) :: self1, self2
         real(dp),           intent(in)    :: shvec(2)
         real(dp) :: r
-        integer  :: hind,kind, ithr
-        if ( self1.eqdims.self2 ) then
-            call calc_tmpmat_re(self1, self2, shvec)
-            r = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:r) private(hind,kind,ithr) default(shared)
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
-                    r = r + ft_exp_tmpmat_re_2d(hind,kind,ithr)
-                end do
-            end do
-            !$omp end parallel do
-            ! finalise the correlation coefficient
-            r = r / denom
-        else
-            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
-            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_shifted_8')
-        endif ! end of if( self1.eqdims.self2 ) statement
+        integer  :: ithr
+        call calc_tmpmat_re(self1, self2, shvec)
+        ithr = omp_get_thread_num() + 1
+        r = sum(ft_exp_tmpmat_re_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr)) / denom
     end function corr_shifted_8
 
-    !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_gshifted_8( self1, self2, shvec, grad )
         class(ft_expanded), target, intent(inout) :: self1, self2
         real(dp),                   intent(in)    :: shvec(2)
         real(dp),                   intent(out)   :: grad(2)
         real(dp) :: grad1, grad2
-        integer  :: hind,kind,ithr
-        if( self1.eqdims.self2 ) then
-            call calc_tmpmat_im(self1, self2, shvec)
-            grad1 = 0.0_dp
-            grad2 = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:grad1,grad2) private(hind,kind,ithr) default(shared)
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
-                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,1)
-                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,2)
-                end do
-            end do
-            !$omp end parallel do
-            grad(1) = grad1
-            grad(2) = grad2
-            ! finalise the correlation coefficient
-            grad = grad / denom
-        else
-            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
-            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            THROW_HARD('cannot correlate expanded_ft:s with different dims; :corr_gshifted_8')
-        endif ! end of if( self1.eqdims.self2 ) statement
+        integer  :: ithr
+        call calc_tmpmat_im(self1, self2, shvec)
+        ithr = omp_get_thread_num() + 1
+        grad(1) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
+                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,1))
+        grad(2) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
+                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,2))
+        grad = grad / denom
     end subroutine corr_gshifted_8
 
-    !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_fdfshifted_8( self1, self2, shvec, f, grad )
         class(ft_expanded), intent(inout) :: self1, self2
         real(dp),           intent(in)    :: shvec(2)
         real(dp),           intent(out)   :: grad(2), f
         real(dp) :: grad1, grad2
         integer  :: hind,kind,ithr
-        if ( self1.eqdims.self2 ) then
-            call calc_tmpmat_re_im(self1, self2, shvec)
-            ! corr is real part of the complex mult btw 1 and 2*
-            f     = 0.0_dp
-            grad1 = 0.0_dp
-            grad2 = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:f,grad1,grad2) private(hind,kind,ithr) default(shared)
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr  = omp_get_thread_num() + 1
-                    f     = f     + ft_exp_tmpmat_re_2d(hind,kind,ithr)
-                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,1)
-                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,2)
-                end do
-            end do
-            !$omp end parallel do
-            grad(1) = grad1
-            grad(2) = grad2
-            ! finalise the correlation coefficient
-            f    = f    / denom
-            grad = grad / denom
-        else
-            write(*,*) 'self1 flims: ', self1%flims(1,1), self1%flims(1,2), self1%flims(2,1),&
-                self1%flims(2,2), self1%flims(3,1), self1%flims(3,2)
-            write(*,*) 'self2 flims: ', self2%flims(1,1), self2%flims(1,2), self2%flims(2,1),&
-                self2%flims(2,2), self2%flims(3,1), self2%flims(3,2)
-            THROW_HARD('cannot correlate expanded_ft:s with different dims; corr_fdfshifted_8')
-        endif ! end of if( self1.eqdims.self2 ) statement
+        call calc_tmpmat_re_im(self1, self2, shvec)
+        ithr    = omp_get_thread_num() + 1
+        f       = sum(ft_exp_tmpmat_re_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr)) / denom
+        grad(1) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
+                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,1))
+        grad(2) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
+                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,2))
+        grad    = grad / denom
     end subroutine corr_fdfshifted_8
 
-    !> \brief  correctly normalize correlations after minimization
     subroutine corr_normalize( self1, self2, corr )
         class(ft_expanded), intent(inout) :: self1, self2
         real(sp),           intent(inout) :: corr
-        real(dp)                          :: sumasq,sumbsq
+        real(dp) :: sumasq,sumbsq
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
         corr   = real(real(corr,dp) * denom / sqrt(sumasq * sumbsq), sp)
@@ -463,28 +324,20 @@ contains
         integer  :: hind,kind,ithr
         ithr = omp_get_thread_num() + 1
         if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
                 end do
             end do
-            !$omp end parallel do
         else
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
                     ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
                 end do
             end do
-            !$omp end parallel do
             ithr = omp_get_thread_num() + 1
             ft_exp_tmp_cmat12_self1(ithr)%p => self1
             ft_exp_tmp_cmat12_self2(ithr)%p => self2
@@ -498,28 +351,20 @@ contains
         integer  :: hind,kind,ithr
         ithr = omp_get_thread_num() + 1
         if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
                 end do
             end do
-            !$omp end parallel do
         else
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
                     ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
                 end do
             end do
-            !$omp end parallel do
             ithr = omp_get_thread_num() + 1
             ft_exp_tmp_cmat12_self1(ithr)%p => self1
             ft_exp_tmp_cmat12_self2(ithr)%p => self2
@@ -527,31 +372,24 @@ contains
     end subroutine calc_tmpmat_im
 
     subroutine calc_tmpmat_re_im(self1, self2, shvec)
-        class(ft_expanded), target, intent(inout) :: self1, self2 !< instances
+        class(ft_expanded), target, intent(inout) :: self1, self2
         real(dp),                   intent(in)    :: shvec(2)
         real(dp)    :: arg
         complex(dp) :: tmp
         integer     :: hind,kind,ithr
         ithr = omp_get_thread_num() + 1
         if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,tmp,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
                     ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(tmp,kind=dp)
                     ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
                 end do
             end do
-            !$omp end parallel do
         else
-            !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,tmp,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    ithr = omp_get_thread_num() + 1
                     arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
                     ft_exp_tmp_cmat12(hind,kind,ithr) = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
                     tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
@@ -559,7 +397,6 @@ contains
                     ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
                 end do
             end do
-            !$omp end parallel do
             ithr = omp_get_thread_num() + 1
             ft_exp_tmp_cmat12_self1(ithr)%p => self1
             ft_exp_tmp_cmat12_self2(ithr)%p => self2

@@ -3,7 +3,7 @@ module simple_ftexp_shsrch
 include 'simple_lib.f08'
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded, ft_exp_reset_tmp_pointers
+use simple_ft_expanded, only: ft_expanded
 
 implicit none
 
@@ -139,7 +139,6 @@ contains
         ! set initial solution to previous shift
         call self%nlopt%minimize(self%ospec, self, cxy(1))
         call self%reference%corr_normalize(self%particle, cxy(1))
-        call ft_exp_reset_tmp_pointers
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = self%ospec%x ! shift
         if( present(prev_corr) )then

@@ -3,7 +3,7 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,   only: ft_expanded
+use simple_ft_expanded,   only: ft_expanded, ft_exp_reset_tmp_pointers
 use simple_image,         only: image
 use simple_parameters,    only: params_glob
 use simple_estimate_ssnr, only: acc_dose2filter
@@ -107,14 +107,15 @@ contains
             nimproved = 0
             do iframe=1,nframes
                 ! subtract the movie frame being aligned to reduce bias
-                call subtract_movie_frame( iframe )
+                call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
                 call  ftexp_srch%set_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
-                cxy =  ftexp_srch%minimize(corrs(iframe), opt_shifts(iframe,:))
+                cxy = ftexp_srch%minimize(corrs(iframe), opt_shifts(iframe,:))
+                call ft_exp_reset_tmp_pointers
                 if( cxy(1) > corrs(iframe) ) nimproved = nimproved + 1
                 opt_shifts(iframe,:) = cxy(2:3)
                 corrs(iframe)        = cxy(1)
                 ! add the subtracted movie frame back to the weighted sum
-                call add_movie_frame( iframe )
+                call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
             end do
             frac_improved = real(nimproved)/real(nframes)*100.
             if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
@@ -321,8 +322,11 @@ contains
                 call movie_frames_ftexp_sh(iframe)%new(movie_frames_ftexp(iframe))
             end do
         endif
+        ! destruct
         call frame_tmp%kill
         if(l_gain) call gainref%kill
+        ! create the global one
+        call movie_sum_global_ftexp%new(movie_frames_ftexp(1))
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             do_dose_weight = .true.
@@ -400,8 +404,8 @@ contains
         xsh = -shifts(fixed_frame,1)
         ysh = -shifts(fixed_frame,2)
         do iframe=1,nframes
-            shifts(iframe,1) = shifts(iframe,1)+xsh
-            shifts(iframe,2) = shifts(iframe,2)+ysh
+            shifts(iframe,1) = shifts(iframe,1) + xsh
+            shifts(iframe,2) = shifts(iframe,2) + ysh
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
@@ -411,15 +415,17 @@ contains
         real, intent(in) :: shifts(nframes,2)
         integer :: iframe
         real    :: shvec(3)
+        !$omp parallel do schedule(static) default(shared) private(iframe,shvec) proc_bind(close)
         do iframe=1,nframes
             shvec(1) = -shifts(iframe,1)
             shvec(2) = -shifts(iframe,2)
             shvec(3) = 0.0
             call movie_frames_ftexp(iframe)%shift(shvec, movie_frames_ftexp_sh(iframe))
         end do
+        !$omp end parallel do
     end subroutine shift_frames
 
-    subroutine calc_corrmat()
+    subroutine calc_corrmat
         integer :: iframe, jframe
         corrmat = 1. ! diagonal elements are 1
         !$omp parallel do schedule(guided) default(shared) private(iframe,jframe) proc_bind(close)
@@ -432,18 +438,18 @@ contains
         !$omp end parallel do
     end subroutine calc_corrmat
 
-    subroutine calc_corrs()
+    subroutine calc_corrs
         integer :: iframe
         do iframe=1,nframes
             ! subtract the movie frame being correlated to reduce bias
-            call subtract_movie_frame(iframe)
+            call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
             corrs(iframe) = movie_sum_global_ftexp%corr(movie_frames_ftexp_sh(iframe))
             ! add the subtracted movie frame back to the weighted sum
-            call add_movie_frame(iframe)
+            call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
         end do
     end subroutine calc_corrs
 
-    subroutine corrmat2weights()
+    subroutine corrmat2weights
         integer :: iframe, jframe
         corrs = 0.
         !$omp parallel do schedule(static) default(shared) private(iframe,jframe) proc_bind(close)
@@ -458,15 +464,37 @@ contains
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
 
-    subroutine sum_movie_frames_ftexp()
-        integer :: iframe
+    subroutine sum_movie_frames_ftexp
+        complex, allocatable :: cmat_sum(:,:,:), cmat(:,:,:)
+        integer :: iframe, flims(3,2)
         real    :: w
-        call movie_sum_global_ftexp%new(movie_frames_ftexp_sh(1))
+        flims = movie_sum_global_ftexp%get_flims()
+        allocate(cmat(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)),&
+             cmat_sum(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)), source=cmplx(0.,0.))
         w = 1./real(nframes)
+        !$omp parallel do schedule(static) default(shared) private(iframe,cmat) proc_bind(close) reduction(+:cmat_sum)
         do iframe=1,nframes
-            call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=w)
+            call movie_frames_ftexp_sh(iframe)%get_cmat(cmat)
+            cmat_sum = cmat_sum + cmat * w
         end do
+        !$omp end parallel do
+        call movie_sum_global_ftexp%set_cmat(cmat_sum)
     end subroutine sum_movie_frames_ftexp
+
+    subroutine wsum_movie_frames_ftexp
+        complex, allocatable :: cmat_sum(:,:,:), cmat(:,:,:)
+        integer :: iframe, flims(3,2)
+        flims = movie_sum_global_ftexp%get_flims()
+        allocate(cmat(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)),&
+             cmat_sum(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)), source=cmplx(0.,0.))
+        !$omp parallel do schedule(static) default(shared) private(iframe,cmat) proc_bind(close) reduction(+:cmat_sum)
+        do iframe=1,nframes
+            call movie_frames_ftexp_sh(iframe)%get_cmat(cmat)
+            cmat_sum = cmat_sum + cmat * frameweights(iframe)
+        end do
+        !$omp end parallel do
+        call movie_sum_global_ftexp%set_cmat(cmat_sum)
+    end subroutine wsum_movie_frames_ftexp
 
     subroutine sum_movie_frames( shifts )
         real, intent(in), optional :: shifts(nframes,2)
@@ -489,15 +517,6 @@ contains
         end do
         call frame_tmp%kill
     end subroutine sum_movie_frames
-
-    subroutine wsum_movie_frames_ftexp()
-        integer :: iframe
-        call movie_sum_global_ftexp%new(movie_frames_ftexp_sh(1))
-        do iframe=1,nframes
-            if( frameweights(iframe) > 0. )&
-            &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
-        end do
-    end subroutine wsum_movie_frames_ftexp
 
     subroutine wsum_movie_frames( shifts, fromto )
         real,              intent(in) :: shifts(nframes,2)
@@ -548,22 +567,6 @@ contains
             endif
         end do
     end subroutine wsum_movie_frames_tomo
-
-    subroutine add_movie_frame( iframe, w )
-        integer,        intent(in) :: iframe
-        real, optional, intent(in) :: w
-        real :: ww
-        ww = frameweights(iframe)
-        if( present(w) ) ww = w
-        if( frameweights(iframe) > 0. )&
-        &call movie_sum_global_ftexp%add(movie_frames_ftexp_sh(iframe), w=ww)
-    end subroutine add_movie_frame
-
-    subroutine subtract_movie_frame( iframe )
-        integer, intent(in) :: iframe
-        if( frameweights(iframe) > 0. )&
-        &call movie_sum_global_ftexp%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
-    end subroutine subtract_movie_frame
 
     subroutine motion_correct_kill
         integer :: iframe
