@@ -57,7 +57,7 @@ contains
 
     !> motion_correct DDD movie
     subroutine motion_correct_movie( movie_stack_fname, ctfvars, corr, shifts, err, gainref_fname, nsig )
-        use simple_ftexp_shsrch
+        use simple_ftexp_shsrch, only: ftexp_shsrch
         character(len=*),            intent(in)    :: movie_stack_fname !< filename
         type(ctfparams),             intent(inout) :: ctfvars
         real,                        intent(out)   :: corr              !< ave correlation per frame
@@ -65,6 +65,7 @@ contains
         logical,                     intent(out)   :: err               !< error flag
         character(len=*),  optional, intent(in)    :: gainref_fname     !< gain reference filename
         real,              optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
+        type(ftexp_shsrch) :: ftexp_srch
         real    :: ave, sdev, var, minw, maxw
         real    :: cxy(3), corr_prev, frac_improved, corrfrac
         integer :: iframe, iter, nimproved, updateres, i
@@ -81,7 +82,7 @@ contains
             return
         endif
         ! make search object ready
-        call ftexp_shsrch_init(movie_sum_global_ftexp, movie_frames_ftexp(1), params_glob%scale * params_glob%trs, &
+        call ftexp_srch%new(movie_sum_global_ftexp, movie_frames_ftexp(1), params_glob%scale * params_glob%trs, &
             motion_correct_ftol = params_glob%motion_correctftol, motion_correct_gtol = params_glob%motion_correctgtol)
         ! initialise with small random shifts (to average out dead/hot pixels)
         do iframe=1,nframes
@@ -107,8 +108,8 @@ contains
             do iframe=1,nframes
                 ! subtract the movie frame being aligned to reduce bias
                 call subtract_movie_frame( iframe )
-                call ftexp_shsrch_set_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
-                cxy = ftexp_shsrch_minimize(corrs(iframe), opt_shifts(iframe,:))
+                call  ftexp_srch%set_ptrs(movie_sum_global_ftexp, movie_frames_ftexp(iframe))
+                cxy =  ftexp_srch%minimize(corrs(iframe), opt_shifts(iframe,:))
                 if( cxy(1) > corrs(iframe) ) nimproved = nimproved + 1
                 opt_shifts(iframe,:) = cxy(2:3)
                 corrs(iframe)        = cxy(1)
@@ -168,6 +169,8 @@ contains
         if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
+        ! destruct
+        call ftexp_srch%kill
 
     contains
 

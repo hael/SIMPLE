@@ -77,10 +77,10 @@ contains
         real(dp), intent(in)    :: vec(D)
         real(dp)                :: cost
         select type(self)
-        class is (pftcc_shsrch_grad)
-            cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
-        class default
-            THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
+            class is (pftcc_shsrch_grad)
+                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
+            class default
+                THROW_HARD('unknown type; grad_shsrch_costfun')
         end select
     end function grad_shsrch_costfun
 
@@ -90,13 +90,13 @@ contains
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
         real(dp)                :: corrs_grad(2)
+        grad = 0.
         select type(self)
-        class is (pftcc_shsrch_grad)
-            call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
-            grad = - corrs_grad
-        class default
-            THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
-            grad = 0.
+            class is (pftcc_shsrch_grad)
+                call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
+                grad = - corrs_grad
+            class default
+                THROW_HARD('unknown type; grad_shsrch_gcostfun')
         end select
     end subroutine grad_shsrch_gcostfun
 
@@ -107,15 +107,15 @@ contains
         real(dp), intent(out)   :: f, grad(D)
         real(dp)                :: corrs
         real(dp)                :: corrs_grad(2)
+        f    = 0.
+        grad = 0.
         select type(self)
-        class is (pftcc_shsrch_grad)
-            call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
-            f    = - corrs
-            grad = - corrs_grad
-        class default
-            THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
-            f = 0.
-            grad = 0.
+            class is (pftcc_shsrch_grad)
+                call pftcc_glob%gencorr_grad_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs, corrs_grad)
+                f    = - corrs
+                grad = - corrs_grad
+            class default
+                THROW_HARD('unknown type; grad_shsrch_fdfcostfun')
         end select
     end subroutine grad_shsrch_fdfcostfun
 

@@ -11,9 +11,9 @@ public :: ft_expanded, ft_exp_reset_tmp_pointers
 
 complex(dp), parameter     :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter     :: denom = 0.00075_dp ! denominator for rescaling of cost function
-real(dp),    allocatable   :: ft_exp_tmpmat_re_2d(:,:)
-real(dp),    allocatable   :: ft_exp_tmpmat_im_2d(:,:)
-complex(dp), allocatable   :: ft_exp_tmp_cmat12(:,:)
+real(dp),    allocatable   :: ft_exp_tmpmat_re_2d(:,:,:)
+real(dp),    allocatable   :: ft_exp_tmpmat_im_2d(:,:,:)
+complex(dp), allocatable   :: ft_exp_tmp_cmat12(:,:,:)
 
 type :: ft_expanded
     private
@@ -59,8 +59,12 @@ type :: ft_expanded
     procedure          :: kill
 end type ft_expanded
 
-type(ft_expanded), pointer :: ft_exp_tmp_cmat12_self1 => null()
-type(ft_expanded), pointer :: ft_exp_tmp_cmat12_self2 => null()
+type ftexp_ptr
+    type(ft_expanded), pointer :: p => null()
+end type ftexp_ptr
+
+type(ftexp_ptr), allocatable :: ft_exp_tmp_cmat12_self1(:)
+type(ftexp_ptr), allocatable :: ft_exp_tmp_cmat12_self2(:)
 
 contains
 
@@ -143,6 +147,18 @@ contains
             end do
         end do
         if( didft ) call img%ifft()
+        ! allocate class variables
+        if( .not. allocated(ft_exp_tmpmat_re_2d) )then
+            allocate( ft_exp_tmpmat_re_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
+                      ft_exp_tmpmat_im_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
+                      ft_exp_tmp_cmat12(   1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
+                      stat=alloc_stat                               )
+            if(alloc_stat/=0)call allocchk("In: new_1; simple_ft_expanded, 3")
+        end if
+        ! pointer arrays for bookkeeping
+        if( .not. allocated(ft_exp_tmp_cmat12_self1) )then
+            allocate(ft_exp_tmp_cmat12_self1(nthr_glob), ft_exp_tmp_cmat12_self2(nthr_glob))
+        endif
         self%existence = .true.
     end subroutine new_1
 
@@ -275,29 +291,6 @@ contains
         endif
     end subroutine subtr
 
-    subroutine allocate_tmpmats( flims )
-        integer, intent(in) :: flims(3,2)
-        logical             :: do_allocate
-        do_allocate = .false.
-        if (.not. allocated( ft_exp_tmpmat_re_2d )) then
-            do_allocate = .true.
-        else if (size(ft_exp_tmpmat_re_2d, 1) .ne. flims(1,2) .or. &
-                 size(ft_exp_tmpmat_re_2d, 2) .ne. flims(2,2)         ) then
-            deallocate( ft_exp_tmpmat_re_2d, ft_exp_tmpmat_im_2d, ft_exp_tmp_cmat12 )
-            do_allocate = .true.
-        end if
-        if (do_allocate) then
-            allocate( ft_exp_tmpmat_re_2d( flims(1,1):flims(1,2),     &
-                                           flims(2,1):flims(2,2) ),   &
-                      ft_exp_tmpmat_im_2d( flims(1,1):flims(1,2),     &
-                                           flims(2,1):flims(2,2) ),   &
-                      ft_exp_tmp_cmat12(   flims(1,1):flims(1,2),     &
-                                           flims(2,1):flims(2,2) ),   &
-                      stat=alloc_stat                               )
-            if(alloc_stat/=0)call allocchk("In: allocate_shmat_2d_cmat2sh_2; simple_ft_expanded")
-        end if
-    end subroutine allocate_tmpmats
-
     ! MODIFIERS
 
     !>  \brief  is 4 shifting an ft_expanded instance
@@ -317,7 +310,7 @@ contains
                     do hind=self%flims(1,1),self%flims(1,2)
                         do kind=self%flims(2,1),self%flims(2,2)
                             do lind=self%flims(3,1),self%flims(3,2)
-                                arg                           = sum(shvec_here*self%transfmat(hind,kind,lind,:))
+                                arg = sum(shvec_here*self%transfmat(hind,kind,lind,:))
                                 self_out%cmat(hind,kind,lind) = self%cmat(hind,kind,lind)*cmplx(cos(arg),sin(arg))
                             end do
                         end do
@@ -357,17 +350,18 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2, double precision
     function corr_shifted_8( self1, self2, shvec ) result( r )
-        class(ft_expanded), intent(inout) :: self1, self2 !< instances
-        real(dp), intent(in)              :: shvec(2)
-        real(dp)                          :: r
-        integer                           :: hind,kind
+        class(ft_expanded), intent(inout) :: self1, self2
+        real(dp),           intent(in)    :: shvec(2)
+        real(dp) :: r
+        integer  :: hind,kind, ithr
         if ( self1.eqdims.self2 ) then
             call calc_tmpmat_re(self1, self2, shvec)
             r = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:r) private(hind,kind) default(shared)
+            !$omp parallel do collapse(2) schedule(static) reduction(+:r) private(hind,kind,ithr) default(shared)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    r = r + ft_exp_tmpmat_re_2d(hind,kind)
+                    ithr = omp_get_thread_num() + 1
+                    r = r + ft_exp_tmpmat_re_2d(hind,kind,ithr)
                 end do
             end do
             !$omp end parallel do
@@ -384,20 +378,21 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_gshifted_8( self1, self2, shvec, grad )
-        class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)
-        real(dp), intent(out)                     :: grad(2)
-        real(dp)                                  :: grad1, grad2
-        integer                                   :: hind,kind
-        if ( self1.eqdims.self2 ) then
+        class(ft_expanded), target, intent(inout) :: self1, self2
+        real(dp),                   intent(in)    :: shvec(2)
+        real(dp),                   intent(out)   :: grad(2)
+        real(dp) :: grad1, grad2
+        integer  :: hind,kind,ithr
+        if( self1.eqdims.self2 ) then
             call calc_tmpmat_im(self1, self2, shvec)
             grad1 = 0.0_dp
             grad2 = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:grad1,grad2) private(hind,kind) default(shared)
+            !$omp parallel do collapse(2) schedule(static) reduction(+:grad1,grad2) private(hind,kind,ithr) default(shared)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,1)
-                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,2)
+                    ithr = omp_get_thread_num() + 1
+                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,1)
+                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,2)
                 end do
             end do
             !$omp end parallel do
@@ -416,23 +411,24 @@ contains
 
     !>  \brief  is a correlation calculator with origin shift of self2, double precision
     subroutine corr_fdfshifted_8( self1, self2, shvec, f, grad )
-        class(ft_expanded), intent(inout) :: self1, self2 !< instances
-        real(dp), intent(in)              :: shvec(2)
-        real(dp), intent(out)             :: grad(2), f
-        real(dp)                          :: grad1, grad2
-        integer                           :: hind,kind
+        class(ft_expanded), intent(inout) :: self1, self2
+        real(dp),           intent(in)    :: shvec(2)
+        real(dp),           intent(out)   :: grad(2), f
+        real(dp) :: grad1, grad2
+        integer  :: hind,kind,ithr
         if ( self1.eqdims.self2 ) then
             call calc_tmpmat_re_im(self1, self2, shvec)
             ! corr is real part of the complex mult btw 1 and 2*
             f     = 0.0_dp
             grad1 = 0.0_dp
             grad2 = 0.0_dp
-            !$omp parallel do collapse(2) schedule(static) reduction(+:f,grad1,grad2) private(hind,kind) default(shared)
+            !$omp parallel do collapse(2) schedule(static) reduction(+:f,grad1,grad2) private(hind,kind,ithr) default(shared)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    f     = f     + ft_exp_tmpmat_re_2d(hind,kind)
-                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,1)
-                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind) * self1%transfmat(hind,kind,1,2)
+                    ithr  = omp_get_thread_num() + 1
+                    f     = f     + ft_exp_tmpmat_re_2d(hind,kind,ithr)
+                    grad1 = grad1 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,1)
+                    grad2 = grad2 + ft_exp_tmpmat_im_2d(hind,kind,ithr) * self1%transfmat(hind,kind,1,2)
                 end do
             end do
             !$omp end parallel do
@@ -452,7 +448,7 @@ contains
 
     !> \brief  correctly normalize correlations after minimization
     subroutine corr_normalize( self1, self2, corr )
-        class(ft_expanded), intent(inout) :: self1, self2 !< instances
+        class(ft_expanded), intent(inout) :: self1, self2
         real(sp),           intent(inout) :: corr
         real(dp)                          :: sumasq,sumbsq
         sumasq = sum(csq(self1%cmat))
@@ -461,109 +457,121 @@ contains
     end subroutine corr_normalize
 
     subroutine calc_tmpmat_re(self1, self2, shvec)
-        class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)
-        real(dp)                                  :: arg
-        integer                                   :: hind,kind
-        call allocate_tmpmats(self1%flims)
-        if (associated(ft_exp_tmp_cmat12_self1, self1) .and. associated(ft_exp_tmp_cmat12_self2, self2)) then
+        class(ft_expanded), target, intent(inout) :: self1, self2
+        real(dp),                   intent(in)    :: shvec(2)
+        real(dp) :: arg
+        integer  :: hind,kind,ithr
+        ithr = omp_get_thread_num() + 1
+        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg) proc_bind(close)
+            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
                 end do
             end do
             !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg) proc_bind(close)
+            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    ft_exp_tmpmat_re_2d(hind,kind) = real(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
+                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
                 end do
             end do
             !$omp end parallel do
-            ft_exp_tmp_cmat12_self1 => self1
-            ft_exp_tmp_cmat12_self2 => self2
+            ithr = omp_get_thread_num() + 1
+            ft_exp_tmp_cmat12_self1(ithr)%p => self1
+            ft_exp_tmp_cmat12_self2(ithr)%p => self2
         end if
     end subroutine calc_tmpmat_re
 
     subroutine calc_tmpmat_im(self1, self2, shvec)
-        class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)
-        real(dp)                                  :: arg
-        integer                                   :: hind,kind
-        call allocate_tmpmats(self1%flims)
-        if (associated(ft_exp_tmp_cmat12_self1, self1) .and. associated(ft_exp_tmp_cmat12_self2, self2)) then
+        class(ft_expanded), target, intent(inout) :: self1, self2
+        real(dp),                   intent(in)    :: shvec(2)
+        real(dp) :: arg
+        integer  :: hind,kind,ithr
+        ithr = omp_get_thread_num() + 1
+        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg) proc_bind(close)
+            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
                 end do
             end do
             !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg) proc_bind(close)
+            !$omp private(hind,kind,arg,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
+                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
                 end do
             end do
             !$omp end parallel do
-            ft_exp_tmp_cmat12_self1 => self1
-            ft_exp_tmp_cmat12_self2 => self2
+            ithr = omp_get_thread_num() + 1
+            ft_exp_tmp_cmat12_self1(ithr)%p => self1
+            ft_exp_tmp_cmat12_self2(ithr)%p => self2
         end if
     end subroutine calc_tmpmat_im
 
     subroutine calc_tmpmat_re_im(self1, self2, shvec)
-        class(ft_expanded), intent(inout), target :: self1, self2 !< instances
-        real(dp), intent(in)                      :: shvec(2)
-        real(dp)                                  :: arg
-        complex(dp)                               :: tmp
-        integer                                   :: hind,kind
-        call allocate_tmpmats(self1%flims)
-        if (associated(ft_exp_tmp_cmat12_self1, self1) .and. associated(ft_exp_tmp_cmat12_self2, self2)) then
+        class(ft_expanded), target, intent(inout) :: self1, self2 !< instances
+        real(dp),                   intent(in)    :: shvec(2)
+        real(dp)    :: arg
+        complex(dp) :: tmp
+        integer     :: hind,kind,ithr
+        ithr = omp_get_thread_num() + 1
+        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,tmp) proc_bind(close)
+            !$omp private(hind,kind,arg,tmp,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                    ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
+                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(tmp,kind=dp)
+                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
                 end do
             end do
             !$omp end parallel do
         else
             !$omp parallel do collapse(2) schedule(static) default(shared) &
-            !$omp private(hind,kind,arg,tmp) proc_bind(close)
+            !$omp private(hind,kind,arg,tmp,ithr) proc_bind(close)
             do hind=self1%flims(1,1),self1%flims(1,2)
                 do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg                            = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    tmp                            = ft_exp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                    ft_exp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                    ithr = omp_get_thread_num() + 1
+                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
+                    ft_exp_tmp_cmat12(hind,kind,ithr) = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
+                    tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
+                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(tmp,kind=dp)
+                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
                 end do
             end do
             !$omp end parallel do
-            ft_exp_tmp_cmat12_self1 => self1
-            ft_exp_tmp_cmat12_self2 => self2
+            ithr = omp_get_thread_num() + 1
+            ft_exp_tmp_cmat12_self1(ithr)%p => self1
+            ft_exp_tmp_cmat12_self2(ithr)%p => self2
         end if
     end subroutine calc_tmpmat_re_im
 
     subroutine ft_exp_reset_tmp_pointers
-        ft_exp_tmp_cmat12_self1 => null()
-        ft_exp_tmp_cmat12_self2 => null()
+        integer :: ithr
+        do ithr=1,nthr_glob
+            ft_exp_tmp_cmat12_self1(ithr)%p => null()
+            ft_exp_tmp_cmat12_self2(ithr)%p => null()
+        end do
     end subroutine ft_exp_reset_tmp_pointers
 
     ! DESTRUCTOR
