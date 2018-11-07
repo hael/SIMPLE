@@ -405,10 +405,9 @@ contains
 
     subroutine ft_exp_reset_tmp_pointers
         integer :: ithr
-        do ithr=1,nthr_glob
-            ft_exp_tmp_cmat12_self1(ithr)%p => null()
-            ft_exp_tmp_cmat12_self2(ithr)%p => null()
-        end do
+        ithr = omp_get_thread_num() + 1
+        ft_exp_tmp_cmat12_self1(ithr)%p => null()
+        ft_exp_tmp_cmat12_self2(ithr)%p => null()
     end subroutine ft_exp_reset_tmp_pointers
 
     ! DESTRUCTOR
