@@ -59,7 +59,9 @@ contains
             call thumbnail%ifft()
             ! jpeg output
             call pspec_all%collage(thumbnail, img_jpg)
-            moviename_thumb = trim(dir_out)//trim(adjustl(basename(trim(moviename_forctf))))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
+            moviename_thumb = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
+            moviename_thumb = swap_suffix(moviename_thumb, THUMBNAIL_SUFFIX, INTGMOV_SUFFIX)
+            moviename_thumb = trim(dir_out)//trim(adjustl(moviename_thumb))//trim(JPG_EXT)
             call img_jpg%write_jpg(moviename_thumb, quality=90)
             call orientation%set('thumb', trim(simple_abspath(moviename_thumb, errmsg='simple_ctf_estimate_iter')))
         endif

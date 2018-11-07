@@ -254,7 +254,7 @@ int makedir(char *path,
             /* Temporarily truncate */
             *p = '\0';
 
-            if(mkdir(_path, S_IRWXU) != 0) {
+            if(mkdir(_path, S_IRWXU|S_IRWXG) != 0) {
                 if(errno != EEXIST) {
                     fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
                     perror("Failed : mkdir in simple_posix::makedir");
@@ -264,7 +264,7 @@ int makedir(char *path,
             *p = '/';
         }
     }
-    if(mkdir(_path, S_IRWXU) != 0) {
+    if(mkdir(_path, S_IRWXU|S_IRWXG) != 0) {
         if(errno != EEXIST) {
             fprintf(stderr, "makedir %s\nerrno:%d msg:%s\n", _path, errno, strerror(errno));
             perror("Failed : mkdir in simple_posix::makedir");
