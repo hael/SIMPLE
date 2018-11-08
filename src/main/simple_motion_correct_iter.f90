@@ -88,14 +88,14 @@ contains
         call orientation%set('ymin',  minval(shifts(2,:)))
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then
-            call motion_correct_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
-            &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+            call motion_correct_calc_sums_tomo(self%moviesum, self%moviesum_ctf,&
+            &self%moviesum_corrected, frame_counter, params_glob%time_per_frame)
         else
             if( cline%defined('tof') )then
-                call motion_correct_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                 call motion_correct_calc_sums(self%moviesum, self%moviesum_ctf,&
+                 &self%moviesum_corrected, self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
             else
-                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                call motion_correct_calc_sums(self%moviesum, self%moviesum_ctf, self%moviesum_corrected)
             endif
             DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
             DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()

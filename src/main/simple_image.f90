@@ -328,7 +328,9 @@ contains
     procedure          :: rtsq_serial
     procedure, private :: shift_phorig
     procedure          :: shift
-    procedure          :: shift2Dserial
+    procedure, private :: shift2Dserial_1
+    procedure, private :: shift2Dserial_2
+    generic            :: shift2Dserial => shift2Dserial_1, shift2Dserial_2
     procedure          :: set_within
     procedure          :: ft2img
     procedure          :: img2ft
@@ -336,10 +338,8 @@ contains
     procedure          :: zero_below
     procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
     ! FFTs
-    procedure          :: fwd_ft
-    procedure          :: bwd_ft
-    generic            :: fft => fwd_ft
-    generic            :: ifft => bwd_ft
+    procedure          :: fft  => fwd_ft
+    procedure          :: ifft => bwd_ft
     ! DESTRUCTOR
     procedure :: kill
 end type image
@@ -1226,7 +1226,7 @@ contains
         if (present(llims))then
             llimits=llims
         else
-            llimits=1
+            llimits      = 1
             llimits(:,2) = self%array_shape
         end if
         allocate(cmat(llimits(1,1):llimits(1,2),&
@@ -6346,7 +6346,7 @@ contains
         if( didft ) call self%ifft()
     end subroutine shift
 
-    subroutine shift2Dserial( self, shvec  )
+    subroutine shift2Dserial_1( self, shvec  )
         class(image), intent(inout) :: self
         real,         intent(in)    :: shvec(2)
         integer :: h, k, lims(3,2), phys(3)
@@ -6361,7 +6361,24 @@ contains
                     &self%oshift([h,k,0], shvec_here)
             end do
         end do
-    end subroutine shift2Dserial
+    end subroutine shift2Dserial_1
+
+    subroutine shift2Dserial_2( self, shvec, self_out )
+        class(image), intent(inout) :: self, self_out
+        real,         intent(in)    :: shvec(2)
+        integer :: h, k, lims(3,2), phys(3)
+        real    :: shvec_here(3)
+        lims            = self%fit%loop_lims(2)
+        shvec_here(1:2) = shvec
+        shvec_here(3)   = 0.
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                phys = self%fit%comp_addr_phys([h,k,0])
+                self_out%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) *&
+                    &self%oshift([h,k,0], shvec_here)
+            end do
+        end do
+    end subroutine shift2Dserial_2
 
     !> \brief mask  is for spherical masking
     !! \param mskrad mask radius
