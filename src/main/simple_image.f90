@@ -7041,11 +7041,11 @@ contains
     !! \param deadhot output index of corrected pixels
     !! \param outliers
     subroutine cure_outliers( self, ncured, nsigma, deadhot, outliers )
-        class(image),      intent(inout) :: self
-        integer,           intent(inout) :: ncured
-        real,              intent(in)    :: nsigma
-        integer,           intent(out)   :: deadhot(2)
-        logical, optional, allocatable   :: outliers(:,:)
+        class(image),                   intent(inout) :: self
+        integer,                        intent(inout) :: ncured
+        real,                           intent(in)    :: nsigma
+        integer,                        intent(out)   :: deadhot(2)
+        logical, allocatable, optional, intent(out)   :: outliers(:,:)
         real, allocatable :: win(:,:), rmat_pad(:,:)
         real    :: ave, sdev, var, lthresh, uthresh
         integer :: i, j, hwinsz, winsz
@@ -7056,10 +7056,12 @@ contains
         present_outliers = present(outliers)
         ncured   = 0
         hwinsz   = 6
-        if( allocated(outliers) ) deallocate(outliers)
-        allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
-        if(alloc_stat/=0)call allocchk("In simple_image::cure_outliers ")
-        outliers = .false.
+        if( present_outliers )then
+            if( allocated(outliers) ) deallocate(outliers)
+            allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
+            if(alloc_stat/=0)call allocchk("In simple_image::cure_outliers ")
+            outliers = .false.
+        endif
         call moment( self%rmat, ave, sdev, var, err )
         if( sdev<TINY )return
         lthresh = ave - nsigma * sdev

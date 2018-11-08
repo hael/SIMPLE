@@ -19,7 +19,7 @@ call img1%fft()
 img2 = img1
 tmp  = img1
 ! prepare objects for corrcalc
-call ftexp1%new(img1,hp,lp)
+call ftexp1%new(img1,hp,lp,.true.)
 ! test
 diff_old    = 0.
 diff_recast = 0.
@@ -35,7 +35,7 @@ do i=1,nits
     old_corr    = cxy(1)
     DebugPrint  'neg(old):    ', -cxy(2:3)
     diff_old    = diff_old+sum(abs(-cxy(2:3)-[x,y]))
-    call ftexp2%new(img2,hp,lp)
+    call ftexp2%new(img2,hp,lp,.true.)
     cxy         = find_shift_recast()
     DebugPrint  'neg(recast): ', -cxy(2:3)
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))

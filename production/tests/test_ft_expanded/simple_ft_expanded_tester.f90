@@ -32,7 +32,7 @@ contains
         integer :: i
         call img%new(LDIM, SMPD)
         call img%square(SQRAD)
-        call ftexp_img%new(img, HP, LP)
+        call ftexp_img%new(img, HP, LP, .true.)
         call img_shifted%new(LDIM, SMPD)
         ! seed the random number generator
         call seed_rnd
@@ -82,7 +82,7 @@ contains
                 type(ft_expanded) :: ftexp_trial
                 real    :: shvec(3), corr
                 integer :: ysh_best, xsh_best, xsh, ysh
-                call ftexp_trial%new(img_shifted, HP, LP)
+                call ftexp_trial%new(img_shifted, HP, LP, .true.)
                 corr_best = -huge(corr)
                 do xsh=nint(-TRS),nint(TRS)
                     do ysh=nint(-TRS),nint(TRS)
@@ -118,11 +118,11 @@ contains
         call img_ref%new([4096,4096,1],SMPD)
         call img_ref%ran
         call img_ref%fft()
-        call ftexp_ref%new(img_ref, HP, LP)
+        call ftexp_ref%new(img_ref, HP, LP, .true.)
         call img_ptcl%new([4096,4096,1],SMPD)
         call img_ptcl%ran
         call img_ptcl%fft()
-        call ftexp_ptcl%new(img_ptcl, HP, LP)
+        call ftexp_ptcl%new(img_ptcl, HP, LP, .true.)
         allocate(shvecs(NTSTS,3))
         do itst=1,NTSTS
             shvecs(itst,1) = ran3()*2*TRS-TRS

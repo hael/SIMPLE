@@ -29,10 +29,11 @@ type :: ft_expanded
     logical              :: existence=.false.  !< existence
   contains
     ! constructors
-    procedure, private :: new_1
-    procedure, private :: new_2
-    procedure, private :: new_3
-    generic            :: new => new_1, new_2, new_3
+    procedure          :: new
+    ! procedure, private :: new_1
+    ! procedure, private :: new_2
+    ! procedure, private :: new_3
+    ! generic            :: new => new_1, new_2, new_3
     ! getters
     procedure          :: get_flims
     procedure          :: get_cmat
@@ -65,10 +66,11 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new_1( self, img, hp, lp )
+    subroutine new( self, img, hp, lp, fetch_comps )
         class(ft_expanded), intent(inout) :: self
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
+        logical,            intent(in)    :: fetch_comps
         integer :: h,k,l,i,hcnt,kcnt,lcnt
         integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
         logical :: didft
@@ -105,7 +107,7 @@ contains
         end do
         ! prepare image
         didft = .false.
-        if( .not. img%is_ft() )then
+        if( .not. img%is_ft() .and. fetch_comps )then
             call img%fft()
             didft = .true.
         endif
@@ -135,7 +137,7 @@ contains
                     if( sqarg <= lplim .and. sqarg >= hplim  )then
                         phys = img%comp_addr_phys([h,k,l])
                         self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
-                        self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
+                        if( fetch_comps ) self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
                     endif
                 end do
             end do
@@ -146,7 +148,7 @@ contains
             allocate( ft_exp_tmpmat_re_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
                       ft_exp_tmpmat_im_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
                       ft_exp_tmp_cmat12(   1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
-                      stat=alloc_stat                               )
+                      stat=alloc_stat )
             if(alloc_stat/=0)call allocchk("In: new_1; simple_ft_expanded, 3")
         end if
         ! pointer arrays for bookkeeping
@@ -154,31 +156,31 @@ contains
             allocate(ft_exp_tmp_cmat12_self1(nthr_glob), ft_exp_tmp_cmat12_self2(nthr_glob))
         endif
         self%existence = .true.
-    end subroutine new_1
+    end subroutine new
 
-    subroutine new_2( self, ldim, smpd, hp, lp )
-        class(ft_expanded), intent(inout) :: self
-        integer,            intent(in)    :: ldim(3)
-        real,               intent(in)    :: smpd
-        real,               intent(in)    :: hp
-        real,               intent(in)    :: lp
-        type(image) :: img
-        call img%new(ldim,smpd)
-        img = cmplx(0.,0.)
-        call self%new_1(img, hp, lp)
-        call img%kill
-    end subroutine new_2
+    ! subroutine new_2( self, ldim, smpd, hp, lp )
+    !     class(ft_expanded), intent(inout) :: self
+    !     integer,            intent(in)    :: ldim(3)
+    !     real,               intent(in)    :: smpd
+    !     real,               intent(in)    :: hp
+    !     real,               intent(in)    :: lp
+    !     type(image) :: img
+    !     call img%new(ldim,smpd)
+    !     img = cmplx(0.,0.)
+    !     call self%new_1(img, hp, lp)
+    !     call img%kill
+    ! end subroutine new_2
 
-    subroutine new_3( self, self_in )
-        class(ft_expanded), intent(inout) :: self
-        class(ft_expanded), intent(in)    :: self_in
-        if( self_in%existence )then
-            call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
-            self%cmat = cmplx(0.,0.)
-        else
-            THROW_HARD('self_in does not exists; new_3')
-        endif
-    end subroutine new_3
+    ! subroutine new_3( self, self_in )
+    !     class(ft_expanded), intent(inout) :: self
+    !     class(ft_expanded), intent(in)    :: self_in
+    !     if( self_in%existence )then
+    !         call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
+    !         self%cmat = cmplx(0.,0.)
+    !     else
+    !         THROW_HARD('self_in does not exists; new_3')
+    !     endif
+    ! end subroutine new_3
 
     ! GETTERS
 

@@ -174,15 +174,15 @@ contains
         call img_ptcl%new([100,100,1], 2.)
         call img_ref%square(20)
         call img_ref%fft()
-        call ftexp_ref%new(img_ref, hp, lp)
-        call ftexp_ptcl%new(img_ptcl, hp, lp)
+        call ftexp_ref%new(img_ref, hp, lp, .true.)
+        call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
         call ftexp_srch%new(ftexp_ref, ftexp_ptcl, trs)
         do i=1,100
             x = ran3()*2*TRS-TRS
             y = ran3()*2*TRS-TRS
             img_ptcl = img_ref
             call img_ptcl%shift([x,y,0.])
-            call ftexp_ptcl%new(img_ptcl, hp, lp)
+            call ftexp_ptcl%new(img_ptcl, hp, lp, .true.)
             cxy = ftexp_srch%minimize()
             if( cxy(1) < 0.995 )then
                 THROW_HARD('shift alignment failed; test_ftexp_shsrch')
