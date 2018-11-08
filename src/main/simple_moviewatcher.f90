@@ -75,11 +75,10 @@ contains
         character(len=LONGSTRLEN), allocatable :: farray(:)
         integer,                   allocatable :: fileinfo(:)
         logical,                   allocatable :: is_new_movie(:)
-        integer                       :: tnow, last_accessed, last_modified, last_status_change ! in seconds
-        integer                       :: i, io_stat, n_lsfiles, cnt, fail_cnt
-        character(len=LONGSTRLEN)     :: fname
-        character(len=:), allocatable :: abs_fname
-        logical                       :: is_closed
+        integer                   :: tnow, last_accessed, last_modified, last_status_change ! in seconds
+        integer                   :: i, io_stat, n_lsfiles, cnt, fail_cnt
+        character(len=LONGSTRLEN) :: fname
+        logical                   :: is_closed
         ! init
         self%n_watch = self%n_watch + 1
         tnow = simple_gettime()
@@ -94,14 +93,7 @@ contains
         call simple_list_files(trim(self%watch_dir)//PATH_SEPARATOR//'*.mrc '//&
             &trim(self%watch_dir)//PATH_SEPARATOR//'*.mrcs', farray)
         if( .not.allocated(farray) )return ! nothing to report
-        ! absolute paths
         n_lsfiles = size(farray)
-        do i = 1, n_lsfiles
-            fname = trim(adjustl(farray(i)))
-            abs_fname = simple_abspath(fname, errmsg='movie_watcher :: watch')
-            farray(i) = trim(adjustl(abs_fname))
-            deallocate(abs_fname)
-        enddo
         ! identifies closed & untouched files
         allocate(is_new_movie(n_lsfiles), source=.false.)
         do i = 1, n_lsfiles
@@ -115,7 +107,7 @@ contains
                 last_accessed      = tnow - fileinfo( 9)
                 last_modified      = tnow - fileinfo(10)
                 last_status_change = tnow - fileinfo(11)
-                if(    (last_accessed      > self%report_time)&
+                if(        (last_accessed      > self%report_time)&
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
                     &.and. is_closed ) is_new_movie(i) = .true.
@@ -145,6 +137,7 @@ contains
     end subroutine watch
 
     !>  \brief  is for adding to the history of already reported files
+    !>          absolute path is implied
     subroutine add2history( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
@@ -170,6 +163,7 @@ contains
     end subroutine add2history
 
     !>  \brief  is for checking a file has already been reported
+    !>          absolute path is implied
     logical function is_past( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname

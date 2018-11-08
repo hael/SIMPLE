@@ -10,7 +10,7 @@ implicit none
 public :: fileiochk, fopen, fclose, nlines,  filelength, funit_size, is_funit_open, get_open_funits
 public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename,  get_fpath
 public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
-public :: arr2file, file2rarr, simple_copy_file
+public :: write_singlelineoftext, arr2file, file2rarr, simple_copy_file
 private
 #include "simple_local_flags.inc"
 
@@ -741,6 +741,17 @@ contains
         call fclose_1(funit,io_stat)
         call fileiochk("write_filetable failed to close",io_stat)
     end subroutine write_filetable
+
+    !>  \brief  (over)writes a file with a single file of text
+    subroutine write_singlelineoftext( filename, text )
+        character(len=*), intent(in)  :: filename, text
+        integer :: funit, io_stat
+        call fopen(funit,filename, 'replace', 'unknown', io_stat)
+        call fileiochk("write_singlelineoftext failed to open file: "//filename,io_stat )
+        write(funit,'(A)')trim(text)
+        call fclose_1(funit,io_stat)
+        call fileiochk("write_singlelineoftext failed to close: "//filename,io_stat)
+    end subroutine write_singlelineoftext
 
     !> \brief  for converting a real array 2 file
     subroutine arr2file( arr, fnam )

@@ -147,7 +147,6 @@ contains
             case('cluster','clustersym')
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
-                if( params_glob%l_frac_update ) ptcl_mask = .true.
                 call build_glob%spproj_field%set_extremal_vars(params_glob%extr_init, params_glob%extr_iter,&
                     &which_iter, frac_srch_space, do_extr, iextr_lim, update_frac=params_glob%update_frac)
                 if( do_extr )then
@@ -165,6 +164,8 @@ contains
                         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
                         deallocate(resarr)
                     endif
+                else
+                    het_mask = .false.
                 endif
                 if(trim(params_glob%refine).eq.'clustersym')then
                    ! symmetry pairing matrix
@@ -339,7 +340,7 @@ contains
 
         ! O_PEAKS I/O & CONVERGENCE STATS
         select case(trim(params_glob%refine))
-            case('eval')
+            case('eval','cluster','clustersym')
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
@@ -419,7 +420,7 @@ contains
                     call rec_imgs(i)%new([params_glob%boxpd, params_glob%boxpd, 1], params_glob%smpd)
                 end do
                 ! prep batch imgs
-                call prepimgbatch( MAXIMGBATCHSZ)
+                call prepimgbatch(MAXIMGBATCHSZ)
                 ! gridding batch loop
                 do i_batch=1,nptcls2update,MAXIMGBATCHSZ
                     batchlims = [i_batch,min(nptcls2update,i_batch + MAXIMGBATCHSZ - 1)]
@@ -600,7 +601,13 @@ contains
         type(polarft_corrcalc) :: pftcc_here
         logical, allocatable   :: ptcl_mask_not(:)
         integer :: nptcls, nrefs, iptcl_batch, batchlims(2), iptcl, imatch, eoarr(MAXIMGBATCHSZ)
-        if( .not.params_glob%l_frac_update )return
+        if( .not.params_glob%l_frac_update ) return
+        select case(params_glob%refine)
+        case('cluster','clustersym','eval')
+                return
+            case DEFAULT
+                ! all good
+        end select
         ! init local mask with states
         allocate(ptcl_mask_not(params_glob%fromp:params_glob%top))
         ptcl_mask_not = .not.ptcl_mask

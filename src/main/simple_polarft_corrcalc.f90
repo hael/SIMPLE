@@ -1596,6 +1596,7 @@ contains
         end if
     end function gencorr_for_rot_8
 
+    !> brief  beware of USE_JACOB_FOR_CC_SHIFT: this routine shall only be used for shift/in-plane search
     function gencorr_cc_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl
@@ -1642,6 +1643,7 @@ contains
         end if
     end function gencorr_cc_for_rot
 
+    !> brief  beware of USE_JACOB_FOR_CC_SHIFT: this routine shall only be used for shift/in-plane search
     function gencorr_cc_for_rot_8( self, iref, iptcl, shvec, irot ) result( cc )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl

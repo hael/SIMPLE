@@ -266,7 +266,6 @@ contains
         class(sp_project), target, intent(inout) :: self, proj
         character(len=*),          intent(in)    :: oritype
         class(oris),          pointer :: os_ptr, os_append_ptr
-        type(oris)                    :: os
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
@@ -301,16 +300,12 @@ contains
                     os_ptr = os_append_ptr
                 else
                     ! append
-                    call os%new(n + n2append)
-                    do i=1,n
-                        call os%set_ori(i, os_ptr%get_ori(i))
-                    enddo
+                    call os_ptr%reallocate(n+n2append)
                     cnt = n
                     do i=1,n2append
                         cnt = cnt + 1
-                        call os%set_ori(cnt, os_append_ptr%get_ori(i))
+                        call os_ptr%set_ori(cnt, os_append_ptr%get_ori(i))
                     enddo
-                    os_ptr = os
                 endif
             case('stk')
                 ! this assumes there's only one stack in the project to append
@@ -318,6 +313,7 @@ contains
                 ctfvar = proj%get_ctfparams('ptcl2D', 1)
                 call self%add_stk(stk, ctfvar)
         end select
+        nullify(os_ptr, os_append_ptr)
     end subroutine append_project
 
     subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )

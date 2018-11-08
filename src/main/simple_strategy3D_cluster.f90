@@ -54,6 +54,8 @@ contains
             self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr')
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
+            self%s%prev_shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl)
+            shvec             = self%s%prev_shvec
             ! extremal optimization score
             score4extr = self%s%prev_corr
             ! B-factor memoization
@@ -82,9 +84,8 @@ contains
                     call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                     ! replaced:
                     ! corrs(state) = corrs_inpl(self%s%prev_roind)
-                    ! with:
+                    ! with to somewhat take account for alignment errors due to state mixing:
                     corrs(state) = maxval(corrs_inpl)
-                    ! to somewhat take account for alignment errors due to state mixing
                 endif
             enddo
             ! make moves
@@ -93,7 +94,8 @@ contains
             if( score4extr < self%spec%extr_score_thresh )then
                 ! state randomization
                 state = irnd_uni(self%s%nstates)
-                do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
+                ! do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
+                do while(.not.s3D%state_exists(state))
                     state = irnd_uni(self%s%nstates)
                 enddo
                 corr = corrs(state)
@@ -118,33 +120,31 @@ contains
                     endif
                 else
                     ! greedy moves after extremal optimization complete
-                    if( mi_state > 0.5 )then
-                        if( hetsym )then
-                            ! greedy in symmetric units
-                            iproj = sym_projs(state)
-                            if( iproj .ne. self%s%prev_proj )then
-                                mi_proj = 0.
-                                iref    = (state-1) * self%s%nprojs + iproj
-                                call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 1)) ! inpl = 1
-                                call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 2)) ! inpl = 1
-                            endif
-                        else
-                            ! greedy in plane, need to recalculate bound for in-plane search
-                            iref = (state-1) * self%s%nprojs + self%s%prev_proj
-                            corr = real(pftcc_glob%gencorr_for_rot_8(iref, self%s%iptcl, [0.d0,0.d0], self%s%prev_roind))
-                            s3D%proj_space_corrs(self%s%ithr,iref,1)         = corr ! inpl = 1
-                            s3D%proj_space_refinds_sorted(self%s%ithr,self%s%nrefsmaxinpl) = iref
-                            call self%s%inpl_srch
-                            if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
-                                corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
-                                shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl) + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl = 1
-                                call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
-                                call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref,1,3))           ! inpl = 1
-                            endif
+                    if( hetsym )then
+                        ! greedy in symmetric units
+                        iproj = sym_projs(state)
+                        if( iproj .ne. self%s%prev_proj )then
+                            mi_proj = 0.
+                            iref    = (state-1) * self%s%nprojs + iproj
+                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 1)) ! inpl = 1
+                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 2)) ! inpl = 1
+                        endif
+                    else
+                        ! greedy in plane, need to recalculate bound for in-plane search
+                        iref = (state-1) * self%s%nprojs + self%s%prev_proj
+                        s3D%proj_space_refinds_sorted_highest(self%s%ithr,self%s%nrefs) = iref ! inpl angle + shift
+                        s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
+                        !s3D%proj_space_refinds_sorted(self%s%ithr,self%s%nrefsmaxinpl) = iref ! shift only
+                        call self%s%inpl_srch
+                        if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
+                            corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
+                            shvec = shvec + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl=1
+                            call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
+                            call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,3)) ! inpl = 1
                         endif
                     endif
-                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
                 endif
+                call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
             endif
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
             call build_glob%spproj_field%set(self%s%iptcl,'frac',     frac)
@@ -161,7 +161,7 @@ contains
             call s3D%o_peaks(self%s%iptcl)%set(1,'ow',    1.)
             call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  real(self%s%prev_proj))
             call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
-            call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(self%s%iptcl))
+            call s3D%o_peaks(self%s%iptcl)%set_shift(1, shvec)
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif

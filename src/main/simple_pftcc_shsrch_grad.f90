@@ -122,20 +122,18 @@ contains
     subroutine grad_shsrch_optimize_angle( self )
         class(pftcc_shsrch_grad), intent(inout) :: self
         real                                    :: corrs(self%nrots)
-        integer                                 :: loc(1)
         call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
-        loc = maxloc(corrs)
-        self%cur_inpl_idx = loc(1)
+        self%cur_inpl_idx = maxloc(corrs, dim=1)
     end subroutine grad_shsrch_optimize_angle
 
     subroutine grad_shsrch_optimize_angle_wrapper( self )
         class(*), intent(inout) :: self
         select type(self)
-        class is (pftcc_shsrch_grad)
-            call grad_shsrch_optimize_angle(self)
-            class default
-            write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
-            stop
+            class is (pftcc_shsrch_grad)
+                call grad_shsrch_optimize_angle(self)
+            class DEFAULT
+                write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
+                stop
         end select
     end subroutine grad_shsrch_optimize_angle_wrapper
 
@@ -158,6 +156,7 @@ contains
         real(dp) :: init_xy(2)
         found_better      = .false.
         if( self%opt_angle )then
+            ! DOES NOT use jacobian for shift search!
             self%ospec%x   = [0.,0.]
             self%ospec%x_8 = [0.d0,0.d0]
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
@@ -196,6 +195,7 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         else
+            ! DOES use jacobian for shift search (depending on USE_JACOB_FOR_CC_SHIFT )!
             if( perform_rndstart )then
                 init_xy(1) = ran3() * coarse_range * 2.d0 - coarse_range
                 init_xy(2) = ran3() * coarse_range * 2.d0 - coarse_range

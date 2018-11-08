@@ -38,7 +38,7 @@ contains
         class(cmdline),                     intent(inout) :: cline
         type(parameters)                       :: params
         integer,                   parameter   :: SHORTTIME = 60   ! folder watched every minute
-        integer,                   parameter   :: LONGTIME  = 600
+        integer,                   parameter   :: LONGTIME  = 600  ! time lag after which a movie is processed
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
         type(moviewatcher)                     :: movie_buff
@@ -67,7 +67,6 @@ contains
         output_dir = PATH_HERE
         output_dir_ctf_estimate   = filepath(trim(output_dir), trim(DIR_CTF_ESTIMATE))
         output_dir_motion_correct = filepath(trim(output_dir), trim(DIR_MOTION_CORRECT))
-        call simple_mkdir(output_dir,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         if( l_pick )then
@@ -77,7 +76,7 @@ contains
             call simple_mkdir(output_dir_extract,errmsg="commander_stream_wflows :: exec_preprocess_stream;  ")
         endif
         ! setup the environment for distributed execution
-        call qenv%new(1,stream=.true. )
+        call qenv%new(1,stream=.true.)
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
         call spproj%get_movies_table(prev_movies)
@@ -90,9 +89,15 @@ contains
         iter         = 0
         do
             if( file_exists(trim(TERM_STREAM)) )then
-                write(*,'(A)')'>>> TERMINATING PREPROCESSING STREAM'
+                write(*,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
             endif
+            do while( file_exists(trim(PAUSE_STREAM)) )
+                if( file_exists(trim(TERM_STREAM)) ) exit
+                call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
+                write(*,'(A,A)')'>>> PREPROCES STREAM PAUSED ',cast_time_char(simple_gettime())
+                call simple_sleep(SHORTTIME)
+            enddo
             iter = iter + 1
             call movie_buff%watch( nmovies, movies )
             ! append movies to processing stack
@@ -403,6 +408,7 @@ contains
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
+                call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
                 write(*,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
                 call simple_sleep(WAIT_WATCHER)
             enddo
