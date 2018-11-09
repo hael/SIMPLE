@@ -25,7 +25,6 @@ type(ft_expanded), allocatable :: movie_sum_global_ftexp_threads(:) !< array of 
 type(image),       allocatable :: movie_frames_scaled(:)            !< scaled movie frames
 type(image),       allocatable :: movie_frames_shifted(:)           !< shifted movie frames
 type(image)                    :: movie_sum_global                  !< global movie sum for output
-real, allocatable              :: corrmat(:,:)                      !< matrix of correlations (to solve the exclusion problem)
 real, allocatable              :: corrs(:)                          !< per-frame correlations
 real, allocatable              :: frameweights(:)                   !< array of frameweights
 real, allocatable              :: frameweights_saved(:)             !< array of frameweights
@@ -218,7 +217,7 @@ contains
         logical,     allocatable :: outliers(:,:)
         type(image)        :: tmpmovsum, gainref
         real               :: moldiam, dimo4, time_per_frame, current_time
-        integer            :: iframe, ncured, deadhot(2), i, j, winsz, ldim_scaled_tmp(3), shp(3)
+        integer            :: iframe, ncured, deadhot(2), i, j, winsz, ldim_scaled_tmp(3), shp(3), sz
         integer, parameter :: HWINSZ = 6
         logical            :: l_gain, do_alloc
         ! get number of frames & dim from stack
@@ -247,16 +246,14 @@ contains
         resstep = (params_glob%lpstart-params_glob%lpstop)/3.
         ! allocate
         do_alloc = .true.
-        if( allocated(movie_frames_ftexp) )then
-            if( size(movie_frames_ftexp) /= nframes )then
-                call motion_correct_kill
+        ! call motion_correct_kill
+        if( allocated(movie_frames_scaled) )then
+            sz = size(movie_frames_scaled)
+            ldim_scaled_tmp = movie_frames_scaled(1)%get_ldim()
+            if( sz == nframes .and. all(ldim_scaled == ldim_scaled_tmp) )then
+                do_alloc = .false.
             else
-                ldim_scaled_tmp = movie_frames_scaled(1)%get_ldim()
-                if( all(ldim_scaled == ldim_scaled_tmp) )then
-                    do_alloc = .false.
-                else
-                    call motion_correct_kill
-                endif
+                call motion_correct_kill
             endif
         endif
         if( do_alloc )then
@@ -360,6 +357,7 @@ contains
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             do_dose_weight = .true.
+            if( allocated(acc_doses) ) deallocate(acc_doses)
             allocate( acc_doses(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = ctfvars%kv
@@ -620,7 +618,7 @@ contains
             end do
             call movie_sum_global%kill
             deallocate( movie_frames_ftexp, movie_frames_ftexp_sh, movie_frames_scaled,&
-            frameweights, frameweights_saved, corrs, corrmat, opt_shifts, opt_shifts_saved,&
+            frameweights, frameweights_saved, corrs, opt_shifts, opt_shifts_saved,&
             movie_sum_global_ftexp_threads, movie_frames_shifted, cmat, cmat_sum)
             if( allocated(acc_doses) ) deallocate(acc_doses)
             existence = .false.
