@@ -361,7 +361,7 @@ contains
         integer               :: i, n, maxpop, funit, closest,io_stat
         real                  :: radius, maxradius, ang, scale, col, avg_geodist,avg_euldist,geodist
         real                  :: xyz(3), xyz_end(3), xyz_start(3), vec(3)
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         n = build%spproj_field%get_noris()
         if( .not.cline%defined('fbody') )then
             fname = basename(trim(adjustl(params%oritab)))

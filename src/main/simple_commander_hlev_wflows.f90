@@ -863,15 +863,18 @@ contains
             case DEFAULT
                 call cline_refine3D1%set('refine', params%refine)
         end select
-        call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
+        !call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg',    'refine3D')
         call cline_refine3D2%set('refine', 'multi')
         if(.not.cline%defined('neigh'))then
-            call cline_refine3D2%set('neigh',  'yes')
-            call cline_refine3D2%set('nnn',    0.1*real(params%nspace))
+            if( .not.params%refine.eq.'sym' )then
+                call cline_refine3D2%set('neigh',  'yes')
+                call cline_refine3D2%set('nnn',    0.1*real(params%nspace))
+            endif
         endif
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
+        if( params%refine.eq.'sym' ) call cline_refine3D2%set('pgrp','c1')
         ! reconstructions
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%delete('lp')

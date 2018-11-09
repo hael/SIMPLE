@@ -255,7 +255,7 @@ contains
         if( present(ptcl_mask) )then
             self%nptcls  = count(ptcl_mask)                      !< the total number of particles in partition
         else
-            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1                   !< the total number of particles in partition
+            self%nptcls  = self%pfromto(2) - self%pfromto(1) + 1 !< the total number of particles in partition
         endif
         self%nrefs       = nrefs                                 !< the number of references (logically indexded [1,nrefs])
         self%nrots       = round2even(twopi * real(params_glob%ring2))     !< number of in-plane rotations for one pft  (determined by radius of molecule)

@@ -249,7 +249,6 @@ type :: parameters
     integer :: nran=0              !< # random images to select
     integer :: nrefs=100           !< # references used for picking{100}
     integer :: nrestarts=1
-    integer :: nrots=0
     integer :: nspace=2500         !< # projection directions
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
@@ -1130,8 +1129,6 @@ contains
         endif
         ! set eo flag
         self%l_eo = self%eo .ne. 'no'
-        ! set nr of rotations
-        self%nrots = round2even(twopi*real(self%ring2))
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value

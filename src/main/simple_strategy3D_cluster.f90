@@ -39,7 +39,7 @@ contains
         use simple_rnd, only: shcloc, irnd_uni
         class(strategy3D_cluster),   intent(inout) :: self
         integer,                     intent(in)    :: ithr
-        integer :: sym_projs(self%s%nstates), loc(1), iproj, iref, isym, state
+        integer :: sym_projs(self%s%nstates), iproj, iref, isym, state
         real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
         real    :: shvec(2), corr, mi_state, frac, mi_proj, bfac, score4extr
         logical :: hetsym
@@ -74,9 +74,9 @@ contains
                         iref  = (state-1) * self%s%nprojs + iproj
                         call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
                         corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
+                        ! corrs_sym(isym) = maxval(corrs_inpl) ! greedier
                     enddo
-                    loc              = maxloc(corrs_sym)
-                    isym             = loc(1)
+                    isym             = maxloc(corrs_sym, dim=1)
                     corrs(state)     = corrs_sym(isym)
                     sym_projs(state) = self%spec%symmat(self%s%prev_proj, isym)
                 else
@@ -94,10 +94,15 @@ contains
             if( score4extr < self%spec%extr_score_thresh )then
                 ! state randomization
                 state = irnd_uni(self%s%nstates)
-                ! do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
-                do while(.not.s3D%state_exists(state))
-                    state = irnd_uni(self%s%nstates)
-                enddo
+                if( self%s%nstates > 2 )then
+                    do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
+                        state = irnd_uni(self%s%nstates)
+                    enddo
+                else
+                    do while(.not.s3D%state_exists(state))
+                        state = irnd_uni(self%s%nstates)
+                    enddo
+                endif
                 corr = corrs(state)
                 self%s%nrefs_eval = 1
             else
@@ -143,8 +148,8 @@ contains
                             call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,3)) ! inpl = 1
                         endif
                     endif
+                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
                 endif
-                call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
             endif
             frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
             call build_glob%spproj_field%set(self%s%iptcl,'frac',     frac)

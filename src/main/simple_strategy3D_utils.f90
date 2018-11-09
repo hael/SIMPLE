@@ -334,7 +334,7 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(out)   :: shwmean, shwstdev
         integer    :: ipeak, states(s3D%o_peaks(s%iptcl)%get_noris())
-        integer    :: best_state, loc(1), npeaks, cnt, i
+        integer    :: best_state, npeaks, cnt, i
         real       :: ws(s3D%o_peaks(s%iptcl)%get_noris()), dev, dev_w, var, var_w
         real       :: shift_incrs(s3D%o_peaks(s%iptcl)%get_noris()), ws_here(s3D%o_peaks(s%iptcl)%get_noris())
         logical    :: multi_states
@@ -349,11 +349,9 @@ contains
         enddo
         if( count(ws > TINY) < 1 ) return ! need at least 1
         ! multi-states or not?
-        multi_states = .false.
-        if( s%nstates > 1 ) multi_states = .true.
+        multi_states = s%nstates > 1
         ! best state is?
-        loc = maxloc(ws)
-        best_state = states(loc(1))
+        best_state = states(maxloc(ws,dim=1))
         if( multi_states )then
             if( count(states == best_state) < 1 ) return ! need at least 1
         endif
@@ -379,7 +377,7 @@ contains
             dev_w = shift_incrs(i) - shwmean
             var_w = var_w + ws_here(i) * dev_w * dev_w
         end do
-        var_w    = (var_w)/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
+        var_w    = var_w/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
         if( var_w > 0. ) shwstdev = sqrt(var_w)
     end subroutine estimate_shift_increment
 
