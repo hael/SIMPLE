@@ -246,7 +246,6 @@ contains
         resstep = (params_glob%lpstart-params_glob%lpstop)/3.
         ! allocate
         do_alloc = .true.
-        ! call motion_correct_kill
         if( allocated(movie_frames_scaled) )then
             sz = size(movie_frames_scaled)
             ldim_scaled_tmp = movie_frames_scaled(1)%get_ldim()
