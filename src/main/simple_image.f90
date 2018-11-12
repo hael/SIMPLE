@@ -6368,6 +6368,7 @@ contains
         lims            = self%fit%loop_lims(2)
         shvec_here(1:2) = shvec
         shvec_here(3)   = 0.
+        self_out%ft     = .true.
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 phys = self%fit%comp_addr_phys([h,k,0])
