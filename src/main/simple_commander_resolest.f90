@@ -182,6 +182,8 @@ contains
             call even_avgs(iptcl)%read(params%stk, iptcl)
             call odd_avgs(iptcl)%read(params%stk2, iptcl)
             ! forward FT
+            call even_avgs(iptcl)%norm
+            call odd_avgs(iptcl)%norm
             call even_avgs(iptcl)%fft()
             call odd_avgs(iptcl)%fft()
         end do

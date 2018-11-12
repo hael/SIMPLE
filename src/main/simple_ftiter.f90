@@ -293,6 +293,7 @@ contains
             phys(3) = -logi(3) + 1 + MERGE(self%ldim(3),0, -logi(3) < 0)
         endif
     end function comp_addr_phys1
+
     pure function comp_addr_phys2(self,h,k,m) result(phys)
         class(ftiter), intent(in) :: self
         integer,       intent(in) :: h,k,m !<  Logical address

@@ -316,7 +316,6 @@ contains
             case('eval')
                 !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
                 do i=1,nptcls2update
-                    iptcl = pinds(i)
                     call eval_ptcl(pftcc, pinds(i), pinds(i))
                 end do
                 !$omp end parallel do

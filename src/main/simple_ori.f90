@@ -493,10 +493,9 @@ contains
     end function get_state
 
     !>  \brief  returns size of hash
-    function hash_size( self ) result( sz )
+    pure integer function hash_size( self )
         class(ori), intent(in) :: self
-        integer :: sz
-        sz = self%htab%size_of()
+        hash_size = self%htab%size_of()
     end function hash_size
 
     !>  \brief  check for presence of key in the ori hash
@@ -511,22 +510,21 @@ contains
     end function isthere
 
     !>  \brief  test for character key
-    function ischar( self, key ) result( is )
-        class(ori),        intent(inout) :: self
-        character(len=*),  intent(in)    :: key
-        logical :: is
-        is = self%chtab%isthere(key)
+    logical function ischar( self, key )
+        class(ori),       intent(in) :: self
+        character(len=*), intent(in) :: key
+        ischar = self%chtab%isthere(key)
     end function ischar
 
     !>  \brief  whether state is zero
     logical function isstatezero( self )
-        class(ori),       intent(inout) :: self
+        class(ori), intent(in) :: self
         isstatezero = (self%get_state() == 0)
     end function isstatezero
 
     !>  \brief  check wether the orientation has any typical search parameter
     logical function has_been_searched( self )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in) :: self
         has_been_searched = .true.
         if(.not. is_zero(self%e1get()) )return
         if(.not. is_zero(self%e2get())      )return
@@ -539,7 +537,7 @@ contains
 
     !>  \brief  joins the hashes into a string that represent the ori
     function ori2str( self ) result( str )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in)        :: self
         character(len=:), allocatable :: str, str_chtab, str_htab
         integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()
@@ -555,12 +553,9 @@ contains
         endif
     end function ori2str
 
-    function ori2strlen_trim( self ) result( len )
-        class(ori), intent(inout) :: self
-        character(len=:), allocatable :: str
-        integer :: len
-        str = self%ori2str()
-        len = len_trim(str)
+    integer function ori2strlen_trim( self )
+        class(ori),        intent(in) :: self
+        ori2strlen_trim = len_trim(self%ori2str())
     end function ori2strlen_trim
 
     function ori2chash( self ) result( ch )

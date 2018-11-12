@@ -335,7 +335,7 @@ contains
         real,                   intent(out)   :: shwmean, shwstdev
         integer    :: ipeak, states(s3D%o_peaks(s%iptcl)%get_noris())
         integer    :: best_state, npeaks, cnt, i
-        real       :: ws(s3D%o_peaks(s%iptcl)%get_noris()), dev, dev_w, var, var_w
+        real       :: ws(s3D%o_peaks(s%iptcl)%get_noris()), dev_w, var_w
         real       :: shift_incrs(s3D%o_peaks(s%iptcl)%get_noris()), ws_here(s3D%o_peaks(s%iptcl)%get_noris())
         logical    :: multi_states
         shwmean  = 0.
@@ -398,10 +398,10 @@ contains
     subroutine sort_corrs( s )
         class(strategy3D_srch), intent(inout) :: s
         real    :: corrs(s%nrefs*NINPLPEAKS2SORT), corrs_highest(s%nrefs)
-        real    :: proj_space_tmp(s%nrefs*NINPLPEAKS2SORT), areal
-        integer :: i, j, arange(2)
+        integer :: proj_space_tmp(s%nrefs*NINPLPEAKS2SORT)
+        integer :: i, j, arange(2), idx_array(s%nrefs*NINPLPEAKS2SORT)
         integer :: asequence(NINPLPEAKS2SORT) = (/(j, j=1,NINPLPEAKS2SORT)/)
-        integer :: idx_array(s%nrefs*NINPLPEAKS2SORT)
+        real    :: areal
         do i = 1,s%nrefs
             arange(1) = (i-1)*NINPLPEAKS2SORT+1
             arange(2) = i*NINPLPEAKS2SORT

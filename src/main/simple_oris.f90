@@ -42,7 +42,6 @@ type :: oris
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
     procedure          :: ischar
-    procedure          :: max_hash_size
     procedure          :: max_ori_strlen_trim
     procedure          :: get_n
     procedure          :: get_pop
@@ -403,31 +402,16 @@ contains
         is = self%o(i)%ischar(key)
     end function ischar
 
-    integer function max_hash_size( self )
-        class(oris),      intent(inout) :: self
-        integer :: sz, i
-        max_hash_size = 0
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(i,sz) reduction(max:max_hash_size)
-        do i=1,self%n
-            sz = self%o(i)%hash_size()
-            if( sz > max_hash_size ) max_hash_size = sz
-        end do
-        !$omp end parallel do
-    end function max_hash_size
-
     !>  \brief  is for getting the maximum string length of a trimed string ori representation
     integer function max_ori_strlen_trim( self )
         class(oris), intent(inout) :: self
         integer :: strlen, i
         max_ori_strlen_trim = 0
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(i,strlen) reduction(max:max_ori_strlen_trim)
+        ! cannot be threaded because of allocatables within loop
         do i=1,self%n
             strlen = self%o(i)%ori2strlen_trim()
             max_ori_strlen_trim = max(strlen,max_ori_strlen_trim)
         end do
-        !$omp end parallel do
     end function max_ori_strlen_trim
 
     !>  \brief  is for getting the max val of integer label

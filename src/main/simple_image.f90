@@ -59,7 +59,6 @@ contains
     procedure          :: get_nyq
     procedure          :: get_filtsz
     procedure          :: get_shconst
-    procedure          :: cyci
     procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_rmat_sub
@@ -102,6 +101,7 @@ contains
     procedure          :: winserialize
     procedure          :: zero2one
     procedure          :: get_fcomp
+    procedure          :: get_fcomp2D
     procedure          :: set_fcomp
     procedure          :: vis
     procedure          :: set_ft
@@ -734,7 +734,6 @@ contains
         integer,      intent(in)      :: coord(2)
         integer, optional, intent(in) :: offset  !if offset is present it doesn't sum windows, but take just the inner part
         integer ::  fromc(2), toc(2), ld(3), box
-
         ld    = imgwin%get_ldim()
         box   = ld(1)
         fromc = coord + 1         ! compensate for the c-range that starts at 0
@@ -1136,24 +1135,6 @@ contains
         real :: shconst(3)
         shconst = self%shconst
     end function get_shconst
-
-    !> \brief cyci  cyclic index generation
-    function cyci( self, logi ) result( inds )
-        class(image), intent(in) :: self
-        integer,      intent(in) :: logi(3)
-        integer                  :: inds(3), lims(3,2)
-        if( self%is_ft() )then
-            lims = self%loop_lims(3)
-        else
-            lims = 1
-            lims(1,2) = self%ldim(1)
-            lims(2,2) = self%ldim(2)
-            lims(3,2) = self%ldim(3)
-        endif
-        inds(1) = cyci_1d(lims(1,:), logi(1))
-        inds(2) = cyci_1d(lims(2,:), logi(2))
-        inds(3) = cyci_1d(lims(3,:), logi(3))
-    end function cyci
 
     function get( self, logi ) result( val )
         class(image), intent(inout) :: self
@@ -1727,9 +1708,27 @@ contains
         class(image), intent(in)  :: self
         integer,      intent(in)  :: logi(3), phys(3)
         complex :: comp
-        comp = self%cmat(phys(1),phys(2),phys(3))
-        if( logi(1) < 0 ) comp = conjg(comp)
+        comp = merge(conjg(self%cmat(phys(1),phys(2),phys(3))),&
+            &self%cmat(phys(1),phys(2),phys(3)), logi(1)<0)
     end function get_fcomp
+
+    !>  \brief get_fcomp for getting a Fourier component from the compact representation
+    elemental complex function get_fcomp2D(self, h, k)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: h,k
+        integer :: phys1, phys2
+        if (h .ge. 0) then
+            phys1 = h + 1
+            phys2 = k + 1 + merge(self%ldim(2),0, k<0)
+            ! phys3 = l + 1 + merge(self%ldim(3),0, l<0)
+            get_fcomp2D = self%cmat(phys1,phys2,1)
+        else
+            phys1 = -h + 1
+            phys2 = -k + 1 + merge(self%ldim(2),0, -k<0)
+            ! phys3 = -l + 1 + merge(self%ldim(3),0, -l<0)
+            get_fcomp2D = conjg(self%cmat(phys1,phys2,1))
+        endif
+    end function get_fcomp2D
 
     !> \brief set_fcomp  for setting a Fourier component in the compact representation
     subroutine set_fcomp( self, logi, phys, comp )
@@ -5592,7 +5591,6 @@ contains
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
-        real, allocatable :: pixels(:)
         integer :: starts(3), stops(3)
         call self%noise_norm(lmsk)
         starts        = (self_out%ldim - self%ldim) / 2 + 1
@@ -5608,7 +5606,6 @@ contains
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
         class(image), intent(inout) :: self_out
-        real, allocatable :: pixels(:)
         integer :: starts(3), stops(3)
         call self%noise_norm(lmsk)
         starts        = (self_out%ldim - self%ldim) / 2 + 1

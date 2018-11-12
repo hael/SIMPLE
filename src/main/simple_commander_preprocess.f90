@@ -311,10 +311,9 @@ contains
         character(len=LONGSTRLEN), allocatable :: imgnames(:)
         type(parameters)              :: params
         type(pspec_thumb_iter)        :: ptiter
-        type(ctfparams)               :: ctfvars
         type(sp_project)              :: spproj
         type(ori)                     :: o
-        character(len=:), allocatable :: output_dir, moviename_intg, imgkind, fbody
+        character(len=:), allocatable :: output_dir, moviename_intg, imgkind
         integer :: nintgs, fromto(2), iintg, ntot, cnt
         call cline%set('oritype', 'mic')
         call params%new(cline)

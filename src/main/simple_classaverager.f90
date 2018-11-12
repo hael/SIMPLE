@@ -240,7 +240,6 @@ contains
         end do
     end subroutine cavger_gen2Dclassdoc
 
-
     !>  \brief  is for initialization of the sums
     subroutine init_cavgs_sums
         integer :: icls
@@ -342,11 +341,11 @@ contains
         real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
         integer,     allocatable      :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,     allocatable      :: ioris(:), cyc1(:), cyc2(:)
-        complex   :: zero
+        complex   :: zero, fcomp
         real      :: loc(2), mat(2,2), pw, add_phshift
+        integer   :: lims(3,2), nyq, lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
-        integer   :: lims(3,2), nyq, logi(3), phys(3), win(2,2), lims_small(3,2), phys_cmat(3)
-        integer   :: cyc_lims(3,2), alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
+        integer   :: alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
         if( .not. params_glob%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
@@ -391,6 +390,8 @@ contains
         cmat_even  = cgrid_imgs(1)%get_cmat()
         cmat_odd   = cgrid_imgs(1)%get_cmat()
         nyq        = cgrid_imgs(1)%get_lfny(1)
+        cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
+        cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                   rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                  &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
@@ -432,7 +433,7 @@ contains
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                 if( L_BENCH ) t_gridding = tic()
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                !$omp private(i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,win,logi,phys,phys_cmat,cyc1,cyc2,w,incr)
+                !$omp private(fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
                 do i=1,batchsz
                     iprec = iprecs(batches(batch,1) + i - 1)
@@ -484,50 +485,34 @@ contains
                             sh = nint(hyp(real(h),real(k)))
                             if( sh > nyq + 1 )cycle
                             loc = matmul(real([h,k]),mat)
-                            ! window using fortran layered array, equivalent to
-                            ! call sqwin_2d(loc(1),loc(2), KBWINSZ, win) with win transposed
-                            win(1,:) = nint(loc)
-                            win(2,:) = win(1,:) + iwinsz
-                            win(1,:) = win(1,:) - iwinsz
+                            win_corner = nint(loc) - iwinsz
                             ! weights kernel
                             w = 1.
                             do l=1,wdim
                                 incr = l - 1
                                 ! circular addresses
-                                cyc1(l) = cyci_1d(cyc_lims(1,:), win(1,1) + incr)
-                                cyc2(l) = cyci_1d(cyc_lims(2,:), win(1,2) + incr)
+                                cyc1(l) = cyci_1d(cyc_limsR(:,1), win_corner(1) + incr)
+                                cyc2(l) = cyci_1d(cyc_limsR(:,2), win_corner(2) + incr)
                                 ! interpolation kernel matrix
-                                w(l,:) = w(l,:) * kbwin%apod( real(win(1,1) + incr) - loc(1) )
-                                w(:,l) = w(:,l) * kbwin%apod( real(win(1,2) + incr) - loc(2) )
+                                w(l,:) = w(l,:) * kbwin%apod( real(win_corner(1) + incr) - loc(1) )
+                                w(:,l) = w(:,l) * kbwin%apod( real(win_corner(2) + incr) - loc(2) )
                             enddo
                             w = pw * w / sum(w)
-                            ! point of addition
+                            ! interpolation
+                            fcomp     = zero
+                            do l=1,wdim
+                                do m=1,wdim
+                                    if( w(l,m) < TINY ) cycle
+                                    fcomp = fcomp + cgrid_imgs(i)%get_fcomp2D(cyc1(l),cyc2(m)) * w(l,m)
+                                end do
+                            end do
+                            ! addition
                             phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
                             select case(precs(iprec)%eo)
-                                case(0,-1)
-                                    ! interpolation
-                                    do l=1,wdim
-                                        do m=1,wdim
-                                            if( w(l,m) < TINY ) cycle
-                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
-                                            cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
-                                                cmat_even(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
-                                        end do
-                                    end do
-                                case(1)
-                                    ! interpolation
-                                    do l=1,wdim
-                                        do m=1,wdim
-                                            if( w(l,m) < TINY ) cycle
-                                            logi       = [cyc1(l), cyc2(m), 0]
-                                            phys       = cgrid_imgs(i)%comp_addr_phys(logi)
-                                            cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) = &
-                                                cmat_odd(phys_cmat(1),phys_cmat(2),phys_cmat(3)) +&
-                                                &cgrid_imgs(i)%get_fcomp(logi, phys) * w(l,m)
-                                        end do
-                                    end do
+                            case(0,-1)
+                                cmat_even(phys_cmat(1),phys_cmat(2),1) = cmat_even(phys_cmat(1),phys_cmat(2),1) + fcomp
+                            case(1)
+                                cmat_odd(phys_cmat(1),phys_cmat(2),1) = cmat_odd(phys_cmat(1),phys_cmat(2),1) + fcomp
                             end select
                         end do
                     end do

@@ -291,7 +291,7 @@ contains
 
     !>  \brief  convert hash to string
     function hash2str( self ) result( str )
-        class(hash), intent(inout)    :: self
+        class(hash),    intent(in)    :: self
         character(len=:), allocatable :: str, str_moving
         integer :: i
         if( self%hash_index > 0 )then
@@ -314,10 +314,9 @@ contains
     end function hash2str
 
     !>  \brief  returns size of hash
-    function size_of( self ) result( sz )
+    pure integer function size_of( self )
         class(hash), intent(in) :: self
-        integer :: sz
-        sz = self%hash_index
+        size_of = self%hash_index
     end function size_of
 
     ! I/O

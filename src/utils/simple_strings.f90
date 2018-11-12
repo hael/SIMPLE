@@ -99,7 +99,7 @@ contains
         character(len=*)                :: args(:)
         integer,          intent(out)   :: nargs
         character(len=len_trim(str))    :: strsav
-        integer                         :: na, i, lenstr, k
+        integer                         :: na, i, lenstr
         strsav=str
         call compact(str)
         na=size(args)
@@ -109,7 +109,6 @@ contains
         nargs=0
         lenstr=len_trim(str)
         if(lenstr==0) return
-        k=0
         do
             if(len_trim(str) == 0) exit
             nargs=nargs+1
