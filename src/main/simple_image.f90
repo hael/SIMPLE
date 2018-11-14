@@ -59,8 +59,9 @@ contains
     procedure          :: get_nyq
     procedure          :: get_filtsz
     procedure          :: get_shconst
-    procedure          :: get
+    procedure          :: get 
     procedure          :: get_rmat
+    procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
     procedure          :: get_cmat_sub
@@ -1164,6 +1165,12 @@ contains
         if (alloc_stat /= 0)call allocchk("simple_image::get_rmat ",alloc_stat)
     end function get_rmat
 
+    subroutine get_rmat_ptr( self, rmat_ptr )
+        class(image), target,        intent(in)  :: self
+        real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
+        rmat_ptr => self%rmat
+    end subroutine get_rmat_ptr
+    
     subroutine get_rmat_sub( self, rmat )
         class(image), intent(in)  :: self
         real,         intent(out) :: rmat(self%ldim(1),self%ldim(2),self%ldim(3))

@@ -3,14 +3,15 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,   only: ft_expanded, ft_exp_reset_tmp_pointers
-use simple_image,         only: image
-use simple_parameters,    only: params_glob
-use simple_estimate_ssnr, only: acc_dose2filter
-use simple_oris,          only: oris
+use simple_ft_expanded,     only: ft_expanded, ft_exp_reset_tmp_pointers
+use simple_motion_anisocor, only: motion_anisocor
+use simple_image,           only: image
+use simple_parameters,      only: params_glob
+use simple_estimate_ssnr,   only: acc_dose2filter
+use simple_oris,            only: oris
 implicit none
 
-public :: motion_correct_movie, motion_correct_calc_sums, motion_correct_calc_sums_tomo
+public :: motion_correct_movie, motion_correct_calc_sums, motion_correct_calc_sums_tomo, motion_correct_movie_aniso
 private
 #include "simple_local_flags.inc"
 
@@ -22,8 +23,10 @@ end interface
 type(ft_expanded), allocatable :: movie_frames_ftexp(:)             !< movie frames
 type(ft_expanded), allocatable :: movie_frames_ftexp_sh(:)          !< shifted movie frames
 type(ft_expanded), allocatable :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
+type(image),       allocatable :: movie_sum_global_threads(:)       !< array of global movie sums for parallel refinement (image)
 type(image),       allocatable :: movie_frames_scaled(:)            !< scaled movie frames
 type(image),       allocatable :: movie_frames_shifted(:)           !< shifted movie frames
+type(image),       allocatable :: movie_frames_shifted_aniso(:)     !< shifted movie frames
 type(image)                    :: movie_sum_global                  !< global movie sum for output
 real, allocatable              :: corrs(:)                          !< per-frame correlations
 real, allocatable              :: frameweights(:)                   !< array of frameweights
@@ -52,7 +55,7 @@ logical                        :: existence      = .false.          !< to indica
 
 integer, parameter :: MITSREF    = 30 !< max nr iterations of refinement optimisation
 real,    parameter :: SMALLSHIFT = 2. !< small initial shift to blur out fixed pattern noise
-logical, parameter :: DEBUG_HERE = .true.
+logical, parameter :: DEBUG_HERE = .false.
 
 contains
 
@@ -207,6 +210,43 @@ contains
             end subroutine update_res
 
     end subroutine motion_correct_movie
+
+    subroutine motion_correct_movie_aniso
+        integer :: iframe
+        type(motion_anisocor), allocatable :: motion_aniso(:)
+        ! start with destructing the ftexp objects (not needed for anisotropic correction)
+        if( .not. existence ) THROW_HARD('motion correction module does not esist; motion_correct_movie_aniso')
+        do iframe=1,nframes
+            call movie_frames_ftexp(iframe)%kill
+            call movie_frames_ftexp_sh(iframe)%kill
+            call movie_frames_scaled(iframe)%kill
+            call movie_sum_global_ftexp_threads(iframe)%kill
+        end do
+        deallocate( movie_frames_ftexp, movie_frames_ftexp_sh, movie_frames_scaled,&
+            movie_sum_global_ftexp_threads)
+        ! prepare the images for anisotropic correction by band-pass filtering
+        do iframe=1,nframes
+            call movie_frames_shifted(iframe)%bp(hp, lp)
+            call movie_frames_shifted(iframe)%ifft
+        end do
+        allocate(motion_aniso(nframes))
+        if (.not. allocated(movie_frames_shifted_aniso)) allocate(movie_frames_shifted_aniso(nframes))
+        if (.not. allocated(movie_sum_global_threads)  ) allocate(movie_sum_global_threads(nframes))
+        do iframe=1,nframes
+            call movie_sum_global_threads(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
+            call movie_frames_shifted_aniso(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
+            call motion_aniso(iframe)%new( frame_idx=iframe, ref=movie_sum_global_threads(iframe), &
+                frame=movie_frames_shifted(iframe), aniso_shifted_frame=movie_frames_shifted_aniso(iframe) )
+        end do
+
+        
+
+        do iframe=1,nframes
+            call motion_aniso(iframe)%kill
+        end do
+        deallocate(motion_aniso)
+        write (*,*) 'has not segfaulted. yay!'
+    end subroutine motion_correct_movie_aniso
 
     subroutine motion_correct_init( movie_stack_fname, ctfvars, gainref_fname )
         character(len=*),           intent(in) :: movie_stack_fname  !< input filename of stack
