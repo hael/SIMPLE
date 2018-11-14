@@ -65,10 +65,10 @@ type(stackops_commander)       :: xstackops
 type(shift_commander)          :: xshift
 
 ! ORIENTATION PROCESSING
-type(make_oris_commander)         :: xmake_oris
-type(orisops_commander)           :: xorisops
-type(oristats_commander)          :: xoristats
-type(vizoris_commander)           :: xvizoris
+type(make_oris_commander) :: xmake_oris
+type(orisops_commander)   :: xorisops
+type(oristats_commander)  :: xoristats
+type(vizoris_commander)   :: xvizoris
 
 ! PRINT INFO
 type(info_image_commander)        :: xinfo_image
@@ -100,62 +100,60 @@ if( str_has_substr(entire_line, 'prg=list') )then
     call list_shmem_prgs_in_ui
     stop
 endif
+! parse command line into cline object
+call cline%parse
 
 select case(prg)
 
     ! PROJECT MANAGEMENT
 
     case( 'new_project' )
-        call cline%parse()
         call xnew_project%execute(cline)
     case( 'update_project' )
-        call cline%parse()
         call xupdate_project%execute(cline)
     case( 'print_project_info' )
-        call cline%parse()
         call xprint_project_info%execute(cline)
     case( 'print_project_field' )
-        call cline%parse()
         call xprint_project_field%execute(cline)
     case( 'import_movies' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call ximport_movies%execute(cline)
     case( 'import_boxes' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call ximport_boxes%execute(cline)
     case( 'import_particles' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call ximport_particles%execute(cline)
     case( 'import_cavgs' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call ximport_cavgs%execute(cline)
 
     ! STAR SUPPORT
 
     case( 'export_starproject' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call xexport_starproject%execute(cline)
     case( 'import_starproject' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call ximport_starproject%execute(cline)
     case( 'print_starproject_info' )
-        call cline%parse()
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call xprint_starproject_info%execute(cline)
 
     ! PART OF SP WORKFLOW
 
     case( 'make_pickrefs' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') )    call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',      'd1'   )
+        if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',         'd1')
         call xmake_pickrefs%execute(cline)
     case( 'extract' )
-        call cline%parse()
-        if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('mkdir') )call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -163,107 +161,85 @@ select case(prg)
         endif
         call xextract%execute(cline)
     case('cluster_cavgs')
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xcluster_cavgs%execute(cline)
     case( 'symaxis_search' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymtst%execute( cline )
     case( 'postprocess' )
-        call cline%parse()
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)
 
     ! IMAGE PROCESSING
 
     case( 'mask' )
-        call cline%parse()
         call xmask%execute(cline)
     case( 'fsc' )
-        call cline%parse()
         call xfsc%execute(cline)
     case( 'local_resolution' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xlocal_res%execute(cline)
     case( 'local_resolution2D' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xlocal_res2D%execute(cline)
     case( 'center' )
-        call cline%parse()
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         call xcenter%execute(cline)
     case( 'reproject' )
-        call cline%parse()
         if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
         if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
         if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
         call xreproject%execute(cline)
     case( 'volops' )
-        call cline%parse()
         call xvolops%execute(cline)
     case( 'convert' )
-        call cline%parse()
         call xconvert%execute(cline)
     case( 'ctfops' )
-        call cline%parse()
         if( .not. cline%defined('stk') ) call cline%set('box', 256.)
         call xctfops%execute(cline)
     case( 'filter' )
-        call cline%parse()
         call xfilter%execute(cline)
     case( 'normalize' )
-        call cline%parse()
         call xnormalize%execute(cline)
     case( 'scale' )
-        call cline%parse()
         call xscale%execute(cline)
     case( 'stack' )
-        call cline%parse()
         call xstack%execute(cline)
     case( 'stackops' )
-        call cline%parse()
         if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call xstackops%execute(cline)
     case( 'shift' )
-        call cline%parse()
         call xshift%execute(cline)
 
     ! ORIENTATION PROCESSING
 
     case( 'make_oris' )
-        call cline%parse()
         call xmake_oris%execute(cline)
     case( 'orisops' )
-        call cline%parse()
         call xorisops%execute(cline)
     case( 'oristats' )
-        call cline%parse()
         call xoristats%execute(cline)
     case( 'vizoris' )
-        call cline%parse()
         call xvizoris%execute(cline)
 
     ! PRINT INFO
 
     case( 'info_image' )
-        call cline%parse()
         call xinfo_image%execute(cline)
     case( 'info_stktab' )
-        call cline%parse()
         call xinfo_stktab%execute(cline)
     case( 'print_fsc' )
-        call cline%parse()
         call xprint_fsc%execute(cline)
     case( 'print_frcs' )
         call pfrcs%print_frcs('frcs.bin')
     case( 'print_magic_boxes' )
-        call cline%parse()
         call xprint_magic_boxes%execute(cline)
     case( 'write_ui_json')
         call write_ui_json
@@ -271,10 +247,10 @@ select case(prg)
     ! SIMULATORS
 
     case( 'simulate_noise' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xsimulate_noise%execute(cline)
     case( 'simulate_particles' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('nspace', cline%get_rarg('nptcls'))
         if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
@@ -287,7 +263,7 @@ select case(prg)
         call cline%set('eo', '  no')
         call xsimulate_particles%execute(cline)
     case( 'simulate_movie' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('trs')     ) call cline%set('trs',      3.)
         if( .not. cline%defined('ctf')     ) call cline%set('ctf',   'yes')
         if( .not. cline%defined('bfac')    ) call cline%set('bfac',   200.)
@@ -298,12 +274,11 @@ select case(prg)
         call cline%set('eo',   'no')
         call xsimulate_movie%execute(cline)
     case( 'simulate_subtomogram' )
-        call cline%parse()
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xsimulate_subtomogram%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
-
 call update_job_descriptions_in_project( cline )
-
+call copy_project_file_to_root_dir( cline )
 end program simple_exec

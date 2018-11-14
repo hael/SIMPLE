@@ -1109,6 +1109,8 @@ contains
         self%lplims2D(3)       = max(self%fny, self%lpstop)
         self%smpd_targets2D(1) = self%lplims2D(2)*LP2SMPDFAC2D
         self%smpd_targets2D(2) = self%lplims2D(3)*LP2SMPDFAC2D
+        ! check scale factor sanity
+        if( self%scale > 1.00001 ) THROW_HARD('scale out if range, should be [0,1] for down-scaling; new')
         ! set default ring2 value
         if( .not. cline%defined('ring2') )then
             if( cline%defined('msk') )then
