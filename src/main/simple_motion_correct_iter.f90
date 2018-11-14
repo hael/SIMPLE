@@ -13,7 +13,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DO_ANISO = .true.
+logical, parameter :: DO_ANISO = .false.
 
 type :: motion_correct_iter
     private
@@ -39,11 +39,11 @@ contains
         character(len=*),           intent(in)    :: moviename, fbody, dir_out
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=:), allocatable :: fbody_here, ext, fname
-        real,             allocatable :: shifts(:,:)
+        real,             allocatable :: shifts(:,:), aniso_shifts(:,:)
         type(stats_struct) :: shstats(2)
         type(image)        :: img_jpg
         integer            :: ldim(3), ldim_thumb(3)
-        real               :: corr, scale, var
+        real               :: scale, var
         logical            :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
@@ -75,7 +75,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_movie(self%moviename, ctfvars, corr, shifts, err, gainref_fname)
+        call motion_correct_movie(self%moviename, ctfvars, shifts, err, gainref_fname)
         if( err ) return
         ! return shift stats
         call moment(shifts(1,:), shstats(1)%avg, shstats(1)%sdev, var, err)
@@ -106,7 +106,7 @@ contains
         endif
         write (*,*) 'DO_ANISO = ', DO_ANISO
         if( DO_ANISO )then
-            call motion_correct_movie_aniso
+            call motion_correct_movie_aniso(ctfvars, aniso_shifts)
         endif
         ! generate power-spectra and cleanup
         self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)

@@ -59,7 +59,7 @@ contains
     procedure          :: get_nyq
     procedure          :: get_filtsz
     procedure          :: get_shconst
-    procedure          :: get 
+    procedure          :: get
     procedure          :: get_rmat
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
@@ -1170,7 +1170,7 @@ contains
         real(kind=c_float), pointer, intent(out) :: rmat_ptr(:,:,:)
         rmat_ptr => self%rmat
     end subroutine get_rmat_ptr
-    
+
     subroutine get_rmat_sub( self, rmat )
         class(image), intent(in)  :: self
         real,         intent(out) :: rmat(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -2103,18 +2103,10 @@ contains
         real :: ww
         ww = 1.0
         if( present(w) ) ww = w
-        if( self.eqdims.self_to_subtr )then
-            if( self%ft .eqv. self_to_subtr%ft )then
-                if( self%ft )then
-                    self%cmat = self%cmat-ww*self_to_subtr%cmat
-                else
-                    self%rmat = self%rmat-ww*self_to_subtr%rmat
-                endif
-            else
-                THROW_HARD('cannot subtract images with different FT status; subtr_1')
-            endif
+        if( self%ft )then
+            self%cmat = self%cmat-ww*self_to_subtr%cmat
         else
-            THROW_HARD('cannot subtract images of different dims; subtr_1')
+            self%rmat = self%rmat-ww*self_to_subtr%rmat
         endif
     end subroutine subtr_1
 
@@ -5069,39 +5061,59 @@ contains
         endif
     end function corr_shifted
 
+
+
     !>  \brief is for calculating a real-space correlation coefficient between images
     !! \param self1,self2 image objects
     !! \return  r correlation coefficient
     !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
-        real :: diff1
-        real :: diff2
-        real :: r, ax, ay, sxx, syy, sxy, npix
+        real    :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3)), diff1sc
+        real    :: diff2(self2%ldim(1),self2%ldim(2),self2%ldim(3)), diff2sc
+        real    :: r, ax, ay, sxx, syy, sxy, npix
         integer :: i,j,k
-        npix = real(product(self1%ldim))
-        ax   = self1%mean()
-        ay   = self2%mean()
-        sxx = 0.
-        syy = 0.
-        sxy = 0.
-        !$omp parallel do default(shared) private(i,j,k,diff1,diff2) collapse(3) proc_bind(close) schedule(static) reduction(+:sxx,syy,sxy)
-        do i=1,self1%ldim(1)
-            do j=1,self1%ldim(2)
-                do k=1,self1%ldim(3)
-                    diff1 = self1%rmat(i,j,k) -ax
-                    diff2 = self2%rmat(i,j,k) -ay
-                    sxx   = sxx + diff1 * diff1
-                    syy   = syy + diff2 * diff2
-                    sxy   = sxy + diff1 * diff2
+        if( self1%wthreads .and. self2%wthreads )then
+            npix = real(product(self1%ldim))
+            ax   = self1%mean()
+            ay   = self2%mean()
+            sxx = 0.
+            syy = 0.
+            sxy = 0.
+            !$omp parallel do default(shared) private(i,j,k,diff1sc,diff2sc) collapse(3) proc_bind(close) schedule(static) reduction(+:sxx,syy,sxy)
+            do i=1,self1%ldim(1)
+                do j=1,self1%ldim(2)
+                    do k=1,self1%ldim(3)
+                        diff1sc = self1%rmat(i,j,k) -ax
+                        diff2sc = self2%rmat(i,j,k) -ay
+                        sxx     = sxx + diff1sc * diff1sc
+                        syy     = syy + diff2sc * diff2sc
+                        sxy     = sxy + diff1sc * diff2sc
+                    end do
                 end do
             end do
-        end do
-        !$omp end parallel do
-        if( sxx > 0. .and. syy > 0. )then
-            r = sxy / sqrt(sxx * syy)
+            !$omp end parallel do
+            if( sxx > 0. .and. syy > 0. )then
+                r = sxy / sqrt(sxx * syy)
+            else
+                r = 0.
+            endif
         else
-            r = 0.
+            diff1 = 0.
+            diff2 = 0.
+            npix  = real(product(self1%ldim))
+            ax    = sum(self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3))) / npix
+            ay    = sum(self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3))) / npix
+            diff1 = self1%rmat(:self1%ldim(1),:self1%ldim(2),:self1%ldim(3)) - ax
+            diff2 = self2%rmat(:self2%ldim(1),:self2%ldim(2),:self2%ldim(3)) - ay
+            sxx   = sum(diff1 * diff1)
+            syy   = sum(diff2 * diff2)
+            sxy   = sum(diff1 * diff2)
+            if( sxx > 0. .and. syy > 0. )then
+                r = sxy / sqrt(sxx * syy)
+            else
+                r = 0.
+            endif
         endif
     end function real_corr_1
 

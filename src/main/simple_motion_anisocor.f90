@@ -7,19 +7,20 @@ use simple_optimizer,   only: optimizer
 use simple_image,       only: image
 implicit none
 private
-public :: motion_anisocor   !, test_motion_anisocor
+public :: motion_anisocor, POLY_DIM   !, test_motion_anisocor
 #include "simple_local_flags.inc"
 
-real,    parameter                  :: TOL=1e-4             !< tolerance parameter
-integer, parameter                  :: MAXITS=30            !< maximum number of iterations
+real,    parameter                  :: TOL      = 1e-4      !< tolerance parameter
+integer, parameter                  :: MAXITS   = 30        !< maximum number of iterations
+integer, parameter                  :: POLY_DIM = 12        !< dimensionality of polynomial dome model
 
 type :: motion_anisocor
+    private
     type(opt_spec)                  :: ospec                !< optimizer specification object
     class(optimizer),   pointer     :: nlopt      => null() !< pointer to nonlinear optimizer
     real                            :: maxHWshift = 0.      !< maximum half-width of shift
     class(image),       pointer     :: reference  => null() !< reference image ptr
     class(image),       pointer     :: frame      => null() !< particle image ptr
-    integer                         :: frame_idx            !< particle image index in the stack
     integer                         :: ldim(2)              !< dimensions of reference, particle
     real(kind=c_float), pointer     :: rmat_ref   (:,:,:)   !< reference matrix
     real(kind=c_float), pointer     :: rmat       (:,:,:)   !< particle  matrix
@@ -29,23 +30,21 @@ type :: motion_anisocor
     real                            :: motion_correctftol
     real                            :: motion_correctgtol
 contains
-    procedure                       :: motion_anisocor_set_ptrs
-    procedure                       :: motion_anisocor_minimize
-    procedure                       :: eval_fdf
-    procedure                       :: biquad_poly_df
-    procedure                       :: biquad_poly
-    procedure                       :: calc_mat_tld
-    procedure                       :: alloc_hlpmats
-    procedure                       :: interp_bilin
-    procedure                       :: interp_bilin_fdf
+    procedure, private              :: eval_fdf
+    procedure, private              :: biquad_poly_df
+    procedure, private              :: biquad_poly
+    procedure, private              :: calc_mat_tld
+    procedure, private              :: alloc_hlpmats
+    ! procedure, private              :: interp_bilin
+    procedure, private              :: interp_bilin_fdf
     procedure                       :: interp_bilin2
-    procedure                       :: interp_bilin2_fdf
-    ! brauche ich im moment erstmal nicht
-    procedure                       :: calc_gradient_cross_deriv
-    procedure                       :: bcuint
-    procedure                       :: bcucof
-    procedure                       :: new  => motion_anisocor_new
-    procedure                       :: kill => motion_anisocor_kill
+    procedure, private              :: interp_bilin2_fdf
+    procedure, private              :: calc_gradient_cross_deriv
+    procedure, private              :: bcuint
+    procedure, private              :: bcucof
+    procedure                       :: new      => motion_anisocor_new
+    procedure                       :: kill     => motion_anisocor_kill
+    procedure                       :: minimize => motion_anisocor_minimize
 end type motion_anisocor
 
 contains
@@ -68,91 +67,91 @@ contains
 !!$        end if
     end subroutine alloc_hlpmats
 
-    ! bilinear interpolation
-    function interp_bilin( self, x ) result( val )
-        class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: x(2)
-        real                                  :: val
-        integer                               :: x1,x2,y1,y2
-        real                                  :: NP1, NP2, NP3, NP4
-        real                                  :: PW1, PW2, PW3, PW4
-        ! Any values out of acceptable range
-        if ((x(1) < 1.).or.(x(1) > real(self%ldim(1))).or.(x(2) < 1.).or.(x(2) > real(self%ldim(2)))) then
-            val = 0.
-            return
-        end if
-        x1 = min(floor(x(1)), self%ldim(1) - 1)
-        x2 = x1 + 1
-        y1 = min(floor(x(2)), self%ldim(2) - 1)
-        y2 = y1 + 1
-        ! Neighboring Pixels
-        NP1 = self%rmat(y1,x1,1)
-        NP2 = self%rmat(y1,x2,1)
-        NP3 = self%rmat(y2,x1,1)
-        NP4 = self%rmat(y2,x2,1)
-        ! Pixel Weights
-        PW1 = (y2-x(2))*(x2-x(1))
-        PW2 = (y2-x(2))*(x(1)-x1)
-        PW3 = (x2-x(1))*(x(2)-y1)
-        PW4 = (x(2)-y1)*(x(1)-x1)
-        val = PW1 * NP1 + PW2 * NP2 + PW3 * NP3 + PW4 * NP4
-    end function interp_bilin
-
-    function interp_bilin2( self, x ) result( val )
-        class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: x(2)
-        real                                  :: val
-        logical                               :: x1_valid, x2_valid, y1_valid, y2_valid
-        integer                               :: x1_h, x2_h, y1_h, y2_h
-        real                                  :: y1, y2, y3, y4, t, u
-        
-        x1_h = floor(x(1))
-        x2_h = x1_h + 1
-        y1_h = floor(x(2))
-        y2_h = y1_h + 1
-    
-        x1_valid = ((x1_h > 0).and.(x1_h <= size(self%rmat, 1)))
-        x2_valid = ((x2_h > 0).and.(x2_h <= size(self%rmat, 1)))
-        y1_valid = ((y1_h > 0).and.(y1_h <= size(self%rmat, 2)))
-        y2_valid = ((y2_h > 0).and.(y2_h <= size(self%rmat, 2)))
-    
-        if (x1_valid .and. y1_valid) then
-            y1 = self%rmat(x1_h, y1_h, 1)
-        else
-            y1 = 0.
-        end if
-    
-        if (x2_valid .and. y1_valid) then
-            y2 = self%rmat(x2_h, y1_h, 1)
-        else
-            y2 = 0.
-        end if
-    
-        if (x2_valid .and. y2_valid) then
-            y3 = self%rmat(x2_h, y2_h, 1)
-        else
-            y3 = 0.
-        end if
-    
-        if (x1_valid .and. y2_valid) then
-            y4 = self%rmat(x1_h, y2_h, 1)
-        else
-            y4 = 0.
-        end if
-    
-    
-        t    = x(1) - real(x1_h);
-        u    = x(2) - real(y1_h);
-    
-        val  =  (1. - t) * (1. - u) * y1 + &
-                      t  * (1. - u) * y2 + &
-                      t  *       u  * y3 + &
-                (1. - t) *       u  * y4 
-    end function interp_bilin2    
+    ! ! bilinear interpolation
+    ! function interp_bilin( self, x ) result( val )
+    !     class(motion_anisocor), intent(inout) :: self
+    !     real,                   intent(in)    :: x(2)
+    !     real                                  :: val
+    !     integer                               :: x1,x2,y1,y2
+    !     real                                  :: NP1, NP2, NP3, NP4
+    !     real                                  :: PW1, PW2, PW3, PW4
+    !     ! Any values out of acceptable range
+    !     if ((x(1) < 1.).or.(x(1) > real(self%ldim(1))).or.(x(2) < 1.).or.(x(2) > real(self%ldim(2)))) then
+    !         val = 0.
+    !         return
+    !     end if
+    !     x1 = min(floor(x(1)), self%ldim(1) - 1)
+    !     x2 = x1 + 1
+    !     y1 = min(floor(x(2)), self%ldim(2) - 1)
+    !     y2 = y1 + 1
+    !     ! Neighboring Pixels
+    !     NP1 = self%rmat(y1,x1,1)
+    !     NP2 = self%rmat(y1,x2,1)
+    !     NP3 = self%rmat(y2,x1,1)
+    !     NP4 = self%rmat(y2,x2,1)
+    !     ! Pixel Weights
+    !     PW1 = (y2-x(2))*(x2-x(1))
+    !     PW2 = (y2-x(2))*(x(1)-x1)
+    !     PW3 = (x2-x(1))*(x(2)-y1)
+    !     PW4 = (x(2)-y1)*(x(1)-x1)
+    !     val = PW1 * NP1 + PW2 * NP2 + PW3 * NP3 + PW4 * NP4
+    ! end function interp_bilin
+    !
+    ! function interp_bilin2( self, x ) result( val )
+    !     class(motion_anisocor), intent(inout) :: self
+    !     real,                   intent(in)    :: x(2)
+    !     real                                  :: val
+    !     logical                               :: x1_valid, x2_valid, y1_valid, y2_valid
+    !     integer                               :: x1_h, x2_h, y1_h, y2_h
+    !     real                                  :: y1, y2, y3, y4, t, u
+    !
+    !     x1_h = floor(x(1))
+    !     x2_h = x1_h + 1
+    !     y1_h = floor(x(2))
+    !     y2_h = y1_h + 1
+    !
+    !     x1_valid = ((x1_h > 0).and.(x1_h <= size(self%rmat, 1)))
+    !     x2_valid = ((x2_h > 0).and.(x2_h <= size(self%rmat, 1)))
+    !     y1_valid = ((y1_h > 0).and.(y1_h <= size(self%rmat, 2)))
+    !     y2_valid = ((y2_h > 0).and.(y2_h <= size(self%rmat, 2)))
+    !
+    !     if (x1_valid .and. y1_valid) then
+    !         y1 = self%rmat(x1_h, y1_h, 1)
+    !     else
+    !         y1 = 0.
+    !     end if
+    !
+    !     if (x2_valid .and. y1_valid) then
+    !         y2 = self%rmat(x2_h, y1_h, 1)
+    !     else
+    !         y2 = 0.
+    !     end if
+    !
+    !     if (x2_valid .and. y2_valid) then
+    !         y3 = self%rmat(x2_h, y2_h, 1)
+    !     else
+    !         y3 = 0.
+    !     end if
+    !
+    !     if (x1_valid .and. y2_valid) then
+    !         y4 = self%rmat(x1_h, y2_h, 1)
+    !     else
+    !         y4 = 0.
+    !     end if
+    !
+    !
+    !     t    = x(1) - real(x1_h);
+    !     u    = x(2) - real(y1_h);
+    !
+    !     val  =  (1. - t) * (1. - u) * y1 + &
+    !                   t  * (1. - u) * y2 + &
+    !                   t  *       u  * y3 + &
+    !             (1. - t) *       u  * y4
+    ! end function interp_bilin2
 
     ! bilinear interpolation with gradient gradient
     subroutine interp_bilin_fdf( self, x, f, grad )
-        class(motion_anisocor), intent(inout) :: self        
+        class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: x(2)
         real,                   intent(out)   :: f
         real,                   intent(out)   :: grad(2)
@@ -208,54 +207,107 @@ contains
         x2_h = x1_h + 1
         y1_h = floor(x(2))
         y2_h = y1_h + 1
-    
-        x1_valid = ((x1_h > 0) .and. (x1_h <= size(self%rmat, 1)))
-        x2_valid = ((x2_h > 0) .and. (x2_h <= size(self%rmat, 1)))
-        y1_valid = ((y1_h > 0) .and. (y1_h <= size(self%rmat, 2)))
-        y2_valid = ((y2_h > 0) .and. (y2_h <= size(self%rmat, 2)))
-    
+
+        x1_valid = ((x1_h > 0) .and. (x1_h <= self%ldim(1)))
+        x2_valid = ((x2_h > 0) .and. (x2_h <= self%ldim(1)))
+        y1_valid = ((y1_h > 0) .and. (y1_h <= self%ldim(2)))
+        y2_valid = ((y2_h > 0) .and. (y2_h <= self%ldim(2)))
+
         if (x1_valid .and. y1_valid) then
             y1 = self%rmat(x1_h, y1_h, 1)
         else
             y1 = 0.
         end if
-    
+
         if (x2_valid .and. y1_valid) then
             y2 = self%rmat(x2_h, y1_h, 1)
         else
             y2 = 0.
         end if
-    
+
         if (x2_valid .and. y2_valid) then
             y3 = self%rmat(x2_h, y2_h, 1)
         else
             y3 = 0.
         end if
-    
+
         if (x1_valid .and. y2_valid) then
             y4 = self%rmat(x1_h, y2_h, 1)
         else
             y4 = 0.
         end if
-    
-    
-        t    = x(1) - x1_h;
-        u    = x(2) - y1_h;
-    
+
+
+        t    = x(1) - x1_h
+        u    = x(2) - y1_h
+
         val  =  (1. - t) * (1. - u) * y1 + &
                       t  * (1. - u) * y2 + &
                       t  *       u  * y3 + &
-                (1. - t) *       u  * y4 
+                (1. - t) *       u  * y4
 
         grad(1) =   - (1. - u) * y1 + &
                       (1. - u) * y2 + &
                             u  * y3 - &
-                            u  * y4 
+                            u  * y4
         grad(2) =   - (1. - t) * y1 - &
                             t  * y2 + &
                             t  * y3 + &
-                      (1. - t) * y4 
+                      (1. - t) * y4
     end subroutine interp_bilin2_fdf
+
+    subroutine interp_bilin2( self, x, rmat, val )
+        class(motion_anisocor), intent(inout) :: self
+        real,                   intent(in)    :: x(2), rmat(:,:)
+        real,                   intent(out)   :: val
+        logical                               :: x1_valid, x2_valid, y1_valid, y2_valid
+        integer                               :: x1_h, x2_h, y1_h, y2_h
+        real                                  :: y1, y2, y3, y4, t, u
+
+        x1_h = floor(x(1))
+        x2_h = x1_h + 1
+        y1_h = floor(x(2))
+        y2_h = y1_h + 1
+
+        x1_valid = ((x1_h > 0) .and. (x1_h <= self%ldim(1)))
+        x2_valid = ((x2_h > 0) .and. (x2_h <= self%ldim(1)))
+        y1_valid = ((y1_h > 0) .and. (y1_h <= self%ldim(2)))
+        y2_valid = ((y2_h > 0) .and. (y2_h <= self%ldim(2)))
+
+        if (x1_valid .and. y1_valid) then
+            y1 = rmat(x1_h, y1_h)
+        else
+            y1 = 0.
+        end if
+
+        if (x2_valid .and. y1_valid) then
+            y2 = rmat(x2_h, y1_h)
+        else
+            y2 = 0.
+        end if
+
+        if (x2_valid .and. y2_valid) then
+            y3 = rmat(x2_h, y2_h)
+        else
+            y3 = 0.
+        end if
+
+        if (x1_valid .and. y2_valid) then
+            y4 = rmat(x1_h, y2_h)
+        else
+            y4 = 0.
+        end if
+
+
+        t    = x(1) - x1_h
+        u    = x(2) - y1_h
+
+        val  =  (1. - t) * (1. - u) * y1 + &
+                      t  * (1. - u) * y2 + &
+                      t  *       u  * y3 + &
+                (1. - t) *       u  * y4
+
+    end subroutine interp_bilin2
 
     subroutine bcuint(self, y, y1, y2, y12, x1l, x1u, x2l, x2u, x1, x2, ansy, &
         &             ansy1, ansy2)
@@ -266,7 +318,7 @@ contains
         ! and x1,x2,  the  coordinates  of  the desired  point  for  the  interpolation.  !
         ! The  interpolated  function  value  is  returned  as ansy, and the interpolated gradient values as
         ! ansy1 and ansy2.  This  routine calls bcucof.
-        class(motion_anisocor), intent(inout) :: self 
+        class(motion_anisocor), intent(inout) :: self
         real                                  :: ansy,ansy1,ansy2,x1,x1l,x1u,x2,x2l,x2u,y(4),y1(4), &
             &                                    y12(4),y2(4)
         integer                               :: i
@@ -323,7 +375,7 @@ contains
             cl(i) = xx
         enddo
         l = 0
-        do i = 1, 4 ! Unpack  the  result  into  the output  table.            
+        do i = 1, 4 ! Unpack  the  result  into  the output  table.
             do j=1,4
                 l      = l + 1
                 c(i,j) = cl(l)
@@ -337,9 +389,34 @@ contains
 
     end subroutine calc_gradient_cross_deriv
 
+    subroutine calc_aniso_shifted( self, a, img )
+        class(motion_anisocor), intent(inout) :: self
+        real,                   intent(in)    :: a(POLY_DIM)
+        class(image),           intent(inout) :: img
+        real, allocatable :: rmat_tmp(:,:)
+        real, pointer     :: rmat_ptr(:,:,:)
+        integer           :: i, j, ldim(3)
+        real              :: x_tld(2), grad(2), val
+        ldim = img%get_ldim()
+        if( .not. all(ldim(1:2) .eq. self%ldim(1:2)) )then
+            THROW_HARD('in calc_aniso_shifted: dimension do not match; simple_motion_anisocor')
+        endif
+        allocate(rmat_tmp(self%ldim(1),self%ldim(2)))
+        call img%get_rmat_ptr(rmat_ptr)
+        rmat_tmp(1:self%ldim(1),1:self%ldim(2)) = rmat_ptr(1:self%ldim(1),1:self%ldim(2),1)
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                call self%biquad_poly(i, j, a, x_tld)
+                call self%interp_bilin2_fdf(x_tld, val, grad)
+                rmat_tmp(i,j) = val
+            end do
+        end do
+        deallocate(rmat_tmp)
+    end
+
     subroutine calc_mat_tld( self, a )
         class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: a(12)
+        real,                   intent(in)    :: a(POLY_DIM)
         integer                               :: i, j
         real                                  :: x_tld(2)
         real                                  :: val, grad(2)
@@ -357,19 +434,19 @@ contains
     subroutine biquad_poly( self, i, j, a, x_tld)
         class(motion_anisocor), intent(inout) :: self
         integer,                intent(in)    :: i, j
-        real,                   intent(in)    :: a(12)
+        real,                   intent(in)    :: a(POLY_DIM)
         real,                   intent(out)   :: x_tld(2)
         real                                  :: x, y, xm, ym, xms, yms, z1, z2
         real                                  :: Nx, Ny
         Nx = self%ldim(1)
-        Ny = self%ldim(2)        
+        Ny = self%ldim(2)
         x  = real(i)
-        y  = real(j)        
+        y  = real(j)
         ! map x,y to [-1:1]
         xm = (2. * x - Nx - 1.) / (Nx - 1.)
         ym = (2. * y - Ny - 1.) / (Ny - 1.)
         xms = xm * xm
-        yms = ym * ym        
+        yms = ym * ym
         ! Polynomial:
         ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
         ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
@@ -377,25 +454,25 @@ contains
         z2 = real(ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym)
         ! remap to [1:N]
         x_tld(1) = ((Nx - 1.) * z1 + Nx + 1.) / 2.
-        x_tld(2) = ((Nx - 1.) * z2 + Ny + 1.) / 2.        
+        x_tld(2) = ((Nx - 1.) * z2 + Ny + 1.) / 2.
     end subroutine biquad_poly
 
     subroutine biquad_poly_df( self, i, j, a, poly_grad )
         class(motion_anisocor), intent(inout) :: self
         integer,                intent(in)    :: i, j
-        real,                   intent(in)    :: a(12)
-        real                                  :: poly_grad(12)
+        real,                   intent(in)    :: a(POLY_DIM)
+        real                                  :: poly_grad(POLY_DIM)
         real                                  :: x, y, xm, ym, xms, yms
         real                                  :: Nx, Ny
         Nx  = self%ldim(1)
-        Ny  = self%ldim(2)        
+        Ny  = self%ldim(2)
         x   = real(i)
         y   = real(j)
         ! map x,y to [-1:1]
         xm  = (2. * x - Nx - 1.) / (Nx - 1.)
         ym  = (2. * y - Ny - 1.) / (Ny - 1.)
         xms = xm * xm
-        yms = ym * ym        
+        yms = ym * ym
         ! Polynomial:
         ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
         ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
@@ -417,11 +494,11 @@ contains
 
     subroutine eval_fdf( self, a, f, grad )
         class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: a(12)
-        real                                  :: f, grad(12)
+        real,                   intent(in)    :: a(POLY_DIM)
+        real                                  :: f, grad(POLY_DIM)
         real                                  :: N, D_I, D_R, grad_tmp1, grad_tmp2
         integer                               :: i, j, r
-        real                                  :: poly_dfs(12)
+        real                                  :: poly_dfs(POLY_DIM)
         call self%calc_mat_tld(a)
         N   = 0.
         D_I = 0.
@@ -436,7 +513,7 @@ contains
         f = N / sqrt(D_I * D_R)
         ! Computing gradient
         grad = 0.
-        do r = 1,12
+        do r = 1,POLY_DIM
             grad_tmp1 = 0.
             grad_tmp2 = 0.
             do i = 1,self%ldim(1)
@@ -456,14 +533,13 @@ contains
     end subroutine eval_fdf
 
     !> Initialise  ftexp_shsrch
-    subroutine motion_anisocor_new( self, frame_idx, ref, frame, aniso_shifted_frame, motion_correct_ftol, motion_correct_gtol )
+    subroutine motion_anisocor_new( self, ref, frame, aniso_shifted_frame, motion_correct_ftol, motion_correct_gtol )
         class(motion_anisocor), intent(inout) :: self
         class(image), target, intent(in) :: ref, frame, aniso_shifted_frame
         real,       optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
-        type(opt_factory)                :: ofac                 !< optimizer factory        
-        integer                          :: frame_idx
+        type(opt_factory)                :: ofac                 !< optimizer factory
         integer                          :: i
-        real                             :: lims(12,2)
+        real                             :: lims(POLY_DIM,2)
         integer                          :: ldim_here1(3), ldim_here2(3)
         call self%kill()
         ldim_here1 = ref  %get_ldim()
@@ -475,9 +551,8 @@ contains
         call ref%get_rmat_ptr(self%rmat_ref)
         self%frame      => frame
         call frame%get_rmat_ptr(self%rmat)
-        self%frame_idx   = frame_idx
         call aniso_shifted_frame%get_rmat_ptr(self%rmat_T)
-        self%ldim       =  ref%get_ldim()        
+        self%ldim       =  ref%get_ldim()
         allocate( self%rmat_T_grad ( self%ldim(1), self%ldim(2), 2 ) )
         self%maxHWshift = 0.1
         if( present(motion_correct_ftol) )then
@@ -490,11 +565,11 @@ contains
         else
             self%motion_correctgtol = TOL
         end if
-        do i = 1,12
+        do i = 1,POLY_DIM
             lims(i,1) = - self%maxHWshift
             lims(1,2) =   self%maxHWshift
         end do
-        call self%ospec%specify('lbfgsb', 12, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=lims)
+        call self%ospec%specify('lbfgsb', POLY_DIM, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=lims)
         call self%ospec%set_costfun_8   (motion_anisocor_cost_8)
         call self%ospec%set_gcostfun_8  (motion_anisocor_gcost_8)
         call self%ospec%set_fdfcostfun_8(motion_anisocor_fdfcost_8)
@@ -506,35 +581,13 @@ contains
         call ofac%new(self%ospec, self%nlopt)
     end subroutine motion_anisocor_new
 
-    subroutine motion_anisocor_set_ptrs( self, ref, frame, frame_idx )
-        class(motion_anisocor), intent(inout)      :: self
-        class(image),           intent(in), target :: ref, frame
-        integer,                intent(in)         :: frame_idx
-!!$        integer                                    :: ldim_here1(3), ldim_here2(3)
-!!$        self%reference  => ref        
-!!$        call ref%get_rmat_ptr(self%rmat_ref)
-!!$        self%frame      => frame
-!!$        call frame%get_rmat_ptr(self%rmat)
-!!$        self%frame_idx  = frame_idx
-!!$        ldim_here1      = ref %get_ldim()
-!!$        ldim_here2      = frame%get_ldim()
-!!$        if ((ldim_here1(1) /= ldim_here2(1)) .or. (ldim_here1(2) /= ldim_here2(2))) then
-!!$            THROW_HARD('motion_anisocor_set_ptrs: dimensions of particle and reference do not match; simple_motion_anisocor')
-!!$        end if
-!!$        self%ldim       = ref%get_ldim()
-!!$        if (.not. ((ldim_here1(1) == self%ldim(1)).and.(ldim_here1(2) == self%ldim(2)))) then
-!!$            if (allocated(self%rmat_T_grad)) deallocate(self%rmat_T_grad)
-!!$            allocate( self%rmat_T_grad ( self%ldim(1), self%ldim(2), 2 ) )
-!!$        end if
-    end subroutine motion_anisocor_set_ptrs
-
     !> Cost function, double precision
     function motion_anisocor_cost_8( fun_self, vec, D ) result(cost)
         class(*),     intent(inout) :: fun_self
         integer,      intent(in)    :: D
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
-        real                        :: f, grad(12)
+        real                        :: f, grad(POLY_DIM)
         select type(fun_self)
         class is (motion_anisocor)
             call fun_self%eval_fdf(real(vec), f, grad)
@@ -550,7 +603,7 @@ contains
         integer,      intent(in)    :: D
         real(dp),     intent(inout) :: vec( D )
         real(dp),     intent(out)   :: grad( D )
-        real                        :: f, spgrad(12)
+        real                        :: f, spgrad(POLY_DIM)
         select type(fun_self)
         class is (motion_anisocor)
             call fun_self%eval_fdf(real(vec), f, spgrad)
@@ -566,7 +619,7 @@ contains
         integer,      intent(in)    :: D
         real(kind=8), intent(inout) :: vec(D)
         real(kind=8), intent(out)   :: f, grad(D)
-        real                        :: spf, spgrad(12)
+        real                        :: spf, spgrad(POLY_DIM)
         select type(fun_self)
         class is (motion_anisocor)
             call fun_self%eval_fdf(real(vec), spf, spgrad)
@@ -580,14 +633,14 @@ contains
     !> Main search routine
     function motion_anisocor_minimize( self ) result( cxy )
         class(motion_anisocor), intent(inout) :: self
-        real :: cxy(1), lims(12,2) ! max_shift, maxlim
+        real :: cxy(POLY_DIM+1) ! corr + model
         class(*), pointer :: fun_self => null()
         integer           :: i
         self%ospec%x = 0.
         call self%nlopt%minimize(self%ospec, self, cxy(1))
-        
-        
-        
+        cxy(2:) = self%ospec%x
+
+
 !!$        lims(1,1) = - maxHWshift
 !!$        lims(1,2) =   maxHWshift
 !!$        lims(2,1) = - maxHWshift
@@ -633,10 +686,9 @@ contains
         self%maxHWshift  = 0.
         self%reference   => null()
         self%frame       => null()
-        self%frame_idx   = 0
-        self%ldim = 0
+        self%ldim        = 0
     end subroutine motion_anisocor_kill
-    
+
 !!$    subroutine test_motion_anisocor
 !!$        type(image)       :: img_ref, img_ptcl
 !!$        type(ft_expanded) :: ftexp_ref, ftexp_ptcl
