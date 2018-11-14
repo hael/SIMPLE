@@ -470,6 +470,10 @@ contains
 
     subroutine motion_correct_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        ! generate straight integrated movie frame for comparison
+        call sum_movie_frames
+        movie_sum = movie_sum_global
+        call movie_sum%ifft()
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
@@ -478,10 +482,6 @@ contains
         call wsum_movie_frames(opt_shifts)
         movie_sum_corrected = movie_sum_global
         call movie_sum_corrected%ifft()
-        ! generate straight integrated movie frame for comparison
-        call sum_movie_frames
-        movie_sum = movie_sum_global
-        call movie_sum%ifft()
     end subroutine motion_correct_calc_sums_1
 
     subroutine motion_correct_calc_sums_2( movie_sum_corrected, fromto )

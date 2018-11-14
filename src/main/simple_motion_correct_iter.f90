@@ -92,6 +92,7 @@ contains
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
             if( cline%defined('tof') )then
+                ! order matters here, if anisotropic correction is on the subsum needs to be generated first
                 call motion_correct_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
                 call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             else
