@@ -7,6 +7,7 @@ use simple_strategy3D_srch,  only: strategy3D_srch, strategy3D_spec
 use simple_builder,          only: build_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 use simple_parameters,       only: params_glob
+use simple_rnd,              only: shcloc, irnd_uni
 implicit none
 
 public :: strategy3D_cluster
@@ -35,147 +36,221 @@ contains
         self%spec = spec
     end subroutine new_cluster3D
 
+    !>  \brief search driver
     subroutine srch_cluster3D( self, ithr )
-        use simple_rnd, only: shcloc, irnd_uni
-        class(strategy3D_cluster),   intent(inout) :: self
-        integer,                     intent(in)    :: ithr
-        integer :: sym_projs(self%s%nstates), iproj, iref, isym, state
-        real    :: corrs(self%s%nstates), corrs_sym(self%s%nsym), corrs_inpl(self%s%nrots)
-        real    :: shvec(2), corr, mi_state, frac, mi_proj, bfac, score4extr
-        logical :: hetsym
+        class(strategy3D_cluster), intent(inout) :: self
+        integer,                   intent(in)    :: ithr
+        real :: bfac
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
-            ! set thread index
+            ! prep
             self%s%ithr = ithr
-            ! local prep
             call prep_strategy3D_thread(self%s%ithr)
-            hetsym            = associated(self%spec%symmat)
             self%s%prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%s%iptcl))
-            self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr')
+            self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr') ! score for EO
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             self%s%prev_shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl)
-            shvec             = self%s%prev_shvec
-            ! extremal optimization score
-            score4extr = self%s%prev_corr
-            ! B-factor memoization
+            ! B-factor memoization & specscore
             bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
             if( params_glob%cc_objfun == OBJFUN_RES )call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
-            ! specscore
             self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
-            ! evaluate all correlations
-            corrs = -1.
-            do state = 1, self%s%nstates
-                if( .not. s3D%state_exists(state) ) cycle
-                if( hetsym )then
-                    ! greedy in symmetric unit
-                    do isym = 1, self%s%nsym
-                        iproj = self%spec%symmat(self%s%prev_proj, isym)
-                        iref  = (state-1) * self%s%nprojs + iproj
-                        call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
-                        corrs_sym(isym) = corrs_inpl(self%s%prev_roind)
-                        ! corrs_sym(isym) = maxval(corrs_inpl) ! greedier
-                    enddo
-                    isym             = maxloc(corrs_sym, dim=1)
-                    corrs(state)     = corrs_sym(isym)
-                    sym_projs(state) = self%spec%symmat(self%s%prev_proj, isym)
-                else
-                    iref = (state-1) * self%s%nprojs + self%s%prev_proj
-                    call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs_inpl)
-                    ! replaced:
-                    ! corrs(state) = corrs_inpl(self%s%prev_roind)
-                    ! with to somewhat take account for alignment errors due to state mixing:
-                    corrs(state) = maxval(corrs_inpl)
-                endif
-            enddo
-            ! make moves
-            mi_state = 0.
-            mi_proj  = 1.
-            if( score4extr < self%spec%extr_score_thresh )then
-                ! state randomization
-                state = irnd_uni(self%s%nstates)
-                if( self%s%nstates > 2 )then
-                    do while(state == self%s%prev_state .or. .not.s3D%state_exists(state))
-                        state = irnd_uni(self%s%nstates)
-                    enddo
-                else
-                    do while(.not.s3D%state_exists(state))
-                        state = irnd_uni(self%s%nstates)
-                    enddo
-                endif
-                corr = corrs(state)
-                self%s%nrefs_eval = 1
-            else
-                ! SHC state optimization
-                self%s%prev_corr  = corrs(self%s%prev_state)
-                state             = shcloc(self%s%nstates, corrs, self%s%prev_corr)
-                corr              = corrs(state)
-                self%s%nrefs_eval = count(corrs <= self%s%prev_corr)
-                if( self%s%prev_state .eq. state ) mi_state = 1.
-                if( self%spec%do_extr )then
-                    ! extremal optimization
-                    if( hetsym )then
-                        ! greedy in symmetric unit
-                        if( sym_projs(state) .ne. self%s%prev_proj )then
-                            mi_proj = 0.
-                            iref    = (state-1)*self%s%nprojs + sym_projs(state)
-                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,1)) ! inpl = 1
-                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,2)) ! inpl = 1
-                        endif
-                    endif
-                else
-                    ! greedy moves after extremal optimization complete
-                    if( hetsym )then
-                        ! greedy in symmetric units
-                        iproj = sym_projs(state)
-                        if( iproj .ne. self%s%prev_proj )then
-                            mi_proj = 0.
-                            iref    = (state-1) * self%s%nprojs + iproj
-                            call build_glob%spproj_field%e1set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 1)) ! inpl = 1
-                            call build_glob%spproj_field%e2set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr, iref, 1, 2)) ! inpl = 1
-                        endif
-                    else
-                        ! greedy in plane, need to recalculate bound for in-plane search
-                        iref = (state-1) * self%s%nprojs + self%s%prev_proj
-                        s3D%proj_space_refinds_sorted_highest(self%s%ithr,self%s%nrefs) = iref ! inpl angle + shift
-                        s3D%proj_space_corrs_srchd(self%s%ithr,iref) = .true.
-                        !s3D%proj_space_refinds_sorted(self%s%ithr,self%s%nrefsmaxinpl) = iref ! shift only
-                        call self%s%inpl_srch
-                        if( s3D%proj_space_corrs(self%s%ithr,iref,1) > corr )then
-                            corr  = s3D%proj_space_corrs(self%s%ithr,iref,1)
-                            shvec = shvec + s3D%proj_space_shift(self%s%ithr,iref,1,:) ! inpl=1
-                            call build_glob%spproj_field%set_shift(self%s%iptcl, shvec)
-                            call build_glob%spproj_field%e3set(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,iref,1,3)) ! inpl = 1
-                        endif
-                    endif
-                    call build_glob%spproj_field%set(self%s%iptcl,'proj', real(self%s%prev_proj))
-                endif
-            endif
-            frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
-            call build_glob%spproj_field%set(self%s%iptcl,'frac',     frac)
-            call build_glob%spproj_field%set(self%s%iptcl,'state',    real(state))
-            call build_glob%spproj_field%set(self%s%iptcl,'corr',     corr)
-            call build_glob%spproj_field%set(self%s%iptcl,'mi_proj',  mi_proj)
-            call build_glob%spproj_field%set(self%s%iptcl,'mi_state', mi_state)
-            call build_glob%spproj_field%set(self%s%iptcl,'w',        1.)
             call build_glob%spproj_field%set(self%s%iptcl,'bfac',     bfac)
             call build_glob%spproj_field%set(self%s%iptcl,'specscore',self%s%specscore)
-            call s3D%o_peaks(self%s%iptcl)%set(1,'state', real(state))
-            call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  corr)
-            call s3D%o_peaks(self%s%iptcl)%set(1,'w',     1.)
-            call s3D%o_peaks(self%s%iptcl)%set(1,'ow',    1.)
-            call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  real(self%s%prev_proj))
-            call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
-            call s3D%o_peaks(self%s%iptcl)%set_shift(1, shvec)
+            ! fork
+            if( associated(self%spec%symmat) )then
+                call symsrch_cluster3D(self%s, self%spec)
+            else
+                call statesrch_cluster3D(self%s, self%spec)
+            endif
+            call self%oris_assign
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
         DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D
 
+    subroutine statesrch_cluster3D(s, spec)
+        type(strategy3D_srch), intent(inout) :: s
+        type(strategy3D_spec), intent(in)    :: spec
+        integer :: neigh_projs(s%nstates),neigh_inpls(s%nstates),iproj,iref,state,ineigh,inpl
+        real    :: corrs(s%nstates),corrs_inpl(s%nrots),corr,mi_state,mi_proj,allcorrs(s%nstates,10)
+        corrs       = -1.
+        neigh_projs = 0
+        neigh_inpls = 0
+        ! evaluate all correlations
+        do state=1,s%nstates
+            if( .not. s3D%state_exists(state) ) cycle
+            if( s%neigh )then
+                ! greedy neighbourhood search
+                do ineigh=1,s%nnn
+                    iproj = build_glob%nnmat(s%prev_proj,ineigh)
+                    iref  = (state-1)*s%nprojs + iproj
+                    call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
+                    inpl = maxloc(corrs_inpl,dim=1)
+                    corr = corrs_inpl(inpl)
+                    if( corr > corrs(state) )then
+                        corrs(state)       = corr
+                        neigh_projs(state) = iproj
+                        neigh_inpls(state) = inpl
+                    endif
+                enddo
+            else
+                iref = (state-1)*s%nprojs + s%prev_proj
+                call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
+                corrs(state) = maxval(corrs_inpl)
+            endif
+        enddo
+        ! make moves
+        if(s%prev_corr < spec%extr_score_thresh)then
+            ! state randomization
+            state = irnd_uni(s%nstates)
+            if( s%nstates > 2 )then
+                do while( state==s%prev_state .or. .not.s3D%state_exists(state) )
+                    state = irnd_uni(s%nstates)
+                enddo
+            else
+                do while( .not.s3D%state_exists(state) )
+                    state = irnd_uni(s%nstates)
+                enddo
+            endif
+            corr = corrs(state)
+            s%nrefs_eval = 1
+            iproj = s%prev_proj
+        else
+            ! SHC state optimization
+            s%prev_corr = corrs(s%prev_state)
+            state = shcloc(s%nstates, corrs, s%prev_corr)
+            corr  = corrs(state)
+            s%nrefs_eval = count(corrs <= s%prev_corr)
+            if( s%neigh )then
+                iproj = neigh_projs(state)
+                iref = (state-1)*s%nprojs + iproj
+                call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,1)) ! inpl = 1
+                call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,2))
+            else
+                iproj = s%prev_proj
+            endif
+            if( state == s%prev_state ) call greedy_inplsrch(s, corr, state, iproj)
+        endif
+        ! reporting & convergence
+        mi_state = merge(1.,0., state==s%prev_state)
+        mi_proj  = merge(1.,0., iproj==s%prev_proj)
+        call build_glob%spproj_field%set(s%iptcl,'state',    real(state))
+        call build_glob%spproj_field%set(s%iptcl,'corr',     corr)
+        call build_glob%spproj_field%set(s%iptcl,'proj',     real(iproj))
+        call build_glob%spproj_field%set(s%iptcl,'mi_proj',  mi_proj)
+        call build_glob%spproj_field%set(s%iptcl,'mi_state', mi_state)
+        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED STATESRCH_CLUSTER3D'
+    end subroutine statesrch_cluster3D
+
+    subroutine symsrch_cluster3D(s, spec)
+        type(strategy3D_srch), intent(inout) :: s
+        type(strategy3D_spec), intent(in)    :: spec
+        integer :: projs(s%nstates),iproj,iref,isym,ineigh,state,iproj_sym
+        real    :: corrs(s%nstates),sym_corrs(s%nsym),corrs_inpl(s%nrots)
+        real    :: corr,mi_state,mi_proj
+        corrs = -1.
+        projs = 0
+        ! evaluate all correlations
+        do state = 1, s%nstates
+            if( .not. s3D%state_exists(state) ) cycle
+            if( s%neigh )then
+                ! greedy in symmetric unit & neighbourhood
+                do ineigh=1,s%nnn
+                    iproj = build_glob%nnmat(s%prev_proj,ineigh)
+                    do isym=1,s%nsym
+                        iproj_sym = spec%symmat(iproj,isym)
+                        iref      = (state-1)*s%nprojs+iproj_sym
+                        call pftcc_glob%gencorrs(iref,s%iptcl,corrs_inpl)
+                        corr = maxval(corrs_inpl)
+                        if( corr > corrs(state) )then
+                            corrs(state) = corr
+                            projs(state) = iproj_sym
+                        endif
+                    enddo
+                enddo
+            else
+                ! greedy in symmetric unit
+                do isym=1,s%nsym
+                    iproj = spec%symmat(s%prev_proj, isym)
+                    iref  = (state-1)*s%nprojs+iproj
+                    call pftcc_glob%gencorrs(iref,s%iptcl,corrs_inpl)
+                    sym_corrs(isym) = maxval(corrs_inpl)
+                enddo
+                isym = maxloc(sym_corrs, dim=1)
+                corrs(state) = sym_corrs(isym)
+                projs(state) = spec%symmat(s%prev_proj, isym)
+            endif
+        enddo
+        ! makes move
+        if( s%prev_corr < spec%extr_score_thresh )then
+            ! state randomization
+            state = irnd_uni(s%nstates)
+            if( s%nstates > 2 )then
+                do while( state==s%prev_state .or. .not.s3D%state_exists(state))
+                    state = irnd_uni(s%nstates)
+                enddo
+            else
+                do while(.not.s3D%state_exists(state))
+                    state = irnd_uni(s%nstates)
+                enddo
+            endif
+            s%nrefs_eval = 1
+            iproj = s%prev_proj
+            corr  = corrs(state)
+        else
+            ! SHC state optimization
+            s%prev_corr  = corrs(s%prev_state)
+            state        = shcloc(s%nstates, corrs, s%prev_corr)
+            s%nrefs_eval = count(corrs <= s%prev_corr)
+            iproj        = projs(state)
+            iref         = (state-1)*s%nprojs+iproj
+            call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,1))
+            call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,2))
+            corr = corrs(state)
+            if(state == s%prev_state) call greedy_inplsrch(s, corr, state, iproj)
+        endif
+        mi_state = merge(1.,0., state==s%prev_state)
+        mi_proj  = merge(1.,0., iproj==s%prev_proj)
+        call build_glob%spproj_field%set(s%iptcl,'state',    real(state))
+        call build_glob%spproj_field%set(s%iptcl,'corr',     corr)
+        call build_glob%spproj_field%set(s%iptcl,'proj',     real(iproj))
+        call build_glob%spproj_field%set(s%iptcl,'mi_proj',  mi_proj)
+        call build_glob%spproj_field%set(s%iptcl,'mi_state', mi_state)
+        DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SYMSRCH_CLUSTER3D'
+    end subroutine symsrch_cluster3D
+
+    subroutine greedy_inplsrch(s, corr, istate, iproj)
+        type(strategy3D_srch), intent(inout) :: s
+        real,                  intent(inout) :: corr
+        integer,               intent(in)    :: istate, iproj
+        integer :: iref
+        iref = (istate-1)*s%nprojs+iproj
+        s3D%proj_space_refinds_sorted_highest(s%ithr,s%nrefs) = iref ! inpl angle + shift
+        !s3D%proj_space_refinds_sorted(s%ithr,s%nrefsmaxinpl) = iref ! shift only
+        s3D%proj_space_corrs_srchd(s%ithr,iref) = .true.
+        call s%inpl_srch
+        if( s3D%proj_space_corrs(s%ithr,iref,1) > corr )then
+            corr = s3D%proj_space_corrs(s%ithr,iref,1)  ! inpl=1
+            call build_glob%spproj_field%set_shift(s%iptcl,s%prev_shvec+s3D%proj_space_shift(s%ithr,iref,1,:))
+            call build_glob%spproj_field%e3set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,3))
+        endif
+    end subroutine greedy_inplsrch
+
     subroutine oris_assign_cluster3D( self )
         class(strategy3D_cluster), intent(inout) :: self
-        ! nothing to do
+        real :: frac
+        frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
+        call build_glob%spproj_field%set(self%s%iptcl,'frac',frac)
+        call build_glob%spproj_field%set(self%s%iptcl,'w',   1.)
+        call s3D%o_peaks(self%s%iptcl)%set(1,'w', 1.)
+        call s3D%o_peaks(self%s%iptcl)%set(1,'ow',1.)
+        call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))
+        call s3D%o_peaks(self%s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(self%s%iptcl))
+        call s3D%o_peaks(self%s%iptcl)%set(1,'state', build_glob%spproj_field%get(self%s%iptcl,'state'))
+        call s3D%o_peaks(self%s%iptcl)%set(1,'corr',  build_glob%spproj_field%get(self%s%iptcl,'corr'))
+        call s3D%o_peaks(self%s%iptcl)%set(1,'proj',  build_glob%spproj_field%get(self%s%iptcl,'proj'))
     end subroutine oris_assign_cluster3D
 
     subroutine kill_cluster3D( self )

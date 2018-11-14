@@ -48,7 +48,7 @@ contains
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
@@ -125,7 +125,20 @@ contains
                     stream_spprojfile = completed_jobs_clines(icline)%get_carg('projfile')
                     call stream_spproj%read( stream_spprojfile )
                     call spproj%append_project(stream_spproj, 'mic')
-                    if( l_pick )call spproj%append_project(stream_spproj, 'stk')
+                    if( l_pick )then
+                        call spproj%append_project(stream_spproj, 'stk')
+                        ! transfer ptcl2D box coordinates
+                        do i=1,stream_spproj%os_ptcl2D%get_noris()
+                            cnt = spproj%os_ptcl2D%get_noris()-stream_spproj%os_ptcl2D%get_noris()+i
+                            ! box coordinates
+                            if(stream_spproj%os_ptcl2D%isthere(i,'xpos'))then
+                                call spproj%os_ptcl2D%set(cnt,'xpos',stream_spproj%os_ptcl2D%get(i,'xpos'))
+                            endif
+                            if(stream_spproj%os_ptcl2D%isthere(i,'ypos'))then
+                                call spproj%os_ptcl2D%set(cnt,'ypos',stream_spproj%os_ptcl2D%get(i,'ypos'))
+                            endif
+                        enddo
+                    endif
                     call stream_spproj%kill()
                     deallocate(stream_spprojfile)
                 enddo

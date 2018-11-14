@@ -80,7 +80,7 @@ contains
             class is (pftcc_shsrch_grad)
                 cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx)
             class default
-                THROW_HARD('unknown type; grad_shsrch_costfun')
+                THROW_HARD('error in grad_shsrch_costfun: unknown type; grad_shsrch_costfun')
         end select
     end function grad_shsrch_costfun
 
@@ -96,7 +96,7 @@ contains
                 call pftcc_glob%gencorr_grad_only_for_rot_8(self%reference, self%particle, vec, self%cur_inpl_idx, corrs_grad)
                 grad = - corrs_grad
             class default
-                THROW_HARD('unknown type; grad_shsrch_gcostfun')
+                THROW_HARD('error in grad_shsrch_gcostfun: unknown type; grad_shsrch_gcostfun')
         end select
     end subroutine grad_shsrch_gcostfun
 
@@ -115,7 +115,7 @@ contains
                 f    = - corrs
                 grad = - corrs_grad
             class default
-                THROW_HARD('unknown type; grad_shsrch_fdfcostfun')
+                THROW_HARD('error in grad_shsrch_fdfcostfun: unknown type; grad_shsrch_fdfcostfun')
         end select
     end subroutine grad_shsrch_fdfcostfun
 
@@ -156,7 +156,6 @@ contains
         real(dp) :: init_xy(2)
         found_better      = .false.
         if( self%opt_angle )then
-            ! DOES NOT use jacobian for shift search!
             self%ospec%x   = [0.,0.]
             self%ospec%x_8 = [0.d0,0.d0]
             call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
@@ -195,7 +194,6 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         else
-            ! DOES use jacobian for shift search (depending on USE_JACOB_FOR_CC_SHIFT )!
             if( perform_rndstart )then
                 init_xy(1) = ran3() * coarse_range * 2.d0 - coarse_range
                 init_xy(2) = ran3() * coarse_range * 2.d0 - coarse_range

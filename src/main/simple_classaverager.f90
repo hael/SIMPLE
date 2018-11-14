@@ -208,6 +208,8 @@ contains
         pops   = 0
         corrs  = 0.
         ws     = 0.
+        !$omp parallel do default(shared) private(iptcl,rstate,icls) schedule(static)&
+        !$omp proc_bind(close) reduction(+:pops,corrs,ws)
         do iptcl=1,nptcls
             rstate = spproj%os_ptcl2D%get(iptcl,'state')
             if( rstate < 0.5 )cycle
@@ -217,6 +219,7 @@ contains
             corrs(icls) = corrs(icls)+spproj%os_ptcl2D%get(iptcl,'corr')
             ws(icls)    = ws(icls)+spproj%os_ptcl2D%get(iptcl,'w')
         enddo
+        !$omp end parallel do
         where(pops>1)
             corrs = corrs / real(pops)
             ws    = ws / real(pops)

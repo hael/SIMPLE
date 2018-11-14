@@ -856,10 +856,12 @@ contains
         ! first stage
         call cline_refine3D1%set('prg', 'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
-        call cline_refine3D1%delete('neigh')
+        ! call cline_refine3D1%delete('neigh')
         select case(trim(params%refine))
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
+                call cline_refine3D2%delete('neigh')
+                call cline_refine3D2%set('pgrp','c1')
             case DEFAULT
                 call cline_refine3D1%set('refine', params%refine)
         end select
@@ -869,12 +871,11 @@ contains
         call cline_refine3D2%set('refine', 'multi')
         if(.not.cline%defined('neigh'))then
             if( .not.params%refine.eq.'sym' )then
-                call cline_refine3D2%set('neigh',  'yes')
-                call cline_refine3D2%set('nnn',    0.1*real(params%nspace))
+                call cline_refine3D2%set('neigh', 'yes')
+                call cline_refine3D2%set('nnn',   0.1*real(params%nspace))
             endif
         endif
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
-        if( params%refine.eq.'sym' ) call cline_refine3D2%set('pgrp','c1')
         ! reconstructions
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%delete('lp')

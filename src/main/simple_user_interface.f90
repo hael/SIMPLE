@@ -2511,7 +2511,7 @@ contains
     subroutine new_scale_project
         ! PROGRAM SPECIFICATION
         call scale_project%new(&
-        &'scale', & ! name
+        &'scale_project', & ! name
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
