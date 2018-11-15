@@ -193,11 +193,7 @@ contains
                     lp = lp - resstep
                     if( doprint )  write(*,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
                     ! need to re-make the ftexps
-                    do iframe=1,nframes
-                        call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp, .true.)
-                        call movie_frames_ftexp_sh(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
-                        call movie_sum_global_ftexp_threads(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
-                    end do
+                    call construct_ftexp_objects
                     call shift_wsum_calc_corrs(opt_shifts,i)
                     ! need to indicate that we updated resolution limit
                     updateres  = updateres + 1

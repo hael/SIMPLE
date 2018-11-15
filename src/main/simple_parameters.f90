@@ -838,6 +838,7 @@ contains
                 self%exec_dir = int2str(idir)//'_'//trim(self%prg)
                 ! make execution directory
                 call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
+                write(*,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
                 ! change to execution directory directory
                 call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then
@@ -845,7 +846,7 @@ contains
                     call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
-                    absname = simple_abspath(self%projfile,errmsg='simple_parameters::new 4')
+                    absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 4')
                     self%projfile = trim(absname)
                     self%projname = get_fbody(basename(self%projfile), 'simple')
                     ! cwd of SP-project will be updated in the builder

@@ -280,5 +280,4 @@ select case(prg)
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
 call update_job_descriptions_in_project( cline )
-call copy_project_file_to_root_dir( cline )
 end program simple_exec
