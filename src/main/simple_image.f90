@@ -1171,7 +1171,7 @@ contains
         rmat_ptr => self%rmat
     end subroutine get_rmat_ptr
 
-    subroutine get_rmat_sub( self, rmat )
+    pure subroutine get_rmat_sub( self, rmat )
         class(image), intent(in)  :: self
         real,         intent(out) :: rmat(self%ldim(1),self%ldim(2),self%ldim(3))
         rmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))

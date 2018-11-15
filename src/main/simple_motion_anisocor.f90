@@ -398,7 +398,7 @@ contains
         integer           :: i, j, ldim(3)
         real              :: x_tld(2), grad(2), val
         ldim = img%get_ldim()
-        if( .not. all(ldim(1:2) .eq. self%ldim(1:2)) )then
+        if( any(ldim(1:2) .ne. self%ldim(1:2)) )then
             THROW_HARD('in calc_aniso_shifted: dimension do not match; simple_motion_anisocor')
         endif
         allocate(rmat_tmp(self%ldim(1),self%ldim(2)))
@@ -412,7 +412,7 @@ contains
             end do
         end do
         deallocate(rmat_tmp)
-    end
+    end subroutine calc_aniso_shifted
 
     subroutine calc_mat_tld( self, a )
         class(motion_anisocor), intent(inout) :: self
@@ -544,7 +544,7 @@ contains
         call self%kill()
         ldim_here1 = ref  %get_ldim()
         ldim_here2 = frame%get_ldim()
-        if ((ldim_here1(1) /= ldim_here2(1)) .or. (ldim_here1(2) /= ldim_here2(2))) then
+        if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
             THROW_HARD('motion_anisocor_new: dimensions of particle and reference do not match; simple_motion_anisocor')
         end if
         self%reference  => ref
@@ -552,7 +552,7 @@ contains
         self%frame      => frame
         call frame%get_rmat_ptr(self%rmat)
         call aniso_shifted_frame%get_rmat_ptr(self%rmat_T)
-        self%ldim       =  ref%get_ldim()
+        self%ldim       =  ldim_here1(1:2)
         allocate( self%rmat_T_grad ( self%ldim(1), self%ldim(2), 2 ) )
         self%maxHWshift = 0.1
         if( present(motion_correct_ftol) )then
@@ -565,10 +565,8 @@ contains
         else
             self%motion_correctgtol = TOL
         end if
-        do i = 1,POLY_DIM
-            lims(i,1) = - self%maxHWshift
-            lims(1,2) =   self%maxHWshift
-        end do
+        lims(:,1) = - self%maxHWshift
+        lims(:,2) =   self%maxHWshift
         call self%ospec%specify('lbfgsb', POLY_DIM, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=lims)
         call self%ospec%set_costfun_8   (motion_anisocor_cost_8)
         call self%ospec%set_gcostfun_8  (motion_anisocor_gcost_8)

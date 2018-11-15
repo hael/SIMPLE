@@ -56,9 +56,10 @@ logical                        :: doprint        = .true.           !< print out
 logical                        :: existence      = .false.          !< to indicate existence
 
 integer, parameter :: MITSREF       = 30 !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 10 !< max # iterations of anisotropic refinement optimisation
+integer, parameter :: MITSREF_ANISO = 3  !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2. !< small initial shift to blur out fixed pattern noise
 logical, parameter :: DEBUG_HERE    = .false.
+logical, parameter :: DEBUG_ANISO   = .false.
 
 contains
 
@@ -74,7 +75,7 @@ contains
         type(ftexp_shsrch), allocatable :: ftexp_srch(:)
         real    :: ave, sdev, var, minw, maxw, corr
         real    :: cxy(3), corr_prev, frac_improved, corrfrac
-        integer :: iframe, iter, nimproved, updateres, i
+        integer :: iframe, nimproved, updateres, i
         logical :: didsave, didupdateres, err_stat
         ! initialise
         nsig_here = 6.0
@@ -98,16 +99,15 @@ contains
             opt_shifts(iframe,2) = ran3()*2.*SMALLSHIFT-SMALLSHIFT
         end do
         ! generate movie sum for refinement
-        call shift_wsum_calc_corrs(opt_shifts, 1)
+        call shift_wsum_calc_corrs(opt_shifts, 0)
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
+        if( DEBUG_ANISO ) goto 321
         if( doprint ) write(*,'(a)') '>>> WEIGHTED AVERAGE-BASED REFINEMENT'
-        iter       = 0
         corr_saved = -1.
         didsave    = .false.
         updateres  = 0
         do i=1,MITSREF
-            iter = iter+1
             nimproved = 0
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
@@ -130,7 +130,7 @@ contains
             !$omp end parallel do
             frac_improved = real(nimproved) / real(nframes) * 100.
             if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
-            call shift_wsum_calc_corrs( opt_shifts, 2 )
+            call shift_wsum_calc_corrs( opt_shifts, i )
             corr_prev = corr
             corr      = sum(corrs) / real(nframes)
             if( corr >= corr_saved )then ! save the local optimum
@@ -161,7 +161,7 @@ contains
         opt_shifts   = opt_shifts_saved
         frameweights = frameweights_saved
         ! output shifts
-        if( allocated(shifts) ) deallocate(shifts)
+321     if( allocated(shifts) ) deallocate(shifts)
         allocate(shifts(nframes,2), source=opt_shifts)
         ! print
         if( corr < 0. )then
@@ -171,10 +171,10 @@ contains
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT     :', ave
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS    :', sdev
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT         :', minw
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
         ! destruct
@@ -198,7 +198,7 @@ contains
                         call movie_frames_ftexp_sh(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
                         call movie_sum_global_ftexp_threads(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
                     end do
-                    call shift_wsum_calc_corrs(opt_shifts,2)
+                    call shift_wsum_calc_corrs(opt_shifts,i)
                     ! need to indicate that we updated resolution limit
                     updateres  = updateres + 1
                     ! need to destroy all previous knowledge about correlations
@@ -216,37 +216,31 @@ contains
         real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identified
         type(ctfparams), intent(inout) :: ctfvars           !< CTF params
         type(motion_anisocor) :: motion_aniso(nframes)
-        real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
-        real    :: rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1)
-        integer :: iframe, iter, nimproved, i
+        real :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
+        real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:)
+        integer :: iframe, nimproved, i
         logical :: didsave, err_stat
-        ! start with destructing the ftexp objects (not needed for anisotropic correction)
+        ! start with destructing the ftexp objects (not needed for anisotropic correction and memory use becomes excessive)
         if( .not. existence ) THROW_HARD('motion correction module does not esist; motion_correct_movie_aniso')
-        do iframe=1,nframes
-            call movie_frames_ftexp(iframe)%kill
-            call movie_frames_ftexp_sh(iframe)%kill
-            call movie_frames_scaled(iframe)%kill
-            call movie_sum_global_ftexp_threads(iframe)%kill
-        end do
-        deallocate( movie_frames_ftexp, movie_frames_ftexp_sh, movie_frames_scaled,&
-            movie_sum_global_ftexp_threads)
+        call destruct_ftexp_objects
+        ! construct (here we don't try to save allocations because it becomes too excessive for big movies)
+        allocate(movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
+                &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_saved(nframes,POLY_DIM),&
+                &rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1))
+        opt_shifts_aniso       = 0.
+        opt_shifts_aniso_saved = 0.
+        rmat                   = 0.
+        rmat_sum               = 0.
         ! prepare the images for anisotropic correction by band-pass filtering
-        !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static)
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%bp(hp, lp)
             call movie_frames_shifted(iframe)%ifft
-            call movie_frames_shifted(iframe)%get_rmat_sub(rmat)
-            call movie_frames_shifted_aniso(iframe)%set_rmat(rmat)
         end do
         !$omp end parallel do
-        if(.not. allocated(movie_frames_shifted_aniso) )then
-            allocate(movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
-                    &opt_shifts_aniso(nframes,POLY_DIM),&
-                    &opt_shifts_aniso_saved(nframes,POLY_DIM))
-        endif
         do iframe=1,nframes
             call movie_sum_global_threads(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
-            call movie_frames_shifted_aniso(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
+            call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
             call motion_aniso(iframe)%new( ref=movie_sum_global_threads(iframe), &
                 frame=movie_frames_shifted(iframe), aniso_shifted_frame=movie_frames_shifted_aniso(iframe) )
         end do
@@ -255,11 +249,9 @@ contains
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
         if( doprint ) write(*,'(a)') '>>> ANISOTROPIC REFINEMENT'
-        iter       = 0
         corr_saved = -1.
         didsave    = .false.
-        do i=1,MITSREF
-            iter = iter + 1
+        do i=1,MITSREF_ANISO
             nimproved = 0
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
@@ -277,7 +269,7 @@ contains
             call gen_aniso_wsum_calc_corrs(i)
             frac_improved = real(nimproved) / real(nframes) * 100.
             if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
-            corr          = sum(corrs) / real(nframes)
+            corr = sum(corrs) / real(nframes)
             if( corr >= corr_saved )then ! save the local optimum
                 corr_saved             = corr
                 opt_shifts_aniso_saved = opt_shifts_aniso
@@ -303,27 +295,32 @@ contains
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT     :', ave
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS    :', sdev
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT         :', minw
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT         :', maxw
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
+        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
+        if( DEBUG_ANISO ) call movie_sum_global_threads(1)%write('aniso_corrected_movie.mrc')
         ! destruct
         do iframe=1,nframes
+            call movie_sum_global_threads(iframe)%kill
+            call movie_frames_shifted_aniso(iframe)%kill
             call motion_aniso(iframe)%kill
         end do
+        deallocate(movie_frames_shifted_aniso, movie_sum_global_threads,&
+                  &opt_shifts_aniso, opt_shifts_aniso_saved, rmat, rmat_sum)
 
     contains
 
         subroutine gen_aniso_wsum_calc_corrs( imode )
             integer, intent(in) :: imode
             real :: corr
-            ! FIRST LOOP TO OBTAIN WEIGHTED SUM
             rmat_sum  = 0.
             nimproved = 0
+            ! FIRST LOOP TO OBTAIN WEIGHTED SUM
             !$omp parallel default(shared) private(iframe,rmat,corr) proc_bind(close)
-            !$omp do schedule(static) reduction(+:cmat_sum)
+            !$omp do schedule(static) reduction(+:rmat_sum)
             do iframe=1,nframes
                 call movie_frames_shifted_aniso(iframe)%get_rmat_sub(rmat)
                 rmat_sum = rmat_sum + rmat * frameweights(iframe)
@@ -495,11 +492,7 @@ contains
             !$omp end parallel do
         endif
         ! create the expanded data structures
-        do iframe=1,nframes
-            call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp, .true.)
-            call movie_frames_ftexp_sh(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
-            call movie_sum_global_ftexp_threads(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
-        end do
+        call construct_ftexp_objects
         ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             do_dose_weight = .true.
@@ -554,7 +547,7 @@ contains
         integer,  intent(in)    :: imode
         complex, allocatable    :: cmat_sum(:,:,:), cmat(:,:,:)
         integer :: iframe, flims(3,2)
-        real    :: shvec(3), w, xsh, ysh
+        real    :: shvec(3), xsh, ysh
         ! CENTER SHIFTS
         xsh = -shifts(fixed_frame,1)
         ysh = -shifts(fixed_frame,2)
@@ -564,9 +557,9 @@ contains
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
         end do
-        if( imode == 1 )then
+        if( imode == 0 )then
             call corrmat2weights ! initialisation
-        else if( imode == 2 )then
+        else
             frameweights = corrs2weights(corrs) ! update
         endif
         ! allocate matrices for reduction
@@ -653,11 +646,9 @@ contains
         integer     :: iframe
         real        :: w
         logical     :: doshift
-        type(image) :: frame_tmp
         doshift = present(shifts)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         call movie_sum_global%set_ft(.true.)
-        call frame_tmp%new(ldim_scaled, smpd_scaled)
         w = 1./real(nframes)
         cmat_sum = cmplx(0.,0.)
         !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
@@ -711,7 +702,6 @@ contains
         integer, intent(inout) :: frame_counter
         real,    intent(in)    :: time_per_frame
         real, allocatable :: filtarr(:,:)
-        type(image)       :: frame_tmp
         integer           :: iframe, sz
         real              :: current_time, acc_dose
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
@@ -737,6 +727,33 @@ contains
         call movie_sum_global%set_cmat(cmat_sum)
         if( allocated(filtarr) ) deallocate(filtarr)
     end subroutine wsum_movie_frames_tomo
+
+    subroutine construct_ftexp_objects
+        integer :: iframe
+        if( .not. allocated(movie_frames_ftexp) )then
+            allocate( movie_frames_ftexp(nframes), movie_frames_ftexp_sh(nframes),&
+                     &movie_sum_global_ftexp_threads(nframes) )
+        endif
+        do iframe=1,nframes
+            call movie_frames_ftexp(iframe)%new(movie_frames_scaled(iframe), hp, lp, .true.)
+            call movie_frames_ftexp_sh(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
+            call movie_sum_global_ftexp_threads(iframe)%new(movie_frames_scaled(iframe), hp, lp, .false.)
+        end do
+    end subroutine construct_ftexp_objects
+
+    subroutine destruct_ftexp_objects
+        integer :: iframe
+        if( allocated(movie_frames_ftexp) )then
+            do iframe=1,nframes
+                call movie_frames_ftexp(iframe)%kill
+                call movie_frames_ftexp_sh(iframe)%kill
+                call movie_frames_scaled(iframe)%kill
+                call movie_sum_global_ftexp_threads(iframe)%kill
+            end do
+            deallocate( movie_frames_ftexp, movie_frames_ftexp_sh,&
+            movie_frames_scaled, movie_sum_global_ftexp_threads)
+        endif
+    end subroutine destruct_ftexp_objects
 
     subroutine motion_correct_kill
         integer :: iframe

@@ -9,6 +9,7 @@ public :: opt_lbfgsb
 private
 #include "simple_local_flags.inc"
 
+logical, parameter  :: PRINT_NEVALS = .false.
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
 real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
 real(dp), parameter :: big=1.0d+10
@@ -54,10 +55,13 @@ contains
     subroutine lbfgsb_minimize( self, spec, fun_self, lowest_cost )
         use simple_opt_spec, only: opt_spec
         use simple_opt_subs, only: lnsrch
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(opt_lbfgsb), intent(inout) :: self        !< instance
         class(opt_spec),   intent(inout) :: spec        !< specification
         class(*),          intent(inout) :: fun_self    !< self-pointer for cost function
         real,              intent(out)   :: lowest_cost !< minimum function value
+        integer :: ithr
         if ( (.not. associated(spec%costfun) ).and.( .not. associated(spec%costfun_8)) ) then
             THROW_HARD('cost function not associated in opt_spec; lbfgsb_minimize')
         endif
@@ -74,6 +78,16 @@ contains
         self%l = spec%limits(:,1)
         self%u = spec%limits(:,2)
         call lbfgsbmin
+        if( PRINT_NEVALS )then
+            ! get thread index
+            ithr = omp_get_thread_num() + 1
+            if( ithr == 1 )then
+                print *, 'nevals        : ', spec%nevals
+                print *, 'ngevals       : ', spec%ngevals
+                print *, 'self%isave(34): ', self%isave(34)
+                print *, 'maxits        : ', spec%maxits
+            endif
+        endif
 
     contains
 
