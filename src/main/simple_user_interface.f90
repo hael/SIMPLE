@@ -613,7 +613,7 @@ contains
         &used', '# projections', .false., 2500.)
         call set_param(objfun,        'objfun',        'multi',  'Objective function', 'Objective function(cc|ccres|euclid){cc}', '(cc|ccres|euclid){cc}', .false., 'cc')
         call set_param(remap_cls,     'remap_cls',     'binary', 'Whether to remap 2D clusters', 'Whether to remap the number of 2D clusters(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV', 'in kV', .false., 300.)
+        call set_param(kv,            'kv',            'num',    'Acceleration voltage', 'Acceleration voltage in kV{300}', 'in kV{300}', .false., 300.)
         call set_param(lplim_crit,    'lplim_crit',    'num',    'Low-pass limit FSC criterion', 'FSC criterion for determining the low-pass limit(0.143-0.5){0.3}',&
         &'low-pass FSC criterion(0.143-0.5){0.3}', .false., 0.3)
         call set_param(cs,            'cs',            'num',    'Spherical aberration', 'Spherical aberration constant(in mm){2.7}', 'in mm{2.7}', .false., 2.7)
@@ -1419,8 +1419,11 @@ contains
         ! parameter input/output
         call import_particles%set_input('parm_ios', 1, smpd)
         call import_particles%set_input('parm_ios', 2, kv)
+        import_particles%parm_ios(2)%required = .true.
         call import_particles%set_input('parm_ios', 3, cs)
+        import_particles%parm_ios(3)%required = .true.
         call import_particles%set_input('parm_ios', 4, fraca)
+        import_particles%parm_ios(4)%required = .true.
         call import_particles%set_input('parm_ios', 5, ctf_yes)
         import_particles%parm_ios(5)%required = .true.
         call import_particles%set_input('parm_ios', 6, phaseplate)
