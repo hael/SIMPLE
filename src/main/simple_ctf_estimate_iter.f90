@@ -46,7 +46,7 @@ contains
         call pspec_lower%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
         call pspec_upper%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
         call pspec_all%new([params_glob%pspecsz,params_glob%pspecsz,1],   ctfvars%smpd)
-        call micrograph%mic2eospecs(params_glob%pspecsz, 'sqrt', pspec_lower, pspec_upper, pspec_all)
+        call micrograph%mic2eospecs(params_glob%pspecsz, 'sqrt', params_glob%hp, pspec_lower, pspec_upper, pspec_all)
         if( l_gen_thumb )then
             ! generate thumbnail
             scale         = real(params_glob%pspecsz)/real(ldim(1))

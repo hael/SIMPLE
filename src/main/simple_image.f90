@@ -41,6 +41,7 @@ contains
     procedure          :: copy
     procedure          :: mic2spec
     procedure          :: mic2eospecs
+    procedure, private :: dampen_pspec_central_cross
     procedure          :: boxconv
     procedure          :: window
     procedure          :: window_slim
@@ -305,7 +306,6 @@ contains
     procedure, private :: gauimg_2
     generic            :: gauimg => gauimg_1, gauimg_2
     procedure          :: gauimg2D
-    procedure          :: dampen_central_cross
     procedure          :: subtr_backgr
     procedure          :: subtr_avg_and_square
     procedure          :: resmsk
@@ -536,13 +536,15 @@ contains
     end subroutine copy
 
     !> mic2spec calculates the average powerspectrum over a micrograph
-    function mic2spec( self, box, speckind ) result( img_out )
+    !!          the resulting spectrum has dampened central cross and subtracted background
+    function mic2spec( self, box, speckind, lp_backgr_subtr ) result( img_out )
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: box
         character(len=*), intent(in)    :: speckind
+        real,             intent(in)    :: lp_backgr_subtr
         type(image) :: img_out, tmp, tmp2
         integer     :: xind, yind, cnt
-        logical     :: didft
+        logical     :: didft, outside
         if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             THROW_HARD('cannot use a box larger than the image')
@@ -558,7 +560,7 @@ contains
         cnt = 0
         do xind=0,self%ldim(1)-box,box/2
             do yind=0,self%ldim(2)-box,box/2
-                call self%window([xind,yind],box,tmp)
+                call self%window_slim([xind,yind],box,tmp,outside)
                 call tmp%norm()
                 call tmp%zero_edgeavg
                 call tmp%fft()
@@ -570,13 +572,16 @@ contains
             end do
         end do
         call img_out%div(real(cnt))
+        call img_out%dampen_pspec_central_cross
+        call img_out%subtr_backgr(lp_backgr_subtr)
         if( didft ) call self%fft()
     end function mic2spec
 
-    subroutine mic2eospecs( self, box, speckind, pspec_lower, pspec_upper, pspec_all )
+    subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all )
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: box
         character(len=*), intent(in)    :: speckind
+        real,             intent(in)    :: lp_backgr_subtr
         class(image),     intent(inout) :: pspec_lower, pspec_upper, pspec_all
         type(image) :: tmp, tmp2
         integer     :: xind, yind, cnt, neven_lim, nodd_lim, neven, nodd
@@ -628,10 +633,43 @@ contains
         end do
         call pspec_all%add(pspec_lower)
         call pspec_all%add(pspec_upper)
+        call pspec_lower%div(real(neven))
+        call pspec_upper%div(real(nodd))
+        call pspec_all%div(real(neven + nodd))
+        call pspec_lower%dampen_pspec_central_cross
+        call pspec_upper%dampen_pspec_central_cross
+        call pspec_all%dampen_pspec_central_cross
+        call pspec_lower%subtr_backgr(lp_backgr_subtr)
+        call pspec_upper%subtr_backgr(lp_backgr_subtr)
+        call pspec_all%subtr_backgr(lp_backgr_subtr)
         call tmp%kill()
         call tmp2%kill()
         if( didft ) call self%fft()
     end subroutine mic2eospecs
+
+    !> \brief dampens the central cross of a powerspectrum by median filtering
+    subroutine dampen_pspec_central_cross( self )
+        class(image), intent(inout) :: self
+        integer            :: h,mh,k,mk,lims(3,2),inds(3)
+        integer, parameter :: XDAMPWINSZ=2
+        real, allocatable  :: pixels(:)
+        if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
+        if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
+        lims = self%loop_lims(3)
+        mh = maxval(lims(1,:))
+        mk = maxval(lims(2,:))
+        inds = 1
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                if( h == 0 .or. k == 0 )then
+                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
+                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                    pixels = self%win2arr(inds(1), inds(2), 1, XDAMPWINSZ)
+                    call self%set(inds, median_nocopy(pixels))
+                endif
+            end do
+        end do
+    end subroutine dampen_pspec_central_cross
 
     function boxconv( self, box ) result( img_out )
         class(image), intent(inout) :: self
@@ -6142,30 +6180,6 @@ contains
             end do
         end do
     end subroutine img2ft
-
-    !> \brief dampens the central cross of a powerspectrum by median filtering
-    subroutine dampen_central_cross( self )
-        class(image), intent(inout) :: self
-        integer            :: h,mh,k,mk,lims(3,2),inds(3)
-        integer, parameter :: XDAMPWINSZ=2
-        real, allocatable  :: pixels(:)
-        if( self%ft )          THROW_HARD('not intended for FTs; dampen_central_cross')
-        if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_central_cross')
-        lims = self%loop_lims(3)
-        mh = maxval(lims(1,:))
-        mk = maxval(lims(2,:))
-        inds = 1
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                if( h == 0 .or. k == 0 )then
-                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
-                    pixels = self%win2arr(inds(1), inds(2), 1, XDAMPWINSZ)
-                    call self%set(inds, median_nocopy(pixels))
-                endif
-            end do
-        end do
-    end subroutine dampen_central_cross
 
     !> \brief subtracts the background of an image by subtracting a low-pass filtered
     !!        version of itself

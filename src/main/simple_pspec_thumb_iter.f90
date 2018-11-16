@@ -48,8 +48,7 @@ contains
         call self%moviesum%new(ldim, smpd)
         call self%moviesum%read(trim(moviename_intg))
         ! generate power-spectra
-        self%pspec = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)
-        call self%pspec%dampen_central_cross
+        self%pspec = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR)
         call self%pspec%write(self%moviename_pspec)
         ! generate thumbnail
         scale         = real(params_glob%pspecsz)/real(ldim(1))

@@ -101,6 +101,9 @@ enum, bind(c)
 end enum
 integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
+! default low-pass limit for power spectrum background subtraction
+real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.
+
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
@@ -204,6 +207,4 @@ logical :: mir_projns = .false.    ! flag indicating if mirrored projection shou
 
 ! append SIMPLE_VERSION and SIMPLE_GIT_VERSION strings to simple_defs
 #include "SimpleGitVersion.h"
-
-
 end module simple_defs

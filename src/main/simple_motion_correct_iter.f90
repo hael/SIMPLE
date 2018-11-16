@@ -104,15 +104,12 @@ contains
             DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
             DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
-        write (*,*) 'DO_ANISO = ', DO_ANISO
         if( DO_ANISO )then
             call motion_correct_movie_aniso(ctfvars, aniso_shifts)
         endif
         ! generate power-spectra and cleanup
-        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind)
-        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind)
-        call self%pspec_sum%dampen_central_cross
-        call self%pspec_ctf%dampen_central_cross
+        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR)
+        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
         ! write output
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)

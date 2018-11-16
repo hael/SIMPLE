@@ -88,13 +88,6 @@ contains
         ! construct CTF objects
         tfun       = ctf(smpd, kV, Cs, amp_contr)
         tfun_roavg = ctf(smpd, kV, Cs, amp_contr)
-        ! prepare powerspectra
-        call ppspec_all%dampen_central_cross
-        call ppspec_all%subtr_backgr(hp)
-        call ppspec_lower%dampen_central_cross
-        call ppspec_lower%subtr_backgr(hp)
-        call ppspec_upper%dampen_central_cross
-        call ppspec_upper%subtr_backgr(hp)
         ! prepare rotationally averaged power spectra
         call ppspec_all%roavg(IARES,   pspec_all_roavg,   180)
         call ppspec_lower%roavg(IARES, pspec_lower_roavg, 180)
