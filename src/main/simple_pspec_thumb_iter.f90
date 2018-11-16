@@ -61,7 +61,7 @@ contains
         call self%thumbnail%ifft()
         ! jpeg output
         call self%pspec%collage(self%thumbnail, img_jpg)
-        call img_jpg%write_jpg(self%moviename_thumb, quality=90)
+        call img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
         ! report to ori object
         fname = simple_abspath(moviename_intg, errmsg='simple_pspec_thumb_iter::iterate 1')
         call orientation%set('intg',   trim(fname))

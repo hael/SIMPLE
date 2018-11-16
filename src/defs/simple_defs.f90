@@ -101,8 +101,9 @@ enum, bind(c)
 end enum
 integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
-! default low-pass limit for power spectrum background subtraction
-real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.
+! power spectrum related stuff
+real,    parameter :: SMPD4VIZ              = 1.25    !< default sampling distance for powerspectrum visualisation
+real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.     !< default low-pass limit for power spectrum background subtraction
 
 ! constants for picker
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor

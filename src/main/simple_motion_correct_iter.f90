@@ -13,16 +13,18 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DO_ANISO = .false.
+logical,          parameter :: DO_ANISO = .false.
+character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter
     private
-    character(len=4)      :: speckind = 'sqrt'
+    ! these image objects are part of the instance to avoid excessive memory re-allocations
+    type(image) :: moviesum, moviesum_corrected, moviesum_corrected_frames
+    type(image) :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
+    type(image) :: pspec_half_n_half, thumbnail
+    ! these strings are part of the instance for reporting purposes
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
     character(len=STDLEN) :: moviename_forctf, moviename_thumb, moviename_pspec
-    type(image)           :: moviesum, moviesum_corrected, moviesum_corrected_frames
-    type(image)           :: moviesum_ctf, pspec_sum, pspec_ctf
-    type(image)           :: pspec_half_n_half, thumbnail
   contains
     procedure :: iterate
     procedure :: get_moviename
@@ -41,13 +43,12 @@ contains
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:), aniso_shifts(:,:)
         type(stats_struct) :: shstats(2)
-        type(image)        :: img_jpg
         integer            :: ldim(3), ldim_thumb(3)
         real               :: scale, var
         logical            :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
-            write(*,*) 'inputted movie stack does not exist: ', moviename
+            write(*,*) 'inputted movie stack does not exist: ', trim(moviename)
         endif
         ! make filenames
         fbody_here = basename(trim(moviename))
@@ -100,17 +101,18 @@ contains
             else
                 call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             endif
-            DebugPrint 'ldim(moviesum):           ', self%moviesum%get_ldim()
-            DebugPrint 'ldim(moviesum_corrected): ', self%moviesum_corrected%get_ldim()
-            DebugPrint 'ldim(moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
+            DebugPrint 'ldim(self%moviesum):           ', self%moviesum%get_ldim()
+            DebugPrint 'ldim(self%moviesum_corrected): ', self%moviesum_corrected%get_ldim()
+            DebugPrint 'ldim(self%moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
         if( DO_ANISO )then
             call motion_correct_movie_aniso(ctfvars, aniso_shifts)
         endif
         ! generate power-spectra and cleanup
-        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR)
-        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, self%speckind, LP_PSPEC_BACKGR_SUBTR)
+        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
+        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+        call self%pspec_half_n_half%scale_pspec4viz
         ! write output
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
         call self%moviesum_corrected%write(self%moviename_intg)
@@ -127,11 +129,11 @@ contains
         call self%moviesum_corrected%clip(self%thumbnail)
         call self%thumbnail%ifft()
         ! jpeg output
-        call self%pspec_half_n_half%collage(self%thumbnail, img_jpg)
-        call img_jpg%write_jpg(self%moviename_thumb, quality=90)
+        call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
+        call self%img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
-        fname = simple_abspath(moviename,  errmsg='simple_motion_correct_iter::iterate 1')
+        fname = simple_abspath(self%moviename,  errmsg='simple_motion_correct_iter::iterate 1')
         call orientation%set('movie',  trim(fname))
         fname = simple_abspath(self%moviename_intg, errmsg='simple_motion_correct_iter::iterate 2')
         call orientation%set('intg',   trim(fname))
@@ -144,17 +146,8 @@ contains
             fname = simple_abspath(self%moviename_intg_frames, errmsg='simple_motion_correct_iter::iterate 5')
             call orientation%set('intg_frames', trim(self%moviename_intg_frames))
         endif
-        ! destruct
-        call self%pspec_sum%kill
-        call self%pspec_ctf%kill
-        call self%moviesum%kill
-        call self%moviesum_corrected%kill
-        call self%moviesum_corrected_frames%kill
-        call self%moviesum_ctf%kill
-        call self%pspec_half_n_half%kill
-        call img_jpg%kill
-        call self%thumbnail%kill
-        deallocate(shifts)
+        if( allocated(shifts) )       deallocate(shifts)
+        if( allocated(aniso_shifts) ) deallocate(aniso_shifts)
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )
@@ -171,7 +164,7 @@ contains
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
             case DEFAULT
-                THROW_HARD('unsupported which flag; get_moviename')
+                THROW_HARD('unsupported which flag; get_self%moviename')
         end select
     end function get_moviename
 

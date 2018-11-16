@@ -2,6 +2,7 @@
 module simple_ctf_estimate_iter
 include 'simple_lib.f08'
 use simple_parameters, only: params_glob
+use simple_image,      only: image
 implicit none
 
 public :: ctf_estimate_iter
@@ -9,6 +10,8 @@ private
 #include "simple_local_flags.inc"
 
 type :: ctf_estimate_iter
+    ! these image objects are part of the instance to avoid excessive memory re-allocations
+    type(image) :: micrograph, pspec_lower, pspec_upper, pspec_all, thumbnail, img_jpg, pspec4viz
   contains
     procedure :: iterate
 end type ctf_estimate_iter
@@ -16,8 +19,7 @@ end type ctf_estimate_iter
 contains
 
     subroutine iterate( self, ctfvars, moviename_forctf, orientation, dir_out, l_gen_thumb )
-        use simple_ori,    only: ori
-        use simple_image,  only: image
+        use simple_ori, only: ori
         use simple_ctf_estimate
         class(ctf_estimate_iter), intent(inout) :: self
         type(ctfparams),          intent(in)    :: ctfvars
@@ -28,7 +30,6 @@ contains
         integer                       :: nframes, ldim(3), ldim_thumb(3)
         character(len=STDLEN)         :: moviename_thumb
         character(len=:), allocatable :: fname_diag
-        type(image)                   :: micrograph, pspec_lower, pspec_upper, pspec_all, thumbnail, img_jpg
         real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore, cc90, scale
         if( .not. file_exists(moviename_forctf) )&
         & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
@@ -38,31 +39,33 @@ contains
             THROW_HARD('single frame input to ctf_estimate assumed; iterate')
         endif
         ldim(3) = 1
-        call micrograph%new(ldim, ctfvars%smpd)
-        call micrograph%read(trim(adjustl(moviename_forctf)), 1)
+        call self%micrograph%new(ldim, ctfvars%smpd)
+        call self%micrograph%read(trim(adjustl(moviename_forctf)), 1)
         ! filter out frequencies lower than the box can express to avoid aliasing
-        call micrograph%bp(real(params_glob%pspecsz) * ctfvars%smpd, 0.)
+        call self%micrograph%bp(real(params_glob%pspecsz) * ctfvars%smpd, 0.)
         ! extract powerspectra
-        call pspec_lower%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
-        call pspec_upper%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
-        call pspec_all%new([params_glob%pspecsz,params_glob%pspecsz,1],   ctfvars%smpd)
-        call micrograph%mic2eospecs(params_glob%pspecsz, 'sqrt', params_glob%hp, pspec_lower, pspec_upper, pspec_all)
+        call self%pspec_lower%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
+        call self%pspec_upper%new([params_glob%pspecsz,params_glob%pspecsz,1], ctfvars%smpd)
+        call self%pspec_all%new([params_glob%pspecsz,params_glob%pspecsz,1],   ctfvars%smpd)
+        call self%micrograph%mic2eospecs(params_glob%pspecsz, 'sqrt', params_glob%hp, self%pspec_lower, self%pspec_upper, self%pspec_all)
         if( l_gen_thumb )then
             ! generate thumbnail
             scale         = real(params_glob%pspecsz)/real(ldim(1))
             ldim_thumb(1) = round2even(real(ldim(1))*scale)
             ldim_thumb(2) = round2even(real(ldim(2))*scale)
             ldim_thumb(3) = 1
-            call thumbnail%new(ldim_thumb, ctfvars%smpd)
-            call micrograph%fft()
-            call micrograph%clip(thumbnail)
-            call thumbnail%ifft()
+            call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
+            call self%micrograph%fft()
+            call self%micrograph%clip(self%thumbnail)
+            call self%thumbnail%ifft()
             ! jpeg output
-            call pspec_all%collage(thumbnail, img_jpg)
+            call self%pspec4viz%copy(self%pspec_all)
+            call self%pspec4viz%scale_pspec4viz
+            call self%pspec4viz%collage(self%thumbnail, self%img_jpg)
             moviename_thumb = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
             moviename_thumb = swap_suffix(moviename_thumb, THUMBNAIL_SUFFIX, INTGMOV_SUFFIX)
             moviename_thumb = trim(dir_out)//trim(adjustl(moviename_thumb))//trim(JPG_EXT)
-            call img_jpg%write_jpg(moviename_thumb, quality=90)
+            call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=90)
             call orientation%set('thumb', trim(simple_abspath(moviename_thumb, errmsg='simple_ctf_estimate_iter')))
         endif
         ! deal with output
@@ -74,7 +77,7 @@ contains
         endif
         fname_diag = filepath(trim(dir_out),trim(fname_diag)//trim(JPG_EXT))
         ! fitting
-        call ctf_estimate_init(pspec_all, pspec_lower, pspec_upper, ctfvars%smpd, ctfvars%kv,&
+        call ctf_estimate_init(self%pspec_all, self%pspec_lower, self%pspec_upper, ctfvars%smpd, ctfvars%kv,&
             &ctfvars%cs, ctfvars%fraca, [params_glob%dfmin,params_glob%dfmax],&
             &[params_glob%hp,params_glob%lp], params_glob%astigtol, ctfvars%l_phaseplate, cc90)
         call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, fname_diag)
@@ -88,13 +91,6 @@ contains
         call orientation%set('dferr',      dferr   )
         call orientation%set('ctfscore',   ctfscore)
         call orientation%set('cc90',       cc90)
-        ! destruct
-        call micrograph%kill
-        call pspec_lower%kill
-        call pspec_upper%kill
-        call pspec_all%kill
-        call thumbnail%kill
-        call img_jpg%kill
     end subroutine iterate
 
 end module simple_ctf_estimate_iter

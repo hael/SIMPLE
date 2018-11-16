@@ -42,6 +42,7 @@ contains
     procedure          :: mic2spec
     procedure          :: mic2eospecs
     procedure, private :: dampen_pspec_central_cross
+    procedure          :: scale_pspec4viz
     procedure          :: boxconv
     procedure          :: window
     procedure          :: window_slim
@@ -670,6 +671,28 @@ contains
             end do
         end do
     end subroutine dampen_pspec_central_cross
+
+    subroutine scale_pspec4viz( self )
+        class(image), intent(inout) :: self
+        type(image) :: tmp
+        real        :: scale4viz
+        integer     :: box4clip
+        if( self%ft )          THROW_HARD('pspec input assumed to be in real-space; scale_pspec4viz')
+        if( self%ldim(3) > 1 ) THROW_HARD('pspec input assumed to be 2D; scale_pspec4viz')
+        scale4viz = min(self%smpd / SMPD4VIZ, 1.)
+        if( scale4viz < 1. )then
+            box4clip = round2even(scale4viz * real(self%ldim(1)))
+        else
+            return
+        endif
+        call tmp%new([box4clip,box4clip,1], SMPD4VIZ)
+        call self%clip(tmp)
+        call tmp%zero_edgeavg
+        call tmp%fft
+        call tmp%pad(self)
+        call self%ifft
+        call tmp%kill
+    end subroutine scale_pspec4viz
 
     function boxconv( self, box ) result( img_out )
         class(image), intent(inout) :: self

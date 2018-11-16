@@ -129,11 +129,11 @@ contains
         real,             intent(out) :: dfx, dfy, angast, phshift, dferr, cc, ctfscore
         character(len=*), intent(in)  :: diagfname
         real, allocatable :: corrs(:)
-        type(image)       :: pspec_half_n_half, tmp
+        type(image)       :: pspec_half_n_half
         real              :: dfavg, dfavg_lower, dfavg_upper, dfx_lower, dfx_upper, dfy_lower
         real              :: dfy_upper, angast_lower, angast_upper, phshift_lower, phshift_upper
         real              :: cc_lower, cc_upper, df_avg, lp4viz
-        integer           :: filtsz, hpfind, lpfind, pad_dim
+        integer           :: filtsz, hpfind, lpfind
         ! determine parameters based on lower half of micrograph
         call init_srch( ppspec_lower, pspec_lower_roavg )
         call grid_srch(   dfx_lower, dfy_lower, angast_lower, phshift_lower, cc_lower )
@@ -182,18 +182,10 @@ contains
         call pspec_ctf%norm()
         call ppspec_ref%norm()
         call pspec_ctf%mul(imgmsk)
-        ! writing jpeg up to 2.5Angs shell as per Joe's request
-        lp4viz  = max(2.5,2.*smpd)
-        pad_dim = round2even(real(ldim(1)**2)/2./real(calc_fourier_index(lp4viz,ldim(1),smpd)))
-        call tmp%new([pad_dim,pad_dim,1], smpd*real(pad_dim)/real(ldim(1)))
         pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
-        call pspec_half_n_half%fft
-        call pspec_half_n_half%pad(tmp,backgr=0.)
-        call tmp%ifft
-        call tmp%clip(pspec_half_n_half)
+        call pspec_half_n_half%scale_pspec4viz
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
         call pspec_half_n_half%kill
-        call tmp%kill
         ! calculate CTF score diagnostic
         df_avg = dfx + dfy / 2.0
         call ctf2pspecimg(tfun, pspec_ctf_roavg, df_avg, df_avg, 0.)
