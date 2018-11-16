@@ -2391,14 +2391,13 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 1, 0, 15, 7, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 0, 0, 15, 7, 5, 2, .true.)                                                              ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
         & sections for particle image matching', 'input volume e.g. vol.mrc', .false., 'vol1.mrc')
         ! parameter input/output
-        call refine3D%set_input('parm_ios', 1, projfile)
-        refine3D%parm_ios(2)%required = .false.
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2826,15 +2825,13 @@ contains
         &file is updated. If you are unsure about the point-group, use the compare=yes mode and input the highest &
         &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
         &'simple_exec',&                                                                                           ! executable
-        &1, 2, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group
+        &1, 1, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symaxis_search%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call symaxis_search%set_input('parm_ios', 1, smpd)
-        call symaxis_search%set_input('parm_ios', 2, projfile)
-        symaxis_search%parm_ios(2)%required = .false.
         ! alternative inputs
         ! <empty>
         ! search controls
