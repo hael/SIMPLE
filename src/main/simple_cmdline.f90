@@ -105,6 +105,9 @@ contains
             call ptr2prg%print_prg_descr_long()
             call exit(EXIT_FAILURE2)
         endif
+        if( .not. associated(ptr2prg) )then
+            THROW_HARD('inputted prg not supported, use prg=list to list all available programs')
+        endif
         ! get required keys
         sz_keys_req = ptr2prg%get_nrequired_keys()
         if( sz_keys_req > 0 )then

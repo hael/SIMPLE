@@ -96,8 +96,9 @@ contains
     procedure, private :: segreader
     ! writers
     procedure          :: write
-    procedure          :: write_segment2txt
     procedure          :: write_segment_inside
+    procedure          :: write_non_data_segments
+    procedure          :: write_segment2txt
     procedure, private :: segwriter
     procedure          :: segwriter_inside
     ! destructor
@@ -2248,7 +2249,7 @@ contains
         integer(kind(ENUM_ORISEG)) :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//'not supported; sp_project :: write')
+                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write')
             endif
             projfile = trim(fname)
         else
@@ -2264,6 +2265,32 @@ contains
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
     end subroutine write_segment_inside
+
+    subroutine write_non_data_segments( self, fname )
+        class(sp_project),          intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+        character(len=:), allocatable :: projfile
+        integer :: iseg
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write')
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
+        endif
+        if( file_exists(projfile) )then
+            call self%bos%open(projfile, del_if_exists=.false.)
+            do iseg=11,MAXN_OS_SEG
+                call self%segwriter(iseg)
+            end do
+            ! update header
+            call self%bos%write_header
+            call self%bos%close
+        else
+            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; write_non_data_segments')
+        endif
+    end subroutine write_non_data_segments
 
     subroutine write_segment2txt( self, oritype, fname, fromto )
         class(sp_project), intent(inout) :: self
@@ -2531,7 +2558,7 @@ contains
 
     ! private supporting subroutines / functions
 
-    integer(kind(ENUM_ORISEG))  function oritype2segment( oritype )
+    integer(kind(ENUM_ORISEG)) function oritype2segment( oritype )
         character(len=*),  intent(in) :: oritype
         select case(trim(oritype))
             case('mic')

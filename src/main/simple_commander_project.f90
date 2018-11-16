@@ -141,6 +141,10 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline)
+
+        !!!!!!!!!!!!!!!!!!!!!! WHY ARE WE READING THE WHOLE FILE HERE, ALL INFO IN HEADER
+
+
         call spproj%read(params%projfile)
         call spproj%print_info
         call spproj%kill
@@ -347,16 +351,17 @@ contains
         endif
         ! change to project directory
         call simple_chdir(filepath(PATH_HERE,trim(params%projname)),errmsg="commander_project :: update_project;")
-        ! read project
-        call spproj%read(trim(params%projfile))
+        ! read relevant segments
+
+        call spproj%read_segment('projinfo', trim(params%projfile) )
+        call spproj%read_segment('compenv',  trim(params%projfile) )
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
         call spproj%update_compenv( cline )
-        ! write project file
-        call spproj%write
-        ! end gracefully
-        call simple_end('**** UPDATE_PROJECT NORMAL STOP ****')
+        ! write the last bit of the project file
+        call spproj%write_non_data_segments
+        ! no printing for this program
     end subroutine exec_update_project
 
     !> for importing movies/integrated movies(micrographs)
