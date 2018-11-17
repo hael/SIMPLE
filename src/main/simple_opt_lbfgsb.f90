@@ -82,6 +82,7 @@ contains
             ! get thread index
             ithr = omp_get_thread_num() + 1
             if( ithr == 1 )then
+                print *, 'task          : ', self%task
                 print *, 'nevals        : ', spec%nevals
                 print *, 'ngevals       : ', spec%ngevals
                 print *, 'self%isave(34): ', self%isave(34)

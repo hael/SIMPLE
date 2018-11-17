@@ -75,7 +75,7 @@ contains
         else
             self%moviename = trim(moviename)
         endif
-        ! execute the motion_correction
+        ! execute the motion_correction        
         call motion_correct_movie(self%moviename, ctfvars, shifts, err, gainref_fname)
         if( err ) return
         ! return shift stats

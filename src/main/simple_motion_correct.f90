@@ -52,14 +52,14 @@ real                           :: dose_rate      = 0.               !< dose rate
 real                           :: nsig_here      = 6.0              !< nr of sigmas (for outlier removal)
 logical                        :: do_dose_weight = .false.          !< dose weight or not
 logical                        :: doscale        = .false.          !< scale or not
-logical                        :: doprint        = .true.           !< print out correlations
+logical                        :: doprint        = .false.          !< print out correlations
 logical                        :: existence      = .false.          !< to indicate existence
 
 integer, parameter :: MITSREF       = 30 !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 3  !< max # iterations of anisotropic refinement optimisation
+integer, parameter :: MITSREF_ANISO = 3 !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2. !< small initial shift to blur out fixed pattern noise
 logical, parameter :: DEBUG_HERE    = .false.
-logical, parameter :: DEBUG_ANISO   = .false.
+logical, parameter :: DEBUG_ANISO   = .true.
 
 contains
 
