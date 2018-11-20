@@ -70,12 +70,12 @@ type(intgpeaks_commander)            :: xintgpeaks
 type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 type(stk_corr_commander)             :: xstk_corr
+type(kstest_commander)               :: xkstst
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)              :: xrotmats2oris
 type(txt2project_commander)               :: xtxt2project
 type(project2txt_commander)               :: xproject2txt
-type(print_project_header_commander)      :: xprint_project_header
 type(print_project_vals_commander)        :: xprint_project_vals
 type(update_project_stateflags_commander) :: xupdate_project_stateflags
 type(multivariate_zscore_commander)       :: xmultizscore
@@ -718,6 +718,13 @@ select case(prg)
         keys_optional(1) = 'lp'
         call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         call xstk_corr%execute(cline)
+    case( 'kstest' )
+        ! Kolmogorov-Smirnov test to deduce equivalence or non-equivalence between two distributions
+        ! in a non-parametric manner
+        keys_required(1) = 'infile'
+        keys_required(2) = 'infile2'
+        call cline%parse_oldschool(keys_required(:2))
+        call xkstst%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
 
@@ -745,11 +752,6 @@ select case(prg)
         keys_optional(1)  = 'outfile'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         call xproject2txt%execute(cline)
-    case( 'print_project_header' )
-        ! converts a binary *.simple project file to a text oritab<project2txt/end>
-        keys_required(1) = 'projfile'
-        call cline%parse_oldschool(keys_required(:1))
-        call xprint_project_header%execute(cline)
     case( 'print_project_vals' )
         keys_required(1) = 'projfile'
         keys_required(2) = 'keys'

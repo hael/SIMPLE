@@ -8,27 +8,27 @@ use simple_syslib
 use simple_fileio
 implicit none
 
-public :: binoris
+public :: binoris, binoris_seginfo
 private
 #include "simple_local_flags.inc"
 
 integer(kind(ENUM_ORISEG)), parameter :: MAX_N_SEGMENTS = 20
-integer(kind=8), parameter :: N_VARS_HEAD_SEG = 5
-integer(kind=8), parameter :: N_BYTES_HEADER  = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
+integer(kind=8),            parameter :: N_VARS_HEAD_SEG = 5
+integer(kind=8),            parameter :: N_BYTES_HEADER  = MAX_N_SEGMENTS * N_VARS_HEAD_SEG * 8 ! because dp integer
 
-type file_header_segment
+type binoris_seginfo
     integer(kind=8)   :: fromto(2)          = 0
     integer(kind=8)   :: n_bytes_per_record = 0
     integer(kind=8)   :: n_records          = 0
     integer(kind=8)   :: first_data_byte    = 0
-end type file_header_segment
+end type binoris_seginfo
 
 type binoris
     private
-    type(file_header_segment) :: header(MAX_N_SEGMENTS)
-    integer                   :: n_segments  = 0
-    integer                   :: funit       = 0
-    logical                   :: l_open      = .false.
+    type(binoris_seginfo) :: header(MAX_N_SEGMENTS)
+    integer               :: n_segments  = 0
+    integer               :: funit       = 0
+    logical               :: l_open      = .false.
   contains
     ! I/O
     procedure          :: open
@@ -56,6 +56,7 @@ type binoris
     generic            :: read_segment => read_segment_1, read_segment_2
     procedure          :: read_record
     ! getters
+    procedure          :: get_segments_info
     procedure          :: get_n_segments
     procedure          :: get_fromto
     procedure          :: get_n_records
@@ -597,7 +598,7 @@ contains
 
     subroutine read_record( self, isegment, ibytes, str )
         class(binoris),                intent(inout) :: self
-        integer(kind(ENUM_ORISEG)),       intent(in)    :: isegment
+        integer(kind(ENUM_ORISEG)),    intent(in)    :: isegment
         integer(kind=8),               intent(inout) :: ibytes
         character(len=:), allocatable, intent(out)   :: str
         if( allocated(str) ) deallocate(str)
@@ -608,33 +609,66 @@ contains
 
     ! getters
 
+    subroutine get_segments_info( self, seginds, info_struct )
+        class(binoris),                     intent(in)  :: self
+        integer,               allocatable, intent(out) :: seginds(:)
+        type(binoris_seginfo), allocatable, intent(out) :: info_struct(:)
+        integer(kind(ENUM_ORISEG)) :: isegment, cnt
+        if( allocated(seginds)     ) deallocate(seginds)
+        if( allocated(info_struct) ) deallocate(info_struct)
+        if( self%n_segments <= 0 ) return
+        ! count # populated segments
+        cnt = 0
+        do isegment=1,MAX_N_SEGMENTS
+            if(   self%header(isegment)%n_records > 0&
+            .and. self%header(isegment)%n_bytes_per_record > 0 )then
+                cnt = cnt + 1
+            endif
+        end do
+        ! allocate arrays
+        allocate(info_struct(cnt), seginds(cnt))
+        cnt = 0
+        do isegment=1,MAX_N_SEGMENTS
+            if(   self%header(isegment)%n_records > 0&
+            .and. self%header(isegment)%n_bytes_per_record > 0 )then
+                ! segment is populateed
+                cnt = cnt + 1
+                seginds(cnt)                        = isegment
+                info_struct(cnt)%fromto             = self%header(isegment)%fromto
+                info_struct(cnt)%n_records          = self%header(isegment)%n_records
+                info_struct(cnt)%n_bytes_per_record = self%header(isegment)%n_bytes_per_record
+                info_struct(cnt)%first_data_byte    = self%header(isegment)%first_data_byte
+            endif
+        end do
+    end subroutine get_segments_info
+
     pure integer function get_n_segments( self )
         class(binoris), intent(in) :: self
         get_n_segments = self%n_segments
     end function get_n_segments
 
     pure function get_fromto( self, isegment ) result( fromto )
-        class(binoris),          intent(in) :: self
+        class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         integer :: fromto(2)
         fromto = self%header(isegment)%fromto
     end function get_fromto
 
     pure integer function get_n_records( self, isegment )
-        class(binoris),          intent(in) :: self
+        class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_n_records = self%header(isegment)%n_records
     end function get_n_records
 
     pure integer function get_n_bytes_per_record( self, isegment )
-        class(binoris),          intent(in) :: self
+        class(binoris),             intent(in) :: self
         integer(kind(ENUM_ORISEG)), intent(in) :: isegment
         get_n_bytes_per_record = self%header(isegment)%n_bytes_per_record
     end function get_n_bytes_per_record
 
     pure integer(kind=8) function get_n_bytes_tot( self )
         class(binoris), intent(in) :: self
-        integer(kind(ENUM_ORISEG))    :: isegment
+        integer(kind(ENUM_ORISEG)) :: isegment
         get_n_bytes_tot = N_BYTES_HEADER
         if( self%n_segments <= 0 ) return
         do isegment=1,self%n_segments

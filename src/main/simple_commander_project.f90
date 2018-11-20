@@ -12,7 +12,6 @@ implicit none
 public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
-public :: print_project_header_commander
 public :: update_project_stateflags_commander
 public :: print_project_vals_commander
 public :: print_project_field_commander
@@ -41,10 +40,6 @@ type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
-type, extends(commander_base) :: print_project_header_commander
-  contains
-    procedure :: execute      => exec_print_project_header
-end type print_project_header_commander
 type, extends(commander_base) :: update_project_stateflags_commander
   contains
     procedure :: execute      => exec_update_project_stateflags
@@ -140,29 +135,12 @@ contains
         class(cmdline),                      intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        call params%new(cline)
-
-        !!!!!!!!!!!!!!!!!!!!!! WHY ARE WE READING THE WHOLE FILE HERE, ALL INFO IN HEADER
-
-
-        call spproj%read(params%projfile)
+        call params%new(cline, silent=.true.)
+        call spproj%read_non_data_segments(params%projfile)
         call spproj%print_info
         call spproj%kill
-        call simple_end('**** PRINT_PROJECT_INFO NORMAL STOP ****')
+        ! no additional printing
     end subroutine exec_print_project_info
-
-    !> convert binary (.simple) oris doc to text (.txt)
-    subroutine exec_print_project_header( self, cline )
-        use simple_binoris, only: binoris
-        class(print_project_header_commander), intent(inout) :: self
-        class(cmdline),                        intent(inout) :: cline
-        type(binoris)                 :: bos_doc
-        character(len=:), allocatable :: fname
-        fname = cline%get_carg('projfile')
-        call bos_doc%open(fname)
-        call bos_doc%print_header
-        call bos_doc%close
-    end subroutine exec_print_project_header
 
     subroutine exec_update_project_stateflags( self, cline )
         use simple_binoris,    only: binoris
@@ -218,7 +196,6 @@ contains
         use simple_binoris,    only: binoris
         use simple_sp_project, only: oritype2segment
         use simple_binoris,    only: binoris
-        !use simple_ori,        only: ori
         class(print_project_vals_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
         type(binoris)                 :: bos_doc
@@ -227,7 +204,6 @@ contains
         character(len=STDLEN)         :: args(32)
         logical    :: ischar
         type(oris) :: os
-        !type(ori)  :: o
         integer    :: nargs, iseg, noris, ikey, iori, state
         real       :: rval, norm(3)
         ! parse the keys
@@ -352,7 +328,6 @@ contains
         ! change to project directory
         call simple_chdir(filepath(PATH_HERE,trim(params%projname)),errmsg="commander_project :: update_project;")
         ! read relevant segments
-
         call spproj%read_segment('projinfo', trim(params%projfile) )
         call spproj%read_segment('compenv',  trim(params%projfile) )
         ! update project info
@@ -469,7 +444,6 @@ contains
         use simple_binoris_io ! use all in there
         class(import_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        !character(len=STDLEN)         :: projfile
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
         type(parameters) :: params
@@ -809,7 +783,6 @@ contains
         use simple_binoris_io ! use all in there
         class(update_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        !character(len=STDLEN)         :: projfile
         character(len=:), allocatable :: phaseplate, ctfstr
         real,             allocatable :: line(:)
         type(parameters) :: params

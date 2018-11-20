@@ -109,7 +109,8 @@ type :: parameters
     character(len=LONGSTRLEN) :: frcs=trim(FRCS_FILE) !< binary file with per-class/proj Fourier Ring Correlations(.bin)
     character(len=LONGSTRLEN) :: fsc='fsc_state01.bin'!< binary file with FSC info{fsc_state01.bin}
     character(len=LONGSTRLEN) :: gainref=''           !< gain reference for movie alignment
-    character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt|.simple)
+    character(len=LONGSTRLEN) :: infile=''            !< file with inputs(.txt)
+    character(len=LONGSTRLEN) :: infile2=''           !< file with inputs(.txt)
     character(len=LONGSTRLEN) :: mskfile=''           !< maskfile.ext
     character(len=LONGSTRLEN) :: msklist=''           !< table (text file) of mask volume files(.txt)
     character(len=LONGSTRLEN) :: mskvols(MAXS)=''
@@ -580,6 +581,7 @@ contains
         call check_file('fsc',            self%fsc,          'B')
         call check_file('gainref',        self%gainref)
         call check_file('infile',         self%infile)
+        call check_file('infile2',        self%infile2)
         call check_file('mskfile',        self%mskfile,      notAllowed='T')
         call check_file('oritab',         self%oritab,       'T', 'O')
         call check_file('oritab2',        self%oritab2,      'T', 'O')

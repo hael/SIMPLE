@@ -2,7 +2,7 @@ module simple_sp_project
 include 'simple_lib.f08'
 use simple_ori,     only: ori
 use simple_oris,    only: oris
-use simple_binoris, only: binoris
+use simple_binoris, only: binoris, binoris_seginfo
 implicit none
 
 public :: sp_project, oritype2segment
@@ -15,19 +15,19 @@ type sp_project
     ! ORIS REPRESENTATIONS OF BINARY FILE SEGMENTS
     ! segments 1-10 reserved for simple program outputs, orientations and files
     ! In segment 7 we stash class averages, ranked class averages, final volumes etc.
-    type(oris)        :: os_mic    ! micrographs,              segment 1
-    type(oris)        :: os_stk    ! per-micrograph stack os,  segment 2
-    type(oris)        :: os_ptcl2D ! per-particle 2D os,       segment 3
-    type(oris)        :: os_cls2D  ! per-cluster 2D os,        segment 4
-    type(oris)        :: os_cls3D  ! per-cluster 3D os,        segment 5
-    type(oris)        :: os_ptcl3D ! per-particle 3D os,       segment 6
-    type(oris)        :: os_out    ! critical project outputs, segment 7
+    type(oris) :: os_mic    ! micrographs,              segment 1
+    type(oris) :: os_stk    ! per-micrograph stack os,  segment 2
+    type(oris) :: os_ptcl2D ! per-particle 2D os,       segment 3
+    type(oris) :: os_cls2D  ! per-cluster 2D os,        segment 4
+    type(oris) :: os_cls3D  ! per-cluster 3D os,        segment 5
+    type(oris) :: os_ptcl3D ! per-particle 3D os,       segment 6
+    type(oris) :: os_out    ! critical project outputs, segment 7
 
     ! ORIS REPRESENTATIONS OF PROJECT DATA / DISTRIBUTED SYSTEM INFO / SYSTEM MANAGEMENT STUFF
     ! segments 11-20 reserved for project info, job management etc.
-    type(oris)        :: projinfo  ! project information      segment 11
-    type(oris)        :: jobproc   ! jobid + PID + etc.       segment 12
-    type(oris)        :: compenv   ! computing environment    segment 13
+    type(oris) :: projinfo  ! project information      segment 11
+    type(oris) :: jobproc   ! jobid + PID + etc.       segment 12
+    type(oris) :: compenv   ! computing environment    segment 13
 
     ! binary file-handler
     type(binoris) :: bos
@@ -91,6 +91,7 @@ contains
     procedure          :: print_segment
     ! readers
     procedure          :: read
+    procedure          :: read_non_data_segments
     procedure          :: read_ctfparams_state_eo
     procedure          :: read_segment
     procedure, private :: segreader
@@ -163,7 +164,7 @@ contains
             endif
         else
             if( .not. cline%defined('projname') .and. .not. cline%defined('projfile') )then
-                THROW_HARD('the project needs a name, inputted via projname or projfile!')
+                THROW_HARD('the project needs a name, inputted via projname or projfile; update_projinfo')
             endif
             if( cline%defined('projfile') )then
                 projfile = cline%get_carg('projfile')
@@ -171,7 +172,7 @@ contains
                     case('O')
                         call self%projinfo%set(1, 'projfile', trim(projfile) )
                     case DEFAULT
-                        THROW_HARD('unsupported format of projfile: '//trim(projfile))
+                        THROW_HARD('unsupported format of projfile: '//trim(projfile)//'; update_projinfo')
                 end select
                 projname = get_fbody(projfile, 'simple')
                 call self%projinfo%set(1, 'projname', trim(projname))
@@ -217,7 +218,7 @@ contains
             iostat = simple_getenv('SIMPLE_QSYS', env_var)
             if( iostat == 0 ) call self%compenv%set(1, 'qsys_name', trim(env_var))
         endif
-        if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment')
+        if( iostat /= 0 ) THROW_HARD('SIMPLE_QSYS is not defined in your environment; update_compenv')
         iostat = simple_getenv('SIMPLE_EMAIL', env_var)
         if( iostat/=0 ) env_var = 'my.name@uni.edu'
         ! get from command line
@@ -322,7 +323,7 @@ contains
         character(len=*),  intent(in)    :: exec_dir
         class(chash),      intent(inout) :: job_descr
         logical,           intent(out)   :: did_update
-        character(len=:), allocatable :: edir
+        character(len=:), allocatable    :: edir
         type(ori)     :: o
         integer       :: njobs, ijob, ind
         character(8)  :: date
@@ -514,7 +515,7 @@ contains
         logical               :: is_movie
         ! file exists?
         if( .not. file_exists(filetab) )then
-            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_movie')
+            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_movies')
         endif
         is_movie = .true.
         ! oris object pointer
@@ -920,7 +921,7 @@ contains
         ! check that stk field is not empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk == 0 )then
-            THROW_HARD('No stack to split! split_single_stk')
+            THROW_HARD('No stack to split! split_stk')
         else if( n_os_stk > 1 )then ! re-splitting not supported
             return
         endif
@@ -1189,7 +1190,7 @@ contains
                 ! full path and existence check
                 vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
             case DEFAULT
-                THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out')
+                THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out 3')
         end select
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1977,7 +1978,7 @@ contains
         !$omp end parallel do
         ! write
         call self%projinfo%getter(1, 'projfile', projfile)
-        call self%bos%open(projfile, del_if_exists=.false.)
+        call self%bos%open(projfile)
         call self%bos%write_segment_inside(isegment, os_strings, [1,nptcls], strlen_max)
         ! transfer to memory & destruct
         call self%ptr2oritype(oritype, os)
@@ -2056,29 +2057,43 @@ contains
 
     ! printers
 
-    subroutine print_info( self )
-        class(sp_project), intent(in) :: self
-        integer :: n
-        n = self%os_mic%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in micrographs          segment (1) :', n
-        n = self%os_stk%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-micrograph stack segment (2) :', n
-        n = self%os_ptcl2D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 2D      segment (3) :', n
-        n = self%os_cls2D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  2D      segment (4) :', n
-        n = self%os_cls3D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-cluster  3D      segment (5) :', n
-        n = self%os_ptcl3D%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in per-particle 3D      segment (6) :', n
-        n = self%os_out%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in out                  segment (7) :', n
-        n = self%projinfo%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in project info         segment (11):', n
-        n = self%jobproc%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in jobproc              segment (12):', n
-        n = self%compenv%get_noris()
-        if( n > 0 ) write(*,'(a,1x,i10)') '# entries in compenv              segment (13):', n
+    subroutine print_info( self, fname )
+        use simple_ansi_ctrls
+        class(sp_project),          intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+        character(len=:),      allocatable :: projfile, record
+        type(binoris_seginfo), allocatable :: hinfo(:)
+        integer,               allocatable :: seginds(:)
+        integer :: i
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
+        endif
+        if( file_exists(projfile) )then
+            call self%bos%open(projfile)
+            call self%bos%get_segments_info(seginds, hinfo)
+
+
+
+
+
+
+            if( allocated(hinfo) )then
+                do i = 1,size(hinfo)
+                    call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
+                    write(*,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' IS OF ORITYPE: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
+                    write(*,'(a)') format_str(segment2info(seginds(i), hinfo(i)%n_records), C_ITALIC)
+                    write(*,'(a)') format_str('first record:', C_BOLD)//' '//trim(record)
+                end do
+            endif
+            call self%bos%close
+        else
+            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; print_info')
+        endif
     end subroutine print_info
 
     ! readers
@@ -2097,7 +2112,7 @@ contains
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         if( .not. file_exists(trim(projfile)) )then
-            THROW_HARD('inputted file: '// trim(projfile)//' does not exist; read')
+            THROW_HARD('file: '// trim(projfile)//' does not exist; read')
         endif
         call self%bos%open(projfile)
         do isegment=1,self%bos%get_n_segments()
@@ -2105,6 +2120,30 @@ contains
         end do
         call self%bos%close
     end subroutine read
+
+    subroutine read_non_data_segments( self, fname )
+        class(sp_project),          intent(inout) :: self
+        character(len=*), optional, intent(in)    :: fname
+        character(len=:), allocatable :: projfile
+        integer :: iseg
+        if( present(fname) )then
+            if( fname2format(fname) .ne. 'O' )then
+                THROW_HARD('file format of: '//trim(fname)//' not supported; read_non_data_segments')
+            endif
+            projfile = trim(fname)
+        else
+            call self%projinfo%getter(1, 'projfile', projfile)
+        endif
+        if( file_exists(projfile) )then
+            call self%bos%open(projfile)
+            do iseg=11,MAXN_OS_SEG
+                call self%segreader(iseg)
+            end do
+            call self%bos%close
+        else
+            THROW_HARD('projfile: '//trim(projfile)//' nonexistent; read_non_data_segments')
+        endif
+    end subroutine read_non_data_segments
 
     subroutine read_ctfparams_state_eo( self, fname )
         class(sp_project), intent(inout) :: self
@@ -2257,7 +2296,7 @@ contains
         endif
         if( file_exists(projfile) )then
             iseg = oritype2segment(oritype)
-            call self%bos%open(projfile, del_if_exists=.false.)
+            call self%bos%open(projfile)
             call self%segwriter_inside(iseg, fromto)
         else
             call self%write(fname, fromto)
@@ -2273,14 +2312,14 @@ contains
         integer :: iseg
         if( present(fname) )then
             if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write')
+                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write_non_data_segments')
             endif
             projfile = trim(fname)
         else
             call self%projinfo%getter(1, 'projfile', projfile)
         endif
         if( file_exists(projfile) )then
-            call self%bos%open(projfile, del_if_exists=.false.)
+            call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG
                 call self%segwriter(iseg)
             end do
@@ -2582,8 +2621,71 @@ contains
             case('compenv')
                 oritype2segment = COMPENV_SEG
             case DEFAULT
-                THROW_HARD('unsupported oritype flag; oritype_flag2isgement')
+                THROW_HARD('unsupported oritype flag; oritype2segment')
         end select
     end function oritype2segment
+
+    function segment2oritype( iseg ) result( oritype )
+        integer(kind(ENUM_ORISEG)), intent(in) :: iseg
+        character(len=:), allocatable :: oritype
+        select case(iseg)
+            case(MIC_SEG)
+                oritype = 'mic'
+            case(STK_SEG)
+                oritype = 'stk'
+            case(PTCL2D_SEG)
+                oritype = 'ptcl2D'
+            case(CLS2D_SEG)
+                oritype = 'cls2D'
+            case(CLS3D_SEG)
+                oritype = 'cls3D'
+            case(PTCL3D_SEG)
+                oritype = 'ptcl3D'
+            case(OUT_SEG)
+                oritype = 'out'
+            case(PROJINFO_SEG)
+                oritype = 'projinfo'
+            case(JOBPROC_SEG)
+                oritype = 'jobproc'
+            case(COMPENV_SEG)
+                oritype = 'compenv'
+            case DEFAULT
+                write(*,*) 'iseg: ', iseg
+                THROW_HARD('unsupported segment of kind(ENUM_ORISEG); segment2oritype')
+        end select
+    end function segment2oritype
+
+    function segment2info( iseg, n_records ) result( info )
+        integer(kind(ENUM_ORISEG)), intent(in) :: iseg
+        integer(kind=8),            intent(in) :: n_records
+        character(len=:), allocatable :: info, nrecs_str
+        nrecs_str = int2str(int(n_records,kind=4))
+        info = nrecs_str//' record(s) of '
+        select case(iseg)
+            case(MIC_SEG)
+                info = info//'movie and micrograph (integrated movie) info, one per movie/micrograph'
+            case(STK_SEG)
+                info = info//'stack (extracted particles) info, one per stack of particles'
+            case(PTCL2D_SEG)
+                info = info//'2D data generated by cluster2D, one per particle'
+            case(CLS2D_SEG)
+                info = info//'data generated by cluster2D, one per 2D cluster'
+            case(CLS3D_SEG)
+                info = info//'data generated by cluster3D and related programs, one per 3D cluster'
+            case(PTCL3D_SEG)
+                info = info//'3D information, one per particle'
+            case(OUT_SEG)
+                info = info//'crtitical project outputs: class averages, 3D volumes, FSC/FRC files etc.'
+            case(PROJINFO_SEG)
+                info = info//'information about the project, project name etc.'
+            case(JOBPROC_SEG)
+                info = info//'all command-lines executed throughout the project'
+            case(COMPENV_SEG)
+                info = info//'computing environment specifications, queue system, memory per job etc.'
+            case DEFAULT
+                write(*,*) 'iseg: ', iseg
+                THROW_HARD('unsupported segment of kind(ENUM_ORISEG); segment2oritype')
+        end select
+    end function segment2info
 
 end module simple_sp_project

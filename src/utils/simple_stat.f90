@@ -7,7 +7,7 @@ implicit none
 
 public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
-public :: robust_z_scores, robust_normalization, pearsn_serial_8
+public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 private
 #include "simple_local_flags.inc"
 
@@ -452,68 +452,66 @@ contains
 
     !>   Kolmogorov-Smirnov test to deduce equivalence or non-equivalence
     !>  between two distributions.
-    !!          The routine returns the K-S statistic d, and the significance
-    !!          level prob for the null hypothesis that the data sets are drawn
-    !!          from the same distribution. Small values for prob show that the
-    !!          cumulative distribution function of data1 is significantly
-    !!          different from that of data2. The input arrays are modified
-    !!          (sorted)
-    !! \param  data1,data2 distribution arrays
-    !! \param  n1,n2 size of distribution arrays
-    !! \param  d K-S statistic
-    ! subroutine kstwo( data1, n1, data2, n2, d, prob )
-    !     integer, intent(in) :: n1, n2
-    !     real, intent(inout) :: data1(n1), data2(n2), d, prob  !< significance
-    !     integer             :: j1, j2
-    !     real                :: d1, d2, dt, en1, en2, en, fn1, fn2
-    !     call hpsort(data1)
-    !     call hpsort(data2)
-    !     en1 = n1
-    !     en2 = n2
-    !     j1  = 1
-    !     j2  = 1
-    !     fn1 = 0.
-    !     fn2 = 0.
-    !     d   = 0.
-    !     do while(j1.le.n1.and.j2.le.n2)
-    !         d1 = data1(j1)
-    !         d2 = data2(j2)
-    !         if(d1.le.d2)then
-    !             fn1 = j1/en1
-    !             j1  = j1+1
-    !         endif
-    !         if(d2.le.d1)then
-    !             fn2 = j2/en2
-    !             j2  = j2+1
-    !         endif
-    !         dt = abs(fn2-fn1)
-    !         if(dt.gt.d) d = dt
-    !     end do
-    !     en = sqrt(en1*en2/(en1+en2))
-    !     prob = probks((en+0.12+0.11/en)*d) ! significance
+    !          The routine returns the K-S statistic d, and the significance
+    !          level prob for the null hypothesis that the data sets are drawn
+    !          from the same distribution. Small values for prob show that the
+    !          cumulative distribution function of data1 is significantly
+    !          different from that of data2. The input arrays are modified
+    !          (sorted)
+    subroutine kstwo( data1, n1, data2, n2, d, prob )
+        integer, intent(in) :: n1, n2
+        real, intent(inout) :: data1(n1), data2(n2), d, prob  !< significance
+        integer             :: j1, j2
+        real                :: d1, d2, dt, en1, en2, en, fn1, fn2
+        call hpsort(data1)
+        call hpsort(data2)
+        en1 = n1
+        en2 = n2
+        j1  = 1
+        j2  = 1
+        fn1 = 0.
+        fn2 = 0.
+        d   = 0.
+        do while(j1.le.n1.and.j2.le.n2)
+            d1 = data1(j1)
+            d2 = data2(j2)
+            if(d1.le.d2)then
+                fn1 = j1/en1
+                j1  = j1+1
+            endif
+            if(d2.le.d1)then
+                fn2 = j2/en2
+                j2  = j2+1
+            endif
+            dt = abs(fn2-fn1)
+            if(dt.gt.d) d = dt
+        end do
+        en = sqrt(en1*en2/(en1+en2))
+        prob = probks((en+0.12+0.11/en)*d) ! significance
 
-    !     contains
-    !         !< Calculate K-S significance test
-    !         function probks( alam ) result( p )
-    !             real, intent(in) :: alam
-    !             real :: p, a2, fac, term, termbf
-    !             real, parameter :: EPS1=0.001, EPS2=1.e-8
-    !             integer :: j
-    !             a2  = -2.*alam**2
-    !             fac = 2.
-    !             p = 0.
-    !             termbf = 0. ! prev term in sum
-    !             do j=1,100
-    !                 term = fac*exp(a2*j**2)
-    !                 p = p+term
-    !                 if(abs(term).le.EPS1*termbf.or.abs(term).le.EPS2*p) return
-    !                 fac = -fac ! alternate signs in sum
-    !                 termbf = abs(term)
-    !             end do
-    !             p=1. ! fail to converge
-    !         end function probks
+        contains
 
-    ! end subroutine kstwo
+            !< Calculate K-S significance test
+            function probks( alam ) result( p )
+                real, intent(in) :: alam
+                real :: p, a2, fac, term, termbf
+                real, parameter :: EPS1=0.001, EPS2=1.e-8
+                integer :: j
+                a2  = -2.*alam**2
+                fac = 2.
+                p = 0.
+                termbf = 0. ! prev term in sum
+                do j=1,100
+                    term = fac*exp(a2*j**2)
+                    p = p+term
+                    if(abs(term).le.EPS1*termbf.or.abs(term).le.EPS2*p) return
+                    fac = -fac ! alternate signs in sum
+                    termbf = abs(term)
+                end do
+                p=1. ! fail to converge
+            end function probks
+
+    end subroutine kstwo
 
     !>    4 statistical analysis of similarity matrix, returns smin,smax
     !! \param smin minimum similarity
