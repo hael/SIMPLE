@@ -27,9 +27,9 @@ contains
         if( str_has_substr(name, 'info')    ) return
         call cline%gen_job_descr(job_descr, name)
         if( file_exists(params_glob%projfile) )then
-            call spproj%read_segment('jobproc', params_glob%projfile)
+            call spproj%read_non_data_segments(params_glob%projfile)
             call spproj%append_job_descr2jobproc(params_glob%exec_dir, job_descr, did_update)
-            if( did_update ) call spproj%write_segment_inside('jobproc', params_glob%projfile)
+            if( did_update ) call spproj%write_non_data_segments(params_glob%projfile)
         endif
     end subroutine update_job_descriptions_in_project
 
