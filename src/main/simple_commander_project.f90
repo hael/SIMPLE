@@ -21,10 +21,6 @@ public :: import_movies_commander
 public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
-public :: update_movies_commander
-public :: update_boxes_commander
-public :: update_particles_commander
-public :: update_cavgs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -76,22 +72,6 @@ type, extends(commander_base) :: import_cavgs_commander
   contains
     procedure :: execute      => exec_import_cavgs
 end type import_cavgs_commander
-type, extends(commander_base) :: update_movies_commander
-  contains
-    procedure :: execute      => exec_update_movies
-end type update_movies_commander
-type, extends(commander_base) :: update_boxes_commander
-  contains
-    procedure :: execute      => exec_update_boxes
-end type update_boxes_commander
-type, extends(commander_base) :: update_particles_commander
-  contains
-    procedure :: execute      => exec_update_particles
-end type update_particles_commander
-type, extends(commander_base) :: update_cavgs_commander
-  contains
-    procedure :: execute      => exec_update_cavgs
-end type update_cavgs_commander
 
 contains
 
@@ -103,15 +83,22 @@ contains
         type(oris)       :: os
         type(sp_project) :: spproj
         integer          :: noris
+        logical          :: projfile_existed
         call params%new(cline)
         noris = nlines(params%oritab)
         call os%new(noris)
         call os%read(params%oritab)
+        projfile_existed = .false.
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)
+            projfile_existed = .true.
         endif
         call spproj%set_sp_oris(params%oritype, os)
-        call spproj%write_segment_inside(params%oritype, params%projfile)
+        if( projfile_existed )then
+            call spproj%write_segment_inside(params%oritype, params%projfile)
+        else
+            call spproj%write(params%projfile)
+        endif
         call spproj%kill
         call simple_end('**** TXT2PROJECT NORMAL STOP ****')
     end subroutine exec_txt2project
@@ -392,7 +379,7 @@ contains
             end do
         endif
         ! write project file
-        call spproj%write
+        call spproj%write ! full write since projinfo is updated and this is guaranteed to be the first import
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 
@@ -425,7 +412,7 @@ contains
             call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
         end do
         ! write project file
-        call spproj%write
+        call spproj%write_segment_inside('mic') ! all that's needed here
         call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
     end subroutine exec_import_boxes
 
@@ -647,7 +634,7 @@ contains
         if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
 
         ! WRITE PROJECT FILE
-        call spproj%write
+        call spproj%write ! full write since this is guaranteed to be the first import
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
 
@@ -665,349 +652,8 @@ contains
         ! update computer environment
         call spproj%update_compenv( cline )
         ! WRITE PROJECT FILE
-        call spproj%write
+        call spproj%write ! full write since this is guaranteed to be the first import
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
-
-    !> for importing movies/integrated movies(micrographs)
-    subroutine exec_update_movies( self, cline )
-        class(update_movies_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        logical          :: inputted_boxtab
-        integer          :: nmovf, nboxf, i
-        type(ctfparams)  :: ctfvars, ctfvars_current
-        character(len=:),      allocatable :: phaseplate, boxf_abspath
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        call params%new(cline)
-        ! parameter input management
-        inputted_boxtab = cline%defined('boxtab')
-        ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
-            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_update_movies')
-        endif
-        call spproj%read(params%projfile)
-        ! CTF
-        if( cline%defined('phaseplate') )then
-            phaseplate = cline%get_carg('phaseplate')
-        else
-            allocate(phaseplate, source='no')
-        endif
-        ctfvars_current = spproj%get_micparams(1)
-        ctfvars%smpd  = params%smpd
-        ctfvars%kv    = params%kv
-        ctfvars%cs    = params%cs
-        ctfvars%fraca = params%fraca
-        select case(params%ctf)
-            case('yes')
-                ctfvars%ctfflag = 1
-            case('no')
-                ctfvars%ctfflag = 0
-            case('flip')
-                ctfvars%ctfflag = 2
-            case DEFAULT
-                THROW_HARD('ctf flag: '//trim(params%ctf)//' not supported; update_movies')
-        end select
-        ctfvars%l_phaseplate = .false.
-        if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
-        ! update project info
-        call spproj%update_projinfo( cline )
-        ! updates segment
-        call spproj%add_movies(params%filetab, ctfvars)
-        ! add boxtab
-        if( inputted_boxtab )then
-            call read_filetable(params%boxtab, boxfnames)
-            nboxf = size(boxfnames)
-            nmovf = nlines(params%filetab)
-            if( nboxf /= nmovf )then
-                write(*,*) '# boxfiles: ', nboxf
-                write(*,*) '# movies  : ', nmovf
-                THROW_HARD('# boxfiles .ne. # movies; exec_update_movies')
-            endif
-            do i=1,nmovf
-                boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_update_movies')
-                call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
-            end do
-        endif
-        ! write project file
-        call spproj%write
-        call simple_end('**** UPDATE_MOVIES NORMAL STOP ****')
-    end subroutine exec_update_movies
-
-    !> for importing particle coordinates (boxes) in EMAN1.9 format
-    subroutine exec_update_boxes( self, cline )
-        class(update_boxes_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        integer          :: nos_mic, nboxf, i
-        character(len=:),          allocatable :: boxf_abspath
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
-        call params%new(cline)
-        ! project file management
-        if( .not. file_exists(trim(params%projfile)) )then
-            THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_update_boxes')
-        endif
-        call spproj%read(params%projfile)
-        ! get boxfiles into os_mic
-        call read_filetable(params%boxtab, boxfnames)
-        nboxf   = size(boxfnames)
-        nos_mic = spproj%os_mic%get_noris()
-        if( nboxf /= nos_mic )then
-            write(*,*) '# boxfiles       : ', nboxf
-            write(*,*) '# os_mic entries : ', nos_mic
-            THROW_HARD('# boxfiles .ne. # os_mic entries; exec_update_boxes')
-        endif
-        do i=1,nos_mic
-             boxf_abspath = simple_abspath(boxfnames(i), errmsg='commander_project :: exec_update_movies')
-            call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
-        end do
-        ! write project file
-        call spproj%write
-        call simple_end('**** UPDATE_BOXES NORMAL STOP ****')
-    end subroutine exec_update_boxes
-
-    !> for importing extracted particles
-    subroutine exec_update_particles( self, cline )
-        use simple_oris,      only: oris
-        use simple_nrtxtfile, only: nrtxtfile
-        use simple_binoris_io ! use all in there
-        class(update_particles_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        character(len=:), allocatable :: phaseplate, ctfstr
-        real,             allocatable :: line(:)
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        type(oris)       :: os
-        type(nrtxtfile)  :: paramfile
-        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-        integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
-        type(ctfparams)  :: ctfvars
-        call params%new(cline)
-        ! PARAMETER INPUT MANAGEMENT
-        ! parameter input flags
-        inputted_oritab       = cline%defined('oritab')
-        inputted_deftab       = cline%defined('deftab')
-        inputted_plaintexttab = cline%defined('plaintexttab')
-        n_ori_inputs          = count([inputted_oritab,inputted_deftab,inputted_plaintexttab])
-        ! exceptions
-        if( .not. cline%defined('smpd')  ) THROW_HARD('smpd (sampling distance in A) input required when updating stacks of particles (stk); exec_update_particles')
-        if( n_ori_inputs > 1 )then
-            write(*,*) 'ERROR, '
-            THROW_HARD('multiple parameter sources inputted, please use (oritab|deftab|plaintexttab); exec_update_particles')
-        endif
-        if( cline%defined('stk') .and. cline%defined('stktab') )then
-            THROW_HARD('stk and stktab are both defined on command line, use either or; exec_update_particles')
-        endif
-        if( cline%defined('stk') .or. cline%defined('stktab') )then
-            if( trim(params%ctf) .ne. 'no' )then
-                ! there needs to be associated parameters of some form
-                if( n_ori_inputs < 1 )then
-                    THROW_HARD('stk or stktab input requires associated parameter input when ctf .ne. no (oritab|deftab|plaintexttab)')
-                endif
-            endif
-        else
-            THROW_HARD('either stk or stktab needed on command line; update_particles')
-        endif
-        ! oris input
-        if( inputted_oritab )then
-            ndatlines = binread_nlines(params%oritab)
-            call os%new(ndatlines)
-            call binread_oritab(params%oritab, spproj, os, [1,ndatlines])
-            call spproj%kill ! for safety
-        endif
-        if( inputted_deftab )then
-            ndatlines = binread_nlines(params%deftab)
-            call os%new(ndatlines)
-            call binread_ctfparams_state_eo(params%deftab, spproj, os, [1,ndatlines])
-            call spproj%kill ! for safety
-        endif
-        if( inputted_plaintexttab )then
-            call paramfile%new(params%plaintexttab, 1)
-            ndatlines = paramfile%get_ndatalines()
-            nrecs     = paramfile%get_nrecs_per_line()
-            if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                write(*,*) ''
-                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_update_ptcls')
-            endif
-            call os%new(ndatlines)
-            allocate( line(nrecs) )
-            do i=1,ndatlines
-                call paramfile%readNextDataLine(line)
-                select case(params%dfunit)
-                    case( 'A' )
-                        line(1) = line(1)/1.0e4
-                        if( nrecs > 1 )  line(2) = line(2)/1.0e4
-                    case( 'microns' )
-                        ! nothing to do
-                    case DEFAULT
-                        THROW_HARD('unsupported dfunit; exec_update_ptcls')
-                end select
-                select case(params%angastunit)
-                    case( 'radians' )
-                        if( nrecs == 3 ) line(3) = rad2deg(line(3))
-                    case( 'degrees' )
-                        ! nothing to do
-                    case DEFAULT
-                        THROW_HARD('unsupported angastunit; exec_update_ptcls')
-                end select
-                select case(params%phshiftunit)
-                    case( 'radians' )
-                        ! nothing to do
-                    case( 'degrees' )
-                        if( nrecs == 4 ) line(4) = deg2rad(line(4))
-                    case DEFAULT
-                        THROW_HARD('unsupported phshiftunit; exec_update_ptcls')
-                end select
-                call os%set(i, 'dfx', line(1))
-                if( nrecs > 1 )then
-                    call os%set(i, 'dfy', line(2))
-                    call os%set(i, 'angast', line(3))
-                endif
-                if( nrecs > 3 )then
-                    call os%set(i, 'phshift', line(4))
-                endif
-            end do
-        endif
-        if( cline%defined('stk') )then
-            ctfvars%smpd = params%smpd
-            select case(trim(params%ctf))
-                case('yes')
-                    ctfvars%ctfflag = CTFFLAG_YES
-                case('no')
-                    ctfvars%ctfflag = CTFFLAG_NO
-                case('flip')
-                    ctfvars%ctfflag = CTFFLAG_FLIP
-                case DEFAULT
-                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_update_ptcls')
-            end select
-            if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
-                ! if updating single stack of extracted particles, these are hard requirements
-                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when updating movies; exec_update_particles')
-                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when updating movies; exec_update_particles')
-                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when updating movies; exec_update_particles')
-                if( cline%defined('phaseplate') )then
-                    phaseplate = cline%get_carg('phaseplate')
-                else
-                    allocate(phaseplate, source='no')
-                endif
-                ctfvars%kv           = params%kv
-                ctfvars%cs           = params%cs
-                ctfvars%fraca        = params%fraca
-                ctfvars%l_phaseplate = phaseplate .eq. 'yes'
-            endif
-        else
-            ! updating from stktab
-            if( n_ori_inputs == 1 )then
-                ! sampling distance
-                call os%set_all2single('smpd', params%smpd)
-                ! acceleration voltage
-                if( cline%defined('kv') )then
-                    call os%set_all2single('kv', params%kv)
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'kv') )then
-                            write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
-                            THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
-                        endif
-                    end do
-                endif
-                ! spherical aberration
-                if( cline%defined('cs') )then
-                    call os%set_all2single('cs', params%cs)
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'cs') )then
-                            write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
-                            THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
-                        endif
-                    end do
-                endif
-                ! fraction of amplitude contrast
-                if( cline%defined('fraca') )then
-                    call os%set_all2single('fraca', params%fraca)
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'fraca') )then
-                            write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
-                            THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
-                        endif
-                    end do
-                endif
-                ! phase-plate
-                if( cline%defined('phaseplate') )then
-                    call os%set_all2single('phaseplate', trim(params%phaseplate))
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'phaseplate') )then
-                            call os%set(i, 'phaseplate', 'no')
-                        endif
-                    end do
-                endif
-                call os%getter(1, 'phaseplate', phaseplate)
-                if( trim(phaseplate) .eq. 'yes' )then
-                    if( .not. os%isthere(1,'phshift') )then
-                        THROW_HARD('phaseplate .eq. yes requires phshift input, currently lacking; exec_update_particles')
-                    endif
-                endif
-                ! ctf flag
-                if( cline%defined('ctf') )then
-                    call os%set_all2single('ctf', trim(params%ctf))
-                else
-                    do i=1,ndatlines
-                        if( .not. os%isthere(i, 'ctf') )then
-                            call os%set(i, 'ctf', 'yes')
-                        endif
-                    end do
-                endif
-                call os%getter(1, 'ctf', ctfstr)
-                if( trim(ctfstr) .ne. 'no' )then
-                    if( .not. os%isthere(1,'dfx') )then
-                        THROW_HARD('ctf .ne. no requires dfx input, currently lacking; exec_update_particles')
-                    endif
-                endif
-            endif
-        endif
-
-        ! PROJECT FILE MANAGEMENT
-        call spproj%read(params%projfile)
-
-        ! UPDATE FIELDS
-        ! add stack if present
-        if( cline%defined('stk') )then
-            if( n_ori_inputs == 0 .and. trim(params%ctf) .eq. 'no' )then
-                ! get number of particles from stack
-                call find_ldim_nptcls(params%stk, lfoo, params%nptcls)
-                call os%new(params%nptcls)
-                call os%set_all2single('state', 1.0)
-            endif
-            call spproj%add_single_stk(params%stk, ctfvars, os)
-        endif
-        ! add list of stacks (stktab) if present
-        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
-
-        ! WRITE PROJECT FILE
-        call spproj%write
-        call simple_end('**** UPDATE_PARTICLES NORMAL STOP ****')
-    end subroutine exec_update_particles
-
-    !> for updating class-averages projects
-    subroutine exec_update_cavgs( self, cline )
-        class(update_cavgs_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        call params%new(cline)
-        if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
-        call spproj%add_cavgs2os_out(params%stk, params%smpd)
-        ! update project info
-        call spproj%update_projinfo( cline )
-        ! update computer environment
-        call spproj%update_compenv( cline )
-        ! WRITE PROJECT FILE
-        call spproj%write
-        call simple_end('**** UPDATE_CAVGS NORMAL STOP ****')
-    end subroutine exec_update_cavgs
 
 end module simple_commander_project
