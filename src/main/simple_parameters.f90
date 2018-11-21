@@ -837,10 +837,16 @@ contains
                 ! distributed workflows without invoking simple_private_exec
                 ! get next directory number
                 idir          = find_next_int_dir_prefix(self%cwd)
-                self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+
+                if( trim(self%prg) .eq. 'mkdir' )then
+                    self%exec_dir = int2str(idir)//'_'//trim(self%dir)
+                else
+                    self%exec_dir = int2str(idir)//'_'//trim(self%prg)
+                endif
                 ! make execution directory
                 call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
                 write(*,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
+                if( trim(self%prg) .eq. 'mkdir' ) return
                 ! change to execution directory directory
                 call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then

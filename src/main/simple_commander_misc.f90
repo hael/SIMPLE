@@ -24,6 +24,7 @@ public :: res_commander
 public :: shift_commander
 public :: stk_corr_commander
 public :: kstest_commander
+public :: mkdir_commander
 private
 #include "simple_local_flags.inc"
 
@@ -67,7 +68,10 @@ type, extends(commander_base) :: kstest_commander
   contains
     procedure :: execute       => exec_kstest
 end type kstest_commander
-
+type, extends(commander_base) :: mkdir_commander
+  contains
+    procedure :: execute       => exec_mkdir
+end type mkdir_commander
 
 contains
 
@@ -385,5 +389,12 @@ contains
             end subroutine read_nrs_dat
 
     end subroutine exec_kstest
+
+    subroutine exec_mkdir( self, cline )
+        class(mkdir_commander), intent(inout) :: self
+        class(cmdline),          intent(inout) :: cline
+        type(parameters) :: params
+        call params%new(cline)
+    end subroutine exec_mkdir
 
 end module simple_commander_misc

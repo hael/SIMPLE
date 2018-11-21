@@ -82,6 +82,9 @@ type(simulate_particles_commander)   :: xsimulate_particles
 type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
+! SYSTEM
+type(mkdir_commander) :: xmkdir
+
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
@@ -289,6 +292,12 @@ select case(prg)
     case( 'simulate_subtomogram' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xsimulate_subtomogram%execute(cline)
+
+    ! SYSTEM
+
+    case( 'mkdir' )
+        call cline%set('mkdir', 'yes')
+        call xmkdir%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

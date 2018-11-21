@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(63)
+type(simple_prg_ptr) :: prg_ptr_array(64)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -97,6 +97,7 @@ type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
+type(simple_program), target :: mkdir_
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
@@ -253,6 +254,7 @@ contains
         call new_make_oris
         call new_make_pickrefs
         call new_mask
+        call new_mkdir_
         call new_motion_correct
         call new_motion_correct_tomo
         call new_new_project
@@ -321,41 +323,42 @@ contains
         prg_ptr_array(26)%ptr2prg => make_oris
         prg_ptr_array(27)%ptr2prg => make_pickrefs
         prg_ptr_array(28)%ptr2prg => mask
-        prg_ptr_array(29)%ptr2prg => motion_correct
-        prg_ptr_array(30)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(31)%ptr2prg => new_project
-        prg_ptr_array(32)%ptr2prg => normalize_
-        prg_ptr_array(33)%ptr2prg => orisops
-        prg_ptr_array(34)%ptr2prg => oristats
-        prg_ptr_array(35)%ptr2prg => pick
-        prg_ptr_array(36)%ptr2prg => postprocess
-        prg_ptr_array(37)%ptr2prg => preprocess
-        prg_ptr_array(38)%ptr2prg => preprocess_stream
-        prg_ptr_array(39)%ptr2prg => print_fsc
-        prg_ptr_array(40)%ptr2prg => print_magic_boxes
-        prg_ptr_array(41)%ptr2prg => print_project_info
-        prg_ptr_array(42)%ptr2prg => print_project_field
-        prg_ptr_array(43)%ptr2prg => reproject
-        prg_ptr_array(44)%ptr2prg => reconstruct3D
-        prg_ptr_array(45)%ptr2prg => refine3D
-        prg_ptr_array(46)%ptr2prg => refine3D_init
-        prg_ptr_array(47)%ptr2prg => scale
-        prg_ptr_array(48)%ptr2prg => scale_project
-        prg_ptr_array(49)%ptr2prg => select_
-        prg_ptr_array(50)%ptr2prg => shift
-        prg_ptr_array(51)%ptr2prg => simulate_movie
-        prg_ptr_array(52)%ptr2prg => simulate_noise
-        prg_ptr_array(53)%ptr2prg => simulate_particles
-        prg_ptr_array(54)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(55)%ptr2prg => stack
-        prg_ptr_array(56)%ptr2prg => stackops
-        prg_ptr_array(57)%ptr2prg => symaxis_search
-        prg_ptr_array(58)%ptr2prg => symmetry_test
-        prg_ptr_array(59)%ptr2prg => tseries_track
-        prg_ptr_array(60)%ptr2prg => update_project
-        prg_ptr_array(61)%ptr2prg => vizoris
-        prg_ptr_array(62)%ptr2prg => volops
-        prg_ptr_array(63)%ptr2prg => cluster3d_init
+        prg_ptr_array(29)%ptr2prg => mkdir_
+        prg_ptr_array(30)%ptr2prg => motion_correct
+        prg_ptr_array(31)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(32)%ptr2prg => new_project
+        prg_ptr_array(33)%ptr2prg => normalize_
+        prg_ptr_array(34)%ptr2prg => orisops
+        prg_ptr_array(35)%ptr2prg => oristats
+        prg_ptr_array(36)%ptr2prg => pick
+        prg_ptr_array(37)%ptr2prg => postprocess
+        prg_ptr_array(38)%ptr2prg => preprocess
+        prg_ptr_array(39)%ptr2prg => preprocess_stream
+        prg_ptr_array(40)%ptr2prg => print_fsc
+        prg_ptr_array(41)%ptr2prg => print_magic_boxes
+        prg_ptr_array(42)%ptr2prg => print_project_info
+        prg_ptr_array(43)%ptr2prg => print_project_field
+        prg_ptr_array(44)%ptr2prg => reproject
+        prg_ptr_array(45)%ptr2prg => reconstruct3D
+        prg_ptr_array(46)%ptr2prg => refine3D
+        prg_ptr_array(47)%ptr2prg => refine3D_init
+        prg_ptr_array(48)%ptr2prg => scale
+        prg_ptr_array(49)%ptr2prg => scale_project
+        prg_ptr_array(50)%ptr2prg => select_
+        prg_ptr_array(51)%ptr2prg => shift
+        prg_ptr_array(52)%ptr2prg => simulate_movie
+        prg_ptr_array(53)%ptr2prg => simulate_noise
+        prg_ptr_array(54)%ptr2prg => simulate_particles
+        prg_ptr_array(55)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(56)%ptr2prg => stack
+        prg_ptr_array(57)%ptr2prg => stackops
+        prg_ptr_array(58)%ptr2prg => symaxis_search
+        prg_ptr_array(59)%ptr2prg => symmetry_test
+        prg_ptr_array(60)%ptr2prg => tseries_track
+        prg_ptr_array(61)%ptr2prg => update_project
+        prg_ptr_array(62)%ptr2prg => vizoris
+        prg_ptr_array(63)%ptr2prg => volops
+        prg_ptr_array(64)%ptr2prg => cluster3d_init
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -421,6 +424,8 @@ contains
                 ptr2prg => make_pickrefs
             case('mask')
                 ptr2prg => mask
+            case('mkdir')
+                ptr2prg => mkdir_
             case('motion_correct')
                 ptr2prg => motion_correct
             case('motion_correct_tomo')
@@ -540,6 +545,7 @@ contains
         write(*,'(A)') make_oris%name
         write(*,'(A)') make_pickrefs%name
         write(*,'(A)') mask%name
+        write(*,'(A)') mkdir_%name
         write(*,'(A)') new_project%name
         write(*,'(A)') normalize_%name
         write(*,'(A)') orisops%name
@@ -1719,6 +1725,31 @@ contains
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
+
+    subroutine new_mkdir_
+        ! PROGRAM SPECIFICATION
+        call mkdir_%new(&
+        &'mkdir',&                                                       ! name
+        &'Make directory',&                                              ! descr_short
+        &'is a program for making an automatically numbered directory',& ! descr_long
+        &'simple_exec',&                                                 ! executable
+        &0, 1, 0, 0, 0, 0, 0, .false.)                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call mkdir_%set_input('parm_ios', 1, 'dir', 'dir', 'Name of directory to create', 'Name of directory name to create(e.g. X_dir/)', 'e.g. X_dir/', .true., ' ')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_mkdir_
 
     subroutine new_motion_correct
         ! PROGRAM SPECIFICATION
