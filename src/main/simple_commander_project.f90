@@ -124,7 +124,7 @@ contains
         type(sp_project) :: spproj
         call params%new(cline, silent=.true.)
         call spproj%read_non_data_segments(params%projfile)
-        call spproj%print_info
+        call spproj%print_info(params%projfile)
         call spproj%kill
         ! no additional printing
     end subroutine exec_print_project_info
@@ -314,7 +314,7 @@ contains
         ! update computer environment
         call spproj%update_compenv( cline )
         ! write the last bit of the project file
-        call spproj%write_non_data_segments
+        call spproj%write_non_data_segments(trim(params%projfile))
         ! no printing for this program
     end subroutine exec_update_project
 

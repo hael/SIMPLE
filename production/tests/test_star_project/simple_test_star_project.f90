@@ -232,7 +232,7 @@ contains
         ! write/read
         call myproject%write('myproject.simple')
         call myproject%read('myproject.simple')
-        call myproject%print_info
+        call myproject%print_info('myproject.simple')
         call myproject%write_segment2txt('stk', 'myproject_os_stk_2.txt')
 
         ! generate 3 algndocs for testing merging

@@ -462,7 +462,7 @@ contains
         ! communicate selection to project
         call build%spproj%map_cavgs_selection(states)
         ! this needs to be a full write as many segments are updated
-        call build%spproj%write()
+        call build%spproj%write
         ! end gracefully
         call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
     end subroutine exec_map_cavgs_selection
@@ -743,7 +743,7 @@ contains
             endif
         enddo
         ! write project if neeeded
-        if( spproj_modified )call spproj%write()
+        if( spproj_modified ) call spproj%write_segment_inside(params_glob%oritype)
         call spproj%kill
         ! sanity checking
         if( nmics == 0 )     THROW_HARD('No particles to extract! exec_extract')
@@ -859,7 +859,7 @@ contains
             call boxfile%kill()
         enddo
         ! we do a full write here as multiple fields are updated
-        call build%spproj%write()
+        call build%spproj%write
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains

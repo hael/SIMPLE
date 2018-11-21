@@ -59,7 +59,7 @@ integer, parameter :: MITSREF       = 30 !< max # iterations of refinement optim
 integer, parameter :: MITSREF_ANISO = 3 !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2. !< small initial shift to blur out fixed pattern noise
 logical, parameter :: DEBUG_HERE    = .false.
-logical, parameter :: DEBUG_ANISO   = .true.
+logical, parameter :: DEBUG_ANISO   = .false.
 
 contains
 

@@ -257,6 +257,7 @@ contains
             'CtfMaxResolution   ' /)
         call self%doc%write(filename, sp, labels)
     end subroutine export_ctf_estimation
+
     subroutine import_ctf_estimation (self, spproj, params, cline, filename)
         use simple_sp_project, only: oritype2segment
         class(star_project), intent(inout) :: self
@@ -374,7 +375,7 @@ contains
         ! !     end do
         ! ! endif
 
-        call spproj%print_info
+        call spproj%print_info(params%projfile)
         call spproj%write
         call spproj%kill
 
@@ -1037,7 +1038,7 @@ contains
         call spproj%update_compenv( cline )
 
         !! write spproj in commander_star; import_starproject
-        call spproj%print_info
+        call spproj%print_info(params%projfile)
         call spproj%write
         call spproj%kill
 
@@ -1220,7 +1221,7 @@ contains
         ! add list of stacks (stktab) if present
 !        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
 
-        call spproj%print_info
+        call spproj%print_info(params%projfile)
         call spproj%write
         call spproj%kill
 

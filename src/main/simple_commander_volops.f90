@@ -596,7 +596,7 @@ contains
         call symaxis4write%set_ori(1, symaxis)
         call symaxis4write%write(SYMAXISTAB, [1,1])
         if( cline%defined('projfile') )then
-            call build%spproj%read
+            call build%spproj%read(params%projfile)
             if( .not. build%spproj%is_virgin_field(params%oritype) )then
                 ! transfer shift and symmetry to orientations
                 call syme%new(params%pgrp)

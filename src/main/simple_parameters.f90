@@ -183,6 +183,7 @@ type :: parameters
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
+    character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG)) :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN)) :: cc_objfun=OBJFUN_CC    !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
@@ -783,10 +784,21 @@ contains
         if(len_trim(self%executable) == 0) THROW_HARD('get_command_argument failed; new')
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
+        ! look for the last previous execution directory and get next directory number
+        if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
+        idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         ! look for a project file
-        call simple_list_files('*.simple', sp_files, self%part)
-        if( allocated(sp_files) )then
-            nsp_files = size(sp_files)
+        if( .not.cline%defined('projfile') )then
+            if( allocated(self%last_prev_dir) )then
+                call simple_list_files(self%last_prev_dir//'/*.simple', sp_files, self%part)
+            else
+                call simple_list_files('*.simple', sp_files, self%part)
+            endif
+            if( allocated(sp_files) )then
+                nsp_files = size(sp_files)
+            else
+                nsp_files = 0
+            endif
         else
             nsp_files = 0
         endif
@@ -798,7 +810,7 @@ contains
                 ! so that distributed execution can deal with multiple project files (eg scaling)
                 ! and simple_exec can also not require a project file
                 if( nsp_files > 1 )then
-                    write(*,*) 'Multiple *simple project files detected in ', trim(self%cwd)
+                    write(*,*) 'Multiple *simple project files detected'
                     do i=1,nsp_files
                         write(*,*) trim(sp_files(i))
                     end do
@@ -819,13 +831,13 @@ contains
             if( .not. cline%defined('projfile') ) self%projfile = trim(sp_files(1))
             self%projname = get_fbody(basename(self%projfile), 'simple')
             ! update command line so that prototype copy in distr commanders transfers the info
-            if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projfile))
+            if( .not. cline%defined('projfile') ) call cline%set('projfile', trim(self%projname)//'.simple')
             if( .not. cline%defined('projname') ) call cline%set('projname', trim(self%projname))
         endif
         ! put a full path on projfile
         if( self%projfile .ne. '' )then
             if( file_exists(self%projfile) )then
-                absname = simple_abspath(self%projfile,errmsg='simple_parameters::new 1')
+                absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 1')
                 self%projfile = trim(absname)
                 self%projname = get_fbody(basename(self%projfile), 'simple')
             endif
@@ -833,11 +845,6 @@ contains
         ! execution directory
         if( self%mkdir .eq. 'yes' )then
             if( associated(self%ptr2prg) .and. .not. str_has_substr(self%executable,'private') )then
-                ! the associated(self%ptr2prg) condition required for commanders executed within
-                ! distributed workflows without invoking simple_private_exec
-                ! get next directory number
-                idir          = find_next_int_dir_prefix(self%cwd)
-
                 if( trim(self%prg) .eq. 'mkdir' )then
                     self%exec_dir = int2str(idir)//'_'//trim(self%dir)
                 else
@@ -845,12 +852,12 @@ contains
                 endif
                 ! make execution directory
                 call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
-                write(*,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
                 if( trim(self%prg) .eq. 'mkdir' ) return
+                write(*,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
                 ! change to execution directory directory
                 call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then
-                    ! copy the project file from upstairs
+                    ! copy the project file
                     call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
@@ -911,40 +918,35 @@ contains
         if( cline%defined('oritype') )then
             ! this determines the spproj_iseg
             select case(trim(self%oritype))
-            case('mic')
-                self%spproj_iseg = MIC_SEG
-            case('stk')
-                self%spproj_iseg = STK_SEG
-            case('ptcl2D')
-                self%spproj_iseg = PTCL2D_SEG
-            case('cls2D')
-                self%spproj_iseg = CLS2D_SEG
-            case('cls3D')
-                self%spproj_iseg = CLS3D_SEG
-            case('ptcl3D')
-                self%spproj_iseg = PTCL3D_SEG
-            case('out')
-                self%spproj_iseg = OUT_SEG
-            case('projinfo')
-                self%spproj_iseg = PROJINFO_SEG
-            case('jobproc')
-                self%spproj_iseg = JOBPROC_SEG
-            case('compenv')
-                self%spproj_iseg = COMPENV_SEG
-            case DEFAULT
-                write(*,*) 'oritype: ', trim(self%oritype)
-                THROW_HARD('unsupported oritype; new')
+                case('mic')
+                    self%spproj_iseg = MIC_SEG
+                case('stk')
+                    self%spproj_iseg = STK_SEG
+                case('ptcl2D')
+                    self%spproj_iseg = PTCL2D_SEG
+                case('cls2D')
+                    self%spproj_iseg = CLS2D_SEG
+                case('cls3D')
+                    self%spproj_iseg = CLS3D_SEG
+                case('ptcl3D')
+                    self%spproj_iseg = PTCL3D_SEG
+                case('out')
+                    self%spproj_iseg = OUT_SEG
+                case('projinfo')
+                    self%spproj_iseg = PROJINFO_SEG
+                case('jobproc')
+                    self%spproj_iseg = JOBPROC_SEG
+                case('compenv')
+                    self%spproj_iseg = COMPENV_SEG
+                case DEFAULT
+                    write(*,*) 'oritype: ', trim(self%oritype)
+                    THROW_HARD('unsupported oritype; new')
             end select
         else
             self%oritype     = 'ptcl3D'
             self%spproj_iseg = PTCL3D_SEG
         endif
         ! take care of nptcls etc.
-        ! project is in charge
-        if( cline%defined('projname') )then
-            self%projfile = trim(self%projname)//'.simple'
-            call cline%set('projfile', trim(self%projfile))
-        endif
         if( file_exists(trim(self%projfile)) )then ! existence should be the only requirement here (not sp_required)
             ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file

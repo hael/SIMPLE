@@ -36,7 +36,6 @@ type binoris
     procedure          :: close
     procedure, private :: read_header
     procedure          :: write_header
-    procedure          :: print_header
     procedure, private :: write_segment_inside_1
     procedure, private :: write_segment_inside_2
     generic            :: write_segment_inside => write_segment_inside_1, write_segment_inside_2
@@ -158,19 +157,6 @@ contains
         write(unit=self%funit,pos=1,iostat=io_status) self%header
         if( io_status .ne. 0 ) call fileiochk('binoris :: write_header, ERROR writing header bytes ', io_status)
     end subroutine write_header
-
-    subroutine print_header( self )
-        class(binoris), intent(in) :: self
-        integer(kind(ENUM_ORISEG))    :: isegment
-        do isegment=1,MAX_N_SEGMENTS
-            write(*,*) '*****  HEADER, segment: ', isegment
-            write(*,*) 'fromto(1)         : ', self%header(isegment)%fromto(1)
-            write(*,*) 'fromto(2)         : ', self%header(isegment)%fromto(2)
-            write(*,*) 'n_bytes_per_record: ', self%header(isegment)%n_bytes_per_record
-            write(*,*) 'n_records         : ', self%header(isegment)%n_records
-            write(*,*) 'first_data_byte   : ', self%header(isegment)%first_data_byte
-        end do
-    end subroutine print_header
 
     subroutine write_segment_inside_1( self, isegment, os, fromto )
         use simple_oris,   only: oris

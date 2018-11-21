@@ -810,17 +810,18 @@ contains
         if(present(status)) status= stat
     end function simple_list_dirs
 
-    function find_next_int_dir_prefix( dir2list ) result( next_int_dir_prefix )
+    function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
         use simple_strings, only: char_is_a_number, map_str_nrs, str2int
-        character(len=*), intent(in)       :: dir2list
+        character(len=*),                        intent(in)  :: dir2list
+        character(len=:), allocatable, optional, intent(out) :: last_prev_dir
         character(len=STDLEN)              :: str
         character(len=STDLEN), allocatable :: dirs(:)
         logical,               allocatable :: nrmap(:)
         integer,               allocatable :: dirinds(:)
         integer :: i, j, last_nr_ind, io_stat
-        integer :: next_int_dir_prefix, ndirs
-        dirs  = simple_list_dirs(dir2list)
-        last_nr_ind=1
+        integer :: next_int_dir_prefix, ndirs, loc(1)
+        dirs = simple_list_dirs(dir2list)
+        last_nr_ind = 1
         if( allocated(dirs) )then
             ndirs = size(dirs)
         else
@@ -843,7 +844,9 @@ contains
             endif
         end do
         if( any(dirinds > 0) )then
-            next_int_dir_prefix =  maxval(dirinds) + 1
+            loc = maxloc(dirinds)
+            next_int_dir_prefix = dirinds(loc(1)) + 1
+            if( present(last_prev_dir) ) allocate(last_prev_dir, source=trim(dirs(loc(1))))
         else
             next_int_dir_prefix = 1
         endif
@@ -863,7 +866,7 @@ contains
         else
             tmpfile = '__simple_filelist__'
         endif
-        cmd     = 'ls '//trim(pattern)//' > '//trim(tmpfile)
+        cmd = 'ls '//trim(pattern)//' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
         if( allocated(list) ) deallocate(list)

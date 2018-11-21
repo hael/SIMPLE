@@ -908,11 +908,12 @@ contains
         integer,                    intent(in)    :: nparts
         logical,                    intent(in)    :: update_parent
         character(len=*), optional, intent(in)    :: dir
-        character(len=4),   parameter :: EXT = '.mrc'
+        character(len=*), parameter   :: EXT = '.mrc'
         type(sp_project)              :: parent_proj
         type(image)                   :: img
         type(ori)                     :: orig_stk
-        character(len=:), allocatable :: stk, tmp_dir, stkpart, dest_stkpart, projname
+        character(len=:), allocatable :: stk, tmp_dir, stkpart
+        character(len=:), allocatable :: dest_stkpart, projname
         character(len=STDLEN) :: cwd
         integer :: parts(nparts,2), ind_in_stk, iptcl, cnt, istk, box, n_os_stk
         integer :: nptcls, nptcls_part, numlen, status
@@ -1920,7 +1921,7 @@ contains
             call self%add_scale_tag
         endif
         ! save
-        call self%write()
+        call self%write
         ! command line for scaling
         call cline_scale%set('newbox', real(box_sc))
         if( cline%defined('nthr') )   call cline_scale%set('nthr', cline%get_rarg('nthr'))
@@ -2059,33 +2060,23 @@ contains
 
     subroutine print_info( self, fname )
         use simple_ansi_ctrls
-        class(sp_project),          intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
         character(len=:),      allocatable :: projfile, record
         type(binoris_seginfo), allocatable :: hinfo(:)
         integer,               allocatable :: seginds(:)
         integer :: i
-        if( present(fname) )then
-            if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
-            endif
-            projfile = trim(fname)
-        else
-            call self%projinfo%getter(1, 'projfile', projfile)
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: print_info')
         endif
+        projfile = trim(fname)
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             call self%bos%get_segments_info(seginds, hinfo)
-
-
-
-
-
-
             if( allocated(hinfo) )then
                 do i = 1,size(hinfo)
                     call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
-                    write(*,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' IS OF ORITYPE: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
+                    write(*,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' of type: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
                     write(*,'(a)') format_str(segment2info(seginds(i), hinfo(i)%n_records), C_ITALIC)
                     write(*,'(a)') format_str('first record:', C_BOLD)//' '//trim(record)
                 end do
@@ -2099,18 +2090,14 @@ contains
     ! readers
 
     subroutine read( self, fname )
-        class(sp_project),          intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
         character(len=:), allocatable :: projfile
         integer :: isegment
-        if( present(fname) )then
-            if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('format of: '//trim(fname)//' not supported; read')
-            endif
-            projfile = trim(fname)
-        else
-            call self%projinfo%getter(1, 'projfile', projfile)
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('format of: '//trim(fname)//' not supported; read')
         endif
+        projfile = trim(fname)
         if( .not. file_exists(trim(projfile)) )then
             THROW_HARD('file: '// trim(projfile)//' does not exist; read')
         endif
@@ -2122,18 +2109,14 @@ contains
     end subroutine read
 
     subroutine read_non_data_segments( self, fname )
-        class(sp_project),          intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
         character(len=:), allocatable :: projfile
         integer :: iseg
-        if( present(fname) )then
-            if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; read_non_data_segments')
-            endif
-            projfile = trim(fname)
-        else
-            call self%projinfo%getter(1, 'projfile', projfile)
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('file format of: '//trim(fname)//' not supported; read_non_data_segments')
         endif
+        projfile = trim(fname)
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG
@@ -2210,9 +2193,9 @@ contains
     end subroutine read_segment
 
     subroutine segreader( self, isegment, only_ctfparams_state_eo )
-        class(sp_project), intent(inout)                :: self
+        class(sp_project),          intent(inout) :: self
         integer(kind(ENUM_ORISEG)), intent(in)    :: isegment
-        logical, optional, intent(in)    :: only_ctfparams_state_eo
+        logical, optional,          intent(in)    :: only_ctfparams_state_eo
         integer :: n
         n = self%bos%get_n_records(isegment)
         select case(isegment)
@@ -2306,18 +2289,14 @@ contains
     end subroutine write_segment_inside
 
     subroutine write_non_data_segments( self, fname )
-        class(sp_project),          intent(inout) :: self
-        character(len=*), optional, intent(in)    :: fname
+        class(sp_project), intent(inout) :: self
+        character(len=*),  intent(in)    :: fname
         character(len=:), allocatable :: projfile
         integer :: iseg
-        if( present(fname) )then
-            if( fname2format(fname) .ne. 'O' )then
-                THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write_non_data_segments')
-            endif
-            projfile = trim(fname)
-        else
-            call self%projinfo%getter(1, 'projfile', projfile)
+        if( fname2format(fname) .ne. 'O' )then
+            THROW_HARD('file format of: '//trim(fname)//' not supported; sp_project :: write_non_data_segments')
         endif
+        projfile = trim(fname)
         if( file_exists(projfile) )then
             call self%bos%open(projfile)
             do iseg=11,MAXN_OS_SEG

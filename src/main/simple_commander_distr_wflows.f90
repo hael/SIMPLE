@@ -718,7 +718,7 @@ contains
             write(*,'(A,I6)')'>>> ITERATION ', iter
             write(*,'(A)')   '>>>'
             if( have_oris .or. iter > params%startit )then
-                call build%spproj%read()
+                call build%spproj%read(params%projfile)
                 if( params%refine .eq. 'snhc' )then
                     ! update stochastic neighborhood size if corr is not improving
                     corr_prev = corr
@@ -840,7 +840,7 @@ contains
             if( iter >= params%maxits ) converged = .true.
             if( converged )then
                 ! safest to write the whole thing here as multiple fields updated
-                call build%spproj%write()
+                call build%spproj%write
                 exit ! main loop
             endif
             ! ITERATION DEPENDENT UPDATES
