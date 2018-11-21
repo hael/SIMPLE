@@ -2933,7 +2933,7 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call update_project%set_input('parm_ios', 1, projname)
+        call update_project%set_input('parm_ios', 1, projfile)
         call update_project%set_input('parm_ios', 2, user_email)
         ! alternative inputs
         ! <empty>

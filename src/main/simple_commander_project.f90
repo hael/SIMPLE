@@ -111,7 +111,7 @@ contains
             call spproj%read(params%projfile)
         endif
         call spproj%set_sp_oris(params%oritype, os)
-        call spproj%write(params%projfile)
+        call spproj%write_segment_inside(params%oritype, params%projfile)
         call spproj%kill
         call simple_end('**** TXT2PROJECT NORMAL STOP ****')
     end subroutine exec_txt2project
@@ -320,16 +320,8 @@ contains
         type(sp_project) :: spproj
         integer          :: iostatus
         call params%new(cline)
-        if( .not. file_exists(PATH_HERE//trim(params%projname)) )then
-            write(*,*) 'project directory: ', trim(params%projname), ' does not exist in cwd: ', trim(params%cwd)
-            write(*,*) 'Use program new_project to create a new project from scratch'
-            THROW_HARD('ABORTING... exec_update_project')
-        endif
-        ! change to project directory
-        call simple_chdir(filepath(PATH_HERE,trim(params%projname)),errmsg="commander_project :: update_project;")
         ! read relevant segments
-        call spproj%read_segment('projinfo', trim(params%projfile) )
-        call spproj%read_segment('compenv',  trim(params%projfile) )
+        call spproj%read_non_data_segments(trim(params%projfile))
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment
