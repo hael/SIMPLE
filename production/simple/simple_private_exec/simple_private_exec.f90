@@ -73,12 +73,11 @@ type(stk_corr_commander)             :: xstk_corr
 type(kstest_commander)               :: xkstst
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
-type(rotmats2oris_commander)              :: xrotmats2oris
-type(txt2project_commander)               :: xtxt2project
-type(project2txt_commander)               :: xproject2txt
-type(print_project_vals_commander)        :: xprint_project_vals
-type(update_project_stateflags_commander) :: xupdate_project_stateflags
-type(multivariate_zscore_commander)       :: xmultizscore
+type(rotmats2oris_commander)         :: xrotmats2oris
+type(txt2project_commander)          :: xtxt2project
+type(project2txt_commander)          :: xproject2txt
+type(print_project_vals_commander)   :: xprint_project_vals
+type(multivariate_zscore_commander)  :: xmultizscore
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -758,12 +757,6 @@ select case(prg)
         keys_required(3) = 'oritype'
         call cline%parse_oldschool(keys_required(:3))
         call xprint_project_vals%execute(cline)
-    case( 'update_project_stateflags' )
-        keys_required(1) = 'projfile'
-        keys_required(2) = 'infile'
-        keys_required(3) = 'oritype'
-        call cline%parse_oldschool(keys_required(:3))
-        call xupdate_project_stateflags%execute(cline)
     case( 'multivariate_zscore' )
         keys_required(1) = 'keys'
         keys_required(2) = 'projfile'

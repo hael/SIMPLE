@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(64)
+type(simple_prg_ptr) :: prg_ptr_array(65)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -116,6 +116,7 @@ type(simple_program), target :: print_project_info
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
+type(simple_program), target :: report_selection
 type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
@@ -274,6 +275,7 @@ contains
         call new_reconstruct3D
         call new_refine3D
         call new_refine3D_init
+        call new_report_selection
         call new_scale
         call new_scale_project
         call new_select_
@@ -342,23 +344,24 @@ contains
         prg_ptr_array(45)%ptr2prg => reconstruct3D
         prg_ptr_array(46)%ptr2prg => refine3D
         prg_ptr_array(47)%ptr2prg => refine3D_init
-        prg_ptr_array(48)%ptr2prg => scale
-        prg_ptr_array(49)%ptr2prg => scale_project
-        prg_ptr_array(50)%ptr2prg => select_
-        prg_ptr_array(51)%ptr2prg => shift
-        prg_ptr_array(52)%ptr2prg => simulate_movie
-        prg_ptr_array(53)%ptr2prg => simulate_noise
-        prg_ptr_array(54)%ptr2prg => simulate_particles
-        prg_ptr_array(55)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(56)%ptr2prg => stack
-        prg_ptr_array(57)%ptr2prg => stackops
-        prg_ptr_array(58)%ptr2prg => symaxis_search
-        prg_ptr_array(59)%ptr2prg => symmetry_test
-        prg_ptr_array(60)%ptr2prg => tseries_track
-        prg_ptr_array(61)%ptr2prg => update_project
-        prg_ptr_array(62)%ptr2prg => vizoris
-        prg_ptr_array(63)%ptr2prg => volops
-        prg_ptr_array(64)%ptr2prg => cluster3d_init
+        prg_ptr_array(48)%ptr2prg => report_selection
+        prg_ptr_array(49)%ptr2prg => scale
+        prg_ptr_array(50)%ptr2prg => scale_project
+        prg_ptr_array(51)%ptr2prg => select_
+        prg_ptr_array(52)%ptr2prg => shift
+        prg_ptr_array(53)%ptr2prg => simulate_movie
+        prg_ptr_array(54)%ptr2prg => simulate_noise
+        prg_ptr_array(55)%ptr2prg => simulate_particles
+        prg_ptr_array(56)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(57)%ptr2prg => stack
+        prg_ptr_array(58)%ptr2prg => stackops
+        prg_ptr_array(59)%ptr2prg => symaxis_search
+        prg_ptr_array(60)%ptr2prg => symmetry_test
+        prg_ptr_array(61)%ptr2prg => tseries_track
+        prg_ptr_array(62)%ptr2prg => update_project
+        prg_ptr_array(63)%ptr2prg => vizoris
+        prg_ptr_array(64)%ptr2prg => volops
+        prg_ptr_array(65)%ptr2prg => cluster3d_init
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -464,6 +467,8 @@ contains
                 ptr2prg => refine3D
             case('refine3D_init')
                 ptr2prg => refine3D_init
+            case('report_selection')
+                ptr2prg => report_selection
             case('scale')
                 ptr2prg => scale
             case('scale_project')
@@ -555,6 +560,7 @@ contains
         write(*,'(A)') print_magic_boxes%name
         write(*,'(A)') print_project_info%name
         write(*,'(A)') print_project_field%name
+        write(*,'(A)') report_selection%name
         write(*,'(A)') reproject%name
         write(*,'(A)') select_%name
         write(*,'(A)') shift%name
@@ -754,7 +760,7 @@ contains
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
         call cluster2D%new(&
-        &'cluster2D',& ! name
+        &'cluster2D',&                                                          ! name
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
@@ -811,7 +817,7 @@ contains
     subroutine new_cluster2D_stream
         ! PROGRAM SPECIFICATION
         call cluster2D_stream%new(&
-        &'cluster2D_stream',& ! name
+        &'cluster2D_stream',&                                                                                             ! name
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                                                            ! executable
@@ -862,7 +868,7 @@ contains
     subroutine new_cluster3D
         ! PROGRAM SPECIFICATION
         call cluster3D%new(&
-        &'cluster3D',& ! name
+        &'cluster3D',&                                                             ! name
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
@@ -960,8 +966,8 @@ contains
         &'cluster3D_init',&                                                ! name
         &'cluster 3D initialization',&                                     ! descr_short
         &'is a distributed workflow based on probabilistic projection matching &
-        &for initialization of 3D heterogeneity analysis by cluster3D ',&   ! descr_long
-        &'simple_distr_exec',&                                              ! executable
+        &for initialization of 3D heterogeneity analysis by cluster3D ',&  ! descr_long
+        &'simple_distr_exec',&                                             ! executable
         &0, 1, 0, 4, 3, 3, 2, .true.)                                      ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -1148,7 +1154,7 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 2, 0, 10, 0, 1, .false.)                ! # entries in each group, requires sp_project
+        &2, 1, 2, 0, 10, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
@@ -1213,7 +1219,7 @@ contains
         &'gen_pspecs_and_thumbs', &                                              ! name
         &'Motion correction of movies',&                                         ! descr_short
         &'is a distributed workflow for generating power spectra and thumbnails&
-        & for imported integrated movies',&                                       ! descr_long
+        & for imported integrated movies',&                                      ! descr_long
         &'simple_distr_exec',&                                                   ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1237,7 +1243,7 @@ contains
     subroutine new_info_image
         ! PROGRAM SPECIFICATION
         call info_image%new(&
-        &'info_image', & ! name
+        &'info_image', &                                                                       ! name
         &'Print header information',&                                                          ! descr_short
         &'is a program for printing header information in MRC and SPIDER stacks and volumes',& ! descr_long
         &'simple_exec',&                                                                       ! executable
@@ -1263,7 +1269,7 @@ contains
     subroutine new_info_stktab
         ! PROGRAM SPECIFICATION
         call info_stktab%new(&
-        &'info_stktab', & ! name
+        &'info_stktab', &                                                        ! name
         &'Print stktab information',&                                            ! descr_short
         &'is a program for printing information about stktab (list of stacks)',& ! descr_long
         &'simple_exec',&                                                         ! executable
@@ -1506,8 +1512,8 @@ contains
         &'export_starproject',&                                       ! name
         &'Import STAR project ',&                                     ! descr_short
         &'is a program for importing STAR-formatted EM project files to the project and saving as SIMPLE project',&
-        &'simple_exec',&                                            ! executable
-        &0, 2, 0, 0, 0, 0, 0, .true.)                             ! # entries in each group, requires sp_project
+        &'simple_exec',&                                              ! executable
+        &0, 2, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1616,7 +1622,7 @@ contains
         ! PROGRAM SPECIFICATION
         call make_oris%new(&
         &'make_oris',&                       ! name
-        &'Make orientations',&           ! descr_short
+        &'Make orientations',&               ! descr_short
         &'is a program for making SIMPLE orientation files. Make_oris generates random Euler angles e1.in.[0,360], e2.in.[0,180] '&
         &'and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number '&
         &'> 0, the shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the orientations '&
@@ -1682,12 +1688,12 @@ contains
     subroutine new_mask
         ! PROGRAM SPECIFICATION
         call mask%new(&
-        &'mask',& ! name
+        &'mask',&                                                        ! name
         &'Mask images/volumes',&                                         ! descr_short
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
-        & falloff, set msk to the radius in pixels',&                         ! descr_long
-        &'simple_exec',&                                                      ! executable
-        &0, 3, 2, 1, 1,10, 1, .false.)                                        ! # entries in each group, requires sp_project
+        & falloff, set msk to the radius in pixels',&                    ! descr_long
+        &'simple_exec',&                                                 ! executable
+        &0, 3, 2, 1, 1,10, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1888,7 +1894,7 @@ contains
     subroutine new_pick
         ! PROGRAM SPECIFICATION
         call pick%new(&
-        &'pick', & ! name
+        &'pick', &                                                         ! name
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
@@ -1917,8 +1923,8 @@ contains
     subroutine new_pick_extract_stream
         ! PROGRAM SPECIFICATION
         call pick_extract_stream%new(&
-        &'pick_extract_stream', & ! name
-        &'Template-based particle picking and extraction in streaming mode',&                               ! descr_short
+        &'pick_extract_stream', &                                          ! name
+        &'Template-based particle picking and extraction in streaming mode',& ! descr_short
         &'is a distributed workflow for template-based particle picking and extraction in streaming mode',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
         &1, 4, 0, 2, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
@@ -1949,7 +1955,7 @@ contains
     subroutine new_postprocess
         ! PROGRAM SPECIFICATION
         call postprocess%new(&
-        &'postprocess',& ! name
+        &'postprocess',&                                                      ! name
         &'Post-processing of volume',&                                        ! descr_short
         &'is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot',& ! descr_long
         &'simple_exec',&                                                      ! executable
@@ -1991,7 +1997,7 @@ contains
     subroutine new_preprocess
         ! PROGRAM SPECIFICATION
         call preprocess%new(&
-        &'preprocess', & ! name
+        &'preprocess', &                                                                    ! name
         &'Preprocessing',&                                                                  ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
@@ -2050,7 +2056,7 @@ contains
     subroutine new_preprocess_stream
         ! PROGRAM SPECIFICATION
         call preprocess_stream%new(&
-        &'preprocess_stream', & ! name
+        &'preprocess_stream', &                                                             ! name
         &'Preprocessing in streaming mode',&                                                ! descr_short
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
@@ -2224,8 +2230,8 @@ contains
     subroutine new_reproject
         ! PROGRAM SPECIFICATION
         call reproject%new(&
-        &'reproject',&                           ! name
-        &'Re-project volume',&                    ! descr_short
+        &'reproject',&                         ! name
+        &'Re-project volume',&                 ! descr_short
         &'is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or &
         &MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections &
         &are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. &
@@ -2303,8 +2309,8 @@ contains
         &'inputted, the orientations are rotated correspondingly. If you input state, '&
         &'only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. '&
         &'If zero=yes, then the shifts are zeroed',&
-        &'simple_exec',&                       ! executable
-        &0, 19, 0, 0, 0, 0, 0, .false.)        ! # entries in each group, requires sp_project
+        &'simple_exec',&                  ! executable
+        &0, 19, 0, 0, 0, 0, 0, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2356,7 +2362,7 @@ contains
         &'tables (oritab and oritab2) are inputted, statistics of the distances between the orientations '&
         &'in the two documents are provided',&
         &'simple_exec',&                          ! executable
-        &0, 9, 0, 0, 0, 0, 1, .false.)           ! # entries in each group, requires sp_project
+        &0, 9, 0, 0, 0, 0, 1, .false.)            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2422,7 +2428,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15, 7, 5, 2, .true.)                                                              ! # entries in each group
+        &1, 0, 0, 15, 7, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2476,11 +2482,11 @@ contains
     subroutine new_refine3D_init
         ! PROGRAM SPECIFICATION
         call refine3D_init%new(&
-        &'refine3D_init',& ! name
+        &'refine3D_init',&                                                                                     ! name
         &'Random initialisation of 3D refinement',&                                                            ! descr_short
         &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
         &'simple_distr_exec',&                                                                                 ! executable
-        &0, 0, 0, 3, 2, 2, 2, .true.)                                                                          ! # entries in each group
+        &0, 0, 0, 3, 2, 2, 2, .true.)                                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2504,14 +2510,41 @@ contains
         call refine3D_init%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_init
 
+    subroutine new_report_selection
+        ! PROGRAM SPECIFICATION
+        call report_selection%new(&
+        &'report_selection',&                                                           ! name
+        &'Reports external selection through state 0/1 tags to project',&               ! descr_short
+        &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
+        &'simple_distr_exec',&                                                          ! executable
+        &0, 2, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call report_selection%set_input('parm_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
+        &'give .txt selection file', .true., '')
+        call report_selection%set_input('parm_ios', 2, oritype)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_report_selection
+
     subroutine new_scale
         ! PROGRAM SPECIFICATION
         call scale%new(&
-        &'scale', & ! name
+        &'scale', &                                                                             ! name
         &'Re-scaling MRC & SPIDER stacks and volumes',&                                         ! descr_short
         &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
-        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group
+        &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2544,11 +2577,11 @@ contains
     subroutine new_scale_project
         ! PROGRAM SPECIFICATION
         call scale_project%new(&
-        &'scale_project', & ! name
+        &'scale_project', &                                                                ! name
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
         &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
-        &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group
+        &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2574,7 +2607,7 @@ contains
         &'Select images',&                                  ! descr_short
         &'is a program for selecting files based on image correlation matching',& ! descr_long
         &'simple_exec',&                                    ! executable
-        &8, 0, 0, 0, 0, 0, 1, .false.)                      ! # entries in each group
+        &8, 0, 0, 0, 0, 0, 1, .false.)                      ! # entries in each group, requires sp_project
         ! TEMPLATE
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
@@ -2607,17 +2640,17 @@ contains
         &'Shift images to rotational origin',&                                      ! descr_short
         &'is a program for shifting a stack according to origin shifts in oritab',& ! descr_long
         &'simple_exec',&                                                            ! executable
-        &3, 3, 0, 0, 0, 0, 1, .false.)                                              ! # entries in each group
+        &2, 4, 0, 0, 0, 0, 1, .false.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call shift%set_input('img_ios', 1, stk)
         shift%img_ios(1)%required = .true.
         call shift%set_input('img_ios', 2, outstk)
-        call shift%set_input('img_ios', 3, oritab)
         ! parameter input/output
         call shift%set_input('parm_ios', 1, smpd)
-        call shift%set_input('parm_ios', 2, 'mul',     'num',   'Shift multiplication factor', 'Shift multiplication factor{1.0}', 'multiplier', .false., 1.0)
+        call shift%set_input('parm_ios', 2, 'mul', 'num', 'Shift multiplication factor', 'Shift multiplication factor{1.0}', 'multiplier', .false., 1.0)
         call shift%set_input('parm_ios', 3, oritype)
+        call shift%set_input('parm_ios', 4, oritab)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2638,7 +2671,7 @@ contains
         &'is a program for crude simulation of a DDD movie. Input is a set of projection images to place. &
         &Movie frames are then generated related by randomly shifting the base image and applying noise',& ! descr_long
         &'simple_exec',&                                    ! executable
-        &1, 10, 0, 0, 1, 0, 1, .false.)                     ! # entries in each group
+        &1, 10, 0, 0, 1, 0, 1, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_movie%set_input('img_ios', 1, stk)
@@ -2672,7 +2705,7 @@ contains
         &'White noise simulation',&                        ! descr_short
         &'is a program for generating pure noise images',& ! descr_long
         &'simple_exec',&                                   ! executable
-        &0, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group
+        &0, 2, 0, 0, 0, 0, 0, .false.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2704,7 +2737,7 @@ contains
         &then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed &
         &before the remaining 80% of the noise (white noise) is added',& ! descr_long
         &'simple_exec',&                                                 ! executable
-        &1, 15, 0, 1, 2, 1, 1, .false.)                                  ! # entries in each group
+        &1, 15, 0, 1, 2, 1, 1, .false.)                                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
@@ -2745,7 +2778,7 @@ contains
         &'Simulate subtomogram',&                               ! descr_short
         &'is a program for crude simulation of a subtomogram',& ! descr_long
         &'simple_exec',&                                        ! executable
-        &1, 3, 0, 0, 0,0, 1, .false.)                           ! # entries in each group
+        &1, 3, 0, 0, 0,0, 1, .false.)                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_subtomogram%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to use for simulation', 'input volume e.g. vol.mrc', .false., '')
@@ -2772,7 +2805,7 @@ contains
         &'Stack images',&              ! descr_short
         &'is a program for stacking individual images (list) or multiple stacks into one',& ! descr_long
         &'simple_exec',&               ! executable
-        &2, 2, 0, 0, 0, 0, 0, .false.) ! # entries in each group
+        &2, 2, 0, 0, 0, 0, 0, .false.) ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stack%set_input('img_ios', 1, 'filetab', 'file', 'Stacks list',&
@@ -2809,7 +2842,7 @@ contains
         &'If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, '&
         &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
-        &2, 18, 0, 0, 0, 0, 1, .false.)              ! # entries in each group
+        &2, 18, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call stackops%set_input('img_ios', 1, stk)
@@ -2856,7 +2889,7 @@ contains
         &file is updated. If you are unsure about the point-group, use the compare=yes mode and input the highest &
         &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
         &'simple_exec',&                                                                                           ! executable
-        &1, 1, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group
+        &1, 1, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symaxis_search%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
@@ -2889,7 +2922,7 @@ contains
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry.',& ! descr long
         &'simple_exec',&                                                                                              ! executable
-        &1, 1, 0, 5, 3, 1, 1, .false.)                                                                                ! # entries in each group
+        &1, 1, 0, 5, 3, 1, 1, .false.)                                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
@@ -2924,7 +2957,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_exec',&                                                         ! executable
-        &1, 3, 0, 1, 2, 0, 1, .false.)                                           ! # entries in each group
+        &1, 3, 0, 1, 2, 0, 1, .false.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_track%set_input('img_ios', 1, 'filetab', 'file', 'List of of movie frames',&
@@ -2955,11 +2988,11 @@ contains
     subroutine new_update_project
         ! PROGRAM SPECIFICATION
         call update_project%new(&
-        &'new_project',&                     ! name
+        &'update_project',&                  ! name
         &'Update an existing project',&      ! descr_short
         &'is a program for updating an existing project: changing the name/user_email/computer controls',& ! descr_long
         &'simple_exec',&                     ! executable
-        &0, 2, 0, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
+        &0, 2, 0, 0, 0, 0, 8, .true.)        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2992,7 +3025,7 @@ contains
         &'Visualization of orientation distribution',&                                                             ! descr_short
         &'is a program for extracting projection directions from orientations for visualization in UCSF Chimera',& ! descr_long
         &'simple_exec',&                                                                                           ! executable
-        &0, 5, 0, 0, 0, 0, 0, .false.)                                                                             ! # entries in each group
+        &0, 5, 0, 0, 0, 0, 0, .false.)                                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3022,7 +3055,7 @@ contains
         &'Standard volume editing',&                                                              ! descr_short
         &'is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes',& ! descr_long
         &'simple_exec',&                                                                          ! executable
-        &2, 12, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group
+        &2, 12, 0, 0, 3, 1, 1, .false.)                                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call volops%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to mask', &

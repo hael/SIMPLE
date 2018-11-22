@@ -12,7 +12,7 @@ implicit none
 public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
-public :: update_project_stateflags_commander
+public :: report_selection_commander
 public :: print_project_vals_commander
 public :: print_project_field_commander
 public :: new_project_commander
@@ -36,10 +36,6 @@ type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
 end type print_project_info_commander
-type, extends(commander_base) :: update_project_stateflags_commander
-  contains
-    procedure :: execute      => exec_update_project_stateflags
-end type update_project_stateflags_commander
 type, extends(commander_base) :: print_project_vals_commander
   contains
     procedure :: execute      => exec_print_project_vals
@@ -48,6 +44,10 @@ type, extends(commander_base) :: print_project_field_commander
   contains
     procedure :: execute      => exec_print_project_field
 end type print_project_field_commander
+type, extends(commander_base) :: report_selection_commander
+  contains
+    procedure :: execute      => exec_report_selection
+end type report_selection_commander
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
@@ -128,55 +128,6 @@ contains
         call spproj%kill
         ! no additional printing
     end subroutine exec_print_project_info
-
-    subroutine exec_update_project_stateflags( self, cline )
-        use simple_binoris,    only: binoris
-        use simple_sp_project, only: oritype2segment
-        use simple_oris,       only: oris
-        class(update_project_stateflags_commander), intent(inout) :: self
-        class(cmdline),                             intent(inout) :: cline
-        type(binoris)                 :: bos_doc
-        type(oris)                    :: os
-        character(len=:), allocatable :: file_w_states, projfile, oritype
-        integer,          allocatable :: states(:)
-        integer :: n_lines, fnr, iseg, noris, i
-        ! parse command line
-        projfile      = cline%get_carg('projfile')
-        file_w_states = cline%get_carg('infile')
-        oritype       = cline%get_carg('oritype')
-        ! read the state-flags
-        n_lines       = nlines(file_w_states)
-        allocate(states(n_lines))
-        call fopen(fnr, FILE=file_w_states, STATUS='OLD', action='READ')
-        do i=1,n_lines
-            read(fnr,*) states(i)
-        end do
-        call fclose(fnr)
-        ! look in projfile
-        call bos_doc%open(projfile)
-        iseg  = oritype2segment(oritype)
-        noris = bos_doc%get_n_records(iseg)
-        if( noris == 0 )then
-            call bos_doc%close
-            THROW_WARN('empty project file segment, nothing to update, aborting; exec_update_project_stateflags')
-            return
-        endif
-        if( noris /= n_lines )then
-            call bos_doc%close
-            write(*,*) '# lines in infile        : ', n_lines
-            write(*,*) '# entries in file segment: ', noris
-            THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_update_project_stateflags')
-            return
-        endif
-        ! read segment
-        call os%new(noris)
-        call bos_doc%read_segment(iseg, os)
-        ! update states
-        call os%set_all('state', real(states))
-        call bos_doc%write_segment_inside(iseg, os)
-        ! no need to update header (taken care of in binoris object)
-        call bos_doc%close
-    end subroutine exec_update_project_stateflags
 
     !> prints the values of inputted keys in the inputted segment
     subroutine exec_print_project_vals( self, cline )
@@ -271,6 +222,52 @@ contains
         call spproj%print_segment(params%oritype)
         call spproj%kill
     end subroutine exec_print_project_field
+
+    subroutine exec_report_selection( self, cline )
+        use simple_binoris,    only: binoris
+        use simple_sp_project, only: oritype2segment
+        use simple_oris,       only: oris
+        class(report_selection_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(binoris)    :: bos_doc
+        type(oris)       :: os
+        type(parameters) :: params
+        integer, allocatable :: states(:)
+        integer :: n_lines, fnr, iseg, noris, i
+        call params%new(cline, silent=.true.)
+        ! read the state-flags
+        n_lines = nlines(trim(params%infile))
+        allocate(states(n_lines))
+        call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
+        do i=1,n_lines
+            read(fnr,*) states(i)
+        end do
+        call fclose(fnr)
+        ! look in projfile
+        call bos_doc%open(trim(params%projfile))
+        iseg  = oritype2segment(trim(params%oritype))
+        noris = bos_doc%get_n_records(iseg)
+        if( noris == 0 )then
+            call bos_doc%close
+            THROW_WARN('empty project file segment, nothing to update, aborting; exec_report_selection')
+            return
+        endif
+        if( noris /= n_lines )then
+            call bos_doc%close
+            write(*,*) '# lines in infile        : ', n_lines
+            write(*,*) '# entries in file segment: ', noris
+            THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_report_selection')
+            return
+        endif
+        ! read segment
+        call os%new(noris)
+        call bos_doc%read_segment(iseg, os)
+        ! update states
+        call os%set_all('state', real(states))
+        call bos_doc%write_segment_inside(iseg, os)
+        ! no need to update header (taken care of in binoris object)
+        call bos_doc%close
+    end subroutine exec_report_selection
 
     !> for creating a new project
     subroutine exec_new_project( self, cline )

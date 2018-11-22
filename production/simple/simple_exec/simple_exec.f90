@@ -40,12 +40,13 @@ type(import_starproject_commander)     :: ximport_starproject
 type(print_starproject_info_commander) :: xprint_starproject_info
 
 ! PART OF SP WORKFLOW
-type(make_pickrefs_commander)  :: xmake_pickrefs
-type(extract_commander)        :: xextract
-type(cluster_cavgs_commander)  :: xcluster_cavgs
-type(symaxis_search_commander) :: xsymsrch
-type(symmetry_test_commander)  :: xsymtst
-type(postprocess_commander)    :: xpostprocess
+type(make_pickrefs_commander)    :: xmake_pickrefs
+type(extract_commander)          :: xextract
+type(cluster_cavgs_commander)    :: xcluster_cavgs
+type(symaxis_search_commander)   :: xsymsrch
+type(symmetry_test_commander)    :: xsymtst
+type(postprocess_commander)      :: xpostprocess
+type(report_selection_commander) :: xreport_selection
 
 ! IMAGE PROCESSING
 type(mask_commander)           :: xmask
@@ -118,6 +119,9 @@ select case(prg)
         call xprint_project_info%execute(cline)
     case( 'print_project_field' )
         call xprint_project_field%execute(cline)
+    case( 'report_selection' )
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call xreport_selection%execute(cline)
     case( 'import_movies' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
