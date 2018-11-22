@@ -239,7 +239,7 @@ contains
     end subroutine removepunct
 
     !> \brief  removes spaces, tabs, and control characters in string str
-    subroutine removesp(str)
+    pure subroutine removesp(str)
         character(len=*), intent(inout) :: str
         character(len=1):: ch
         character(len=len_trim(str))::outstr
@@ -275,7 +275,7 @@ contains
     end function str2real
 
     !> \brief  converts a real number to a string
-    function real2str(rval) result(str)
+    pure function real2str(rval) result(str)
         real, intent(in)  :: rval
         character(len=32) :: str
         write(str,*) rval

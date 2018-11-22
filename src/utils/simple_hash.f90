@@ -41,6 +41,7 @@ type :: hash
     procedure          :: get_str
     procedure          :: get_value_at
     procedure          :: hash2str
+    procedure          :: hash_strlen
     procedure          :: size_of
     ! I/O
     procedure          :: print
@@ -290,28 +291,46 @@ contains
     end function get_values
 
     !>  \brief  convert hash to string
-    function hash2str( self ) result( str )
-        class(hash),    intent(in)    :: self
-        character(len=:), allocatable :: str, str_moving
-        integer :: i
+    pure function hash2str( self ) result( str )
+        class(hash),intent(in)    :: self
+        character(len=LONGSTRLEN) :: str
+        integer :: i, len
         if( self%hash_index > 0 )then
             if( self%hash_index == 1 )then
-                allocate(str, source=trim(self%keys(1)%str)//'='//trim(real2str(self%values(1))))
+                str = trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))//' ')
+            str = trim(self%keys(1)%str)//'='//trim(real2str(self%values(1)))//' '
             if( self%hash_index > 2 )then
                 do i=2,self%hash_index - 1
-                    allocate(str, source=str_moving//trim(self%keys(i)%str)//'='//trim(real2str(self%values(i)))//' ')
-                    deallocate(str_moving)
-                    allocate(str_moving,source=str,stat=alloc_stat)
-                    deallocate(str)
+                    len = len_trim(str)
+                    str = str(1:len+1)//trim(self%keys(i)%str)//'='//trim(real2str(self%values(i)))//' '
                 end do
             endif
-            allocate(str,source=trim(str_moving//trim(self%keys(self%hash_index)%str)&
-                &//'='//trim(real2str(self%values(self%hash_index)))))
+            len = len_trim(str)
+            str = trim(str(1:len+1)//trim(self%keys(self%hash_index)%str)&
+                &//'='//trim(real2str(self%values(self%hash_index))))
         endif
     end function hash2str
+
+    !>  \brief  convert hash to string
+    pure integer function hash_strlen( self )
+        class(hash),intent(in)    :: self
+        integer :: i
+        hash_strlen = 0
+        if( self%hash_index == 0 )then
+            return
+        elseif( self%hash_index == 1 )then
+            hash_strlen = len_trim(self%keys(1)%str)+len_trim(real2str(self%values(1)))
+            hash_strlen = hash_strlen + 1 ! for '=' separator
+        else
+            do i=1,self%hash_index
+                hash_strlen = hash_strlen+len_trim(self%keys(i)%str)+len_trim(real2str(self%values(i)))
+            end do
+            hash_strlen = hash_strlen + self%hash_index ! for '=' separator
+            hash_strlen = hash_strlen + self%hash_index-1 ! for ' ' separator
+        endif
+    end function hash_strlen
 
     !>  \brief  returns size of hash
     pure integer function size_of( self )

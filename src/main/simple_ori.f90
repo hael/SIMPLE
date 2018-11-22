@@ -66,7 +66,7 @@ type :: ori
     procedure          :: isstatezero
     procedure          :: has_been_searched
     procedure          :: ori2str
-    procedure          :: ori2strlen_trim
+    procedure          :: ori_strlen_trim
     procedure          :: ori2chash
     procedure          :: chash2ori
     procedure          :: get_ctfvars
@@ -536,27 +536,35 @@ contains
     end function has_been_searched
 
     !>  \brief  joins the hashes into a string that represent the ori
-    function ori2str( self ) result( str )
+    pure function ori2str( self ) result( str )
         class(ori), intent(in)        :: self
-        character(len=:), allocatable :: str, str_chtab, str_htab
+        character(len=:), allocatable :: str
+        character(len=LONGSTRLEN)     :: str_htab
+        character(len=XLONGSTRLEN)    :: str_chtab
         integer :: sz_chash, sz_hash
         sz_chash = self%chtab%size_of()
         sz_hash  = self%htab%size_of()
         if( sz_chash > 0 ) str_chtab = self%chtab%chash2str()
         if( sz_hash  > 0 ) str_htab  = self%htab%hash2str()
         if( sz_chash > 0 .and. sz_hash > 0 )then
-            allocate( str, source=str_chtab//' '//str_htab)
+            allocate( str, source=trim(str_chtab)//' '//trim(str_htab))
         else if( sz_hash > 0 )then
-            allocate( str, source=str_htab)
+            allocate( str, source=trim(str_htab))
         else if( sz_chash > 0 )then
-            allocate( str, source=str_chtab)
+            allocate( str, source=trim(str_chtab))
         endif
     end function ori2str
 
-    integer function ori2strlen_trim( self )
+    pure integer function ori_strlen_trim( self )
         class(ori),        intent(in) :: self
-        ori2strlen_trim = len_trim(self%ori2str())
-    end function ori2strlen_trim
+        integer :: chashlen, hashlen
+        chashlen = self%chtab%chash_strlen()
+        hashlen  = self%htab%hash_strlen()
+        ori_strlen_trim = chashlen + hashlen
+        if( chashlen > 0 .and. hashlen > 0 )then
+            ori_strlen_trim = ori_strlen_trim + 1 ! for ' ' separator
+        endif
+    end function ori_strlen_trim
 
     function ori2chash( self ) result( ch )
         class(ori), intent(in) :: self

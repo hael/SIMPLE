@@ -395,23 +395,25 @@ contains
     end function isthere_2
 
     function ischar( self, i, key ) result ( is )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: i
-        character(len=*),  intent(in)    :: key
+        class(oris),       intent(in) :: self
+        integer,           intent(in) :: i
+        character(len=*),  intent(in) :: key
         logical :: is
         is = self%o(i)%ischar(key)
     end function ischar
 
     !>  \brief  is for getting the maximum string length of a trimed string ori representation
     integer function max_ori_strlen_trim( self )
-        class(oris), intent(inout) :: self
-        integer :: strlen, i
+        class(oris), intent(in) :: self
+        integer :: i
         max_ori_strlen_trim = 0
         ! cannot be threaded because of allocatables within loop
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)&
+        !$omp reduction(max:max_ori_strlen_trim)
         do i=1,self%n
-            strlen = self%o(i)%ori2strlen_trim()
-            max_ori_strlen_trim = max(strlen,max_ori_strlen_trim)
+            max_ori_strlen_trim = max(max_ori_strlen_trim,self%o(i)%ori_strlen_trim())
         end do
+        !$omp end parallel do
     end function max_ori_strlen_trim
 
     !>  \brief  is for getting the max val of integer label
@@ -2576,7 +2578,6 @@ contains
         logical,           intent(out)   :: do_extr
         integer,           intent(out)   :: iextr_lim
         real,    optional, intent(in)    :: update_frac
-        real    :: extr_thresh
         integer :: zero_pop
         logical :: l_update_frac
         do_extr           = .false.

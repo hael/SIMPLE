@@ -64,11 +64,11 @@ contains
         contains
 
             subroutine per_ref_srch
-                integer :: loc(NINPLPEAKS2SORT)
+                integer :: loc(params_glob%ninplpeaks)
                 ! calculate in-plane correlations
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, inpl_corrs)
-                ! identify the NINPLPEAKS2SORT top scoring in-planes
-                loc = maxnloc(inpl_corrs, NINPLPEAKS2SORT)
+                ! identify the params_glob%ninplpeaks top scoring in-planes
+                loc = maxnloc(inpl_corrs, params_glob%ninplpeaks)
                 ! stash
                 call self%s%store_solution(iref, loc, inpl_corrs(loc), .true.)
             end subroutine per_ref_srch
@@ -81,7 +81,7 @@ contains
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym
         real       :: dist_inpl, corr, frac, euldist, bfac
-        real       :: shwmean, shwstdev        
+        real       :: shwmean, shwstdev
         integer    :: ref, roind
         ! orientation parameters
         ref = s3D%proj_space_refinds_sorted(self%s%ithr, self%s%nrefsmaxinpl)
@@ -126,7 +126,7 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'inpl',      s3D%o_peaks(self%s%iptcl)%get(1,'inpl'))
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
-        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)        
+        call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc

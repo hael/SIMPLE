@@ -239,6 +239,7 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
+    integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
     integer :: nmembers=0
     integer :: nnn=200             !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
@@ -645,6 +646,7 @@ contains
         call check_iarg('ndocs',          self%ndocs)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
+        call check_iarg('ninplpeaks',     self%ninplpeaks)
         call check_iarg('nmembers',       self%nmembers)
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
@@ -1196,6 +1198,10 @@ contains
         self%eullims(:,1) = 0.
         self%eullims(:,2) = 359.99
         self%eullims(2,2) = 180.
+        ! check number of peaks
+        if(self%npeaks<=0) THROW_HARD('Invalid number of peaks')
+        if(self%ninplpeaks<=0 .or. self%ninplpeaks>NINPLPEAKS2SORT)&
+            &THROW_HARD('Invalid number of peaks')
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
             self%nran = self%nptcls

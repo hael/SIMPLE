@@ -48,6 +48,7 @@ type :: chash
     procedure          :: get_static
     procedure          :: get_key
     procedure          :: chash2str
+    procedure          :: chash_strlen
     procedure          :: size_of
     !< MODIFIERS
     procedure          :: sort
@@ -361,34 +362,51 @@ contains
     end function get_key
 
     !>  \brief  concatenates the chash into a string
-    function chash2str( self ) result( str )
-        class(chash), intent(in)      :: self
-        character(len=:), allocatable :: str, str_moving
-        integer :: i
+    pure function chash2str( self ) result( str )
+        class(chash), intent(in)  :: self
+        character(len=XLONGSTRLEN) :: str
+        integer :: i, len
         if( self%chash_index > 0 )then
             if( self%chash_index == 1 )then
-                allocate(str, source=trim(self%keys(1)%str)//'='//trim(self%values(1)%str))
+                str = trim(self%keys(1)%str)//'='//trim(self%values(1)%str)
                 return
             endif
-            allocate(str_moving, source=trim(self%keys(1)%str)//'='//trim(self%values(1)%str)//' ')
+            str = trim(self%keys(1)%str)//'='//trim(self%values(1)%str)//' '
             if( self%chash_index > 2 )then
                 do i=2,self%chash_index-1
-                    allocate(str, source=str_moving//trim(self%keys(i)%str)//'='//trim(self%values(i)%str)//' ')
-                    deallocate(str_moving)
-                    allocate(str_moving,source=str,stat=alloc_stat)
-                    deallocate(str)
+                    len = len_trim(str)
+                    str = str(1:len+1)//trim(self%keys(i)%str)//'='//trim(self%values(i)%str)//' '
                 end do
             endif
-            allocate(str,source=trim(str_moving//trim(self%keys(self%chash_index)%str)//'='//&
-                &trim(self%values(self%chash_index)%str)))
+            len = len_trim(str)
+            str = trim(str(1:len+1)//trim(self%keys(self%chash_index)%str)//'='//&
+                &trim(self%values(self%chash_index)%str))
         endif
     end function chash2str
 
+    !>  \brief  convert hash to string
+    pure integer function chash_strlen( self )
+        class(chash),intent(in)    :: self
+        integer :: i
+        chash_strlen = 0
+        if( self%chash_index == 0 )then
+            return
+        elseif( self%chash_index == 1 )then
+            chash_strlen = len_trim(self%keys(1)%str)+len_trim(self%values(1)%str)
+            chash_strlen = chash_strlen + 1 ! for '=' separator
+        else
+            do i=1,self%chash_index
+                chash_strlen = chash_strlen+len_trim(self%keys(i)%str)+len_trim(self%values(i)%str)
+            end do
+            chash_strlen = chash_strlen + self%chash_index ! for '=' separator
+            chash_strlen = chash_strlen + self%chash_index-1 ! for ' ' separator
+        endif
+    end function chash_strlen
+
     !>  \brief  returns size of chash
-    function size_of( self ) result( sz )
+    pure integer function size_of( self )
         class(chash), intent(in) :: self
-        integer :: sz
-        sz = self%chash_index
+        size_of = self%chash_index
     end function size_of
 
     ! MODIFIERS
