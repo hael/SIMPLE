@@ -502,7 +502,7 @@ contains
                             enddo
                             w = pw * w / sum(w)
                             ! interpolation
-                            fcomp     = zero
+                            fcomp = zero
                             do l=1,wdim
                                 do m=1,wdim
                                     if( w(l,m) < TINY ) cycle

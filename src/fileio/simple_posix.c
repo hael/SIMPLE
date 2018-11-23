@@ -601,11 +601,18 @@ int get_file_list_modified(char * path, int*len, char* ext, int* count, int flag
  *  \param count return ptr for number of dirss found
  *  \return return status success=0
  */
-int list_dirs(char * path, int*len, int* count, size_t ivf_path)
+int list_dirs(char * path, int*len, char * fout, int*len_fout, int* count, size_t ivf_path)
 {
     char *cpath = F90toCstring(path, *len);
+    char *cfout = F90toCstring(fout, *len_fout);
+
     if(cpath == NULL) {
         printf("%d %s\nlist_dirs failed to open convert string (unprotected) %s\n", errno, strerror(errno), path);
+        perror("Failed : simple_posix.c::list_dirs ");
+        return -1;
+    }
+    if(cfout == NULL) {
+        printf("%d %s\nlist_dirs failed to convert string (unprotected) %s\n", errno, strerror(errno), fout);
         perror("Failed : simple_posix.c::list_dirs ");
         return -1;
     }
@@ -629,7 +636,7 @@ int list_dirs(char * path, int*len, int* count, size_t ivf_path)
         //  results = malloc ( sizeof(char*) * fcount );
         //printf(" list_dirs size %d\n", fcount);
         //if (fcount > 0){
-        FILE* f = fopen("__simple_filelist__", "w");
+        FILE* f = fopen(cfout, "w");
         if(f) {
             fcount = 0;
             struct dirent *dir;

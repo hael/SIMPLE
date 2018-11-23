@@ -249,8 +249,8 @@ if(allocated(res))deallocate(res)
 
 
 print *, '>>> Syslib function Test 4f:   simple_list_dirs / list_dirs '
-res = simple_list_dirs(".", status=io_stat)
-if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist__'))) then
+res = simple_list_dirs(".", 1, status=io_stat)
+if (io_stat /= 0 .or. .not.allocated(res) .or. (file_exists('__simple_filelist_1__'))) then
     print *, '<<<   simple_list_dirs/get_file_list "." failed '
     THROW_HARD('simple_list_dirs failed')
     passed=.false.
