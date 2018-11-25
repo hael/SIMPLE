@@ -87,20 +87,4 @@ contains
         end do
     end subroutine qsys_watcher_2
 
-    ! subroutine exec_simple_prg( exec_bin, cline )
-    !     use simple_cmdline, only: cmdline
-    !     character(len=*),  intent(in) :: exec_bin
-    !     class(cmdline),    intent(in) :: cline
-    !     type(chash) :: job_descr
-    !     character(len=1024) :: exec_str
-    !     character(len=11)   :: suppress_msg='2>/dev/null'
-    !     integer :: pid
-    !     ! prepare job description
-    !     call cline%gen_job_descr(job_descr)
-    !     exec_str = trim(exec_bin)//' '//job_descr%chash2str()//' '//suppress_msg
-    !     write(*,'(a)') '>>> EXECUTING COMMAND:'
-    !     write(*,'(a)') trim(exec_str)
-    !     call exec_subprocess(exec_str, pid)
-    ! end subroutine exec_simple_prg
-
 end module simple_qsys_funs

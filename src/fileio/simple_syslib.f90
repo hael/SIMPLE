@@ -90,15 +90,6 @@ interface
         integer(c_int), intent(inout) :: count
     end function removedir
 
-    function recursive_delete(dirname,str_len, count) bind(C, name="recursive_delete")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: recursive_delete
-        character(c_char),dimension(*),intent(in)  ::  dirname
-        integer(c_int), intent(in) :: str_len
-        integer(c_int), intent(inout) :: count
-    end function recursive_delete
-
     function get_file_list(path,str_len, ext, count) bind(c,name="get_file_list")
         use, intrinsic :: iso_c_binding
         implicit none
@@ -108,36 +99,6 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in)   :: ext
         integer(c_int), intent(inout) :: count                    !> number of elements in results
     end function get_file_list
-
-    function get_file_list_modified(path,  str_len, ext, count, flag) bind(c,name="get_file_list_modified")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: get_file_list_modified                  !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in)   :: path
-        integer(c_int), intent(in) :: str_len
-        character(kind=c_char,len=1),dimension(3),intent(in)   :: ext
-        integer(c_int), intent(inout)     :: count                !> number of elements in results
-        integer(c_int), intent(in), value :: flag                 !> 1st bit reverse, 2nd bit alphanumeric sort or modified time
-    end function get_file_list_modified
-
-    function glob_file_list(av, count, flag, str_len) bind(c,name="glob_file_list")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: glob_file_list                           !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in):: av  !> glob string
-        integer(c_int), intent(inout) :: count                     !> number of elements in results
-        integer(c_int), intent(in)    :: flag                      !> flag 1=time-modified reverse
-         integer(c_int), intent(in) :: str_len
-    end function glob_file_list
-
-    function glob_rm_all(av, str_len, count) bind(c,name="glob_rm_all")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: glob_rm_all                              !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in):: av  !> glob string
-        integer(c_int), intent(inout) :: count                     !> number of elements in results
-         integer(c_int), intent(in) :: str_len
-    end function glob_rm_all
 
     function list_dirs(path, str_len, list_fout, str_len_fout, count) bind(c,name="list_dirs")
         use, intrinsic :: iso_c_binding
@@ -149,21 +110,6 @@ interface
         integer(c_int), intent(in)    :: str_len_fout               !> output list file name string length
         integer(c_int), intent(inout) :: count                      !> return number of elements in results
     end function list_dirs
-
-    subroutine show_dir_content_recursive(path, str_len) bind(c,name="show_dir_content_recursive")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        character(kind=c_char,len=1),dimension(*),intent(in) :: path
-        integer(c_int), intent(in) :: str_len
-    end subroutine show_dir_content_recursive
-
-    function subprocess(cmd, cmdlen) bind(c,name="subprocess")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: subprocess                                  !> return PID of forked process
-        character(kind=c_char,len=1),dimension(*),intent(in) :: cmd   !> shell command
-        integer(c_int), intent(in) :: cmdlen                          !> command string length
-    end function subprocess
 
     function wait_pid(pid) bind(c,name="wait_pid")
         use, intrinsic :: iso_c_binding
@@ -179,13 +125,6 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in) :: filename
         integer(c_int), intent(in) :: len
     end function touch
-
-    subroutine free_file_list(p, n) bind(c, name='free_file_list')
-        use, intrinsic :: iso_c_binding
-        implicit none
-        type(c_ptr),    intent(in), value :: p
-        integer(c_int), intent(in), value :: n
-    end subroutine free_file_list
 
     function get_absolute_pathname(infile, inlen, outfile, outlen) bind(c,name="get_absolute_pathname")
         use, intrinsic :: iso_c_binding
@@ -217,15 +156,6 @@ interface
         character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
         integer(c_int), intent(in) :: rgx_len
     end function
-    function regexp_multi(source,src_len, regex,rgx_len) bind(C,name="regexp_multi")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: regexp_multi
-        character(kind=c_char,len=1),dimension(*),intent(in)    :: source  !> input string
-        integer(c_int), intent(in) :: src_len
-        character(kind=c_char,len=1),dimension(*),intent(in)    :: regex   !> input RE string
-        integer(c_int), intent(in) :: rgx_len
-    end function
 
 end interface
 
@@ -233,12 +163,6 @@ interface simple_getenv
     module procedure simple_getenv_1
     module procedure simple_getenv_2
 end interface
-
-interface simple_abspath
-!    module procedure simple_abspath_1
-    module procedure simple_abspath_2
-end interface
-
 
 contains
 
@@ -274,18 +198,6 @@ contains
         endif
         if(present(exitstat))exitstat=exec_stat
     end subroutine exec_cmdline
-
-    !>  Wrapper for simple_posix's subprocess : this uses system fork & execp
-    subroutine exec_subprocess( cmdline, pid )
-        character(len=*),  intent(in)      :: cmdline
-        integer, intent(out)               :: pid
-        character(len=:), allocatable      :: cmd
-        integer                            :: cmdlen
-        allocate(cmd, source=trim(adjustl(cmdline))//c_null_char)
-        cmdlen = len(trim(adjustl(cmd)))
-        pid = subprocess( cmd, cmdlen  )
-        deallocate(cmd)
-    end subroutine exec_subprocess
 
     !>  Handles error from system call
     subroutine raise_sys_error( cmd, exit_status, cmdstat, cmdmsg )
@@ -659,7 +571,7 @@ contains
         endif
         if(allocated(targetdir))deallocate(targetdir)
         check_exists=.true.
-        targetdir = simple_abspath_2 (trim(newd), errmsg=eemsg, check_exists=check_exists)
+        targetdir = simple_abspath(trim(newd), errmsg=eemsg, check_exists=check_exists)
         inquire(file=trim(targetdir), EXIST=dir_e, IOSTAT=io_status)
         if(dir_e) then
 #if defined(INTEL)
@@ -900,36 +812,6 @@ contains
         endif
     end subroutine simple_list_files
 
-    !> Glob list : Emulate ls "glob" > outfile
-    !!    iostat = glob_list_tofile('dir/*tmp*.txt', 'out.txt')
-    function simple_glob_list_tofile(glob, outfile, tr) result(status)
-        character(len=*), intent(in)           :: glob
-        character(len=*), intent(in)           :: outfile
-        logical,          intent(in), optional :: tr !> "ls -tr " reverse time-modified flag
-        character(kind=c_char,len=:), allocatable :: thisglob
-        integer      :: status
-        integer      :: num_files, time_sorted_flag
-        time_sorted_flag = 0
-        status=0
-        if(len(glob)==0) then
-            allocate(thisglob, source=trim(glob)//achar(0))
-        else
-            allocate(thisglob, source='*'//achar(0))
-        end if
-        time_sorted_flag = 0
-        if(present(tr))then
-            if(tr) time_sorted_flag = 1
-        end if
-        if(global_debug) print *, 'Calling  glob_file_list ', trim(thisglob)
-        status = glob_file_list(trim(thisglob), num_files, time_sorted_flag, len_trim(thisglob))
-        if(status/=0)THROW_ERROR("failed to process file list "//trim(thisglob))
-        if(global_debug) print *, ' In simple_syslib::simple_glob_list_tofile  outfile : ', outfile
-        if(file_exists(trim(outfile))) call del_file(trim(outfile))
-        call syslib_copy_file(trim('__simple_filelist__'), trim(outfile), status)
-        if(status/=0) THROW_ERROR("failed to copy tmpfile to "//trim(outfile))
-        deallocate(thisglob)
-    end function simple_glob_list_tofile
-
     !> \brief  is for deleting a file
     subroutine del_file( file )
         character(len=*), intent(in) :: file !< input filename
@@ -942,132 +824,6 @@ contains
             end if
         endif
     end subroutine del_file
-
-    !> generic deletion of files using POSIX glob, emulate rm -f glob
-    function simple_del_files(glob, dlist, status) result(glob_elems)
-        character(len=*), intent(in), optional   :: glob
-        character(len=:), allocatable, intent(out), optional  :: dlist(:)
-        integer,          intent(out), optional  :: status
-        character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(kind=c_char,len=:), allocatable  :: thisglob
-        integer                                    :: i, glob_elems,iostatus, luntmp
-        if(present(glob))then
-            thisglob=trim(glob)//c_null_char
-        else
-            thisglob='*'//c_null_char
-        endif
-        !! glob must be protected by c_null char
-        iostatus =  glob_file_list(trim(thisglob), glob_elems, 0, len_trim(thisglob))  ! simple_posix.c
-        if(status/=0) THROW_ERROR("glob failed")
-        !! Read temp filelist
-        open(newunit=luntmp, file='__simple_filelist__')
-        allocate( list(glob_elems) )
-        do i = 1,glob_elems
-            read( luntmp, '(a)' ) list(i)
-        enddo
-        close( luntmp, status='delete' )
-        !! delete and double check
-        if ( glob_elems > 0) then
-            do i=1,glob_elems
-                call del_file(list(i))
-            enddo
-            do i=1,glob_elems
-                if(file_exists(list(i))) THROW_ERROR("failed to delete "//trim(list(i)))
-            enddo
-        else
-            print *,"simple_syslib::simple_del_files no files matching ", trim(thisglob)
-        endif
-        if(present(dlist)) then
-            allocate(dlist(glob_elems), source=list)
-            do i=1,glob_elems
-                dlist(i)= list(i)
-            end do
-        end if
-        if(present(status))status=iostatus
-        deallocate(list)
-        deallocate(thisglob)
-    end function simple_del_files
-
-    !> forced deletion of dirs and files using POSIX glob -- rm -rf glob
-    !! No return of number of deleted files or list
-    !! call syslib_rm("tmpdir*/tmp*.ext",  status=stat)
-    subroutine syslib_rm_rf(glob,  status)
-        character(len=*), intent(in), optional     :: glob
-        integer,          intent(out), optional    :: status
-        character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(kind=c_char,len=:), allocatable  :: thisglob
-        integer                                    :: i, glob_elems,iostatus, luntmp
-        if(present(glob))then
-            allocate(thisglob, source=trim(glob)//c_null_char)
-        else
-            allocate(thisglob, source=path_here//'*'//c_null_char) ! "./*" default
-        endif
-        call del_file('__simple_filelist__')
-        !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob)-1, glob_elems)  ! simple_posix.c
-        if(iostatus/=0) THROW_ERROR("glob failed")
-        open(newunit = luntmp, file = '__simple_filelist__')
-        allocate( list(glob_elems) )
-        do i = 1,glob_elems
-            read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) THROW_ERROR("reading temp file failed")
-        enddo
-        close( luntmp, status = 'delete' )
-        if ( glob_elems > 0) then
-            do i=1, glob_elems
-                if(file_exists(list(i))) then
-                    THROW_ERROR("failed to delete "//trim(list(i)))
-                end if
-            enddo
-        else
-            print *,"simple_syslib::syslib_rm_rf no files matching ", trim(thisglob)
-        endif
-        if(present(status))status=iostatus
-        deallocate(thisglob)
-    end subroutine syslib_rm_rf
-
-    !> forced deletion of dirs and files using POSIX glob -- rm -rf glob
-    !! num_deleted = simple_rm_force("tmpdir*/tmp*.ext", dlist=list_of_deleted_elements, status=stat)
-    function simple_rm_force(glob, dlist, status) result(glob_elems)
-        character(len=*), intent(in), optional     :: glob
-        character(len=:), allocatable, intent(out), optional    :: dlist(:)
-        integer,          intent(out), optional    :: status
-        character(kind=c_char,len=STDLEN), pointer :: list(:)
-        character(kind=c_char,len=:), allocatable  :: thisglob
-        integer                                    :: i, glob_elems,iostatus, luntmp
-        if(present(glob))then
-            allocate(thisglob, source=trim(glob)//c_null_char)
-        else
-            allocate(thisglob, source='*'//c_null_char)
-        endif
-        call del_file('__simple_filelist__')
-        !! glob must be protected by c_null char
-        iostatus =  glob_rm_all(trim(thisglob), len_trim(thisglob)-1, glob_elems)  ! simple_posix.c
-        if(iostatus/=0) THROW_ERROR("glob failed")
-        open(newunit = luntmp, file = '__simple_filelist__')
-        allocate( list(glob_elems) )
-        do i = 1,glob_elems
-            read( luntmp, '(a)' , iostat=iostatus) list(i)
-            if(iostatus/=0) THROW_ERROR("reading temp file failed")
-        enddo
-        close( luntmp, status = 'delete' )
-        if ( glob_elems > 0) then
-            do i=1, glob_elems
-                if(file_exists(list(i))) then
-                    THROW_ERROR("failed to delete "//trim(list(i)))
-                end if
-            enddo
-        else
-            print *,"simple_syslib::simple_rm_force no files matching ", trim(thisglob)
-        endif
-        if(present(dlist)) then
-            allocate( dlist(glob_elems), source=list)
-        else
-            deallocate(list)
-        end if
-        if(present(status))status=iostatus
-        deallocate(thisglob)
-    end function simple_rm_force
 
     !> simple_timestamp prints time stamp (based on John Burkardt's website code)
     subroutine simple_timestamp ( )
@@ -1313,37 +1069,7 @@ contains
         call exec_cmdline(trim(command))
     end subroutine simple_dump_mem_usage
 
-    function simple_abspath_1 (infile, absolute_name,  check_exists) result(status)
-        character(len=*),              intent(in)  :: infile
-        character(len=:), allocatable, intent(out) :: absolute_name
-        logical,          optional,    intent(in)  :: check_exists
-        type(c_ptr)                          :: cstring
-        character(len=LINE_MAX_LEN), target  :: fstr
-        character(kind=c_char,len=STDLEN)    :: infilename_c
-        character(kind=c_char,len=LONGSTRLEN):: outfilename_c
-        integer :: lengthin, lengthout, status
-        logical :: check_exists_here
-        check_exists_here = .true.
-        if( present(check_exists) )check_exists_here = check_exists
-        if( check_exists_here )then
-            if( .not.file_exists(trim(infile)) )then
-                THROW_ERROR('file: '//trim(infile)//' does not exist')
-            endif
-        endif
-        lengthin     = len_trim(infile)
-        cstring      = c_loc(fstr)
-        infilename_c = trim(infile)//achar(0)
-        status       = get_absolute_pathname(trim(adjustl(infilename_c)), lengthin, outfilename_c, lengthout )
-        call syslib_c2fortran_string(outfilename_c)
-        if(allocated(absolute_name)) deallocate(absolute_name)
-        if( lengthout > 1)then
-           allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
-        else
-            allocate(absolute_name, source=trim(infile))
-        end if
-    end function simple_abspath_1
-
-    function simple_abspath_2 (infile,errmsg,status,check_exists) result(absolute_name)
+    function simple_abspath(infile,errmsg,status,check_exists) result(absolute_name)
         character(len=*),              intent(in)  :: infile
         integer,          optional,    intent(out) :: status
         character(len=*), optional,    intent(in)  :: errmsg
@@ -1374,8 +1100,7 @@ contains
             allocate(absolute_name, source=trim(infile))
         end if
         if(present(status))status = status_here
-    end function simple_abspath_2
-
+    end function simple_abspath
 
     integer function RE_match(source, regex)
         character(len=*),              intent(in)  :: source,regex
@@ -1387,16 +1112,5 @@ contains
         res = regexp_match(source_c,len_trim(source),  regex_c, len_trim(regex))
         RE_match = INT(res)
     end function RE_match
-    integer function RE_multi(source, regex)
-        character(len=*),              intent(in)  :: source,regex
-        integer(c_int) :: res
-        character(kind=c_char,len=STDLEN)  :: source_c  !> input string
-        character(kind=c_char,len=STDLEN)  :: regex_c   !> input RE string
-        RE_multi = 0
-        source_c = trim(source)//achar(0)
-        regex_c = trim(regex)//achar(0)
-        res = regexp_multi(source_c,len_trim(source),  regex_c, len_trim(regex))
-        if(res > 0) RE_multi = INT(res)
-    end function RE_multi
 
 end module simple_syslib

@@ -209,7 +209,6 @@ list(APPEND CTESTDIRS
   simple_test_simd
   simple_test_sp_project
   simple_test_sym
-  simple_test_syslib
   simple_test_timer
   simple_test_units )
 
