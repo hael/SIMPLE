@@ -4,7 +4,7 @@ use simple_defs
 use simple_strings, only: upperCase,stringsAreEqual, strIsBlank, int2str,int2str_pad,cpStr
 use simple_error,   only: allocchk, simple_exception, simple_error_check
 use simple_syslib,  only: file_exists, is_open, is_file_open, is_io, simple_abspath,&
-&exec_cmdline, del_file, simple_list_files, syslib_copy_file
+&exec_cmdline, del_file, syslib_copy_file
 implicit none
 
 public :: fileiochk, fopen, fclose, nlines,  filelength, funit_size, is_funit_open, get_open_funits

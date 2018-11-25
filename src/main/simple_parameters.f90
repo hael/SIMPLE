@@ -788,13 +788,13 @@ contains
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for the last previous execution directory and get next directory number
         if( allocated(self%last_prev_dir) ) deallocate(self%last_prev_dir)
-        idir = find_next_int_dir_prefix(self%cwd, self%part, self%last_prev_dir)
+        idir = find_next_int_dir_prefix(self%cwd, self%last_prev_dir)
         ! look for a project file
         if( .not.cline%defined('projfile') )then
             if( allocated(self%last_prev_dir) )then
-                call simple_list_files(self%last_prev_dir//'/*.simple', sp_files, self%part)
+                call simple_list_files(self%last_prev_dir//'/*.simple', sp_files)
             else
-                call simple_list_files('*.simple', sp_files, self%part)
+                call simple_list_files('*.simple', sp_files)
             endif
             if( allocated(sp_files) )then
                 nsp_files = size(sp_files)

@@ -60,7 +60,6 @@ void noprint(FILE *f,...){}
 #define LONGSTRLEN 1024
 #define MAKEDIR makedir_
 #define REMOVEDIR removedir_
-#define GET_FILE_LIST get_file_list_
 #define LIST_DIRS list_dirs_
 #define GLOB_FILE_LIST glob_file_list_
 #define GLOB_RM_ALL glob_rm_all_
@@ -347,61 +346,6 @@ int removedir(char *path, int* len, int* count, size_t ivf_path)
     }
     *count = 1;
     printf("DEBUG:in removedir  completed rmdir %s\n", _path);
-    return 0;
-}
-
-// get_file_list emulates terminal command 'ls '
-int get_file_list(char * path, int*len, char * ext, int *count, size_t ivf_path)
-{
-    char *cpath = F90toCstring(path, *len);
-    if(cpath == NULL) {
-        printf("%d %s\nget_file_list failed to convert string (unprotected) %s\n", errno, strerror(errno), path);
-        perror("Failed : simple_posix.c::get_file_list ");
-        return -1;
-    }
-    dgprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "path", cpath);
-    dgprintf(stderr, "DEBUG: In get_file_list, %15s:%s\n", "ext", ext);
-    DIR *d;
-    d = opendir(cpath); free(cpath);
-    if(d) {
-        struct dirent *elem;
-        int fcount = 0;
-        while((elem = readdir(d)) != NULL) {
-            if(elem-> d_type != DT_DIR) {
-                fcount++;
-            }
-        }
-        rewinddir(d);
-        dgprintf(stderr, " get_file_list size %d\n", fcount);
-        FILE* f = fopen("__simple_filelist__", "w");
-        fcount = 0;
-        char *cext = F90toCstring(ext, 3);
-        if(strcmp(ext, "")) {
-            while((elem = readdir(d)) != NULL) {
-                if(elem->d_type != DT_DIR) {
-                    fprintf(f, "%s\n", elem->d_name);
-                    fcount++;
-                }
-            }
-        } else {
-            while((elem = readdir(d)) != NULL) {
-                if(elem->d_type != DT_DIR) {
-                    if(strstr(elem->d_name, ext) != NULL) {
-                        fprintf(f, "%s\n", elem->d_name);
-                        fcount++;
-                    }
-                }
-            }
-        }
-        *count = fcount;
-        free(cext);
-        fclose(f);
-        closedir(d);
-    } else {
-        printf("%d %s\nget_file_list opendir failed to open %s\n", errno, strerror(errno), path);
-        perror("Failed : simple_posix.c::get_file_list ");
-        return -1;
-    }
     return 0;
 }
 

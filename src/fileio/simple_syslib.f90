@@ -90,16 +90,6 @@ interface
         integer(c_int), intent(inout) :: count
     end function removedir
 
-    function get_file_list(path,str_len, ext, count) bind(c,name="get_file_list")
-        use, intrinsic :: iso_c_binding
-        implicit none
-        integer(c_int) :: get_file_list                           !> return success
-        character(kind=c_char,len=1),dimension(*),intent(in)   :: path
-        integer(c_int), intent(in) :: str_len
-        character(kind=c_char,len=1),dimension(*),intent(in)   :: ext
-        integer(c_int), intent(inout) :: count                    !> number of elements in results
-    end function get_file_list
-
     function list_dirs(path, str_len, list_fout, str_len_fout, count) bind(c,name="list_dirs")
         use, intrinsic :: iso_c_binding
         implicit none
@@ -703,35 +693,9 @@ contains
         if(l>0) str(l:)=' '
     end subroutine syslib_c2fortran_string
 
-    function simple_list_dirs(path, part, outfile, status) result(list)
-        use simple_strings, only: int2str
-        character(len=*),           intent(in)  :: path
-        integer,                    intent(in)  :: part
-        character(len=*), optional, intent(in)  :: outfile
-        integer,          optional, intent(out) :: status
-        character(len=STDLEN),        allocatable :: list(:)
-        character(kind=c_char,len=:), allocatable :: pathhere
-        character(len=STDLEN) :: list_fname
-        integer               :: stat, i,num_dirs, luntmp
-        allocate(pathhere, source=trim(adjustl(path))//c_null_char)
-        list_fname = '__simple_filelist_'//int2str(part)//'__'
-        stat = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
-        if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
-        if(present(outfile)) call syslib_copy_file(trim(list_fname), trim(outfile))
-        open(newunit = luntmp, file = trim(list_fname))
-        allocate( list(num_dirs) )
-        do i = 1,num_dirs
-            read( luntmp, '(a)' ) list(i)
-        enddo
-        close( luntmp, status = 'delete' )
-        deallocate(pathhere)
-        if(present(status)) status= stat
-    end function simple_list_dirs
-
-    function find_next_int_dir_prefix( dir2list, part, last_prev_dir ) result( next_int_dir_prefix )
+    function find_next_int_dir_prefix( dir2list, last_prev_dir ) result( next_int_dir_prefix )
         use simple_strings, only: char_is_a_number, map_str_nrs, str2int
         character(len=*),                        intent(in)  :: dir2list
-        integer,                                 intent(in)  :: part
         character(len=:), allocatable, optional, intent(out) :: last_prev_dir
         character(len=STDLEN)              :: str
         character(len=STDLEN), allocatable :: dirs(:)
@@ -739,7 +703,7 @@ contains
         integer,               allocatable :: dirinds(:)
         integer :: i, j, last_nr_ind, io_stat
         integer :: next_int_dir_prefix, ndirs, loc(1)
-        dirs = simple_list_dirs(dir2list, part)
+        dirs = simple_list_dirs(dir2list)
         last_nr_ind = 1
         if( allocated(dirs) )then
             ndirs = size(dirs)
@@ -771,20 +735,39 @@ contains
         endif
     end function find_next_int_dir_prefix
 
-    subroutine simple_list_files( pattern, list, id )
+    function simple_list_dirs(path, outfile, status) result(list)
+        use simple_strings, only: int2str
+        character(len=*),           intent(in)  :: path
+        character(len=*), optional, intent(in)  :: outfile
+        integer,          optional, intent(out) :: status
+        character(len=STDLEN),        allocatable :: list(:)
+        character(kind=c_char,len=:), allocatable :: pathhere
+        character(len=STDLEN) :: list_fname
+        integer               :: stat, i,num_dirs, luntmp
+        allocate(pathhere, source=trim(adjustl(path))//c_null_char)
+        list_fname =  '__simple_filelist_'//int2str(part_glob)//'__'
+        stat = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
+        if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
+        if(present(outfile)) call syslib_copy_file(trim(list_fname), trim(outfile))
+        open(newunit = luntmp, file = trim(list_fname))
+        allocate( list(num_dirs) )
+        do i = 1,num_dirs
+            read( luntmp, '(a)' ) list(i)
+        enddo
+        close( luntmp, status = 'delete' )
+        deallocate(pathhere)
+        if(present(status)) status= stat
+    end function simple_list_dirs
+
+    subroutine simple_list_files( pattern, list )
         use simple_strings, only: int2str
         character(len=*),                       intent(in)    :: pattern
         character(len=LONGSTRLEN), allocatable, intent(inout) :: list(:)
-        integer,                   optional,    intent(in)    :: id
         character(len=STDLEN)     :: cmd
         character(len=LONGSTRLEN) :: tmpfile
         character(len=1) :: junk
         integer :: sz, funit, ios, i, nlines
-        if( present(id) )then
-            tmpfile = '__simple_filelist_'//int2str(id)//'__'
-        else
-            tmpfile = '__simple_filelist__'
-        endif
+        tmpfile = '__simple_filelist_'//int2str(part_glob)//'__'
         cmd = 'ls '//trim(pattern)//' > '//trim(tmpfile)
         call exec_cmdline( cmd, suppress_errors=.true.)
         inquire(file=trim(tmpfile), size=sz)
