@@ -3,6 +3,8 @@ module simple_test_chiara_try_mod
   use simple_image, only : image
   implicit none
   public
+  ! #include "simple_local_flags.inc"
+
   contains
       subroutine get_pixel_pos(rmat_masked, pos)
           integer,              intent(in)  :: rmat_masked(:,:,:)
@@ -67,6 +69,36 @@ module simple_test_chiara_try_mod
         enddo
         diameter = maxval(dist)
     end function part_diameter
+    !This function plots the gray-level histogram of a 2D image
+    ! COULD IMPLEMENT OTHER OPTIONS FOR THE HIST
+    subroutine gray_level_hist(img)
+        use gnufor2
+        class(image), intent(inout) :: img
+        ! real(kind=4),    optional   :: pause
+        ! character(len=*),optional   :: color, terminal, filename, persist, input
+        real, allocatable :: rmat(:,:,:)
+        real, allocatable :: x(:) !vectorisation of the matrix
+        integer :: n ! number of intervals
+        rmat = img%get_rmat()
+        x = pack(rmat(:,:,:), .true.)
+        n = int(maxval(rmat))-int(minval(rmat)) + 1
+        call hist(x, n)
+        deallocate(rmat,x)
+    end subroutine gray_level_hist
+
+      ! subroutine hist(x,n,pause,color,terminal,filename,persist,input)
+      !
+      !     ! this subroutine plots the histogram of data contained in array x, using n bins
+      !
+      !     implicit none
+      !     real(kind=4), intent(in)  :: x(:) !the data to plot
+      !     integer, intent(in)       :: n !the number of intervals
+      !     real(kind=4), optional    :: pause
+      !     character(len=*),optional :: color, terminal, filename, persist, input
+      !     integer                   :: i, j, ierror, ios, file_unit, nx
+      !     character(len=100)        :: data_file_name, command_file_name, yrange, xrange1, xrange2, my_color, &
+      !         & xtic_start, dxtic, xtic_end, my_pause, my_persist
+      !     real(kind=4)              :: xmin, xmax, xhist(0:n), yhist(n+1), dx
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
@@ -83,9 +115,70 @@ program simple_test_chiara_try
   use simple_edge_detector
   use simple_parameters, only: parameters
   use simple_cmdline,    only: cmdline
+type(image) :: img, img_out
+real, allocatable :: rmat(:,:,:)
+integer :: i, winsz
+logical ::yes_no
+real :: matrix(7,7,1), thresh, lp
 
-  call process_ps_stack('pspecs_saga_polii.mrc', 'analysed_pspecs_saga_polii.mrc', 1.14, 35.)
+ ! img = build_ice_template(512, 1.41, winsz)
+ ! print *, 'WINSZ = ', winsz
+ ! call img_win%new([int(winsz/2),int(winsz/2),1], 1.41)
+ ! call img%write('IceTemplate.mrc')
+ ! call img%window_slim([int(winsz/4),int(winsz/4)], 10, img_win, outside )
+ ! call img_win%write('IceTemplateWin.mrc')
+ ! print *, 'OUTSIDE = ', outside
 
+ ! call img%ellipse([256,256],[20.,20.], 'yes')
+ ! call img%ellipse([352,312],[10.,5.], 'yes')
+ ! call img%ellipse([23,25],[5.,10.], 'yes')
+ ! call img%ellipse([112,53],[10.,10.], 'yes')
+ !  call img%ellipse([220,153],[8.,8.], 'yes')
+ ! call img%read('ToyImage.mrc')
+ ! call img%find_connected_comps(img_cc)
+ ! call img_cc%write('ToyImageCC.mrc')
+ ! yes_no = is_symmetric(img_cc, 1)
+ ! print *, 'CC ', 1, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 2)
+ ! print *, 'CC ', 2, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 3)
+ ! print *, 'CC ', 3, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 4)
+ ! print *, 'CC ', 4, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 5)
+ ! print *, 'CC ', 5, ' is symmetric ', yes_no
+
+  ! !TO START AGAIN FROM HERE
+  ! call img%new([512,512,1],1.)
+  ! call img_cc%new([512,512,1],1.)
+  ! call img%read('SAGAWhithICEBin.mrc')
+  ! call img%find_connected_comps(img_cc)
+  ! call img_cc%write('SAGAWithICEBinCC.mrc')
+  ! rmat = img_cc%get_rmat()
+  ! do i = 1, int(maxval(rmat))
+  !   yes_no = is_symmetric(img_cc, i)
+  !   print *, 'CC ', i, ' is symmetric ', yes_no
+  ! enddo
+
+ ! call process_ps_stack('pspecs_sphire_tstdat.mrc', 'analysed_pspecs_sphire.mrc', 1.41, 20.,1)
+! call process_ps_stack('pspecs_saga_polii.mrc', 'analysed_pspecs_saga_polii.mrc', 1.14, 35.,2)
+
+
+! call img%new([2048,2048,1],1.)
+! !call img%read('/home/lenovoc30/Desktop/MassCenter/simple_test_chiara_mass_center/shrunken_hpassfiltered.mrc')
+! call img%read('ImgNOnoise.mrc')
+! call iterative_thresholding(img,img_out,thresh)
+! call img%write('Img_inParticle.mrc')
+! call img_out%write('Img_outParticle_iterative_thresholding.mrc')
+! print *, 'selected threshold: ' , thresh
+! call otsu(img,img_out,thresh)
+! call img_out%write('Img_outParticle_otsu.mrc')
+! print *, 'selected threshold: ' , thresh
+! 
+! call img%new([1024,1024,1],1.)
+! call img%read('/home/lenovoc30/Desktop/PickingResults/SomeExamples/NegStainingWorking/try23Nov/bp_filtered.mrc')
+! call img%NLmean()
+! call img%write('NLmeanFiltered.mrc')
 end program simple_test_chiara_try
 !In here you have to implement the statistics.
 

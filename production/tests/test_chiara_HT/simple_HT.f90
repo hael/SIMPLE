@@ -43,16 +43,16 @@ real,    allocatable    :: rmat(:,:,:), mat_HT(:,:,:)
 integer, allocatable    :: H(:,:), x_inds(:), y_inds(:)
 type(image)             :: img_e
 type(three_vect)        :: vectors
-integer                 :: num_steps(3), ldim(3), max_pos(2), box, cnt, l_sig(1)
-real                    :: ranges(2,3), center(2), b1
+integer                 :: num_steps(3), ldim(3), max_pos(2), box, cnt, l_sig(1), center(2)
+real                    :: ranges(2,3), b1
 
 !STEP 0, READING AND PREPROCESSING
 box  = 256
 ldim = [box,box,1]
 allocate( rmat(box,box,1) )
 call img_e%new(ldim,1.)
-center = [real(floor(real(box/2))), real(floor(real(box/2)))]
-call img_e%build_ellipse( center , [50.,60.], 0.)
+center = [floor(real(box/2)), floor(real(box/2))]
+call img_e%ellipse( center , [50.,60.], 'yes')
 rmat = img_e%get_rmat()
 N    = count(rmat > 0.5) ! number of points of interest, whites are 1
 allocate(x_inds(N), y_inds(N), source = 0)

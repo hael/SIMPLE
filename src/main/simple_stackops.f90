@@ -5,7 +5,7 @@ use simple_image,   only: image
 use simple_oris,    only: oris
 implicit none
 
-public :: make_pattern_stack, binarize_stack, calc_log_stack
+public :: make_pattern_stack, binarize_stack, prepare_stack
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 private
 #include "simple_local_flags.inc"
@@ -228,20 +228,18 @@ contains
     end subroutine calc_log_stack
 
     !!!!ADDED BY CHIAAARA!!!!!!!!!
-    ! This subroutine takes in input a stack of images and binarises them.
-    ! It is meant to binarise power spectra stacks.
+    ! This subroutine takes in input a stack of images and performs
+    ! a series of operations on it in order to prepare it to be
+    ! binarised. It is written for power spectra stacks.
     ! Procedure:
-    !
     !                -) logarithm of the image (after pixel scaling)
     !                -) background subtraction
     !                -) median filter
-    !                -) canny automatic edge detection
-    !
-    subroutine binarize_stack( fname2process, fname, smpd, lp )
+    subroutine prepare_stack( fname2process, fname, smpd, lp, winsz)
         use simple_procimgfile,   only : subtr_backgr_imgfile, real_filter_imgfile
-        use simple_edge_detector, only : canny
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lp
+        integer,          intent(in) :: winsz !for median filtering
         integer     :: n, ldim(3), i
         type(image) :: img
         call find_ldim_nptcls(fname2process, ldim, n)
@@ -250,12 +248,26 @@ contains
         call raise_exception( n, ldim, 'calc_log_imgfile' )
         call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
         call subtr_backgr_imgfile( fname, fname, smpd, lp )
-        call real_filter_imgfile(fname, fname, smpd, 'median', 2) !winsz=2
-        do i = 1, n
-            call img%read( fname, i)
-            call canny(img)
-            call img%write(fname,i)
-        enddo
+        call real_filter_imgfile(fname, fname, smpd, 'median', winsz) 
         call img%kill
+    end subroutine prepare_stack
+
+    !This subroutine performs Canny automatic edge detection on a stack
+    !of images.
+    subroutine binarize_stack(fname2process,fname,smpd)
+      use simple_edge_detector, only : canny
+      character(len=*), intent(in) :: fname2process, fname
+      real,             intent(in) :: smpd
+      integer     :: n, ldim(3), i
+      type(image) :: img
+      call find_ldim_nptcls(fname2process, ldim, n)
+      ldim(3) = 1
+      call img%new(ldim,smpd)
+      do i = 1, n
+          call img%read(fname2process, i)
+          call canny(img)
+          call img%write(fname,i)
+      enddo
+      call img%kill
     end subroutine binarize_stack
 end module simple_stackops

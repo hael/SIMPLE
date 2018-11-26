@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny
+public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu
 
 private
 #include "simple_local_flags.inc"
@@ -125,8 +125,8 @@ contains
       allocate(vector(size(grad)), source = pack(grad, .true.))
       m = median(vector) !Use the gradient, the source talks about the image itself
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-      tthresh(1) = max(0.   ,(1-sigma)*m) !lower
-      tthresh(2) = min(255., (1+sigma)*m) !upper
+      tthresh(1) = max(1.,                  (1-sigma)*m) !lower
+      tthresh(2) = min(real(ldim(1))*2.+1., (1+sigma)*m) !upper
       print *, 'Selected thresholds: ', tthresh
       if (present(lp)) then
           call canny_edge(img_in,tthresh,lp)
@@ -149,7 +149,7 @@ contains
         !if the rounded edge direction angle is   0 degrees, checks the north and south directions
         !if the rounded edge direction angle is  45 degrees, checks the northwest and southeast directions
         !if the rounded edge direction angle is  90 degrees, checks the east and west directions
-        !if the rounded edge direction angle is 135 degrees, checks the east and west directions
+        !if the rounded edge direction angle is 135 degrees, checks the northeast and southwest directions
         allocate(temp_mat(ldim(1),ldim(2),1), source = mat_in)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
@@ -277,4 +277,147 @@ contains
         img_in = Gr
         deallocate(grad)
     end subroutine canny_edge
+
+    !This subroutine binarises an image through iterative thresholding.
+    !ALGORITHM: -) select initial threshold T
+    !           -) split the image in 2 groups according to T
+    !           -) calc the mean grey level value in each group M1, M2
+    !           -) update T as the mean value of M1 and M2
+    !           -) stop when 2 threshold in a row are 'similar'
+    subroutine iterative_thresholding(img_in,img_out,thresh)
+      class(image),   intent(inout) :: img_in
+      type(image),    intent(out)   :: img_out
+      real, optional, intent(out)   :: thresh  !selected threshold for binarisation
+      real, allocatable    :: rmat(:,:,:)
+      logical, allocatable :: mask(:,:,:)
+      real, parameter :: TOLL = 0.05           !tollerance for threshold selection
+      real            :: T_n, T
+      integer         :: cnt
+      call img_out%new(img_in%get_ldim(),img_in%get_smpd())
+      rmat = img_in%get_rmat()
+      allocate(mask(size(rmat, dim =1), size(rmat, dim =1), size(rmat, dim = 3)), source = .false.)
+      T = (maxval(rmat) + minval(rmat))/2.    !initial guessing
+      T_n = T + 1                             !to get into the while loop
+      cnt = 0                                 !# of iterations
+      do while(abs(T-T_n)> TOLL)
+          cnt = cnt + 1
+          if(cnt > 0)  T = T_n
+          where(rmat <= T) mask = .true.                            !in order to distinguish the 2 groups
+          T_n = ((sum(rmat,       mask)/real(count(     mask))) + &
+               & (sum(rmat, .not. mask)/real(count(.not. mask))))/2.!new threshold
+      enddo
+      if(present(thresh)) thresh = T_n
+      where(rmat > T_n)  !thresholding
+          rmat = 1.
+      elsewhere
+          rmat = 0.
+      endwhere
+      call img_out%set_rmat(rmat)
+      deallocate(rmat, mask)
+    end subroutine iterative_thresholding
+
+    ! !This subroutine calculates the probability q1, q2 of being in group1,2.
+    ! !it is for Otsu thresholding.
+    ! subroutine calc_prob_groups(p,T,q1,q2)
+    !   real, intent(in)  :: p(MIN_VAL:MAX_VAL)
+    !   real, intent(in)  :: T !threshold for group splitting
+    !   real, intent(out) :: q1, q2
+    !   integer :: i
+    !
+    !   if(T > MAX_VAL .or. T < MIN_VAL ) THROW_HARD('Invalid parameter! T; calc_prob_groups')
+    !   q1 = sum(p(i), i = MIN_VAL, T)
+    !   q2 = sum(p(i), i = T, MAX_VAL)
+    !
+    ! end subroutine calc_prob_groups
+
+    subroutine otsu(img_in,img_out, thresh)
+      class(image),   intent(inout) :: img_in
+      type(image),    intent(out)   :: img_out
+      real, optional, intent(out)   :: thresh  !selected threshold for binarisation
+      integer :: i, T
+      integer, parameter :: MIN_VAL = 1, MAX_VAL = 256
+      ! integer :: MIN_VAL, MAX_VAL
+      real,    allocatable :: rmat(:,:,:)
+      real, allocatable :: p(:)
+      real :: q1, q2, m1, m2
+      real :: sigma1, sigma2
+      real :: sigma, sigma_next
+      real :: sum1, sum2
+      real :: threshold !threshold for binarisation
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      ! integer :: ldim(3)
+      ! ldim = img_in%get_ldim()
+      ! MIN_VAL = 1
+      ! MAX_VAL = ldim(1)*2+1
+      !!!!!!!!!!!!!
+      call img_in%scale_pixels(real([MIN_VAL,MAX_VAL]))
+      ! call img_in%write('BeforeOtsu.mrc')
+      call img_out%new(img_in%get_ldim(), img_in%get_smpd())
+      rmat = img_in%get_rmat()
+      ! print *, 'MIN = ', minval(rmat)
+      ! print *, 'MAX_VAL = ', maxval(rmat)
+      ! print *, count(abs(rmat-maxval(rmat)) < TINY)
+      allocate(p (MIN_VAL:MAX_VAL),     source = 0.)
+      do i = MIN_VAL, MAX_VAL
+          p(i) = count(abs(rmat-i) < 0.5)   !p = (count(abs(rmat-i) < 0.5), i = MIN_VAL, MAX_VAL)
+      enddo
+      p = p/(size(rmat, dim = 1)*size(rmat, dim = 2)*size(rmat, dim = 3)) !normalise, it's a probability
+      print *, 'Is it 1? ', sum(p)
+      q1 = 0.
+      q2 = sum(p)
+      sum1 = 0.
+      sum2 = 0.
+      do i = MIN_VAL, MAX_VAL
+        sum2 = sum2 + i*p(i)
+      enddo
+      !sigma = 1000. !initialisation
+      !FOLLOWING it
+      print *, 'P = ', p
+      do T = MIN_VAL, MAX_VAL-1
+          q1 = q1 + p(T)
+          q2 = q2 - p(T)
+          print *, 'T = ', T, 'q1 = ', q1, 'q2 = ', q2
+          sum1 = sum1 + T*p(T)
+          sum2 = sum2 - T*p(T)
+          m1 = sum1/q1
+          m2 = sum2/q2
+          sigma1 = 0.
+          if(T > MIN_VAL) then  !do not know if it is necessary
+              do i = MIN_VAL, T
+                  sigma1 = sigma1 + (i-m1)**2*p(i)
+              enddo
+          else
+              sigma1 = 0.
+          endif
+          sigma1 = sigma1/q1
+          print*, "T = ", T, 'sigma1= ', sigma1, 'm1 = ', m1, 'q1 = ', q1
+          if(T < MAX_VAL-1) then
+              do i = T+1, MAX_VAL
+                  sigma2 = sigma2 + (i-m2)**2*p(i)
+              enddo
+          else
+              sigma2 = 0.
+          endif
+          sigma2 = sigma2/q2
+          sigma_next = q1*sigma1 +q2*sigma2
+          ! print *, 'T = ', T, 'sigma = ', sigma, 'sigma_next = ', sigma_next, 'q1 = ', q1, 'q2 = ', q2
+          ! print *, 'sigma1 = ', sigma1, 'sigma2 = ', sigma2
+          if(sigma_next < sigma .and. T > MIN_VAL) then
+              threshold = T !keep the minimum
+              print *, 'I am into, T = ', T
+              !print *, 'SIgma = ', sigma, 'SIgma_next = ', sigma_next
+              sigma = sigma_next
+          elseif(T == MIN_VAL) then
+              sigma = sigma_next
+          endif
+      enddo
+      if(present(thresh)) thresh = threshold
+      where(rmat > threshold)
+          rmat = 1.
+      elsewhere
+          rmat = 0.
+      endwhere
+      call img_out%set_rmat(rmat)
+      deallocate(rmat, p)
+    end subroutine otsu
 end module simple_edge_detector

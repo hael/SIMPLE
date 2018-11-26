@@ -210,11 +210,11 @@ contains
     procedure          :: size_connected_comps
     procedure          :: is_cc_closed                !!!!!!!!!ADDED BY CHIARA
     procedure          :: prepare_connected_comps
-    procedure          :: elim_cc                     !!!!!!!!!ADDED BY CHIARA
-    procedure          :: dilatation                  !!!!!!!!!ADDED BY CHIARA
-    procedure          :: erosion                     !!!!!!!!!ADDED BY CHIARA
-    procedure          :: morpho_closing              !!!!!!!!!ADDED BY CHIARA
-    procedure          :: morpho_opening              !!!!!!!!!ADDED BY CHIARA
+    procedure          :: elim_cc
+    procedure          :: dilatation
+    procedure          :: erosion
+    procedure          :: morpho_closing
+    procedure          :: morpho_opening
     procedure          :: border_mask                 !!!!!!!!!ADDED BY CHIARA
     ! FILTERS
     procedure          :: acf
@@ -241,8 +241,8 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    !procedure          :: NLmean              !!!!!!!!!ADDED BY CHIARA, still to work on
-    !procedure          :: similarity_window   !!!!!!!!!ADDED BY CHIARA
+    procedure          :: NLmean              !!!!!!!!!ADDED BY CHIARA, still to work on
+    procedure          :: similarity_window   !!!!!!!!!ADDED BY CHIARA
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -256,9 +256,9 @@ contains
     procedure          :: cure
     procedure          :: loop_lims
     procedure          :: calc_gradient
-    procedure          :: calc_neigh_8_1
-    procedure          :: calc_neigh_8_2     !!!!!!!!!!ADDED BY CHIARA
-    generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2 !!!!!!!!!!ADDED BY CHIARA
+    procedure, private :: calc_neigh_8_1
+    procedure, private :: calc_neigh_8_2
+    generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -339,6 +339,7 @@ contains
     procedure          :: cure_outliers
     procedure          :: zero_below
     procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
+    procedure          :: ellipse          !!!!!!!!!!!!!!ADDED BY CHIARA
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -3186,7 +3187,7 @@ contains
     end subroutine enumerate_white_pixels
 
 
-    !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+
     !This subroutine enumerates (increasing order) the connected components
     !of the image. This connected components are selected by
     !'find_connected_comps' procedure.
@@ -3213,7 +3214,7 @@ contains
         enddo
     end subroutine enumerate_connected_comps
 
-    ! Img_in should be a binary image. Img_out is the connencted component image.
+    ! Img_in should be a binary image. Img_out is the connected component image.
     subroutine find_connected_comps(img_in, img_out)
         class(image), intent(in)  :: img_in
         type(image),  intent(out) :: img_out
@@ -3321,7 +3322,6 @@ contains
         deallocate(sz,biggest_cc,biggest_val)
     end subroutine prepare_connected_comps
 
-    !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!
     ! This subroutine takes in input a connected component (cc) image
     ! and sets to 0 the cc which has size (# pixels) smaller than min_sz = range(1)
     ! or bigger than max_sz = range(2).
@@ -3343,7 +3343,7 @@ contains
         enddo
     end subroutine elim_cc
 
-     !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation dilatation.
     subroutine dilatation(self)
@@ -3369,7 +3369,7 @@ contains
         call self_copy%kill
     end subroutine dilatation
 
-     !!!!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation erosion.
     subroutine erosion(self)
@@ -3384,7 +3384,7 @@ contains
         endwhere
     end subroutine erosion
 
-     !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+
      ! This subroutine implements morphological operation of closing
      ! on the image self.
     subroutine morpho_closing(self)
@@ -3396,7 +3396,7 @@ contains
         call self%erosion()
     end subroutine morpho_closing
 
-     !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!
+
      ! This subroutine implements morphological operation of opening
      ! on the image self.
     subroutine morpho_opening(self)
@@ -3408,7 +3408,7 @@ contains
         call self%dilatation()
     end subroutine morpho_opening
 
-     !!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
+
      ! This subroutine builds the logical array 'border' of the same dims of
      ! the input image self. Border is true in corrispondence of
      ! the border pixels in self. Self is meant to be binary.
@@ -4382,72 +4382,60 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    ! !!!!!!!!!ADDED BY CHIARA, for NLmean.
-    ! function similarity_window(self,px) result(sw)
-    !     class(image), intent(in) :: self
-    !     integer,      intent(in) :: px(3)
-    !     integer, parameter  :: DIM_SW = 7
-    !     real                :: sw_mat(DIM_SW,DIM_SW,1), sw(DIM_SW*DIM_SW)
-    !     if(px(3) /= 1) THROW_HARD('similarity window. Image has to be 2D!')
-    !     if(px(1) < 1 .or. px(1)+DIM_SW-1 > self%ldim(1) .or. &
-    !     &  px(2) < 1 .or. px(2)+DIM_SW-1 > self%ldim(2)) THROW_HARD('similarity window. Padding error!')
-    !     sw_mat(:DIM_SW,:DIM_SW,1) = self%rmat(px(1):px(1)+DIM_SW-1, px(2):px(2)+DIM_SW-1,1)  !self is meant to be pad
-    !     sw = reshape(sw_mat,[DIM_SW*DIM_SW])
-    ! end function similarity_window
+    !!!!!!!!!ADDED BY CHIARA, for NLmean. I will remove it in order to improve
+    ! the performance
+    function similarity_window(self,px) result(sw)
+        class(image), intent(in) :: self
+        integer,      intent(in) :: px(2)
+        integer, parameter  :: DIM_SW = 3
+        real                :: sw(DIM_SW,DIM_SW)
+        sw(:DIM_SW,:DIM_SW) = self%rmat(px(1):px(1)+DIM_SW-1, px(2):px(2)+DIM_SW-1,1)  !self is meant to be pad
+    end function similarity_window
 
-    !!!!!!!!ADDED BY CHIARA, still to work on
-    ! subroutine NLmean(self)
-    !   class(image), intent(inout) :: self
-    !   real, allocatable  :: NL(:,:,:), Z(:,:,:)
-    !   integer, parameter :: DIM_SW = 7
-    !   real               :: sw(DIM_SW*DIM_SW), sw_px(DIM_SW*DIM_SW)
-    !   integer            :: i, j, m, n,  pad
-    !   integer, parameter :: cfr_box = 10
-    !   real, parameter    :: sigma = 5., h =4.*sigma !SIGMA, H..?
-    !   type(image)        :: img_p
-    !   real               :: w
-    !   pad = (DIM_SW-1)/2
-    !   call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.) !you can also insert a control so that you pad only if necessary
-    !   call self%scale_pixels([1.,500.])
-    !   call self%pad(img_p)
-    !   allocate(Z(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2),1), source = 0.)
-    !   do m = 1,self%ldim(1)             !fix pixel (m,n)
-    !     do n = 1,self%ldim(2)
-    !       do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
-    !           do j = -cfr_box,cfr_box
-    !             if(i/=0 .or. j/=0) then !Not to take pixel (m,n)
-    !                 if(m+i > 0 .and. m+i <= self%ldim(1) .and. n+j > 0 .and. n+j <= self%ldim(2)) then
-    !                     Z(m,n,1) = Z(m,n,1)+ &
-    !                     & exp(-((norm2( img_p%similarity_window([m,n,1]) &
-    !                                 & - img_p%similarity_window([m+i,n+j,1])))**2./h**2.))
-    !                 endif
-    !             endif
-    !           enddo
-    !       enddo
-    !     enddo
-    !   enddo
-    !
-    !   do m = 1,self%ldim(1)
-    !     do n = 1,self%ldim(2)
-    !       sw_px = img_p%similarity_window([m,n,1])
-    !       do i = -cfr_box,cfr_box   !As suggested in the paper, I just consider a box 21x21
-    !           do j = -cfr_box,cfr_box
-    !             if(i/=0 .or. j/=0) then !Not to take pixel (m,n)
-    !                 if(m+i > 0 .and. m+i <= self%ldim(1) .and. n+j > 0 .and. n+j <= self%ldim(2)) then
-    !                     if(abs(Z(m,n,1)) > TINY) then !do not divide by 0
-    !                         sw = img_p%similarity_window([m+i,n+j,1])
-    !                         w = (exp(-((norm2(sw_px-sw))**2./h**2.)))/Z(m,n,1)
-    !                         NL(m,n,1) = NL(m,n,1)+w*self%rmat(m+i,n+j,1)
-    !                     endif
-    !                 endif
-    !             endif
-    !           enddo
-    !       enddo
-    !     enddo
-    !   enddo
-    !   call self%set_rmat(NL)
-    !   deallocate(Z,NL)
-    ! end subroutine NLmean
+    !!!!!!!ADDED BY CHIARA, still to work on, to make it faster
+    subroutine NLmean(self)
+      class(image), intent(inout) :: self
+      real, allocatable  :: NL_image(:,:,:), NL(:,:)
+      integer, parameter :: DIM_SW = 3
+      real               :: sw(DIM_SW,DIM_SW), sw_px(DIM_SW,DIM_SW)
+      integer            :: i, j, m, n,  pad
+      integer, parameter :: cfr_box = 5
+      real :: z,sigma, h , h_sq
+      type(image)        :: img_p
+      real               :: w, sum
+      pad = (DIM_SW-1)/2
+      sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
+      h = 4.*sigma !h = 4.*sigma
+      h_sq = h**2
+      call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.)
+      call self%pad(img_p)
+      allocate(NL_image(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2)), source = 0.)
+      do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n
+        do n = cfr_box+1,self%ldim(2)-cfr_box-1
+          sw_px = similarity_window(img_p,[m,n])
+          z = 0.
+          do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
+              do j = -cfr_box,cfr_box
+                if(i==0.and.j==0)cycle
+                sw = similarity_window(img_p, [m+i,n+j])
+                z = z + exp(-norm2(sw_px- sw)**2./h_sq)
+              enddo
+          enddo
+          if(abs(z) < 0.001) cycle
+          do i = -cfr_box,cfr_box   !As suggested in the paper, I just consider a box 21x21
+              do j = -cfr_box,cfr_box
+                if(i==0.and.j==0)cycle
+                sw = similarity_window(img_p, [m+i,n+j])
+                w = exp(-norm2(sw_px-sw)**2./h_sq) / z
+                NL(m,n) = NL(m,n)+w*self%rmat(m+i,n+j,1)
+              enddo
+          enddo
+        enddo
+      enddo
+      NL_image(:,:,1) = NL(:,:)
+      call self%set_rmat(NL_image)
+      deallocate(NL, NL_image)
+end subroutine NLmean
 
     ! CALCULATORS
 
@@ -6750,7 +6738,7 @@ contains
         call tmp%kill()
     end subroutine clip_inplace
 
-    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+
     ! This subroutine rescales the pixel intensities to a new input range.
     subroutine scale_pixels(self, new_range)
           class(image), intent(inout) :: self
@@ -7175,14 +7163,57 @@ contains
         where( self%rmat < thres ) self%rmat = 0.
     end subroutine zero_below
 
-    !!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
+    !>  \brief ellipse constructs an ellipse of given axes.
+    !    optional parameter 'hole' (yes|no) allows the user to choose
+    !    between the full ellipse or just its borders. Default: full.
+    !    It is faster then build_ellipse, but this latter has the option
+    !    of rotating the ellipse. The ellipse is built 'on top' of the image,
+    !    it doesn't cancel what is already present
+    subroutine ellipse(self, center, axes, hole)
+        class(image),               intent(inout) :: self
+        real,                       intent(in)    :: axes(2)
+        integer,                    intent(in)    :: center(2)
+        character(len=*), optional, intent(in)    :: hole
+        integer :: i, j
+        if(.not. self%existence) THROW_HARD('Image has to be created before; ellipse')
+        if(self%ldim(3) /= 1) THROW_HARD('For 2D images only; ellipse')
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                if((real(i)-center(1))**2/(axes(1)**2) + (real(j)-center(2))**2/(axes(2)**2) - 1 < TINY) then
+                    if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
+                      self%rmat(i,j,1) = maxval(self%rmat(:,:,:))
+                    else
+                      self%rmat(i,j,1) = 1.
+                    endif
+                endif
+            enddo
+        enddo
+        if(present(hole)) then
+            if(hole .eq. 'yes') then
+              do i = 1, self%ldim(1)
+                  do j = 1, self%ldim(2)
+                      if((real(i)-center(1))**2/(axes(1)-1)**2 + (real(j)-center(2))**2/(axes(2)-1)**2 - 1 < TINY) then
+                          if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
+                              self%rmat(i,j,1) = minval(self%rmat(:,:,:))
+                          else
+                              self%rmat(i,j,1) = 0.
+                          endif
+                        endif
+                  enddo
+              enddo
+            elseif(hole .ne. 'no') then
+              THROW_HARD('Input error for hole parameter; ellipse')
+            endif
+          endif
+    end subroutine ellipse
+
+
     ! build_ellipse construts an ellipse centered in center
-    ! with axis length equal to axis and rotation angle rot.
-    ! This subroutine is not a constructor since
-    ! it supposes self has already been created.
-    subroutine build_ellipse(self, center, axis, rot)
+    ! with axes length equal to axes and ROTATION angle rot.
+    ! This supposes self has already been created.
+    subroutine build_ellipse(self, center, axes, rot)
         class(image), intent(inout) :: self
-        real,         intent(in)    :: center(2), axis(2), rot
+        real,         intent(in)    :: center(2), axes(2), rot
         real, allocatable :: theta(:)
         integer           :: i, j, k
         if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
@@ -7191,10 +7222,10 @@ contains
         do k = 1,size(theta)
             do i = 1, self%ldim(1)
                 do j = 1,self%ldim(2)
-                    if(abs(real(i) - center(1) - axis(1)*cos(theta(k))*cos(deg2rad(rot))&
-                                             & + axis(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
-                    &  abs(real(j) - center(1) - axis(1)*cos(theta(k))*sin(deg2rad(rot))&
-                                             & - axis(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
+                    if(abs(real(i) - center(1) - axes(1)*cos(theta(k))*cos(deg2rad(rot))&
+                                             & + axes(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
+                    &  abs(real(j) - center(1) - axes(1)*cos(theta(k))*sin(deg2rad(rot))&
+                                             & - axes(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
                         call self%set([i,j,1], 1.)
                         call self%set([i+1,j+1,1], 0.)
                         call self%set([i-1,j-1,1], 0.)

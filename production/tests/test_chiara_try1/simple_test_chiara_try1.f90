@@ -58,6 +58,7 @@ program simple_test_chiara_try1
   call mic_copy%copy(mic_shrunken) !work on a copy not to modify the original mic
   call mic_copy%bp(0.,lp)
   call mic_copy%ifft()
+  call mic_copy%write('bp_filtered.mrc')
   call mic_lp%copy(mic_shrunken) !work on a copy not to modify the original mic
   call mic_lp%bp(0.,20.)
   call mic_lp%ifft()
@@ -69,6 +70,7 @@ program simple_test_chiara_try1
     call sobel(mic_copy,thresh)
   else if (params%detector .eq. 'bin') then
     call mic_copy%bin(ave+.8*sdev) !(ave+.7*sdev)
+    print *, 'threshold = ', ave+.8*sdev
   else if (params%detector .eq. 'canny') then
     call canny(mic_copy)
   endif
@@ -76,14 +78,12 @@ program simple_test_chiara_try1
   call mic_copy%real_space_filter(5,'median') !median filtering allows easy calculation of cc
   call mic_copy%write('Bin1Median.mrc')
 
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  ! call mic_copy%morpho_opening()
-  ! call mic_copy%morpho_closing()
-  ! call mic_copy%write('MorphoOpenedClosed.mrc')
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
   ! 5) Connected components (cc) identification
   call imgcc%new(ldim_shrunken, smpd_shrunken)
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  call mic_copy%read('MedianFiltered.mrc')
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   call mic_copy%find_connected_comps(imgcc)
   call imgcc%write('ConnectedComponents.mrc')
   ! 6) cc filtering
