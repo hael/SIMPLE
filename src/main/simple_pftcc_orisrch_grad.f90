@@ -67,7 +67,7 @@ contains
         logical,                   intent(out)   :: found_better
         complex, allocatable :: pft_ref_even(:,:) !< for thread safe use of pftcc
         complex, allocatable :: pft_ref_odd(:,:)  !< -"-
-        real     :: cxy(3), cost, cost_init
+        real     :: cxy(3), rotmat(2,2), cost, cost_init
         real(dp) :: f, grad(5), vec(5)
         integer  :: ithr
         ! copy the pftcc references so we can put them back after minimization is done
@@ -108,7 +108,8 @@ contains
             call o_inout%set_euler(self%ospec%x(1:3))
             ! rotate the shift vector to the frame of reference
             cxy(2:) = self%ospec%x(4:5)
-            cxy(2:) = matmul(cxy(2:), rotmat2d(self%ospec%x(3)))
+            call rotmat2d(self%ospec%x(3), rotmat)
+            cxy(2:) = matmul(cxy(2:), rotmat)
             ! update ori
             call o_inout%set_shift(cxy(2:))
             ! indicate that better was found

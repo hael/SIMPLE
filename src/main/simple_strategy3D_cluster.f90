@@ -73,11 +73,10 @@ contains
     subroutine statesrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: neigh_projs(s%nstates),neigh_inpls(s%nstates),iproj,iref,state,ineigh,inpl
-        real    :: corrs(s%nstates),corrs_inpl(s%nrots),corr,mi_state,mi_proj,allcorrs(s%nstates,10)
+        integer :: neigh_projs(s%nstates),iproj,iref,state,ineigh,inpl
+        real    :: corrs(s%nstates),corrs_inpl(s%nrots),corr,mi_state,mi_proj
         corrs       = -1.
         neigh_projs = 0
-        neigh_inpls = 0
         ! evaluate all correlations
         do state=1,s%nstates
             if( .not. s3D%state_exists(state) ) cycle
@@ -88,11 +87,9 @@ contains
                     iref  = (state-1)*s%nprojs + iproj
                     call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
                     inpl = maxloc(corrs_inpl,dim=1)
-                    corr = corrs_inpl(inpl)
-                    if( corr > corrs(state) )then
-                        corrs(state)       = corr
+                    if( corrs_inpl(inpl) > corrs(state) )then
+                        corrs(state)       = corrs_inpl(inpl)
                         neigh_projs(state) = iproj
-                        neigh_inpls(state) = inpl
                     endif
                 enddo
             else
@@ -115,8 +112,8 @@ contains
                 enddo
             endif
             corr = corrs(state)
-            s%nrefs_eval = 1
             iproj = s%prev_proj
+            s%nrefs_eval = 1
         else
             ! SHC state optimization
             s%prev_corr = corrs(s%prev_state)
@@ -238,12 +235,80 @@ contains
         endif
     end subroutine greedy_inplsrch
 
+    subroutine weight_state_corrs(s, corrs, corrs_state)
+        type(strategy3D_srch), intent(inout) :: s
+        real,                  intent(in)    :: corrs(s%nstates,s%nnn)
+        real,                  intent(out)   :: corrs_state(s%nstates)
+        real    :: corrs_here(s%nstates*s%nnn), dists(s%nstates*s%nnn), ws(s%nstates*s%nnn)
+        real    :: thresh, wsum, wavg, sig, var, ep, wthresh, dev
+        logical :: pmask(s%nstates,s%nnn)
+        integer :: i,k, state, n
+        n = s%nstates*s%nnn
+        ! extract peaks
+        i = 0
+        do state=1,s%nstates
+            do k = 1,s%nnn
+                i = i+1
+                corrs_here(i) = corrs(state,k)
+            enddo
+        enddo
+        ! weight peaks
+        call hpsort(corrs_here)
+        thresh = corrs_here(n-NPROJPEAKS)
+        corrs_here = 0.
+        i = 0
+        do state=1,s%nstates
+            do k = 1,s%nnn
+                i = i+1
+                if(corrs(state,k)>thresh) corrs_here(i) = corrs(state,k)
+            enddo
+        enddo
+        ! softmax
+        dists = (1.0 - corrs_here) / params_glob%tau
+        ws    = exp(-dists - maxval(-dists))
+        where(corrs_here<thresh) ws = 0.
+        wsum = sum(ws)
+        ws   = ws / wsum
+        ! calculate standard deviation of weights
+        where(ws < TINY) ws=0.
+        wavg = sum(ws) / real(NPROJPEAKS)
+        ep   = 0.
+        var  = 0.
+        do i=1,n
+            if(ws(i) < TINY) cycle
+            dev = ws(i) - wavg
+            ep  = ep + dev
+            var = var + dev * dev
+        end do
+        var = (var - ep * ep / real(NPROJPEAKS))/(real(NPROJPEAKS) - 1.) ! corrected two-pass formula
+        sig = 0.
+        if( var > 0. ) sig = sqrt(var)
+        wthresh = wavg + SOFTMAXW_THRESH * sig
+        ! threshold weights
+        where(ws < wthresh) ws=0.
+        ! normalise again
+        wsum = sum(ws)
+        ws = ws / wsum
+        ! finalize
+        corrs_state = 0.
+        i = 0
+        do state=1,s%nstates
+            do k = 1,s%nnn
+                i = i+1
+                if( ws(i)>TINY )then
+                    corrs_state(state) = corrs_state(state) + corrs(state,k)*ws(i)
+                endif
+            enddo
+        enddo
+    end subroutine weight_state_corrs
+
     subroutine oris_assign_cluster3D( self )
         class(strategy3D_cluster), intent(inout) :: self
         real :: frac
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nstates)
         call build_glob%spproj_field%set(self%s%iptcl,'frac',frac)
         call build_glob%spproj_field%set(self%s%iptcl,'w',   1.)
+        call build_glob%spproj_field%set(self%s%iptcl,'ow',  1.)
         call s3D%o_peaks(self%s%iptcl)%set(1,'w', 1.)
         call s3D%o_peaks(self%s%iptcl)%set(1,'ow',1.)
         call s3D%o_peaks(self%s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(self%s%iptcl))

@@ -1245,15 +1245,16 @@ contains
     end subroutine projz
 
     !>   is for 2d rotation matrix generation
-    pure function rotmat2d( ang ) result( mat )
-        real, intent(in) :: ang ! in degrees
-        real :: mat(2,2), ang_in_rad
+    pure subroutine rotmat2d( ang, mat )
+        real, intent(in)  :: ang ! in degrees
+        real, intent(out) :: mat(2,2)
+        real :: ang_in_rad
         ang_in_rad = ang*pi/180.
         mat(1,1) = cos(ang_in_rad)
         mat(1,2) = sin(ang_in_rad)
         mat(2,1) = -mat(1,2)
         mat(2,2) = mat(1,1)
-    end function rotmat2d
+    end subroutine rotmat2d
 
     !>  in-plane parameters to 3x3 transformation matrix
     function make_transfmat( psi, tx, ty )result( R )

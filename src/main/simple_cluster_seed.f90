@@ -44,6 +44,8 @@ contains
                 call draw_uniform
             case('uniform_corr')
                 call draw_uniform_corr(os)
+            case('uniform_corr2')
+                call draw_uniform_corr2(os)
             case('squared')
                 call draw_squared(os, 2.)
             case('single_power_high')
@@ -52,6 +54,10 @@ contains
                 call draw_single_power(os, .true., power_here)
             case('ranked_uniform')
                 call draw_ranked_uniform(os)
+            case('ranked')
+                call draw_ranked(os)
+            case('squared_uniform')
+                call draw_squared_uniform(os, power_here)
             case DEFAULT
                 THROW_HARD('Unsupported method; gen_labelling')
         end select
@@ -110,6 +116,147 @@ contains
         ! cleanup
         call rt%kill
     end subroutine draw_uniform_corr
+
+    !>  partitions have a uniform distribution of correlations
+    subroutine draw_uniform_corr2(os)
+        type(oris), intent(inout) :: os
+        type(ran_tabu) :: rt
+        integer        :: tmp(nlabels-2), order(nptcls), config(nptcls)
+        real           :: corrs(nptcls)
+        integer        :: iptcl, s, ind, cnt
+        write(*,'(A)') '>>> GENERATING DIVERSE LABELLING WITH RESPECT TO OBJECTIVE FUNCTION 2'
+        config = 0
+        corrs = os%get_all('corr')
+        where( states<=0 ) corrs = -1.
+        order = (/(iptcl,iptcl=1,nptcls)/)
+        call hpsort( corrs, order )
+        if(nlabels == 2)then
+            do iptcl = 1, nincl_ptcls+nlabels, nlabels
+                if( ran3() > 0.5 )then
+                    if(iptcl > nptcls)exit
+                    config(order(iptcl)) = 1
+                    ind = iptcl+1
+                    if(ind > nptcls)exit
+                    config(order(ind))   = 2
+                else
+                    if(iptcl > nptcls)exit
+                    config(order(iptcl)) = 2
+                    ind = iptcl+1
+                    if(ind > nptcls)exit
+                    config(order(ind))   = 1
+                endif
+            enddo
+        else if( nlabels == 3 )then
+            do iptcl = nptcls, nptcls-nincl_ptcls+1-nlabels, -nlabels
+                if(iptcl < 1)exit
+                config(order(iptcl)) = 1
+                ind = iptcl-1
+                if(ind < 1)exit
+                config(order(ind))   = 2
+                ind = iptcl-2
+                if(ind < 1)exit
+                config(order(ind))   = 3
+            enddo
+        else
+            tmp = (/(s,s=2,nlabels-1)/)
+            rt  = ran_tabu(nlabels-2)
+            do iptcl = 1, nincl_ptcls+nlabels, nlabels
+                if(iptcl > nptcls)exit
+                config(order(iptcl)) = 1
+                ind = iptcl+nlabels-1
+                if(ind > nptcls)exit
+                config(order(ind))   = nlabels
+                call rt%shuffle(tmp)
+                cnt = 0
+                do s = 2, nlabels-1
+                    ind = iptcl+s-1
+                    if(ind > nptcls)exit
+                    cnt = cnt + 1
+                    config(order(ind)) = tmp(cnt)
+                enddo
+            enddo
+            call rt%kill
+        endif
+        ! update states
+        where((states > 0) .and. (states <= nlabels)) states = config
+        ! cleanup
+    end subroutine draw_uniform_corr2
+
+    !>  partitions have a uniform distribution of correlations
+    subroutine draw_ranked(os)
+        type(oris), intent(inout) :: os
+        type(ran_tabu) :: rt
+        integer        :: tmp(nlabels), order(nptcls), config(nptcls), pops(nlabels)
+        real           :: corrs(nptcls)
+        integer        :: iptcl, s, ind
+        write(*,'(A)') '>>> GENERATING ranked'
+        ! even partitions
+        pops = floor(real(nincl_ptcls)/real(nlabels))
+        do s=1,nlabels
+            if(sum(pops)==nincl_ptcls)exit
+            pops(s) = pops(s)+1
+        enddo
+        config = 0
+        corrs = os%get_all('corr')
+        where( states<=0 ) corrs = -1.
+        order = (/(iptcl,iptcl=1,nptcls)/)
+        call hpsort( corrs, order )
+        call reverse(order)
+        iptcl = 0
+        do s=1,nlabels
+            do ind=1,pops(s)
+                iptcl = iptcl+1
+                config(order(iptcl)) = s
+            enddo
+        enddo
+        ! update states
+        where((states > 0) .and. (states <= nlabels)) states = config
+        ! cleanup
+    end subroutine draw_ranked
+
+    !>  first partition squared, all others uniform, simultaneous sampling
+    subroutine draw_squared_uniform(os, power)
+        type(oris), intent(inout) :: os
+        real,       intent(in)    :: power
+        type(ran_tabu) :: rt
+        integer        :: tmp(nlabels), order(nptcls), config(nptcls)
+        real           :: corrs(nptcls), rnincl
+        integer        :: iptcl, s, ind, i
+        logical        :: mask(nincl_ptcls)
+        write(*,'(A)') '>>> GENERATING simultaneous draw'
+        config = 0
+        rnincl = real(nincl_ptcls)
+        mask   = .true.
+        corrs  = os%get_all('corr')
+        order = (/(iptcl,iptcl=1,nptcls)/)
+        where( states<=0 ) corrs = -1.
+        call hpsort( corrs, order )
+        call reverse(order)
+        iptcl = 0
+        do i=1,nincl_ptcls+nlabels,nlabels
+            if(i>nincl_ptcls)exit
+            ind = ceiling((ran3()**power)*rnincl)
+            do while(.not.mask(ind))
+                ind = ceiling((ran3()**power)*rnincl)
+            enddo
+            config(order(ind)) = 1
+            mask(ind)          = .false.
+            iptcl              = i
+            do s=2,nlabels
+                iptcl = iptcl+1
+                if(iptcl>nincl_ptcls)exit
+                ind = ceiling(ran3()*rnincl)
+                do while(.not.mask(ind))
+                    ind = ceiling(ran3()*rnincl)
+                enddo
+                config(order(ind)) = s
+                mask(ind)          = .false.
+            enddo
+        enddo
+        ! update states
+        where((states > 0) .and. (states <= nlabels)) states = config
+        ! cleanup
+    end subroutine draw_squared_uniform
 
     ! Loose adaptation of k++ seeding procedure
     subroutine draw_squared(os, power)

@@ -11,7 +11,6 @@ public :: cluster2D_autoscale_commander
 public :: initial_3Dmodel_commander
 public :: cluster3D_commander
 public :: cluster3D_refine_commander
-public :: cluster3D_init_commander
 private
 #include "simple_local_flags.inc"
 
@@ -31,10 +30,6 @@ type, extends(commander_base) :: cluster3D_refine_commander
   contains
     procedure :: execute      => exec_cluster3D_refine
 end type cluster3D_refine_commander
-type, extends(commander_base) :: cluster3D_init_commander
-  contains
-    procedure :: execute      => exec_cluster3D_init
-end type cluster3D_init_commander
 
 contains
 
@@ -740,8 +735,8 @@ contains
         real,             allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
         integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
-        integer  :: iter, startit, rename_stat, ncls
-        logical  :: fall_over, cavgs_import, do_continue
+        integer  :: iter, startit, rename_stat, ncls, iptcl
+        logical  :: fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -753,9 +748,6 @@ contains
         ! prep project
         cavgs_import = .false.
         fall_over    = .false.
-        do_continue  = params%continue.eq.'yes'
-        call cline%set('continue', 'no')
-        params%continue = 'no'
         select case(trim(params%oritype))
             case('ptcl3D')
                 call work_proj%read(params%projfile)
@@ -819,14 +811,13 @@ contains
         ! fetch project oris
         call work_proj%get_sp_oris('ptcl3D', os)
         ! wipe previous states
-        if( .not.do_continue )then
-            labels = nint(os%get_all('state'))
-            if( any(labels > 1) )then
-                where(labels > 0) labels = 1
-                call os%set_all('state', real(labels))
-            endif
-            deallocate(labels)
+        labels = nint(os%get_all('state'))
+        if( any(labels > 1) )then
+            where(labels > 0) labels = 1
+            call os%set_all('state', real(labels))
         endif
+        deallocate(labels)
+
         ! e/o partition
         if( params%eo.eq.'no' )then
             call os%set_all2single('eo', -1.)
@@ -922,10 +913,8 @@ contains
         write(*,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
 
         ! randomize state labels
-        if( .not.do_continue )then
-            write(*,'(A)') '>>>'
-            call gen_labelling(os, params%nstates, 'uniform')
-        endif
+        write(*,'(A)') '>>>'
+        call gen_labelling(os, params%nstates, 'uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
         work_proj%os_ptcl3D = os
@@ -1282,304 +1271,5 @@ contains
             end subroutine prep_eo_stks
 
     end subroutine exec_cluster3D_refine
-
-    !> for heterogeinity analysis
-    subroutine exec_cluster3D_init( self, cline )
-        use simple_oris,             only: oris
-        use simple_cluster_seed,     only: gen_labelling
-        use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
-        class(cluster3D_init_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        ! constants
-        character(len=2),  parameter :: one = '01'
-        character(len=17), parameter :: cls3D_projfile = 'cls3D_init.simple'
-        character(len=21), parameter :: WORK_PROJFILE  = 'cluster3D_init.simple'
-        ! distributed commanders
-        type(refine3D_distr_commander)      :: xrefine3D_distr
-        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
-        ! command lines
-        type(cmdline)                 :: cline_refine3D
-        type(cmdline)                 :: cline_reconstruct3D
-        ! other variables
-        type(parameters)              :: params
-        type(sp_project)              :: spproj, work_proj
-        type(oris)                    :: os
-        type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: cavg_stk, vol, str_state
-        real,             allocatable :: res(:), tmp_rarr(:), final_corrs(:)
-        integer,          allocatable :: labels(:), final_labels(:), states(:), tmp_iarr(:)
-        real     :: lp_cls3D, corr
-        integer  :: rename_stat, ncls, nptcls, iptcl, istate, state2keep, nstates
-        logical  :: fall_over, cavgs_import
-        ! sanity check
-        if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! make master parameters
-        call params%new(cline)
-        if(params%eo .eq. 'no' .and. .not.cline%defined('lp')) THROW_HARD('need lp input when eo .eq. no; cluster3D')
-        nstates = params%nstates
-        params%nstates = 1 ! because otherwise transferred to child distributed workflows
-        ! set mkdir to no
-        call cline%set('mkdir', 'no')
-        ! prep project
-        cavgs_import = .false.
-        fall_over    = .false.
-        call spproj%read(params%projfile)
-        select case(trim(params%oritype))
-            case('ptcl3D')
-                fall_over = spproj%get_nptcls() == 0
-            case('cls3D')
-                fall_over = spproj%os_out%get_noris() == 0
-        case DEFAULT
-            write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D'
-        end select
-        if( fall_over ) THROW_HARD('no particles found! exec_cluster3D')
-        if( params%oritype.eq.'ptcl3D' )then
-            ! splitting
-            call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
-            ! new project
-            work_proj%projinfo = spproj%projinfo
-            call work_proj%projinfo%delete_entry('projname')
-            call work_proj%projinfo%delete_entry('projfile')
-            call cline%set('projfile', trim(WORK_PROJFILE))
-            call cline%set('projname', trim(get_fbody(trim(WORK_PROJFILE),trim('simple'))))
-            call work_proj%update_projinfo(cline)
-            work_proj%compenv   = spproj%compenv
-            if(spproj%jobproc%get_noris()  > 0) work_proj%jobproc = spproj%jobproc
-            work_proj%os_stk    = spproj%os_stk
-            work_proj%os_ptcl3D = spproj%os_ptcl3D
-        else
-            ! class-averages
-            params%projfile = trim(cls3d_projfile)
-            call cline%set('oritype', 'ptcl3D')
-            call spproj%get_cavgs_stk(cavg_stk, ncls, ctfparms%smpd)
-            cavgs_import = spproj%os_ptcl2D%get_noris() == 0
-            if( cavgs_import )then
-                ! start from import
-                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for imported class-averages; cluster3D')
-                lp_cls3D = params%lp
-                allocate(states(ncls), source=1)
-            else
-                ! start from previous 2D
-                states = nint(spproj%os_cls2D%get_all('state'))
-                ! determines resolution limit
-                if(cline%defined('lp'))then
-                    lp_cls3D = params%lp
-                else
-                    tmp_rarr  = spproj%os_cls2D%get_all('res')
-                    tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-                    res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-                    lp_cls3D  = median_nocopy(res)
-                    deallocate(res, tmp_iarr, tmp_rarr)
-                endif
-                if(cline%defined('lpstop')) lp_cls3D = max(lp_cls3D, params%lpstop)
-            endif
-            if( count(states==0) .eq. ncls )then
-                THROW_HARD('no class averages detected in project file: '//trim(params%projfile)//'; cluster3D')
-            endif
-            work_proj%projinfo = spproj%projinfo
-            work_proj%compenv  = spproj%compenv
-            if(spproj%jobproc%get_noris()  > 0) work_proj%jobproc = spproj%jobproc
-            call work_proj%add_single_stk(trim(cavg_stk), ctfparms, spproj%os_cls3D)
-            ! takes care of states
-            call work_proj%os_ptcl3D%set_all('state', real(states))
-            ! name change
-            call work_proj%projinfo%delete_entry('projname')
-            call work_proj%projinfo%delete_entry('projfile')
-            call cline%set('projfile', trim(params%projfile))
-            call cline%set('projname', trim(get_fbody(trim(params%projfile),trim('simple'))))
-            call work_proj%update_projinfo(cline)
-            ! splitting in CURRENT directory
-            call work_proj%split_stk(params%nparts, .false., dir=PATH_HERE)
-        endif
-        call spproj%kill
-        ! wipe previous states
-        call work_proj%get_sp_oris('ptcl3D', os)
-        labels = nint(os%get_all('state'))
-        nptcls = size(labels)
-        if( any(labels > 1) )then
-            where(labels > 0) labels = 1
-            call os%set_all('state', real(labels))
-        endif
-        final_labels = labels
-        allocate(final_corrs(nptcls),source=-1.)
-        ! e/o partition
-        if( params%eo.eq.'no' )then
-            call os%set_all2single('eo', -1.)
-        else
-            if( os%get_nevenodd() == 0 ) call os%partition_eo
-        endif
-
-        ! prepare command lines from prototype
-        call cline%delete('nstates')
-        ! resolution limits
-        if( trim(params%oritype).eq.'cls3D' )then
-            params%eo = 'no'
-            call cline%set('eo','no')
-            call cline%set('lp',lp_cls3D)
-        endif
-        cline_refine3D      = cline
-        cline_reconstruct3D = cline
-        ! evaluation
-        call cline_refine3D%set('prg', 'refine3D')
-        call cline_refine3D%set('refine', 'eval')
-        call cline_refine3D%set('center', 'no')
-        call cline_refine3D%set('startit',1.)
-        call cline_refine3D%set('maxits', 1.)
-        ! reconstructions
-        call cline_reconstruct3D%set('prg', 'reconstruct3D')
-        call cline_reconstruct3D%delete('lp')
-
-        ! MIXED MODEL RECONSTRUCTION
-        ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( params%eo .ne. 'no' )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> RECONSTRUCTING MIXED MODEL'
-            write(*,'(A)') '>>>'
-            work_proj%os_ptcl3D = os
-            call work_proj%write
-            call xreconstruct3D_distr%execute(cline_reconstruct3D)
-            rename_stat = rename(trim(VOL_FBODY)//one//params%ext,trim(CLUSTER3D_VOL)//params%ext)
-            rename_stat = rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
-            rename_stat = rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
-            rename_stat = rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
-            rename_stat = rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-            rename_stat = rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
-        endif
-
-        ! MAIN LOOP
-        do istate=1,nstates
-            write(*,'(A)')    '>>>'
-            write(*,'(A,I3)') '>>> STATE ', istate
-            write(*,'(A)')    '>>>'
-            str_state = int2str_pad(istate,2)
-            ! Generate labels
-            if( istate == nstates )then
-                ! nothing to do
-            else
-                if( nstates == 2 )then
-                    call gen_labelling(os, 1, 'single_power_high', 4.)
-                else
-                    if( istate == 1 )then
-                        call gen_labelling(os, nstates, 'uniform')
-                    else if( istate == 2 )then
-                        call gen_labelling(os, nstates-istate+1, 'single_power_high', 4.)
-                    else
-                        call gen_labelling(os, nstates-istate+1, 'single_power_low')
-                    endif
-                endif
-                labels = nint(os%get_all('state'))
-                ! book keeping solution
-                state2keep = 1 ! always
-                where(labels == 0)
-                    ! no update!!
-                else where(labels == state2keep)
-                    final_labels = istate
-                else where
-                    ! so last state is already sampled
-                    final_labels = nstates
-                end where
-                ! book keeping for next draw
-                if( istate < nstates-1 )then
-                    do iptcl=1,nptcls
-                        if( final_labels(iptcl) == nstates )then
-                            call os%set(iptcl, 'state', 1.)
-                        else
-                            call os%set(iptcl, 'state', 0.)
-                        endif
-                    enddo
-                endif
-            endif
-            ! book keeping reconstruction
-            do iptcl=1,nptcls
-                if( final_labels(iptcl) == istate )then
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 1.)
-                else
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 0.)
-                endif
-            enddo
-            ! Reconstruction
-            call work_proj%os_out%kill
-            call work_proj%write
-            write(*,'(A)')    '>>>'
-            write(*,'(A,I3)') '>>> RECONSTRUCTING STATE ', istate
-            write(*,'(A)')    '>>>'
-            call xreconstruct3D_distr%execute(cline_reconstruct3D)
-            vol = 'vol_state'//str_state//params%ext
-            call stash_rec
-            ! Evaluation
-            write(*,'(A)')    '>>>'
-            write(*,'(A,I3)') '>>> EVALUATING STATE ', istate
-            write(*,'(A)')    '>>>'
-            do iptcl=1,nptcls
-                if( final_labels(iptcl) < istate )then
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 0.)
-                else
-                    call work_proj%os_ptcl3D%set(iptcl, 'state', 1.)
-                endif
-            enddo
-            call work_proj%write
-            call cline_refine3D%delete('endit')
-            call cline_refine3D%set('vol1', vol)
-            call xrefine3D_distr%execute(cline_refine3D)
-            call work_proj%read(WORK_PROJFILE)
-            ! Correlation update
-            do iptcl=1,nptcls
-                if( final_labels(iptcl) == istate )then
-                    final_corrs(iptcl) = work_proj%os_ptcl3D%get(iptcl,'corr')
-                else if( final_labels(iptcl) > istate )then
-                    corr = work_proj%os_ptcl3D%get(iptcl,'corr')
-                    corr = max(corr, os%get(iptcl,'corr'))
-                    call os%set(iptcl,'corr',corr)
-                    call work_proj%os_ptcl3D%set(iptcl,'corr',corr)
-                endif
-            enddo
-        enddo
-        call os%kill
-        call work_proj%kill
-        deallocate(labels)
-        ! updates original document
-        call spproj%read(params%projfile)
-        do iptcl=1,nptcls
-            if( final_labels(iptcl) == 0 ) cycle
-            call spproj%os_ptcl3D%set(iptcl,'corr',final_corrs(iptcl))
-            call spproj%os_ptcl3D%set(iptcl,'state',real(final_labels(iptcl)))
-        enddo
-        ! debug
-        call spproj%os_ptcl3D%write('states.txt')
-        ! end debug
-        do istate = 1,nstates
-            vol = 'vol_state'//int2str_pad(istate,2)//params%ext
-            call spproj%add_vol2os_out(vol, params%smpd, istate, 'vol')
-            if( params%eo .ne. 'no' )then
-                call spproj%add_fsc2os_out(CLUSTER3D_FSC, istate, params%box)
-                call spproj%add_vol2os_out(trim(CLUSTER3D_ANISOLP)//params%ext,params%smpd,istate,'vol_filt',box=params%box)
-            endif
-        enddo
-        call spproj%write
-        ! cleanup
-        call spproj%kill
-        deallocate(final_labels, final_corrs)
-        call del_file(WORK_PROJFILE)
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER3D_INIT NORMAL STOP ****')
-
-        contains
-
-            subroutine stash_rec
-                rename_stat = rename(trim(VOL_FBODY)//one//params%ext,vol)
-                if( params%eo .ne. 'no' )then
-                    call simple_copy_file(trim(VOL_FBODY)//one//'_even'//params%ext,'vol_state'//str_state//'_even'//params%ext)
-                    call simple_copy_file(trim(VOL_FBODY)//one//'_odd'//params%ext,'vol_state'//str_state//'_odd'//params%ext)
-                    ! call simple_copy_file(trim(ANISOLP_FBODY)//one//params%ext,trim(ANISOLP_FBODY)//str_state//params%ext)
-                    ! restore low-pass limit etc for evaluation
-                    call simple_copy_file(trim(CLUSTER3D_VOL)//'_even'//params%ext,trim(VOL_FBODY)//one//'_even'//params%ext)
-                    call simple_copy_file(trim(CLUSTER3D_VOL)//'_odd'//params%ext, trim(VOL_FBODY)//one//'_odd'//params%ext)
-                    call simple_copy_file(trim(CLUSTER3D_FSC), trim(FSC_FBODY)//one//BIN_EXT)
-                    call simple_copy_file(trim(CLUSTER3D_FRCS),trim(FRCS_FBODY)//one//BIN_EXT)
-                endif
-            end subroutine stash_rec
-
-    end subroutine exec_cluster3D_init
 
 end module simple_commander_hlev_wflows

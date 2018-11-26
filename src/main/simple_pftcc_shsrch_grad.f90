@@ -150,7 +150,7 @@ contains
         class(pftcc_shsrch_grad), intent(inout) :: self
         integer,                  intent(inout) :: irot
         real    :: corrs(self%nrots), cxy(3)
-        real    :: lowest_cost, lowest_cost_overall, lowest_shift(2)
+        real    :: lowest_cost, lowest_cost_overall, lowest_shift(2), rotmat(2,2)
         integer :: loc(1), i, lowest_rot, init_rot
         logical :: found_better
         real(dp) :: init_xy(2)
@@ -189,7 +189,8 @@ contains
                 cxy(1)  = - lowest_cost_overall  ! correlation
                 cxy(2:) =   lowest_shift         ! shift
                 ! rotate the shift vector to the frame of reference
-                cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
+                call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                cxy(2:) = matmul(cxy(2:), rotmat)
             else
                 irot = 0 ! to communicate that a better solution was not found
             endif
@@ -221,7 +222,8 @@ contains
                 cxy(1)  = - lowest_cost_overall  ! correlation
                 cxy(2:) =   lowest_shift         ! shift
                 ! rotate the shift vector to the frame of reference
-                cxy(2:) = matmul(cxy(2:), rotmat2d(pftcc_glob%get_rot(irot)))
+                call rotmat2d(pftcc_glob%get_rot(irot), rotmat)
+                cxy(2:) = matmul(cxy(2:), rotmat)
             else
                 irot = 0 ! to communicate that a better solution was not found
             endif

@@ -258,6 +258,7 @@ contains
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk
         character(len=STDLEN)              :: str_iter, refs_glob
         character(len=LONGSTRLEN)          :: buffer_dir
+
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
@@ -661,19 +662,22 @@ contains
 
             !>  runs iterations of cluster2D for the buffer in a separate folder
             subroutine classify_buffer
+                use simple_commander_hlev_wflows, only: cluster2D_autoscale_commander
                 type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
                 write(*,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
+                ! folders handling
+                call simple_mkdir('buffer2D')
+                call chdir('buffer2D')
+                call rename('../'//trim(PROJFILE_BUFFER),PROJFILE_BUFFER)
+                ! init
                 nptcls = buffer_proj%get_nptcls()
                 nparts = calc_nparts(buffer_proj, nptcls)
                 call buffer_proj%kill
                 ! cluster2d execution
-                params_glob%projfile = trim(PROJFILE_BUFFER)
-                call cline_cluster2D_buffer%set('prg',       'cluster2D')
-                call cline_cluster2D_buffer%set('objfun',    'cc')
+                params_glob%projfile = trim('./'//trim(PROJFILE_BUFFER))
                 call cline_cluster2D_buffer%set('refine',    'snhc')
-                call cline_cluster2D_buffer%set('mkdir',     'yes')
-                call cline_cluster2D_buffer%set('stream',    'no')
+                call cline_cluster2D_buffer%set('mkdir',     'no')
                 call cline_cluster2D_buffer%set('startit',   1.)
                 call cline_cluster2D_buffer%set('maxits',    10.)
                 call cline_cluster2D_buffer%set('ncls',      real(params%ncls_start))

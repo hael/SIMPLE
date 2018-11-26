@@ -138,9 +138,9 @@ contains
         ! calculate in-plane rot dist (radians)
         u(1) = 0.
         u(2) = 1.
-        mat  = rotmat2d(e3)
+        call rotmat2d(e3, mat)
         x1   = matmul(u,mat)
-        mat  = rotmat2d(build_glob%spproj_field%e3get(self%iptcl))
+        call rotmat2d(build_glob%spproj_field%e3get(self%iptcl), mat)
         x2   = matmul(u,mat)
         dist = myacos(dot_product(x1,x2))
         ! calculate overlap between distributions

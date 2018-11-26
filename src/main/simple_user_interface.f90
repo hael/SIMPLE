@@ -73,7 +73,6 @@ type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
-type(simple_program), target :: cluster3D_init
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
@@ -231,7 +230,6 @@ contains
         call new_cluster2D_stream
         call new_cluster3D
         call new_cluster3D_refine
-        call new_cluster3D_init
         call new_cluster_cavgs
         call new_convert
         call new_ctf_estimate
@@ -361,7 +359,6 @@ contains
         prg_ptr_array(62)%ptr2prg => update_project
         prg_ptr_array(63)%ptr2prg => vizoris
         prg_ptr_array(64)%ptr2prg => volops
-        prg_ptr_array(65)%ptr2prg => cluster3d_init
         if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -379,8 +376,6 @@ contains
                 ptr2prg => cluster3D
             case('cluster3D_refine')
                 ptr2prg => cluster3D_refine
-            case('cluster3D_init')
-                ptr2prg => cluster3D_init
             case('cluster_cavgs')
                 ptr2prg => cluster_cavgs
             case('convert')
@@ -511,7 +506,6 @@ contains
         write(*,'(A)') cluster2D_stream%name
         write(*,'(A)') cluster3D%name
         write(*,'(A)') cluster3D_refine%name
-        write(*,'(A)') cluster3D_init%name
         write(*,'(A)') ctf_estimate%name
         write(*,'(A)') gen_pspecs_and_thumbs%name
         write(*,'(A)') initial_3Dmodel%name
@@ -960,41 +954,6 @@ contains
         call cluster3D_refine%set_input('comp_ctrls', 1, nparts)
         call cluster3D_refine%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster3D_refine
-
-    subroutine new_cluster3D_init
-        ! PROGRAM SPECIFICATION
-        call cluster3D_init%new(&
-        &'cluster3D_init',&                                                ! name
-        &'cluster 3D initialization',&                                     ! descr_short
-        &'is a distributed workflow based on probabilistic projection matching &
-        &for initialization of 3D heterogeneity analysis by cluster3D ',&  ! descr_long
-        &'simple_distr_exec',&                                             ! executable
-        &0, 1, 0, 4, 3, 3, 2, .true.)                                      ! # entries in each group
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call cluster3D_init%set_input('parm_ios', 1, 'nstates', 'num', 'Number of states', 'Number of conformational/compositional states to separate',&
-        '# states to separate', .true., 2.0)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call cluster3D_init%set_input('srch_ctrls', 1, nspace)
-        call cluster3D_init%set_input('srch_ctrls', 2, frac)
-        call cluster3D_init%set_input('srch_ctrls', 3, pgrp)
-        call cluster3D_init%set_input('srch_ctrls', 4, objfun)
-        ! filter controls
-        call cluster3D_init%set_input('filt_ctrls', 1, hp)
-        call cluster3D_init%set_input('filt_ctrls', 2, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
-        call cluster3D_init%set_input('filt_ctrls', 3, eo)
-        ! mask controls
-        call cluster3D_init%set_input('mask_ctrls', 1, msk)
-        call cluster3D_init%set_input('mask_ctrls', 2, inner)
-        call cluster3D_init%set_input('mask_ctrls', 3, 'width', 'num', 'Falloff of inner mask', 'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge{10}', .false., 10.)
-        ! computer controls
-        call cluster3D_init%set_input('comp_ctrls', 1, nparts)
-        call cluster3D_init%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_cluster3D_init
 
     subroutine new_cluster_cavgs
         ! PROGRAM SPECIFICATION

@@ -481,7 +481,7 @@ contains
                     call batch_imgs(i)%ifft()
                     call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! rotation
-                    mat = rotmat2d( -precs(iprec)%e3s(iori) )
+                    call rotmat2d(-precs(iprec)%e3s(iori), mat)
                     ! Fourier components loop
                     do h=lims(1,1),lims(1,2)
                         do k=lims(2,1),lims(2,2)

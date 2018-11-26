@@ -372,11 +372,8 @@ contains
         integer                   :: iter
         type(chash)               :: job_descr
         real                      :: frac_srch_space
-        logical                   :: l_stream
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! streaming gets its own logics because it is an exception to rules in parameters
-        l_stream = .false.
-        if( cline%defined('stream') ) l_stream = cline%get_carg('stream').eq.'yes'
         call cline%set('stream','no')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
@@ -390,7 +387,6 @@ contains
         call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
-        if( l_stream )call job_descr%set('stream','yes') ! only transferred fo cluster2D private_exec
         ! splitting
         call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'))
         ! prepare command lines from prototype master

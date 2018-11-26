@@ -34,7 +34,6 @@ type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 ! HIGH-LEVEL WORKFLOWS
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 type(cluster3D_commander)                   :: xcluster3D
-type(cluster3D_init_commander)              :: xcluster3D_init
 type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES WORKFLOWS
@@ -163,10 +162,6 @@ select case(prg)
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
         if( cline%defined('lp') )            call cline%set('eo','no')
         call xcluster3D%execute( cline )
-    case( 'cluster3D_init' )
-        if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
-        if( cline%defined('lp') )            call cline%set('eo','no')
-        call xcluster3D_init%execute( cline )
     case( 'cluster3D_refine' )
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xcluster3D_refine%execute( cline )

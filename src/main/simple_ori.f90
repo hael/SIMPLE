@@ -931,9 +931,9 @@ contains
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
         u(1) = 0.
         u(2) = 1.
-        mat  = rotmat2d(self1%e3get())
+        call rotmat2d(self1%e3get(), mat)
         x1   = matmul(u,mat)
-        mat  = rotmat2d(self2%e3get())
+        call rotmat2d(self2%e3get(), mat)
         x2   = matmul(u,mat)
         dist = myacos(dot_product(x1,x2))
     end function inplrotdist
