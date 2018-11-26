@@ -731,7 +731,7 @@ contains
         type(sp_project)              :: spproj, work_proj
         type(oris)                    :: os
         type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: cavg_stk
+        character(len=:), allocatable :: cavg_stk, orig_projfile
         real,             allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
         integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
@@ -742,6 +742,9 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
+        orig_projfile   = trim(params%projfile)
+        params%projfile = trim(params%cwd)//'/'//trim(params%projname)//trim(METADATA_EXT)
+        call cline%set('projfile',params%projfile)
         if(params%eo .eq. 'no' .and. .not.cline%defined('lp')) THROW_HARD('need lp input when eo .eq. no; cluster3D')
         ! set mkdir to no
         call cline%set('mkdir', 'no')
@@ -914,7 +917,7 @@ contains
 
         ! randomize state labels
         write(*,'(A)') '>>>'
-        call gen_labelling(os, params%nstates, 'uniform')
+        call gen_labelling(os, params%nstates, 'squared_uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
         work_proj%os_ptcl3D = os
@@ -1197,7 +1200,6 @@ contains
                     dest = 'RESOLUTION_STATE'//str_state
                     stat = simple_rename(src, dest)
                     do it = 1,final_it
-                        str_iter = '_iter'//int2str_pad(it,3)
                         str_iter = '_ITER'//int2str_pad(it,3)
                         src  = filepath( dirs(s), 'RESOLUTION_STATE'//one//str_iter)
                         dest = 'RESOLUTION_STATE'//str_state//str_iter

@@ -218,7 +218,6 @@ contains
     subroutine draw_squared_uniform(os, power)
         type(oris), intent(inout) :: os
         real,       intent(in)    :: power
-        type(ran_tabu) :: rt
         integer        :: tmp(nlabels), order(nptcls), config(nptcls)
         real           :: corrs(nptcls), rnincl
         integer        :: iptcl, s, ind, i

@@ -111,7 +111,7 @@ contains
                     state = irnd_uni(s%nstates)
                 enddo
             endif
-            corr = corrs(state)
+            corr  = corrs(state)
             iproj = s%prev_proj
             s%nrefs_eval = 1
         else

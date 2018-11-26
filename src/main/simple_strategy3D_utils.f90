@@ -371,14 +371,19 @@ contains
         enddo
         if( cnt < 1 ) return ! need at least 1
         ! calculate standard deviation of distances as measure of angular spread
-        shwmean = sum(shift_incrs(:cnt)*ws_here(:cnt)) / sum(ws_here(:cnt))
-        var_w   = 0.
-        do i=1,cnt
-            dev_w = shift_incrs(i) - shwmean
-            var_w = var_w + ws_here(i) * dev_w * dev_w
-        end do
-        var_w    = var_w/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
-        if( var_w > 0. ) shwstdev = sqrt(var_w)
+        if( cnt == 1)then
+            shwmean  = shift_incrs(1)
+            shwstdev = 0.
+        else
+            shwmean = sum(shift_incrs(:cnt)*ws_here(:cnt)) / sum(ws_here(:cnt))
+            var_w   = 0.
+            do i=1,cnt
+                dev_w = shift_incrs(i) - shwmean
+                var_w = var_w + ws_here(i) * dev_w * dev_w
+            end do
+            var_w    = var_w/((real(cnt) - 1.)/real(cnt)*sum(ws_here(:cnt))) ! corrected two-pass formula
+            if( var_w > 0. ) shwstdev = sqrt(var_w)
+        endif
     end subroutine estimate_shift_increment
 
     subroutine set_state_overlap( s, best_loc )
