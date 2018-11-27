@@ -215,9 +215,9 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         if( params%l_locres )then
-            call spproj%add_cavgs2os_out( CAVGS_2DLOCRES//params%ext, spproj%get_smpd(), 'cavg_locres')
+            call spproj%add_cavgs2os_out(CAVGS_2DLOCRES//params%ext, spproj%get_smpd(), imgkind='cavg_locres')
         endif
-        call spproj%add_cavgs2os_out( trim(finalcavgs), spproj%get_smpd(), 'cavg')
+        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
         call spproj%write_segment_inside('out')
         call spproj%kill()
         ! ranking

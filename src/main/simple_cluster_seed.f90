@@ -44,14 +44,8 @@ contains
                 call draw_uniform
             case('uniform_corr')
                 call draw_uniform_corr(os)
-            case('uniform_corr2')
-                call draw_uniform_corr2(os)
             case('squared')
                 call draw_squared(os, 2.)
-            case('single_power_high')
-                call draw_single_power(os, .false., power_here)
-            case('single_power_low')
-                call draw_single_power(os, .true., power_here)
             case('ranked_uniform')
                 call draw_ranked_uniform(os)
             case('ranked')
@@ -116,71 +110,6 @@ contains
         ! cleanup
         call rt%kill
     end subroutine draw_uniform_corr
-
-    !>  partitions have a uniform distribution of correlations
-    subroutine draw_uniform_corr2(os)
-        type(oris), intent(inout) :: os
-        type(ran_tabu) :: rt
-        integer        :: tmp(nlabels-2), order(nptcls), config(nptcls)
-        real           :: corrs(nptcls)
-        integer        :: iptcl, s, ind, cnt
-        write(*,'(A)') '>>> GENERATING DIVERSE LABELLING WITH RESPECT TO OBJECTIVE FUNCTION 2'
-        config = 0
-        corrs = os%get_all('corr')
-        where( states<=0 ) corrs = -1.
-        order = (/(iptcl,iptcl=1,nptcls)/)
-        call hpsort( corrs, order )
-        if(nlabels == 2)then
-            do iptcl = 1, nincl_ptcls+nlabels, nlabels
-                if( ran3() > 0.5 )then
-                    if(iptcl > nptcls)exit
-                    config(order(iptcl)) = 1
-                    ind = iptcl+1
-                    if(ind > nptcls)exit
-                    config(order(ind))   = 2
-                else
-                    if(iptcl > nptcls)exit
-                    config(order(iptcl)) = 2
-                    ind = iptcl+1
-                    if(ind > nptcls)exit
-                    config(order(ind))   = 1
-                endif
-            enddo
-        else if( nlabels == 3 )then
-            do iptcl = nptcls, nptcls-nincl_ptcls+1-nlabels, -nlabels
-                if(iptcl < 1)exit
-                config(order(iptcl)) = 1
-                ind = iptcl-1
-                if(ind < 1)exit
-                config(order(ind))   = 2
-                ind = iptcl-2
-                if(ind < 1)exit
-                config(order(ind))   = 3
-            enddo
-        else
-            tmp = (/(s,s=2,nlabels-1)/)
-            rt  = ran_tabu(nlabels-2)
-            do iptcl = 1, nincl_ptcls+nlabels, nlabels
-                if(iptcl > nptcls)exit
-                config(order(iptcl)) = 1
-                ind = iptcl+nlabels-1
-                if(ind > nptcls)exit
-                config(order(ind))   = nlabels
-                call rt%shuffle(tmp)
-                cnt = 0
-                do s = 2, nlabels-1
-                    ind = iptcl+s-1
-                    if(ind > nptcls)exit
-                    cnt = cnt + 1
-                    config(order(ind)) = tmp(cnt)
-                enddo
-            enddo
-            call rt%kill
-        endif
-        ! update states
-        where((states > 0) .and. (states <= nlabels)) states = config
-        ! cleanup
-    end subroutine draw_uniform_corr2
 
     !>  partitions have a uniform distribution of correlations
     subroutine draw_ranked(os)
@@ -305,56 +234,6 @@ contains
         ! updates states
         where((states > 0) .and. (states <= nlabels)) states = config
     end subroutine draw_squared
-
-    ! Loose adaptation of k++ seeding procedure, reurns one partition only
-    ! state=1: drawned
-    ! state=nstates: not drawned
-    subroutine draw_single_power(os, high, power)
-        real,       intent(in)    :: power
-        logical,    intent(in)    :: high ! whether to sample high or low distances
-        type(oris), intent(inout) :: os
-        real    :: dists(nptcls), dists_part(nptcls)
-        integer :: inds(nptcls), pops(nlabels), config(nptcls)
-        logical :: mask(nptcls)
-        real    :: areal
-        integer :: iptcl, s, n_drawn, ind, n_avail
-        write(*,'(A)') '>>> SAMPLING FROM DISTANCES'
-        mask   = (states > 0) .and. (states <= nlabels)
-        dists  = 1. - os%get_all('corr')
-        config = 0
-        ! even partitions
-        pops = floor(real(nincl_ptcls)/real(nlabels))
-        do s=1,nlabels
-            if(sum(pops)==nincl_ptcls)exit
-            pops(s) = pops(s)+1
-        enddo
-        ! draw following powered distribution
-        n_avail    = count(mask)
-        inds       = (/(iptcl, iptcl=1,nptcls)/)
-        dists_part = huge(areal)
-        if( .not.high )then
-            ! sample lowest distances
-            where(mask) dists_part = dists
-        else
-            ! sample highest distances
-            where(mask) dists_part = 1. - dists
-        endif
-        call hpsort(dists_part,inds)
-        n_drawn = 0
-        do while(n_drawn < pops(1))
-            ind   = ceiling((ran3()**power)*real(n_avail))
-            iptcl = inds(ind)
-            if(mask(iptcl))then
-                mask(iptcl)   = .false.
-                n_drawn       = n_drawn + 1
-                config(iptcl) = 1
-            endif
-        enddo
-        ! leftovers
-        where(mask) config = nlabels
-        ! updates states
-        where((states > 0) .and. (states <= nlabels)) states = config
-    end subroutine draw_single_power
 
     ! Bottom half randomization followed by sorted assignment for the top half
     subroutine draw_ranked_uniform(os)

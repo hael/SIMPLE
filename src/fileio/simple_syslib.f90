@@ -735,21 +735,19 @@ contains
         endif
     end function find_next_int_dir_prefix
 
-    function simple_list_dirs(path, outfile, status) result(list)
+    function simple_list_dirs(path, status) result(list)
         use simple_strings, only: int2str
         character(len=*),           intent(in)  :: path
-        character(len=*), optional, intent(in)  :: outfile
         integer,          optional, intent(out) :: status
         character(len=STDLEN),        allocatable :: list(:)
         character(kind=c_char,len=:), allocatable :: pathhere
         character(len=STDLEN) :: list_fname
         integer               :: stat, i,num_dirs, luntmp
         allocate(pathhere, source=trim(adjustl(path))//c_null_char)
-        list_fname =  '__simple_filelist_'//int2str(part_glob)//'__'
+        list_fname =  '__simple_dirlist_'//int2str(part_glob)//'__'
         stat = list_dirs(trim(pathhere),len_trim(pathhere), trim(list_fname), len_trim(list_fname), num_dirs)
         if(stat/=0)THROW_ERROR("failed to process list_dirs "//trim(pathhere))
-        if(present(outfile)) call syslib_copy_file(trim(list_fname), trim(outfile))
-        open(newunit = luntmp, file = trim(list_fname))
+        open(newunit=luntmp, file=trim(list_fname))
         allocate( list(num_dirs) )
         do i = 1,num_dirs
             read( luntmp, '(a)' ) list(i)

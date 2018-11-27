@@ -1069,26 +1069,40 @@ contains
 
     ! os_out related methods
 
-    subroutine add_cavgs2os_out( self, stk, smpd, imgkind )
+    subroutine add_cavgs2os_out( self, stk, smpd, imgkind, dir )
         class(sp_project),          intent(inout) :: self
         character(len=*),           intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
-        character(len=*), optional, intent(in)    :: imgkind
-        character(len=:), allocatable :: stk_abspath, iimgkind
-        integer :: ldim(3), nptcls, ind
+        character(len=*), optional, intent(in)    :: imgkind, dir
+        character(len=:), allocatable :: path, iimgkind
+        integer :: ldim(3), nptcls, ind, ipos, l
         if( present(imgkind) )then
             allocate(iimgkind, source=trim(imgkind))
         else
             allocate(iimgkind, source='cavg')
         endif
-        ! full path and existence check
-        stk_abspath = simple_abspath(stk,errmsg='sp_project :: add_cavgs2os_out')
+        ! path and existence check
+        if( present(dir) )then
+            l = len_trim(dir)
+            if( l > 0 )then
+                if(dir(l:l)=='/')then
+                    path = dir(1:l)//trim(stk)
+                else
+                    path = dir(1:l)//'/'//trim(stk)
+                endif
+            else
+                path = './'//trim(stk)
+            endif
+            if(.not.file_exists(path)) THROW_HARD('cavgs stack does not exits; sp_project :: add_cavgs2os_out')
+        else
+            path = simple_abspath(stk,errmsg='sp_project :: add_cavgs2os_out')
+        endif
         ! find dimension of inputted stack
-        call find_ldim_nptcls(stk_abspath, ldim, nptcls)
+        call find_ldim_nptcls(path, ldim, nptcls)
         ! add os_out entry
         call self%add_entry2os_out('cavg', ind)
         ! fill-in field
-        call self%os_out%set(ind, 'stk',     trim(stk_abspath))
+        call self%os_out%set(ind, 'stk',     trim(path))
         call self%os_out%set(ind, 'box',     real(ldim(1)))
         call self%os_out%set(ind, 'nptcls',  real(nptcls))
         call self%os_out%set(ind, 'fromp',   1.0)

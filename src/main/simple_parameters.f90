@@ -784,6 +784,15 @@ contains
         ! get name of executable
         call get_command_argument(0,self%executable)
         if(len_trim(self%executable) == 0) THROW_HARD('get_command_argument failed; new')
+        ! set execution mode (shmem or distr)
+        if( cline%defined('part') .and. cline%defined('nparts') )then
+            self%l_distr_exec = .true.
+            part_glob = self%part
+        else
+            self%l_distr_exec = .false.
+            part_glob = 1
+        endif
+        l_distr_exec_glob = self%l_distr_exec
         ! get pointer to program user interface
         call get_prg_ptr(self%prg, self%ptr2prg)
         ! look for the last previous execution directory and get next directory number
@@ -1064,15 +1073,6 @@ contains
         self%split_mode = 'even'
         nparts_set      = .false.
         if( cline%defined('nparts') ) nparts_set  = .true.
-        ! set execution mode (shmem or distr)
-        if( cline%defined('part') .and. cline%defined('nparts') )then
-            self%l_distr_exec = .true.
-            part_glob = self%part
-        else
-            self%l_distr_exec = .false.
-            part_glob = 1
-        endif
-        l_distr_exec_glob = self%l_distr_exec
         ! set lenght of number string for zero padding
         if( .not. cline%defined('numlen') )then
             if( nparts_set ) self%numlen = len(int2str(self%nparts))
@@ -1414,7 +1414,7 @@ contains
             integer                       :: nl, fnr, i, io_stat
             filename = cline%get_carg('msklist')
             if( filename(1:1).ne.PATH_SEPARATOR )then
-                if( self%mkdir.eq.'yes' )  filename = PATH_PARENT//trim(filename)
+                if( self%mkdir.eq.'yes' ) filename = PATH_PARENT//trim(filename)
             endif
             nl = nlines(filename)
             call fopen(fnr, file=filename, iostat=io_stat)
