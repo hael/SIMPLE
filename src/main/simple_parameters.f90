@@ -202,7 +202,6 @@ type :: parameters
     integer :: chunksz=0           !< # images/orientations in chunk
     integer :: class=1             !< cluster identity
     integer :: clip=0              !< clipped image box size(in pixels)
-    integer :: cn_start=1          !< rotational symmetry order start index{1}
     integer :: cn_stop=10          !< rotational symmetry order stop index{10}
     integer :: corner=0            !< corner size(in pixels){0}
     integer :: cube=0              !< side size(in pixels){0}
@@ -617,7 +616,6 @@ contains
         call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
-        call check_iarg('cn_start',       self%cn_start)
         call check_iarg('cn_stop',        self%cn_stop)
         call check_iarg('corner',         self%corner)
         call check_iarg('cube',           self%cube)

@@ -15,9 +15,9 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG_HERE = .false.
-integer, parameter :: NPROJ      = 200
+integer, parameter :: NPROJ      = 600
 integer, parameter :: NBEST      = 20
-integer, parameter :: ANGSTEP    = 10
+integer, parameter :: ANGSTEP    = 7
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object

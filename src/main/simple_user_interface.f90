@@ -2882,7 +2882,7 @@ contains
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry.',& ! descr long
         &'simple_exec',&                                                                                              ! executable
-        &1, 1, 0, 5, 3, 1, 1, .false.)                                                                                ! # entries in each group, requires sp_project
+        &1, 1, 0, 3, 3, 1, 1, .false.)                                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
@@ -2892,12 +2892,10 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call symmetry_test%set_input('srch_ctrls', 1, 'cn_start', 'num', 'Rotational symmetry order start index', 'Rotational symmetry order start index', 'give start index', .false., 1.)
-        call symmetry_test%set_input('srch_ctrls', 2, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
-        call symmetry_test%set_input('srch_ctrls', 3, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        call symmetry_test%set_input('srch_ctrls', 1, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
+        call symmetry_test%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call symmetry_test%set_input('srch_ctrls', 4, 'dihedral', 'binary', 'Search for dihedral symmetries', 'Search for dihedral symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call symmetry_test%set_input('srch_ctrls', 5, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call symmetry_test%set_input('srch_ctrls', 3, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call symmetry_test%set_input('filt_ctrls', 1, lp)
         call symmetry_test%set_input('filt_ctrls', 2, hp)
