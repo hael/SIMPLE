@@ -651,14 +651,30 @@ contains
         use simple_symanalyzer
         class(symmetry_test_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
+        character(len=:), allocatable :: pgrp_best
         type(parameters)      :: params
         type(builder)         :: build
         character(len=STDLEN) :: fbody
-        real                  :: shvec(3)
+        real                  :: shvec(3), scale
+        integer               :: ldim(3)
+        integer, parameter    :: MAXBOX = 256
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         ! center volume
         call build%vol%read(params%vols(1))
+        ! possible downscaling of input vol
+        ldim = build%vol%get_ldim()
+        if( ldim(1) > MAXBOX )then
+            scale = real(MAXBOX) / real(ldim(1))
+            call build%vol%fft
+            call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
+            call build%vol%ifft
+            params%smpd = build%vol%get_smpd()
+            params%msk  = round2even(scale * params%msk)
+        endif
+        ! low-pass limit safety
+        params%lp = max(2. * params%smpd, params%lp)
+        ! centering
         shvec = 0.
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
@@ -670,7 +686,7 @@ contains
         call build%vol%mask(params%msk, 'soft')
         ! run test
         call symmetry_tester(build%vol, params%msk, params%hp,&
-        &params%lp, params%cn_stop, params%platonic .eq. 'yes')
+        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp_best)
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test

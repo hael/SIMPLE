@@ -85,11 +85,12 @@ contains
         call symobj%kill
     end subroutine symmetrize_map
 
-    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic )
-        class(projector), intent(inout) :: vol_in
-        real,             intent(in)    :: msk, hp, lp
-        integer,          intent(in)    :: cn_stop
-        logical,          intent(in)    :: platonic
+    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic, pgrp_best )
+        class(projector),              intent(inout) :: vol_in
+        real,                          intent(in)    :: msk, hp, lp
+        integer,                       intent(in)    :: cn_stop
+        logical,                       intent(in)    :: platonic
+        character(len=:), allocatable, intent(out)   :: pgrp_best
         type(sym_stats), allocatable    :: pgrps(:)
         real,    allocatable  :: scores(:), res(:), zscores(:)
         real,    allocatable  :: scores_peak(:), scores_backgr(:)
@@ -154,7 +155,11 @@ contains
         ! extract peak and background scores
         peak_msk      = zscores >= ZSCORE_PEAK_BOUND .and. scores >= SCORE_PEAK_BOUND
         npeaks        = count(peak_msk)
-        if( npeaks == 0 ) THROW_HARD('no symmetry could be identified, npeaks == 0')
+        if( npeaks == 0 )then
+            THROW_WARN('no symmetry could be identified, npeaks == 0')
+            pgrp_best = 'c1'
+            return
+        endif
         scores_peak   = pack(scores, mask =       peak_msk)
         scores_backgr = pack(scores, mask = .not. peak_msk)
         ! calculate Kolmogorov-Smirnov stats
@@ -181,13 +186,14 @@ contains
             else
                 peak_flag = 0
             endif
-            write(fnr,'(a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2,1x,a,i1)') 'POINT-GROUP:',&
+            write(fnr,'(a,1x,a5,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2,1x,a,1x,i1)') 'POINT-GROUP:',&
                 &pgrps(isym)%str, 'SCORE:', pgrps(isym)%score, 'CORRELATION:', pgrps(isym)%cc,&
                 'Z-SCORE:', zscores(isym), 'PEAK:', peak_flag
         end do
         write(fnr,'(a)') ''
         write(fnr,'(a)') '>>> MOST LIKELY POINT-GROUP DEFINED AS HIGHEST GROUP AMONG PEAKS'
-        write(fnr,'(a,1x,a,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'POINT-GROUP:',&
+        pgrp_best = pgrps(isym_most_likely)%str
+        write(fnr,'(a,1x,a5,1x,a,f5.2,1x,a,1x,f5.2,1x,a,1x,f5.2)') 'POINT-GROUP:',&
             &pgrps(isym_most_likely)%str, 'SCORE:', pgrps(isym_most_likely)%score, 'CORRELATION:',&
             pgrps(isym_most_likely)%cc, 'Z-SCORE:', zscores(isym_most_likely)
         write(fnr,'(a)') ''

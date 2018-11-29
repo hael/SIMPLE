@@ -110,7 +110,7 @@ elseif(USE_OPENMP)
         set(EXTRA_FFLAGS "${EXTRA_FFLAGS} ${DONT_CHECK_RANGE}")
     endif()
 endif()
-    
+
 message( STATUS "Test directories ${TESTDIRS}")
 
 foreach(TESTNAME ${TESTDIRS})
@@ -202,7 +202,6 @@ list(APPEND CTESTDIRS
   simple_test_maxnloc
   simple_test_multinomal
   simple_test_omp
-  simple_test_opeaksio
   simple_test_order_corr
   simple_test_parse
   simple_test_phaseplate_correct_fsc

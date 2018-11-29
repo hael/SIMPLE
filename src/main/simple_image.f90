@@ -6738,7 +6738,6 @@ end subroutine NLmean
         call tmp%kill()
     end subroutine clip_inplace
 
-
     ! This subroutine rescales the pixel intensities to a new input range.
     subroutine scale_pixels(self, new_range)
           class(image), intent(inout) :: self
@@ -6850,8 +6849,8 @@ end subroutine NLmean
     subroutine zero_edgeavg( self )
         class(image), intent(inout) :: self
         real :: edges_sum, edges_ave
-        if( self%ft )           THROW_HARD('not for Fted images; edge_norm')
-        if( .not.self%is_2d() ) THROW_HARD('only for 2d images; edge_norm')
+        if( self%ft )           THROW_HARD('not for Fted images; zero_edgeavg')
+        if( .not.self%is_2d() ) THROW_HARD('only for 2d images; zero_edgeavg')
         edges_sum = sum(self%rmat(1:self%ldim(1),1,1))
         edges_sum = edges_sum + sum(self%rmat(1:self%ldim(1),self%ldim(2),1))
         edges_sum = edges_sum + sum(self%rmat(1,1:self%ldim(2),1))
