@@ -208,7 +208,7 @@ contains
     procedure, private :: enumerate_connected_comps
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
-    procedure          :: is_cc_closed                !!!!!!!!!ADDED BY CHIARA
+    procedure          :: is_cc_closed
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc
     procedure          :: dilatation
@@ -241,8 +241,7 @@ contains
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
-    procedure          :: NLmean              !!!!!!!!!ADDED BY CHIARA, still to work on
-    procedure          :: similarity_window   !!!!!!!!!ADDED BY CHIARA
+    procedure          :: NLmean
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -340,6 +339,7 @@ contains
     procedure          :: zero_below
     procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
     procedure          :: ellipse          !!!!!!!!!!!!!!ADDED BY CHIARA
+    procedure          :: hist_stretching  !!!!!!!!!!!!!!ADDED BY CHIARA
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -4382,59 +4382,57 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    !!!!!!!!!ADDED BY CHIARA, for NLmean. I will remove it in order to improve
-    ! the performance
-    function similarity_window(self,px) result(sw)
-        class(image), intent(in) :: self
-        integer,      intent(in) :: px(2)
-        integer, parameter  :: DIM_SW = 3
-        real                :: sw(DIM_SW,DIM_SW)
-        sw(:DIM_SW,:DIM_SW) = self%rmat(px(1):px(1)+DIM_SW-1, px(2):px(2)+DIM_SW-1,1)  !self is meant to be pad
-    end function similarity_window
-
     !!!!!!!ADDED BY CHIARA, still to work on, to make it faster
     subroutine NLmean(self)
       class(image), intent(inout) :: self
       real, allocatable  :: NL_image(:,:,:), NL(:,:)
-      integer, parameter :: DIM_SW = 3
-      real               :: sw(DIM_SW,DIM_SW), sw_px(DIM_SW,DIM_SW)
-      integer            :: i, j, m, n,  pad
-      integer, parameter :: cfr_box = 5
-      real :: z,sigma, h , h_sq
+      integer, parameter :: DIM_SW = 3    !Good if use Euclidean distance
+      integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
+      real               :: exponentials(2*cfr_box+1,2*cfr_box+1)
+      real               :: sw_px(DIM_SW,DIM_SW)
+      integer            :: i, j, m, n, pad, ind(2)
+      real               :: z, sigma, h, h_sq
       type(image)        :: img_p
-      real               :: w, sum
+      real, allocatable  :: rmat(:,:,:)
       pad = (DIM_SW-1)/2
       sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
-      h = 4.*sigma !h = 4.*sigma
+      h = 4.*sigma !h = 12.*sigma
       h_sq = h**2
       call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.)
       call self%pad(img_p)
+      rmat = img_p%get_rmat()
+      call img_p%kill
       allocate(NL_image(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2)), source = 0.)
-      do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n
+      print *, '-------------------NL MEAN FILTERING-------------------'
+      do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
+        call progress(m-cfr_box,self%ldim(1) -2*cfr_box)
         do n = cfr_box+1,self%ldim(2)-cfr_box-1
-          sw_px = similarity_window(img_p,[m,n])
-          z = 0.
+          sw_px = rmat(m:m+DIM_SW-1,n:n+DIM_SW-1,1)
+          exponentials = 0.
           do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
+              ind(1) = i+cfr_box+1
               do j = -cfr_box,cfr_box
                 if(i==0.and.j==0)cycle
-                sw = similarity_window(img_p, [m+i,n+j])
-                z = z + exp(-norm2(sw_px- sw)**2./h_sq)
+                ind(2) = j+cfr_box+1
+                exponentials(ind(1),ind(2)) = &
+                & exp( -sum( (sw_px - rmat(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1,1))**2. )/h_sq) !euclidean norm
               enddo
           enddo
-          if(abs(z) < 0.001) cycle
-          do i = -cfr_box,cfr_box   !As suggested in the paper, I just consider a box 21x21
+          z = sum(exponentials)
+          if(z < 0.001) cycle
+          do i = -cfr_box,cfr_box
               do j = -cfr_box,cfr_box
                 if(i==0.and.j==0)cycle
-                sw = similarity_window(img_p, [m+i,n+j])
-                w = exp(-norm2(sw_px-sw)**2./h_sq) / z
-                NL(m,n) = NL(m,n)+w*self%rmat(m+i,n+j,1)
+                NL(m,n) = NL(m,n)+exponentials(i+cfr_box+1,j+cfr_box+1)*rmat(m+i,n+j,1)
               enddo
           enddo
+          NL(m,n) = NL(m,n) / z
         enddo
       enddo
       NL_image(:,:,1) = NL(:,:)
       call self%set_rmat(NL_image)
-      deallocate(NL, NL_image)
+      deallocate(NL,NL_image,rmat)
+      call img_p%kill
 end subroutine NLmean
 
     ! CALCULATORS
@@ -7236,6 +7234,32 @@ end subroutine NLmean
         enddo
         deallocate(theta)
     end subroutine build_ellipse
+
+    !!!!!!!!!!!!!ADDED BY CHIARAAAAA!!!!!!
+    !This function performs standardization by selective histogram stretching.
+    !It consists of stretching only a selected part of the histogram that contains
+    !most of the pixels. It is developed as explained in Adiga's paper about
+    !particle picking (2003).
+    subroutine hist_stretching(self_in, self_out)
+        class(image), intent(inout) :: self_in
+        class(image), intent(out)   :: self_out
+        real :: m(1)
+        real :: stretch_lim(2)
+        integer :: npxls_at_mode
+        integer, parameter   :: N = 256        !N = 2*(nint(maxval(x)-minval(x))+1)
+        real,    parameter   :: LAMBDA = 255.  !expected max intensity value in the histogram-stretched image
+        real,    allocatable :: rmat(:,:,:), x(:)
+        real,    allocatable :: xhist(:)
+        integer, allocatable :: yhist(:)
+        call self_out%new(self_in%ldim, self_in%smpd)
+        call self_in%scale_pixels([0.,255.])   !to be consistent
+        rmat = self_in%get_rmat()
+        x = pack(rmat(:,:,:), .true.)
+        call create_hist_vector(x,N,xhist,yhist)
+        deallocate(x)
+        call find_stretch_minmax(xhist,yhist,m,npxls_at_mode,stretch_lim)
+        self_out%rmat = (LAMBDA-1)*(rmat-stretch_lim(1))/(stretch_lim(2)-stretch_lim(1))
+    end subroutine hist_stretching
 
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )

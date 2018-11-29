@@ -5,7 +5,7 @@ program simple_test_chiara_try1
   use simple_image,         only : image
   use simple_stackops
   use simple_math
-  use simple_edge_detector, only: sobel, canny
+  use simple_segmentation, only: sobel, automatic_thresh_sobel, canny
   use simple_parameters,    only: parameters
   use simple_cmdline,       only: cmdline
   type(cmdline)      :: cline
@@ -47,45 +47,64 @@ program simple_test_chiara_try1
   call params%new(cline)  !<read cline parameters
   ! 0) Reading and saving original micrograph
   call read_micrograph(micfname = params%fname, smpd = params%smpd)
+
   ! 1) Shrink and high pass filtering
   part_radius = params%part_radius
   call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-  call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
+  call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken) !here it is high pass filt
   call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
   call mic_shrunken%read('shrunken_hpassfiltered.mrc')
+
+  ! 1.1) Standardization by Histogram stretching
+  call mic_shrunken%hist_stretching(mic_copy)
+
+  ! 1.2) Non local mean filtering
+  call mic_copy%NLmean()
+  call mic_copy%write('NLmean_filtered.mrc')
+
   ! 2) Low pass filtering
-  lp = 40. !35
+  lp = 35. !40
   call mic_copy%copy(mic_shrunken) !work on a copy not to modify the original mic
   call mic_copy%bp(0.,lp)
   call mic_copy%ifft()
   call mic_copy%write('bp_filtered.mrc')
+
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!just to draw on that version, which is the most visible for human eye!!!!!!!!!!!!!
   call mic_lp%copy(mic_shrunken) !work on a copy not to modify the original mic
   call mic_lp%bp(0.,20.)
   call mic_lp%ifft()
   call mic_lp%write('LowPassFiltered.mrc')
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   ! 3) Edge Detection
   call mic_copy%stats( ave, sdev, maxv, minv )
   if(params%detector .eq. 'sobel') then
-    thresh(1) = ave+.5*sdev  !0.7
+    thresh(1) = ave+.7*sdev
     call sobel(mic_copy,thresh)
   else if (params%detector .eq. 'bin') then
-    call mic_copy%bin(ave+.8*sdev) !(ave+.7*sdev)
-    print *, 'threshold = ', ave+.8*sdev
+    call mic_copy%bin(ave+.7*sdev) !(ave+.8*sdev)
+    print *, 'threshold = ', ave+.7*sdev
   else if (params%detector .eq. 'canny') then
     call canny(mic_copy)
   endif
   call mic_copy%write('Bin1.mrc')
-  call mic_copy%real_space_filter(5,'median') !median filtering allows easy calculation of cc
+  call mic_copy%real_space_filter(3,'median') !median filtering allows easy calculation of cc. winsz=5??
   call mic_copy%write('Bin1Median.mrc')
-
+  ! call automatic_thresh_sobel(mic_copy, 0.2, thresh)
+  ! print *, 'Selected threshold = ', thresh
   ! 5) Connected components (cc) identification
   call imgcc%new(ldim_shrunken, smpd_shrunken)
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-  call mic_copy%read('MedianFiltered.mrc')
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !TO MAKE IT FASTER
+  !call mic_copy%read('Bin1Filtered.mrc')
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   call mic_copy%find_connected_comps(imgcc)
   call imgcc%write('ConnectedComponents.mrc')
+
   ! 6) cc filtering
   min_sz = 20*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
   max_sz = 150*int(part_radius)

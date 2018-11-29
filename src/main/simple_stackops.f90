@@ -248,14 +248,14 @@ contains
         call raise_exception( n, ldim, 'calc_log_imgfile' )
         call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
         call subtr_backgr_imgfile( fname, fname, smpd, lp )
-        call real_filter_imgfile(fname, fname, smpd, 'median', winsz) 
+        call real_filter_imgfile(fname, fname, smpd, 'median', winsz)
         call img%kill
     end subroutine prepare_stack
 
     !This subroutine performs Canny automatic edge detection on a stack
     !of images.
     subroutine binarize_stack(fname2process,fname,smpd)
-      use simple_edge_detector, only : canny
+      use simple_segmentation, only : canny
       character(len=*), intent(in) :: fname2process, fname
       real,             intent(in) :: smpd
       integer     :: n, ldim(3), i

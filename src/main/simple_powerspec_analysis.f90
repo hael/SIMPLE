@@ -260,3 +260,47 @@ contains
       if(allocated(rmat)) deallocate(rmat)
     end subroutine process_ps_stack
 end module simple_powerspec_analysis
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TESTS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+ ! img = build_ice_template(512, 1.41, winsz)
+ ! print *, 'WINSZ = ', winsz
+ ! call img_win%new([int(winsz/2),int(winsz/2),1], 1.41)
+ ! call img%write('IceTemplate.mrc')
+ ! call img%window_slim([int(winsz/4),int(winsz/4)], 10, img_win, outside )
+ ! call img_win%write('IceTemplateWin.mrc')
+ ! print *, 'OUTSIDE = ', outside
+
+ ! call img%ellipse([256,256],[20.,20.], 'yes')
+ ! call img%ellipse([352,312],[10.,5.], 'yes')
+ ! call img%ellipse([23,25],[5.,10.], 'yes')
+ ! call img%ellipse([112,53],[10.,10.], 'yes')
+ !  call img%ellipse([220,153],[8.,8.], 'yes')
+ ! call img%read('ToyImage.mrc')
+ ! call img%find_connected_comps(img_cc)
+ ! call img_cc%write('ToyImageCC.mrc')
+ ! yes_no = is_symmetric(img_cc, 1)
+ ! print *, 'CC ', 1, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 2)
+ ! print *, 'CC ', 2, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 3)
+ ! print *, 'CC ', 3, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 4)
+ ! print *, 'CC ', 4, ' is symmetric ', yes_no
+ ! yes_no = is_symmetric(img_cc, 5)
+ ! print *, 'CC ', 5, ' is symmetric ', yes_no
+
+  ! !TO START AGAIN FROM HERE
+  ! call img%new([512,512,1],1.)
+  ! call img_cc%new([512,512,1],1.)
+  ! call img%read('SAGAWhithICEBin.mrc')
+  ! call img%find_connected_comps(img_cc)
+  ! call img_cc%write('SAGAWithICEBinCC.mrc')
+  ! rmat = img_cc%get_rmat()
+  ! do i = 1, int(maxval(rmat))
+  !   yes_no = is_symmetric(img_cc, i)
+  !   print *, 'CC ', i, ' is symmetric ', yes_no
+  ! enddo
+
+ ! call process_ps_stack('pspecs_sphire_tstdat.mrc', 'analysed_pspecs_sphire.mrc', 1.41, 20.,1)
+! call process_ps_stack('pspecs_saga_polii.mrc', 'analysed_pspecs_saga_polii.mrc', 1.14, 35.,2)

@@ -154,6 +154,12 @@ interface vis_mat
     module procedure vis_3Dinteger_mat
 end interface vis_mat
 
+!!!!!!ADDED BY CHIARA!!!!!
+interface mode
+    module procedure mode_1
+    module procedure mode_2
+end interface mode
+
 contains
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
@@ -2038,4 +2044,112 @@ contains
         enddo
     end subroutine vis_3Dinteger_mat
 
+    !!!!!!!!!!!!!ADDED BY CHIARAAAAA!!!!!!!!!!
+    !This function simply calculates the mode of an array,
+    !I don't know if it has already been implemented somehow.
+    subroutine mode_1(arr, m, npxls_at_mode)   !INTEGER VECTORS
+        integer, intent(in)  :: arr(:)
+        integer, intent(out) :: m !mode
+        integer, optional, intent(out) :: npxls_at_mode
+        integer, allocatable :: counts(:)
+        integer :: i
+        ! Initialise array to count occurrences of each value.
+        allocate(counts(minval(arr):maxval(arr)), source = 0)
+        counts = 0
+        ! Loop over inputted array, counting occurrence of each value.
+        do i=1,size(arr)
+            counts(arr(i)) = counts(arr(i)) + 1
+        end do
+        ! Find the mode
+        m = minloc(abs(counts - maxval(counts)),1)
+        if(present(npxls_at_mode)) npxls_at_mode = maxval(counts)
+    end subroutine mode_1
+
+    subroutine mode_2(arr, m, npxls_at_mode)  !REAL VECTORS
+        real, intent(in)  :: arr(:)
+        real, intent(out) :: m(1)
+        integer, optional, intent(out) :: npxls_at_mode
+        integer              :: n !the number of intervals
+        real,    allocatable :: xhist(:)
+        integer, allocatable :: yhist(:)
+        integer              :: i, j
+        real                 :: xmin, xmax, dx
+        integer, dimension(:), allocatable :: counts
+        integer :: astat
+        character(len=128) :: error_str
+        xmin=minval(arr)
+        xmax=maxval(arr)
+        n = 2*(nint(xmax-xmin)+1) !this value influence the result because it determins how to approximate the steps
+        allocate(xhist(0:n-1))
+        allocate(yhist(n), source = 0 )
+        dx=(xmax+1-xmin)/n
+        do i=0,n-1
+            xhist(i)=xmin+i*dx
+        end do
+        do i=1,size(arr, dim =1)
+            j = nint((arr(i)-xmin)/dx)+1
+            yhist(j)=yhist(j)+1
+        end do
+        m(:) = xhist(maxloc(yhist)-1)
+        if(present(npxls_at_mode)) npxls_at_mode = maxval(yhist)
+    end subroutine mode_2
+
+    !!!!!!!!!!!!!!!ADDED BY CHIARAAAA!!!!!!!!!!!!
+    !This function takes in input a vector x and an integer n.
+    !It stores in xhist the discretisation of the values in x
+    !performed dividing it in n intervals and the correspondent
+    !number of occurrences in yhist.
+    subroutine create_hist_vector(x,n,xhist,yhist)
+        real,                 intent(in)  :: x(:)     !data
+        integer,              intent(in)  :: n        !number of intervals
+        real,    allocatable, intent(out) :: xhist(:) !discretization of the values
+        integer, allocatable, intent(out) :: yhist(:) !number of occurences
+        integer   :: i, j
+        real      :: xmin, xmax, dx
+        if(allocated(xhist)) deallocate(xhist)
+        if(allocated(yhist)) deallocate(yhist)
+        allocate(xhist(0:n-1), source = 0.)
+        allocate(yhist(n), source = 0 )
+        xmin=minval(x)
+        xmax=maxval(x)
+        dx=(xmax+1-xmin)/n
+        do i=0,n-1
+            xhist(i)=xmin+i*dx
+        end do
+        do i=1,size(x)
+            j=nint((x(i)-xmin)/dx)+1
+            yhist(j)=yhist(j)+1
+        end do
+    end subroutine create_hist_vector
+
+    !!!!!!!!!!!!!!!!!!!ADDED BY CHIARAAAA!!!!!!!!!!!!!!
+    !This function is meant to be a support for performing histogram stretching.
+    !It takes in input the histogram vectors xhist and yhist (see function create_hist_vector
+    !in the simple_image file)
+    !and gives as an output the mode m of the histogram, the corresponding number of pixels
+    !at mode npxls_at_mode and calculates the min and max gray-level values as limits
+    !for histogram stretching (stretch_lim). By default, the limits specify the bottom
+    !1% and the top 1% of all pixel values.
+    subroutine find_stretch_minmax(xhist,yhist,m,npxls_at_mode,stretch_lim)
+        real,    intent(in)  :: xhist(:)
+        integer, intent(in)  :: yhist(:)
+        real,    intent(out) :: m(1)
+        integer, intent(out) :: npxls_at_mode
+        real,    intent(out) :: stretch_lim(2)
+        real, parameter :: OFFSET = 0. !to change??
+        integer         ::  i, ilim(1)
+        m(:)    = xhist(maxloc(yhist)+1) !+1 cuz of different index
+        ilim(:) =       maxloc(yhist)
+        npxls_at_mode = maxval(yhist)
+        do i = 1, ilim(1)-1
+            if(yhist(i) > real(npxls_at_mode/100) - OFFSET) goto 128  !bottom 1%
+        enddo
+        128 continue
+        stretch_lim(1) = xhist(i-1)
+        do i = ilim(1)+1, size(yhist, dim = 1)
+            if(yhist(i) < real(npxls_at_mode/100) + OFFSET) goto 132  !top 1%
+        enddo
+        132 continue
+        stretch_lim(2) = xhist(i)
+    end subroutine find_stretch_minmax
 end module simple_math

@@ -532,7 +532,7 @@ contains
         use simple_micops
         use simple_image
         use simple_stackops
-        use simple_edge_detector, only: sobel, canny, automatic_thresh_sobel
+        use simple_segmentation, only: sobel, canny, automatic_thresh_sobel
         class(pick_commander_chiara), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir

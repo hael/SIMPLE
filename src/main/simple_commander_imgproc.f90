@@ -131,34 +131,34 @@ contains
         integer          :: igrow, iptcl
         ! error check
         if( .not. cline%defined('stk') )then
-            THROW_HARD('ERROR! stk needs to be present; simple_edge_detector')
+            THROW_HARD('ERROR! stk needs to be present; simple_segmentation')
         endif
         if( .not. cline%defined('detector') )then
-            THROW_HARD('ERROR! detector needs to be present; simple_edge_detector')
+            THROW_HARD('ERROR! detector needs to be present; simple_segmentation')
         endif
         if( .not. cline%defined('automatic') )then
-            THROW_HARD('ERROR! automatic needs to be present; simple_edge_detector')
+            THROW_HARD('ERROR! automatic needs to be present; simple_segmentation')
         endif
         if(.not. cline%defined('outstk') )then
             params%outstk = 'Outstk.mrc'
         endif
         if( cline%defined('thres') .and. cline%defined('npix') )then
-            THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; simple_edge_detector')
+            THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; simple_segmentation')
         endif
         if( cline%defined('thres') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres in automatic mode; simple_segmentation')
         endif
         if( cline%defined('npix') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose npix in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose npix in automatic mode; simple_segmentation')
         endif
         if( cline%defined('thres_low') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_low in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres_low in automatic mode; simple_segmentation')
         endif
         if( cline%defined('thres_up') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_up in automatic mode; simple_edge_detector')
+            THROW_HARD('cannot chose thres_up in automatic mode; simple_segmentation')
         endif
         if( cline%defined('thres') .and. params%detector .eq. 'canny') then
-            THROW_HARD('canny needs double thresholding; simple_edge_detector')
+            THROW_HARD('canny needs double thresholding; simple_segmentation')
         endif
 
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
@@ -170,12 +170,12 @@ contains
             call build%img%kill
         end do
         ! end gracefully
-        call simple_end('**** SIMPLE_EDGE_DETECTOR NORMAL STOP ****')
+        call simple_end('**** simple_segmentation NORMAL STOP ****')
 
     contains
 
             subroutine doit( img )
-                use simple_edge_detector
+                use simple_segmentation
                 class(image), intent(inout) :: img
                 real, allocatable  :: grad(:,:,:)
                 real    :: thresh(1), ave, sdev, maxv, minv, lp(1)
@@ -203,7 +203,7 @@ contains
                     endif
                     if( params%automatic .eq. 'no' ) then
                         if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                            THROW_HARD('both upper and lower threshold needed; simple_edge_detector')
+                            THROW_HARD('both upper and lower threshold needed; simple_segmentation')
                         else
                             if( cline%defined('lp')) then
                                 call canny(img,[params%thres_low, params%thres_up],lp(1))
@@ -213,7 +213,7 @@ contains
                         endif
                     elseif( params%automatic .eq. 'yes') then
                         if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                            THROW_HARD('cannot define thresholds in automatic mode; simple_edge_detector')
+                            THROW_HARD('cannot define thresholds in automatic mode; simple_segmentation')
                         else
                             if( cline%defined('lp')) then
                                 call canny(img,lp = lp(1))
@@ -228,7 +228,7 @@ contains
                   call img%stats( ave, sdev, maxv, minv )
                   call img%bin(ave+.7*sdev)
                 case DEFAULT
-                    THROW_HARD('Unknown detector argument; simple_edge_detector')
+                    THROW_HARD('Unknown detector argument; simple_segmentation')
                end select
             end subroutine
 
