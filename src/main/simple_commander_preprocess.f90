@@ -15,7 +15,7 @@ public :: gen_pspecs_and_thumbs_commander
 public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
-! public :: pick_commander_chiara
+public :: pick_commander_chiara
 public :: extract_commander
 public :: pick_extract_commander
 private
@@ -45,10 +45,10 @@ type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
 end type pick_commander
-! type, extends(commander_base) :: pick_commander_chiara
-!   contains
-!     procedure :: execute      => exec_pick_chiara
-! end type pick_commander_chiara
+type, extends(commander_base) :: pick_commander_chiara
+  contains
+    procedure :: execute      => exec_pick_chiara
+end type pick_commander_chiara
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
@@ -527,117 +527,117 @@ contains
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
-    ! subroutine exec_pick_chiara( self, cline)
-    !     use simple_picker_chiara
-    !     use simple_micops
-    !     use simple_image
-    !     use simple_stackops
-    !     use simple_segmentation, only: sobel, canny, automatic_thresh_sobel
-    !     class(pick_commander_chiara), intent(inout) :: self
-    !     class(cmdline),               intent(inout) :: cline !< command line input
-    !     character(len=:), allocatable :: output_dir
-    !     type(parameters)   :: params
-    !     type(image)        :: mic_shrunken, mic_bin, mic_copy
-    !     type(image)        :: imgcc, imgwi
-    !     integer            :: ldim_shrunken(3), box_shrunken, winsz, min_sz, max_sz
-    !     real               :: part_radius
-    !     real,    parameter :: SHRINK = 4.
-    !     real               :: smpd_shrunken, lp, ave, sdev, maxv, minv, thresh(1)
-    !     if( .not. cline%defined('fname') )then
-    !         THROW_HARD('ERROR! fname needs to be present; exec_pick_chiara')
-    !     endif
-    !     if( .not. cline%defined('smpd') )then
-    !         THROW_HARD('ERROR! smpd needs to be present; exec_pick_chiara')
-    !     endif
-    !     if( .not. cline%defined('part_radius') )then
-    !         THROW_HARD('ERROR! part_radius to be present; exec_pick_chiara')
-    !     endif
-    !     call params%new(cline)
-    !     if( cline%defined('thres') .and. params%detector .ne. 'sobel')then
-    !         THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_pick_chiara')
-    !     endif
-    !     if( cline%defined('part_concentration') .and. params%detector .ne. 'sobel')then
-    !         THROW_HARD('ERROR! part_concentration is compatible only with sobel detector; exec_pick_chiara')
-    !     endif
-    !     if( cline%defined('thres') .and. cline%defined('part_concentration'))then
-    !         THROW_HARD('ERROR! thres and part_concentration are not compatible; exec_pick_chiara')
-    !     endif
-    !     ! output directory
-    !     output_dir = PATH_HERE
-    !     ! 0) Reading and saving original micrograph
-    !     call read_micrograph(micfname = params%fname, smpd = params%smpd)
-    !     ! 1) Shrink and high pass filtering
-    !     part_radius = params%part_radius
-    !     call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-    !     call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
-    !     call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
-    !     call mic_shrunken%read('shrunken_hpassfiltered.mrc')
-    !     call mic_copy%new(ldim_shrunken, smpd_shrunken) !work on a copy not to modify the original mic
-    !     call mic_copy%read('shrunken_hpassfiltered.mrc')
-    !     ! 2) Low pass filtering
-    !     if( cline%defined('lp')) then
-    !         lp = params%lp
-    !     else
-    !         lp = 35.
-    !     endif
-    !     call mic_copy%bp(0.,lp)
-    !     call mic_copy%ifft()
-    !     ! 3) Edge Detection
-    !     call mic_copy%stats( ave, sdev, maxv, minv )
-    !     if(params%detector .eq. 'sobel') then
-    !         if(cline%defined('thres')) then
-    !             thresh(1) = params%thres
-    !             print *, 'threshold selected = ', thresh
-    !             call sobel(mic_copy,thresh)
-    !         elseif(cline%defined('part_concentration')) then
-    !             call automatic_thresh_sobel(mic_copy, params%part_concentration)
-    !         else
-    !             thresh(1) = ave+.8*sdev
-    !             call sobel(mic_copy,thresh)
-    !         endif
-    !     else if (params%detector .eq. 'bin') then
-    !         call mic_copy%bin(ave+.8*sdev)
-    !     else if (params%detector .eq. 'canny') then
-    !         call canny(mic_copy)
-    !     endif
-    !     call mic_copy%write('Bin1.mrc')
-    !     if( cline%defined('winsz')) then
-    !         winsz = params%winsz
-    !     else
-    !         winsz = 4
-    !     endif
-    !     call mic_copy%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
-    !     call mic_copy%write('Bin1Median.mrc')
-    !     ! 5) Connected components (cc) identification
-    !     call imgcc%new(ldim_shrunken, smpd_shrunken)
-    !     call mic_copy%find_connected_comps(imgcc)
-    !     call imgcc%write('ConnectedComponents.mrc')
-    !     ! 6) cc filtering
-    !     min_sz = 10*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
-    !     max_sz = 70*int(part_radius)
-    !     call imgcc%elim_cc([min_sz,max_sz])
-    !     call imgcc%write('ConnectedComponentsElimin.mrc')
-    !     call extract_particles_NOmasscen(mic_shrunken, imgcc, int(part_radius))
-    !     open(unit = 17, file = "PickerInfo.txt")
-    !     write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
-    !     write(unit = 17, fmt = '(a)') ''
-    !     write(unit = 17, fmt = '(a,a)') 'Working Directory ', output_dir
-    !     write(unit = 17, fmt = "(a,f0.0)")  'Mic Shrunken by factor ', SHRINK
-    !     write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dim after shrink ', ldim_shrunken
-    !     write(unit = 17, fmt = "(a,f0.0)")  'Smpd after shrink ', smpd_shrunken
-    !     write(unit = 17, fmt = "(a,i0)")  'Hp box ', int(SHRINK*( 4*part_radius+10 ))
-    !     write(unit = 17, fmt = "(a,f0.0)")  'Lp  ', lp
-    !     write(unit = 17, fmt = "(a,i0,tr1, i0)")  'Connected Components size filtering  ', min_sz, max_sz
-    !     write(unit = 17, fmt = '(a)') ''
-    !     write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
-    !     write(unit = 17, fmt = '(a)') ''
-    !     write(unit = 17, fmt = "(a,tr1,f0.0)")  'smpd ', params%smpd
-    !     write(unit = 17, fmt = "(a,tr1,f0.0)")  'part_radius  ', params%part_radius
-    !     write(unit = 17, fmt = "(a,a)")  'detector  ', params%detector
-    !     close(17, status = "keep")
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
-    ! end subroutine exec_pick_chiara
+    subroutine exec_pick_chiara( self, cline)
+        use simple_picker_chiara
+        use simple_micops
+        use simple_image
+        use simple_stackops
+        use simple_segmentation, only: sobel, canny, automatic_thresh_sobel
+        class(pick_commander_chiara), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline !< command line input
+        character(len=:), allocatable :: output_dir
+        type(parameters)   :: params
+        type(image)        :: mic_shrunken, mic_bin, mic_copy
+        type(image)        :: imgcc, imgwi
+        integer            :: ldim_shrunken(3), box_shrunken, winsz, min_sz, max_sz
+        real               :: part_radius
+        real,    parameter :: SHRINK = 4.
+        real               :: smpd_shrunken, lp, ave, sdev, maxv, minv, thresh(1)
+        if( .not. cline%defined('fname') )then
+            THROW_HARD('ERROR! fname needs to be present; exec_pick_chiara')
+        endif
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_pick_chiara')
+        endif
+        if( .not. cline%defined('part_radius') )then
+            THROW_HARD('ERROR! part_radius to be present; exec_pick_chiara')
+        endif
+        call params%new(cline)
+        if( cline%defined('thres') .and. params%detector .ne. 'sobel')then
+            THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_pick_chiara')
+        endif
+        if( cline%defined('part_concentration') .and. params%detector .ne. 'sobel')then
+            THROW_HARD('ERROR! part_concentration is compatible only with sobel detector; exec_pick_chiara')
+        endif
+        if( cline%defined('thres') .and. cline%defined('part_concentration'))then
+            THROW_HARD('ERROR! thres and part_concentration are not compatible; exec_pick_chiara')
+        endif
+        ! output directory
+        output_dir = PATH_HERE
+        ! 0) Reading and saving original micrograph
+        call read_micrograph(micfname = params%fname, smpd = params%smpd)
+        ! 1) Shrink and high pass filtering
+        part_radius = params%part_radius
+        call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
+        call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
+        call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
+        call mic_shrunken%read('shrunken_hpassfiltered.mrc')
+        call mic_copy%new(ldim_shrunken, smpd_shrunken) !work on a copy not to modify the original mic
+        call mic_copy%read('shrunken_hpassfiltered.mrc')
+        ! 2) Low pass filtering
+        if( cline%defined('lp')) then
+            lp = params%lp
+        else
+            lp = 35.
+        endif
+        call mic_copy%bp(0.,lp)
+        call mic_copy%ifft()
+        ! 3) Edge Detection
+        call mic_copy%stats( ave, sdev, maxv, minv )
+        if(params%detector .eq. 'sobel') then
+            if(cline%defined('thres')) then
+                thresh(1) = params%thres
+                print *, 'threshold selected = ', thresh
+                call sobel(mic_copy,thresh)
+            elseif(cline%defined('part_concentration')) then
+                call automatic_thresh_sobel(mic_copy, params%part_concentration)
+            else
+                thresh(1) = ave+.8*sdev
+                call sobel(mic_copy,thresh)
+            endif
+        else if (params%detector .eq. 'bin') then
+            call mic_copy%bin(ave+.8*sdev)
+        else if (params%detector .eq. 'canny') then
+            call canny(mic_copy)
+        endif
+        call mic_copy%write('Bin1.mrc')
+        if( cline%defined('winsz')) then
+            winsz = params%winsz
+        else
+            winsz = 4
+        endif
+        call mic_copy%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
+        call mic_copy%write('Bin1Median.mrc')
+        ! 5) Connected components (cc) identification
+        call imgcc%new(ldim_shrunken, smpd_shrunken)
+        call mic_copy%find_connected_comps(imgcc)
+        call imgcc%write('ConnectedComponents.mrc')
+        ! 6) cc filtering
+        min_sz = 10*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
+        max_sz = 70*int(part_radius)
+        call imgcc%elim_cc([min_sz,max_sz])
+        call imgcc%write('ConnectedComponentsElimin.mrc')
+        call extract_particles_NOmasscen(mic_shrunken, imgcc, int(part_radius))
+        open(unit = 17, file = "PickerInfo.txt")
+        write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = '(a,a)') 'Working Directory ', output_dir
+        write(unit = 17, fmt = "(a,f0.0)")  'Mic Shrunken by factor ', SHRINK
+        write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dim after shrink ', ldim_shrunken
+        write(unit = 17, fmt = "(a,f0.0)")  'Smpd after shrink ', smpd_shrunken
+        write(unit = 17, fmt = "(a,i0)")  'Hp box ', int(SHRINK*( 4*part_radius+10 ))
+        write(unit = 17, fmt = "(a,f0.0)")  'Lp  ', lp
+        write(unit = 17, fmt = "(a,i0,tr1, i0)")  'Connected Components size filtering  ', min_sz, max_sz
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = "(a,tr1,f0.0)")  'smpd ', params%smpd
+        write(unit = 17, fmt = "(a,tr1,f0.0)")  'part_radius  ', params%part_radius
+        write(unit = 17, fmt = "(a,a)")  'detector  ', params%detector
+        close(17, status = "keep")
+        ! end gracefully
+        call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
+    end subroutine exec_pick_chiara
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )

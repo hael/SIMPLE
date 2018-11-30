@@ -26,7 +26,7 @@ type(ctf_estimate_commander)          :: xctf_estimate
 type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
 type(pick_extract_commander)          :: xpick_extract
 type(pick_commander)                  :: xpick
-! type(pick_commander_chiara)           :: xpickchiara
+type(pick_commander_chiara)           :: xpickchiara
 
 ! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)           :: xmake_cavgs
@@ -294,7 +294,7 @@ select case(prg)
        keys_optional(3) = 'thres'
        keys_optional(4) = 'part_concentration'
       call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
-      ! call xpickchiara%execute(cline)
+      call xpickchiara%execute(cline)
 
     ! CLUSTER2D PROGRAMS
 
