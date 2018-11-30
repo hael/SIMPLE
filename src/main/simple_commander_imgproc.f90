@@ -175,61 +175,61 @@ contains
     contains
 
             subroutine doit( img )
-                use simple_segmentation
+               !  use simple_segmentation
                 class(image), intent(inout) :: img
-                real, allocatable  :: grad(:,:,:)
-                real    :: thresh(1), ave, sdev, maxv, minv, lp(1)
-                integer :: ldim(3)
-                thresh = 0. !initialise
-                if(cline%defined('lp')) lp(1) = params%lp
-                select case ( params%detector )
-                case ('sobel')
-                    if( cline%defined('thres') )then
-                        thresh(1) = params%thres
-                        call sobel(img,thresh)
-                    else if( cline%defined('npix') )then
-                        ldim = img%get_ldim()
-                        call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
-                    elseif( params%automatic .eq. 'yes') then
-                        call img%scale_pixels([0.,255.])
-                        call img%calc_gradient(grad)
-                        call img%stats( ave, sdev, maxv, minv )
-                        thresh(1) = ave + 0.7*sdev
-                        print *, 'Selected threshold: ', thresh
-                        call sobel(img,thresh)
-                        deallocate(grad)
-                    else
-                        call canny(img,[params%thres_low, params%thres_up])
-                    endif
-                    if( params%automatic .eq. 'no' ) then
-                        if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                            THROW_HARD('both upper and lower threshold needed; simple_segmentation')
-                        else
-                            if( cline%defined('lp')) then
-                                call canny(img,[params%thres_low, params%thres_up],lp(1))
-                            else
-                                call canny(img,[params%thres_low, params%thres_up])
-                            endif
-                        endif
-                    elseif( params%automatic .eq. 'yes') then
-                        if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                            THROW_HARD('cannot define thresholds in automatic mode; simple_segmentation')
-                        else
-                            if( cline%defined('lp')) then
-                                call canny(img,lp = lp(1))
-                            else
-                                call canny(img)
-                            endif
-                        endif
-                    else
-                        call canny(img)
-                    endif
-                case ('bin')
-                  call img%stats( ave, sdev, maxv, minv )
-                  call img%bin(ave+.7*sdev)
-                case DEFAULT
-                    THROW_HARD('Unknown detector argument; simple_segmentation')
-               end select
+               !  real, allocatable  :: grad(:,:,:)
+               !  real    :: thresh(1), ave, sdev, maxv, minv, lp(1)
+               !  integer :: ldim(3)
+               !  thresh = 0. !initialise
+               !  if(cline%defined('lp')) lp(1) = params%lp
+               !  select case ( params%detector )
+               !  case ('sobel')
+               !      if( cline%defined('thres') )then
+               !          thresh(1) = params%thres
+               !          call sobel(img,thresh)
+               !      else if( cline%defined('npix') )then
+               !          ldim = img%get_ldim()
+               !          call automatic_thresh_sobel(img,real(params%npix)/(real(ldim(1)*ldim(2))))
+               !      elseif( params%automatic .eq. 'yes') then
+               !          call img%scale_pixels([0.,255.])
+               !          call img%calc_gradient(grad)
+               !          call img%stats( ave, sdev, maxv, minv )
+               !          thresh(1) = ave + 0.7*sdev
+               !          print *, 'Selected threshold: ', thresh
+               !          call sobel(img,thresh)
+               !          deallocate(grad)
+               !      else
+               !          call canny(img,[params%thres_low, params%thres_up])
+               !      endif
+               !      if( params%automatic .eq. 'no' ) then
+               !          if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
+               !              THROW_HARD('both upper and lower threshold needed; simple_segmentation')
+               !          else
+               !              if( cline%defined('lp')) then
+               !                  call canny(img,[params%thres_low, params%thres_up],lp(1))
+               !              else
+               !                  call canny(img,[params%thres_low, params%thres_up])
+               !              endif
+               !          endif
+               !      elseif( params%automatic .eq. 'yes') then
+               !          if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
+               !              THROW_HARD('cannot define thresholds in automatic mode; simple_segmentation')
+               !          else
+               !              if( cline%defined('lp')) then
+               !                  call canny(img,lp = lp(1))
+               !              else
+               !                  call canny(img)
+               !              endif
+               !          endif
+               !      else
+               !          call canny(img)
+               !      endif
+               !  case ('bin')
+               !    call img%stats( ave, sdev, maxv, minv )
+               !    call img%bin(ave+.7*sdev)
+               !  case DEFAULT
+               !      THROW_HARD('Unknown detector argument; simple_segmentation')
+               ! end select
             end subroutine
 
     end subroutine exec_edge_detector

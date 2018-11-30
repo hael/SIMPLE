@@ -255,7 +255,7 @@ contains
     !This subroutine performs Canny automatic edge detection on a stack
     !of images.
     subroutine binarize_stack(fname2process,fname,smpd)
-      use simple_segmentation, only : canny
+      ! use simple_segmentation, only : canny
       character(len=*), intent(in) :: fname2process, fname
       real,             intent(in) :: smpd
       integer     :: n, ldim(3), i
@@ -265,7 +265,7 @@ contains
       call img%new(ldim,smpd)
       do i = 1, n
           call img%read(fname2process, i)
-          call canny(img)
+          ! call canny(img)
           call img%write(fname,i)
       enddo
       call img%kill
