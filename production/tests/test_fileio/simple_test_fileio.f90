@@ -29,56 +29,6 @@ program simple_test_fileio
     print *," Current working directory ", curDir
     print *," Previous working directory ", oldfolder
 
-
-#if defined(PGI)
-    print *,">>> Testing PGI STREAMING  "
-    call fopen(fid,file='myfile.txt',access='stream',form='unformatted',iostat=ios,iomsg=msg)
-    write(*,*) 'ios1=',ios
-    write(*,*) 'mess1=',trim(msg)
-    read(fid,pos=20,iostat=ios,iomsg=msg) c
-    write(*,*) 'ios1=',ios
-    write(*,*) 'mess1=',trim(msg)
-    read(fid,pos=1,iostat=ios) c
-    write(*,*) 'ios2=',ios
-    write(*,*) 'mess2=',trim(msg)
-    call fclose(fid)
-
-    call fopen(un,file='test.bin',status='unknown',action='write',access='stream',form='unformatted',iostat=istat,iomsg=msg)
-    if(istat /= 0) then
-        call fileiochk(" PGI STREAMING failed ", istat)
-        call simple_error_check()
-        call gerror(msg)
-        write(stderr,'("SIMPLE_SYSLIB::SYSERROR  ",I0)') istat
-        write(stderr,*) trim(adjustl(msg))
-
-    endif
-
-    write(un) 1._dp,2._dp,3._dp
-    call flush(un)
-    call fclose(un,iostat=istat)
-    open(un,file='test.bin',status='old',action='write',access='stream',form='unformatted',position='append',iostat=istat)
-    write(un) 4._dp, 5._dp
-    call flush(un)
-    close(un,iostat=istat)
-    open(un,file='test.bin',status='old',action='read',access='stream',form='unformatted',iostat=istat)
-    read(un) tmp
-    print *, tmp
-    call flush(un)
-    close(un,iostat=istat)
-
-    print *,">>> Testing PGI STREAMING INT32 record test "
-    call random_number(a)
-    open (10,file='test.dat',form='unformatted',access='stream')
-    inquire (iolength=ii) a
-    write (10) ii, a, ii
-    close (10)
-    open (10,file='test.dat',form='unformatted')
-    read (10) b
-    if (all (a == b)) print *,'">>> Testing PGI STREAMING INT32  success!!'
-
-    print *,">>> Testing PGI STREAMING  completed"
-#endif
-
     print *,">>> Testing FOPEN  (Expecting Error 24)"
     do i=1,1200
         write(fname,'("tmp_",i0,".txt")') i
@@ -118,7 +68,7 @@ program simple_test_fileio
     call cube%kill
     call img%write( 'cubes.mrc' )
     call img%kill
-    write(*,*)'>>> WROTE TEST VOLUME cubes.mrc'
+    write(logfhandle,*)'>>> WROTE TEST VOLUME cubes.mrc'
     ! test units
     !command = 'simple_test_units'
     !call exec_cmdline( trim(command) )
@@ -128,7 +78,7 @@ program simple_test_fileio
     !call exec_cmdline( trim(command) )
     ! end
 
-    write(*,*)'>>> Testing Read/Write accuracy (floats)'
+    write(logfhandle,*)'>>> Testing Read/Write accuracy (floats)'
     call test_readwrite_accuracy
     call simple_chdir(PATH_PARENT)
     call simple_end('**** SIMPLE_TEST_FILEIO NORMAL STOP ****')

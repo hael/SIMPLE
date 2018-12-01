@@ -275,7 +275,7 @@ contains
         if( filesz == -1 )then
             THROW_HARD('file_size cannot be inquired; openstar')
         else if (filesz < 10) then
-            write(*,*) 'file: ', trim(filename)
+            write(logfhandle,*) 'file: ', trim(filename)
             THROW_HARD('file size too small to contain a header; openstar')
         endif
     end subroutine openstar

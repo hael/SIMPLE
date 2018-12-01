@@ -20,6 +20,7 @@ integer, parameter, public :: max_colors    =  256
 integer, parameter         :: GREYSCALE     =  1
 integer(kind=4), parameter :: boz_00ff = INT(z'000000ff',kind=4)
 integer(kind=4), parameter :: boz_ffff = INT(z'00ffffff',kind=4)
+
 type jpg_img
     private
     integer       :: width      =  0
@@ -31,7 +32,6 @@ type jpg_img
     real          :: gamma      = 0.707    ! 1./sqrt(2.)
     logical       :: normalised = .false.
 contains
-    procedure          :: destructor
     procedure          :: constructor
     procedure          :: getWidth
     procedure          :: getHeight
@@ -242,8 +242,7 @@ contains
         integer               ::  w,h,c,slice
         integer               ::  status
         character(len=STDLEN) ::  fstr
-         status = 1
-        VerbosePrint ' In save_jpeg_r4_3D '
+        status = 1
         fname_here = trim(adjustl(fname))
         c=4
         w = size(in_buffer,1)
@@ -268,7 +267,6 @@ contains
         integer(1),       pointer     :: img_buffer(:) => NULL()
         status = 1
         c      = 1
-        VerbosePrint '>>> In save_jpeg_r4 '
         self%width  = 0
         self%height = 0
         w = size(in_buffer,1)
@@ -277,10 +275,8 @@ contains
         if(present(quality)) self%quality = quality
         if(present(colorspec)) self%colorspace = colorspec
         allocate(fstr, source=trim(fname)//c_null_char)
-        VerbosePrint '>>> In save_jpeg_r4 input w x h ', w, h
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
-        VerbosePrint '>>> In save_jpeg_r4 input lo hi ', lo, hi
         allocate(img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
@@ -302,17 +298,10 @@ contains
         img = c_loc(img_buffer)
         self%width = w
         self%height = h
-        VerbosePrint '>>> Calling stbi_write_jpg fname ', fname
-        VerbosePrint '>>> Calling stbi_write_jpg width ',self%width
-        VerbosePrint '>>> Calling stbi_write_jpg height ',  self%height
-        VerbosePrint '>>> Calling stbi_write_jpg comp ', self%colorspace
-        VerbosePrint '>>> Calling stbi_write_jpg quality ', self%quality
         status = stbi_write_jpg (fstr, self%width, self%height, self%colorspace, img, self%quality )
-        VerbosePrint '>>> stbi_write_jpg returned status ', status
         if(status == 0 ) THROW_HARD('call to write_jpeg failed')
         status = 0
         deallocate(fstr,img_buffer)
-        VerbosePrint '>>> Done  save_jpeg_r4 '
     end function save_jpeg_r4
 
     function save_jpeg_i4 (self, fname, in_buffer, quality, colorspec) result(status)
@@ -325,7 +314,6 @@ contains
         integer(c_int)                :: pixel
         character(len=:), allocatable :: fstr
         integer(1),       pointer     :: img_buffer(:) => NULL()
-        VerbosePrint '>>>  In save_jpeg_i4 '
         status       = 0
         w            = size(in_buffer,1)
         h            = size(in_buffer,2)
@@ -336,7 +324,6 @@ contains
         self%height = h
         lo = minval(in_buffer)
         hi = maxval(in_buffer)
-        VerbosePrint '>>> In save_jpeg_i4 input lo hi ', lo, hi
         allocate(img_buffer(w*h*3))
         do j=0,h-1
             do i=0,w-1
@@ -381,10 +368,6 @@ contains
         if(associated(imgbuffer)) nullify(imgbuffer)
         bshape = (/ w * h /)
         call c_f_pointer(img,imgbuffer, bshape)
-        VerbosePrint 'load_jpeg_r4 img size / shape', size(imgbuffer), shape(imgbuffer)
-        VerbosePrint 'load_jpeg_r4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
-        VerbosePrint 'load_jpeg_r4 img_buffer ', associated(imgbuffer)
-        VerbosePrint 'load_jpeg_r4 img_buffer '
         allocate(out_buffer(w,h))
         do i=0,w-1
             do j=0,h-1
@@ -402,7 +385,6 @@ contains
         self%colorspace = c
         status=0
         if(associated(imgbuffer)) nullify(imgbuffer)
-        VerbosePrint 'load_jpeg_r4 done'
         if(allocated(fstr))deallocate(fstr)
     end function load_jpeg_r4
 
@@ -421,22 +403,15 @@ contains
         status = 1
         verbose =.true.
         allocate(fstr, source=trim(fname)//c_null_char)
-        VerbosePrint 'load_jpeg_i4 ', fstr
         status = stbi_read_jpg (fstr, img, w, h, c )
         if(status==0) THROW_HARD ("read_jpeg failed")
         status=0
-        VerbosePrint 'load_jpeg_i4 return values width, height, components', w, h, c
         if(associated(imgbuffer)) nullify(imgbuffer)
         bshape = (/ w * h /)
         call c_f_pointer(img,imgbuffer, bshape)
-        VerbosePrint 'load_jpeg_i4 img size / shape', size(imgbuffer), shape(imgbuffer)
-        VerbosePrint 'load_jpeg_i4 img_buffer l/u bounds ', lbound(imgbuffer), ubound(imgbuffer)
-        VerbosePrint 'load_jpeg_i4 img_buffer ', associated(imgbuffer)
-        VerbosePrint 'load_jpeg_i4 img_buffer '
         allocate(out_buffer(w,h))
         do j=0,h-1
             do i=0,w-1
-                VerbosePrint 'load_jpeg_i4 ', (i*c) + (w*j * c) + 1, imgbuffer((i*c) + (w*j*c) + 1)
                 out_buffer(i+1,j+1) = imgbuffer((i * c) + (w * j * c) + 1)
             end do
         end do
@@ -445,14 +420,8 @@ contains
         self%colorspace = c
         if(allocated(fstr)) deallocate(fstr)
         if(associated(imgbuffer)) nullify(imgbuffer)
-        VerbosePrint 'load_jpeg_i4 done'
         status=0
     end function load_jpeg_i4
-
-    subroutine destructor(self)
-        class(jpg_img) :: self
-        DebugPrint 'Destructor of jpg_img object with address: ', loc(self)
-    end subroutine destructor
 
     subroutine test_jpg_export()
         use,intrinsic :: iso_c_binding
@@ -475,52 +444,52 @@ contains
         bmp_size   = width * height * pixel_size
         simple_path_str = simple_getenv('SIMPLE_PATH', status)
         if(status/=0) THROW_HARD("SIMPLE_PATH not found in environment")
-        print *,"test_jpg_export: Starting"
+        write(logfhandle,*)"test_jpg_export: Starting"
         allocate(testimg, source=trim(simple_path_str)//"/bin/gui/ext/src/jpeg/testimg.jpg")
         allocate(cmd, source="cp "//trim(adjustl(testimg))//" ./; convert testimg.jpg -colorspace Gray  test.jpg")
         if(.not. file_exists("test.jpg")) then
             if(.not. file_exists(testimg)) THROW_HARD("the jpeglib testimg needed to run test")
-            print *," Executing ", cmd
+            write(logfhandle,*)" Executing ", cmd
             call exec_cmdline(cmd)
         end if
         deallocate(cmd)
         allocate(cmd, source="identify  test.jpg")
         call exec_cmdline(cmd)
-        print *,"test_jpg_export: Testing load_jpeg_i4 "
+        write(logfhandle,*)"test_jpg_export: Testing load_jpeg_i4 "
         allocate(fstr, source="test.jpg")
         status = jpg%loadJpg(fstr, int32_buffer)
         if(status == 0) then
-            print *, " test_jpg_export: load_jpeg_i4 success "
+            write(logfhandle,*) " test_jpg_export: load_jpeg_i4 success "
             if(allocated(int32_buffer)) then
                 width=size(int32_buffer, 1)
                 height = size(int32_buffer, 2)
-                print *, " test_jpg_export: load_jpeg int32 width x height ", width, height
+                write(logfhandle,*) " test_jpg_export: load_jpeg int32 width x height ", width, height
                 if(width /= jpg%getWidth() .or. height /= jpg%getHeight())then
-                    print *,"test_jpg_export: FAILED: load_jpeg int32 width height not consistent "
+                    write(logfhandle,*)"test_jpg_export: FAILED: load_jpeg int32 width height not consistent "
                     status=1
                 endif
-                print *, "test_jpg_export:  sum | max ", sum(int32_buffer), maxval(int32_buffer)
+                write(logfhandle,*) "test_jpg_export:  sum | max ", sum(int32_buffer), maxval(int32_buffer)
             else
-                print *,"test_jpg_export: FAILED: int32 image buffer not allocated"
+                write(logfhandle,*)"test_jpg_export: FAILED: int32 image buffer not allocated"
                 status=1
             end if
         end if
         if(status==1) THROW_HARD("load_jpeg int32 failed")
-        print *,"test_jpg_export: Testing load_jpeg_r4 "
+        write(logfhandle,*)"test_jpg_export: Testing load_jpeg_r4 "
         status = jpg%loadJpg(fstr, real32_buffer)
         if(status == 0) then
-            print *, "test_jpg_export: load_jpeg_r4 success "
+            write(logfhandle,*) "test_jpg_export: load_jpeg_r4 success "
             if(allocated(real32_buffer))then
                 width=size(real32_buffer, 1)
                 height = size(real32_buffer, 2)
-                print *, " width x height ", width, height
+                write(logfhandle,*) " width x height ", width, height
                 if(width /= jpg%getWidth() .or. height /= jpg%getHeight())then
-                    print *,"test_jpg_export: FAILED: load_jpeg real32 width height not consistent "
+                    write(logfhandle,*)"test_jpg_export: FAILED: load_jpeg real32 width height not consistent "
                     status=1
                 endif
-                print *,"test_jpg_export:  sum | max ", sum(real32_buffer), maxval(real32_buffer)
+                write(logfhandle,*)"test_jpg_export:  sum | max ", sum(real32_buffer), maxval(real32_buffer)
             else
-                print *,"test_jpg_export: FAILED: real32 image buffer not allocated"
+                write(logfhandle,*)"test_jpg_export: FAILED: real32 image buffer not allocated"
                 status=1
             end if
         end if
@@ -530,7 +499,7 @@ contains
         call del_file(fstr)
         status = jpg%writeJpg(fstr, int32_buffer)
         if(status == 0) then
-            print *, " test_jpg_export: save_jpeg_i4 success "
+            write(logfhandle,*) " test_jpg_export: save_jpeg_i4 success "
             if(file_exists("test-i4.jpg"))then
                 call exec_cmdline("display test-i4.jpg")
             else
@@ -541,10 +510,10 @@ contains
         deallocate(fstr)
         allocate(fstr, source="test-r4.jpg")
         call del_file(fstr)
-        print *, " test_jpg_export: save_jpeg_r4  "
+        write(logfhandle,*) " test_jpg_export: save_jpeg_r4  "
         status = jpg%writeJpg(fstr, real32_buffer)
         if(status == 0) then
-            print *, " test_jpg_export: save_jpeg_r4 success "
+            write(logfhandle,*) " test_jpg_export: save_jpeg_r4 success "
             if(file_exists("test-r4.jpg"))then
                 call exec_cmdline("display test-r4.jpg")
             else

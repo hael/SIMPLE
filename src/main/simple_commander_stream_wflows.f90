@@ -89,13 +89,13 @@ contains
         iter         = 0
         do
             if( file_exists(trim(TERM_STREAM)) )then
-                write(*,'(A)')'>>> TERMINATING PREPROCESS STREAM'
+                write(logfhandle,'(A)')'>>> TERMINATING PREPROCESS STREAM'
                 exit
             endif
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                write(*,'(A,A)')'>>> PREPROCES STREAM PAUSED ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> PREPROCES STREAM PAUSED ',cast_time_char(simple_gettime())
                 call simple_sleep(SHORTTIME)
             enddo
             iter = iter + 1
@@ -113,7 +113,7 @@ contains
             stacksz = qenv%qscripts%get_stacksz()
             if( stacksz .ne. prev_stacksz )then
                 prev_stacksz = stacksz
-                write(*,'(A,I5)')'>>> MOVIES/MICROGRAPHS TO PROCESS: ', stacksz
+                write(logfhandle,'(A,I5)')'>>> MOVIES/MICROGRAPHS TO PROCESS: ', stacksz
             endif
             ! completed jobs update the current project
             if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -319,7 +319,7 @@ contains
             if( file_exists(spproj_list_fname) )then
                 if( .not.is_file_open(spproj_list_fname) )then
                     call read_mics
-                    write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' : ',cast_time_char(simple_gettime())
+                    write(logfhandle,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' : ',cast_time_char(simple_gettime())
                     call flush(6)
                     if( nptcls_glob > nptcls_per_buffer )then
                         exit ! Enough particles to initiate cluster2D
@@ -394,7 +394,7 @@ contains
         do iter = 1,9999
             str_iter  = int2str_pad(iter,3)
             pool_iter = min(999,pool_iter)
-            write(*,'(A,I3)')'>>> WAIT CYCLE ',iter
+            write(logfhandle,'(A,I3)')'>>> WAIT CYCLE ',iter
             if( is_timeout(simple_gettime()) )exit
             if( buffer_exists )then
                 ! ten iterations of the buffer
@@ -423,11 +423,11 @@ contains
             do while( file_exists(trim(PAUSE_STREAM)) )
                 if( file_exists(trim(TERM_STREAM)) ) exit
                 call write_singlelineoftext(PAUSE_STREAM, 'PAUSED')
-                write(*,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> CLUSTER2D STREAM PAUSED ',cast_time_char(simple_gettime())
                 call simple_sleep(WAIT_WATCHER)
             enddo
             if( file_exists(TERM_STREAM) )then
-                write(*,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> TERMINATING CLUSTER2D STREAM ',cast_time_char(simple_gettime())
                 exit
             endif
             if( do_wait ) call simple_sleep(WAIT_WATCHER)
@@ -509,7 +509,7 @@ contains
                     call img%kill
                     !!! END DEBUG
                     deallocate(cls_mask)
-                    write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                    write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                 endif
             end subroutine reject_from_buffer
 
@@ -553,10 +553,10 @@ contains
                         call img%kill
                         !!! END DEBUG
                         deallocate(cls_mask)
-                        write(*,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
+                        write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                     endif
                 else
-                    write(*,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
+                    write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
                 endif
             end subroutine reject_from_pool
 
@@ -597,7 +597,7 @@ contains
                             do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
                                 call pool_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
                             enddo
-                            write(*,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
+                            write(logfhandle,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                             last_injection = simple_gettime()
                             call cline_cluster2D%delete('converged') ! reactivates pool classification
                         endif
@@ -634,7 +634,7 @@ contains
                         call pool_proj%os_mic%set(iproj,'state',1.)
                         call pool_proj%os_stk%set(iproj,'state',1.)
                     else
-                        write(*,'(A,A)')'>>> DESELECTING MICROGRAPH: ',trim(mic_name)
+                        write(logfhandle,'(A,A)')'>>> DESELECTING MICROGRAPH: ',trim(mic_name)
                         call pool_proj%os_mic%set(iproj,'state',0.)
                         call pool_proj%os_stk%set(iproj,'state',0.)
                     endif
@@ -665,7 +665,7 @@ contains
                 use simple_commander_hlev_wflows, only: cluster2D_autoscale_commander
                 type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
-                write(*,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
+                write(logfhandle,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
                 ! folders handling
                 call simple_mkdir('buffer2D')
                 call chdir('buffer2D')
@@ -732,7 +732,7 @@ contains
                 spproj2D%os_out   = pool_proj%os_out
                 call spproj2D%write(PROJFILE2D)
                 nptcls_sel = spproj2D%os_ptcl2D%get_noris(consider_state=.true.)
-                write(*,'(A,I8,A,I4,A)')'>>> 2D CLASSIFICATION OF POOL: ',nptcls_sel,' PARTICLES IN ',ncls_glob,' CLUSTERS'
+                write(logfhandle,'(A,I8,A,I4,A)')'>>> 2D CLASSIFICATION OF POOL: ',nptcls_sel,' PARTICLES IN ',ncls_glob,' CLUSTERS'
                 ! cluster2d execution
                 params_glob%projfile = trim(PROJFILE_POOL)
                 select case(trim(cline%get_carg('objfun')))
@@ -790,7 +790,7 @@ contains
                 integer                       :: endit, iptcl, ind, state, ncls_here, icls, i, cnt, stat
                 real                          :: stkind
                 n_transfers = n_transfers+1
-                write(*,'(A,I4)')'>>> TRANSFER BUFFER PARTICLES CLASSIFICATION TO POOL #',n_transfers
+                write(logfhandle,'(A,I4)')'>>> TRANSFER BUFFER PARTICLES CLASSIFICATION TO POOL #',n_transfers
                 ! max # of classes reached ?
                 l_maxed = ncls_glob >= max_ncls
                 ! updates # of classes
@@ -1024,7 +1024,7 @@ contains
                 nptcls_here = 0
                 do istk=micind,pool_proj%os_stk%get_noris()
                     if(.not.pool_proj%os_stk%isthere(istk,'state'))then
-                        write(*,*)'error: missing state flag; gen_buffer_from_pool'
+                        write(logfhandle,*)'error: missing state flag; gen_buffer_from_pool'
                         stop
                     endif
                     state = pool_proj%os_stk%get_state(istk)
@@ -1066,18 +1066,18 @@ contains
                 buffer_ptcls_range(2) = buffer_ptcls_range(1)+top-1
                 call buffer_proj%write
                 buffer_exists = .true.
-                write(*,'(A,I4,A,I6,A)')'>>> BUILT NEW BUFFER WITH ', nmics_here, ' MICROGRAPHS, ',nptcls_here, ' PARTICLES'
+                write(logfhandle,'(A,I4,A,I6,A)')'>>> BUILT NEW BUFFER WITH ', nmics_here, ' MICROGRAPHS, ',nptcls_here, ' PARTICLES'
             end subroutine gen_buffer_from_pool
 
             logical function is_timeout( time_now )
                 integer, intent(in) :: time_now
                 is_timeout = .false.
                 if(time_now-last_injection > params%time_inactive)then
-                    write(*,'(A,A)')'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
+                    write(logfhandle,'(A,A)')'>>> TIME LIMIT WITHOUT NEW IMAGES REACHED: ',cast_time_char(time_now)
                     is_timeout = .true.
                     if( .not.cline_cluster2D%defined('converged') )is_timeout = .false.
                 else if(time_now-last_injection > 3600)then
-                    write(*,'(A,A)')'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
+                    write(logfhandle,'(A,A)')'>>> OVER ONE HOUR WITHOUT NEW PARTICLES: ',cast_time_char(time_now)
                     call flush(6)
                 endif
                 return
@@ -1091,7 +1091,7 @@ contains
                 real                               :: rstate
                 integer                            :: nprev, n2append, cnt
                 logical                            :: has_mics
-                write(*,'(A,A)')'>>> UPDATING PROJECT AT: ',cast_time_char(simple_gettime())
+                write(logfhandle,'(A,A)')'>>> UPDATING PROJECT AT: ',cast_time_char(simple_gettime())
                 call orig_proj%read(orig_projfile)
                 nprev    = orig_proj%os_stk%get_noris()
                 n2append = n_spprojs-nprev
@@ -1188,8 +1188,8 @@ contains
         integer :: iter, origproj_time, tnow, iproj, icline, nptcls, prev_stacksz, stacksz
         integer :: last_injection, n_spprojs, n_spprojs_prev, n_newspprojs, nmics
         ! output command line executed
-        write(*,'(a)') '>>> COMMAND LINE EXECUTED'
-        write(*,*) trim(cmdline_glob)
+        write(logfhandle,'(a)') '>>> COMMAND LINE EXECUTED'
+        write(logfhandle,*) trim(cmdline_glob)
         ! set oritype & defaults
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('stream','yes')
@@ -1224,7 +1224,7 @@ contains
         do iter = 1,999999
             tnow = simple_gettime()
             if(tnow-last_injection > params%time_inactive)then
-                write(*,*)'>>> TIME LIMIT WITHOUT NEW MICROGRAPHS REACHED'
+                write(logfhandle,*)'>>> TIME LIMIT WITHOUT NEW MICROGRAPHS REACHED'
                 exit
             endif
             if( file_exists(spproj_list_fname) )then
@@ -1250,7 +1250,7 @@ contains
                     stacksz = qenv%qscripts%get_stacksz()
                     if( stacksz .ne. prev_stacksz )then
                         prev_stacksz = stacksz
-                        write(*,'(A,I5)')'>>> MICROGRAPHS TO PROCESS: ', stacksz
+                        write(logfhandle,'(A,I5)')'>>> MICROGRAPHS TO PROCESS: ', stacksz
                     endif
                     ! completed jobs update the current project
                     if( qenv%qscripts%get_done_stacksz() > 0 )then
@@ -1265,8 +1265,8 @@ contains
                         enddo
                         nptcls = orig_proj%get_nptcls()
                         nmics  = orig_proj%get_nintgs()
-                        write(*,'(A,I8)')'>>> NEW MICROGRAPHS COUNT: ', nmics
-                        write(*,'(A,I8)')'>>> NEW PARTICLES   COUNT: ', nptcls
+                        write(logfhandle,'(A,I8)')'>>> NEW MICROGRAPHS COUNT: ', nmics
+                        write(logfhandle,'(A,I8)')'>>> NEW PARTICLES   COUNT: ', nptcls
                         call orig_proj%write
                         deallocate(completed_jobs_clines)
                     endif

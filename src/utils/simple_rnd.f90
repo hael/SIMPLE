@@ -34,7 +34,7 @@ contains
 
     !>  \brief  random seed
     !>  solution from https://stackoverflow.com/questions/34797938/random-number-generator-in-pgi-fortran-not-so-random
-    !>  the old version was replace because the bug described in the thread was observed with GCC and PGI
+    !>  the old version was replaced because the bug described in the thread was observed with GCC and PGI
     subroutine seed_rnd
         use iso_fortran_env, only: int64
         integer, allocatable :: seed(:)
@@ -209,8 +209,8 @@ contains
         integer             :: irnd
         irnd = 1
         if( NP == 0 )then
-            write(*,*) 'Uniform random integer must be generated from a non-empty set!'
-            write(*,*) 'In: irnd_uni, module: simple_rnd'
+            write(logfhandle,*) 'Uniform random integer must be generated from a non-empty set!'
+            write(logfhandle,*) 'In: irnd_uni, module: simple_rnd'
             stop
         else if( NP == 1 )then
             irnd = 1
@@ -240,8 +240,8 @@ contains
         real                :: limits(2)
         irnd = 1
         if( NP == 0 )then
-            write(*,*) 'Gaussian random integer must be generated from a non-empty (.ne. 0) set!'
-            write(*,*) 'In: irnd_gasdev, module: simple_rnd'
+            write(logfhandle,*) 'Gaussian random integer must be generated from a non-empty (.ne. 0) set!'
+            write(logfhandle,*) 'In: irnd_gasdev, module: simple_rnd'
             stop
         else if( NP == 1 )then
             irnd = 1

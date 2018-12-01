@@ -84,7 +84,7 @@ contains
         err = .false.
         if( nframes < 2 )then
             err = .true.
-            write(*,*) 'movie: ', trim(movie_stack_fname)
+            write(logfhandle,*) 'movie: ', trim(movie_stack_fname)
             THROW_WARN('nframes of movie < 2, aborting motion_correct')
             return
         endif
@@ -103,7 +103,7 @@ contains
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
         if( DEBUG_ANISO ) goto 321
-        if( doprint ) write(*,'(a)') '>>> WEIGHTED AVERAGE-BASED REFINEMENT'
+        if( doprint ) write(logfhandle,'(a)') '>>> WEIGHTED AVERAGE-BASED REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
         updateres  = 0
@@ -129,7 +129,7 @@ contains
             end do
             !$omp end parallel do
             frac_improved = real(nimproved) / real(nframes) * 100.
-            if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
+            if( doprint ) write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
             call shift_wsum_calc_corrs( opt_shifts, i )
             corr_prev = corr
             corr      = sum(corrs) / real(nframes)
@@ -165,16 +165,16 @@ contains
         allocate(shifts(nframes,2), source=opt_shifts)
         ! print
         if( corr < 0. )then
-            if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+            if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
             if( doprint ) THROW_WARN('OPTIMAL CORRELATION < 0.0')
         endif
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
         ! destruct
@@ -191,7 +191,7 @@ contains
                 if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
                 .and. updateres == which_update )then
                     lp = lp - resstep
-                    if( doprint )  write(*,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
+                    if( doprint )  write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
                     ! need to re-make the ftexps
                     call construct_ftexp_objects
                     call shift_wsum_calc_corrs(opt_shifts,i)
@@ -244,7 +244,7 @@ contains
         call gen_aniso_wsum_calc_corrs(0)
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
-        if( doprint ) write(*,'(a)') '>>> ANISOTROPIC REFINEMENT'
+        if( doprint ) write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
         do i=1,MITSREF_ANISO
@@ -264,7 +264,7 @@ contains
             corr_prev = corr
             call gen_aniso_wsum_calc_corrs(i)
             frac_improved = real(nimproved) / real(nframes) * 100.
-            if( doprint ) write(*,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
+            if( doprint ) write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
             corr = sum(corrs) / real(nframes)
             if( corr >= corr_saved )then ! save the local optimum
                 corr_saved             = corr
@@ -285,16 +285,16 @@ contains
         allocate(shifts(nframes,POLY_DIM), source=opt_shifts)
         ! print
         if( corr < 0. )then
-            if( doprint ) write(*,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+            if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
             if( doprint ) THROW_WARN('OPTIMAL CORRELATION < 0.0')
         endif
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
-        if( doprint ) write(*,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
+        if( doprint ) write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
         if( DEBUG_ANISO ) call movie_sum_global_threads(1)%write('aniso_corrected_movie.mrc')
@@ -443,7 +443,7 @@ contains
             call movie_frames(iframe)%read(movie_stack_fname, iframe)
         end do
         ! calculate image sum and identify outliers
-        if( doprint ) write(*,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
+        if( doprint ) write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         ! gain correction, generation of temporary movie sum and outlier detection
         rmat_sum = 0.
         !$omp parallel do schedule(static) default(shared) private(iframe,rmat) proc_bind(close) reduction(+:rmat_sum)
@@ -458,8 +458,8 @@ contains
         call tmpmovsum%set_rmat(rmat_sum)
         call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
         call tmpmovsum%kill
-        write(*,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
-        write(*,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
+        write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
+        write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
         if( any(outliers) )then ! remove the outliers & do the rest
             !$omp parallel do schedule(static) default(shared) private(iframe,rmat,rmat_pad,i,j,win) proc_bind(close)
             do iframe=1,nframes

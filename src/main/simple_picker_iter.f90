@@ -24,9 +24,9 @@ contains
         integer,               intent(out)     :: nptcls_out
         character(len=*),      intent(in)      :: dir_out
         if( .not. file_exists(moviename_intg) )then
-            write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
+            write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_intg))
         endif
-        write(*,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
+        write(logfhandle,'(a,1x,a)') '>>> PICKING MICROGRAPH:', trim(adjustl(moviename_intg))
         if( cline%defined('thres') )then
             call init_picker(moviename_intg, params_glob%refs, params_glob%smpd, lp_in=params_glob%lp,&
                 &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)

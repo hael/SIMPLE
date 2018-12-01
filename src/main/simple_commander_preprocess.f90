@@ -237,7 +237,7 @@ contains
         endif
         if( params%tomo .eq. 'yes' )then
             if( .not. params%l_dose_weight )then
-                write(*,*) 'tomo=yes only supported with dose weighting!'
+                write(logfhandle,*) 'tomo=yes only supported with dose weighting!'
                 THROW_HARD('give total exposure time: exp_time (in seconds) and dose_rate (in e/A2/s)')
             endif
         endif
@@ -291,7 +291,7 @@ contains
                     call mciter%iterate(cline, ctfvars, o, fbody, frame_counter, moviename, trim(output_dir))
                 endif
                 call spproj%os_mic%set_ori(imovie, o)
-                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
+                write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the movies processed'
             endif
         end do
         ! output
@@ -347,7 +347,7 @@ contains
                 call o%getter('intg', moviename_intg)
                 call ptiter%iterate(o, moviename_intg, trim(output_dir))
                 call spproj%os_mic%set_ori(iintg, o)
-                write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
+                write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the integrated movies processed'
             endif
         end do
         ! output
@@ -415,7 +415,7 @@ contains
                 call cfiter%iterate( ctfvars, intg_forctf, o, trim(output_dir), l_gen_thumb)
                 call spproj%os_mic%set_ori(imic, o)
             endif
-            write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
+            write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -450,7 +450,7 @@ contains
             call imgs_all(iimg)%new([params%box,params%box,1], params%smpd)
             call imgs_all(iimg)%read(params%stk, iimg)
         end do
-        write(*,'(a)') '>>> CALCULATING CORRELATIONS'
+        write(logfhandle,'(a)') '>>> CALCULATING CORRELATIONS'
         call calc_cartesian_corrmat(imgs_sel, imgs_all, correlations)
         ! create the states array for mapping the selection
         allocate(states(nall))
@@ -518,7 +518,7 @@ contains
                 call spproj%os_mic%set(imic, 'boxfile', trim(boxfile))
                 call spproj%os_mic%set(imic, 'nptcls', real(nptcls_out))
             endif
-            write(*,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
+            write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
@@ -587,7 +587,7 @@ contains
         if(params%detector .eq. 'sobel') then
             if(cline%defined('thres')) then
                 thresh(1) = params%thres
-                print *, 'threshold selected = ', thresh
+                write(logfhandle,*) 'threshold selected = ', thresh
                 call sobel(mic_copy,thresh)
             elseif(cline%defined('part_concentration')) then
                 call automatic_thresh_sobel(mic_copy, params%part_concentration)
@@ -680,11 +680,11 @@ contains
             if( file_exists(dir_box) )then
                 call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
                 if(.not.allocated(boxfiles))then
-                    write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 1'
+                    write(logfhandle,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 1'
                     THROW_HARD('No box file found; exec_extract, 1')
                 endif
                 if(size(boxfiles)==0)then
-                    write(*,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 2'
+                    write(logfhandle,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 2'
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
                 do i=1,size(boxfiles)
@@ -692,7 +692,7 @@ contains
                     boxfiles(i) = trim(boxfile_name)
                 enddo
             else
-                write(*,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
+                write(logfhandle,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
         endif
@@ -790,7 +790,7 @@ contains
                 ! modify coordinates if change in box (shift by half the difference)
                 if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
                 if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
-                    write(*,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
+                    write(logfhandle,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
                     THROW_HARD('inconsistent box sizes in box files; exec_extract')
                 endif
                 ! update particle mask & movie index

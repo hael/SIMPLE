@@ -199,7 +199,7 @@ contains
         type(image)     :: img_pd
         ldim = img%get_ldim()
         if( img%is_3d() )then
-            print *, 'ldim: ', ldim
+            write(logfhandle,*) 'ldim: ', ldim
             THROW_HARD('Only 4 2D images; apply')
         endif
         ctfvars%smpd = self%smpd
@@ -345,7 +345,7 @@ contains
                 end do
             end do
         case DEFAULT
-            write(*,*) 'mode:', mode
+            write(logfhandle,*) 'mode:', mode
             THROW_HARD('unsupported mode in ctf2img')
         end select
     end subroutine apply_serial

@@ -1831,10 +1831,6 @@
 
     subroutine json_throw_exception(json,msg)
 
-#ifdef __INTEL_COMPILER
-    use ifcore, only: tracebackqq
-#endif
-
     implicit none
 
     class(json_core),intent(inout)      :: json
@@ -1845,29 +1841,13 @@
 
     if (json%stop_on_error) then
 
-#ifdef __INTEL_COMPILER
-        ! for Intel, we raise a traceback and quit
-        call tracebackqq(string=trim(msg), user_exit_code=0)
-#else
         write(error_unit,'(A)') 'JSON-Fortran Exception: '//trim(msg)
         error stop 1
-#endif
 
     elseif (json%is_verbose) then
-
-        write(output_unit,'(A)') '***********************'
-        write(output_unit,'(A)') 'JSON-Fortran Exception: '//trim(msg)
-
-!#if defined __GFORTRAN__
-!        call backtrace()  ! (have to compile with -fbacktrace -fall-intrinsics flags)
-!#endif
-
-#ifdef __INTEL_COMPILER
-        call tracebackqq(user_exit_code=-1)  ! print a traceback and return
-#endif
-
-        write(output_unit,'(A)') '***********************'
-
+        write(OUTPUT_UNIT,'(A)') '***********************'
+        write(OUTPUT_UNIT,'(A)') 'JSON-Fortran Exception: '//trim(msg)
+        write(OUTPUT_UNIT,'(A)') '***********************'
     end if
 
     end subroutine json_throw_exception
@@ -1907,7 +1887,7 @@
 !     call json%load_file(filename='myfile.json')
 !     call json%check_for_errors(status_ok, error_msg)
 !     if (.not. status_ok) then
-!         write(*,*) 'Error: '//error_msg
+!         write(OUTPUT_UNIT,*) 'Error: '//error_msg
 !         call json%clear_exceptions()
 !         call json%destroy()
 !     end if
@@ -1966,7 +1946,7 @@
 !    call json%parse(filename='myfile.json',p)
 !    if (json%failed()) then
 !        call json%check_for_errors(status_ok, error_msg)
-!        write(*,*) 'Error: '//error_msg
+!        write(OUTPUT_UNIT,*) 'Error: '//error_msg
 !        call json%clear_exceptions()
 !        call json%destroy(p)
 !    end if
@@ -1980,7 +1960,7 @@
 !    call f%load_file(filename='myfile.json')
 !    if (f%failed()) then
 !        call f%check_for_errors(status_ok, error_msg)
-!        write(*,*) 'Error: '//error_msg
+!        write(OUTPUT_UNIT,*) 'Error: '//error_msg
 !        call f%clear_exceptions()
 !        call f%destroy()
 !    end if
@@ -10353,7 +10333,7 @@
         if (present(io_unit)) then
             write(io_unit,'(A)') error_msg
         else
-            write(output_unit,'(A)') error_msg
+            write(OUTPUT_UNIT,'(A)') error_msg
         end if
         deallocate(error_msg)
         call json%clear_exceptions()

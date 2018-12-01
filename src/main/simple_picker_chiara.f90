@@ -211,7 +211,7 @@ contains
         case('sum')
             dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
         case DEFAULT
-            write(*,*) 'Pixels_dist kind: ', trim(which)
+            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
             THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
         end select
     end function pixels_dist

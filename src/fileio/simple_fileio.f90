@@ -39,17 +39,17 @@ contains
         iostat_this=2
         if( present(die) ) die_this=die
         if( present(iostat) ) iostat_this=iostat
-        if( iostat_this /= 0 ) write(OUTPUT_UNIT,'(a)') message
+        if( iostat_this /= 0 ) write(logfhandle,'(a)') message
         if (iostat_this == -1)then
-            write(OUTPUT_UNIT,'(a)') "fileio: EOF reached "
+            write(logfhandle,'(a)') "fileio: EOF reached "
         else if (iostat_this == -2) then
-            write(OUTPUT_UNIT,'(a)') "fileio: End-of-record reached "
+            write(logfhandle,'(a)') "fileio: End-of-record reached "
         else if( iostat_this /= 0 ) then
             if( die_this ) THROW_HARD('I/O')
         endif
     end subroutine fileiochk
 
-    !> FOPEN enforce F2008 style open so that PGI/Intel behave correctly
+    !> FOPEN enforce F2008 style open
     !!
     !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
     !!        call fileiochk('In: commander_rec :: eo_volassemble', file_stat )
@@ -70,9 +70,9 @@ contains
         ! check to see if filename is empty
         write(filename,'(A)') trim(adjustl(file))
         if ( strIsBlank(filename) )then
-            print *, 'simple_system::fopen filename blank'
-            if(present(iomsg))  print *, trim(adjustl(iomsg))
-            if(present(errmsg))  print *, "Message: ", trim(adjustl(errmsg))
+            write(logfhandle,*) 'simple_system::fopen filename blank'
+            if(present(iomsg))  write(logfhandle,*) trim(adjustl(iomsg))
+            if(present(errmsg)) write(logfhandle,*) "Message: ", trim(adjustl(errmsg))
             return
         end if
         errmsg_this="In simple_fileio::fopen "
@@ -107,14 +107,14 @@ contains
         if ( (stringsAreEqual(status_this, 'NEW',.false.))  .and. &
             (stringsAreEqual(action_this, 'READ',.false.))  .and. &
             (.not. file_exists(filename) ) )then
-            print *, "::fopen incompatible status=NEW and action=READ ", trim(filename)," does not exist"
+            write(logfhandle,*) "::fopen incompatible status=NEW and action=READ ", trim(filename)," does not exist"
             return ! false
         end if
         if(present(position)) then
             if ( (stringsAreEqual(status_this, 'OLD',.false.))  .and. &
                 (stringsAreEqual(position, 'APPEND',.false.))  .and. &
                 (.not. file_exists(filename) ) )then
-                print *, "::fopen incompatible status=OLD and position=APPEND  when ",&
+                write(logfhandle,*) "::fopen incompatible status=OLD and position=APPEND  when ",&
                     trim(filename)," does not exist"
                 write( status_this,'(A)')  upperCase('NEW')
             end if
@@ -174,7 +174,7 @@ contains
                     end if
                 end if
             end if
-            call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
+            ! call fileiochk(trim(adjustl(errmsg_this))//" fopen common open "//trim(filename), iostat_this,.false.)
             if(present(iostat))iostat=iostat_this
             if(funit/=0 .and. is_io(funit)) THROW_HARD("newunit returned "//int2str(funit))
             return

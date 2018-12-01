@@ -119,9 +119,9 @@ contains
             THROW_HARD(trim(errmsg))
         endif
         if( platonic )then
-            write(*,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL & PLATONIC GROUPS'
+            write(logfhandle,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL & PLATONIC GROUPS'
         else
-            write(*,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL GROUPS'
+            write(logfhandle,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL GROUPS'
         endif
         ! prepare point-group stats object
         allocate(pgrps(nsym))
@@ -237,43 +237,43 @@ contains
         ! loop over point-groups
         do igrp=2,nsym
             if( DEBUG_HERE )then
-                print *, 'gathering info for point-group: ', pgrps(igrp)%str
+                write(logfhandle,*) 'gathering info for point-group: ', pgrps(igrp)%str
             else
                 call progress(igrp, nsym)
             endif
             ! make point-group object
             call symobj%new(pgrps(igrp)%str)
             ! locate the symmetry axis
-            if( DEBUG_HERE ) print *, 'searching for the symmetry axis'
+            if( DEBUG_HERE ) write(logfhandle,*) 'searching for the symmetry axis'
             call find_symaxis(pgrps(igrp)%str)
             ! rotate input (non-symmetrized) volume to symmetry axis
-            if( DEBUG_HERE ) print *, 'rotating input volume to symmetry axis'
+            if( DEBUG_HERE ) write(logfhandle,*) 'rotating input volume to symmetry axis'
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
             call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc')
             call vol_asym_aligned2axis%mask(msk, 'soft')
             ! generate symmetrized volume
-            if( DEBUG_HERE ) print *, 'generating symmetrized volume'
+            if( DEBUG_HERE ) write(logfhandle,*) 'generating symmetrized volume'
             call symaverage
             call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             call vol_sym%mask(msk, 'soft')
             ! correct for any small discrepancy in shift between the volumes
-            if( DEBUG_HERE ) print *, 'correcting for any small discrepancy in shift between the volumes'
+            if( DEBUG_HERE ) write(logfhandle,*) 'correcting for any small discrepancy in shift between the volumes'
             call vol_asym_aligned2axis%fft
             call vol_sym%fft
             call vol_srch_init(vol_asym_aligned2axis, vol_sym, hp, lp, SHSRCH_HWDTH)
             cxyz = vol_shsrch_minimize()
             ! read back in unmasked volume and shift it before re-applying the mask
-            if( DEBUG_HERE ) print *, 'shifting volume'
+            if( DEBUG_HERE ) write(logfhandle,*) 'shifting volume'
             call vol_sym%read('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             call vol_sym%shift(cxyz(2:4))
             call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             call vol_sym%mask(msk, 'soft')
             call vol_sym%fft
             ! calculate a correlation coefficient
-            if( DEBUG_HERE ) print *, 'calculating correlation'
+            if( DEBUG_HERE ) write(logfhandle,*) 'calculating correlation'
             pgrps(igrp)%cc = vol_sym%corr(vol_asym_aligned2axis, lp_dyn=lp, hp_dyn=hp)
             ! calculate FSC
-            if( DEBUG_HERE ) print *, 'calculating FSC'
+            if( DEBUG_HERE ) write(logfhandle,*) 'calculating FSC'
             if( allocated(pgrps(igrp)%fsc) ) deallocate(pgrps(igrp)%fsc)
             allocate(pgrps(igrp)%fsc(filtsz), source=0.)
             call vol_sym%fsc(vol_asym_aligned2axis, pgrps(igrp)%fsc)

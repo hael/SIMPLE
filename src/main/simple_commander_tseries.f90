@@ -56,8 +56,8 @@ contains
             ! all ok
             call frame_img%new(ldim, params%smpd)
         else
-            write(*,*) 'ldim(3): ', ldim(3)
-            write(*,*) 'nframes: ', nframes
+            write(logfhandle,*) 'ldim(3): ', ldim(3)
+            write(logfhandle,*) 'nframes: ', nframes
             THROW_HARD('exec_tseries_extract assumes one frame per file')
         endif
         if( cline%defined('nframesgrp') )then
@@ -171,10 +171,10 @@ contains
             if( all(params_present) )then
                 ! alles ok
             else
-                if( .not. params_present(1) ) write(*,*) 'ERROR! input deftab lacks kv'
-                if( .not. params_present(2) ) write(*,*) 'ERROR! input deftab lacks cs'
-                if( .not. params_present(3) ) write(*,*) 'ERROR! input deftab lacks fraca'
-                if( .not. params_present(4) ) write(*,*) 'ERROR! input deftab lacks dfx'
+                if( .not. params_present(1) ) write(logfhandle,*) 'ERROR! input deftab lacks kv'
+                if( .not. params_present(2) ) write(logfhandle,*) 'ERROR! input deftab lacks cs'
+                if( .not. params_present(3) ) write(logfhandle,*) 'ERROR! input deftab lacks fraca'
+                if( .not. params_present(4) ) write(logfhandle,*) 'ERROR! input deftab lacks dfx'
                 stop
             endif
         endif

@@ -212,7 +212,7 @@ contains
             !$omp end parallel do
             ccavg     = ccavg / real(npix * nptcls)
             frac_nccs = real(cnt) / real(npix * nptcls) * 100.
-            write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', ccavg,&
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', ccavg,&
             &'>>> % NEIGH_CCS >= 0.5', frac_nccs
             if( ccavg < 0.01 ) exit
         end do
@@ -233,8 +233,8 @@ contains
                 find_lres = find_min
             endif
         end do
-        write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_hres)
-        write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_lres)
+        write(logfhandle,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_hres)
+        write(logfhandle,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even_imgs(1)%get_lp(find_lres)
         ! destruct
         do iptcl=1,nptcls
             call eimgs_copy(iptcl)%kill
@@ -398,17 +398,17 @@ contains
             ccavg     = ccavg / real(npix)
             fsc(kind) = ccavg
             frac_nccs = real(cnt) / real(npix) * 100.
-            write(*,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
+            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3,1X,A,1X,F6.2)') '>>> RESOLUTION:', res(kind), '>>> CORRELATION:', fsc(kind),&
             &'>>> % NEIGH_CCS >= 0.5', frac_nccs
             if( frac_nccs < 1. .or. ccavg < 0.01 ) exit ! save the compute
         end do
         call get_resolution(fsc, res, res_fsc05, res_fsc0143)
-        write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-        write(*,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        write(logfhandle,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> GLOBAL RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
         find_hres = maxval(locres_finds, l_mask)
         find_lres = max(2, minval(locres_finds, l_mask .and. locres_finds > 0))
-        write(*,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_hres)
-        write(*,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_lres)
+        write(logfhandle,'(A,1X,F6.2)') '>>> HIGHEST LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_hres)
+        write(logfhandle,'(A,1X,F6.2)') '>>> LOWEST  LOCAL RESOLUTION DETERMINED TO:', even%get_lp(find_lres)
         ! make sure no 0 elements within the mask
         where( l_mask .and. locres_finds == 0 ) locres_finds = filtsz
         ! make sure background at lowest estimated local resolution

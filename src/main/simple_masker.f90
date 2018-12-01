@@ -44,10 +44,10 @@ contains
         self%binwidth  = params_glob%binwidth
         self%edge      = params_glob%edge
         self%pix_thres = params_glob%thres
-        write(*,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
-        write(*,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
-        write(*,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
-        write(*,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK LOW-PASS:           ', self%amsklp,  ' ANGSTROMS'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK SOFT EDGE WIDTH:    ', self%edge,    ' PIXEL(S)'
+        write(logfhandle,'(A,I7,A)'  ) '>>> AUTOMASK BINARY LAYERS WIDTH:', self%binwidth,' PIXEL(S)'
+        write(logfhandle,'(A,F7.1,A)') '>>> AUTOMASK MOLECULAR WEIGHT:   ', self%mw,      ' kDa'
         was_ft = vol_inout%is_ft()
         if( was_ft )call vol_inout%ifft()
         call self%copy(vol_inout)
@@ -139,7 +139,7 @@ contains
         if(was_ft) call vol_inout%fft()
         ! focusmsk
         minmax = distimg%minmax()
-        write(*,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge
+        write(logfhandle,'(A,I4)') '>>> SUGGESTED FOCUSMSK: ', ceiling(minmax(2))+params_glob%edge
         call distimg%kill
     end subroutine mask_from_pdb
 
@@ -186,11 +186,11 @@ contains
         vec      = 0
         rmat     = self%get_rmat()
         if( global_debug.or.debug )then
-            print *, 'maxrad:       ', maxrad
-            print *, 'sqmaxrad:     ', sqmaxrad
-            print *, 'maxval(rmat): ', maxval(rmat)
-            print *, 'minval(rmat): ', minval(rmat)
-            print *, 'self%idim:    ', self%idim
+            write(logfhandle,*) 'maxrad:       ', maxrad
+            write(logfhandle,*) 'sqmaxrad:     ', sqmaxrad
+            write(logfhandle,*) 'maxval(rmat): ', maxval(rmat)
+            write(logfhandle,*) 'minval(rmat): ', minval(rmat)
+            write(logfhandle,*) 'self%idim:    ', self%idim
         endif
         incr_k   = matmul([0., 0., 1.], e%get_mat())
         !$omp parallel do default(shared) private(j,out_coos,rad,i,k,vec,rvec,rvec_k)&

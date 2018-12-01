@@ -123,7 +123,7 @@ contains
             call mskvol%write('resmask'//params%ext)
             call mskvol%kill
         else
-            write(*,*)
+            write(logfhandle,*)
             THROW_HARD('inputted mskfile: '//trim(params%mskfile)//'does not exists in cwd; exec_resmask')
         endif
          ! end gracefully

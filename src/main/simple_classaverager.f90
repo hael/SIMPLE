@@ -349,7 +349,7 @@ contains
         integer   :: lims(3,2), nyq, lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
         integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
         integer   :: alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
-        if( .not. params_glob%l_distr_exec ) write(*,'(a)') '>>> ASSEMBLING CLASS SUMS'
+        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
             call cavger_readwrite_partial_sums( 'read' )

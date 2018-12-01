@@ -170,7 +170,7 @@ contains
         ! set the resolution limit according to the worst resolved model
         res  = maxval(res0143s)
         params%lp = max( params%lpstop,res )
-        write(*,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
+        write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
         call eorecvol_read%kill
         ! end gracefully
         call simple_end('**** SIMPLE_VOLASSEMBLE_EO NORMAL STOP ****', print_simple=.false.)

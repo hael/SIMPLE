@@ -7,22 +7,17 @@
 
 !! Function:  get_sys_error, simple_getenv, get_lunit, cpu_usage, get_process_id
 
-!! New interface: get_file_list, list_dirs, subprocess, glob_list_tofile, show_dir_content_recursive
-!! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files, exec_subprocess
+!! New interface: get_file_list, list_dirs, glob_list_tofile, show_dir_content_recursive
+!! New OS calls:  simple_list_dirs, simple_list_files, simple_rmdir, simple_del_files
 
 module simple_syslib
 use simple_defs
 use simple_error
 use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
-#ifdef __INTEL_COMPILER
-    use ifport, killpid=>kill, intel_ran=>ran
-    use ifcore
-#endif
 implicit none
 ! local version of throw_hard to enable public feature
 #define THROW_ERROR(msg) call simple_exception(msg, __FILENAME__ , __LINE__)
-
 
 !> glibc interface CONFORMING TO POSIX.1-2001, POSIX.1-2008, SVr4, 4.3BSD.
 interface
@@ -183,8 +178,8 @@ contains
         exec_stat = system(trim(adjustl(cmdstr)))
 #endif
         if( l_doprint )then
-            write(*,*) 'command            : ', cmdstr
-            write(*,*) 'status of execution: ', exec_stat
+            write(logfhandle,*) 'command            : ', cmdstr
+            write(logfhandle,*) 'status of execution: ', exec_stat
         endif
         if(present(exitstat))exitstat=exec_stat
     end subroutine exec_cmdline
@@ -197,13 +192,13 @@ contains
         logical :: err
         err = .false.
         if( exit_status /= 0 )then
-            write(*,*)'System error', exit_status,' for command: ', trim(adjustl(cmd))
+            write(logfhandle,*)'System error', exit_status,' for command: ', trim(adjustl(cmd))
             err = .true.
         endif
         if( cmdstat /= 0 )then
-            write(*,*)cmdmsg
+            write(logfhandle,*)cmdmsg
             call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
-            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
+            write(logfhandle,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
     end subroutine raise_sys_error
@@ -227,13 +222,13 @@ contains
         logical,     optional, intent(in)  :: allowfail
         integer                            :: length, status
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
-        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv_1'
+        if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_1'
         if( status ==  1 )then
-            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
+            write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_1'
             retval = 'undefined'
             return
         endif
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_1'
+        if( status ==  2 ) write(logfhandle,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_1'
         if( length ==  0 .or. status /= 0 )then
             retval = ""
             return
@@ -249,13 +244,13 @@ contains
         character(len=STDLEN)              :: retval
         integer                            :: length
         call get_environment_variable( trim(name), value=retval, length=length, status=status)
-        if( status == -1 ) write(*,*) 'value string too short; simple_syslib :: simple_getenv_2'
+        if( status == -1 ) write(logfhandle,*) 'value string too short; simple_syslib :: simple_getenv_2'
         if( status ==  1 )then
-            write(*,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_2'
+            write(logfhandle,*) 'environment variable: ', trim(name), ' is not defined; simple_syslib :: simple_getenv_2'
             envval = 'undefined'
             return
         endif
-        if( status ==  2 ) write(*,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_2'
+        if( status ==  2 ) write(logfhandle,*) 'environment variables not supported by system; simple_syslib :: simple_getenv_2'
         if( length ==  0 .or. status /= 0 )then
             envval = ""
             return
@@ -316,7 +311,7 @@ contains
         inquire(file=trim(fname1),size=sz)
         open(newunit=in, file=trim(fname1), status="old", action="read", access="stream", iostat=ioerr)
         if( ioerr /= 0 )then
-            print *,"In syslib_copy_file, failed to open input file ", trim(fname1)
+            write(logfhandle,*) "In syslib_copy_file, failed to open input file ", trim(fname1)
             call simple_error_check(ioerr,"syslib_copy_file input file not opened")
             if( present(status) ) status = ioerr
             return
@@ -335,7 +330,7 @@ contains
         ! process output file
         open(newunit=out, file=trim(fname2), status="replace", action="write", access="stream", iostat=ioerr)
         if( ioerr /= 0 )then
-            print *,"In syslib_copy_file, failed to open output file ", trim(fname2)
+            write(logfhandle,*)"In syslib_copy_file, failed to open output file ", trim(fname2)
             call simple_error_check(ioerr,"syslib_copy_file output file not opened")
             if( present(status) ) status = ioerr
             return
@@ -436,14 +431,14 @@ contains
         status = STAT (trim(adjustl(filename)) , buffer)
         if (status /= 0) then
             call simple_error_check(status, "In simple_syslib::simple_file_stat "//trim(filename))
-            print *, buffer
+            write(logfhandle,*) buffer
         end if
         if(.not.currently_opened) close(funit)
 #endif
         if( present(doprint) )l_print = doprint
         if( l_print )then
-            write(*,*) 'command: stat ', trim(adjustl(filename))
-            write(*,*) 'status of execution: ', status
+            write(logfhandle,*) 'command: stat ', trim(adjustl(filename))
+            write(logfhandle,*) 'status of execution: ', status
         endif
     end subroutine simple_file_stat
 
@@ -463,7 +458,7 @@ contains
         inquire(unit=unit_number, opened=is_open,iostat=io_status,iomsg=io_message)
         if(is_iostat_eor(io_status) .or. is_iostat_end(io_status)) return
         if (io_status .ne. 0) then
-            print *, 'is_open: I/O error ', io_status, ': ', trim(adjustl(io_message))
+            write(logfhandle,*) 'is_open: I/O error ', io_status, ': ', trim(adjustl(io_message))
             THROW_ERROR('I/O')
         endif
     end function is_open
@@ -483,9 +478,9 @@ contains
             dir_exists = .true.
             call simple_file_stat( trim(adjustl(dname)), status, buffer, .false. )
             if(global_debug)then
-                print *, " status ", status
-                print *, " file mode ", buffer(3)
-                print *, " last modified ", buffer(10)
+                write(logfhandle,*) " status ", status
+                write(logfhandle,*) " file mode ", buffer(3)
+                write(logfhandle,*) " last modified ", buffer(10)
             endif
         endif
     end function dir_exists
@@ -608,10 +603,10 @@ contains
         tmpdir = trim(adjustl(dir))
         lenstr = len_trim(tmpdir)
         if(lenstr==0) then
-            print *,"syslib:: simple_mkdir arg empty "//trim(tmpdir)
+            write(logfhandle,*)"syslib:: simple_mkdir arg empty "//trim(tmpdir)
         else if(lenstr<=2 .and. (tmpdir(1:1)=='/' .or. tmpdir(1:1)=='.'))then
             ! ignore '/' '.' './' '..'
-            print *,"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
+            write(logfhandle,*)"syslib:: simple_mkdir arg special char: "//trim(tmpdir)
         endif
         ignore_here = .false.
         io_status=0
@@ -625,7 +620,7 @@ contains
 #endif
             if(.not. dir_exists(trim(adjustl(path)))) then
                 if(present(errmsg))write (*,*) "ERROR>> ", trim(errmsg)
-                print *," syslib:: simple_mkdir failed to create "//trim(path)
+                write(logfhandle,*)" syslib:: simple_mkdir failed to create "//trim(path)
 
                 if(.not. ignore_here)then
 
@@ -634,12 +629,12 @@ contains
                 endif
             else
                 if(global_verbose)then
-                    print *," Directory ", trim(path), " created."
+                    write(logfhandle,*)" Directory ", trim(path), " created."
                 endif
             endif
             deallocate(path)
         else
-            if(global_verbose) print *," Directory ", trim(dir), " already exists, simple_mkdir ignoring request"
+            if(global_verbose) write(logfhandle,*)" Directory ", trim(dir), " already exists, simple_mkdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_mkdir
@@ -675,10 +670,10 @@ contains
                 call simple_error_check(io_status, "syslib:: simple_rmdir failed to remove "//trim(d))
                 io_status=0
             endif
-            if(global_debug) print *,' simple_rmdir removed ', count, ' items'
+            if(global_debug) write(logfhandle,*)' simple_rmdir removed ', count, ' items'
             deallocate(path)
         else
-            print *," Directory ", d, " does not exists, simple_rmdir ignoring request"
+            write(logfhandle,*)" Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir
@@ -862,7 +857,7 @@ contains
         oldidle=0
         times = 0
         percent = 0.
-        write(*,'(a)') 'CPU Usage'
+        write(logfhandle,'(a)') 'CPU Usage'
         open(newunit=unit, file = '/proc/stat', status = 'old', action = 'read', iostat = ios)
         if (ios /= 0) then
             THROW_ERROR('opening /proc/stat')
@@ -874,7 +869,7 @@ contains
             if (lineID /= 'cpu ') THROW_ERROR('reading /proc/stat')
             sumtimes = sum(times)
             percent = (1. - real((times(4) - oldidle)) / real((sumtimes - oldsum))) * 100.
-            write(*, fmt = '(F6.2,A2)') percent, '%'
+            write(logfhandle, fmt = '(F6.2,A2)') percent, '%'
             oldidle = times(4)
             oldsum = sumtimes
         end if
@@ -902,20 +897,6 @@ contains
         else
             file_unit_op = OUTPUT_UNIT
         end if
-#ifdef __INTEL_COMPILER
-#if __INTEL_COMPILER >= 1700
-        status = FOR_IFCORE_VERSION( str )
-        write( file_unit_op, '(A,A)' ) &
-            ' Intel IFCORE version ', trim(adjustl(str))
-        deallocate ( compiler_ver)
-        status = FOR_IFPORT_VERSION( str )
-        write( file_unit_op, '(A,A)' ) &
-            ' Intel IFPORT version ', trim(adjustl(str))
-#else
-        write( file_unit_op, '(A,I0)' ) &
-            ' Intel Fortran version ', __INTEL_COMPILER
-#endif
-#endif
         write( file_unit_op, '(A,A)' ) 'CMAKE Fortran COMPILER VERSION ',&
             trim(FC_COMPILER_CMAKE_VERSION)
 
@@ -948,11 +929,11 @@ contains
         valueSize = shRAM
         valueHWM = HWM
         if(global_debug)then
-            print *," simple_sysinfo_usage :"
-            print *," Total usable main memory size (bytes):", valuePeak
-            print *," Amount of shared memory:              ", valueSize
-            print *," Memory used by buffers:               ", valueRSS
-            print *," High water mark:                      ", valueHWM
+            write(logfhandle,*)" simple_sysinfo_usage :"
+            write(logfhandle,*)" Total usable main memory size (bytes):", valuePeak
+            write(logfhandle,*)" Amount of shared memory:              ", valueSize
+            write(logfhandle,*)" Memory used by buffers:               ", valueRSS
+            write(logfhandle,*)" High water mark:                      ", valueHWM
         endif
     end subroutine simple_sysinfo_usage
 
@@ -977,7 +958,7 @@ contains
         pid=getpid()
         write(pid_char,'(I8)') pid
         filename='/proc/'//trim(adjustl(pid_char))//'/status'
-        if(global_debug) print *,'simple_mem_usage:debug:  Fetching ', trim(filename)
+        if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  Fetching ', trim(filename)
         !--- read system file
         inquire (file=trim(filename),exist=ifxst)
         if (.not.ifxst) then
@@ -991,7 +972,7 @@ contains
                 read (unit,'(a)',end=110) line
                 if (line(1:7).eq.'VmPeak:') then
                     read (line(8:),*) valuePeak
-                    if(global_debug) print *,'simple_mem_usage:debug:  Peak ', valuePeak
+                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  Peak ', valuePeak
                     exit
                 endif
             enddo
@@ -1002,7 +983,7 @@ contains
                 read (unit,'(a)',end=120) line
                 if (line(1:7).eq.'VmSize:') then
                     read (line(8:),*) valueSize
-                    if(global_debug) print *,'simple_mem_usage:debug:  VM Size ', valueSize
+                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  VM Size ', valueSize
                     exit
                 endif
             enddo
@@ -1013,7 +994,7 @@ contains
                 read (unit,'(a)',end=130) line
                 if (line(1:6).eq.'VmHWM:') then
                     read (line(7:),*) valueHWM
-                    if(global_debug) print *,'simple_mem_usage:debug:  peak RAM ', valueHWM
+                    if(global_debug) write(logfhandle,*)'simple_mem_usage:debug:  peak RAM ', valueHWM
                     exit
                 endif
             enddo
@@ -1023,7 +1004,7 @@ contains
             read (unit,'(a)',end=140) line
             if (line(1:6).eq.'VmRSS:') then
                 read (line(7:),*) valueRSS
-                if(global_debug) print *,'simple_mem_usage:debug: RSS ', valueRSS
+                if(global_debug) write(logfhandle,*)'simple_mem_usage:debug: RSS ', valueRSS
                 exit
             endif
         enddo
@@ -1039,7 +1020,7 @@ contains
         character(len=STDLEN) :: command
         integer               :: pid
 #ifdef MACOSX
-        print *," simple_dump_mem_usage cannot run on MacOSX"
+        write(logfhandle,*)" simple_dump_mem_usage cannot run on MacOSX"
         return
 #endif
         pid=getpid()
@@ -1082,6 +1063,12 @@ contains
         end if
         if(present(status))status = status_here
     end function simple_abspath
+
+    subroutine simple_write( msg )
+        character(len=*), intent(in) :: msg
+
+
+    end subroutine simple_write
 
     integer function RE_match(source, regex)
         character(len=*),              intent(in)  :: source,regex

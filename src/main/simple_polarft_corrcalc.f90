@@ -235,11 +235,11 @@ contains
         self%pfromto = pfromto
         ! error check
         if( self%pfromto(2) - self%pfromto(1) + 1 < 1 )then
-            write(*,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
+            write(logfhandle,*) 'pfromto: ', self%pfromto(1), self%pfromto(2)
             THROW_HARD ('nptcls (# of particles) must be > 0; new')
         endif
         if( nrefs < 1 )then
-            write(*,*) 'nrefs: ', nrefs
+            write(logfhandle,*) 'nrefs: ', nrefs
             THROW_HARD ('nrefs (# of reference sections) must be > 0; new')
         endif
         self%ldim = [params_glob%boxmatch,params_glob%boxmatch,1] !< logical dimensions of original cartesian image
@@ -248,7 +248,7 @@ contains
         test(2)   = is_even(self%ldim(2))
         even_dims = all(test)
         if( .not. even_dims )then
-            write(*,*) 'self%ldim: ', self%ldim
+            write(logfhandle,*) 'self%ldim: ', self%ldim
             THROW_HARD ('only even logical dims supported; new')
         endif
         ! set constants
@@ -572,8 +572,8 @@ contains
         integer,                 intent(in) :: roind !< in-plane rotation index
         real(sp) :: rot
         if( roind < 1 .or. roind > self%nrots )then
-            print *, 'roind: ', roind
-            print *, 'nrots: ', self%nrots
+            write(logfhandle,*) 'roind: ', roind
+            write(logfhandle,*) 'nrots: ', self%nrots
             THROW_HARD('roind is out of range; get_rot')
         endif
         rot = self%angtab(roind)
@@ -702,11 +702,11 @@ contains
     !>  \brief  for printing info about the object
     subroutine print( self )
         class(polarft_corrcalc), intent(in) :: self
-        write(*,*) "total n particles in partition         (self%nptcls): ", self%nptcls
-        write(*,*) "number of references                    (self%nrefs): ", self%nrefs
-        write(*,*) "number of rotations                     (self%nrots): ", self%nrots
-        write(*,*) "size of pft                             (self%pftsz): ", self%pftsz
-        write(*,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
+        write(logfhandle,*) "total n particles in partition         (self%nptcls): ", self%nptcls
+        write(logfhandle,*) "number of references                    (self%nrefs): ", self%nrefs
+        write(logfhandle,*) "number of rotations                     (self%nrots): ", self%nrots
+        write(logfhandle,*) "size of pft                             (self%pftsz): ", self%pftsz
+        write(logfhandle,*) "logical dim. of original Cartesian image (self%ldim): ", self%ldim
     end subroutine print
 
     ! MEMOIZERS

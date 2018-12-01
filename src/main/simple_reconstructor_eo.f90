@@ -382,15 +382,15 @@ contains
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
         do j=1,size(res)
-           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
         call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', self%res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', self%res_fsc0143
         ! Fourier index for eo averaging
         if( self%hpind_fsc > 0 )then
             find4eoavg = self%hpind_fsc
@@ -407,7 +407,7 @@ contains
     subroutine sampl_dens_correct_sum( self, reference )
         class(reconstructor_eo), intent(inout) :: self      !< instance
         class(image),            intent(inout) :: reference !< reference volume
-        write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+        write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
         call reference%set_ft(.false.)
         call self%eosum%sampl_dens_correct
         call self%eosum%ifft()
@@ -440,7 +440,7 @@ contains
         ! zero the Fourier volumes and rhos
         call self%reset_all
         call self%reset_eoexp
-        write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
+        write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION'
         statecnt = 0
         cnt      = 0
         do i=1,params_glob%nptcls
@@ -470,7 +470,7 @@ contains
         if( allocated(lmsk) ) deallocate(lmsk)
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
-            write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
+            write(logfhandle,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
 
         contains

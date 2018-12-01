@@ -434,9 +434,9 @@ contains
         do
             iter = iter + 1
             str_iter = int2str_pad(iter,3)
-            write(*,'(A)')   '>>>'
-            write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
+            write(logfhandle,'(A)')   '>>>'
             ! cooling of the randomization rate
             params%extr_iter = params%extr_iter + 1
             call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
@@ -562,7 +562,7 @@ contains
             case('cls3D')
                 fall_over = build%spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(*,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
+            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
         end select
         if( fall_over )then
             THROW_HARD('no particles found! :exec_refine3D_distr')
@@ -710,9 +710,9 @@ contains
             iter = iter + 1
             params%which_iter = iter
             str_iter = int2str_pad(iter,3)
-            write(*,'(A)')   '>>>'
-            write(*,'(A,I6)')'>>> ITERATION ', iter
-            write(*,'(A)')   '>>>'
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
+            write(logfhandle,'(A)')   '>>>'
             if( have_oris .or. iter > params%startit )then
                 call build%spproj%read(params%projfile)
                 if( params%refine .eq. 'snhc' )then
@@ -1041,7 +1041,7 @@ contains
                 dir=filepath(PATH_PARENT,'stack_parts_sc'))
             newbox = nint(cline_scale%get_rarg('newbox'))
             if( newbox == box )then
-                write(*,*)'Inconsistent input dimensions: from ',box,' to ',newbox
+                write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox
                 THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
             endif
             call cline_scale%set('newbox', real(newbox))

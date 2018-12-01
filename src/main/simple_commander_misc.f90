@@ -100,7 +100,7 @@ contains
         call fileiochk('commander_misc; cluster_smat fopen', io_stat)
         read(unit=funit,pos=1,iostat=io_stat) smat
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', params%fname
+            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when reading: ', params%fname
             THROW_HARD('I/O')
         endif
         call fclose(funit,errmsg='commander_misc; cluster_smat fclose ')
@@ -131,13 +131,13 @@ contains
         ncls_stop = 0
         done = .false.
         do ncls=2,params%ncls
-            write(*,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
+            write(logfhandle,'(a,1x,f9.3,8x,a,1x,i3)') 'COHESION/SEPARATION RATIO INDEX: ', validinds(ncls), ' NCLS: ', ncls
             call build%spproj_field%read('clustering_shc_ncls'//int2str_pad(ncls,numlen)//trim(TXT_EXT), [1,build%spproj_field%get_noris()])
             do icls=1,ncls
                 pop = build%spproj_field%get_pop(icls, params%label)
-                write(*,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
+                write(logfhandle,'(a,3x,i5,1x,a,1x,i3)') '  CLUSTER POPULATION:', pop, 'CLUSTER:', icls
             end do
-            write(*,'(a)') '***************************************************'
+            write(logfhandle,'(a)') '***************************************************'
             if( ncls < params%ncls )then
                 if( validinds(ncls+1) >= validinds(ncls) .and. .not. done )then
                     ncls_stop = ncls
@@ -147,9 +147,9 @@ contains
         end do
         loc = minloc(validinds)
         ncls_min = loc(1)+1
-        write(*,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY MINIMIZING RATIO INDEX: ', ncls_min
+        write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY MINIMIZING RATIO INDEX: ', ncls_min
         if( ncls_stop /= 0 )then
-            write(*,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY STOPPING CRITERIUM:     ', ncls_stop
+            write(logfhandle,'(a,i3)') 'NUMBER OF CLUSTERS FOUND BY STOPPING CRITERIUM:     ', ncls_stop
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
@@ -234,9 +234,9 @@ contains
             current_time = real(iframe)*time_per_frame
             acc_dose     = params%dose_rate*current_time
             filter       = acc_dose2filter(dummy_img, acc_dose, params%kv)
-            write(*,'(a)') '>>> PRINTING DOSE WEIGHTS'
+            write(logfhandle,'(a)') '>>> PRINTING DOSE WEIGHTS'
             do find=1,size(filter)
-                write(*,'(A,1X,F8.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', dummy_img%get_lp(find), 'WEIGHT: ', filter(find)
+                write(logfhandle,'(A,1X,F8.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', dummy_img%get_lp(find), 'WEIGHT: ', filter(find)
             end do
         end do
         call dummy_img%kill
@@ -257,12 +257,12 @@ contains
         res = img%get_res()
         fsc = file2rarr(params%fsc)
         do k=1,size(fsc)
-        write(*,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
+        write(logfhandle,'(A,1X,F6.2,1X,A,1X,F15.3)') '>>> RESOLUTION:', res(k), '>>> FSC:', fsc(k)
         end do
         ! get & print resolution
         call get_resolution(fsc, res, res05, res0143)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res0143
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res05
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_FSC NORMAL STOP ****')
     end subroutine exec_print_fsc
@@ -286,7 +286,7 @@ contains
         real :: lp
         call params%new(cline)
         lp = (real(params%box-1)*params%smpd)/real(params%find)
-        write(*,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
+        write(logfhandle,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
         call simple_end('**** SIMPLE_RES NORMAL STOP ****')
     end subroutine exec_res
 
@@ -330,7 +330,7 @@ contains
                 call build%img%ifft
                 call build%img_copy%ifft
             endif
-            write(*,'(I6,F8.3)')i,build%img%real_corr(build%img_copy, l_mask)
+            write(logfhandle,'(I6,F8.3)')i,build%img%real_corr(build%img_copy, l_mask)
         enddo
         ! end gracefully
         call simple_end('**** SIMPLE_CONVERT NORMAL STOP ****')
@@ -347,17 +347,17 @@ contains
         call params%new(cline)
         call read_nrs_dat(params%infile,  dat1, ndat1)
         call read_nrs_dat(params%infile2, dat2, ndat2)
-        write(*,'(a)') '>>> STATISTICS OF THE TWO DISTRIBUTIONS'
+        write(logfhandle,'(a)') '>>> STATISTICS OF THE TWO DISTRIBUTIONS'
         call moment(dat1, ave1, sdev1, var, err)
         call moment(dat2, ave2, sdev2, var, err)
-        write(*,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile : ', ave1, sdev1
-        write(*,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile2: ', ave2, sdev2
-        write(*,'(a)') '>>> KOLMOGOROV-SMIRNOV TEST TO DEDUCE EQUIVALENCE OR NON-EQUIVALENCE BETWEEN TWO DISTRIBUTIONS'
+        write(logfhandle,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile : ', ave1, sdev1
+        write(logfhandle,'(a,1x,f4.2,1x,f4.2)') 'mean & sdev for infile2: ', ave2, sdev2
+        write(logfhandle,'(a)') '>>> KOLMOGOROV-SMIRNOV TEST TO DEDUCE EQUIVALENCE OR NON-EQUIVALENCE BETWEEN TWO DISTRIBUTIONS'
         call kstwo(dat1, ndat1, dat2, ndat2, ksstat, prob)
-        write(*,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
-        write(*,'(a,1x,f4.2)') 'P             = ', prob
-        write(*,'(a)') 'P represents the significance level for the null hypothesis that the two data sets are drawn from the same distribution'
-        write(*,'(a)') 'Small P values show that the cumulative distribution functions of the two data sets differ significantly'
+        write(logfhandle,'(a,1x,f4.2)') 'K-S statistic = ', ksstat
+        write(logfhandle,'(a,1x,f4.2)') 'P             = ', prob
+        write(logfhandle,'(a)') 'P represents the significance level for the null hypothesis that the two data sets are drawn from the same distribution'
+        write(logfhandle,'(a)') 'Small P values show that the cumulative distribution functions of the two data sets differ significantly'
         ! end gracefully
         call simple_end('**** SIMPLE_KSTEST NORMAL STOP ****')
 

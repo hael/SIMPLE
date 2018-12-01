@@ -182,10 +182,10 @@ contains
         do i=1,argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(*,*) 'ERROR! while parsing the command line; simple_chash :: parse_cmdline'
-                write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exceeds the length limit STDLEN'
-                write(*,*) 'Create a symbolic link with shorter name in the cwd'
+                write(logfhandle,*) 'ERROR! while parsing the command line; simple_chash :: parse_cmdline'
+                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(logfhandle,*) 'which likely exceeds the length limit STDLEN'
+                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 stop
             endif
             pos1 = index(arg, '=') ! position of '='
@@ -477,9 +477,9 @@ contains
                     endif
                 else
                     if( aadvance )then
-                        write(*,'(a)')                    format_str(trim(key)//'='//trim(self%values(which)%str), aansi_flag)
+                        write(logfhandle,'(a)')                    format_str(trim(key)//'='//trim(self%values(which)%str), aansi_flag)
                     else
-                        write(*,'(a)',advance='no')       format_str(trim(key)//'='//trim(self%values(which)%str)//' ', aansi_flag)
+                        write(logfhandle,'(a)',advance='no')       format_str(trim(key)//'='//trim(self%values(which)%str)//' ', aansi_flag)
                     endif
                 endif
             else
@@ -491,7 +491,7 @@ contains
                 if( present(fhandle) )then
                     write(fhandle,'(a,1x,a)') format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag)
                 else
-                    write(*,'(a,1x,a)')       format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag)
+                    write(logfhandle,'(a,1x,a)')       format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag)
                 endif
             endif
         else
@@ -520,7 +520,7 @@ contains
         if( present(fhandle) .and. is_open(fhandle) )then
             write(fhandle,'(a,1x,a)') format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag)
         else
-            write(*,      '(a,1x,a)') format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag)
+            write(logfhandle,      '(a,1x,a)') format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag)
         endif
     end subroutine print_key_val_pair_2
 

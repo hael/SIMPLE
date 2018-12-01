@@ -247,19 +247,19 @@ contains
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
         if(self%het(i))then
-            write(*,'(A6)',advance='no')'HETERO-ATOM '
+            write(logfhandle,'(A6)',advance='no')'HETERO-ATOM '
         else
-            write(*,'(A6)',advance='no')'ATOM        '
+            write(logfhandle,'(A6)',advance='no')'ATOM        '
         endif
-        write(*,'(I6,1X)',advance='no')self%num(i)
-        write(*,'(A4,1X)',advance='no')self%name(i)
-        write(*,'(A1,1X)',advance='no')self%altloc(i)
-        write(*,'(A3,1X)',advance='no')self%resname(i)
-        write(*,'(A1,1X)',advance='no')self%chain(i)
-        write(*,'(I4,1X)',advance='no')self%resnum(i)
-        write(*,'(A1,1X)',advance='no')self%icode(i)
-        write(*,'(3F8.3,1X)',advance='no')self%xyz(i,:)
-        write(*,'(2F6.2,1X)',advance='yes')self%occupancy(i), self%beta(i)
+        write(logfhandle,'(I6,1X)',advance='no')self%num(i)
+        write(logfhandle,'(A4,1X)',advance='no')self%name(i)
+        write(logfhandle,'(A1,1X)',advance='no')self%altloc(i)
+        write(logfhandle,'(A3,1X)',advance='no')self%resname(i)
+        write(logfhandle,'(A1,1X)',advance='no')self%chain(i)
+        write(logfhandle,'(I4,1X)',advance='no')self%resnum(i)
+        write(logfhandle,'(A1,1X)',advance='no')self%icode(i)
+        write(logfhandle,'(3F8.3,1X)',advance='no')self%xyz(i,:)
+        write(logfhandle,'(2F6.2,1X)',advance='yes')self%occupancy(i), self%beta(i)
     end subroutine print_atom
 
     ! I/O

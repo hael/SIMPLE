@@ -279,7 +279,7 @@ contains
         type(ori) :: o
         if( self%n == 0 ) THROW_HARD('oris object does not exist; get_ori')
         if( i > self%n .or. i < 1 )then
-            write(*,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
+            write(logfhandle,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
             THROW_HARD('i out of range; get_ori')
         endif
         o = self%o(i)
@@ -542,8 +542,8 @@ contains
         type(oris) :: os_tmp
         integer    :: i, cnt
         if( size(mask) /= self%n )then
-            print *, 'self%n:     ', self%n
-            print *, 'size(mask): ', size(mask)
+            write(logfhandle,*) 'self%n:     ', self%n
+            write(logfhandle,*) 'size(mask): ', size(mask)
             THROW_HARD('nonconforming mask size; compress')
         endif
         call os_tmp%new(count(mask))
@@ -950,7 +950,7 @@ contains
         sum = 0.
         if( mask_present )then
             if( count(mask)==0 )then
-                write(*,*)'Empty mask; simple_oris :: clac_sum'
+                write(logfhandle,*)'Empty mask; simple_oris :: clac_sum'
                 return
             endif
         endif
@@ -1078,7 +1078,7 @@ contains
     subroutine print_matrices( self )
         class(oris), intent(inout) :: self
         integer :: i
-        write(*,*) 'ORDER OF ROTATION MATRIX ELEMENTS: (1,1) (1,2) (1,3) (2,1) (2,2) (2,3) (3,1) (3,2) (3,3)'
+        write(logfhandle,*) 'ORDER OF ROTATION MATRIX ELEMENTS: (1,1) (1,2) (1,3) (2,1) (2,2) (2,3) (3,1) (3,2) (3,3)'
         do i=1,self%n
             call self%o(i)%print_mat()
         end do
@@ -1800,8 +1800,12 @@ contains
         if( o_tmp%isthere('dfy')     ) call self%o(i)%set('dfy',     o_tmp%get('dfy'))
         if( o_tmp%isthere('angast')  ) call self%o(i)%set('angast',  o_tmp%get('angast'))
         if( o_tmp%isthere('bfac')    ) call self%o(i)%set('bfac',    o_tmp%get('bfac'))
-        if( o_tmp%isthere('state')   ) call self%o(i)%set('state',   o_tmp%get('state'))
-        if( o_tmp%isthere('eo')      ) call self%o(i)%set('eo',      o_tmp%get('eo'))
+        if( o_tmp%isthere('state')   )then
+            call self%o(i)%set('state', o_tmp%get('state'))
+        else
+            call self%o(i)%set('state', 1.0)
+        endif
+        if( o_tmp%isthere('eo') ) call self%o(i)%set('eo',      o_tmp%get('eo'))
         call o_tmp%kill
     end subroutine str2ori_ctfparams_state_eo
 
@@ -2549,7 +2553,7 @@ contains
             case('specscore')
                 ! to be tested, should be amenable to any objective function
             case DEFAULT
-                write(*,*)'Invalid metric: ', trim(which_here)
+                write(logfhandle,*)'Invalid metric: ', trim(which_here)
                 THROW_HARD('extremal_bound')
         end select
         if( .not.self%isthere(which_here) )then
@@ -2822,7 +2826,7 @@ contains
         integer              :: i
         integer, allocatable :: order(:)
         logical              :: passed
-        write(*,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
+        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part1): testing getters/setters'
         os = oris(100)
         os2 = oris(100)
         passed = .false.
@@ -2843,17 +2847,17 @@ contains
         if( abs(euls(1)-1.+euls(2)-2.+euls(3)-3.) < 0.0001 ) passed = .true.
         if( doprint )then
             call os%rnd_oris(5.)
-            write(*,*) '********'
+            write(logfhandle,*) '********'
             do i=1,100
                 call os%print_(i)
             end do
             call os2%rnd_oris(5.)
-            write(*,*) '********'
+            write(logfhandle,*) '********'
             do i=1,100
                 call os2%print_(i)
             end do
         endif
-        write(*,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
+        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing assignment'
         os = oris(2)
         call os%rnd_oris(5.)
         os2 = os
@@ -2882,7 +2886,7 @@ contains
             endif
         end do
         if( .not. passed ) THROW_HARD('assignment test failed!')
-        write(*,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
+        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part2): testing i/o'
         passed = .false.
         os = oris(100)
         os2 = oris(100)
@@ -2898,7 +2902,7 @@ contains
         call os%write('test_oris_rndoris_rndstates.txt')
         if( os%corr_oris(os2) > 0.99 ) passed = .true.
         if( .not. passed ) THROW_HARD('statedoc read/write failed!')
-        write(*,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
+        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part3): testing calculators'
         passed = .false.
         call os%rnd_lps()
         call os%write('test_oris_rndoris_rndstates_rndlps.txt')
@@ -2910,16 +2914,16 @@ contains
             do i=1,100
                 call os%print_(order(i))
             end do
-            write(*,*) 'median:', os%median('lp')
+            write(logfhandle,*) 'median:', os%median('lp')
         endif
-        write(*,'(a)') '**info(simple_oris_unit_test, part4): testing destructor'
+        write(logfhandle,'(a)') '**info(simple_oris_unit_test, part4): testing destructor'
         call os%kill
         call os2%kill
         ! test find_angres
         os = oris(1000)
         call os%spiral
-        print *, 'angres:      ', os%find_angres()
-        write(*,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        write(logfhandle,*) 'angres:      ', os%find_angres()
+        write(logfhandle,'(a)') 'SIMPLE_ORIS_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_oris
 
     ! DESTRUCTORS

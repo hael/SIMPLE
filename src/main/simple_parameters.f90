@@ -423,7 +423,7 @@ contains
         character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
         character(len=1)              :: checkupfile(50)
-        character(len=:), allocatable :: absname
+        character(len=:), allocatable :: absname, executable
         type(binoris)    :: bos
         type(sp_project) :: spproj
         type(ori)        :: o
@@ -775,8 +775,8 @@ contains
         ! get cwd
         call simple_getcwd(self%cwd)
         ! update CWD globals in defs
-        if( .not. allocated(CWD_GLOB_ORIGINAL) ) allocate(CWD_GLOB_ORIGINAL, source=trim(self%cwd))
-        CWD_GLOB = trim(self%cwd)
+        if( .not. allocated(cwd_glob_orig) ) allocate(cwd_glob_orig, source=trim(self%cwd))
+        cwd_glob = trim(self%cwd)
         ! get process ID
         self%pid = get_process_id()
         ! get name of executable
@@ -819,9 +819,9 @@ contains
                 ! so that distributed execution can deal with multiple project files (eg scaling)
                 ! and simple_exec can also not require a project file
                 if( nsp_files > 1 )then
-                    write(*,*) 'Multiple *simple project files detected'
+                    write(logfhandle,*) 'Multiple *simple project files detected'
                     do i=1,nsp_files
-                        write(*,*) trim(sp_files(i))
+                        write(logfhandle,*) trim(sp_files(i))
                     end do
                     THROW_HARD('a unique *.simple project could NOT be identified; new')
                 endif
@@ -830,8 +830,8 @@ contains
             self%sp_required = .false.
         endif
         if( nsp_files == 0 .and. self%sp_required .and. .not. cline%defined('projfile') )then
-            write(*,*) 'program: ', trim(self%prg), ' requires a project file!'
-            write(*,*) 'cwd:     ', trim(self%cwd)
+            write(logfhandle,*) 'program: ', trim(self%prg), ' requires a project file!'
+            write(logfhandle,*) 'cwd:     ', trim(self%cwd)
             THROW_HARD('no *.simple project file identified; new')
         endif
         if( nsp_files == 1 .and. self%sp_required )then
@@ -862,7 +862,7 @@ contains
                 ! make execution directory
                 call simple_mkdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 2")
                 if( trim(self%prg) .eq. 'mkdir' ) return
-                write(*,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
+                write(logfhandle,'(a)') '>>> EXECUTION DIRECTORY: '//trim(self%exec_dir)
                 ! change to execution directory directory
                 call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then
@@ -877,8 +877,14 @@ contains
                 endif
                 ! get new cwd
                 call simple_getcwd(self%cwd)
-                CWD_GLOB = trim(self%cwd)
+                cwd_glob = trim(self%cwd)
             endif
+        endif
+        ! open log file for write
+        if( .not. str_has_substr(self%executable,'private') .and. STDOUT2LOG )then
+            ! this is NOT a simple_private_exec execution but a simple_exec or simple_distr_exec one
+            ! open the log file
+            call fopen(logfhandle, status='replace', file=LOGFNAME, action='write')
         endif
         !>>> END, EXECUTION RELATED
 
@@ -948,7 +954,7 @@ contains
                 case('compenv')
                     self%spproj_iseg = COMPENV_SEG
                 case DEFAULT
-                    write(*,*) 'oritype: ', trim(self%oritype)
+                    write(logfhandle,*) 'oritype: ', trim(self%oritype)
                     THROW_HARD('unsupported oritype; new')
             end select
         else
@@ -1026,7 +1032,7 @@ contains
                     call find_ldim_nptcls(self%stk, lfoo, self%nptcls)
                 endif
             else
-                write(*,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
+                write(logfhandle,'(a,1x,a)') 'Inputted stack (stk) file does not exist!', trim(self%stk)
                 stop
             endif
         else if( self%oritab .ne. '' )then
@@ -1149,7 +1155,7 @@ contains
         ! checks automask related values
         if( cline%defined('mskfile') )then
             if( .not. file_exists(self%mskfile) )then
-                write(*,*) 'file: ', trim(self%mskfile)
+                write(logfhandle,*) 'file: ', trim(self%mskfile)
                 THROW_HARD('input mask file not in cwd')
             endif
         endif
@@ -1215,8 +1221,8 @@ contains
             DebugPrint 'found ncls from refs: ', ncls
             if( cline%defined('ncls') )then
                 if( ncls /= self%ncls )then
-                    write(*,*)'ncls in ',trim(self%refs),' : ',ncls
-                    write(*,*)'self%ncls : ',self%ncls
+                    write(logfhandle,*)'ncls in ',trim(self%refs),' : ',ncls
+                    write(logfhandle,*)'self%ncls : ',self%ncls
                     THROW_HARD('input number of clusters (ncls) not consistent with the number of references in stack (p%refs)')
                 endif
             else
@@ -1295,7 +1301,7 @@ contains
             ! to be consistent with RELION
             if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
         case DEFAULT
-            write(*,*) 'objfun flag: ', trim(self%objfun)
+            write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
             THROW_HARD('unsupported objective function; new')
         end select
         ! matched filter and sigma needs flags
@@ -1326,7 +1332,7 @@ contains
         case('movie','mic','ptcl','cavg','vol','vol_cavg')
             ! alles gut!
         case DEFAULT
-            write(*,*) 'imgkind: ', trim(self%imgkind)
+            write(logfhandle,*) 'imgkind: ', trim(self%imgkind)
             THROW_HARD('unsupported imgkind; new')
         end select
         ! o_peaks file
@@ -1340,7 +1346,7 @@ contains
         ! set global pointer to instance
         ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self
-        if( .not. ssilent ) write(*,'(A)') '>>> DONE PROCESSING PARAMETERS'
+        if( .not. ssilent ) write(logfhandle,'(A)') '>>> DONE PROCESSING PARAMETERS'
 
     contains
 
@@ -1356,7 +1362,7 @@ contains
                     ! already in absolute path format
                     call check_file(key, self%vols(i), notAllowed='T')
                     if( .not. file_exists(self%vols(i)) )then
-                        write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
+                        write(logfhandle,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 1'
                         stop
                     endif
                 else
@@ -1368,7 +1374,7 @@ contains
                     endif
                     call check_file(key, self%vols(i), notAllowed='T')
                     if( .not. file_exists(self%vols(i)) )then
-                        write(*,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
+                        write(logfhandle,*) 'Input volume:', trim(self%vols(i)), ' does not exist! 2'
                         stop
                     else
                         abs_fname = simple_abspath(self%vols(i),'parameters :: check_vol', check_exists=.false.)
@@ -1455,8 +1461,8 @@ contains
                     if( notAllowed == file_descr ) raise_exception = .true.
                 endif
                 if( raise_exception )then
-                    write(*,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
-                    write(*,*) 'flag:', trim(file)
+                    write(logfhandle,*) 'This format: ', file_descr, ' is not allowed for this file: ', trim(var)
+                    write(logfhandle,*) 'flag:', trim(file)
                     stop
                 endif
                 select case(file_descr)
@@ -1471,7 +1477,7 @@ contains
                     cntfile = cntfile+1
                     checkupfile(cntfile) = 'S'
                 case ('N')
-                    write(*,*) 'file: ', trim(var)
+                    write(logfhandle,*) 'file: ', trim(var)
                     THROW_HARD('This file format is not supported by SIMPLE')
                 case ('T','B','P','O', 'R')
                     ! text files are supported
@@ -1480,7 +1486,7 @@ contains
                     ! *.simple project files are supported
                     ! R=*.star format -- in testing
                 case DEFAULT
-                    write(*,*) 'file: ', trim(var)
+                    write(logfhandle,*) 'file: ', trim(var)
                     THROW_HARD('This file format is not supported by SIMPLE')
                 end select
                 if( file_exists(var) )then
@@ -1567,8 +1573,8 @@ contains
                         self%box     = self%ldim(1)
                     endif
                 else
-                    write(*,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
-                    write(*,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
+                    write(logfhandle,'(a)')      'simple_parameters :: set_ldim_box_from_stk'
+                    write(logfhandle,'(a,1x,a)') 'Stack file does not exist!', trim(self%stk)
                     THROW_HARD("set_ldim_box_from_stk")
                 endif
             endif
@@ -1585,7 +1591,7 @@ contains
             case('S')
                 self%ext = '.spi'
             case DEFAULT
-                write(*,*)'format: ', trim(ext)
+                write(logfhandle,*)'format: ', trim(ext)
                 THROW_HARD('This file format is not supported by SIMPLE')
         end select
     end subroutine set_img_format

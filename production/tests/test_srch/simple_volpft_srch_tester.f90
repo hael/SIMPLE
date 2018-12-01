@@ -29,9 +29,9 @@ contains
         class(cmdline),    intent(inout) :: cline
         logical, optional, intent(in)    :: be_verbose
         call setup_testenv( cline, be_verbose )
-        write(*,*) '****volpft_srch, init'
+        write(logfhandle,*) '****volpft_srch, init'
         call test_volpft_srch
-        write(*,*) '****volpft_srch, completed'
+        write(logfhandle,*) '****volpft_srch, completed'
     end subroutine exec_volpft_srch_test
 
     subroutine setup_testenv( cline, be_verbose )
@@ -96,8 +96,8 @@ contains
         ! end do
         ! dist = sumdist/real(NTESTS)
         ! corr = sumcorr/real(NTESTS)
-        ! write(*,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
-        ! write(*,'(a,1x,f7.4)') 'CORR: ', corr
+        ! write(logfhandle,'(a,1x,f5.2)') 'ROT ERROR (IN DEGREES): ', dist
+        ! write(logfhandle,'(a,1x,f7.4)') 'CORR: ', corr
         ! if( .not. test_passed() ) THROW_HARD('****volpft_srch_tester FAILURE volpft_srch :: volpft_6dimsrch')
         !
         ! contains

@@ -69,15 +69,11 @@ contains
             allocate(tmp, source=cmsg//' '//suppress_msg)
             cmsg = tmp
         endif
-#if defined(PGI)
-        exec_stat = system(trim(adjustl(cmsg)))
-#else
         call execute_command_line(cmsg, wait=wwait, exitstat=exec_stat, cmdstat=cstat, cmdmsg=cmdmsg)
         if( .not. l_suppress_errors ) call raise_sys_error( cmsg, exec_stat, cstat, cmdmsg )
-#endif
         if( l_doprint )then
-            write(*,*) 'command            : ', cmsg
-            write(*,*) 'status of execution: ', exec_stat
+            write(logfhandle,*) 'command            : ', cmsg
+            write(logfhandle,*) 'status of execution: ', exec_stat
         endif
     end subroutine exec_cmdline
 
@@ -89,15 +85,15 @@ contains
         logical :: err
         err = .false.
         if( exitstat /= 0 )then
-            write(*,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
+            write(logfhandle,*)'System error', exitstat,' for command: ', trim(adjustl(cmd))
             err = .true.
         endif
         if( cmdstat /= 0 )then
             ! call simple_error_check(cmdstat,' command could not be executed: '//trim(adjustl(cmd)))
-            write(*,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
+            write(logfhandle,*)'cmdstat = ',cmdstat,' command could not be executed: ', trim(adjustl(cmd))
             err = .true.
         endif
-        ! if( err ) write(*,*) trim(adjustl(cmdmsg))
+        ! if( err ) write(logfhandle,*) trim(adjustl(cmdmsg))
     end subroutine raise_sys_error
 
 end program simple_test_list_files

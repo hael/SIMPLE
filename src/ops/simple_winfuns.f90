@@ -121,7 +121,7 @@ contains
                 self%apod_fun  => sinc_apod
                 self%instr_fun => sinc_instr
             case DEFAULT
-                write(*,*) 'window function:', trim(self%wfun_str), 'Unsupprted constructor; simple_winfuns'
+                write(logfhandle,*) 'window function:', trim(self%wfun_str), 'Unsupprted constructor; simple_winfuns'
                 stop
         end select
     end function

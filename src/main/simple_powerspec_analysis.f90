@@ -73,7 +73,7 @@ contains
         ldim = bin_img%get_ldim()
         allocate(mask(ldim(1),ldim(2),ldim(3)), source = .true.)
         img_templ = build_ice_template(ldim(1), smpd, winsz)
-        print *, 'WINSZ = ', winsz
+        write(logfhandle,*) 'WINSZ = ', winsz
         call bin_img_win%new([winsz,winsz,1],smpd)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
@@ -93,16 +93,16 @@ contains
                    !!!!!!!!!!!!
                    if(.not. outside) then
                         corr_coeff =  img_templ%real_corr(bin_img)
-                        ! print *, 'pixel', i, j, 'corr ', corr_coeff
+                        ! write(logfhandle,*) 'pixel', i, j, 'corr ', corr_coeff
                    else
                         corr_coeff = 0.
                    endif
                    if(corr_coeff > 0.75) then
                       mask(i:i+winsz,j:j+winsz,1) = .false. !do not check again in this zone
-                      print *, 'Detected ICE: pixel', i,j
+                      write(logfhandle,*) 'Detected ICE: pixel', i,j
                     endif
                    !build function is_simmetric(bin_img, coord) !coordinates of the detected ice
-                  ! if(is_simmetric(bin_img, [i,j,1])) print *, "ICE detected at ", calc_fourier_index(i, ldim(1), smpd), ' A'  ! ?? not sure
+                  ! if(is_simmetric(bin_img, [i,j,1])) write(logfhandle,*) "ICE detected at ", calc_fourier_index(i, ldim(1), smpd), ' A'  ! ?? not sure
                 endif
             enddo
         enddo
@@ -199,11 +199,11 @@ contains
       if(present(winsz)) wwinsz = winsz
       call img%new(ldim,smpd)
       call prepare_stack(fname2process, 'prepared_stack.mrc', smpd, lp,wwinsz)
-      print *, '>>>>>>>>>>>>>STACK PREPARED SUCCESSFULLY>>>>>>>>>>>>>'
+      write(logfhandle,*) '>>>>>>>>>>>>>STACK PREPARED SUCCESSFULLY>>>>>>>>>>>>>'
       call binarize_stack('prepared_stack.mrc','binarised_stack.mrc', smpd)
-      print *, '>>>>>>>>>>>>>STACK BINARISED SUCCESSFULLY>>>>>>>>>>>>>'
+      write(logfhandle,*) '>>>>>>>>>>>>>STACK BINARISED SUCCESSFULLY>>>>>>>>>>>>>'
       call build_resolutions_vector(box, smpd, res_vec,nn_shells)
-      print *, "Power spectra divided into ", nn_shells, ' shells'
+      write(logfhandle,*) "Power spectra divided into ", nn_shells, ' shells'
       allocate(counter(nn_shells), mask(nn_shells,2))
       open(unit = 17, access = 'sequential', action = 'readwrite',file = "PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
       write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>POWER SPECTRA STATISTICS>>>>>>>>>>>>>>>>>>'
@@ -264,12 +264,12 @@ end module simple_powerspec_analysis
 
 
  ! img = build_ice_template(512, 1.41, winsz)
- ! print *, 'WINSZ = ', winsz
+ ! write(logfhandle,*) 'WINSZ = ', winsz
  ! call img_win%new([int(winsz/2),int(winsz/2),1], 1.41)
  ! call img%write('IceTemplate.mrc')
  ! call img%window_slim([int(winsz/4),int(winsz/4)], 10, img_win, outside )
  ! call img_win%write('IceTemplateWin.mrc')
- ! print *, 'OUTSIDE = ', outside
+ ! write(logfhandle,*) 'OUTSIDE = ', outside
 
  ! call img%ellipse([256,256],[20.,20.], 'yes')
  ! call img%ellipse([352,312],[10.,5.], 'yes')
@@ -280,15 +280,15 @@ end module simple_powerspec_analysis
  ! call img%find_connected_comps(img_cc)
  ! call img_cc%write('ToyImageCC.mrc')
  ! yes_no = is_symmetric(img_cc, 1)
- ! print *, 'CC ', 1, ' is symmetric ', yes_no
+ ! write(logfhandle,*) 'CC ', 1, ' is symmetric ', yes_no
  ! yes_no = is_symmetric(img_cc, 2)
- ! print *, 'CC ', 2, ' is symmetric ', yes_no
+ ! write(logfhandle,*) 'CC ', 2, ' is symmetric ', yes_no
  ! yes_no = is_symmetric(img_cc, 3)
- ! print *, 'CC ', 3, ' is symmetric ', yes_no
+ ! write(logfhandle,*) 'CC ', 3, ' is symmetric ', yes_no
  ! yes_no = is_symmetric(img_cc, 4)
- ! print *, 'CC ', 4, ' is symmetric ', yes_no
+ ! write(logfhandle,*) 'CC ', 4, ' is symmetric ', yes_no
  ! yes_no = is_symmetric(img_cc, 5)
- ! print *, 'CC ', 5, ' is symmetric ', yes_no
+ ! write(logfhandle,*) 'CC ', 5, ' is symmetric ', yes_no
 
   ! !TO START AGAIN FROM HERE
   ! call img%new([512,512,1],1.)
@@ -299,7 +299,7 @@ end module simple_powerspec_analysis
   ! rmat = img_cc%get_rmat()
   ! do i = 1, int(maxval(rmat))
   !   yes_no = is_symmetric(img_cc, i)
-  !   print *, 'CC ', i, ' is symmetric ', yes_no
+  !   write(logfhandle,*) 'CC ', i, ' is symmetric ', yes_no
   ! enddo
 
  ! call process_ps_stack('pspecs_sphire_tstdat.mrc', 'analysed_pspecs_sphire.mrc', 1.41, 20.,1)

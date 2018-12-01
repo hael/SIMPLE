@@ -45,7 +45,7 @@ contains
         type(moviewatcher)  :: self
         call self%kill
         if( .not. file_exists(trim(adjustl(params_glob%dir_movies))) )then
-            print *, 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
+            write(logfhandle,*) 'Directory does not exist: ', trim(adjustl(params_glob%dir_movies))
             stop
         endif
         self%cwd         = trim(params_glob%cwd)
@@ -111,12 +111,12 @@ contains
                     &.and. (last_modified      > self%report_time)&
                     &.and. (last_status_change > self%report_time)&
                     &.and. is_closed ) is_new_movie(i) = .true.
-                if( is_new_movie(i) )write(*,'(A,A,A,A)')'>>> NEW MOVIE: ',&
+                if( is_new_movie(i) )write(logfhandle,'(A,A,A,A)')'>>> NEW MOVIE: ',&
                     &trim(adjustl(farray(i))), '; ', cast_time_char(tnow)
             else
                 ! some error occured
                 fail_cnt = fail_cnt + 1
-                print *,'Error watching file: ', trim(fname), ' with code: ',io_stat
+                write(logfhandle,*)'Error watching file: ', trim(fname), ' with code: ',io_stat
             endif
             if(allocated(fileinfo))deallocate(fileinfo)
         enddo

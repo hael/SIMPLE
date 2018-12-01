@@ -212,11 +212,11 @@ contains
             call vol%mul(mskvol)
         else if( params%automsk .eq. 'yes' )then
             if( .not. cline%defined('thres') )then
-                write(*,*) 'Need a pixel threshold > 0. for the binarisation'
-                write(*,*) 'Procedure for obtaining thresh:'
-                write(*,*) '(1) postproc vol without bfac or automsk'
-                write(*,*) '(2) Use UCSF Chimera to look at the volume'
-                write(*,*) '(3) Identify the pixel threshold that excludes any background noise'
+                write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'
+                write(logfhandle,*) 'Procedure for obtaining thresh:'
+                write(logfhandle,*) '(1) postproc vol without bfac or automsk'
+                write(logfhandle,*) '(2) Use UCSF Chimera to look at the volume'
+                write(logfhandle,*) '(3) Identify the pixel threshold that excludes any background noise'
                 THROW_HARD('postprocess')
             endif
             if( .not. cline%defined('mw') )then
@@ -320,10 +320,10 @@ contains
         endif
         if( params%stats .eq. 'yes' )then
             call build%vol%stats('foreground', ave, sdev, maxv, minv)
-            write(*,*) 'ave : ', ave
-            write(*,*) 'sdev: ', sdev
-            write(*,*) 'maxv: ', maxv
-            write(*,*) 'minv: ', minv
+            write(logfhandle,*) 'ave : ', ave
+            write(logfhandle,*) 'sdev: ', sdev
+            write(logfhandle,*) 'maxv: ', maxv
+            write(logfhandle,*) 'minv: ', minv
             return
         endif
         if( params%guinier .eq. 'yes' )then
@@ -331,7 +331,7 @@ contains
             if( .not. cline%defined('hp')   ) THROW_HARD('need hp (high-pass limit) input for Guinier plot')
             if( .not. cline%defined('lp')   ) THROW_HARD('need lp (low-pass limit) input for Guinier plot')
             params%bfac = build%vol%guinier_bfac(params%hp, params%lp)
-            write(*,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
+            write(logfhandle,'(A,1X,F8.2)') '>>> B-FACTOR DETERMINED TO:', params%bfac
         else
             if( cline%defined('neg')  )then
                 call build%vol%neg()
@@ -457,12 +457,12 @@ contains
             loc                         = minloc(corrmat(spat_med,:))
             furthest_from_spat_med      = loc(1)
             furthest_from_spat_med_corr = corrmat(spat_med,furthest_from_spat_med)
-            write(*,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
-            write(*,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
-            write(*,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med
-            write(*,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
-            write(*,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
-            write(*,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
+            write(logfhandle,'(a,1x,f7.4)') 'MAX VOL PAIR CORR          :', corr_max
+            write(logfhandle,'(a,1x,f7.4)') 'MIN VOL PAIR CORR          :', corr_min
+            write(logfhandle,'(a,1x,i7)'  ) 'SPATIAL MEDIAN             :', spat_med
+            write(logfhandle,'(a,1x,f7.4)') 'SPATIAL MEDIAN CORR        :', spat_med_corr
+            write(logfhandle,'(a,1x,i7)'  ) 'FURTHEST FROM SPAT MED     :', furthest_from_spat_med
+            write(logfhandle,'(a,1x,f7.4)') 'FURTHEST FROM SPAT MED CORR:', furthest_from_spat_med_corr
             call fopen(funit, status='REPLACE', action='WRITE', file='vol_smat.bin', &
                 &access='STREAM', iostat=io_stat)
              if(io_stat/=0)call fileiochk('volops; volume smat 3 opening ', io_stat)
@@ -495,7 +495,7 @@ contains
             case('shift')
                 call vol_srch_init(vol1, vol2, params%hp, params%lpstart, params%trs)
                 cxyz = vol_shsrch_minimize()
-                print *, 'corr: ', cxyz(1), 'shift: ', cxyz(2:4)
+                write(logfhandle,*) 'corr: ', cxyz(1), 'shift: ', cxyz(2:4)
                 call vol2%read(params%vols(2))
                 call vol2%shift(cxyz(2:4))
                 call vol2%write(params%outvol)
@@ -552,7 +552,7 @@ contains
             case('refine')
                 ! to be implemented
             case DEFAULT
-                print *, 'dockmode: ', trim(params%dockmode), ' is unsupported'
+                write(logfhandle,*) 'dockmode: ', trim(params%dockmode), ' is unsupported'
         end select
         ! end gracefully
         call simple_end('**** SIMPLE_DOCK_VOLPAIR NORMAL STOP ****')

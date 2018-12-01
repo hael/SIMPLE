@@ -33,7 +33,7 @@ do xind=1,BOX*8,BOX
         coord_build(cnt,:) = [xind,yind]
     end do
 end do
-write(*,*)'cnt:', cnt
+write(logfhandle,*)'cnt:', cnt
 call mic_original%new([BOX*8, BOX*8,1], 1.) !building my micrograph
 call img%new([BOX,BOX,1],1.)
 do ifeat=1,n_proj

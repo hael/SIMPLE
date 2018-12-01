@@ -63,7 +63,7 @@ contains
             deallocate(fbody)
         end do
         DebugPrint ' exec_rec took ', toc(t1), ' secs'
-        write(*,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
+        write(logfhandle,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
         call qsys_job_finished(  'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
@@ -89,7 +89,7 @@ contains
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')
         DebugPrint ' exec_eorec_distr took ', toc(t1), ' secs'
-        write(*,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
+        write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
 
 end module simple_rec_master

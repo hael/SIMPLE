@@ -2,6 +2,7 @@
 module simple_magic_boxes
 use simple_math,  only: find
 use simple_error, only: simple_exception
+use simple_defs
 implicit none
 
 public :: find_magic_box, find_boxmatch, print_magic_box_range, find_magic_boxes4scale, autoscale
@@ -41,7 +42,7 @@ contains
         call find(boxsizes, NSZS, nint((1.5*diam)/smpd), ind_start, dist)
         call find(boxsizes, NSZS, nint((2.0*diam)/smpd), ind_stop, dist)
         do i=ind_start,ind_stop
-            write(*,'(i5)') boxsizes(i)
+            write(logfhandle,'(i5)') boxsizes(i)
         end do
         if( ind_stop == NSZS ) THROW_WARN('box size may underestimated (max value in list is 1024)')
     end subroutine print_magic_box_range
@@ -67,7 +68,7 @@ contains
             scale    = 1.0
             box_new  = box_in
             smpd_new = smpd_in
-            write(*,*) 'Inputted smpd < smpd_target, no scaling done; simple_magic_boxes :: autoscale_1'
+            write(logfhandle,*) 'Inputted smpd < smpd_target, no scaling done; simple_magic_boxes :: autoscale_1'
             return
         endif
         scale    = smpd_in/smpd_target

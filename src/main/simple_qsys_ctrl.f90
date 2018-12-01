@@ -163,7 +163,7 @@ contains
         class(qsys_ctrl), intent(in) :: self
         integer :: i
         do i=1,size(self%jobs_submitted)
-            print *, i, 'submitted: ', self%jobs_submitted(i), 'done: ', self%jobs_done(i)
+            write(logfhandle,*) i, 'submitted: ', self%jobs_submitted(i), 'done: ', self%jobs_done(i)
         end do
     end subroutine print_jobs_status
 
@@ -260,7 +260,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
+        write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(self%exec_binary)//' '//trim(job_descr%chash2str())
@@ -274,8 +274,8 @@ contains
         if( q_descr%get('qsys_name').eq.'local' )then
             ios = simple_chmod(trim(self%script_names(ipart)),'+x')
             if( ios .ne. 0 )then
-                write(*,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
-                write(*,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
+                write(logfhandle,'(a)',advance='no') 'simple_qsys_scripts :: gen_qsys_script; Error'
+                write(logfhandle,'(a)') 'chmoding submit script'//trim(self%script_names(ipart))
                 stop
             endif
         endif
@@ -305,7 +305,7 @@ contains
         else
             call self%myqsys%write_instr(job_descr, fhandle=funit)
         endif
-        write(funit,'(a)') 'cd '//trim(CWD_GLOB)
+        write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         ! compose the command line
         write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
@@ -329,8 +329,8 @@ contains
         if( trim(q_descr%get('qsys_name')).eq.'local' )then
             ios=simple_chmod(trim(script_name),'+x')
             if( ios .ne. 0 )then
-                write(*,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
-                write(*,'(a)') 'chmoding submit script'//trim(script_name)
+                write(logfhandle,'(a)',advance='no') 'simple_qsys_ctrl :: generate_script_2; Error'
+                write(logfhandle,'(a)') 'chmoding submit script'//trim(script_name)
                 stop
             end if
         endif
@@ -370,7 +370,7 @@ contains
                 if( submit_or_not(ipart) )then
                     script_name = filepath(PATH_HERE, trim(adjustl(self%script_names(ipart))))
                     if( .not.file_exists(trim(script_name)))then
-                        write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
+                        write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
                     endif
                     select type( pmyqsys => self%myqsys )
                     class is(qsys_local)
@@ -398,16 +398,16 @@ contains
         character(len=STDLEN) :: cmd
         integer :: pid
         if( .not.file_exists(filepath(PATH_HERE,trim(script_name))))then
-            write(*,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
+            write(logfhandle,'(A,A)')'FILE DOES NOT EXIST:',trim(script_name)
         endif
         select type( pmyqsys => self%myqsys )
             type is (qsys_local)
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                    &filepath(trim(CWD_GLOB),trim(script_name))//' '//&
+                    &filepath(trim(cwd_glob),trim(script_name))//' '//&
                     &SUPPRESS_MSG//'&'
             class DEFAULT
                 cmd = trim(adjustl(self%myqsys%submit_cmd()))//' '//&
-                    &filepath(trim(CWD_GLOB),trim(script_name))
+                    &filepath(trim(cwd_glob),trim(script_name))
         end select
         ! execute the command
         call exec_cmdline(trim(cmd))

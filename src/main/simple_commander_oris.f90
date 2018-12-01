@@ -178,27 +178,27 @@ contains
             call spproj%new_seg_with_ptr(params%nptcls, params%oritype, o)
             call binread_oritab(params%oritab2, spproj, o, [1,params%nptcls])
             call build%spproj_field%diststat(o, sumd, avgd, sdevd, mind, maxd)
-            write(*,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
-            write(*,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
-            write(*,'(a,1x,f15.6)') 'STANDARD DEVIATION OF ANGULAR DISTANCES       :', sdevd
-            write(*,'(a,1x,f15.6)') 'MINIMUM ANGULAR DISTANCE                      :', mind
-            write(*,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
+            write(logfhandle,'(a,1x,f15.6)') 'SUM OF ANGULAR DISTANCE BETWEEN ORIENTATIONS  :', sumd
+            write(logfhandle,'(a,1x,f15.6)') 'AVERAGE ANGULAR DISTANCE BETWEEN ORIENTATIONS :', avgd
+            write(logfhandle,'(a,1x,f15.6)') 'STANDARD DEVIATION OF ANGULAR DISTANCES       :', sdevd
+            write(logfhandle,'(a,1x,f15.6)') 'MINIMUM ANGULAR DISTANCE                      :', mind
+            write(logfhandle,'(a,1x,f15.6)') 'MAXIMUM ANGULAR DISTANCE                      :', maxd
         else if( cline%defined('oritab') )then
             if( params%ctfstats .eq. 'yes' )then
                 call build%spproj_field%stats('ctfres', avgd, sdevd, vard, err )
                 call build%spproj_field%minmax('ctfres', mind, maxd)
-                write(*,'(a,1x,f8.2)') 'AVERAGE CTF RESOLUTION               :', avgd
-                write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF CTF RESOLUTION :', sdevd
-                write(*,'(a,1x,f8.2)') 'MINIMUM CTF RESOLUTION (BEST)        :', mind
-                write(*,'(a,1x,f8.2)') 'MAXIMUM CTF RESOLUTION (WORST)       :', maxd
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE CTF RESOLUTION               :', avgd
+                write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF CTF RESOLUTION :', sdevd
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM CTF RESOLUTION (BEST)        :', mind
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM CTF RESOLUTION (WORST)       :', maxd
                 call build%spproj_field%stats('dfx', avgd, sdevd, vard, err )
                 call build%spproj_field%minmax('dfx', mind, maxd)
                 call build%spproj_field%stats('dfy', avgd2, sdevd2, vard2, err )
                 call build%spproj_field%minmax('dfy', mind2, maxd2)
-                write(*,'(a,1x,f8.2)') 'AVERAGE DF                           :', (avgd+avgd2)/2.
-                write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
-                write(*,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
-                write(*,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE DF                           :', (avgd+avgd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
                 goto 999
             endif
             if( params%classtats .eq. 'yes' )then
@@ -210,11 +210,11 @@ contains
                 popmax         = maxval(pops)
                 popmed         = median(real(pops))
                 call moment(real(pops), popave, popsdev, popvar, err)
-                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
-                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
-                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION :', popave
-                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION :', popsdev
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM POPULATION :', popmin
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM POPULATION :', popmax
+                write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  POPULATION :', popmed
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE POPULATION :', popave
+                write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION :', popsdev
                 ! produce a histogram of class populations
                 szmax = maxval(pops)
                 ! scale to max 50 *:s
@@ -222,9 +222,9 @@ contains
                 do while( nint(scale*szmax) > hlen )
                     scale = scale - 0.001
                 end do
-                write(*,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
+                write(logfhandle,'(a)') '>>> HISTOGRAM OF CLASS POPULATIONS'
                 do icls=1,ncls
-                    write(*,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
+                    write(logfhandle,*) pops(icls),"|",('*', j=1,nint(real(pops(icls)*scale)))
                 end do
             endif
             if( params%projstats .eq. 'yes' )then
@@ -241,13 +241,13 @@ contains
                 popmax         = maxval(pops)
                 popmed         = median(real(pops))
                 call moment(real(pops), popave, popsdev, popvar, err)
-                write(*,'(a)') '>>> STATISTICS BEFORE CLUSTERING'
-                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
-                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
-                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
-                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
-                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
+                write(logfhandle,'(a)') '>>> STATISTICS BEFORE CLUSTERING'
+                write(logfhandle,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
+                write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
+                write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! produce a histogram based on clustering into NSPACE_REDUCED even directions
                 ! first, generate a mask based on state flag and w
                 ptcl_mask = build%spproj_field%included(consider_w=.true.)
@@ -272,21 +272,21 @@ contains
                 popmax         = maxval(clustszs)
                 popmed         = median_nocopy(clustszs)
                 call moment(clustszs, popave, popsdev, popvar, err)
-                write(*,'(a)') '>>> STATISTICS AFTER CLUSTERING'
-                write(*,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
-                write(*,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
-                write(*,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
-                write(*,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
-                write(*,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
-                write(*,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
+                write(logfhandle,'(a)') '>>> STATISTICS AFTER CLUSTERING'
+                write(logfhandle,'(a,1x,f8.2)') 'FRAC POPULATED DIRECTIONS :', frac_populated
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM POPULATION        :', popmin
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM POPULATION        :', popmax
+                write(logfhandle,'(a,1x,f8.2)') 'MEDIAN  POPULATION        :', popmed
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE POPULATION        :', popave
+                write(logfhandle,'(a,1x,f8.2)') 'SDEV OF POPULATION        :', popsdev
                 ! scale to max 50 *:s
                 scale = 1.0
                 do while( nint(scale * popmax) > hlen )
                     scale = scale - 0.001
                 end do
-                write(*,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
+                write(logfhandle,'(a)') '>>> HISTOGRAM OF SUBSPACE POPULATIONS (FROM NORTH TO SOUTH)'
                 do icls=1,NSPACE_REDUCED
-                    write(*,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))
+                    write(logfhandle,*) nint(clustszs(icls)),"|",('*', j=1,nint(clustszs(icls)*scale))
                 end do
             endif
             if( params%trsstats .eq. 'yes' )then
@@ -294,10 +294,10 @@ contains
                 call build%spproj_field%minmax('x', mind, maxd)
                 call build%spproj_field%stats('y', avgd2, sdevd2, vard2, err )
                 call build%spproj_field%minmax('y', mind2, maxd2)
-                write(*,'(a,1x,f8.2)') 'AVERAGE TRS               :', (avgd+avgd2)/2.
-                write(*,'(a,1x,f8.2)') 'STANDARD DEVIATION OF TRS :', (sdevd+sdevd2)/2.
-                write(*,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
-                write(*,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE TRS               :', (avgd+avgd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF TRS :', (sdevd+sdevd2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
                 goto 999
             endif
         endif
@@ -385,8 +385,8 @@ contains
                 pops(closest) = pops(closest) + 1
             enddo
             maxpop = maxval(pops)
-            write(*,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
-            write(*,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
+            write(logfhandle,'(A,I6)')'>>> NUMBER OF POPULATED PROJECTION DIRECTIONS:', count(pops>0)
+            write(logfhandle,'(A,I6)')'>>> NUMBER OF EMPTY     PROJECTION DIRECTIONS:', count(pops==0)
             ! output
             fname = trim(params%fbody)//'.bild'
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname),iostat=io_stat)
@@ -480,8 +480,8 @@ contains
             call fclose(funit, errmsg="simple_commander_oris::exec_vizoris closing "//trim(fname))
             avg_geodist = avg_geodist / real(n-1)
             avg_euldist = avg_euldist / real(n-1)
-            write(*,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
-            write(*,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
+            write(logfhandle,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
+            write(logfhandle,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
         endif
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris

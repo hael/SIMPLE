@@ -346,11 +346,11 @@ contains
         integer :: i
         if( self%hash_index > 0 )then
             do i=1,self%hash_index-1,1
-                write(*,"(1X,A,A)", advance="no") trim(self%keys(i)%str), '='
-                write(*,"(A)", advance="no") trim(real2str(self%values(i)))
+                write(logfhandle,"(1X,A,A)", advance="no") trim(self%keys(i)%str), '='
+                write(logfhandle,"(A)", advance="no") trim(real2str(self%values(i)))
             end do
-            write(*,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)%str), '='
-            write(*,"(A)") trim(real2str(self%values(self%hash_index)))
+            write(logfhandle,"(1X,A,A)", advance="no") trim(self%keys(self%hash_index)%str), '='
+            write(logfhandle,"(A)") trim(real2str(self%values(self%hash_index)))
         endif
     end subroutine print
 

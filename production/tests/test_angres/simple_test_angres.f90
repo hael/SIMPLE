@@ -1,5 +1,6 @@
 program simple_test_angres
 use simple_oris, only: oris
+use simple_defs
 implicit none
 
 integer    :: i
@@ -8,10 +9,10 @@ type(oris) :: os
 do i=500,20000,500
     call os%new(i)
     call os%spiral
-    print *, i, os%find_angres()
+    write(logfhandle,*) i, os%find_angres()
 end do
 
-       !  500    9.15350437    
+       !  500    9.15350437
        !  1000   6.47799063
        !  1500   5.30222988
        !  2000   4.58571291

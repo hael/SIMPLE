@@ -66,7 +66,7 @@ contains
         type(ran_tabu) :: rt
         integer        :: tmp(nincl_ptcls)
         integer        :: iptcl, cnt
-        write(*,'(A)') '>>> GENERATING DIVERSE LABELLING'
+        write(logfhandle,'(A)') '>>> GENERATING DIVERSE LABELLING'
         rt = ran_tabu(nincl_ptcls)
         call rt%balanced(nlabels, tmp)
         cnt = 0
@@ -86,7 +86,7 @@ contains
         integer        :: tmp(nlabels), order(nptcls), config(nptcls)
         real           :: corrs(nptcls)
         integer        :: iptcl, s, ind
-        write(*,'(A)') '>>> GENERATING DIVERSE LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
+        write(logfhandle,'(A)') '>>> GENERATING DIVERSE LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
         config = 0
         corrs = os%get_all('corr')
         tmp   = (/(s,s=1,nlabels)/)
@@ -118,7 +118,7 @@ contains
         integer        :: tmp(nlabels), order(nptcls), config(nptcls), pops(nlabels)
         real           :: corrs(nptcls)
         integer        :: iptcl, s, ind
-        write(*,'(A)') '>>> GENERATING ranked'
+        write(logfhandle,'(A)') '>>> GENERATING ranked'
         ! even partitions
         pops = floor(real(nincl_ptcls)/real(nlabels))
         do s=1,nlabels
@@ -151,7 +151,7 @@ contains
         real           :: corrs(nptcls), rnincl
         integer        :: iptcl, s, ind, i
         logical        :: mask(nincl_ptcls)
-        write(*,'(A)') '>>> GENERATING simultaneous draw'
+        write(logfhandle,'(A)') '>>> GENERATING simultaneous draw'
         config = 0
         rnincl = real(nincl_ptcls)
         mask   = .true.
@@ -195,7 +195,7 @@ contains
         logical  :: mask(nptcls)
         real     :: areal
         integer  :: iptcl, s, n_drawn, ind, n_avail
-        write(*,'(A)') '>>> GENERATING SKEWED LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
+        write(logfhandle,'(A)') '>>> GENERATING SKEWED LABELLING WITH RESPECT TO OBJECTIVE FUNCTION'
         mask   = (states > 0) .and. (states <= nlabels)
         dists  = 1. - os%get_all('corr')
         config = 0
@@ -243,7 +243,7 @@ contains
         logical  :: mask(nptcls)
         real     :: areal
         integer  :: i,iptcl, cnt, s, n_avail, half_pop
-        write(*,'(A)') '>>> GENERATING MIXED UNIFORM & RANKED LABELLING'
+        write(logfhandle,'(A)') '>>> GENERATING MIXED UNIFORM & RANKED LABELLING'
         mask   = (states > 0) .and. (states <= nlabels)
         dists  = 1. - os%get_all('corr')
         config = 0

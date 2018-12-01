@@ -107,8 +107,8 @@ contains
                 else
                     call img_or_vol%bin_kmeans
                 endif
-                write(*,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
-                write(*,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
+                write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
+                write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
                 if( cline%defined('grow') )then
                     do igrow=1,params%grow
                         call img_or_vol%grow_bin
@@ -195,7 +195,7 @@ contains
                         call img%calc_gradient(grad)
                         call img%stats( ave, sdev, maxv, minv )
                         thresh(1) = ave + 0.7*sdev
-                        print *, 'Selected threshold: ', thresh
+                        write(logfhandle,*) 'Selected threshold: ', thresh
                         call sobel(img,thresh)
                         deallocate(grad)
                     else
@@ -470,9 +470,9 @@ contains
                     [params%clip,params%clip,1],smpd_new)
                 else
                     call resize_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,smpd_new)
-                    write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
+                    write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
                 endif
-                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
+                write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             else if( cline%defined('clip') )then
                 call del_file(params%outstk)
                 ! Clipping
@@ -504,7 +504,7 @@ contains
                 scale = real(params%newbox)/real(params%box)
                 params%box = params%newbox
                 smpd_new = params%smpd/scale
-                write(*,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
+                write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
             endif
             if( cline%defined('clip') )then
                 ! Clipping
@@ -517,7 +517,7 @@ contains
                 endif
                 call build%vol%copy(vol2)
             else
-                 write(*,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', params%newbox
+                 write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', params%newbox
             endif
             if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
         else if( cline%defined('filetab') )then
@@ -596,7 +596,7 @@ contains
         cnt = 0
         do ifile=1,nfiles
             if( .not. file_exists(filenames(ifile)) )then
-                write(*,*) 'inputted spec file does not exist: ', trim(adjustl(filenames(ifile)))
+                write(logfhandle,*) 'inputted spec file does not exist: ', trim(adjustl(filenames(ifile)))
             endif
             call find_ldim_nptcls(filenames(ifile),lfoo,nimgs)
             do iimg=1,nimgs
@@ -635,7 +635,7 @@ contains
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
         ! random selection
         if( cline%defined('nran') )then
-            write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+            write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
             allocate( pinds(params%nran), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('In: simple_commander; stackops',alloc_stat)
             rt = ran_tabu(params%nptcls)
@@ -845,7 +845,7 @@ contains
             goto 999
         endif
         ! default
-        write(*,*)'Nothing to do!'
+        write(logfhandle,*)'Nothing to do!'
         ! end gracefully
 999     call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops

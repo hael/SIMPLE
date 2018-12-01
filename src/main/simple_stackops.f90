@@ -18,10 +18,10 @@ contains
         integer, intent(in) :: ldim(3)  !< logical dimensions
         character(len=*)    :: routine  !< Error message caller
         if( n < 1 .or. any(ldim == 0) )then
-            write(*,*) routine
-            write(*,*) 'The input stack is corrupt!'
-            write(*,*) 'Number of images: ', n
-            write(*,*) 'Logical dimensions: ', ldim
+            write(logfhandle,*) routine
+            write(logfhandle,*) 'The input stack is corrupt!'
+            write(logfhandle,*) 'Number of images: ', n
+            write(logfhandle,*) 'Logical dimensions: ', ldim
             THROW_HARD('procimgfile exception')
         endif
     end subroutine raise_exception
@@ -42,9 +42,9 @@ contains
         call raise_exception( n, ldim, 'make_pattern_stack' )
         ldim_mask = [size(l_mask, dim=1),size(l_mask, dim=2),size(l_mask, dim=3)]
         if( .not. all(ldim_mask .eq. ldim) )then
-            write(*,*) 'ERROR! nonconforming matrix sizes'
-            write(*,*) 'ldim of image: ', ldim
-            write(*,*) 'ldim of mask : ', ldim_mask
+            write(logfhandle,*) 'ERROR! nonconforming matrix sizes'
+            write(logfhandle,*) 'ldim of image: ', ldim
+            write(logfhandle,*) 'ldim of mask : ', ldim_mask
             THROW_HARD('make_pattern_stack')
         endif
         ! build and initialise objects
@@ -63,7 +63,7 @@ contains
         call fopen(fnum, status='replace', action='readwrite', file=fnamePatterns,&
              access='direct', form='unformatted', recl=recsz, iostat=ier)
         call fileiochk('make_pattern_stack; simple_procimgfile', ier)
-        write(*,'(a)') '>>> MAKING PATTERN STACK'
+        write(logfhandle,'(a)') '>>> MAKING PATTERN STACK'
         do i=1,n
             call progress(i,n)
             call img%read(fnameStack, i)
@@ -99,7 +99,7 @@ contains
         call avg%new(ldim, smpd)
         call img%new(ldim, smpd)
         avg = 0.
-        write(*,'(a)') '>>> MAKING GLOBAL STACK AVERAGE'
+        write(logfhandle,'(a)') '>>> MAKING GLOBAL STACK AVERAGE'
         do i=1,n
             call progress(i,n)
             call img%read(fname, i)
@@ -127,7 +127,7 @@ contains
         call avg%new(ldim,smpd)
         cnt = 0
         cnt2 = 0
-        write(*,'(a)') '>>> AVERAGING FRAMES'
+        write(logfhandle,'(a)') '>>> AVERAGING FRAMES'
         do i=1,n
             call progress(i,n)
             cnt = cnt+1
@@ -157,7 +157,7 @@ contains
         ldim(3) = 1
         call raise_exception( n, ldim, 'acf_imgfile' )
         call img%new(ldim,1.)
-        write(*,'(a)') '>>> CALCULATING ACF:S OF THE IMAGES'
+        write(logfhandle,'(a)') '>>> CALCULATING ACF:S OF THE IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2acf, i)
@@ -181,7 +181,7 @@ contains
         call raise_exception( n, ldim, 'stats_imgfile' )
         call img%new(ldim,1.)
         call os%new(n)
-        write(*,'(a)') '>>> CALCULATING STACK STATISTICS'
+        write(logfhandle,'(a)') '>>> CALCULATING STACK STATISTICS'
         do i=1,n
             call progress(i,n)
             call img%read(fname,i)

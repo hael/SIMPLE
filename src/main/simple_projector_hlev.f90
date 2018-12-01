@@ -46,7 +46,7 @@ contains
         end do
         ! prepare for projection
         call vol_pad%expand_cmat(KBALPHA)
-        write(*,'(A)') '>>> GENERATES PROJECTIONS'
+        write(logfhandle,'(A)') '>>> GENERATES PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
         !$omp private(i,ithr) proc_bind(close)
         do i=1,n

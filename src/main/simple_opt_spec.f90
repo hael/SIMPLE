@@ -209,8 +209,8 @@ contains
                 if( .not. present(limits) ) THROW_HARD('need limits (variable bounds) for brute force search; specify')
                 if( .not. present(stepsz) ) THROW_HARD('need step sizes (stepsz) for brute force search; specify')
             case DEFAULT
-                write(*,*) 'Unsupported optimizer string descriptor:', str_opt
-                write(*,*) 'specify; simple_opt_spec'
+                write(logfhandle,*) 'Unsupported optimizer string descriptor:', str_opt
+                write(logfhandle,*) 'specify; simple_opt_spec'
         end select
         ! parse input data
         self%str_opt = str_opt
@@ -281,9 +281,9 @@ contains
         do i=1,self%ndim
             if(lims(i,2) >= lims(i,1)) then
             else
-                write(*,*) 'Bad limits for the constrained optimization!'
-                write(*,*) 'set_limits; simple_opt_spec'
-                write(*,*) 'Lim(',i,1,'):',lims(i,1),'Lim(',i,2,'):',lims(i,2)
+                write(logfhandle,*) 'Bad limits for the constrained optimization!'
+                write(logfhandle,*) 'set_limits; simple_opt_spec'
+                write(logfhandle,*) 'Lim(',i,1,'):',lims(i,1),'Lim(',i,2,'):',lims(i,2)
                 THROW_HARD('set_limit; opt_spec')
             endif
         end do
@@ -300,9 +300,9 @@ contains
         do i=1,self%ndim
             if(lims_init(i,2) >= lims_init(i,1)) then
             else
-                write(*,*) 'Bad limits for the constrained optimization!'
-                write(*,*) 'set_limits_init; simple_opt_spec'
-                write(*,*) 'Lim(',i,1,'):',lims_init(i,1),'Lim(',i,2,'):',lims_init(i,2)
+                write(logfhandle,*) 'Bad limits for the constrained optimization!'
+                write(logfhandle,*) 'set_limits_init; simple_opt_spec'
+                write(logfhandle,*) 'Lim(',i,1,'):',lims_init(i,1),'Lim(',i,2,'):',lims_init(i,2)
                 THROW_HARD('set_limit_inits; opt_spec')
             endif
         end do

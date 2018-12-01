@@ -124,21 +124,21 @@ contains
         integer :: i
         logical :: err
         type(online_var) :: owv, owv2
-        write(*,'(a)') '**info(simple_online_var_unit_test): testing all functionality'
+        write(logfhandle,'(a)') '**info(simple_online_var_unit_test): testing all functionality'
         do i=1,10000
             samples(i) = gasdev(5., 2.)
         end do
         call moment(samples, ave, sdev, var, err )
-        write(*,*) 'classical estimation, ave/sdev:', ave, sdev
+        write(logfhandle,*) 'classical estimation, ave/sdev:', ave, sdev
         do i=1,10000
             call owv%add(samples(i))
         end do
         call owv%finalize
         owv2 = owv
         mv = owv2%get_mean_var()
-        write(*,*) 'online estimation, ave/sdev:', mv(1), sqrt(mv(2))
+        write(logfhandle,*) 'online estimation, ave/sdev:', mv(1), sqrt(mv(2))
         if( abs(mv(1)-ave) < 0.005 .and. abs(sqrt(mv(2))-sdev) < 0.005 )then
-            write(*,'(a)') 'SIMPLE_ONLINE_var_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+            write(logfhandle,'(a)') 'SIMPLE_ONLINE_var_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
         endif
     end subroutine test_online_var
 

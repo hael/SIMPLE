@@ -13,14 +13,14 @@ contains
         ll_stop = .true.
         if( present(l_stop) ) ll_stop = l_stop
         if( ll_stop )then
-            write(OUTPUT_UNIT,'(A)', advance='no') 'ERROR! '//trim(msg)
+            write(logfhandle,'(A)', advance='no') 'ERROR! '//trim(msg)
         else
-            write(OUTPUT_UNIT,'(A)', advance='no') 'WARNING! '//trim(msg)
+            write(logfhandle,'(A)', advance='no') 'WARNING! '//trim(msg)
         endif
         if( l_distr_exec_glob )then
-            write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line, '; part: ', part_glob, ' of distributed execution'
+            write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line, '; part: ', part_glob, ' of distributed execution'
         else
-            write(OUTPUT_UNIT,'(A,I5)') '; '//trim(file)//'; line: ', line
+            write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
 #if defined(GNU) && defined(_DEBUG)
         call backtrace()
@@ -39,12 +39,12 @@ contains
         alloc_status=alloc_stat    !! global variable from simple_defs
         if(present(alloc_err))alloc_status=alloc_err
         if (alloc_status/=0)then
-            write(OUTPUT_UNIT,'(a)') 'ERROR: Allocation failure!'
+            write(logfhandle,'(a)') 'ERROR: Allocation failure!'
             call simple_error_check(alloc_status)
             if(present(iomsg))&
-                write(OUTPUT_UNIT,'("IO Message ",A)') trim(adjustl(iomsg))
+                write(logfhandle,'("IO Message ",A)') trim(adjustl(iomsg))
             if(present(file).and.present(line))&
-                write(OUTPUT_UNIT,'("Stopping in file ",/,A,/," at line ",I0)') file,line
+                write(logfhandle,'("Stopping in file ",/,A,/," at line ",I0)') file,line
             call simple_exception(message,__FILENAME__,__LINE__)
         endif
     end subroutine allocchk
@@ -54,11 +54,11 @@ contains
         character(len=*), optional, intent(in) :: msg
 
         !! Intel and GNU
-        if (io_stat==IOSTAT_END)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
-        if (io_stat==IOSTAT_EOR)  write(*,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
+        if (io_stat==IOSTAT_END)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOF reached, end-of-file reached IOS# ', io_stat
+        if (io_stat==IOSTAT_EOR)  write(logfhandle,'(a,1x,I0 )') 'ERRCHECK: EOR reached, read was short, IOS# ', io_stat
         if( io_stat /= 0 ) then
-            write(OUTPUT_UNIT,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat
-            if(present(msg)) write(OUTPUT_UNIT,'(a)') trim(adjustl(msg))
+            write(logfhandle,'(a,1x,I0 )') 'ERROR: IOS# ', io_stat
+            if(present(msg)) write(logfhandle,'(a)') trim(adjustl(msg))
             !! do not stop yet -- let the fopen/fclose call to finish
             !! stop
         endif

@@ -150,13 +150,13 @@ contains
         if(dir_exists(params%starfile))then
             call simple_list_files(trim(params%starfile)//'*.star', starfiles)
             nStarfiles = size(starfiles)
-            write(*,*) " Importing star project :", nStarfiles, " found "
+            write(logfhandle,*) " Importing star project :", nStarfiles, " found "
         else if(file_exists(params%starfile))then
             allocate(starfiles(1))
             starfiles(1)=trim(params%starfile)
             nStarfiles=1
         else
-            write(*,*) " "
+            write(logfhandle,*) " "
             THROW_HARD('Importing star project must have a valid input file, starfile=<filename|directory>')
         endif
         inputted_startype = cline%defined('startype')
@@ -195,8 +195,8 @@ contains
 
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
-            write(*,*) 'Project file: ', trim(params%projfile), ' does not exist!'
-            write(*,*)
+            write(logfhandle,*) 'Project file: ', trim(params%projfile), ' does not exist!'
+            write(logfhandle,*)
             THROW_HARD("exec_import_starproject; not in SIMPLE project dir. ")
         endif
         !! Read existing SIMPLE project
@@ -224,7 +224,7 @@ contains
 
         select case(params%startype)
         case('basic')
-           ! do nothing 
+           ! do nothing
 
            !! #IMPORT MICROGRAPHS
         case('m')
@@ -286,7 +286,7 @@ contains
 
         call spproj%write
         call spproj%kill
-        
+
         call starproj%kill
         call simple_end('**** import_starproject NORMAL STOP ****')
     end subroutine exec_import_starproject
@@ -299,7 +299,7 @@ contains
         type(parameters) :: params
         type(star_project) :: starproj
         call params%new(cline)
-        print *," Reading star-formatted file: ", trim(params%starfile)
+        write(logfhandle,*)" Reading star-formatted file: ", trim(params%starfile)
         call starproj%read(params%starfile)
         call starproj%print_info
         call starproj%kill

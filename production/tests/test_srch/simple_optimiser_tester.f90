@@ -34,16 +34,16 @@ contains
         logical, optional, intent(in)    :: be_verbose_here
         verbose_here = .false.
         if( present(be_verbose_here) ) verbose_here = be_verbose_here
-        write(*,*) '****optimiser_test, init'
+        write(logfhandle,*) '****optimiser_test, init'
         call test_bound_routine
         call test_all_optimizers
-        write(*,*) '****optimiser_test, completed'
+        write(logfhandle,*) '****optimiser_test, completed'
     end subroutine exec_optimiser_test
 
     subroutine test_bound_routine
         real           :: lims(2,2), vec(2)
         integer        :: i
-        if( verbose_here ) write(*,*) 'testing the bound routine'
+        if( verbose_here ) write(logfhandle,*) 'testing the bound routine'
         lims = 0.
         lims(1,2) = 360.
         lims(2,2) = 180.
@@ -150,8 +150,8 @@ contains
         nevals   = 0
         totfails = 0
         do i=1,NOPTS
-            write(*,*) ''
-            write(*,'(a,1x,a)') '>>> TESTING OPTIMIZER:', str_opts(i)
+            write(logfhandle,*) ''
+            write(logfhandle,'(a,1x,a)') '>>> TESTING OPTIMIZER:', str_opts(i)
             cnt = 0
             do j=1,NTESTS    ! restarts per optimizer
                 do k=1,nfuns ! nr of test functions
@@ -162,14 +162,14 @@ contains
             end do
             do k=1,nfuns ! nr of test functions
                 if( success(i,k) == NTESTS )then
-                    write(*,'(a,1x,a,1x,i2)') str_opts(i), '    always succeeds with function:', k
+                    write(logfhandle,'(a,1x,a,1x,i2)') str_opts(i), '    always succeeds with function:', k
                 else if( success(i,k) == 0         )then
                     totfails(i) = totfails(i)+1
-                    write(*,'(a,1x,a,1x,i2)') str_opts(i), '     never succeeds with function:', k
+                    write(logfhandle,'(a,1x,a,1x,i2)') str_opts(i), '     never succeeds with function:', k
                 else if( success(i,k) <  NTESTS/2 .and. success(i,k) >= 1  )then
-                    write(*,'(a,1x,a,1x,i2)') str_opts(i), ' sometimes succeeds with function:', k
+                    write(logfhandle,'(a,1x,a,1x,i2)') str_opts(i), ' sometimes succeeds with function:', k
                 else if( success(i,k) >= NTESTS/2  )then
-                    write(*,'(a,1x,a,1x,i2)') str_opts(i), '     often succeeds with function:', k
+                    write(logfhandle,'(a,1x,a,1x,i2)') str_opts(i), '     often succeeds with function:', k
                 else
                     print *, 'weird success:', success(i,k)
                 endif
@@ -184,10 +184,10 @@ contains
             endif
         end do
         ! print results
-        write(*,*) ''
-        write(*,'(a)') '>>> TEST RESULTS'
+        write(logfhandle,*) ''
+        write(logfhandle,'(a)') '>>> TEST RESULTS'
         do i=1,NOPTS
-            write(*,'(a,f4.0,a,f4.0,a,f4.0)') str_opts(i)//' successes: ',&
+            write(logfhandle,'(a,f4.0,a,f4.0,a,f4.0)') str_opts(i)//' successes: ',&
             100.*(sum(success(i,:))/real(NTESTS*nfuns)), ' totfailures: ', 100.*totfails(i)/real(nfuns),&
             ' nevals: ', 100.*real(sum(nevals(i,:)))/(real(NTESTS*nfuns)*maxeval)
         end do
@@ -246,8 +246,8 @@ contains
         if( dist < 1e-4 .and. abs(lowest_cost) < 1e-9 )then
             ! test passed
         else
-            write(*,*) 'dist from global opt (0,0): ', dist
-            write(*,*) 'cost obtained (lowest=0):   ', lowest_cost
+            write(logfhandle,*) 'dist from global opt (0,0): ', dist
+            write(logfhandle,*) 'cost obtained (lowest=0):   ', lowest_cost
             THROW_HARD('****optimiser_test FAILURE opt_bforce')
         endif
     end subroutine simple_test_opt_bforce

@@ -8,7 +8,7 @@
 !!     integer(8)  :: tn;
 !!     tn = tic()
 !!     ...
-!!     write(*,'(A,F20.10)') ">>> Elapsed time (sec) ", toc()
+!!     write(logfhandle,'(A,F20.10)') ">>> Elapsed time (sec) ", toc()
 !!
 !! \author Michael Eager 2017
 !! REVISIONS:
@@ -144,7 +144,7 @@ end function cast_time_char
    subroutine now
       character(len=8)  :: date
       character(len=10) :: time
-      print *, "System_clock: ", tic()
+      write(logfhandle,*) "System_clock: ", tic()
       call date_and_time(date, time)
       write (*, '(A,A,A,A,A,A,A)') 'Date: ', date(7:8), '-', date(5:6), '-', date(1:4), '\n'
       write (*, '(A,A,A,A,A,A,A)') 'Time: ', time(1:2), ':', time(3:4), ':', time(5:10), '\n'
@@ -157,7 +157,7 @@ end function cast_time_char
    logical function in_timer_loop()
       in_timer_loop = .false.
       if (.not. in_loop) then
-         print *, "Failed timer_loop: Timer loop did not start"
+         write(logfhandle,*) "Failed timer_loop: Timer loop did not start"
       else
          if (idx_elapsed .lt. num_elapsed) then
             elapsed_times(idx_elapsed) = toc()
@@ -196,7 +196,7 @@ DebugPrint 'Size of elapsed array ', size(elapsed_times)
          end if
       end if
       if (.not. in_loop) then
-         print *, "Failed timer_loop_end: Timer loop did not start"
+         write(logfhandle,*) "Failed timer_loop_end: Timer loop did not start"
       else
          write (*, '(A,A)') "******* TIMER LOOP ", trim(strcomment)
          write (*, '(A,1i8)') '*** Iterations:  ', num_elapsed

@@ -40,8 +40,8 @@ type(parameters)       :: params
 integer, dimension(3)  :: ldim
 
 if( command_argument_count() < 1 )then
-    write(*,'(a)',advance='no') 'simple_test_chiara_ctf2 smpd=<sampling distance(in A)>'
-    write(*,'(a)')              ' [kv=<acceleration voltage(in kV){300.}>] [fraca=<fraction &
+    write(logfhandle,'(a)',advance='no') 'simple_test_chiara_ctf2 smpd=<sampling distance(in A)>'
+    write(logfhandle,'(a)')              ' [kv=<acceleration voltage(in kV){300.}>] [fraca=<fraction &
         & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
     stop
 endif
@@ -89,8 +89,8 @@ end program simple_chiara_ctf
 !type(ctf)              :: tfun
 !type(parameters)       :: params
 !if( command_argument_count() < 1 )then
-!    write(*,'(a)',advance='no') 'simple_test_chiara_ctf2 smpd=<sampling distance(in A)>'
-!    write(*,'(a)')              ' [kv=<acceleration voltage(in kV){300.}>] [fraca=<fraction &
+!    write(logfhandle,'(a)',advance='no') 'simple_test_chiara_ctf2 smpd=<sampling distance(in A)>'
+!    write(logfhandle,'(a)')              ' [kv=<acceleration voltage(in kV){300.}>] [fraca=<fraction &
 !                                & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
 !    stop
 !endif

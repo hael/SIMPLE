@@ -48,7 +48,7 @@ contains
         logical            :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
-            write(*,*) 'inputted movie stack does not exist: ', trim(moviename)
+            write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
         endif
         ! make filenames
         fbody_here = basename(trim(moviename))
@@ -67,7 +67,7 @@ contains
             &//int2str(params_glob%tof)//INTGMOV_SUFFIX//params_glob%ext
         endif
         ! check, increment counter & print
-        write(*,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
+        write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
         if( params_glob%nframesgrp > 0 )then
             self%moviename = 'tmpnframesgrpmovie'//params_glob%ext

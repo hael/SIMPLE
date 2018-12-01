@@ -19,8 +19,6 @@ use simple_magic_boxes
 use simple_map_reduce
 use simple_sauron
 !! General data structures
-use simple_arr,       only: arr
-use simple_sll,       only: sll
 use simple_hash,      only: hash
 use simple_chash,     only: chash
 use simple_ran_tabu,  only: ran_tabu

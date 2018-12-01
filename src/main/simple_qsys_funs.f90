@@ -22,7 +22,6 @@ contains
         ! single files
         call del_file('FOO')
         call del_file('fort.0')
-        call del_file('ftab_from_sys_find_last_fname.txt')
         call del_file('VOLASSEMBLE')
         call del_file('CAVGASSEMBLE')
         call del_file('SYMSRCH')
@@ -35,6 +34,8 @@ contains
         call del_files('algndoc_',                       params_glob%nparts, ext=trim(METADATA_EXT))
         call del_files('JOB_FINISHED_',                  params_glob%nparts)
         if(nokeep)call del_files('distr_simple_script_', params_glob%nparts)
+        ! flush the log filehandle to avoid delayed printing
+        call flush(logfhandle)
     end subroutine qsys_cleanup
 
     !>  Writes the JOB_FINISHED_* file to mark end of computing unit job

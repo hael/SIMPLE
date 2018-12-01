@@ -180,7 +180,7 @@ contains
             if( params%oritab /= '' ) call binread_oritab(params%oritab,              self%spproj, self%spproj_field, [1,params%nptcls])
         endif
         if( .not. associated(build_glob) ) build_glob => self
-        write(*,'(A)') '>>> DONE BUILDING SP PROJECT'
+        write(logfhandle,'(A)') '>>> DONE BUILDING SP PROJECT'
     end subroutine build_spproj
 
     subroutine build_general_tbox( self, params, cline, do3d )
@@ -250,7 +250,7 @@ contains
         endif
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
     end subroutine build_general_tbox
 
     subroutine kill_general_tbox( self )
@@ -288,7 +288,7 @@ contains
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%rec_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_tbox
 
     subroutine kill_rec_tbox( self )
@@ -309,7 +309,7 @@ contains
         call self%projfrcs%new(NSPACE_REDUCED, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%eo_rec_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING EO RECONSTRUCTION TOOLBOX'
     end subroutine build_rec_eo_tbox
 
     subroutine kill_rec_eo_tbox( self )
@@ -335,7 +335,7 @@ contains
         call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
     end subroutine build_strategy2D_tbox
 
     subroutine kill_strategy2D_tbox( self )
@@ -370,7 +370,7 @@ contains
         endif
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy3D_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY3D TOOLBOX'
     end subroutine build_strategy3D_tbox
 
     subroutine kill_strategy3D_tbox( self )
@@ -407,7 +407,7 @@ contains
         if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         if( .not. associated(build_glob) ) build_glob => self
         self%extremal3D_tbox_exists = .true.
-        write(*,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
+        write(logfhandle,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
     end subroutine build_extremal3D_tbox
 
     subroutine kill_extremal3D_tbox( self )

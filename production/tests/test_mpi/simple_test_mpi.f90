@@ -66,7 +66,7 @@ contains
         call MPI_COMM_SIZE(MPI_COMM_WORLD, size, ierr)
         call MPI_GET_LIBRARY_VERSION(version, len,ierr)
 
-        write(*, '("Hello, world, I am ", i2, " of ", i2, ": ", a)') &
+        write(logfhandle, '("Hello, world, I am ", i2, " of ", i2, ": ", a)') &
             rank, size, version
 
         !       call MPI_FINALIZE()
@@ -97,10 +97,10 @@ contains
         if (rank .eq. 0) then
             message = 10
 
-            write(*, '("Process 0 sending ", i2, " to ", i2, " tag ", i3, " (", i2, " processes in ring)")') &
+            write(logfhandle, '("Process 0 sending ", i2, " to ", i2, " tag ", i3, " (", i2, " processes in ring)")') &
                 &message, next, tag, size
             call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD,ierr)
-            write(*, '("Process 0 sent to ", i2)') next
+            write(logfhandle, '("Process 0 sent to ", i2)') next
         endif
 
         ! Pass the message around the ring.  The exit mechanism works as
@@ -116,13 +116,13 @@ contains
 
         if (rank .eq. 0) then
             message = message - 1
-            write(*, '("Process 0 decremented value: ", i2)') message
+            write(logfhandle, '("Process 0 decremented value: ", i2)') message
         endif
 
         call MPI_SEND(message, 1, MPI_INTEGER, next, tag, MPI_COMM_WORLD,ierr)
 
         if (message .eq. 0) then
-            write(*, '("Process ", i2, " exiting")') rank
+            write(logfhandle, '("Process ", i2, " exiting")') rank
             goto 20
         endif
         goto 10

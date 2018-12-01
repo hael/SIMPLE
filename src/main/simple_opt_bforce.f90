@@ -62,7 +62,7 @@ contains
         DebugPrint  'did set best and current point'
         ! set best cost
         self%yb     = spec%costfun(fun_self, self%pb, spec%ndim)
-        if( debug ) write(*,'(a,1x,f7.3)') 'Initial cost:', self%yb
+        if( debug ) write(logfhandle,'(a,1x,f7.3)') 'Initial cost:', self%yb
         spec%nevals = spec%nevals+1
         ! search: we will start at the lowest value for each dimension, then
         ! go in steps of stepsz until we get to the upper bounds

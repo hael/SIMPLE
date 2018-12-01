@@ -64,7 +64,7 @@ contains
         allocate(self%pop(spec%npop,spec%ndim), self%costs(spec%npop), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: new_de; simple_opt_de",alloc_stat)
         self%exists = .true. ! indicates existence
-        if( spec%DEBUG ) write(*,*) 'created new differential evolution population'
+        if( spec%DEBUG ) write(logfhandle,*) 'created new differential evolution population'
     end subroutine new_de
 
     !> \brief  is the differential evolution minimization routine

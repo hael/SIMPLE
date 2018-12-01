@@ -3,7 +3,7 @@ use, intrinsic :: iso_fortran_env
 use, intrinsic :: iso_c_binding
 use simple_defs_fname
 implicit none
-integer,  parameter :: MAXS         = 99   !< maximum number of states
+integer,  parameter :: MAXS         = 99 !< maximum number of states
 integer,  parameter :: short        = selected_int_kind(4)
 integer,  parameter :: long         = selected_int_kind(9)
 integer,  parameter :: longer       = selected_int_kind(16)
@@ -11,7 +11,7 @@ integer,  parameter :: I4B          = selected_int_kind(9)
 integer,  parameter :: I2B          = selected_int_kind(4)
 integer,  parameter :: I1B          = selected_int_kind(2)
 integer,  parameter :: SP           = kind(1.0)
-integer,  parameter :: DP           = selected_real_kind(8) !kind(1.0d0)
+integer,  parameter :: DP           = selected_real_kind(8) ! kind(1.0d0)
 integer,  parameter :: DOUBLE       = kind(1.0d0)
 integer,  parameter :: SPC          = kind((1.0,1.0))
 integer,  parameter :: DPC          = kind((1.0d0,1.0d0))
@@ -33,7 +33,10 @@ real(dp), parameter :: DSMALL       = 1e-6
 real(dp), parameter :: PISQR        = DPI*DPI
 
 ! directory-based execution model
-character(len=:), allocatable :: CWD_GLOB_ORIGINAL, CWD_GLOB
+character(len=:), allocatable :: cwd_glob_orig, cwd_glob
+character(len=*), parameter   :: LOGFNAME   = 'simple.log' !< log file name
+integer                       :: logfhandle = OUTPUT_UNIT  !< log file handle, default to STDOUT
+logical, parameter            :: STDOUT2LOG = .false.
 
  ! other global variables
 integer                       :: nthr_glob         !< number of threads global variable
@@ -47,6 +50,7 @@ type ctfplan
    character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
    logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
 end type ctfplan
+
 ! type for arrays of allocatable strings
 type str4arr
     character(len=:), allocatable :: str
@@ -93,6 +97,7 @@ enum, bind(c)
     enumerator :: PROJINFO_SEG=11, JOBPROC_SEG=12, COMPENV_SEG=13
 end enum
 integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG
+
 ! export (to STAR) type enumeration
 enum, bind(c)
     enumerator :: ENUM_STARTYPE = 0

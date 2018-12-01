@@ -57,12 +57,12 @@ contains
         self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
-        write(*,'(A,1X,F7.4)') '>>> CLASS OVERLAP:            ', self%mi_class
-        write(*,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:   ', avg_updatecnt
-        write(*,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):  ', self%dist_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:', self%bfac
-        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:   ', self%frac
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION:              ', self%corr
+        write(logfhandle,'(A,1X,F7.4)') '>>> CLASS OVERLAP:            ', self%mi_class
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:   ', avg_updatecnt
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):  ', self%dist_inpl
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:', self%bfac
+        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:   ', self%frac
+        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:              ', self%corr
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -83,16 +83,16 @@ contains
                 if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
             endif
             if( converged )then
-                write(*,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
             else
-                write(*,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
             endif
         else
             if( self%dist_inpl < 0.5 )then
-                write(*,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
-                write(*,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
                 converged = .false.
             endif
         endif
@@ -124,23 +124,23 @@ contains
         self%bfac_rec  = 0.
         bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
         if( bfac_rec_there ) self%bfac_rec = build_glob%spproj_field%get_avg('bfac_rec')
-        write(*,'(A,1X,F7.4)') '>>> ORIENTATION OVERLAP:               ', self%mi_proj
-        write(*,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:            ', avg_updatecnt
+        write(logfhandle,'(A,1X,F7.4)') '>>> ORIENTATION OVERLAP:               ', self%mi_proj
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:            ', avg_updatecnt
         if( params_glob%nstates > 1 )then
-        write(*,'(A,1X,F7.4)') '>>> STATE OVERLAP:                     ', self%mi_state
+        write(logfhandle,'(A,1X,F7.4)') '>>> STATE OVERLAP:                     ', self%mi_state
         endif
-        write(*,'(A,1X,F7.1)') '>>> AVG DIST BTW BEST ORIS (DEG):      ', self%dist
-        write(*,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST      (DEG):      ', self%dist_inpl
-        write(*,'(A,1X,F7.1)') '>>> AVG # PEAKS:                       ', self%npeaks
-        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (SEARCH):', self%bfac
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG DIST BTW BEST ORIS (DEG):      ', self%dist
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST      (DEG):      ', self%dist_inpl
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PEAKS:                       ', self%npeaks
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (SEARCH):', self%bfac
         if( bfac_rec_there )then
-        write(*,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (REC):   ', self%bfac_rec
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (REC):   ', self%bfac_rec
         endif
-        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-        write(*,'(A,1X,F7.2)') '>>> ANGULAR SPREAD (DEG):              ', self%spread
-        write(*,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCREMENT:      ', self%shwmean
-        write(*,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCR STDEV:     ', self%shwstdev
+        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
+        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
+        write(logfhandle,'(A,1X,F7.2)') '>>> ANGULAR SPREAD (DEG):              ', self%spread
+        write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCREMENT:      ', self%shwmean
+        write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCR STDEV:     ', self%shwstdev
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
@@ -157,10 +157,10 @@ contains
         if( params_glob%nstates == 1 )then
             if( self%frac    > FRAC_LIM       .and.&
                 self%mi_proj > MI_CLASS_LIM_3D )then
-                write(*,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
-                write(*,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
                 converged = .false.
             endif
         else
@@ -182,16 +182,16 @@ contains
             min_state_mi_joint = minval(state_mi_joint, mask=statepops>0.)
             ! print the overlaps and pops for the different states
             do istate=1,params_glob%nstates
-                write(*,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
+                write(logfhandle,'(A,1X,I3,1X,A,1X,F7.4,1X,A,1X,I8)') '>>> STATE', istate,&
                 'JOINT DISTRIBUTION OVERLAP:', state_mi_joint(istate), 'POPULATION:', nint(statepops(istate))
             end do
             if( min_state_mi_joint > MI_STATE_JOINT_LIM .and.&
                 self%mi_state      > MI_STATE_LIM .and.&
                 self%frac          > FRAC_LIM      )then
-                write(*,'(A)') '>>> CONVERGED: .YES.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
-                write(*,'(A)') '>>> CONVERGED: .NO.'
+                write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
                 converged = .false.
             endif
             deallocate( state_mi_joint, statepops )
@@ -208,8 +208,8 @@ contains
         integer           :: iptcl, istate
         self%frac      = build_glob%spproj_field%get_avg('frac')
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        write(*,'(A,1X,F7.4)') '>>> STATE OVERLAP:                ', self%mi_state
-        write(*,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:       ', self%frac
+        write(logfhandle,'(A,1X,F7.4)') '>>> STATE OVERLAP:                ', self%mi_state
+        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:       ', self%frac
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(params_glob%nstates) )
@@ -221,20 +221,20 @@ contains
         end do
         if( build_glob%spproj_field%isthere('bfac') )then
             self%bfac = build_glob%spproj_field%get_avg('bfac')
-            write(*,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:', self%bfac
+            write(logfhandle,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:', self%bfac
         endif
         self%corr = build_glob%spproj_field%get_avg('corr')
-        write(*,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
+        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
         ! print the overlaps and pops for the different states
         do istate=1,params_glob%nstates
-            write(*,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
+            write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
             self%frac     > HET_FRAC_LIM     )then
-            write(*,'(A)') '>>> CONVERGED: .YES.'
+            write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
             converged = .true.
         else
-            write(*,'(A)') '>>> CONVERGED: .NO.'
+            write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
             converged = .false.
         endif
         deallocate( statepops )

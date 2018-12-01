@@ -877,7 +877,7 @@ contains
         integer          :: mode
         if( self%existence )then
             if( .not. file_exists(fname) )then
-                print *, 'file: ', trim(fname)
+                write(logfhandle,*) 'file: ', trim(fname)
                 THROW_HARD('The file you are trying to open does not exists; open')
             endif
             if( present(formatchar) )then
@@ -936,7 +936,7 @@ contains
         case('M', 'F', 'S')
             call self%open(fname, ioimg, formatchar, readhead, rwaction='READ')
         case DEFAULT
-            write(*,*) 'Trying to read from file: ', trim(fname)
+            write(logfhandle,*) 'Trying to read from file: ', trim(fname)
             THROW_HARD('unsupported file format; read')
         end select
         call exception_handler(ioimg)
@@ -972,8 +972,8 @@ contains
                 ! make sure that the logical image dimensions of self are consistent with the overall header
                 ldim = ioimg%getDims()
                 if( .not. all(ldim(1:2) == self%ldim(1:2)) )then
-                    write(*,*) 'ldim of image object: ', self%ldim
-                    write(*,*) 'ldim in ioimg (fhandle) object: ', ldim
+                    write(logfhandle,*) 'ldim of image object: ', self%ldim
+                    write(logfhandle,*) 'ldim in ioimg (fhandle) object: ', ldim
                     THROW_HARD('logical dims of overall header & image object do not match; read')
                 endif
             endif
@@ -1021,7 +1021,7 @@ contains
                 endif
                 if( iform == -21 .or. iform == -22 ) self%ft = .true.
             case DEFAULT
-                write(*,*) 'iform = ', iform
+                write(logfhandle,*) 'iform = ', iform
                 THROW_HARD('unsupported iform flag; read')
             end select
         end subroutine spider_exception_handler
@@ -1115,7 +1115,7 @@ contains
                 endif
                 call ioimg%setIform(iform)
             case DEFAULT
-                write(*,*) 'format descriptor: ', form
+                write(logfhandle,*) 'format descriptor: ', form
                 THROW_HARD('unsupported file format; write')
             end select
             ! work out the slice range
@@ -1471,12 +1471,12 @@ contains
 
     subroutine print_cmat( self )
         class(image), intent(in) :: self
-        print *, self%cmat
+        write(logfhandle,*) self%cmat
     end subroutine print_cmat
 
     subroutine print_rmat( self )
         class(image), intent(in) :: self
-        print *, self%rmat
+        write(logfhandle,*) self%rmat
     end subroutine print_rmat
 
     !>  \brief  expand_ft is for getting a Fourier plane using the old SIMPLE logics
@@ -1525,8 +1525,8 @@ contains
             self%rmat = 0.
             self%rmat(:ldim(1),:ldim(2),:ldim(3)) = rmat
         else
-            write(*,*) 'ldim(rmat): ', ldim
-            write(*,*) 'ldim(img): ', self%ldim
+            write(logfhandle,*) 'ldim(rmat): ', ldim
+            write(logfhandle,*) 'ldim(img): ', self%ldim
             THROW_HARD('nonconforming dims; set_rmat')
         endif
     end subroutine set_rmat
@@ -1544,8 +1544,8 @@ contains
             self%cmat = cmplx(0.,0.)
             self%cmat(:cdim(1),:cdim(2),:cdim(3)) = cmat
         else
-            write(*,*) 'dim(cmat): ', cdim
-            write(*,*) 'dim(self%cmat): ', self%array_shape
+            write(logfhandle,*) 'dim(cmat): ', cdim
+            write(logfhandle,*) 'dim(self%cmat): ', self%array_shape
             THROW_HARD('nonconforming dims; set_cmat')
         endif
     end subroutine set_cmat
@@ -1665,9 +1665,9 @@ contains
             sz     = size(pcavec)
             sz_msk = count(l_msk)
             if( sz /= sz_msk )then
-                write(*,*) 'ERROR! Nonconforming sizes'
-                write(*,*) 'sizeof(pcavec): ', sz
-                write(*,*) 'sizeof(l_msk) : ', sz_msk
+                write(logfhandle,*) 'ERROR! Nonconforming sizes'
+                write(logfhandle,*) 'sizeof(pcavec): ', sz
+                write(logfhandle,*) 'sizeof(l_msk) : ', sz_msk
                 THROW_HARD('unserialize')
             endif
         else
@@ -3288,7 +3288,7 @@ contains
               enddo
             enddo
         else
-            write(*,*) 'label ', label, 'cc selected not present; is_cc_closed'
+            write(logfhandle,*) 'label ', label, 'cc selected not present; is_cc_closed'
             yes_no = .false.
             return
         endif
@@ -3489,7 +3489,7 @@ contains
         do k=1,lfny
             plot(k,1) = 1./(self%get_lp(k)**2.)
             plot(k,2) = log(spec(k))
-            write(*,'(A,1X,F8.4,1X,A,1X,F7.3)') '>>> RECIPROCAL SQUARE RES:', plot(k,1), '>>> LOG(ABS(REAL(F))):', plot(k,2)
+            write(logfhandle,'(A,1X,F8.4,1X,A,1X,F7.3)') '>>> RECIPROCAL SQUARE RES:', plot(k,1), '>>> LOG(ABS(REAL(F))):', plot(k,2)
         end do
         deallocate(spec)
     end function guinier
@@ -3631,7 +3631,7 @@ contains
                 end do
             end do
         case DEFAULT
-            write(*,*) 'Spectrum kind: ', trim(which)
+            write(logfhandle,*) 'Spectrum kind: ', trim(which)
             THROW_HARD('Unsupported spectrum kind; spectrum')
         end select
         if( which .ne. 'count' .and. nnorm )then
@@ -4403,7 +4403,7 @@ contains
       rmat = img_p%get_rmat()
       call img_p%kill
       allocate(NL_image(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2)), source = 0.)
-      print *, '-------------------NL MEAN FILTERING-------------------'
+      write(logfhandle,*) '-------------------NL MEAN FILTERING-------------------'
       do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
         call progress(m-cfr_box,self%ldim(1) -2*cfr_box)
         do n = cfr_box+1,self%ldim(2)-cfr_box-1
@@ -4714,7 +4714,7 @@ end subroutine NLmean
         end do
         !$omp end parallel do
         if( n_nans > 0 )then
-            write(*,*) 'found NaNs in simple_image; cure:', n_nans
+            write(logfhandle,*) 'found NaNs in simple_image; cure:', n_nans
         endif
         ave       = ave/real(npix)
         maxv      = maxval( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) )
@@ -5051,8 +5051,8 @@ end subroutine NLmean
             if( didft1 ) call self1%ifft()
             if( didft2 ) call self2%ifft()
         else
-            write(*,*) 'self1%ldim:', self1%ldim
-            write(*,*) 'self2%ldim:', self2%ldim
+            write(logfhandle,*) 'self1%ldim:', self1%ldim
+            write(logfhandle,*) 'self2%ldim:', self2%ldim
             THROW_HARD('images to be correlated need to have same dimensions; corr')
         endif
     end function corr
@@ -5912,7 +5912,7 @@ end subroutine NLmean
       if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
       if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
       &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
-        print *, 'The window is out of the border of the image!'
+        write(logfhandle,*) 'The window is out of the border of the image!'
         return    !Do not throw error, just do not draw
       endif
       ! Edges of the window
@@ -6114,8 +6114,8 @@ end subroutine NLmean
         logical :: didft
         complex :: comp
         if( .not.(self.eqdims.img) )then
-            print *, 'self%ldim: ', self%ldim
-            print *, 'img%ldim:  ', img%ldim
+            write(logfhandle,*) 'self%ldim: ', self%ldim
+            write(logfhandle,*) 'img%ldim:  ', img%ldim
             THROW_HARD('non-equal dims; ft2img')
         endif
         didft = .false.
@@ -6162,8 +6162,8 @@ end subroutine NLmean
         integer :: h,k,l,lims(3,2),logi(3),phys(3)
         integer :: xcnt,ycnt,zcnt
         if( .not.(self.eqdims.img) )then
-            print *, 'self%ldim: ', self%ldim
-            print *, 'img%ldim:  ', img%ldim
+            write(logfhandle,*) 'self%ldim: ', self%ldim
+            write(logfhandle,*) 'img%ldim:  ', img%ldim
             THROW_HARD('non-equal dims; img2ft')
         endif
         call img%zero_and_flag_ft
@@ -6347,7 +6347,7 @@ end subroutine NLmean
                 endif
             endif
         else
-            write(*,*) 'ldim: ', self%ldim
+            write(logfhandle,*) 'ldim: ', self%ldim
             THROW_HARD('even dimensions assumed; shift_phorig')
         endif
     end subroutine shift_phorig
@@ -6779,7 +6779,7 @@ end subroutine NLmean
                 end do
             end do
         else
-            write(*,'(a)') 'Mode needs to be either x, y or z; mirror; simple_image'
+            write(logfhandle,'(a)') 'Mode needs to be either x, y or z; mirror; simple_image'
         endif
         if( didft ) call self%fft()
     end subroutine mirror
@@ -7264,11 +7264,11 @@ end subroutine NLmean
     !>  \brief  is the image class unit test
     subroutine test_image( doplot )
         logical, intent(in)  :: doplot
-        write(*,'(a)') '**info(simple_image_unit_test): testing square dimensions'
+        write(logfhandle,'(a)') '**info(simple_image_unit_test): testing square dimensions'
         call test_image_local( 100, 100, 100, doplot )
-        !        write(*,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
+        !        write(logfhandle,'(a)') '**info(simple_image_unit_test): testing non-square dimensions'
         !        call test_image_local( 120, 90, 80, doplot )
-        write(*,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        write(logfhandle,'(a)') 'SIMPLE_IMAGE_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
     contains
 
@@ -7284,14 +7284,14 @@ end subroutine NLmean
             real                 :: smpd=2.
             logical              :: passed, test(6)
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 1): testing basal constructors'
             call img%new([ld1,ld2,1], 1.)
             call img_3%new([ld1,ld2,1], 1.)
             call img3d%new([ld1,ld2,ld3], 1.)
             if( .not. img%exists() )   THROW_HARD('ERROR, in constructor or in exists function, 1')
             if( .not. img3d%exists() ) THROW_HARD('ERROR, in constructor or in exists function, 2')
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 2): testing getters/setters'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 2): testing getters/setters'
             passed = .true.
             cnt = 1
             do i=1,ld1
@@ -7309,7 +7309,7 @@ end subroutine NLmean
             end do
             if( .not. passed )  THROW_HARD('getters/setters test failed')
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 4): testing checkups'
             img_2 = img
             test(1) = img%even_dims()
             if( ld1 == ld2 )then
@@ -7323,12 +7323,12 @@ end subroutine NLmean
             test(6) = .not. img%is_3d()
             passed = all(test)
             if( .not. passed ) then
-                write(*,*) ""
-                print *, ' checkups ', test
-                write(*,*) ""
+                write(logfhandle,*) ""
+                write(logfhandle,*) ' checkups ', test
+                write(logfhandle,*) ""
                 THROW_HARD('checkups test failed')
             endif
-            write(*,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 6): testing stats'
             passed = .false.
             call img%gauran( 5., 15. )
             call img%stats( 'foreground', ave, sdev, maxv, minv, 40., med )
@@ -7336,7 +7336,7 @@ end subroutine NLmean
                 sdev <= 16. .and. med >= 4. .and. med <= 6. ) passed = .true.
             if( .not. passed )  THROW_HARD('stats test failed')
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 9): testing lowpass filter'
             call img%square( 10 )
             if( doplot ) call img%vis
             call img%bp(0., 5.)
@@ -7348,7 +7348,7 @@ end subroutine NLmean
             call img%bp(0., 30.)
             if( doplot ) call img%vis
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 10): testing spherical mask'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 10): testing spherical mask'
             call img%ran
             if( doplot ) call img%vis
             call img%mask(35.,'hard')
@@ -7357,7 +7357,7 @@ end subroutine NLmean
             call img%mask(35.,'soft')
             if( doplot ) call img%vis
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 13): testing bicubic rots'
             cnt = 0
             call img_3%square(20)
             if( ld1 == ld2 )then
@@ -7369,7 +7369,7 @@ end subroutine NLmean
                 end do
             endif
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 14): testing binary imgproc routines'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 14): testing binary imgproc routines'
             passed = .false.
             call img%gauimg(20)
             call img%norm_bin
@@ -7384,7 +7384,7 @@ end subroutine NLmean
             end do
             if( doplot ) call img%vis
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 15): testing auto correlation function'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 15): testing auto correlation function'
             call img%square( 10 )
             if( doplot ) call img%vis
             call img%acf
@@ -7395,7 +7395,7 @@ end subroutine NLmean
             call img%acf
             if( doplot ) call img%vis
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 16): testing correlation functions'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 16): testing correlation functions'
             passed = .false.
             ldim = [100,100,1]
             call img%new(ldim, smpd)
@@ -7409,7 +7409,7 @@ end subroutine NLmean
             if( corr > 0.96 .and. corr < 0.98 .and. corr_lp > 0.96 .and. corr_lp < 0.98 ) passed = .true.
             if( .not. passed ) THROW_HARD('corr test failed')
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 17): testing downscaling'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 17): testing downscaling'
             if( ld1 == ld2 )then
                 call img%gauimg(20)
                 if( doplot )  call img%vis
@@ -7417,14 +7417,14 @@ end subroutine NLmean
             endif
 
             if( img%square_dims() .and. nthr_glob > 2 )then
-                write(*,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
+                write(logfhandle,'(a)') '**info(simple_image_unit_test, part 19): testing rotational averager'
                 call img%square( 10 )
                 if( doplot ) call img%vis
                 call img%roavg(5,img_2)
                 if( doplot ) call img_2%vis
             endif
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 20): testing the read/write capabilities'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 20): testing the read/write capabilities'
             ! create a square
             ldim = [120,120,1]
             call img%new(ldim, smpd)
@@ -7503,7 +7503,7 @@ end subroutine NLmean
                 end do
             end do
 
-            write(*,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
+            write(logfhandle,'(a)') '**info(simple_image_unit_test, part 21): testing destructor'
             passed = .false.
             call img%kill()
             call img3d%kill()

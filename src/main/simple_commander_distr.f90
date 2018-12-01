@@ -46,7 +46,7 @@ contains
         call fileiochk('simple_merge_nnmat ; fopen error when opening nnmat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) nnmat
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
+            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to nnmat.bin'
             THROW_HARD('I/O; exec_merge_nnmat')
         endif
         call fclose(filnum,errmsg='simple_merge_nnmat ;error when closing nnmat.bin  ')
@@ -67,7 +67,7 @@ contains
         call fileiochk('simple_merge_nnmat ; fopen error when opening smat.bin  ', io_stat)
         write(unit=filnum,pos=1,iostat=io_stat) simmat
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
+            write(logfhandle,'(a,i0,a)') 'I/O error ', io_stat, ' when writing to smat.bin'
             THROW_HARD('I/O; exec_merge_similarities')
         endif
         call fclose(filnum,errmsg='simple_merge_nnmat ; error when closing smat.bin ')

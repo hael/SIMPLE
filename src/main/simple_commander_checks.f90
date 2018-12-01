@@ -44,7 +44,7 @@ contains
         endif
         call params%new(cline)
         call cline%set('box', real(params%box))
-        write(*,'(A,1X,I7)') '>>> BOX:', params%box
+        write(logfhandle,'(A,1X,I7)') '>>> BOX:', params%box
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_BOX NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_box
@@ -56,7 +56,7 @@ contains
         type(parameters) :: params
         call params%new(cline)
         call cline%set('nptcls', real(params%nptcls))
-        write(*,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
+        write(logfhandle,'(A,1X,I7)') '>>> NPTCLS:', params%nptcls
         ! end gracefully
         call simple_end('**** SIMPLE_CHECK_NPTCLS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_nptcls
@@ -82,18 +82,15 @@ contains
                 if( params%stats .ne. 'no' )then
                     call img%cure(maxv, minv, ave, sdev, n_nans)
                     if( params%stats .eq. 'print' .or. n_nans > 0 )then
-                        write(*,*) '*********IMAGE********', i, '*******'
-                        write(*,*) 'maxv = ',   maxv
-                        write(*,*) 'minv = ',   minv
-                        write(*,*) 'ave = ',    ave
-                        write(*,*) 'sdev = ',   sdev
-                        write(*,*) 'n_nans = ', n_nans
+                        write(logfhandle,*) '*********IMAGE********', i, '*******'
+                        write(logfhandle,*) 'maxv = ',   maxv
+                        write(logfhandle,*) 'minv = ',   minv
+                        write(logfhandle,*) 'ave = ',    ave
+                        write(logfhandle,*) 'sdev = ',   sdev
+                        write(logfhandle,*) 'n_nans = ', n_nans
                     endif
                 endif
-                if( params%vis .eq. 'yes' )then
-                    print *, 'calling img%vis'
-                    call img%vis()
-                endif
+                if( params%vis .eq. 'yes' ) call img%vis()
             end do
         endif
         call simple_end('**** SIMPLE_INFO_IMAGE NORMAL STOP ****')
@@ -108,10 +105,10 @@ contains
         if( .not. file_exists(params%stktab) )then
             THROW_HARD('file: '//trim(params%stktab)//' not in cwd; exec_info_stktab')
         endif
-        write(*,*) '# micrograps: ', params%nmics
-        write(*,*) '# particles : ', params%nptcls
-        write(*,*) 'ldim        : ', params%ldim
-        write(*,*) 'box size    : ', params%box
+        write(logfhandle,*) '# micrograps: ', params%nmics
+        write(logfhandle,*) '# particles : ', params%nptcls
+        write(logfhandle,*) 'ldim        : ', params%ldim
+        write(logfhandle,*) 'box size    : ', params%box
         call simple_end('**** SIMPLE_INFO_STKTAB NORMAL STOP ****')
     end subroutine exec_info_stktab
 

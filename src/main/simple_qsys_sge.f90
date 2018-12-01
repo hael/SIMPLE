@@ -2,6 +2,7 @@
 module simple_qsys_sge
 use simple_qsys_base, only: qsys_base
 use simple_chash,     only: chash
+use simple_defs
 implicit none
 
 public :: qsys_sge
@@ -71,7 +72,7 @@ contains
                     if( write2file )then
                         write(fhandle,'(a)') qsub_cmd//' '//qsub_val
                     else
-                        write(*,'(a)') qsub_cmd//' '//qsub_val
+                        write(logfhandle,'(a)') qsub_cmd//' '//qsub_val
                     endif
                 endif
                 if(key .eq. 'job_cpus_per_task')then
@@ -96,16 +97,16 @@ contains
                  write(fhandle, '(a)') addon_line
             endif
         else
-            write(*,'(a)') '#$ -V'
-            write(*,'(a)') '#$ -S /bin/bash'
-            write(*,'(a)') '#$ -cwd'
-            write(*,'(a)') '#$ -o outfile -j y'
- !           write(*,'(a)') '#$ -pe mpi 1'
+            write(logfhandle,'(a)') '#$ -V'
+            write(logfhandle,'(a)') '#$ -S /bin/bash'
+            write(logfhandle,'(a)') '#$ -cwd'
+            write(logfhandle,'(a)') '#$ -o outfile -j y'
+ !           write(logfhandle,'(a)') '#$ -pe mpi 1'
             if( allocated(bind2socket) )then
-                 write(*,'(a)') bind2socket
+                 write(logfhandle,'(a)') bind2socket
             endif
             if( allocated(addon_line) )then
-                 write(*,'(a)') addon_line
+                 write(logfhandle,'(a)') addon_line
             endif
         endif
     end subroutine write_sge_header

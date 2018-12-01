@@ -37,7 +37,7 @@ contains
         real, allocatable :: plane_normals(:,:,:), plane_normals_L2(:,:), filters2D(:,:)
         real, allocatable :: frc(:)
         real              :: fwght, fwght_find0, fwght_find1, fwght_find2
-        write(*,'(a)') '>>> GENERATING ANISOTROPIC OPTIMAL 3D LOW-PASS FILTER'
+        write(logfhandle,'(a)') '>>> GENERATING ANISOTROPIC OPTIMAL 3D LOW-PASS FILTER'
         ! sanity checking
         noris  = e_space%get_noris()
         nprojs = projfrcs%get_nprojs()

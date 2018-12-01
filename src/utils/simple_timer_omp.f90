@@ -4,7 +4,7 @@
 !> Simple timer module using OpenMP functions
 !!
 !! \author
-!!     Michael Eager 
+!!     Michael Eager
 !! Original version: 2017-03-15
 !
 ! The SIMPLE code is distributed with the hope that it will be
@@ -88,10 +88,9 @@ contains
    subroutine now_omp()
       character(len=8)  :: date
       character(len=10) :: time
-      print *, "OpenMP time: ", tic_omp()
+      write(logfhandle,*) "OpenMP time: ", tic_omp()
       call date_and_time(date, time)
       write (*, '(A,A,A,A,A,A,A)') 'Date: ', date(7:8), '-', date(5:6), '-', date(1:4), '\n'
       write (*, '(A,A,A,A,A,A,A)') 'Time: ', time(1:2), ':', time(3:4), ':', time(5:10), '\n'
    endsubroutine now_omp
 end module simple_timer_omp
-

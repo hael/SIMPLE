@@ -30,10 +30,10 @@ contains
         integer, intent(in) :: ldim(3)  !< logical dimensions
         character(len=*)    :: routine  !< Error message caller
         if( n < 1 .or. any(ldim == 0) )then
-            write(*,*) routine
-            write(*,*) 'The input stack is corrupt!'
-            write(*,*) 'Number of images: ', n
-            write(*,*) 'Logical dimensions: ', ldim
+            write(logfhandle,*) routine
+            write(logfhandle,*) 'The input stack is corrupt!'
+            write(logfhandle,*) 'Number of images: ', n
+            write(logfhandle,*) 'Logical dimensions: ', ldim
             THROW_HARD('procimgfile exception')
         endif
     end subroutine raise_exception_imgfile
@@ -50,7 +50,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile(n, ldim, 'copy_imgfile')
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> COPYING IMAGES'
+        write(logfhandle,'(a)') '>>> COPYING IMAGES'
         cnt = 0
         do i=fromto(1),fromto(2)
             cnt = cnt+1
@@ -76,7 +76,7 @@ contains
         call diffimg%new(ldim,smpd)
         call img2%new(ldim,smpd)
         if( n >= 1 )then
-            write(*,'(a)') '>>> SUBTRACTING IMAGES'
+            write(logfhandle,'(a)') '>>> SUBTRACTING IMAGES'
             if( present(fromto) )then
                 cnt = 0
                 do i=fromto(1),fromto(2)
@@ -120,7 +120,7 @@ contains
              .and. ldim(3) >= ldim(3) )then
             call img%new(ldim,smpd)
             call img_pad%new(ldim_pad,smpd)
-            write(*,'(a)') '>>> PADDING IMAGES'
+            write(logfhandle,'(a)') '>>> PADDING IMAGES'
             do i=1,n
                 call progress(i,n)
                 call img%read(fname2pad, i)
@@ -158,7 +158,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
-        write(*,'(a)') '>>> RESIZING IMAGES'
+        write(logfhandle,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -206,7 +206,7 @@ contains
              .and. ldim_clip(3) <= ldim(3) )then
             call img%new(ldim,smpd)
             call img_clip%new(ldim_clip,smpd)
-            write(*,'(a)') '>>> CLIPPING IMAGES'
+            write(logfhandle,'(a)') '>>> CLIPPING IMAGES'
             do i=1,n
                 call progress(i,n)
                 call img%read(fname2clip, i)
@@ -230,7 +230,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'clip_imgfile' )
         ! do the work
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> MIRRORING IMAGES'
+        write(logfhandle,'(a)') '>>> MIRRORING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2mirr, i)
@@ -263,7 +263,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
-        write(*,'(a)') '>>> RESIZING IMAGES'
+        write(logfhandle,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -316,7 +316,7 @@ contains
         call img%new(ldim,smpd)
         call img_resized1%new(ldims_new(1,:),smpd) ! this sampling distance will be overwritten
         call img_resized2%new(ldims_new(2,:),smpd) ! this sampling distance will be overwritten
-        write(*,'(a)') '>>> RESIZING IMAGES'
+        write(logfhandle,'(a)') '>>> RESIZING IMAGES'
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -353,7 +353,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'subtr_backgr_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> SUBTRACTING BACKGROUND FROM IMAGES'
+        write(logfhandle,'(a)') '>>> SUBTRACTING BACKGROUND FROM IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2subtr, i)
@@ -372,7 +372,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> BIN NORMALIZING IMAGES'
+        write(logfhandle,'(a)') '>>> BIN NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
@@ -391,7 +391,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> NORMALIZING IMAGES'
+        write(logfhandle,'(a)') '>>> NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
@@ -415,7 +415,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'norm_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> NORMALIZING IMAGES'
+        write(logfhandle,'(a)') '>>> NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
@@ -440,7 +440,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
         call img%disc(ldim, smpd, msk, lmsk)
-        write(*,'(a)') '>>> NOISE NORMALIZING IMAGES'
+        write(logfhandle,'(a)') '>>> NOISE NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
@@ -463,7 +463,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'noise_norm_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> SHELL NORMALIZING IMAGES'
+        write(logfhandle,'(a)') '>>> SHELL NORMALIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2norm, i)
@@ -490,18 +490,18 @@ contains
         call find_ldim_nptcls(fname2filt, ldim, n)
         ldim(3) = 1
         if( frcs%get_nprojs().ne.n )then
-            write(*,*) '# imgs: ',n
-            write(*,*) '# projection_frcs: ',frcs%get_nprojs()
+            write(logfhandle,*) '# imgs: ',n
+            write(logfhandle,*) '# projection_frcs: ',frcs%get_nprojs()
             THROW_HARD('inconsistent dimensions; matchfilt_imgfile')
         endif
         call raise_exception_imgfile( n, ldim, 'matchfilt_imgfile' )
         call img%new(ldim,smpd)
         if( frcs%get_filtsz().ne.img%get_filtsz() )then
-            write(*,*) 'img filtsz: ',img%get_filtsz()
-            write(*,*) 'frcs filtsz: ',frcs%get_filtsz()
+            write(logfhandle,*) 'img filtsz: ',img%get_filtsz()
+            write(logfhandle,*) 'frcs filtsz: ',frcs%get_filtsz()
             THROW_HARD('Inconsistent filter dimensions; matchfilt_imgfile')
         endif
-        write(*,'(a)') '>>> SHELL NORMALIZING AND FILTERING IMAGES'
+        write(logfhandle,'(a)') '>>> SHELL NORMALIZING AND FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2filt, i)
@@ -532,7 +532,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'neg_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> INVERTING IMAGE CONTRAST'
+        write(logfhandle,'(a)') '>>> INVERTING IMAGE CONTRAST'
         do i=1,n
             call progress(i,n)
             call img%read(fname2neg, i)
@@ -557,7 +557,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'masscen_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> CENTERING IMAGES'
+        write(logfhandle,'(a)') '>>> CENTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2masscen, i)
@@ -584,7 +584,7 @@ contains
         call fopen(filnum,'cure_stats.txt',status='replace',iostat=io_stat)
         call fileiochk("cure_imgfile error", io_stat)
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> CURING IMAGES'
+        write(logfhandle,'(a)') '>>> CURING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2cure, i)
@@ -611,7 +611,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'add_noise_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> ADDING NOISE TO THE IMAGES'
+        write(logfhandle,'(a)') '>>> ADDING NOISE TO THE IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -674,7 +674,7 @@ contains
         if( present(round) ) rround = round
         if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; shift_imgfile')
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> SHIFTING IMAGES'
+        write(logfhandle,'(a)') '>>> SHIFTING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2shift, i)
@@ -718,7 +718,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'bp_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> BAND-PASS FILTERING IMAGES'
+        write(logfhandle,'(a)') '>>> BAND-PASS FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2filter, i)
@@ -746,7 +746,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'real_filter_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
+        write(logfhandle,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2filter, i)
@@ -771,7 +771,7 @@ contains
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'phase_rand_imgfile' )
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> PHASE RANDOMIZING IMAGES'
+        write(logfhandle,'(a)') '>>> PHASE RANDOMIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -805,7 +805,7 @@ contains
         ! do the work
         if( n /= o%get_noris() ) THROW_HARD('inconsistent nr entries; apply_ctf_imgfile')
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> APPLYING CTF TO IMAGES'
+        write(logfhandle,'(a)') '>>> APPLYING CTF TO IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -840,13 +840,13 @@ contains
         call raise_exception_imgfile( n, ldim, 'shrot_imgfile' )
         ! do the work
         if( n /= o%get_noris() )then
-            write(*,*) 'nr of entries in stack: ', n
-            write(*,*) 'nr of entries in oris object: ', o%get_noris()
+            write(logfhandle,*) 'nr of entries in stack: ', n
+            write(logfhandle,*) 'nr of entries in oris object: ', o%get_noris()
             THROW_HARD('inconsistent nr entries; shrot_imgfile')
         endif
         call img%new(ldim,smpd)
         call img_rot%new(ldim,smpd)
-        write(*,'(a)') '>>> SHIFTING AND ROTATING IMAGES'
+        write(logfhandle,'(a)') '>>> SHIFTING AND ROTATING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -889,7 +889,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'mask_imgfile' )
         ! do the work
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> MASKING IMAGES'
+        write(logfhandle,'(a)') '>>> MASKING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2mask, i)
@@ -914,7 +914,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'taper_edges_imgfile' )
         ! do the work
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> TAPERING EDGES OF IMAGES'
+        write(logfhandle,'(a)') '>>> TAPERING EDGES OF IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2mask, i)
@@ -941,7 +941,7 @@ contains
         call raise_exception_imgfile( n, ldim, 'bin_imgfile' )
         ! do the work
         call img%new(ldim,smpd)
-        write(*,'(a)') '>>> BINARIZING IMAGES'
+        write(logfhandle,'(a)') '>>> BINARIZING IMAGES'
         do i=1,n
             call progress(i,n)
             call img%read(fname2process, i)
@@ -1001,7 +1001,7 @@ contains
             if( .not. mask(i) ) call rt%insert(i)
         end do
         ! copy
-        write(*,'(a)') '>>> RANDOMLY SELECTING IMAGES'
+        write(logfhandle,'(a)') '>>> RANDOMLY SELECTING IMAGES'
         do i = 1,nran
             call progress(i, nran)
             ii = rt%irnd()

@@ -306,19 +306,19 @@ contains
         if( present(distr) ) ddistr = distr
         ! initialise if needed
         if( .not. initialised ) call init_cmd_dict
-        write(*,'(a)') 'USAGE:'
+        write(logfhandle,'(a)') 'USAGE:'
         if( ddistr )then
-            write(*,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
+            write(logfhandle,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
         else
-            write(*,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
+            write(logfhandle,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
         endif
         ! print required
         if( present(keys_required) )then
             nreq =  size(keys_required)
             DebugPrint  '# required keys provided: ', nreq
             if( nreq > 0 )then
-                write(*,'(a)') ''
-                write(*,'(a)') 'REQUIRED'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'REQUIRED'
                 allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
                 call lexSort(sorted_keys)
@@ -331,8 +331,8 @@ contains
             nopt = size(keys_optional)
             DebugPrint  '# optional keys provided: ', nopt
             if( nopt > 0 )then
-                write(*,'(a)') ''
-                write(*,'(a)') 'OPTIONAL'
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'OPTIONAL'
                 allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
                 call lexSort(sorted_keys)
@@ -340,7 +340,7 @@ contains
                 deallocate(sorted_keys)
             endif
         endif
-        write(*,'(a)') ''
+        write(logfhandle,'(a)') ''
     end subroutine print_cmdline
 
     subroutine test_cmd_dict
@@ -359,7 +359,6 @@ contains
         call print_cmdline( keys_required )
         call print_cmdline( keys_optional=keys_optional )
         call print_cmdline( keys_required, keys_optional )
-        print *, '************************'
         call print_cmd_key_descr('cmd_key_descr_from_test_cmd_dict.txt')
     end subroutine test_cmd_dict
 

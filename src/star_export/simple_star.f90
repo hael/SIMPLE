@@ -115,7 +115,7 @@ contains
         n=0
         if(.not. self%doc%existence) THROW_HARD('get_ndatalines doc unopened')
         if( self%doc%num_data_lines == 0) then
-            print *," simple_star :: get_ndatalines no data entries"
+            write(logfhandle,*)" simple_star :: get_ndatalines no data entries"
         else
             n= self%doc%num_data_lines
         endif
@@ -127,7 +127,7 @@ contains
         nrecs=0
         if(.not. self%doc%existence) THROW_HARD('get_ndatalines doc unopened')
         if( self%doc%num_data_elements == 0) then
-            print *," simple_star :: get_ndatalines no data entries"
+            write(logfhandle,*)" simple_star :: get_ndatalines no data entries"
         else
             nrecs = self%doc%num_data_elements
         endif
@@ -153,25 +153,25 @@ contains
         integer :: nl_filetab, nl_deftab
 
         if (.not. file_exists('oritab-stardoc.txt')) then
-            print *,"star_project; check_temp_files called from "//trim(msg)
+            write(logfhandle,*)"star_project; check_temp_files called from "//trim(msg)
             THROW_HARD( 'star_project;  oritab-stardoc.txt not found' )
         endif
         nl_deftab = nlines('oritab-stardoc.txt')
         if(nl_deftab /= self%doc%num_data_lines)then
-            print *,"star_project; check_temp_files called from "//trim(msg)
+            write(logfhandle,*)"star_project; check_temp_files called from "//trim(msg)
             THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
         if (.not. file_exists('filetab-stardoc.txt')) then
-            print *,"star_project; check_temp_files called from "//trim(msg)
+            write(logfhandle,*)"star_project; check_temp_files called from "//trim(msg)
             THROW_HARD('star_project;  filetab-stardoc.txt not found')
         endif
         nl_filetab= nlines('filetab-stardoc.txt')
         if(nl_deftab /= self%doc%num_data_lines)then
-            print *,"star_project; check_temp_files called from "//trim(msg)
+            write(logfhandle,*)"star_project; check_temp_files called from "//trim(msg)
             THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
         if(nl_filetab /= nl_deftab)then
-            print *,"star_project; check_temp_files called from "//trim(msg)
+            write(logfhandle,*)"star_project; check_temp_files called from "//trim(msg)
             THROW_HARD('star_project;  oritab-stardoc.txt lines not same as num_data_lines')
         endif
 

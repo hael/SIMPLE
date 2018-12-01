@@ -81,15 +81,15 @@ contains
             diff(:) = abs(ggoal-ratio(:))
             tthresh(:) = t(minloc(diff))
             if(DEBUG) then
-                print *, 'ITERATION ', n_it
-                print *, 'ratios = ', ratio
-                print *, 'thresholds = ', t
-                print *, 'threshold selected = ', tthresh
+                write(logfhandle,*) 'ITERATION ', n_it
+                write(logfhandle,*) 'ratios = ', ratio
+                write(logfhandle,*) 'thresholds = ', t
+                write(logfhandle,*) 'threshold selected = ', tthresh
             endif
         end do
         if(present(thresh)) thresh = tthresh
         call sobel(img, tthresh)
-        if(DEBUG) print *, 'Final threshold = ', tthresh
+        if(DEBUG) write(logfhandle,*) 'Final threshold = ', tthresh
         deallocate(grad)
     end subroutine automatic_thresh_sobel
 
@@ -129,7 +129,7 @@ contains
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
       tthresh(1) = max(1.,                  (1-sigma)*m) !lower
       tthresh(2) = min(real(ldim(1))*2.+1., (1+sigma)*m) !upper
-      print *, 'Selected thresholds: ', tthresh
+      write(logfhandle,*) 'Selected thresholds: ', tthresh
       if (present(lp)) then
           call canny_edge(img_in,tthresh,lp)
       else
@@ -191,7 +191,7 @@ contains
                         !In the angles I decide not to to anything
                     endif
                 else !case default
-                    print *, "There is an error in the direction matrix"
+                    write(logfhandle,*) "There is an error in the direction matrix"
                 end if
             enddo
         enddo
@@ -356,15 +356,15 @@ contains
       ! call img_in%write('BeforeOtsu.mrc')
       call img_out%new(img_in%get_ldim(), img_in%get_smpd())
       rmat = img_in%get_rmat()
-      ! print *, 'MIN = ', minval(rmat)
-      ! print *, 'MAX_VAL = ', maxval(rmat)
-      ! print *, count(abs(rmat-maxval(rmat)) < TINY)
+      ! write(logfhandle,*) 'MIN = ', minval(rmat)
+      ! write(logfhandle,*) 'MAX_VAL = ', maxval(rmat)
+      ! write(logfhandle,*) count(abs(rmat-maxval(rmat)) < TINY)
       allocate(p (MIN_VAL:MAX_VAL),     source = 0.)
       do i = MIN_VAL, MAX_VAL
           p(i) = count(abs(rmat-i) < 0.5)   !p = (count(abs(rmat-i) < 0.5), i = MIN_VAL, MAX_VAL)
       enddo
       p = p/(size(rmat, dim = 1)*size(rmat, dim = 2)*size(rmat, dim = 3)) !normalise, it's a probability
-      print *, 'Is it 1? ', sum(p)
+      write(logfhandle,*) 'Is it 1? ', sum(p)
       q1 = 0.
       q2 = sum(p)
       sum1 = 0.
@@ -374,11 +374,11 @@ contains
       enddo
       !sigma = 1000. !initialisation
       !FOLLOWING it
-      print *, 'P = ', p
+      write(logfhandle,*) 'P = ', p
       do T = MIN_VAL, MAX_VAL-1
           q1 = q1 + p(T)
           q2 = q2 - p(T)
-          print *, 'T = ', T, 'q1 = ', q1, 'q2 = ', q2
+          write(logfhandle,*) 'T = ', T, 'q1 = ', q1, 'q2 = ', q2
           sum1 = sum1 + T*p(T)
           sum2 = sum2 - T*p(T)
           m1 = sum1/q1
@@ -402,12 +402,12 @@ contains
           endif
           sigma2 = sigma2/q2
           sigma_next = q1*sigma1 +q2*sigma2
-          ! print *, 'T = ', T, 'sigma = ', sigma, 'sigma_next = ', sigma_next, 'q1 = ', q1, 'q2 = ', q2
-          ! print *, 'sigma1 = ', sigma1, 'sigma2 = ', sigma2
+          ! write(logfhandle,*) 'T = ', T, 'sigma = ', sigma, 'sigma_next = ', sigma_next, 'q1 = ', q1, 'q2 = ', q2
+          ! write(logfhandle,*) 'sigma1 = ', sigma1, 'sigma2 = ', sigma2
           if(sigma_next < sigma .and. T > MIN_VAL) then
               threshold = T !keep the minimum
-              print *, 'I am into, T = ', T
-              !print *, 'SIgma = ', sigma, 'SIgma_next = ', sigma_next
+              write(logfhandle,*) 'I am into, T = ', T
+              !write(logfhandle,*) 'SIgma = ', sigma, 'SIgma_next = ', sigma_next
               sigma = sigma_next
           elseif(T == MIN_VAL) then
               sigma = sigma_next
@@ -430,7 +430,7 @@ end module simple_segmentation
 ! call iterative_thresholding(img,img_out,thresh)
 ! call img%write('Img_inParticle.mrc')
 ! call img_out%write('Img_outParticle_iterative_thresholding.mrc')
-! print *, 'selected threshold: ' , thresh
+! write(logfhandle,*) 'selected threshold: ' , thresh
 ! call otsu(img,img_out,thresh)
 ! call img_out%write('Img_outParticle_otsu.mrc')
-! print *, 'selected threshold: ' , thresh
+! write(logfhandle,*) 'selected threshold: ' , thresh

@@ -7,8 +7,8 @@ implicit none
 type(cmdline) :: cline
 logical       :: be_verbose=.false.
 if( command_argument_count() < 3 )then
-    write(*,'(a)',advance='no') 'simple_test_srch vol1=<volume.mrc> msk=<mask radius(in pixels)>'
-    write(*,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
+    write(logfhandle,'(a)',advance='no') 'simple_test_srch vol1=<volume.mrc> msk=<mask radius(in pixels)>'
+    write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
     stop
 endif
 call seed_rnd

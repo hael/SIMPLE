@@ -398,23 +398,13 @@ contains
         integer ::  pos1,linelen
         strIsComment = .false.
         if(strIsEmpty(line)) return
-
         pos1 = firstNonBlank(line)
         ! if we didn't find a non-blank character, then the line must be blank!
         if( pos1 .eq. 0 ) return
         linelen=len_trim(line)
-        if( scan(line(pos1:),'#!c;', back=.false.) .eq. 1 )then
+        if( scan(line(pos1:),'#!;', back=.false.) .eq. 1 )then
             ! the first non-blank character is a comment character.
             strIsComment = .true.
-            ! on one condidtion:
-            ! if that's a c, we need to check that the following character is a space.
-            if( stringsAreEqual(line(pos1:pos1),'c') )then
-                if (pos1+1 .le. linelen)then
-                    if( .not.stringsAreEqual(line(pos1+1:pos1+1),' ') )then
-                        strIsComment = .false.
-                    endif
-                endif
-            endif
         endif
     end function strIsComment
 
@@ -576,8 +566,8 @@ contains
         high         = size(strArr)
         allocate(indexarray(high), stat=alloc_stat)
         if( alloc_stat /= 0 ) then
-            write(*,'(a)') 'ERROR: Allocation failure!'
-            write(*,'(a)') 'In: lexSort; simple_strings'
+            write(logfhandle,'(a)') 'ERROR: Allocation failure!'
+            write(logfhandle,'(a)') 'In: lexSort; simple_strings'
             stop
         endif
         indexarray = (/(k,k=low,high)/)

@@ -18,7 +18,7 @@ contains
         allocate(img(10,10,10))
         call random_number(img)
         allocate(fname,source='tifftest-1.tif')
-        write(*,*) " Testing write_tiff(fname, img )"
+        write(logfhandle,*) " Testing write_tiff(fname, img )"
         call write_tiff(fname, img )
         call gnufor_image(img(:,:,1), palette='gray')
         call exec_cmdline('display tifftest-1.tif')
@@ -36,7 +36,7 @@ contains
             img(i) = INT( (2.**24) * temp)
         end do
         allocate(fname, source='tifftest-2.tif')
-        write(*,*) " Testing write_tiff2(fname, img )"
+        write(logfhandle,*) " Testing write_tiff2(fname, img )"
         call write_tiff2(fname, img, [10,10] )
 
         call gnufor_image(reshape(real(img), shape=(/ 10,10 /)), palette='gray')
@@ -58,7 +58,7 @@ contains
             end do
         end do
         allocate(fname, source='tifftest-3.tif')
-         write(*,*) " Testing write_tiff3(fname, img )"
+         write(logfhandle,*) " Testing write_tiff3(fname, img )"
       !  call write_tiff3(fname, img )
         call gnufor_image(reshape(real(img), shape=(/ 10,10 /)), palette='gray')
         call exec_cmdline('display tifftest-3.tif')
@@ -73,7 +73,7 @@ contains
         allocate(img(10,10,10))
         call random_number(img)
         allocate(fname, source='tifftest-4.tif')
-        write(*,*) " Testing write_tiff4(fname, img )"
+        write(logfhandle,*) " Testing write_tiff4(fname, img )"
         call write_tiff4(fname, img )
 
         call gnufor_image(img(:,:,1), palette='gray')
@@ -94,7 +94,7 @@ contains
             end do
         end do
         allocate(fname, source= 'tifftest-BIG.tif')
-        write(*,*) " Testing write_bigtiff(fname, img )"
+        write(logfhandle,*) " Testing write_bigtiff(fname, img )"
         call write_bigtiff(fname, img )
         call gnufor_image(img, palette='gray')
         call exec_cmdline('display tifftest-BIG.tif')
@@ -110,7 +110,7 @@ contains
         allocate(img(100,100))
         call random_number(img)
         allocate(fname, source='tifftest-BIG1.tif')
-        write(*,*) " Testing write_tiff_bigimg(fname, img )"
+        write(logfhandle,*) " Testing write_tiff_bigimg(fname, img )"
       !  status =  write_tiff_bigimg('tifftest-BIG2.tif', img , 10,  10)
         call gnufor_image(img, palette='gray')
         call exec_cmdline('display tifftest-BIG1.tif')
@@ -126,7 +126,7 @@ contains
         allocate(img(100,100))
         call random_number(img)
         allocate(fname, source='tifftest-BIG2.tif')
-        write(*,*) " Testing write_bigtiff2(fname, img )"
+        write(logfhandle,*) " Testing write_bigtiff2(fname, img )"
         call write_bigtiff2(fname, img)
         call gnufor_image(img, palette='gray')
         call exec_cmdline('display tifftest-BIG2.tif')
@@ -141,7 +141,7 @@ contains
         allocate(img(100,100))
         call random_number(img)
         allocate(fname, source='tifftest-BIG3.tif')
-        write(*,*) " Testing write_bigtiff3(fname, img )"
+        write(logfhandle,*) " Testing write_bigtiff3(fname, img )"
         call write_bigtiff3(fname, img)
         call gnufor_image(img, palette='gray')
         call exec_cmdline('display tifftest-BIG3.tif')

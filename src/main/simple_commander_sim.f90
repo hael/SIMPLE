@@ -109,7 +109,7 @@ contains
         call build%vol%pad(vol_pad)
         call vol_pad%fft
         call vol_pad%expand_cmat(params%alpha)
-        write(*,'(A)') '>>> GENERATING IMAGES'
+        write(logfhandle,'(A)') '>>> GENERATING IMAGES'
         cnt = 0
         ntot = params%top-params%fromp+1
         do i=params%fromp,params%top
@@ -172,13 +172,13 @@ contains
         ptclarea   = params%box*params%box*params%nptcls
         mgrapharea = params%xdim*params%ydim
         fracarea   = real(ptclarea)/real(mgrapharea)
-        write(*,'(a,1x,f7.3)') 'Fraction of area occupied by ptcls:', fracarea
+        write(logfhandle,'(a,1x,f7.3)') 'Fraction of area occupied by ptcls:', fracarea
         if( fracarea > 0.55 )then
-            write(*,'(A)') 'It is not recommended that more than 55% of the micrograph area is occupied with particles!'
-            write(*,'(A)') 'Please, reduce the number of projection images to place!'
+            write(logfhandle,'(A)') 'It is not recommended that more than 55% of the micrograph area is occupied with particles!'
+            write(logfhandle,'(A)') 'Please, reduce the number of projection images to place!'
             stop
         endif
-        write(*,'(a)') '>>> GENERATING PARTICLE POSITIONS'
+        write(logfhandle,'(a)') '>>> GENERATING PARTICLE POSITIONS'
         ptcl_positions = gen_ptcl_pos(params%nptcls, params%xdim, params%ydim, params%box)
         ! make a base image by inserting the projections at ptcl_positions
         call base_image%new([params%xdim,params%ydim,1], params%smpd)
@@ -233,7 +233,7 @@ contains
             call build%spproj_field%set(1, 'y'//int2str(i), shifts(i,2))
         end do
         ! make and open a stack for the movie frames
-        write(*,'(a)') '>>> GENERATING MOVIE FRAMES'
+        write(logfhandle,'(a)') '>>> GENERATING MOVIE FRAMES'
         call base_image%fft()
         do i=1,params%nframes
             call progress(i,params%nframes)
@@ -262,7 +262,7 @@ contains
         end do
         ! generate the optimal average
         base_image = 0.
-        write(*,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
+        write(logfhandle,'(a)') '>>> GENERATING OPTIMAL AVERAGE'
         do i=1,params%nframes
             call progress(i,params%nframes)
             call shifted_base_image%read('simulate_movie'//params%ext, i)

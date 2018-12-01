@@ -42,8 +42,8 @@ contains
         if( n == 1 .and. ldim(3) == 1 )then
             ! all ok
         else
-            write(*,*) 'ldim(3): ', ldim(3)
-            write(*,*) 'nframes: ', n
+            write(logfhandle,*) 'ldim(3): ', ldim(3)
+            write(logfhandle,*) 'nframes: ', n
             THROW_HARD('init_tracker; assumes one frame per file')
         endif
         nx = ldim(1) - box
@@ -73,7 +73,7 @@ contains
         sumw = 1.0
         call update_background_images(1, pos)
         ! track
-        write(*,'(a)') ">>> TRACKING PARTICLE"
+        write(logfhandle,'(a)') ">>> TRACKING PARTICLE"
         do iframe=2,nframes
             sumw = sumw + 1.0
             call progress(iframe,nframes)

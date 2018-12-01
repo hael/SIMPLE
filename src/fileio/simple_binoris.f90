@@ -174,8 +174,8 @@ contains
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
-                write(*,*) 'noris : ', noris
-                write(*,*) 'fromto: ', fromto
+                write(logfhandle,*) 'noris : ', noris
+                write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
@@ -211,7 +211,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
-                write(*,*) 'first_data_byte: ', first_data_byte
+                write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
         endif
@@ -266,7 +266,7 @@ contains
             if( first_data_byte > 0 )then
                 write(unit=self%funit,pos=first_data_byte) bytearr_part3
             else
-                write(*,*) 'first_data_byte: ', first_data_byte
+                write(logfhandle,*) 'first_data_byte: ', first_data_byte
                 THROW_HARD('first_data_byte must be > 0 for non-empty 3d segment')
             endif
         endif
@@ -320,8 +320,8 @@ contains
         call self%update_byte_ranges
         ! validate byte ranges
         if( self%header(isegment)%first_data_byte - 1 /= end_part1 )then
-            write(*,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
-            write(*,*) 'end of part 1 (bytes)     : ', end_part1
+            write(logfhandle,*) 'first data byte of segment: ', self%header(isegment)%first_data_byte
+            write(logfhandle,*) 'end of part 1 (bytes)     : ', end_part1
             THROW_HARD('end of part 1 of file does not match first data byte of segment')
         endif
         if( allocated(bytearr_part3) )then
@@ -335,8 +335,8 @@ contains
             ! compare with original
             n_bytes_part3_orig = end_part3 - start_part3 + 1
             if( n_bytes_part3_orig /= n_bytes_part3 )then
-                write(*,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
-                write(*,*) '# bytes of part 3 in updated : ', n_bytes_part3
+                write(logfhandle,*) '# bytes of part 3 in original: ', n_bytes_part3_orig
+                write(logfhandle,*) '# bytes of part 3 in updated : ', n_bytes_part3
                 THROW_HARD('byte sizes of part3 in original and updated do not match')
             endif
         endif
@@ -355,8 +355,8 @@ contains
         if( noris == 0 ) return
         if( present(fromto) )then
             if( fromto(1) < 1 .or. fromto(2) > noris )then
-                write(*,*) 'noris : ', noris
-                write(*,*) 'fromto: ', fromto
+                write(logfhandle,*) 'noris : ', noris
+                write(logfhandle,*) 'fromto: ', fromto
                 THROW_HARD('fromto out of range')
             endif
         endif
@@ -435,7 +435,7 @@ contains
         integer :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
-            write(*,*) 'isegment: ', isegment
+            write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         if( isegment > self%n_segments ) self%n_segments = isegment
@@ -461,7 +461,7 @@ contains
         integer,                 intent(in) :: strlen_max
         ! sanity check isegment
         if( isegment < 1 .or. isegment > MAX_N_SEGMENTS )then
-            write(*,*) 'isegment: ', isegment
+            write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         if( isegment > self%n_segments ) self%n_segments = isegment
@@ -495,8 +495,8 @@ contains
         character(len=self%header(isegment)%n_bytes_per_record) :: str_os_line ! string with static lenght (set to max(strlen))
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(*,*) 'isegment: ', isegment
-            write(*,*) 'n_segments: ', self%n_segments
+            write(logfhandle,*) 'isegment: ', isegment
+            write(logfhandle,*) 'n_segments: ', self%n_segments
             THROW_HARD('isegment out of range')
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then
@@ -520,7 +520,7 @@ contains
         logical :: present_fromto, oonly_ctfparams_state_eo
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(*,*) 'isegment: ', isegment
+            write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         present_fromto = present(fromto)
@@ -566,7 +566,7 @@ contains
         integer(kind=8) :: ibytes
         if( .not. self%l_open ) THROW_HARD('file needs to be open')
         if( isegment < 1 .or. isegment > self%n_segments )then
-            write(*,*) 'isegment: ', isegment
+            write(logfhandle,*) 'isegment: ', isegment
             THROW_HARD('isegment out of range')
         endif
         if( self%header(isegment)%n_records > 0 .and. self%header(isegment)%n_bytes_per_record > 0 )then

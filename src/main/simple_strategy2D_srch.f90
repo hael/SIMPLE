@@ -105,7 +105,7 @@ contains
         endif
         ! calculate spectral score
         self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, self%prev_rot)
-        if( DEBUG ) print *, '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
+        if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 
     subroutine inpl_srch( self )

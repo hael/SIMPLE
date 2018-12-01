@@ -12,9 +12,9 @@ contains
         logical, intent(in) :: doplot
         logical passed
         global_verbose=.true.
-        write(*,'(a)') '**info(simple_jpg_unit_test): testing simple_jpg '
+        write(logfhandle,'(a)') '**info(simple_jpg_unit_test): testing simple_jpg '
         call test_jpg_image_local( 91, 91, 100, doplot )
-        write(*,'(a)') 'SIMPLE_JPG_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        write(logfhandle,'(a)') 'SIMPLE_JPG_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 
     contains
 
@@ -28,9 +28,9 @@ contains
             real,    allocatable  :: rptr(:,:)
             integer, allocatable  :: ibuf(:,:,:)
             integer :: status
-            write(*,'(a)') '**info(simple_jpg_unit_test, part 1)'
+            write(logfhandle,'(a)') '**info(simple_jpg_unit_test, part 1)'
             call img%new([ld1,ld2,1], 1.)
-            write(*,'(a)') '**info(simple_jpg_unit_test, part 2): testing real buffer write to JPG'
+            write(logfhandle,'(a)') '**info(simple_jpg_unit_test, part 2): testing real buffer write to JPG'
             passed = .true.
             call img%ran
             if( doplot ) call img%vis
@@ -41,14 +41,14 @@ contains
             status =  jpg%writeJpg(str,rptr, quality=100, colorspec=1)
             if(status /= 0) THROW_HARD('write_jpeg failed')
             call exec_cmdline('display test_jpg_ran.jpg')
-            write(*,'(a)') '**info(simple_jpg_unit_test, part 3): testing int buffer write to JPG'
+            write(logfhandle,'(a)') '**info(simple_jpg_unit_test, part 3): testing int buffer write to JPG'
             allocate(ibuf(size(rbuf,1),size(rbuf,2),size(rbuf,3)))
             ibuf = INT(rbuf * (2**12))
             str= 'test_jpg_ran_int.jpg'
             status = jpg%writeJpg(str,ibuf(:,:,1))
             if(status /= 0) THROW_HARD('write_jpeg int buffer failed')
             call exec_cmdline('display test_jpg_ran_int.jpg')
-            write(*,'(a)') '**info(simple_jpg_unit_test, part 4): testing 3D real buffer write from get_rmat'
+            write(logfhandle,'(a)') '**info(simple_jpg_unit_test, part 4): testing 3D real buffer write from get_rmat'
             call img3%new([21,20,10], 1.)
             call img3%gauran( 5., 15. )
             if( doplot ) call img%vis

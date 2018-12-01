@@ -32,7 +32,7 @@ contains
         real        :: scale, smpd
         ! check, increment counter & print
         if( .not. file_exists(moviename_intg) )then
-            write(*,*) 'inputted integrated movie does not exist: ', trim(moviename_intg)
+            write(logfhandle,*) 'inputted integrated movie does not exist: ', trim(moviename_intg)
         endif
         ! make filenames
         fbody_here = basename(trim(moviename_intg))
@@ -40,7 +40,7 @@ contains
         fbody_here = get_fbody(trim(fbody_here), trim(ext))
         self%moviename_pspec = trim(dir_out)//trim(adjustl(fbody_here))//POWSPEC_SUFFIX//trim(params_glob%ext)
         self%moviename_thumb = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
-        write(*,'(a,1x,a)') '>>> PROCESSING INTEGRATED MOVIE:', trim(moviename_intg)
+        write(logfhandle,'(a,1x,a)') '>>> PROCESSING INTEGRATED MOVIE:', trim(moviename_intg)
         call find_ldim_nptcls(trim(moviename_intg), ldim, nframes)
         if( nframes /= 1 ) THROW_HARD('imported movie assumed to be integrated but nframes /= 1, aborting; simple_pspec_thumb_iter :: iterate')
         if( .not. orientation%isthere('smpd') ) THROW_HARD('smpd assumed to be set in input orientation, aborting; simple_pspec_thumb_iter :: iterate')

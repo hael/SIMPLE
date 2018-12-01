@@ -55,7 +55,7 @@ contains
         real    :: dist, corr, corravg, distavg
         integer :: itst
         real    :: shvec(3)
-        write(*,*) 'testing ft_expanded :: shifted correlator'
+        write(logfhandle,*) 'testing ft_expanded :: shifted correlator'
         corravg = 0.
         distavg = 0.
         do itst=1,NTST
@@ -130,26 +130,26 @@ contains
             shvecs(itst,3) = 0.
         end do
         actual = etime( tarray )
-        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
-        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
+        write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
 
-        write(*,'(a)') '>>> PROFILING STANDARD CORRELATOR'
+        write(logfhandle,'(a)') '>>> PROFILING STANDARD CORRELATOR'
         do itst=1,NTST
             corr = img_ref%corr_shifted(img_ptcl, shvecs(itst,:), lp_dyn=LP)
         end do
         actual = etime( tarray )
-        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
-        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
-        write(*,'(a)') '>>> PROFILING FTEXP CORRELATOR'
+        write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
+        write(logfhandle,'(a)') '>>> PROFILING FTEXP CORRELATOR'
         do itst=1,NTST
             corr = real(ftexp_ref%corr_shifted_8(ftexp_ptcl, dble(shvecs(itst,:))))
         end do
         actual = etime( tarray )
-        write(*,'(A,2X,F9.2)') 'Actual cpu-time:', actual
+        write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual
         delta = dtime( tarray )
-        write(*,'(A,F9.2)') 'Relative cpu-time:', delta
+        write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
     end subroutine profile_corrs
 
 end module simple_ft_expanded_tester

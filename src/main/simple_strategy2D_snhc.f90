@@ -91,7 +91,7 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
-        if( DEBUG ) print *, '>>> strategy2D_srch::FINISHED STOCHASTIC NEIGH SEARCH'
+        if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::FINISHED STOCHASTIC NEIGH SEARCH'
     end subroutine srch_snhc
 
     subroutine kill_snhc( self )

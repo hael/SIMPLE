@@ -75,7 +75,7 @@ contains
                 if( write2file )then
                     write(fhandle,'(a)') sbatch_cmd//'='//sbatch_val
                 else
-                    write(*,'(a)') sbatch_cmd//'='//sbatch_val
+                    write(logfhandle,'(a)') sbatch_cmd//'='//sbatch_val
                 endif
                 deallocate(sbatch_cmd,sbatch_val)
             endif
@@ -87,9 +87,9 @@ contains
             write(fhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%j'
             write(fhandle,'(a)') '#SBATCH --mail-type=FAIL'
         else
-            write(*,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%j'
-            write(*,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%j'
-            write(*,'(a)') '#SBATCH --mail-type=FAIL'
+            write(logfhandle,'(a)') '#SBATCH --output='//trim(stderrout)//'outfile.%j'
+            write(logfhandle,'(a)') '#SBATCH --error='//trim(stderrout)//'errfile.%j'
+            write(logfhandle,'(a)') '#SBATCH --mail-type=FAIL'
         endif
     end subroutine write_slurm_header
 

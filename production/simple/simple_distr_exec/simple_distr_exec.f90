@@ -183,4 +183,8 @@ select case(prg)
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select
 call update_job_descriptions_in_project( cline )
+! close log file
+if( logfhandle .ne. OUTPUT_UNIT )then
+    if( is_open(logfhandle) ) call fclose(logfhandle) 
+endif
 end program simple_distr_exec

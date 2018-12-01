@@ -25,13 +25,13 @@ contains
         if(present(save_copy)) ssave_copy = save_copy
         call find_ldim_nptcls(trim(micfname), ldim, nframes)
         if( nframes > 1 )then
-            write(*,*) '# frames: ', nframes
+            write(logfhandle,*) '# frames: ', nframes
             THROW_HARD('simple_micops only intended for nframes=1 micrographs; read_micrograph')
         endif
         call micrograph%new(ldim, smpd)
         call micrograph%read(trim(micfname))
         if(ssave_copy) call micrograph%write('Original_micrograph.mrc')
-        if( DEBUG ) print *, 'debug(micops); read micrograph'
+        if( DEBUG ) write(logfhandle,*) 'debug(micops); read micrograph'
     end subroutine read_micrograph
 
     subroutine shrink_micrograph( shrink_fact, ldim_out, smpd_out )
@@ -48,7 +48,7 @@ contains
         call micrograph%clip(micrograph_shrunken)
         if( present(ldim_out) ) ldim_out = ldim_shrunken
         if( present(smpd_out) ) smpd_out = micrograph%get_smpd() * shrink_factor
-        if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); did shrink micrograph to logical dimension: ', ldim_shrunken
+        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); did shrink micrograph to logical dimension: ', ldim_shrunken
     end subroutine shrink_micrograph
 
     subroutine set_box( box_in, box_out, snr )
@@ -67,7 +67,7 @@ contains
         nx = ldim_shrunken(1) - box_shrunken
         ny = ldim_shrunken(2) - box_shrunken
         if( present(box_out) ) box_out = box_shrunken
-        if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); did set box_shrunken to: ', box_shrunken
+        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); did set box_shrunken to: ', box_shrunken
     end subroutine set_box
 
     subroutine extract_boxes2file( offset, outstk, n_images, boffset, coord )
@@ -112,7 +112,7 @@ contains
             end do
 
         endif
-        if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
+        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
     end subroutine extract_boxes2file
 
     ! This subroutine does exactly what 'extract_boxes2file' in simple_micops does, but it works on
@@ -160,7 +160,7 @@ contains
             end do
 
         endif
-        if( DEBUG_HERE ) print *, 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
+        if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); wrote # images to stack: ', n_images
     end subroutine extract_windows2file
 
     function generate_sampling_coordinates( offset ) result( coords )

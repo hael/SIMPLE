@@ -32,10 +32,10 @@ contains
         character(len=:), allocatable :: fname_diag
         real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore, cc90, scale
         if( .not. file_exists(moviename_forctf) )&
-        & write(*,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
+        & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
         if( nframes /= 1 )then
-            print *, 'nframes: ', nframes
+            write(logfhandle,*) 'nframes: ', nframes
             THROW_HARD('single frame input to ctf_estimate assumed; iterate')
         endif
         ldim(3) = 1

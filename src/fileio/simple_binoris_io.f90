@@ -41,12 +41,12 @@ contains
             THROW_HARD('file: '//trim(fname)//' does not exist in cwd')
         endif
         select case(fname2format(fname))
-        case('O')
-            call spproj%read_ctfparams_state_eo(fname)
-        case('T')
-            call a%read_ctfparams_state_eo(fname)
-        case DEFAULT
-            THROW_HARD('format of file: '//trim(fname)//' unsupported')
+            case('O')
+                call spproj%read_ctfparams_state_eo(fname)
+            case('T')
+                call a%read_ctfparams_state_eo(fname)
+            case DEFAULT
+                THROW_HARD('format of file: '//trim(fname)//' unsupported')
         end select
     end subroutine binread_ctfparams_state_eo
 

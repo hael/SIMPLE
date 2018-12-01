@@ -243,55 +243,55 @@ contains
         integer :: bytes_per_pixel
         select type( self )
             type is( MrcImgHead )
-                write(*,'(a,3(i0,1x))')     'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
-                write(*,'(a,i0)')           'MRC data mode: ',  self%mode
+                write(logfhandle,'(a,3(i0,1x))')     'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
+                write(logfhandle,'(a,i0)')           'MRC data mode: ',  self%mode
                 bytes_per_pixel = self%bytesPerPix()
-                write(*,'(a,i0)')           'Bit depth: ',      bytes_per_pixel*8
+                write(logfhandle,'(a,i0)')           'Bit depth: ',      bytes_per_pixel*8
                 smpd = 0.0
                 if (self%mx .ne. 0) smpd(1) = self%cella1/self%mx
                 if (self%my .ne. 0) smpd(2) = self%cella2/self%my
                 if (self%mz .ne. 0) smpd(3) = self%cella3/self%mz
-                write(*,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
+                write(logfhandle,'(a,3(f0.3,1x))')   'Pixel size: ', smpd
             type is( SpiImgHead )
-                write(*,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
-                write(*,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
+                write(logfhandle,'(a,3(1x,f7.0))') 'Number of columns, rows, sections: ', self%nx, self%ny, self%nz
+                write(logfhandle,'(a,1x,f7.0)') 'SPIDER data mode (iform):                                       ', self%iform
                 bytes_per_pixel = self%bytesPerPix()
-                write(*,'(a,1x,f7.0)') 'Bit depth:                                                       ', real(bytes_per_pixel*8)
-                write(*,'(a,1x,f7.3)') 'Pixel size:                                                      ', self%pixsiz
-                write(*,'(a,1x,f7.0)') 'Number of slices (planes) in volume (=1 for an image)            ', self%nz
-                write(*,'(a,1x,f7.0)') 'Total number of records (including header records) in each image:', self%irec
-                write(*,'(a,1x,f7.0)') 'Maximum/minimum flag=1 if stats have been computed and 0 else:   ', self%imami
-                write(*,'(a,1x,f7.3)') 'Maximum data value:                                              ', self%fmax
-                write(*,'(a,1x,f7.3)') 'Minimum data value:                                              ', self%fmin
-                write(*,'(a,1x,f7.3)') 'Average data value:                                              ', self%av
-                write(*,'(a,1x,f7.3)') 'Standard deviation. -1. or 0. indicates SIG not computed:        ', self%sig
-                write(*,'(a,1x,f7.0)') 'Number of records in file header (label):                        ', self%labrec
-                write(*,'(a,1x,f7.0)') 'Flag that following three tilt angles are present:               ', self%iangle
-                write(*,'(a,1x,f7.3)') 'Tilt angle: phi (See note #2 below):                             ', self%phi
-                write(*,'(a,1x,f7.3)') 'Tilt angle: theta:                                               ', self%theta
-                write(*,'(a,1x,f7.3)') 'Tilt angle: gamma (also called psi):                             ', self%gamma
-                write(*,'(a,1x,f7.3)') 'X translation:                                                   ', self%xoff
-                write(*,'(a,1x,f7.3)') 'Y translation:                                                   ', self%yoff
-                write(*,'(a,1x,f7.3)') 'Z translation:                                                   ', self%zoff
-                write(*,'(a,1x,f7.3)') 'Scale factor:                                                    ', self%scale
-                write(*,'(a,1x,f7.0)') 'Total number of bytes in header:                                 ', self%labbyt
-                write(*,'(a,1x,f7.0)') 'Record length in bytes:                                          ', self%lenbyt
-                write(*,'(a,1x,f7.0)') 'istack=0 for 3D (non-stack) files and a value > 0 for stacks:    ', self%istack
-                write(*,'(a,1x,f7.0)') 'The number of the highest image currently used in the stack:     ', self%maxim
-                write(*,'(a,1x,f7.0)') 'Number of current image in stack:                                ', self%imgnum
-                write(*,'(a,1x,f7.0)') 'Highest index location currently in use in indexed stacks:       ', self%lastindx
-                write(*,'(a,1x,f7.0)') 'Flag that additional rotation angles follow in header:           ', self%kangle
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi1
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta1
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi1
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi2
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta2
-                write(*,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi2
-                write(*,'(a,1x,f7.3)') 'Electron voltage:                                                ', self%ev
-                write(*,'(a,1x,f7.0)') 'Project number:                                                  ', self%proj
-                write(*,'(a,1x,f7.0)') 'Micrograph number:                                               ', self%mic
-                write(*,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
-                write(*,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
+                write(logfhandle,'(a,1x,f7.0)') 'Bit depth:                                                       ', real(bytes_per_pixel*8)
+                write(logfhandle,'(a,1x,f7.3)') 'Pixel size:                                                      ', self%pixsiz
+                write(logfhandle,'(a,1x,f7.0)') 'Number of slices (planes) in volume (=1 for an image)            ', self%nz
+                write(logfhandle,'(a,1x,f7.0)') 'Total number of records (including header records) in each image:', self%irec
+                write(logfhandle,'(a,1x,f7.0)') 'Maximum/minimum flag=1 if stats have been computed and 0 else:   ', self%imami
+                write(logfhandle,'(a,1x,f7.3)') 'Maximum data value:                                              ', self%fmax
+                write(logfhandle,'(a,1x,f7.3)') 'Minimum data value:                                              ', self%fmin
+                write(logfhandle,'(a,1x,f7.3)') 'Average data value:                                              ', self%av
+                write(logfhandle,'(a,1x,f7.3)') 'Standard deviation. -1. or 0. indicates SIG not computed:        ', self%sig
+                write(logfhandle,'(a,1x,f7.0)') 'Number of records in file header (label):                        ', self%labrec
+                write(logfhandle,'(a,1x,f7.0)') 'Flag that following three tilt angles are present:               ', self%iangle
+                write(logfhandle,'(a,1x,f7.3)') 'Tilt angle: phi (See note #2 below):                             ', self%phi
+                write(logfhandle,'(a,1x,f7.3)') 'Tilt angle: theta:                                               ', self%theta
+                write(logfhandle,'(a,1x,f7.3)') 'Tilt angle: gamma (also called psi):                             ', self%gamma
+                write(logfhandle,'(a,1x,f7.3)') 'X translation:                                                   ', self%xoff
+                write(logfhandle,'(a,1x,f7.3)') 'Y translation:                                                   ', self%yoff
+                write(logfhandle,'(a,1x,f7.3)') 'Z translation:                                                   ', self%zoff
+                write(logfhandle,'(a,1x,f7.3)') 'Scale factor:                                                    ', self%scale
+                write(logfhandle,'(a,1x,f7.0)') 'Total number of bytes in header:                                 ', self%labbyt
+                write(logfhandle,'(a,1x,f7.0)') 'Record length in bytes:                                          ', self%lenbyt
+                write(logfhandle,'(a,1x,f7.0)') 'istack=0 for 3D (non-stack) files and a value > 0 for stacks:    ', self%istack
+                write(logfhandle,'(a,1x,f7.0)') 'The number of the highest image currently used in the stack:     ', self%maxim
+                write(logfhandle,'(a,1x,f7.0)') 'Number of current image in stack:                                ', self%imgnum
+                write(logfhandle,'(a,1x,f7.0)') 'Highest index location currently in use in indexed stacks:       ', self%lastindx
+                write(logfhandle,'(a,1x,f7.0)') 'Flag that additional rotation angles follow in header:           ', self%kangle
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi1
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta1
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi1
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%phi2
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%theta2
+                write(logfhandle,'(a,1x,f7.3)') 'Angle:                                                           ', self%psi2
+                write(logfhandle,'(a,1x,f7.3)') 'Electron voltage:                                                ', self%ev
+                write(logfhandle,'(a,1x,f7.0)') 'Project number:                                                  ', self%proj
+                write(logfhandle,'(a,1x,f7.0)') 'Micrograph number:                                               ', self%mic
+                write(logfhandle,'(a,1x,f7.0)') 'Micrograph window number:                                        ', self%num
+                write(logfhandle,'(a,1x,f7.0)') 'Global image number:                                             ', self%glonum
             class DEFAULT
                 THROW_HARD('format not supported')
         end select
@@ -318,7 +318,7 @@ contains
                     cnt = cnt+1
                     read(unit=lun,pos=i) spihed(cnt)
                     if( present(print_entire) )then
-                        write(*,*) i, spihed(cnt)
+                        write(logfhandle,*) i, spihed(cnt)
                     endif
                 end do
                 self%nz       = spihed(1)
@@ -937,7 +937,7 @@ contains
         class(ImgHead), intent(inout) :: self
         integer,        intent(inout) :: which_dim, d
         if( d < 1 )then
-            write(*,'(a,1x,f7.0)') 'Dimension: ', real(d)
+            write(logfhandle,'(a,1x,f7.0)') 'Dimension: ', real(d)
             THROW_HARD('trying to set image dimension that is nonconforming')
         endif
         select type( self )
@@ -1101,8 +1101,8 @@ contains
                     smpd = hed%getPixSz()
                     if( doprint )then
                         call hed%print_imghead
-                        write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
-                        write(*,'(a,1x,f15.8)')  'Pixel size: ', smpd
+                        write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
+                        write(logfhandle,'(a,1x,f15.8)')  'Pixel size: ', smpd
                     endif
                 case('F')
                     allocate(MrcImgHead :: hed)
@@ -1113,7 +1113,7 @@ contains
                     call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
                     if( doprint ) call hed%print_imghead
                 case DEFAULT
-                    write(*,*) 'file: ', trim(fname)
+                    write(logfhandle,*) 'file: ', trim(fname)
                     THROW_HARD('the inputted file is not an MRC file')
             end select
         else
@@ -1184,12 +1184,12 @@ contains
 
             subroutine print_spihed
                 if( doprint )then
-                    write(*,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)),&
+                    write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', int(spihed(12)),&
                         int(spihed(2)), int(spihed(1))
-                    write(*,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
-                    write(*,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ',&
+                    write(logfhandle,'(a,1x,i3)')    'Iform descriptor: ', int(spihed(5))
+                    write(logfhandle,'(a,1x,f7.0)')  'The number of the highest image currently used in the stack: ',&
                         spihed(26)
-                    write(*,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
+                    write(logfhandle,'(a,1x,f7.3)')  'Pixel size: ', spihed(38)
                 endif
             end subroutine
 
@@ -1267,7 +1267,7 @@ contains
     subroutine test_imghead
         class(ImgHead), allocatable :: hed, hed2
         integer :: recsz, funit, ios
-        write(*,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
+        write(logfhandle,'(a)') '**info(simple_imghead_unit_test): testing read/write capabilities'
         allocate(SpiImgHead :: hed, hed2 )
         call hed%new([120,120,1])
         call hed2%new([120,120,1])
@@ -1278,19 +1278,19 @@ contains
         call hed%write(funit)
         call hed2%read(funit)
         call fclose(funit,ios,errmsg="test_imghead fclose error")
-        write(*,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
+        write(logfhandle,*) '>>> PRINTING HEADER THAT WAS WRITTEN TO DISK'
         call hed%print_imghead
-        write(*,*) ''
-        write(*,*) '*************************************************'
-        write(*,*) ''
-        write(*,*) '>>> PRINTING HEADER THAT WAS READ FROM DISK'
+        write(logfhandle,*) ''
+        write(logfhandle,*) '*************************************************'
+        write(logfhandle,*) ''
+        write(logfhandle,*) '>>> PRINTING HEADER THAT WAS READ FROM DISK'
         call hed2%print_imghead
         if( all(hed%getDims() == hed2%getDims()) )then
             ! all good
         else
             THROW_HARD('test_imghed failed')
         endif
-        write(*,'(a)') 'SIMPLE_IMGHEAD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        write(logfhandle,'(a)') 'SIMPLE_IMGHEAD_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_imghead
 
 end module simple_imghead

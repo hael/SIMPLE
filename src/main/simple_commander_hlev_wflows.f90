@@ -481,21 +481,21 @@ contains
         call cline_reproject%set('msk',     orig_msk)
         call cline_reproject%set('box',     real(orig_box))
         ! execute commanders
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
-        write(*,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> INITIALIZATION WITH STOCHASTIC NEIGHBORHOOD HILL-CLIMBING'
+        write(logfhandle,'(A,F6.1,A)') '>>> LOW-PASS LIMIT FOR ALIGNMENT: ', lplims(1),' ANGSTROMS'
+        write(logfhandle,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_snhc)
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
+        write(logfhandle,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_init)
         iter = cline_refine3D_init%get_rarg('endit')
         call set_iter_dependencies
         if( srch4symaxis )then
-            write(*,'(A)') '>>>'
-            write(*,'(A)') '>>> SYMMETRY AXIS SEARCH'
-            write(*,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>>'
+            write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
+            write(logfhandle,'(A)') '>>>'
             call cline_symsrch%set('vol1', trim(vol_iter))
             if( qenv%get_qsys() .eq. 'local' )then
                 call xsymsrch%execute(cline_symsrch)
@@ -562,13 +562,13 @@ contains
                 call cline_refine3D_refine%set('vol1', trim(vol_iter))
             endif
         endif
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
         if( do_autoscale )then
-            write(*,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
+            write(logfhandle,'(A)') '>>> PROBABILISTIC REFINEMENT AT ORIGINAL SAMPLING'
         else
-            write(*,'(A)') '>>> PROBABILISTIC REFINEMENT'
+            write(logfhandle,'(A)') '>>> PROBABILISTIC REFINEMENT'
         endif
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
         call cline_refine3D_refine%set('startit', iter + 1.)
         call xrefine3D_distr%execute(cline_refine3D_refine)
         iter = cline_refine3D_refine%get_rarg('endit')
@@ -603,9 +603,9 @@ contains
         call spproj%write()
         ! reprojections
         call spproj%os_cls3D%write('final_oris.txt')
-        write(*,'(A)') '>>>'
-        write(*,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>> RE-PROJECTION OF THE FINAL VOLUME'
+        write(logfhandle,'(A)') '>>>'
         call cline_reproject%set('vol1',   'rec_final_pproc'//params%ext)
         call cline_reproject%set('oritab', 'final_oris.txt')
         call xreproject%execute(cline_reproject)
@@ -699,8 +699,8 @@ contains
                     avg_euldist = avg_euldist + euldist
                 enddo
                 avg_euldist = avg_euldist/real(ncls)
-                write(*,'(A)')'>>>'
-                write(*,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A,F6.1)')'>>> EVEN/ODD AVERAGE ANGULAR DISTANCE: ', avg_euldist
             end subroutine conv_eo
 
     end subroutine exec_initial_3Dmodel
@@ -759,7 +759,7 @@ contains
                 call spproj%read(params%projfile)
                 fall_over = spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D'
+            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D'
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_cluster3D')
         if( params%oritype.eq.'ptcl3D' )then
@@ -913,10 +913,10 @@ contains
             extr_init = EXTRINITHRESH
         endif
         call cline_refine3D1%set('extr_init', extr_init)
-        write(*,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
+        write(logfhandle,'(A,F5.2)') '>>> INITIAL EXTREMAL RATIO: ',extr_init
 
         ! randomize state labels
-        write(*,'(A)') '>>>'
+        write(logfhandle,'(A)') '>>>'
         call gen_labelling(os, params%nstates, 'squared_uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
         ! writes for refine3D
@@ -926,9 +926,9 @@ contains
         call os%kill
 
         ! STAGE1: extremal optimization, frozen orientation parameters
-        write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 1'
-        write(*,'(A)')    '>>>'
+        write(logfhandle,'(A)')    '>>>'
+        write(logfhandle,'(A,I3)') '>>> 3D CLUSTERING - STAGE 1'
+        write(logfhandle,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D1)
         iter = nint(cline_refine3D1%get_rarg('endit'))
         ! for analysis purpose only
@@ -940,9 +940,9 @@ contains
         startit = iter + 1
         call cline_refine3D2%set('startit', real(startit))
         call cline_refine3D2%set('maxits',  real(min(params%maxits,startit+MAXITS2)))
-        write(*,'(A)')    '>>>'
-        write(*,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
-        write(*,'(A)')    '>>>'
+        write(logfhandle,'(A)')    '>>>'
+        write(logfhandle,'(A,I3)') '>>> 3D CLUSTERING - STAGE 2'
+        write(logfhandle,'(A)')    '>>>'
         call xrefine3D_distr%execute(cline_refine3D2)
 
         ! class-averages mapping
@@ -1013,7 +1013,7 @@ contains
                 call spproj%read(params%projfile)
                 fall_over = spproj%os_out%get_noris() == 0
         case DEFAULT
-            write(*,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D_refine'
+            write(logfhandle,*)'Unsupported ORITYPE; simple_commander_hlev_wflows::exec_cluster3D_refine'
         end select
         if( fall_over ) THROW_HARD('no particles found! exec_cluster3D_refine')
         ! stash states
@@ -1113,9 +1113,9 @@ contains
         do state = 1, nstates
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.single_state )cycle
-            write(*,'(A)')   '>>>'
-            write(*,'(A,I2,A,A)')'>>> REFINING STATE: ', state
-            write(*,'(A)')   '>>>'
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I2,A,A)')'>>> REFINING STATE: ', state
+            write(logfhandle,'(A)')   '>>>'
             params_glob%projname = 'state_'//trim(int2str_pad(state,2))
             params_glob%projfile = projfiles(state)
             params_glob%nstates = 1

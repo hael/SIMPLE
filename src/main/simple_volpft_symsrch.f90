@@ -52,8 +52,8 @@ contains
         call vpftcc%new(vol, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
         kfromto = vpftcc%get_kfromto()
-        if( DEBUG_HERE ) print *, 'nspace : ', nspace
-        if( DEBUG_HERE ) print *, 'kfromto: ', kfromto
+        if( DEBUG_HERE ) write(logfhandle,*) 'nspace : ', nspace
+        if( DEBUG_HERE ) write(logfhandle,*) 'kfromto: ', kfromto
         ! create the symmetry object
         call symobj%new(pgrp)
         nsym = symobj%get_nsym()
@@ -85,7 +85,7 @@ contains
         end do
         ! create global symaxis
         call saxis_glob%new
-        if( DEBUG_HERE ) print *, '***DEBUG_HERE(volpft_symsrch)***; volpft_symsrch_init, DONE'
+        if( DEBUG_HERE ) write(logfhandle,*) '***DEBUG_HERE(volpft_symsrch)***; volpft_symsrch_init, DONE'
     end subroutine volpft_symsrch_init
 
     subroutine volpft_srch4symaxis( symaxis_best, fromto )
@@ -113,8 +113,8 @@ contains
            THROW_HARD('range out of bound; volpft_srch4symaxis')
         endif
         ntot = ffromto(2) - ffromto(1) + 1
-        if( DEBUG_HERE ) print *, 'ffromto: ', ffromto
-        if( DEBUG_HERE ) print *, 'ntot   : ', ntot
+        if( DEBUG_HERE ) write(logfhandle,*) 'ffromto: ', ffromto
+        if( DEBUG_HERE ) write(logfhandle,*) 'ntot   : ', ntot
         ! create
         ! container for candidate symmetry axes
         call cand_axes%new(NPROJ)
@@ -153,7 +153,7 @@ contains
             end do
         end do
         !$omp end parallel do
-        if( DEBUG_HERE ) print *, '***DEBUG_HERE(volpft_symsrch)***; grid search, DONE'
+        if( DEBUG_HERE ) write(logfhandle,*) '***DEBUG_HERE(volpft_symsrch)***; grid search, DONE'
         ! identify the best candidates (serial code)
         do iproj=ffromto(1),ffromto(2)
             corr_best  = -1.0
@@ -171,7 +171,7 @@ contains
             call symaxis%set('corr', corr_best)
             call cand_axes%set_ori(iproj,symaxis)
         end do
-        if( DEBUG_HERE ) print *, '***DEBUG_HERE(volpft_symsrch)***; identify the best candidates, DONE'
+        if( DEBUG_HERE ) write(logfhandle,*) '***DEBUG_HERE(volpft_symsrch)***; identify the best candidates, DONE'
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_axes%order_corr()

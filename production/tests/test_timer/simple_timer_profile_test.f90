@@ -27,7 +27,7 @@ implicit none
 public:: exec_profiletest
 private
 #include "simple_local_flags.inc"
-#include "simple_timer.h"   
+#include "simple_timer.h"
 contains
 
     subroutine exec_profiletest(be_verbose)
@@ -46,11 +46,6 @@ contains
       b = 1.5
       xx = 12.0_dp
       if (verbose) print *, 'Fortran Timer and Profiler'
-#ifdef PGI
-       print *, 'PGI cannot process block statements'
-       return
-#else
-
       call reset_timer()
       if (verbose) write (*, "(A)") ' '
       if (verbose) write (*, '(A)') '1.  Testing profiler using macros inside loop'
@@ -114,7 +109,6 @@ contains
       TEND(empty)
 
       TREPORT( Testing different loop unrolling methods )
-#endif
 
    end subroutine exec_profiletest
 
@@ -145,4 +139,3 @@ contains
    end subroutine scsaxpy
 
 end module simple_timer_profile_test
-

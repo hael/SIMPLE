@@ -57,9 +57,9 @@ contains
             ! index stuff
             recind = iptcl - fromto(1) + 1
             if( recind < 1 )then
-                print *, 'iptcl:  ', iptcl
-                print *, 'fromto: ', fromto
-                print *, 'recind: ', recind
+                write(logfhandle,*) 'iptcl:  ', iptcl
+                write(logfhandle,*) 'fromto: ', fromto
+                write(logfhandle,*) 'recind: ', recind
                 THROW_HARD('nonsensical record index; write_o_peak')
             endif
             ! write record
@@ -78,9 +78,9 @@ contains
             ! index stuff
             recind = iptcl - fromto(1) + 1
             if( recind < 1 )then
-                print *, 'iptcl:  ', iptcl
-                print *, 'fromto: ', fromto
-                print *, 'recind: ', recind
+                write(logfhandle,*) 'iptcl:  ', iptcl
+                write(logfhandle,*) 'fromto: ', fromto
+                write(logfhandle,*) 'recind: ', recind
                 THROW_HARD('nonsensical record index; write_o_peak')
             endif
             npeaks = o_peak%get_noris()
@@ -121,9 +121,9 @@ contains
             ! index stuff
             recind = iptcl - fromto(1) + 1
             if( recind < 1 )then
-                print *, 'iptcl:  ', iptcl
-                print *, 'fromto: ', fromto
-                print *, 'recind: ', recind
+                write(logfhandle,*) 'iptcl:  ', iptcl
+                write(logfhandle,*) 'fromto: ', fromto
+                write(logfhandle,*) 'recind: ', recind
                 THROW_HARD('nonsensical record index; write_o_peak')
             endif
             ! read record

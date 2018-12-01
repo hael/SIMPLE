@@ -283,8 +283,7 @@ contains
             if(which /= 0 )then
                 val = self%keywords_filename%get(which)
             else
-                !    if((self%keywords_class3D%isthere(starkey))then
-                print *,"simple_star_dict::  STAR token ", trim(starkey), " not supported "
+                write(logfhandle,*)"simple_star_dict::  STAR token ", trim(starkey), " not supported "
             end if
         end if
 
@@ -308,7 +307,7 @@ contains
                 val = self%keywords_filename%get_key(which)
             else
                 !    if((self%keywords_class3D%isthere(simplekey))then
-                print *,"simple_star_dict:: SIMPLE token ", trim(simplekey), " not supported "
+                write(logfhandle,*)"simple_star_dict:: SIMPLE token ", trim(simplekey), " not supported "
             end if
         end if
     end function simple2star

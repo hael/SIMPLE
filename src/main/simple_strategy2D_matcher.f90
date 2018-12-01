@@ -102,7 +102,7 @@ contains
             ! factorial decay, -2 because first step is always greedy
             snhc_sz = min(SNHC2D_INITFRAC,&
                 &max(0.,SNHC2D_INITFRAC*(1.-SNHC2D_DECAY)**real(params_glob%extr_iter-2)))
-            write(*,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
+            write(logfhandle,'(A,F8.2)') '>>> STOCHASTIC NEIGHBOURHOOD SIZE(%):',&
                 &100.*(1.-snhc_sz(params_glob%fromp))
         else
             snhc_sz = 0. ! full neighbourhood
@@ -115,7 +115,7 @@ contains
         ! B-FACTOR
         if( params_glob%cc_objfun == OBJFUN_RES )then
             call build_glob%spproj_field%calc_bfac_srch(bfactor)
-            write(*,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
+            write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
         else
             bfactor = 0.
         endif
@@ -173,7 +173,7 @@ contains
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
-        write(*,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
+        write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
         ! array allocation for strategy2D
         call prep_strategy2D( ptcl_mask, which_iter )
         ! switch for polymorphic strategy2D construction

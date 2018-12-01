@@ -298,7 +298,7 @@ contains
             endif
         end do
         if( n_nans > 0 )then
-            write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
+            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_1', n_nans
         endif
     end subroutine check4nans_1
 
@@ -315,7 +315,7 @@ contains
             endif
         end do
         if( n_nans > 0 )then
-            write(*,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
+            write(logfhandle,*) 'found NaNs in inputted vector; simple_math::check4nans_2', n_nans
         endif
     end subroutine check4nans_2
 
@@ -2013,7 +2013,7 @@ contains
         integer :: j, s(2)
         s = shape(mat)
         do j = 1, s(1)
-            print *, mat(j,:)
+            write(logfhandle,*) mat(j,:)
         enddo
     end subroutine vis_2Dreal_mat
 
@@ -2022,7 +2022,7 @@ contains
         integer :: j, s(2)
         s = shape(mat)
         do j = 1, s(1)
-            print *, mat(j,:)
+            write(logfhandle,*) mat(j,:)
         enddo
     end subroutine vis_2Dinteger_mat
 
@@ -2031,7 +2031,7 @@ contains
         integer :: j, s(3)
         s = shape(mat)
         do j = 1, s(1)
-            print *, mat(j,:,1)
+            write(logfhandle,*) mat(j,:,1)
         enddo
     end subroutine vis_3Dreal_mat
 
@@ -2040,7 +2040,7 @@ contains
         integer :: j, s(3)
         s = shape(mat)
         do j = 1, s(1)
-            print *, mat(j,:,1)
+            write(logfhandle,*) mat(j,:,1)
         enddo
     end subroutine vis_3Dinteger_mat
 

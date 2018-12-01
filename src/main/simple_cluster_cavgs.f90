@@ -107,10 +107,10 @@ contains
             end do
         end do
         corr_between_cls_avg = corr_between_cls_avg / real((params_glob%ncls * (params_glob%ncls -1 )) / 2)
-        write(*,'(a)') '>>> CLUSTERING STATISTICS'
-        write(*,'(a,1x,f8.4)') '>>> # CLUSTERS FOUND        ', real(params_glob%ncls)
-        write(*,'(a,1x,f8.4)') '>>> WITHIN  CLUSTER CORR    ', corr_within_cls_avg
-        write(*,'(a,1x,f8.4)') '>>> BETWEEN CLUSTER CORR    ', corr_between_cls_avg
+        write(logfhandle,'(a)') '>>> CLUSTERING STATISTICS'
+        write(logfhandle,'(a,1x,f8.4)') '>>> # CLUSTERS FOUND        ', real(params_glob%ncls)
+        write(logfhandle,'(a,1x,f8.4)') '>>> WITHIN  CLUSTER CORR    ', corr_within_cls_avg
+        write(logfhandle,'(a,1x,f8.4)') '>>> BETWEEN CLUSTER CORR    ', corr_between_cls_avg
         call ceninfo%new(params_glob%ncls)
         do icen=1,params_glob%ncls
             where( labels == icen )
@@ -138,11 +138,11 @@ contains
         popmax = maxval(pops)
         popmed = median(pops)
         call moment(pops, popave, popsdev, popvar, err)
-        write(*,'(a,1x,f8.2)') '>>> MINIMUM POPULATION    ', popmin
-        write(*,'(a,1x,f8.2)') '>>> MAXIMUM POPULATION    ', popmax
-        write(*,'(a,1x,f8.2)') '>>> MEDIAN  POPULATION    ', popmed
-        write(*,'(a,1x,f8.2)') '>>> AVERAGE POPULATION    ', popave
-        write(*,'(a,1x,f8.2)') '>>> SDEV OF POPULATION    ', popsdev
+        write(logfhandle,'(a,1x,f8.2)') '>>> MINIMUM POPULATION    ', popmin
+        write(logfhandle,'(a,1x,f8.2)') '>>> MAXIMUM POPULATION    ', popmax
+        write(logfhandle,'(a,1x,f8.2)') '>>> MEDIAN  POPULATION    ', popmed
+        write(logfhandle,'(a,1x,f8.2)') '>>> AVERAGE POPULATION    ', popave
+        write(logfhandle,'(a,1x,f8.2)') '>>> SDEV OF POPULATION    ', popsdev
         if( params_glob%balance > 0 )then
             inds     = (/(i,i=1,params_glob%nptcls)/)
             included = .true.
@@ -182,16 +182,16 @@ contains
                     deallocate(meminds, memres, mempops)
                 endif
             end do
-            write(*,'(a)') '>>> CLUSTERING STATISTICS AFTER BALANCING'
+            write(logfhandle,'(a)') '>>> CLUSTERING STATISTICS AFTER BALANCING'
             popmin = minval(pops)
                popmax = maxval(pops)
             popmed = median_nocopy(pops)
             call moment(pops, popave, popsdev, popvar, err)
-            write(*,'(a,1x,f8.2)') '>>> MINIMUM POPULATION    ', popmin
-            write(*,'(a,1x,f8.2)') '>>> MAXIMUM POPULATION    ', popmax
-            write(*,'(a,1x,f8.2)') '>>> MEDIAN  POPULATION    ', popmed
-            write(*,'(a,1x,f8.2)') '>>> AVERAGE POPULATION    ', popave
-            write(*,'(a,1x,f8.2)') '>>> SDEV OF POPULATION    ', popsdev
+            write(logfhandle,'(a,1x,f8.2)') '>>> MINIMUM POPULATION    ', popmin
+            write(logfhandle,'(a,1x,f8.2)') '>>> MAXIMUM POPULATION    ', popmax
+            write(logfhandle,'(a,1x,f8.2)') '>>> MEDIAN  POPULATION    ', popmed
+            write(logfhandle,'(a,1x,f8.2)') '>>> AVERAGE POPULATION    ', popave
+            write(logfhandle,'(a,1x,f8.2)') '>>> SDEV OF POPULATION    ', popsdev
         endif
         ! produce a histogram of class populations
         szmax = maxval(pops)
@@ -200,10 +200,10 @@ contains
         do while( nint(scale*szmax) > hlen )
             scale = scale - 0.001
         end do
-        write(*,'(a)') '>>> HISTOGRAM OF CLUSTER POPULATIONS'
+        write(logfhandle,'(a)') '>>> HISTOGRAM OF CLUSTER POPULATIONS'
         call hpsort(pops)
         do icen=1,params_glob%ncls
-            write(*,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
+            write(logfhandle,*) nint(pops(icen)),"|",('*', j=1,nint(pops(icen)*scale))
         end do
         call ceninfo%write('aff_prop_ceninfo'//trim(TXT_EXT), [1,params_glob%ncls])
         ! write selected class averages
@@ -216,7 +216,7 @@ contains
                     call build_glob%img%write('aff_prop_selected_imgs'//params_glob%ext, cnt)
                 endif
             enddo
-            write(*,'(i5,1x,a)') cnt, 'SELECTED CLASS AVERAGES WRITTEN TO FILE: aff_prop_selected_imgs.ext'
+            write(logfhandle,'(i5,1x,a)') cnt, 'SELECTED CLASS AVERAGES WRITTEN TO FILE: aff_prop_selected_imgs.ext'
         endif
         call ceninfo%kill
         call aprop%kill

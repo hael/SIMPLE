@@ -35,7 +35,7 @@ program simple_test_chiara_try1
   !      detector    = bin
 
   if( command_argument_count() < 4 )then
-      write(*,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)] [detector= <binarisation method> (sobel|canny|bin)]'
+      write(logfhandle,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)] [detector= <binarisation method> (sobel|canny|bin)]'
       stop
   endif
   call cline%parse_oldschool

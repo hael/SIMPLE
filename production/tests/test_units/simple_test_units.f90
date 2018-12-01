@@ -51,28 +51,26 @@ contains
         do i=2,10
             pvec(i) = 0.2/9.
         end do
-        write(*,*) 'this should be one:', sum(pvec)
+        write(logfhandle,*) 'this should be one:', sum(pvec)
         prob=0.
         do i=1,1000
             if( multinomal(pvec) == 1 ) prob = prob+1.
         end do
         prob = prob/1000.
-        write(*,*) 'this should be 0.8:', prob
+        write(logfhandle,*) 'this should be 0.8:', prob
         pvec = 0.1
-        write(*,*) 'this should be one:', sum(pvec)
+        write(logfhandle,*) 'this should be one:', sum(pvec)
         prob=0.
         do i=1,1000
             irnd = multinomal(pvec)
             if( irnd == 1 ) prob = prob+1.
         end do
         prob = prob/1000.
-        write(*,*) 'this should be 0.1:', prob
-        write(*,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
+        write(logfhandle,*) 'this should be 0.1:', prob
+        write(logfhandle,'(a)') 'SIMPLE_RND: MULTINOMAL TEST COMPLETED WITHOUT TERMINAL BUGS ;-)'
     end subroutine
 
     subroutine test_testfuns
-        !how do we make this function compile under PGI?
-#if !defined(PGI)
         procedure(testfun), pointer :: ptr
         integer                     :: i
         real                        :: gmin, range(2)
@@ -128,12 +126,11 @@ contains
             if( success )then
                 cycle
             else
-                write(*,*) 'testing of testfun:', i, 'failed!'
-                write(*,*) 'minimum:', gmin
+                write(logfhandle,*) 'testing of testfun:', i, 'failed!'
+                write(logfhandle,*) 'minimum:', gmin
             endif
         end do
-        write(*,'(a)') 'SIMPLE_TESTFUNS: TEST OF TEST FUNCTIONS COMPLETED ;-)'
-#endif
+        write(logfhandle,'(a)') 'SIMPLE_TESTFUNS: TEST OF TEST FUNCTIONS COMPLETED ;-)'
     end subroutine
 
     subroutine test_euler_shift
@@ -166,8 +163,8 @@ contains
             if( ran3() < 0.5 ) slope = -slope
             intercept = 10.*ran3()
             if( ran3() < 0.5 ) intercept = -intercept
-!            write(*,*) '***********************************'
-!            write(*,*) 'Slope/Intercept:', slope, intercept
+!            write(logfhandle,*) '***********************************'
+!            write(logfhandle,*) 'Slope/Intercept:', slope, intercept
             ! generate the data
             x = -1.
             do j=1,100
@@ -177,13 +174,13 @@ contains
             end do
             ! fit the data
             call fit_straight_line(100, datavec, slope, intercept, corr)
-!            write(*,*) 'Fitted Slope/Intercept:', slope, intercept
-!            write(*,*) 'Corr:', corr
+!            write(logfhandle,*) 'Fitted Slope/Intercept:', slope, intercept
+!            write(logfhandle,*) 'Corr:', corr
             if( corr < 0.9999 )then
                 THROW_HARD('fit_straight_line failed!')
             endif
         end do
-        write(*,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'
+        write(logfhandle,'(a)') 'FIT_STRAIGHT_LINE UNIT TEST COMPLETED ;-)'
     end subroutine
 
 end program simple_test_units

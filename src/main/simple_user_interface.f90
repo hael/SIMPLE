@@ -291,7 +291,7 @@ contains
         call new_vizoris
         call new_volops
         ! ...
-        if( DEBUG ) print *, '***DEBUG::simple_user_interface; make_user_interface, DONE'
+        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
     subroutine set_prg_ptr_array
@@ -359,7 +359,7 @@ contains
         prg_ptr_array(62)%ptr2prg => update_project
         prg_ptr_array(63)%ptr2prg => vizoris
         prg_ptr_array(64)%ptr2prg => volops
-        if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
+        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
     subroutine get_prg_ptr( which_program, ptr2prg )
@@ -502,74 +502,74 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_distr_prgs_in_ui
-        write(*,'(A)') cluster2D%name
-        write(*,'(A)') cluster2D_stream%name
-        write(*,'(A)') cluster3D%name
-        write(*,'(A)') cluster3D_refine%name
-        write(*,'(A)') ctf_estimate%name
-        write(*,'(A)') gen_pspecs_and_thumbs%name
-        write(*,'(A)') initial_3Dmodel%name
-        write(*,'(A)') make_cavgs%name
-        write(*,'(A)') motion_correct%name
-        write(*,'(A)') motion_correct_tomo%name
-        write(*,'(A)') pick%name
-        write(*,'(A)') pick_extract_stream%name
-        write(*,'(A)') preprocess%name
-        write(*,'(A)') preprocess_stream%name
-        write(*,'(A)') reconstruct3D%name
-        write(*,'(A)') refine3D%name
-        write(*,'(A)') refine3D_init%name
-        write(*,'(A)') scale_project%name
-        write(*,'(A)') tseries_track%name
+        write(logfhandle,'(A)') cluster2D%name
+        write(logfhandle,'(A)') cluster2D_stream%name
+        write(logfhandle,'(A)') cluster3D%name
+        write(logfhandle,'(A)') cluster3D_refine%name
+        write(logfhandle,'(A)') ctf_estimate%name
+        write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
+        write(logfhandle,'(A)') initial_3Dmodel%name
+        write(logfhandle,'(A)') make_cavgs%name
+        write(logfhandle,'(A)') motion_correct%name
+        write(logfhandle,'(A)') motion_correct_tomo%name
+        write(logfhandle,'(A)') pick%name
+        write(logfhandle,'(A)') pick_extract_stream%name
+        write(logfhandle,'(A)') preprocess%name
+        write(logfhandle,'(A)') preprocess_stream%name
+        write(logfhandle,'(A)') reconstruct3D%name
+        write(logfhandle,'(A)') refine3D%name
+        write(logfhandle,'(A)') refine3D_init%name
+        write(logfhandle,'(A)') scale_project%name
+        write(logfhandle,'(A)') tseries_track%name
     end subroutine list_distr_prgs_in_ui
 
     subroutine list_shmem_prgs_in_ui
-        write(*,'(A)') center%name
-        write(*,'(A)') cluster_cavgs%name
-        write(*,'(A)') convert%name
-        write(*,'(A)') ctfops%name
-        write(*,'(A)') export_starproject%name
-        write(*,'(A)') extract%name
-        write(*,'(A)') filter%name
-        write(*,'(A)') fsc%name
-        write(*,'(A)') info_image%name
-        write(*,'(A)') info_stktab%name
-        write(*,'(A)') import_boxes%name
-        write(*,'(A)') import_cavgs%name
-        write(*,'(A)') import_movies%name
-        write(*,'(A)') import_particles%name
-        write(*,'(A)') import_starproject%name
-        write(*,'(A)') local_resolution%name
-        write(*,'(A)') local_resolution2D%name
-        write(*,'(A)') make_oris%name
-        write(*,'(A)') make_pickrefs%name
-        write(*,'(A)') mask%name
-        write(*,'(A)') mkdir_%name
-        write(*,'(A)') new_project%name
-        write(*,'(A)') normalize_%name
-        write(*,'(A)') orisops%name
-        write(*,'(A)') oristats%name
-        write(*,'(A)') postprocess%name
-        write(*,'(A)') print_fsc%name
-        write(*,'(A)') print_magic_boxes%name
-        write(*,'(A)') print_project_info%name
-        write(*,'(A)') print_project_field%name
-        write(*,'(A)') report_selection%name
-        write(*,'(A)') reproject%name
-        write(*,'(A)') select_%name
-        write(*,'(A)') shift%name
-        write(*,'(A)') simulate_movie%name
-        write(*,'(A)') simulate_noise%name
-        write(*,'(A)') simulate_particles%name
-        write(*,'(A)') simulate_subtomogram%name
-        write(*,'(A)') scale%name
-        write(*,'(A)') stack%name
-        write(*,'(A)') stackops%name
-        write(*,'(A)') symaxis_search%name
-        write(*,'(A)') symmetry_test%name
-        write(*,'(A)') update_project%name
-        write(*,'(A)') vizoris%name
-        write(*,'(A)') volops%name
+        write(logfhandle,'(A)') center%name
+        write(logfhandle,'(A)') cluster_cavgs%name
+        write(logfhandle,'(A)') convert%name
+        write(logfhandle,'(A)') ctfops%name
+        write(logfhandle,'(A)') export_starproject%name
+        write(logfhandle,'(A)') extract%name
+        write(logfhandle,'(A)') filter%name
+        write(logfhandle,'(A)') fsc%name
+        write(logfhandle,'(A)') info_image%name
+        write(logfhandle,'(A)') info_stktab%name
+        write(logfhandle,'(A)') import_boxes%name
+        write(logfhandle,'(A)') import_cavgs%name
+        write(logfhandle,'(A)') import_movies%name
+        write(logfhandle,'(A)') import_particles%name
+        write(logfhandle,'(A)') import_starproject%name
+        write(logfhandle,'(A)') local_resolution%name
+        write(logfhandle,'(A)') local_resolution2D%name
+        write(logfhandle,'(A)') make_oris%name
+        write(logfhandle,'(A)') make_pickrefs%name
+        write(logfhandle,'(A)') mask%name
+        write(logfhandle,'(A)') mkdir_%name
+        write(logfhandle,'(A)') new_project%name
+        write(logfhandle,'(A)') normalize_%name
+        write(logfhandle,'(A)') orisops%name
+        write(logfhandle,'(A)') oristats%name
+        write(logfhandle,'(A)') postprocess%name
+        write(logfhandle,'(A)') print_fsc%name
+        write(logfhandle,'(A)') print_magic_boxes%name
+        write(logfhandle,'(A)') print_project_info%name
+        write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') report_selection%name
+        write(logfhandle,'(A)') reproject%name
+        write(logfhandle,'(A)') select_%name
+        write(logfhandle,'(A)') shift%name
+        write(logfhandle,'(A)') simulate_movie%name
+        write(logfhandle,'(A)') simulate_noise%name
+        write(logfhandle,'(A)') simulate_particles%name
+        write(logfhandle,'(A)') simulate_subtomogram%name
+        write(logfhandle,'(A)') scale%name
+        write(logfhandle,'(A)') stack%name
+        write(logfhandle,'(A)') stackops%name
+        write(logfhandle,'(A)') symaxis_search%name
+        write(logfhandle,'(A)') symmetry_test%name
+        write(logfhandle,'(A)') update_project%name
+        write(logfhandle,'(A)') vizoris%name
+        write(logfhandle,'(A)') volops%name
     end subroutine list_shmem_prgs_in_ui
 
     ! private class methods
@@ -673,7 +673,7 @@ contains
         call set_param(starfile,       'starfile',     'file',  'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,       'startype',     'str',     'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
-        if( DEBUG ) print *, '***DEBUG::simple_user_interface; set_common_params, DONE'
+        if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
     subroutine set_param_1( self, key, keytype, descr_short, descr_long, descr_placeholder, required, default_value )
@@ -3201,8 +3201,8 @@ contains
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
         type(chash) :: ch
-        write(*,'(a)') ''
-        write(*,'(a)') '>>> PROGRAM INFO'
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') '>>> PROGRAM INFO'
         call ch%new(4)
         call ch%push('name',        self%name)
         call ch%push('descr_short', self%descr_short)
@@ -3210,26 +3210,26 @@ contains
         call ch%push('executable',  self%executable)
         call ch%print_key_val_pairs
         call ch%kill
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
         call print_param_hash(self%parm_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
         call print_param_hash(self%alt_ios)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%srch_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%filt_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
         call print_param_hash(self%mask_ctrls)
-        write(*,'(a)') ''
-        write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
+        write(logfhandle,'(a)') ''
+        write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
 
         contains
@@ -3239,7 +3239,7 @@ contains
                 integer :: i
                 if( allocated(arr) )then
                     do i=1,size(arr)
-                        write(*,'(a,1x,i3)') '>>> PARAMETER #', i
+                        write(logfhandle,'(a,1x,i3)') '>>> PARAMETER #', i
                         call ch%new(6)
                         call ch%push('key',               arr(i)%key)
                         call ch%push('keytype',           arr(i)%keytype)
@@ -3265,33 +3265,33 @@ contains
         type(chash) :: ch
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
-        write(*,'(a)') format_str('USAGE', C_UNDERLINED)
+        write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
         if( l_distr_exec )then
-            write(*,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+            write(logfhandle,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
         else
-            write(*,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
         endif
-        write(*,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
+        write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
 
-        if( allocated(self%img_ios) )    write(*,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
+        if( allocated(self%img_ios) )    write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
 
-        if( allocated(self%parm_ios) )   write(*,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
+        if( allocated(self%parm_ios) )   write(logfhandle,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
         call print_param_hash(self%parm_ios)
 
-        if( allocated(self%alt_ios) )    write(*,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
+        if( allocated(self%alt_ios) )    write(logfhandle,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
         call print_param_hash(self%alt_ios)
 
-        if( allocated(self%srch_ctrls) ) write(*,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
+        if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%srch_ctrls)
 
-        if( allocated(self%filt_ctrls) ) write(*,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
+        if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%filt_ctrls)
 
-        if( allocated(self%mask_ctrls) ) write(*,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
+        if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
         call print_param_hash(self%mask_ctrls)
 
-        if( allocated(self%comp_ctrls) ) write(*,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
+        if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
 
         contains
@@ -3346,7 +3346,7 @@ contains
 
     subroutine print_prg_descr_long( self )
         class(simple_program), intent(in) :: self
-        write(*,'(a)') self%descr_long
+        write(logfhandle,'(a)') self%descr_long
     end subroutine print_prg_descr_long
 
     subroutine write_ui_json
@@ -3365,7 +3365,7 @@ contains
         ! write & clean
         call json%print(all_programs, 'simple_user_interface.json')
         if( json%failed() )then
-            write(*,*) 'json input/output error for simple_user_interface'
+            write(logfhandle,*) 'json input/output error for simple_user_interface'
             stop
         endif
         call json%destroy(all_programs)
@@ -3419,8 +3419,8 @@ contains
                             call parsestr(before, '|', args, nargs)
                             exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
                             if( exception )then
-                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(*,*)trim(arr(i)%descr_placeholder)
+                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
                                 stop
                             endif
                             call json%add(entry, 'options', args(1:nargs))
@@ -3462,7 +3462,7 @@ contains
         ! write & clean
         call json%print(program_entry, trim(adjustl(self%name))//'.json')
         if( json%failed() )then
-            write(*,*) 'json input/output error for program: ', trim(self%name)
+            write(logfhandle,*) 'json input/output error for program: ', trim(self%name)
             stop
         endif
         call json%destroy(program_entry)
@@ -3497,8 +3497,8 @@ contains
                             call parsestr(before, '|', args, nargs)
                             exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
                             if( exception )then
-                                write(*,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
-                                write(*,*)trim(arr(i)%descr_placeholder)
+                                write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
+                                write(logfhandle,*)trim(arr(i)%descr_placeholder)
                                 stop
                             endif
                             call json%add(entry, 'options', args(1:nargs))

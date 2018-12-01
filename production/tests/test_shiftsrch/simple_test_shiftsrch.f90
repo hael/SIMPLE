@@ -5,6 +5,7 @@ use simple_builder,          only: builder
 use simple_image,            only: image
 use simple_parameters,       only: parameters
 use simple_polarizer,        only: polarizer
+use simple_defs
 implicit none
 type(cmdline)          :: cline
 type(builder)          :: b
@@ -17,8 +18,8 @@ real, allocatable      :: corrs(:)
 real                   :: corrmax, corr
 integer                :: xsh, ysh, xbest, ybest, i
 if( command_argument_count() < 3 )then
-    write(*,'(a)',advance='no') 'simple_test_shiftsrch stk=<particles.ext> msk=<mask radius(in pixels)>'
-    write(*,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
+    write(logfhandle,'(a)',advance='no') 'simple_test_shiftsrch stk=<particles.ext> msk=<mask radius(in pixels)>'
+    write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
     stop
 endif
 call cline%parse_oldschool

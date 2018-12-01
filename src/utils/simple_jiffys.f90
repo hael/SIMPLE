@@ -15,10 +15,10 @@ contains
     subroutine progress( i, n )
         integer, intent(in) :: i, n
         if( .not. l_distr_exec_glob )then
-            write(OUTPUT_UNIT,'(a1,a,t21,i3,a)',advance="no") achar(13),&
+            write(logfhandle,'(a1,a,t21,i3,a)',advance="no") achar(13),&
                 &"Percent Complete: ", nint((real(i)/real(n))*100.0), "%"
             flush (OUTPUT_UNIT)
-            if( i >= n ) write(*,*) ''
+            if( i >= n ) write(logfhandle,*) ''
         endif
     end subroutine progress
 
@@ -67,66 +67,66 @@ contains
         pprint_simple = .true.
         if( present(print_simple) ) pprint_simple = print_simple
         if( pprint_simple )then
-            write(OUTPUT_UNIT,'(A)') "       _______ _____ _______  _____         _______"
-            write(OUTPUT_UNIT,'(A)') "       |______   |   |  |  | |_____] |      |______"
-            write(OUTPUT_UNIT,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
-            write(OUTPUT_UNIT,'(A)') " "
-            write(OUTPUT_UNIT,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
-            write(OUTPUT_UNIT,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
-            write(OUTPUT_UNIT,'(A)') "         (_                  (\   (_         _)      (_"
-            write(OUTPUT_UNIT,'(A)') ""
+            write(logfhandle,'(A)') "       _______ _____ _______  _____         _______"
+            write(logfhandle,'(A)') "       |______   |   |  |  | |_____] |      |______"
+            write(logfhandle,'(A)') "       ______| __|__ |  |  | |       |_____ |______"
+            write(logfhandle,'(A)') " "
+            write(logfhandle,'(A)') " _)_ ( _   _     ) o  _             _   _   _   o  _   _"
+            write(logfhandle,'(A)') " (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
+            write(logfhandle,'(A)') "         (_                  (\   (_         _)      (_"
+            write(logfhandle,'(A)') ""
         endif
-        write(OUTPUT_UNIT,'(A)') str
+        write(logfhandle,'(A)') str
     end subroutine simple_end
 
     !> \brief  for pretty haloween ending
     subroutine haloween_end( str )
         character(len=*), intent(in) :: str
-        write(*,'(A)') " #"
-        write(*,'(A)') " ##"
-        write(*,'(A)') " ###"
-        write(*,'(A)') "  ####"
-        write(*,'(A)') "   #####              _______ _____ _______  _____         _______"
-        write(*,'(A)') "   #######            |______   |   |  |  | |_____] |      |______"
-        write(*,'(A)') "    #######           ______| __|__ |  |  | |       |_____ |______  v3.0"
-        write(*,'(A)') "    ########"
-        write(*,'(A)') "    #########    _)_ ( _   _     ) o  _             _   _   _   o  _   _"
-        write(*,'(A)') "    ##########   (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
-        write(*,'(A)') "    ##########            (_                  (\   (_         _)      (_"
-        write(*,'(A)') "   ###########"
-        write(*,'(A)') " ##############                                                    #"
-        write(*,'(A)') "###############                                                    #"
-        write(*,'(A)') " ##############                                                   ##"
-        write(*,'(A)') "   #############                                                 ##"
-        write(*,'(A)') "    #############                                              ###"
-        write(*,'(A)') "    ###############                                         #####"
-        write(*,'(A)') "     ###############                                    ########"
-        write(*,'(A)') "     ################                                ###########"
-        write(*,'(A)') "     ################                              ############"
-        write(*,'(A)') "     ################                           #############"
-        write(*,'(A)') "    #################       #                 ###############"
-        write(*,'(A)') "   ###################     ##    #           ################"
-        write(*,'(A)') "  #####################   ###   ##          #################"
-        write(*,'(A)') " #######################  ########         ###################"
-        write(*,'(A)') "   ######################  #######        #####################"
-        write(*,'(A)') "     #############################       #######################"
-        write(*,'(A)') "        #########################       #####################"
-        write(*,'(A)') "           ################################################"
-        write(*,'(A)') "            ##############################################"
-        write(*,'(A)') "              ###########################################"
-        write(*,'(A)') "               #########################################"
-        write(*,'(A)') "                #######################################"
-        write(*,'(A)') "                 ######################################"
-        write(*,'(A)') "                 ######################################"
-        write(*,'(A)') "                 ###########################      ######"
-        write(*,'(A)') "                 ####  ###################           ###"
-        write(*,'(A)') "                 ###    ################              ##"
-        write(*,'(A)') "                 ##     ##  ##########                 #"
-        write(*,'(A)') "                 #      #   #### ####"
-        write(*,'(A)') "                            ##    ###"
-        write(*,'(A)') "                            #     ##"
-        write(*,'(A)') "                                  #"
-        write(*,'(A)') str
+        write(logfhandle,'(A)') " #"
+        write(logfhandle,'(A)') " ##"
+        write(logfhandle,'(A)') " ###"
+        write(logfhandle,'(A)') "  ####"
+        write(logfhandle,'(A)') "   #####              _______ _____ _______  _____         _______"
+        write(logfhandle,'(A)') "   #######            |______   |   |  |  | |_____] |      |______"
+        write(logfhandle,'(A)') "    #######           ______| __|__ |  |  | |       |_____ |______  v3.0"
+        write(logfhandle,'(A)') "    ########"
+        write(logfhandle,'(A)') "    #########    _)_ ( _   _     ) o  _             _   _   _   o  _   _"
+        write(logfhandle,'(A)') "    ##########   (_   ) ) )_)   (  ( ) ) (_( \)    )_) ) ) (_(  ( ) ) )_)"
+        write(logfhandle,'(A)') "    ##########            (_                  (\   (_         _)      (_"
+        write(logfhandle,'(A)') "   ###########"
+        write(logfhandle,'(A)') " ##############                                                    #"
+        write(logfhandle,'(A)') "###############                                                    #"
+        write(logfhandle,'(A)') " ##############                                                   ##"
+        write(logfhandle,'(A)') "   #############                                                 ##"
+        write(logfhandle,'(A)') "    #############                                              ###"
+        write(logfhandle,'(A)') "    ###############                                         #####"
+        write(logfhandle,'(A)') "     ###############                                    ########"
+        write(logfhandle,'(A)') "     ################                                ###########"
+        write(logfhandle,'(A)') "     ################                              ############"
+        write(logfhandle,'(A)') "     ################                           #############"
+        write(logfhandle,'(A)') "    #################       #                 ###############"
+        write(logfhandle,'(A)') "   ###################     ##    #           ################"
+        write(logfhandle,'(A)') "  #####################   ###   ##          #################"
+        write(logfhandle,'(A)') " #######################  ########         ###################"
+        write(logfhandle,'(A)') "   ######################  #######        #####################"
+        write(logfhandle,'(A)') "     #############################       #######################"
+        write(logfhandle,'(A)') "        #########################       #####################"
+        write(logfhandle,'(A)') "           ################################################"
+        write(logfhandle,'(A)') "            ##############################################"
+        write(logfhandle,'(A)') "              ###########################################"
+        write(logfhandle,'(A)') "               #########################################"
+        write(logfhandle,'(A)') "                #######################################"
+        write(logfhandle,'(A)') "                 ######################################"
+        write(logfhandle,'(A)') "                 ######################################"
+        write(logfhandle,'(A)') "                 ###########################      ######"
+        write(logfhandle,'(A)') "                 ####  ###################           ###"
+        write(logfhandle,'(A)') "                 ###    ################              ##"
+        write(logfhandle,'(A)') "                 ##     ##  ##########                 #"
+        write(logfhandle,'(A)') "                 #      #   #### ####"
+        write(logfhandle,'(A)') "                            ##    ###"
+        write(logfhandle,'(A)') "                            #     ##"
+        write(logfhandle,'(A)') "                                  #"
+        write(logfhandle,'(A)') str
     end subroutine haloween_end
 
     subroutine swap_i(a,b)

@@ -91,10 +91,10 @@ contains
             write(fhandle,'(a)') '#PBS -e errfile.%j'
             write(fhandle,'(a)') '#PBS -m a'
         else
-            write(*,'(a)') '#PBS -V'  ! environment copy
-            write(*,'(a)') '#PBS -o outfile.%j'
-            write(*,'(a)') '#PBS -e errfile.%j'
-            write(*,'(a)') '#PBS -m a'
+            write(logfhandle,'(a)') '#PBS -V'  ! environment copy
+            write(logfhandle,'(a)') '#PBS -o outfile.%j'
+            write(logfhandle,'(a)') '#PBS -e errfile.%j'
+            write(logfhandle,'(a)') '#PBS -m a'
         endif
 
         contains
@@ -106,13 +106,13 @@ contains
                     if( write2file )then
                         write(fhandle,'(a)') trim(cmd)//trim(delimiter)//trim(val)
                     else
-                        write(*,'(a)') trim(cmd)//trim(delimiter)//trim(val)
+                        write(logfhandle,'(a)') trim(cmd)//trim(delimiter)//trim(val)
                     endif
                 else
                     if( write2file )then
                         write(fhandle,'(a)') trim(cmd)//' '//trim(val)
                     else
-                        write(*,'(a)') trim(cmd)//' '//trim(val)
+                        write(logfhandle,'(a)') trim(cmd)//' '//trim(val)
                     endif
                 endif
             end subroutine write_formatted

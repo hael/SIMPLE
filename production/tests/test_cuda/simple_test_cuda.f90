@@ -66,9 +66,9 @@ contains
     subroutine test_cuda_precision(flag)
         implicit none
         logical, intent(inout):: flag
-        write(*,"(a)") '  CUDA Query: Test precision'
+        write(logfhandle,"(a)") '  CUDA Query: Test precision'
         call test_precision(flag)
-        write(*,"(a)") '  CUDA Query: Sum accuracy'
+        write(logfhandle,"(a)") '  CUDA Query: Sum accuracy'
         call sum_accuracy(flag)
     end subroutine test_cuda_precision
 
@@ -149,13 +149,13 @@ contains
             end do
             sum_pairwise=x(1)+x(2)
 
-            write(*, "('Summming ',i10,' elements of magnitude ',f3.1)") N,7.
-            write(*, "('Sum with intrinsic function       =',f12.1,'   Error=', f12.1)")  &
+            write(logfhandle, "('Summming ',i10,' elements of magnitude ',f3.1)") N,7.
+            write(logfhandle, "('Sum with intrinsic function       =',f12.1,'   Error=', f12.1)")  &
                 sum_intrinsic, 7.*N-sum_intrinsic
-            write(*, "('Recursive sum with SP accumulator =',f12.1,'   Error=', f12.1)")  sum_cpu, 7.*N-sum_cpu
-            write(*, "('Recursive sum with DP accumulator =',f12.1,'   Error=', f12.1)")  sum_cpu_dp, 7.*N-sum_cpu_dp
-            write(*, "('Pairwise sum in SP                =',f12.1,'   Error=', f12.1)")  sum_pairwise, 7.*N-sum_pairwise
-            write(*, "('Compensated sum in SP             =',f12.1,'   Error=', f12.1)")  sum_kahan, 7.*N-sum_kahan
+            write(logfhandle, "('Recursive sum with SP accumulator =',f12.1,'   Error=', f12.1)")  sum_cpu, 7.*N-sum_cpu
+            write(logfhandle, "('Recursive sum with DP accumulator =',f12.1,'   Error=', f12.1)")  sum_cpu_dp, 7.*N-sum_cpu_dp
+            write(logfhandle, "('Pairwise sum in SP                =',f12.1,'   Error=', f12.1)")  sum_pairwise, 7.*N-sum_pairwise
+            write(logfhandle, "('Compensated sum in SP             =',f12.1,'   Error=', f12.1)")  sum_kahan, 7.*N-sum_kahan
 
             deallocate(x)
     end subroutine sum_accuracy

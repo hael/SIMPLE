@@ -191,7 +191,7 @@ contains
         real                 :: simmat(900,900), simsum
         integer, allocatable :: centers(:), labels(:)
         integer              :: i, j, ncls, nerr
-        write(*,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
+        write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
         ! make data
         do i=1,300
             datavecs(i,:) = 1.
@@ -227,16 +227,16 @@ contains
                 if( labels(i) /= labels(j) ) nerr = nerr+1
             end do
         end do
-        write(*,*) 'NR OF CLUSTERS FOUND:', ncls
-        write(*,*) 'NR OF ASSIGNMENT ERRORS:', nerr
-        write(*,*) 'CENTERS'
+        write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
+        write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
+        write(logfhandle,*) 'CENTERS'
         do i=1,size(centers)
-            write(*,*) datavecs(centers(i),:)
+            write(logfhandle,*) datavecs(centers(i),:)
         end do
         if( ncls == 3 .and. nerr == 0 )then
-            write(*,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
+            write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
         else
-            write(*,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
+            write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
         endif
     end subroutine test_aff_prop
 

@@ -131,10 +131,10 @@ contains
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
-                write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
-                write(*,*) 'Create a symbolic link with shorter name in the cwd'
+                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse'
+                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 call exit(EXIT_FAILURE3)
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
@@ -184,10 +184,10 @@ contains
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(*,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
-                write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-                write(*,*) 'which likely exceeds the length limit LONGSTRLEN'
-                write(*,*) 'Create a symbolic link with shorter name in the cwd'
+                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
+                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 call exit(EXIT_FAILURE5)
             endif
             call self%parse_command_line_value(i, arg, allowed_args)
@@ -208,8 +208,8 @@ contains
         if( pos1 /= 0 )then
             self%cmds(i)%key = arg(:pos1-1) ! KEY
             if( .not. allowed_args%is_present(self%cmds(i)%key) )then
-                write(*,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
-                write(*,'(a)') 'Perhaps you have misspelled?'
+                write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
+                write(logfhandle,'(a)') 'Perhaps you have misspelled?'
                 call exit(EXIT_FAILURE4)
             endif
             form = str2format(arg(pos1+1:))
@@ -274,8 +274,8 @@ contains
         if( which == 0 )then
             self%argcnt = self%argcnt + 1
             if( self%argcnt > MAX_CMDARGS )then
-                write(*,*) 'self%argcnt: ', self%argcnt
-                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                write(logfhandle,*) 'self%argcnt: ', self%argcnt
+                write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
                 THROW_HARD('stack overflow; set_1')
             endif
             self%cmds(self%argcnt)%key = trim(key)
@@ -296,8 +296,8 @@ contains
         if( which == 0 )then
             self%argcnt = self%argcnt + 1
             if( self%argcnt > MAX_CMDARGS )then
-                write(*,*) 'self%argcnt: ', self%argcnt
-                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                write(logfhandle,*) 'self%argcnt: ', self%argcnt
+                write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
                 THROW_HARD('stack overflow; set_2')
             endif
             self%cmds(self%argcnt)%key = trim(key)
@@ -317,8 +317,8 @@ contains
         if( which == 0 )then
             self%argcnt = self%argcnt + 1
             if( self%argcnt > MAX_CMDARGS )then
-                write(*,*) 'self%argcnt: ', self%argcnt
-                write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                write(logfhandle,*) 'self%argcnt: ', self%argcnt
+                write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
                 THROW_HARD('stack overflow; set_3')
             endif
             self%cmds(self%argcnt)%key = trim(cmarg%key)
@@ -347,8 +347,8 @@ contains
             if( which == 0 )then
                 self%argcnt = self%argcnt + 1
                 if( self%argcnt > MAX_CMDARGS )then
-                    write(*,*) 'self%argcnt: ', self%argcnt
-                    write(*,*) 'MAX_CMDARGS: ', MAX_CMDARGS
+                    write(logfhandle,*) 'self%argcnt: ', self%argcnt
+                    write(logfhandle,*) 'MAX_CMDARGS: ', MAX_CMDARGS
                     THROW_HARD('stack overflow; set_4')
                 endif
                 self%cmds(self%argcnt)%key = trim(cmarg(n)%key)
@@ -405,7 +405,7 @@ contains
         cmderr = .false.
         do i=1,self%ncheck
            cmderr(i) = .not. self%defined(self%checker(i))
-           if( cmderr(i) ) write(*,'(a,a)') 'Missing key on command line: ', trim(self%checker(i))
+           if( cmderr(i) ) write(logfhandle,'(a,a)') 'Missing key on command line: ', trim(self%checker(i))
         end do
         ! to take care of the case where the first state has vanished (eg vol1 key absent)
         if( self%defined('nstates') )then
@@ -431,7 +431,7 @@ contains
         endif
         ! output
         if( any(cmderr) )then
-            write(*,'(a)') 'ERROR, not enough input variables defined!'
+            write(logfhandle,'(a)') 'ERROR, not enough input variables defined!'
             call exit(EXIT_FAILURE6)
         endif
         deallocate( cmderr )
@@ -443,9 +443,9 @@ contains
         integer :: i
         do i=1,self%argcnt
             if( self%cmds(i)%defined .and. allocated(self%cmds(i)%carg) )then
-                write(*,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
+                write(logfhandle,*) trim(self%cmds(i)%key), ' ', trim(self%cmds(i)%carg)
             else if( self%cmds(i)%defined )then
-                write(*,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
+                write(logfhandle,*) trim(self%cmds(i)%key), ' ', self%cmds(i)%rarg
             endif
         end do
     end subroutine printline
@@ -553,22 +553,22 @@ contains
         integer, intent(in)          :: cmdstat, cmdlen, pos
         character(len=*), intent(in) :: arg
         if( cmdstat == -1 )then
-            write(*,*) 'ERROR! while parsing the command line'
-            write(*,*) 'The string length of argument: ', arg, 'is: ', cmdlen
-            write(*,*) 'which likely exeeds the lenght limit LONGSTRLEN'
-            write(*,*) 'Create a symbolic link with shorter name in the cwd'
+            write(logfhandle,*) 'ERROR! while parsing the command line'
+            write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+            write(logfhandle,*) 'which likely exeeds the lenght limit LONGSTRLEN'
+            write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
             call exit(EXIT_FAILURE7)
         endif
         if( arg(:pos-1) .ne. 'prg' )then
-            write(*,'(a)') 'ERROR!'
-            write(*,'(a)') ''
-            write(*,'(a)') 'prg=program required to be first on command line'
-            write(*,'(a)') ''
-            write(*,'(a)') 'Please, execute with prg=list to print all available programs'
-            write(*,'(a)') ''
-            write(*,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
-            write(*,'(a)') ''
-            write(*,'(a)') 'Executing with prg flag only prints all available command-line options'
+            write(logfhandle,'(a)') 'ERROR!'
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'prg=program required to be first on command line'
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'Please, execute with prg=list to print all available programs'
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'Please, execute with prg flag and describe=yes to obtain a short description'
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'Executing with prg flag only prints all available command-line options'
             call exit(EXIT_FAILURE7)
         endif
     end subroutine cmdline_err

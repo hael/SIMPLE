@@ -135,7 +135,7 @@ contains
         integer, intent(in)                    :: recsz, maxpcaits
         integer                                :: k, file_stat, funit2, recsz2, err
         real                                   :: p, p_prev
-        write(*,'(A)') '>>> GENERATIVE ITERATIVE PCA'
+        write(logfhandle,'(A)') '>>> GENERATIVE ITERATIVE PCA'
         open(newunit=self%funit, status='old', action='read', file=datastk,&
         access='direct', form='unformatted', recl=recsz, iostat=file_stat)
         inquire( iolength=recsz2 ) self%E_zn(1,:,1)
@@ -149,14 +149,14 @@ contains
             p_prev = p
             call self%em_opt( p, err )
             if( err == -1 )then
-                write(*,'(A)') 'ERROR, in matrix inversion, iteration:', k
-                write(*,'(A)') 'RESTARTING'
+                write(logfhandle,'(A)') 'ERROR, in matrix inversion, iteration:', k
+                write(logfhandle,'(A)') 'RESTARTING'
                 call self%init
                 k = 0
                 cycle
             endif
             if( k == 1 .or. mod(k,5) == 0 )then
-                write(*,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Squared error:', p
+                write(logfhandle,"(1X,A,1X,I3,1X,A,1X,F10.0)") 'Iteration:', k, 'Squared error:', p
             endif
             if( (abs(p-p_prev) < 0.1) .or. k == maxpcaits ) exit
         end do

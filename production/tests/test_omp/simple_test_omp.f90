@@ -447,7 +447,7 @@ contains
     subroutine workordered(k)
         integer k
         !$omp ordered
-        write(*,*) k
+        write(logfhandle,*) k
         !$omp end ordered
     end subroutine workordered
     subroutine ordered_good(n)

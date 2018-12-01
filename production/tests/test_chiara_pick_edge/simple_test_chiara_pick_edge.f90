@@ -33,7 +33,7 @@ logical            :: outside, discard, picked
 !      part_radius = 15.
 
 if( command_argument_count() < 3 )then
-    write(*,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)]'
+    write(logfhandle,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)]'
     stop
 endif
 call cline%parse_oldschool

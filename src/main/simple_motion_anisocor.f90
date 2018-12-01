@@ -971,7 +971,7 @@ contains
 !!$                THROW_HARD('shift alignment failed; test_ftexp_shsrch')
 !!$            endif
 !!$        end do
-!!$        write(*,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+!!$        write(logfhandle,'(a)') 'SIMPLE_ftexp_shsrch_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
 !!$    end subroutine test_motion_anisocor
 
 end module simple_motion_anisocor

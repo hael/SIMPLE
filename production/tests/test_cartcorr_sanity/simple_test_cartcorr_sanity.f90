@@ -41,9 +41,9 @@ do i=1,nits
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))
     diff_corr   = diff_corr+abs(old_corr-cxy(1))
 end do
-write(*,*) 'diff_old:    ', diff_old
-write(*,*) 'diff_recast: ', diff_recast
-write(*,*) 'diff_corr:   ', diff_corr
+write(logfhandle,*) 'diff_old:    ', diff_old
+write(logfhandle,*) 'diff_recast: ', diff_recast
+write(logfhandle,*) 'diff_corr:   ', diff_corr
 contains
 
     function find_shift_old() result( cxy )

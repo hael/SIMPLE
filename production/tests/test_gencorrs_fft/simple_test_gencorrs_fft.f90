@@ -15,8 +15,8 @@ integer                 :: iptcl, jptcl, irot, loc_cc(1), loc_cc_fft(1), nerrors
 integer(timer_int_kind) :: torig, tfft
 real                    :: err, erravg, errmax
 if( command_argument_count() < 3 )then
-    write(*,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
-    write(*,'(a)') ' smpd=<sampling distance(in A)>'
+    write(logfhandle,'(a)',advance='no') 'simple_test_srch stk=<particles.mrc> msk=<mask radius(in pixels)>'
+    write(logfhandle,'(a)') ' smpd=<sampling distance(in A)>'
     stop
 endif
 call cline%parse_oldschool

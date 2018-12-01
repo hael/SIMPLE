@@ -35,7 +35,7 @@ call img%add( cube )
 call cube%kill
 call img%write( 'cubes.mrc' )
 call img%kill
-write(*,*)'>>> WROTE TEST VOLUME cubes.mrc'
+write(logfhandle,*)'>>> WROTE TEST VOLUME cubes.mrc'
 ! test units
 command = 'simple_test_units'
 call exec_cmdline( trim(command) )

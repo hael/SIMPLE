@@ -176,39 +176,39 @@ contains
         if( all(keys_present) )then
             do iori=1,noris
                 ! first we write the index
-                write(*,'(i9,a)',advance='no') iori, ' '
+                write(logfhandle,'(i9,a)',advance='no') iori, ' '
                 ! then the state
                 if( os%isthere(iori,'state') )then
                     state = nint(os%get(iori,'state'))
                 else
                     state = 1
                 endif
-                write(*,'(i3,a)',advance='no') state, ' '
+                write(logfhandle,'(i3,a)',advance='no') state, ' '
                 ! then the key values
                 do ikey=1,nargs
                     if( trim(args(ikey)).eq.'eulnorm' )then
                         norm = os%get_normal(iori)
-                        write(*,'(f12.4,a)',advance='no') norm(1), ' '
-                        write(*,'(f12.4,a)',advance='no') norm(2), ' '
-                        write(*,'(f12.4,a)',advance='no') norm(3), ' '
+                        write(logfhandle,'(f12.4,a)',advance='no') norm(1), ' '
+                        write(logfhandle,'(f12.4,a)',advance='no') norm(2), ' '
+                        write(logfhandle,'(f12.4,a)',advance='no') norm(3), ' '
                     else
                         ischar = os%ischar(iori,trim(args(ikey)))
                         if( ischar )then
                             call os%getter(iori, trim(args(ikey)), str)
-                            write(*,'(a)',advance='no') trim(str)//' '
+                            write(logfhandle,'(a)',advance='no') trim(str)//' '
                         else
                             call os%getter(iori, trim(args(ikey)), rval)
-                            write(*,'(f12.4,a)',advance='no') rval, ' '
+                            write(logfhandle,'(f12.4,a)',advance='no') rval, ' '
                         endif
                     endif
                 end do
-                write(*,*) ''
+                write(logfhandle,*) ''
             end do
         else
             do ikey=1,nargs
-                if( .not. keys_present(ikey) ) write(*,*) 'key: ', trim(args(ikey)), ' is missing in segment'
+                if( .not. keys_present(ikey) ) write(logfhandle,*) 'key: ', trim(args(ikey)), ' is missing in segment'
             end do
-            write(*,*) 'ERROR! print request failed due to missing keys; simple_commander_project :: exec_print_project_vals'
+            write(logfhandle,*) 'ERROR! print request failed due to missing keys; simple_commander_project :: exec_print_project_vals'
         endif
     end subroutine exec_print_project_vals
 
@@ -254,8 +254,8 @@ contains
         endif
         if( noris /= n_lines )then
             call bos_doc%close
-            write(*,*) '# lines in infile        : ', n_lines
-            write(*,*) '# entries in file segment: ', noris
+            write(logfhandle,*) '# lines in infile        : ', n_lines
+            write(logfhandle,*) '# entries in file segment: ', noris
             THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_report_selection')
             return
         endif
@@ -278,8 +278,8 @@ contains
         integer          :: iostatus
         call params%new(cline)
         if( file_exists(PATH_HERE//trim(params%projname)) )then
-            write(*,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
-            write(*,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
+            write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
+            write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
             THROW_HARD('ABORTING... exec_new_project')
         endif
         ! make project directory
@@ -366,8 +366,8 @@ contains
             nboxf = size(boxfnames)
             nmovf = nlines(params%filetab)
             if( nboxf /= nmovf )then
-                write(*,*) '# boxfiles: ', nboxf
-                write(*,*) '# movies  : ', nmovf
+                write(logfhandle,*) '# boxfiles: ', nboxf
+                write(logfhandle,*) '# movies  : ', nmovf
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
@@ -400,8 +400,8 @@ contains
         nboxf   = size(boxfnames)
         nos_mic = spproj%os_mic%get_noris()
         if( nboxf /= nos_mic )then
-            write(*,*) '# boxfiles       : ', nboxf
-            write(*,*) '# os_mic entries : ', nos_mic
+            write(logfhandle,*) '# boxfiles       : ', nboxf
+            write(logfhandle,*) '# os_mic entries : ', nos_mic
             THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
         endif
         do i=1,nos_mic
@@ -522,7 +522,7 @@ contains
                 case('flip')
                     ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
-                    write(*,*)
+                    write(logfhandle,*)
                     THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_extract_ptcls')
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
@@ -551,7 +551,7 @@ contains
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'kv') )then
-                            write(*,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
+                            write(logfhandle,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
                             THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
@@ -562,7 +562,7 @@ contains
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'cs') )then
-                            write(*,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
+                            write(logfhandle,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
                             THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
                         endif
                     end do
@@ -573,7 +573,7 @@ contains
                 else
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'fraca') )then
-                            write(*,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
+                            write(logfhandle,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
                             THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
                         endif
                     end do

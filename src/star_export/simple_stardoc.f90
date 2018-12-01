@@ -289,7 +289,7 @@ contains
                         DebugPrint " STAR field :", self%num_data_elements, " found in dictionary ", trim(starlabel)
                         DebugPrint " New Converted Parameter #",self%num_valid_elements, " string:", trim(adjustl(simplelabel))
                     else
-                        print *," STAR field: ", trim(starlabel), " star field not in dictionary"
+                        write(logfhandle,*)" STAR field: ", trim(starlabel), " star field not in dictionary"
                     end if
                     !! Jump to next line in starfile
                     cycle
@@ -388,8 +388,8 @@ contains
                 !call parsestr(line,' ',argline,nargsline)
                 nargsline = cntRecsPerLine(trim(line))
                 if(nargsline /=  self%num_data_elements)then
-                    print *, " Records on line mismatch ", nargsline,  self%num_data_elements
-                    print *, "Line number ",idata, ":: ", line
+                    write(logfhandle,*) " Records on line mismatch ", nargsline,  self%num_data_elements
+                    write(logfhandle,*) "Line number ",idata, ":: ", line
                     THROW_HARD("line has insufficient elements")
                 endif
                 !! Jump to next line
@@ -409,15 +409,15 @@ contains
 
         !! Check exceptions
         if(ielem /= self%num_data_elements .or. ivalid /= self%num_valid_elements)then
-            print *, " Second pass incorrectly counted  detected parameters "
+            write(logfhandle,*) " Second pass incorrectly counted  detected parameters "
             THROW_HARD( "simple_stardoc:: read_header invalid element mismatch 1")
         endif
         if(idata /= self%num_data_lines)then
-            print *, " Second pass incorrectly counted data lines "
+            write(logfhandle,*) " Second pass incorrectly counted data lines "
             THROW_HARD( "simple_stardoc:: read_header invalid data line mismatch ")
         endif
         if(sum(int(self%param_converted)) /= self%num_valid_elements) then
-            print *, " Second pass incorrectly allocated detected parameters "
+            write(logfhandle,*) " Second pass incorrectly allocated detected parameters "
             THROW_HARD( "simple_stardoc:: read_header invalid element mismatch 2")
         endif
         !! Check allocation of type variables
@@ -426,11 +426,11 @@ contains
             .not. allocated(self%param_isstr) .or. &
             .not. allocated(self%param_scale) .or. &
             .not. allocated(self%param_converted)) then
-            print *, " Second pass did not allocate correctly "
+            write(logfhandle,*) " Second pass did not allocate correctly "
             THROW_HARD( "simple_stardoc:: read_header allocation unsuccessful")
         endif
 
-        print *, ">>>  STAR IMPORT HEADER INFO "
+        write(logfhandle,*) ">>>  STAR IMPORT HEADER INFO "
         do i=1, self%num_data_elements
             if(allocated(self%param_labels(i)%str)) then
                 if(self%param_converted(i) == 1)then
@@ -440,7 +440,7 @@ contains
                     print*, i, trim(self%param_starlabels(i)%str), " not converted"
                 end if
             else
-                print *, " Second pass incorrectly allocated detected parameter label ",i
+                write(logfhandle,*) " Second pass incorrectly allocated detected parameter label ",i
                 THROW_HARD( "simple_stardoc:: read_header invalid label ")
             endif
         end do
@@ -518,8 +518,8 @@ contains
                 !! Check the number of records on line
                 nargsOnDataline = cntRecsPerLine(trim(line))
                 if(nargsOnDataline /=  self%num_data_elements) then
-                    print *, " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
-                    print *, line
+                    write(logfhandle,*) " Records on line mismatch ", nargsOnDataline,  self%num_data_elements
+                    write(logfhandle,*) line
                     THROW_HARD("line has insufficient elements")
                 endif
                 !! split line
@@ -530,8 +530,8 @@ contains
                 !! double-check number of args after split
                 if(nargsParsed /= nargsOnDataline )then
 
-                    print *, " Parsing records on line failed ", nargsOnDataline,  nargsParsed
-                    print *, line
+                    write(logfhandle,*) " Parsing records on line failed ", nargsOnDataline,  nargsParsed
+                    write(logfhandle,*) line
                     THROW_HARD("line has insufficient elements")
                 endif
 
@@ -589,11 +589,11 @@ contains
                         if(.not. ignore_file_checks)then
                             DebugPrint " Parsing file param : ", trim(imgfilename)
                             if( file_exists (trim(imgfilename)) )then
-                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)
+                                write(logfhandle,*)" Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)
 
                             else if( file_exists (trim(imgfilename)//"s") )then
                                 !! Account for MRCS extension
-                                print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)//"s"
+                                write(logfhandle,*)" Found ",trim(self%param_labels(i)%str)," file: ", trim(imgfilename)//"s"
                                 imgfilename = trim(imgfilename)//"s"
 
                             else
@@ -601,20 +601,20 @@ contains
                                     tmpfilename = filepath(trim(self%project_root_dir), trim(imgfilename))
                                     if( file_exists (trim(tmpfilename)) )then
 
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)
+                                        write(logfhandle,*)" Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)
                                         imgfilename = trim(tmpfilename)
 
                                     else if( file_exists (trim(tmpfilename)//"s") )then
                                         !! Account for MRCS extension
-                                        print *," Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)//"s"
+                                        write(logfhandle,*)" Found ",trim(self%param_labels(i)%str)," file: ", trim(tmpfilename)//"s"
                                         imgfilename = trim(tmpfilename)//"s"
 
                                     else
-                                        print *," Unable to find file in path of project "//trim(tmpfilename)
+                                        write(logfhandle,*)" Unable to find file in path of project "//trim(tmpfilename)
                                         THROW_HARD(" Unable to find file "//trim(tmpfilename) )
                                     endif
                                 else
-                                    print *," Unable to find file in path of current star file "//trim(imgfilename)
+                                    write(logfhandle,*)" Unable to find file in path of current star file "//trim(imgfilename)
                                     THROW_HARD(" Unable to find file "//trim(imgfilename) )
                                 endif
                             endif
@@ -680,8 +680,8 @@ contains
         rewind( self%funit,IOSTAT=ios)
         if(ios/=0)call fileiochk('star_doc ; read_header - rewind failed ', ios)
 
-        print *, ">>>  STAR IMPORT DATA INFO "
-        print *, ">>>  number of data lines imported: ",self%num_data_lines
+        write(logfhandle,*) ">>>  STAR IMPORT DATA INFO "
+        write(logfhandle,*) ">>>  number of data lines imported: ",self%num_data_lines
 
     end subroutine read_data_lines
 

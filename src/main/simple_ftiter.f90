@@ -2,6 +2,7 @@
 module simple_ftiter
 use simple_error, only: simple_exception
 use simple_math,  only: is_even, fdim
+use simple_defs
 implicit none
 
 public :: ftiter, test_ftiter
@@ -354,24 +355,24 @@ contains
 
     subroutine test_ftiter
         type(ftiter) :: fit
-        write(*,'(a)') '**info(simple_ftiter_unit_test): testing square dimensions'
+        write(logfhandle,'(a)') '**info(simple_ftiter_unit_test): testing square dimensions'
         call fit%new([100,100,100],2.)
         call fit%test_addr
         call fit%new([100,100,1],2.)
         call fit%test_addr
-        write(*,'(a)') '**info(simple_ftiter_unit_test): testing non-square dimensions'
+        write(logfhandle,'(a)') '**info(simple_ftiter_unit_test): testing non-square dimensions'
         call fit%new([120,90,80],2.)
         call fit%test_addr
         call fit%new([120,90,1],2.)
         call fit%test_addr
-         write(*,'(a)') 'SIMPLE_FTITER_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+         write(logfhandle,'(a)') 'SIMPLE_FTITER_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ftiter
 
     !>  \brief  Test the addressing of the FT'ed image for consistency
     subroutine test_addr(self)
         class(ftiter), intent(in) :: self
         integer ::  i, j, k, logi(3), phys(3)
-        write(*,'(a)') '**info(test_addr): testing phys->logi->phys address conversion'
+        write(logfhandle,'(a)') '**info(test_addr): testing phys->logi->phys address conversion'
         do k=1,self%ldim(3)
             do j=1,self%ldim(2) ! this could be: do j=1,self%cphys_ubounds(2)
                 do i=1,self%cphys_ubounds(1)
@@ -383,7 +384,7 @@ contains
                 enddo
             enddo
         enddo
-        write(*,'(a)') '**info(test_addr): testing phys->logi->phys address conversion (scalar)'
+        write(logfhandle,'(a)') '**info(test_addr): testing phys->logi->phys address conversion (scalar)'
         do k=1,self%ldim(3)
             do j=1,self%ldim(2) ! this could be: do j=1,self%cphys_ubounds(2)
                 do i=1,self%cphys_ubounds(1)
@@ -395,7 +396,7 @@ contains
                 enddo
             enddo
         enddo
-        write(*,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy)'
+        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy)'
         do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
             do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
                 do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
@@ -407,7 +408,7 @@ contains
                 enddo
             enddo
         enddo
-        write(*,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy, scalar)'
+        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (no Friedel redundancy, scalar)'
         do k=self%clogi_lbounds(3),self%clogi_ubounds(3)
             do j=self%clogi_lbounds(2),self%clogi_ubounds(2)
                 do i=self%clogi_lbounds(1),self%clogi_ubounds(1)
@@ -419,7 +420,7 @@ contains
                 enddo
             enddo
         enddo
-        write(*,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy)'
+        write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy)'
         do k=self%clogi_lbounds_all(3),self%clogi_ubounds_all(3)
             do j=self%clogi_lbounds_all(2),self%clogi_ubounds_all(2)
                 do i=self%clogi_lbounds_all(1),self%clogi_ubounds_all(1)
@@ -427,15 +428,15 @@ contains
                     logi = self%comp_addr_logi(phys)
                     if (any([i,j,k]    .ne. logi) .and. &
                         any([-i,-j,-k] .ne. logi)) then
-                        write(*,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
-                        write(*,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
-                        write(*,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
+                        write(logfhandle,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
+                        write(logfhandle,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
+                        write(logfhandle,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
                         THROW_HARD('failed complex logi->phys->logi address conversion test (with redundant voxels)')
                     endif
                 enddo
             enddo
         enddo
-         write(*,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy, scalar)'
+         write(logfhandle,'(a)') '**info(test_addr): testing logi->phys->logi address conversion (with Friedel redundancy, scalar)'
         do k=self%clogi_lbounds_all(3),self%clogi_ubounds_all(3)
             do j=self%clogi_lbounds_all(2),self%clogi_ubounds_all(2)
                 do i=self%clogi_lbounds_all(1),self%clogi_ubounds_all(1)
@@ -443,9 +444,9 @@ contains
                     logi = self%comp_addr_logi(phys(1),phys(2),phys(3))
                     if (any([i,j,k]    .ne. logi) .and. &
                         any([-i,-j,-k] .ne. logi)) then
-                        write(*,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
-                        write(*,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
-                        write(*,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
+                        write(logfhandle,'(a,3(i0,1x))') '          i,j,k   = ', i,j,k
+                        write(logfhandle,'(a,3(i0,1x))') '     phys(i,j,k)  = ', phys
+                        write(logfhandle,'(a,3(i0,1x))') 'logi(phys(i,j,k)) = ', logi
                         THROW_HARD('failed complex logi->phys->logi address conversion test (with redundant voxels)')
                     endif
                 enddo

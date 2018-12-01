@@ -78,12 +78,12 @@ contains
         call even%fsc(odd, corrs)
         if( params%l_phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         do j=1,size(res)
-           write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
         call get_resolution(corrs, res, res_fsc05, res_fsc0143)
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
-        write(*,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
-        write(*,'(A,1X,F6.2)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs)
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.500 DETERMINED TO:', res_fsc05
+        write(logfhandle,'(A,1X,F6.2)') '>>> RESOLUTION AT FSC=0.143 DETERMINED TO:', res_fsc0143
+        write(logfhandle,'(A,1X,F6.2)') '>>> MEDIAN FSC (SPECSCORE):', median_nocopy(corrs)
         call even%kill
         call odd%kill
         ! end gracefully

@@ -1202,7 +1202,7 @@ contains
                      enddo
                      cptr = c_loc(buf(1))
                      if (TIFFWriteScanline(out, cptr, row, 0_2) /= 1 ) then
-                         print *,"Unable to write a row"
+                         write(logfhandle,*) "Unable to write a row"
                          exit
                      endif
                  enddo

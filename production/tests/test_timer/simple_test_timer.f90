@@ -25,7 +25,7 @@ character(STDLEN) :: timestr
 call date_and_time(TIME=timestr)
 starttime = str2real(timestr)
 !if( command_argument_count() < 0 )then
-!    write(*,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
+!    write(logfhandle,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
 !    stop
 !endif
 !call cline%parse
@@ -37,15 +37,15 @@ be_verbose = .true.
 !        be_verbose = .true.
 !    endif
 !endif
-write(*,'(a)') '------------- Basic timer test ----------------- '
+write(logfhandle,'(a)') '------------- Basic timer test ----------------- '
 call exec_timertest(be_verbose)
 call date_and_time(TIME=timestr)
 stoptime = str2real(timestr)
-write(*,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
+write(logfhandle,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
 starttime=stoptime
-write(*,'(a)') '------------- Profiling timer test ----------------- '
+write(logfhandle,'(a)') '------------- Profiling timer test ----------------- '
 call exec_profiletest(be_verbose)
 call date_and_time(TIME=timestr)
 stoptime = str2real(timestr)
-write(*,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
+write(logfhandle,'(a,1x,f9.2)') 'simple_test_timer_basic total runtime (s): ', stoptime - starttime
 end program simple_test_timer

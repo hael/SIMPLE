@@ -741,7 +741,7 @@ contains
         ! zero the Fourier volume and rho
         call self%reset
         call self%reset_exp
-        write(*,'(A)') '>>> KAISER-BESSEL INTERPOLATION '
+        write(logfhandle,'(A)') '>>> KAISER-BESSEL INTERPOLATION '
         statecnt = 0
         cnt      = 0
         do i=1,params_glob%nptcls
@@ -758,7 +758,7 @@ contains
         if( present(part) )then
             return
         else
-            write(*,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
+            write(logfhandle,'(A)') '>>> SAMPLING DENSITY (RHO) CORRECTION & WIENER NORMALIZATION'
             call self%compress_exp
             call self%sampl_dens_correct
         endif
@@ -769,7 +769,7 @@ contains
         if( allocated(lmsk) ) deallocate(lmsk)
         ! report how many particles were used to reconstruct each state
         if( params_glob%nstates > 1 )then
-            write(*,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
+            write(logfhandle,'(a,1x,i3,1x,a,1x,i6)') '>>> NR OF PARTICLES INCLUDED IN STATE:', state, 'WAS:', statecnt(state)
         endif
         contains
 

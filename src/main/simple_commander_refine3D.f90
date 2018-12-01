@@ -47,7 +47,7 @@ contains
             o = oris(i)
             call o%spiral
             ares = o%find_angres()
-            write(*,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, params%moldiam)
+            write(logfhandle,'(A,1X,I7,1X,A,1X,F5.2)') 'NR OF PROJDIRS:', i, 'RESOLUTION:', resang(ares, params%moldiam)
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
@@ -110,7 +110,7 @@ contains
                 else
                     forall(i=1:nsamp) sample(i) = i
                 endif
-                write(*,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
+                write(logfhandle,'(A)') '>>> RECONSTRUCTING RANDOM MODEL'
                 do i=1,nsamp
                     call progress(i, nsamp)
                     ind         = sample(i) + params%fromp - 1

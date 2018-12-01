@@ -110,7 +110,7 @@ contains
         else
             mx(2)=nint(real(mx(3)-mx(1))/2. + real(mx(1)))
         end if
-        !write(*,*) nx,ny
+        !write(logfhandle,*) nx,ny
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'
@@ -253,7 +253,7 @@ contains
         else
             mx(2)=nint(real(mx(3)-mx(1))/2. + real(mx(1)))
         end if
-        !write(*,*) nx,ny
+        !write(logfhandle,*) nx,ny
 
         if (present(input)) then
             data_file_name='data_file_'//input//'.txt'

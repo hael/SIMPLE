@@ -128,7 +128,7 @@ contains
             call self%e_sym%new(self%n)
             call self%make_i_relion
         else
-            write(*,'(a)') 'symmetry not supported; new; simple_sym', pgrp
+            write(logfhandle,'(a)') 'symmetry not supported; new; simple_sym', pgrp
             stop
         endif
         if(trim(self%pgrp).ne.'d1')call self%set_subgrps
@@ -210,7 +210,7 @@ contains
         integer   :: i, n
         n = size(self%subgrps)
         if( (i>n).or.(i<1) )then
-            write(*,*)'Index out of bonds on simple_sym; get_subgroup'
+            write(logfhandle,*)'Index out of bonds on simple_sym; get_subgroup'
             stop
         endif
         symobj = sym(self%subgrps(i))
@@ -223,7 +223,7 @@ contains
         integer   :: i, n
         n = size(self%subgrps)
         if( (i>n).or.(i<1) )then
-            write(*,*)'Index out of bonds on simple_sym; get_subgrp_descr'
+            write(logfhandle,*)'Index out of bonds on simple_sym; get_subgrp_descr'
             stop
         endif
         str_descr = self%subgrps(i)
@@ -1765,19 +1765,19 @@ contains
         type(oris) :: os
         integer    :: i,j,isym,n
         logical    :: found
-        write(*,'(A,A)')'>>>'
-        write(*,'(A,A)')'>>> POINT GROUP: ', trim(pgrp)
+        write(logfhandle,'(A,A)')'>>>'
+        write(logfhandle,'(A,A)')'>>> POINT GROUP: ', trim(pgrp)
         call se%new(pgrp)
-        write(*,'(A)')'>>> SYMMETRY SUB-GROUPS'
+        write(logfhandle,'(A)')'>>> SYMMETRY SUB-GROUPS'
         do isym=1, se%get_nsubgrp()
             tmp = se%get_subgrp(isym)
-            write(*,'(I3,1X,A3)') isym, tmp%get_pgrp()
+            write(logfhandle,'(I3,1X,A3)') isym, tmp%get_pgrp()
         enddo
-        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE PHI  :', se%eullims_nomirr(1,:)
-        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE THETA:', se%eullims_nomirr(2,:)
-        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR PHI  :', se%eullims(1,:)
-        write(*,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR THETA:', se%eullims(2,:)
-        write(*,'(A)')'>>> SPIRAL'
+        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE PHI  :', se%eullims_nomirr(1,:)
+        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE THETA:', se%eullims_nomirr(2,:)
+        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR PHI  :', se%eullims(1,:)
+        write(logfhandle,'(A,2F8.3)')'>>> ANGULAR RANGE INCL MIRROR THETA:', se%eullims(2,:)
+        write(logfhandle,'(A)')'>>> SPIRAL'
         call os%new(1000)
         call se%build_refspiral(os)
         call os%write(pgrp//'.txt')
@@ -1791,15 +1791,15 @@ contains
                 oj = os%get_ori(j)
                 if( rad2deg(o.euldist.oj) < 0.001 )then
                     n=n+1
-                    print *,i,j,o%get_euler(),oj%get_euler()
+                    write(logfhandle,*)i,j,o%get_euler(),oj%get_euler()
                 endif
             enddo
         enddo
         if(n==0)then
-            write(*,'(A)')'>>> SPIRAL REDUNDANCY PASSED'
+            write(logfhandle,'(A)')'>>> SPIRAL REDUNDANCY PASSED'
         else
-            write(*,'(A)')'>>> SPIRAL REDUNDANCY FAILED'
-            print *,n
+            write(logfhandle,'(A)')'>>> SPIRAL REDUNDANCY FAILED'
+            write(logfhandle,*)n
         endif
         ! north pole
         call north_pole%new
@@ -1813,11 +1813,11 @@ contains
             endif
         enddo
         if(found)then
-            write(*,'(A)')'>>> NORTH POLE PASSED'
+            write(logfhandle,'(A)')'>>> NORTH POLE PASSED'
         else
-            write(*,'(A)')'>>> NORTH POLE FAILED'
+            write(logfhandle,'(A)')'>>> NORTH POLE FAILED'
         endif
-        write(*,'(A)')'>>> SYMMETRY OPERATORS EULER ANGLES:'
+        write(logfhandle,'(A)')'>>> SYMMETRY OPERATORS EULER ANGLES:'
         do isym=1, se%get_nsym()
             call se%e_sym%print_(isym)
         enddo

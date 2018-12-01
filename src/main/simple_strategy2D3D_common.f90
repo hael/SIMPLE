@@ -361,7 +361,7 @@ contains
         else
             mask_here = .true.
         endif
-        if( .not. params_glob%l_distr_exec ) write(*,'(A)') '>>> BUILDING PARTICLES'
+        if( .not. params_glob%l_distr_exec ) write(logfhandle,'(A)') '>>> BUILDING PARTICLES'
         call prepimgbatch( batchsz_max )
         do iptcl_batch=params_glob%fromp,params_glob%top,batchsz_max
             batchlims = [iptcl_batch,min(params_glob%top,iptcl_batch + batchsz_max - 1)]

@@ -68,7 +68,7 @@ contains
         ! unflag doshift
         doshift    = .false.
         shvec_glob = 0.
-        if( DEBUG ) write(*,*) 'debug(volpft_srch); volpft_srch_init, DONE'
+        if( DEBUG ) write(logfhandle,*) 'debug(volpft_srch); volpft_srch_init, DONE'
     end subroutine volpft_srch_init
 
     subroutine volpft_srch_set_shvec( shvec )

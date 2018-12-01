@@ -86,13 +86,13 @@ contains
         logical :: l_outside
         l_outside = .false.
         if( proj  < 1 .or. proj  > self%nprojs  )then
-            write(*,*) self%nprojs
-            write(*,*) 'exists: ', self%exists
-            write(*,*) 'proj: ', proj
+            write(logfhandle,*) self%nprojs
+            write(logfhandle,*) 'exists: ', self%exists
+            write(logfhandle,*) 'proj: ', proj
             l_outside = .true.
         endif
         if( state < 1 .or. state > self%nstates ) then
-            write(*,*) 'state: ', state
+            write(logfhandle,*) 'state: ', state
             l_outside = .true.
         endif
         if( l_outside ) THROW_HARD(trim(msg)//'; raise_exception')
@@ -288,12 +288,12 @@ contains
         call self%read(fname)
         res = get_resarr(self%box4frc_calc, self%smpd)
         do iproj=1,self%nprojs
-            write(*,'(A,1X,I4)') '>>> FRC FOR PROJECTION INDEX:', iproj
-            write(*,*) ''
+            write(logfhandle,'(A,1X,I4)') '>>> FRC FOR PROJECTION INDEX:', iproj
+            write(logfhandle,*) ''
             do j=1,size(res)
-               write(*,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', self%frcs(sstate,iproj,j)
+               write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', self%frcs(sstate,iproj,j)
             end do
-            write(*,*) ''
+            write(logfhandle,*) ''
         end do
     end subroutine print_frcs
 

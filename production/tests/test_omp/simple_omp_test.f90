@@ -40,7 +40,7 @@ be_verbose = .true.
 #else
     print *, " Preprocessor macro _OPENMP not defined"
 #endif
-write(*,'(a,i0)') 'OpenMP version: ', openmp_version
+write(logfhandle,'(a,i0)') 'OpenMP version: ', openmp_version
 print *, ' Test omp flush '
 !$omp flush
 call test_omp_basics(10000)
@@ -73,7 +73,7 @@ print *, ' Test OpenMP timer '
 call exec_OpenMP_timer_test(be_verbose)
 call date_and_time(TIME=timestr)
 stoptime = str2real(timestr)
-write(*,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - starttime
+write(logfhandle,'(a,1x,f9.2)') '<<< intrinsic date_and_time elapsed (s): ', stoptime - starttime
 
 
 #ifdef OPENMP_VERSION

@@ -169,7 +169,7 @@ contains
         integer, allocatable :: labels(:), target_positions(:,:)
         real,    allocatable :: target_corrs(:)
         logical :: outside
-        write(*,'(a)') '>>> EXTRACTING PEAKS'
+        write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         ntargets = 0
         do xind=0,nx,PICKER_OFFSET
             do yind=0,ny,PICKER_OFFSET
@@ -224,7 +224,7 @@ contains
         real    :: dist
         logical, allocatable :: mask(:)
         real,    allocatable :: corrs(:)
-        write(*,'(a)') '>>> DISTANCE FILTERING'
+        write(logfhandle,'(a)') '>>> DISTANCE FILTERING'
         allocate( mask(npeaks), corrs(npeaks), selected_peak_positions(npeaks), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk( 'In: simple_picker :: distance_filter',alloc_stat)
         selected_peak_positions = .true.
@@ -248,14 +248,14 @@ contains
             end where
         end do
         npeaks_sel = count(selected_peak_positions)
-        write(*,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
+        write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
     end subroutine distance_filter
 
     subroutine refine_positions
         integer :: ipeak, xrange(2), yrange(2), xind, yind, ref, cnt
         real    :: corr, target_corr
         logical :: outside
-        write(*,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
+        write(logfhandle,'(a)') '>>> REFINING POSITIONS & GATHERING FIRST STATS'
         allocate( peak_stats(npeaks_sel,NSTAT) )
         ! bring back coordinates to refinement sampling
         allocate( peak_positions_refined(npeaks,2), source=nint(PICKER_SHRINK/PICKER_SHRINK_REFINE)*peak_positions)
@@ -301,7 +301,7 @@ contains
         logical           :: outside
         real              :: ave, maxv, minv
         real, allocatable :: spec(:)
-        write(*,'(a)') '>>> GATHERING REMAINING STATS'
+        write(logfhandle,'(a)') '>>> GATHERING REMAINING STATS'
         call ptcl_target%new(ldim_refs_refine, smpd_shrunken_refine)
         cnt = 0
         do ipeak=1,npeaks
@@ -347,7 +347,7 @@ contains
             endif
         end do
         npeaks_sel = count(selected_peak_positions)
-        write(*,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
+        write(logfhandle,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
     end subroutine one_cluster_clustering
 
     subroutine write_boxfile

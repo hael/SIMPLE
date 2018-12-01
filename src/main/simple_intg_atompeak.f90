@@ -160,10 +160,10 @@ contains
         call set_intgvol(vol)
         call vol%write('cube.mrc')
         do i = 1, natoms
-            if(intg_nn(mol%get_coord(i)).ne.rmat(i,64,64))print *, 'interpolation error for atom:', i
+            if(intg_nn(mol%get_coord(i)).ne.rmat(i,64,64))write(logfhandle,*) 'interpolation error for atom:', i
         enddo
         call reset_vol
-        write(*,'(A)')'>>> FINISHED INTGPEAK TEST'
+        write(logfhandle,'(A)')'>>> FINISHED INTGPEAK TEST'
     end subroutine test_intg_atompeak
 
     ! DESTRUCTORS

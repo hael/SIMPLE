@@ -258,8 +258,8 @@ contains
             arr_is_ready = (size(rarr,1) .eq. dims(1) + 2) .and. size(rarr,2) .eq. dims(2)
         endif
         if( .not. arr_is_ready )then
-            write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
-            write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
+            write(logfhandle,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
+            write(logfhandle,*) 'Dimensions: ', dims(1), dims(2), dims(3)
             THROW_HARD('array not properly allocated')
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
@@ -338,14 +338,14 @@ contains
         case(4)
             read(unit=self%funit,pos=first_byte,iostat=io_stat,iomsg=io_message) rarr(:dims(1),:,:)
         case DEFAULT
-            write(*,'(2a)') 'fname: ', trim(self%fname)
-            write(*,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
+            write(logfhandle,'(2a)') 'fname: ', trim(self%fname)
+            write(logfhandle,'(a,i0,a)') 'bit depth: ', self%overall_head%bytesPerPix(), ' bytes'
             THROW_HARD('unsupported bit-depth')
         end select
         ! Check the read was successful
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
-            write(*,'(2a)') 'IO error message was: ', trim(io_message)
+            write(logfhandle,'(a,i0,2a)') '**ERROR(rSlices): I/O error ', io_stat, ' when reading from: ', trim(self%fname)
+            write(logfhandle,'(2a)') 'IO error message was: ', trim(io_message)
             THROW_HARD('I/O')
         endif
     end subroutine rSlices
@@ -389,8 +389,8 @@ contains
             arr_is_ready = (size(rarr,1) .eq. dims(1) + 2) .and. size(rarr,2) .eq. dims(2)
         endif
         if( .not. arr_is_ready )then
-            write(*,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
-            write(*,*) 'Dimensions: ', dims(1), dims(2), dims(3)
+            write(logfhandle,*) 'Array size: ', size(rarr,1), size(rarr,2), size(rarr,3)
+            write(logfhandle,*) 'Dimensions: ', dims(1), dims(2), dims(3)
             THROW_HARD('array not properly allocated')
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
@@ -436,7 +436,7 @@ contains
         write(unit=self%funit,pos=first_byte,iostat=io_stat) rarr(1:dims(1),:,:)
         ! Check the write was successful
         if( io_stat .ne. 0 )then
-            write(*,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
+            write(logfhandle,'(a,i0,2a)') '**ERROR(wSlices): I/O error ', io_stat, ' when writing to: ', trim(self%fname)
             THROW_HARD('I/O')
         endif
         ! May need to update file dims

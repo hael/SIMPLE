@@ -663,7 +663,7 @@ contains
         real :: euls(3), rmat(3,3)
         euls = self%get_euler()
         rmat = euler2m(euls)
-        write(*,*) rmat(1,1), rmat(1,2), rmat(1,3), &
+        write(logfhandle,*) rmat(1,1), rmat(1,2), rmat(1,3), &
             &      rmat(2,1), rmat(2,2), rmat(2,3), &
             &      rmat(3,1), rmat(3,2), rmat(3,3)
     end subroutine print_mat
@@ -1160,7 +1160,7 @@ contains
         call e1%new_ori
         call e2%new_ori
         call e3%new_ori
-        write(*,'(a)') '**info(simple_ori_unit_test: testing all functionality'
+        write(logfhandle,'(a)') '**info(simple_ori_unit_test: testing all functionality'
         passed = .false.
         call e1%set_euler([1.,2.,3.])
         euls = e1%get_euler()
@@ -1205,7 +1205,7 @@ contains
             euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
             euls(3) < 20.0001 .and. euls(3) > 19.9999 ) passed = .true.
         if( .not. passed ) THROW_HARD('Euler composer corrupt!')
-        write(*,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        write(logfhandle,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
     end subroutine test_ori
 
 end module simple_ori

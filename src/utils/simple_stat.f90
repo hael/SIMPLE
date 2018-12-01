@@ -55,8 +55,8 @@ contains
         n   = size(data,1)
         nr  = real(n)
         if( n <= 1 ) then
-            write(*,*) 'ERROR: n must be at least 2'
-            write(*,*) 'In: moment_1, module: simple_stat.f90'
+            write(logfhandle,*) 'ERROR: n must be at least 2'
+            write(logfhandle,*) 'In: moment_1, module: simple_stat.f90'
             stop
         endif
         ! calc average
@@ -101,8 +101,8 @@ contains
         n  = nx*ny
         nr = real(n)
         if( n <= 1 ) then
-            write(*,*) 'ERROR: n must be at least 2'
-            write(*,*) 'In: moment_2, module: simple_stat.f90'
+            write(logfhandle,*) 'ERROR: n must be at least 2'
+            write(logfhandle,*) 'In: moment_2, module: simple_stat.f90'
             stop
         endif
         ! calc average
@@ -150,8 +150,8 @@ contains
         n  = nx*ny*nz
         nr = real(n)
         if( n <= 1 ) then
-            write(*,*) 'ERROR: n must be at least 2'
-            write(*,*) 'In: moment_3, module: simple_stat.f90'
+            write(logfhandle,*) 'ERROR: n must be at least 2'
+            write(logfhandle,*) 'In: moment_3, module: simple_stat.f90'
             stop
         endif
         ave = sum(data)/nr

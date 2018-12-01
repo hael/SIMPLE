@@ -69,7 +69,7 @@ contains
         rt = ran_tabu(self%N)
         call self%init
         convcnt = 0
-        if( doprint ) write(*,*) 'SHC CLUSTERING ITERATION: ', 0, 'SIMILARITY: ', sum(self%SPS)/real(self%N)
+        if( doprint ) write(logfhandle,*) 'SHC CLUSTERING ITERATION: ', 0, 'SIMILARITY: ', sum(self%SPS)/real(self%N)
         do iter=1,MAXITS
             ! make random order
             call rt%reset
@@ -83,7 +83,7 @@ contains
             ! calculate new similarity
             sim_new = sum(self%SPS)/real(self%N)
             if( doprint )then
-                write(*,*) 'SHC CLUSTERING ITERATION: ', iter, 'SIMILARITY: ', sim_new
+                write(logfhandle,*) 'SHC CLUSTERING ITERATION: ', iter, 'SIMILARITY: ', sim_new
             endif
             if( sim_prev/sim_new > 0.995 )then
                 convcnt = convcnt+1

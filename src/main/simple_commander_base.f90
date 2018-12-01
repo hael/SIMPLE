@@ -37,15 +37,15 @@ contains
         if( nrestarts > 1 ) call cline%set('mkdir', 'yes') ! need to make unique execution dir for multiple restarts
         ! update original CWD global in defs
         call simple_getcwd(cwd)
-        if( allocated(CWD_GLOB_ORIGINAL) ) deallocate(CWD_GLOB_ORIGINAL)
-        allocate(CWD_GLOB_ORIGINAL, source=trim(cwd))
+        if( allocated(cwd_glob_orig) ) deallocate(cwd_glob_orig)
+        allocate(cwd_glob_orig, source=trim(cwd))
         ! save original command line
         cline_original = cline
         do i=1,nrestarts
             call self%execute(cline)
             ! go back to original working directory
-            write(*,'(A,A)') '>>> IN COMMANDER_BASE, CHANGING BACK TO DIR: ', CWD_GLOB_ORIGINAL
-            call simple_chdir(CWD_GLOB_ORIGINAL,errmsg="commander_base :: execute_commander;")
+            write(logfhandle,'(A,A)') '>>> IN COMMANDER_BASE, CHANGING BACK TO DIR: ', cwd_glob_orig
+            call simple_chdir(cwd_glob_orig,errmsg="commander_base :: execute_commander;")
             ! put back the original command line
             cline = cline_original
         end do

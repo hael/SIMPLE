@@ -204,8 +204,8 @@ contains
         ! get from environment
         iostat  = simple_getenv('SIMPLE_PATH', env_var)
         if( iostat /= 0 )then
-            write(*,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
-            write(*,*) 'Please refer to installation documentation for correct system configuration'
+            write(logfhandle,*) 'ERROR! SIMPLE_PATH is not defined in your shell environment!'
+            write(logfhandle,*) 'Please refer to installation documentation for correct system configuration'
             stop
         else
             call self%compenv%set(1, 'simple_path', trim(env_var))
@@ -291,8 +291,8 @@ contains
         else
             smpd_self = os_ptr%get(1, 'smpd')
             if( abs(smpd-smpd_self) > 0.001 )then
-                write(*,*) 'smpd self', smpd_self
-                write(*,*) 'smpd 2 append', smpd
+                write(logfhandle,*) 'smpd self', smpd_self
+                write(logfhandle,*) 'smpd 2 append', smpd
                 THROW_HARD('only a project with the same smpd can be appended to the project; append_project')
             endif
         endif
@@ -384,13 +384,13 @@ contains
         nptcls = ptcl_field%get_noris()
         ! first sanity check, range
         if( iptcl < 1 .or. iptcl > nptcls )then
-            print *, 'iptcl : ', iptcl
-            print *, 'nptcls: ', nptcls
+            write(logfhandle,*) 'iptcl : ', iptcl
+            write(logfhandle,*) 'nptcls: ', nptcls
             THROW_HARD('iptcl index out of range; map_ptcl_ind2stk_ind')
         endif
         ! second sanity check, stack index present in ptcl_field
         if( .not. ptcl_field%isthere(iptcl, 'stkind') )then
-            print *, 'iptcl: ', iptcl
+            write(logfhandle,*) 'iptcl: ', iptcl
             THROW_HARD('stkind not present in field: '//trim(oritype)//'; map_ptcl_ind2stk_ind')
         endif
         stkind = nint(ptcl_field%get(iptcl, 'stkind'))
@@ -398,9 +398,9 @@ contains
         fromp = nint(self%os_stk%get(stkind, 'fromp'))
         top   = nint(self%os_stk%get(stkind, 'top'))
         if( iptcl < fromp .or. iptcl > top )then
-            print *, 'iptcl            : ', iptcl
-            print *, 'stkind           : ', stkind
-            print *, 'prange for micstk: ', fromp, top
+            write(logfhandle,*) 'iptcl            : ', iptcl
+            write(logfhandle,*) 'stkind           : ', stkind
+            write(logfhandle,*) 'prange for micstk: ', fromp, top
             THROW_HARD('iptcl index out of micstk range; map_ptcl_ind2stk_ind')
         endif
         ! output index in stack
@@ -418,8 +418,8 @@ contains
         sz_cls2D  = self%os_cls2D%get_noris()
         sz_states = size(states)
         if( sz_cls2D /= sz_states )then
-            write(*,*) 'size(cls2D): ', sz_cls2D
-            write(*,*) 'sz_states  : ', sz_states
+            write(logfhandle,*) 'size(cls2D): ', sz_cls2D
+            write(logfhandle,*) 'sz_states  : ', sz_states
             THROW_HARD('size(cls2D) not consistent with size(states) in map_cavgs_selection, aborting...')
         endif
         ! map selection to self%os_cls2D
@@ -463,7 +463,7 @@ contains
         ! check that stk field is empty
         n_os_mic = os_ptr%get_noris()
         if( n_os_mic > 0 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
+            write(logfhandle,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
             THROW_HARD('add_single_movie')
         endif
         ! update ori
@@ -579,8 +579,8 @@ contains
         else
             name = 'MICROGRAPH(S)'
         endif
-        write(*,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
-        write(*,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
+        write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
+        write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
 
     subroutine get_movies_table( self, moviestab )
@@ -649,8 +649,8 @@ contains
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_abspath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
-            write(*,*) 'xdim: ', ldim(1)
-            write(*,*) 'ydim: ', ldim(2)
+            write(logfhandle,*) 'xdim: ', ldim(1)
+            write(logfhandle,*) 'ydim: ', ldim(2)
             THROW_HARD('nonsquare particle images not supported; add_stk')
         endif
         ! updates_fields
@@ -721,18 +721,18 @@ contains
         ! check that stk field is empty
         n_os_stk = self%os_stk%get_noris()
         if( n_os_stk > 0 )then
-            write(*,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
+            write(logfhandle,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_stk
             THROW_HARD('add_single_stk')
         endif
         ! check that particle fields are empty
         n_os_ptcl2D = self%os_ptcl2D%get_noris()
         if( n_os_ptcl2D > 0 )then
-            write(*,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
+            write(logfhandle,*) 'ptcl2D field (self%os_ptcl2D) already populated with # entries: ', n_os_ptcl2D
             THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
         n_os_ptcl3D = self%os_ptcl3D%get_noris()
         if( n_os_ptcl3D > 0 )then
-            write(*,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
+            write(logfhandle,*) 'ptcl3D field (self%os_ptcl3D) already populated with # entries: ', n_os_ptcl3D
             THROW_HARD('empty particle fields in project file assumed; add_single_stk')
         endif
         self%os_ptcl2D = os
@@ -746,8 +746,8 @@ contains
         ! find dimension of inputted stack
         call find_ldim_nptcls(trim(stk_abspath), ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
-            write(*,*) 'xdim: ', ldim(1)
-            write(*,*) 'ydim: ', ldim(2)
+            write(logfhandle,*) 'xdim: ', ldim(1)
+            write(logfhandle,*) 'ydim: ', ldim(2)
             THROW_HARD('nonsquare particle images not supported; add_single_stk')
         endif
         call self%os_stk%new(1)
@@ -801,8 +801,8 @@ contains
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
         if( n_os /= nstks )then
-            write(*,*) '# input oris      : ', n_os
-            write(*,*) '# stacks in stktab: ', nstks
+            write(logfhandle,*) '# input oris      : ', n_os
+            write(logfhandle,*) '# stacks in stktab: ', nstks
             THROW_HARD('nonconforming sizes of inputs; add_stktab')
         endif
         ! first pass for sanity check and determining dimensions
@@ -819,17 +819,17 @@ contains
                 ldim_here = ldim
             else
                 if( .not. all(ldim_here == ldim) )then
-                    write(*,*) 'micrograph stack #  : ', istk
-                    write(*,*) 'stk name            : ', trim(stknames(istk))
-                    write(*,*) 'ldim in object      : ', ldim_here
-                    write(*,*) 'ldim read from stack: ', ldim
+                    write(logfhandle,*) 'micrograph stack #  : ', istk
+                    write(logfhandle,*) 'stk name            : ', trim(stknames(istk))
+                    write(logfhandle,*) 'ldim in object      : ', ldim_here
+                    write(logfhandle,*) 'ldim read from stack: ', ldim
                     THROW_HARD('inconsistent logical dimensions; add_stktab')
                 endif
             endif
             if( ldim(1) /= ldim(2) )then
-                write(*,*) 'stk name: ', trim(stknames(istk))
-                write(*,*) 'xdim:     ', ldim(1)
-                write(*,*) 'ydim:     ', ldim(2)
+                write(logfhandle,*) 'stk name: ', trim(stknames(istk))
+                write(logfhandle,*) 'xdim:     ', ldim(1)
+                write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
             endif
             ! check variable presence
@@ -943,7 +943,7 @@ contains
             tmp_dir = filepath(trim(cwd),'tmp_stacks')
         endif
         call simple_mkdir(trim(tmp_dir),errmsg="sp_project::split_stk")
-        write(*,'(a)') '>>> SPLITTING STACK INTO PARTS'
+        write(logfhandle,'(a)') '>>> SPLITTING STACK INTO PARTS'
         do istk = 1,nparts
             call progress(istk,nparts)
             stkpart = filepath(trim(tmp_dir),'stack_part'//int2str_pad(istk,numlen)//EXT)
@@ -1014,8 +1014,8 @@ contains
         integer :: nmics
         nmics = self%os_stk%get_noris()
         if( imic < 1 .or. imic > nmics )then
-            print *, 'imic : ', imic
-            print *, 'nmics: ', nmics
+            write(logfhandle,*) 'imic : ', imic
+            write(logfhandle,*) 'nmics: ', nmics
             THROW_HARD('imic index out of range; get_stkname')
         endif
         stkname = trim(self%os_stk%get_static(imic, 'stk'))
@@ -1051,7 +1051,7 @@ contains
                 case('S')
                     ext_out = '.spi'
                 case DEFAULT
-                    write(*,*)'format: ', trim(ext)
+                    write(logfhandle,*)'format: ', trim(ext)
                     THROW_HARD('This file format is not supported by SIMPLE; add_scale_tag')
             end select
             if(present(dir))then
@@ -1528,8 +1528,8 @@ contains
         ! sanity check
         if( self%os_stk%isthere(nos,'top') )then
             if( nint(self%os_stk%get(nos,'top')) /=  get_nptcls )then
-                write(*,*) 'nptcls from ptcls', get_nptcls
-                write(*,*) 'nptcls from top', nint(self%os_stk%get(nos,'top'))
+                write(logfhandle,*) 'nptcls from ptcls', get_nptcls
+                write(logfhandle,*) 'nptcls from top', nint(self%os_stk%get(nos,'top'))
                 THROW_HARD('total # particles .ne. last top index; get_nptcls')
             endif
         endif
@@ -1694,7 +1694,7 @@ contains
         case('flip')
             ctfvars%ctfflag = CTFFLAG_FLIP
         case DEFAULT
-            write(*,*) 'stkind/iptcl: ', stkind, iptcl
+            write(logfhandle,*) 'stkind/iptcl: ', stkind, iptcl
             THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
         end select
 
@@ -1971,12 +1971,12 @@ contains
             n_records = bos_doc%get_n_records(isegment)
             partsz    = parts(i,2) - parts(i,1) + 1
             if( n_records /= partsz )then
-                write(*,*) 'ERROR, # records does not match expectation'
-                write(*,*) 'EXTRACTED FROM file: ', trim(fname)
-                write(*,*) 'n_records: ', n_records
-                write(*,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
-                write(*,*) 'fromto: ', parts(i,1), parts(i,2)
-                write(*,*) 'partsz: ', partsz
+                write(logfhandle,*) 'ERROR, # records does not match expectation'
+                write(logfhandle,*) 'EXTRACTED FROM file: ', trim(fname)
+                write(logfhandle,*) 'n_records: ', n_records
+                write(logfhandle,*) 'CALCULATED FROM input p%nptcls/p%ndocs'
+                write(logfhandle,*) 'fromto: ', parts(i,1), parts(i,2)
+                write(logfhandle,*) 'partsz: ', partsz
                 stop
             endif
             call bos_doc%read_segment(isegment, os_strings)
@@ -2090,9 +2090,9 @@ contains
             if( allocated(hinfo) )then
                 do i = 1,size(hinfo)
                     call self%bos%read_record(seginds(i), hinfo(i)%first_data_byte, record)
-                    write(*,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' of type: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
-                    write(*,'(a)') format_str(segment2info(seginds(i), hinfo(i)%n_records), C_ITALIC)
-                    write(*,'(a)') format_str('first record:', C_BOLD)//' '//trim(record)
+                    write(logfhandle,'(a)') format_str(format_str('SEGMENT '//int2str_pad(seginds(i),2)//' of type: '//segment2oritype(seginds(i)), C_BOLD), C_UNDERLINED)
+                    write(logfhandle,'(a)') format_str(segment2info(seginds(i), hinfo(i)%n_records), C_ITALIC)
+                    write(logfhandle,'(a)') format_str('first record:', C_BOLD)//' '//trim(record)
                 end do
             endif
             call self%bos%close
@@ -2417,100 +2417,100 @@ contains
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_mic%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_mic%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No mic-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No mic-type oris available to print; sp_project :: print_segment'
                 endif
             case('stk')
                 noris = self%os_stk%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_stk%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_stk%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No stk-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No stk-type oris available to print; sp_project :: print_segment'
                 endif
             case('ptcl2D')
                 noris = self%os_ptcl2D%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_ptcl2D%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_ptcl2D%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No ptcl2D-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No ptcl2D-type oris available to print; sp_project :: print_segment'
                 endif
             case('cls2D')
                 noris = self%os_cls2D%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_cls2D%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_cls2D%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No cls2D-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No cls2D-type oris available to print; sp_project :: print_segment'
                 endif
             case('cls3D')
                 noris = self%os_cls3D%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_cls3D%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_cls3D%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No cls3D-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No cls3D-type oris available to print; sp_project :: print_segment'
                 endif
             case('ptcl3D')
                 noris = self%os_ptcl3D%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_ptcl3D%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_ptcl3D%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No ptcl3D-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No ptcl3D-type oris available to print; sp_project :: print_segment'
                 endif
             case('out')
                 noris = self%os_out%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%os_out%ori2str(iori)
+                        write(logfhandle,'(a)') self%os_out%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No out-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No out-type oris available to print; sp_project :: print_segment'
                 endif
             case('projinfo')
                 noris = self%projinfo%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%projinfo%ori2str(iori)
+                        write(logfhandle,'(a)') self%projinfo%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No projinfo-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No projinfo-type oris available to print; sp_project :: print_segment'
                 endif
             case('jobproc')
                 noris = self%jobproc%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%jobproc%ori2str(iori)
+                        write(logfhandle,'(a)') self%jobproc%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No jobproc-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No jobproc-type oris available to print; sp_project :: print_segment'
                 endif
             case('compenv')
                 noris = self%compenv%get_noris()
                 if( noris > 0 )then
                     if( .not. fromto_present ) ffromto = [1,noris]
                     do iori=ffromto(1),ffromto(2)
-                        write(*,'(a)') self%compenv%ori2str(iori)
+                        write(logfhandle,'(a)') self%compenv%ori2str(iori)
                     end do
                 else
-                    write(*,*) 'No compenv-type oris available to print; sp_project :: print_segment'
+                    write(logfhandle,*) 'No compenv-type oris available to print; sp_project :: print_segment'
                 endif
             case DEFAULT
                 THROW_HARD('unsupported oritype flag; print_segment')
@@ -2643,7 +2643,7 @@ contains
             case(COMPENV_SEG)
                 oritype = 'compenv'
             case DEFAULT
-                write(*,*) 'iseg: ', iseg
+                write(logfhandle,*) 'iseg: ', iseg
                 THROW_HARD('unsupported segment of kind(ENUM_ORISEG); segment2oritype')
         end select
     end function segment2oritype
@@ -2676,7 +2676,7 @@ contains
             case(COMPENV_SEG)
                 info = info//'computing environment specifications, queue system, memory per job etc.'
             case DEFAULT
-                write(*,*) 'iseg: ', iseg
+                write(logfhandle,*) 'iseg: ', iseg
                 THROW_HARD('unsupported segment of kind(ENUM_ORISEG); segment2oritype')
         end select
     end function segment2info

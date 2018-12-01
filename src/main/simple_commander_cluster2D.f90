@@ -53,7 +53,7 @@ contains
         integer :: ncls_here
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_strategy2D_tbox(cline, params)
-        write(*,'(a)') '>>> GENERATING CLUSTER CENTERS'
+        write(logfhandle,'(a)') '>>> GENERATING CLUSTER CENTERS'
         ! deal with the orientations
         ncls_here = build%spproj_field%get_n('class')
         if( .not. cline%defined('ncls') ) params%ncls = build%spproj_field%get_n('class')
@@ -217,7 +217,7 @@ contains
                 call clsdoc_ranked%set(iclass, 'res',   build%spproj_field%get(order(iclass),  'res'))
                 call clsdoc_ranked%set(iclass, 'corr',  build%spproj_field%get(order(iclass), 'corr'))
                 call clsdoc_ranked%set(iclass, 'w',     build%spproj_field%get(order(iclass),    'w'))
-                write(*,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
+                write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
                     &'RANK:', iclass ,'POP:', nint(build%spproj_field%get(order(iclass), 'pop')),&
                     &'RES:', build%spproj_field%get(order(iclass), 'res')
                 call build%img%read(params%stk, order(iclass))
