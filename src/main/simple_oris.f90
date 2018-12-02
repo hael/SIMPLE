@@ -2112,22 +2112,18 @@ contains
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: minv, maxv
-        real, allocatable :: vals(:)
-        integer           :: i, cnt, mystate
-        allocate( vals(self%n), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('In: minmax, module: simple_oris',alloc_stat)
-        vals = 0.
-        cnt = 0
+        real    :: val, x
+        integer :: i, mystate
+        minv = huge(x)
+        maxv = -huge(x)
         do i=1,self%n
             mystate = nint(self%o(i)%get('state'))
             if( mystate /= 0 )then
-                cnt = cnt+1
-                vals(cnt) = self%o(i)%get(which)
+                val = self%o(i)%get(which)
+                if( val < minv ) minv = val
+                if( val > maxv ) maxv = val
             endif
         end do
-        minv = minval(vals(:cnt))
-        maxv = maxval(vals(:cnt))
-        deallocate(vals)
     end subroutine minmax
 
     !>  \brief  is for generating evenly distributed projection directions

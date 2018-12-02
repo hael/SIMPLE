@@ -123,7 +123,6 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         call params%new(cline, silent=.true.)
-        call spproj%read_non_data_segments(params%projfile)
         call spproj%print_info(params%projfile)
         call spproj%kill
         ! no additional printing
@@ -225,15 +224,17 @@ contains
 
     subroutine exec_report_selection( self, cline )
         use simple_binoris,    only: binoris
-        use simple_sp_project, only: oritype2segment
+        use simple_sp_project, only: sp_project, oritype2segment
         use simple_oris,       only: oris
         class(report_selection_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(binoris)    :: bos_doc
         type(oris)       :: os
         type(parameters) :: params
+        type(sp_project) :: spproj
         integer, allocatable :: states(:)
-        integer :: n_lines, fnr, iseg, noris, i
+        integer(kind=kind(ENUM_ORISEG)) :: iseg
+        integer :: n_lines, fnr, noris, i
         call params%new(cline, silent=.true.)
         ! read the state-flags
         n_lines = nlines(trim(params%infile))
@@ -243,30 +244,47 @@ contains
             read(fnr,*) states(i)
         end do
         call fclose(fnr)
-        ! look in projfile
-        call bos_doc%open(trim(params%projfile))
-        iseg  = oritype2segment(trim(params%oritype))
-        noris = bos_doc%get_n_records(iseg)
-        if( noris == 0 )then
+        iseg = oritype2segment(trim(params%oritype))
+        if( iseg == CLS2D_SEG )then
+            ! different approach since state mapping may have to be propagated to ptcl fields
+            call spproj%read(params%projfile) ! full read since multiple segments will be modified
+            noris = spproj%os_cls2D%get_noris()
+            if( noris /= n_lines )then
+                write(logfhandle,*) '# lines in infile         : ', n_lines
+                write(logfhandle,*) '# entries in CLS2D segment: ', noris
+                THROW_WARN('# entries in infile/project file CLS2D segment do not match, aborting; exec_report_selection')
+                return
+            endif
+            ! update states
+            call spproj%os_cls2D%set_all('state', real(states))
+            ! map states to ptcl segments
+            call spproj%map2ptcls_state
+            call spproj%write(params%projfile) ! full write since multiple segments possibly modified
+        else
+            ! look in projfile
+            call bos_doc%open(trim(params%projfile))
+            noris = bos_doc%get_n_records(iseg)
+            if( noris == 0 )then
+                call bos_doc%close
+                THROW_WARN('empty project file segment, nothing to update, aborting; exec_report_selection')
+                return
+            endif
+            if( noris /= n_lines )then
+                call bos_doc%close
+                write(logfhandle,*) '# lines in infile        : ', n_lines
+                write(logfhandle,*) '# entries in file segment: ', noris
+                THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_report_selection')
+                return
+            endif
+            ! read segment
+            call os%new(noris)
+            call bos_doc%read_segment(iseg, os)
+            ! update states
+            call os%set_all('state', real(states))
+            call bos_doc%write_segment_inside(iseg, os)
+            ! no need to update header (taken care of in binoris object)
             call bos_doc%close
-            THROW_WARN('empty project file segment, nothing to update, aborting; exec_report_selection')
-            return
         endif
-        if( noris /= n_lines )then
-            call bos_doc%close
-            write(logfhandle,*) '# lines in infile        : ', n_lines
-            write(logfhandle,*) '# entries in file segment: ', noris
-            THROW_WARN('# entries in infile/project file segment do not match, aborting; exec_report_selection')
-            return
-        endif
-        ! read segment
-        call os%new(noris)
-        call bos_doc%read_segment(iseg, os)
-        ! update states
-        call os%set_all('state', real(states))
-        call bos_doc%write_segment_inside(iseg, os)
-        ! no need to update header (taken care of in binoris object)
-        call bos_doc%close
     end subroutine exec_report_selection
 
     !> for creating a new project

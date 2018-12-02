@@ -85,6 +85,7 @@ contains
     procedure          :: scale_projfile
     procedure          :: merge_algndocs
     procedure          :: map2ptcls
+    procedure          :: map2ptcls_state
     ! I/O
     ! printers
     procedure          :: print_info
@@ -2030,18 +2031,17 @@ contains
             self%os_ptcl3D = self%os_ptcl2D
             call self%os_ptcl3D%delete_2Dclustering
         endif
-        call self%os_ptcl3D%delete_entry('state') ! states reset below
         ! do the mapping
         ncls = self%os_cls3D%get_noris()
         do icls=1,ncls
             ! get particle indices
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
-            ! get 3d ori info
-            o      = self%os_cls3D%get_ori(icls)
-            rproj  = o%get('proj')
-            rstate = o%get('state')
-            corr   = o%get('corr')
             if( allocated(particles) )then
+                ! get 3d ori info
+                o      = self%os_cls3D%get_ori(icls)
+                rproj  = o%get('proj')
+                rstate = o%get('state')
+                corr   = o%get('corr')
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind  = particles(iptcl)
@@ -2069,6 +2069,53 @@ contains
             if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
         end do
     end subroutine map2ptcls
+
+    ! this map2ptcls routine assumes that any selection of class averages is done
+    ! exclusively by state=0 flagging without any physical deletion
+    subroutine map2ptcls_state( self )
+        class(sp_project), intent(inout) :: self
+        integer, allocatable :: particles(:)
+        type(ori) :: o
+        integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
+        real      :: rstate
+        noris_ptcl2D = self%os_ptcl2D%get_noris()
+        if( noris_ptcl2D == 0 )then
+            THROW_WARN('empty PTCL2D field. Nothing to do; map2ptcls_state')
+            return
+        endif
+        ! ensure ptcl3D field congruent with ptcl2D field
+        noris_ptcl3D = self%os_ptcl3D%get_noris()
+        if( noris_ptcl3D /= noris_ptcl2D )then
+            ! preserve defocus parameters, stack indices
+            self%os_ptcl3D = self%os_ptcl2D
+            call self%os_ptcl3D%delete_2Dclustering
+        endif
+        ! do the mapping
+        ncls = self%os_cls2D%get_noris()
+        do icls=1,ncls
+            ! get particle indices
+            call self%os_ptcl2D%get_pinds(icls, 'class', particles)
+            if( allocated(particles) )then
+                ! get 3d ori info
+                o      = self%os_cls2D%get_ori(icls)
+                rstate = o%get('state')
+                do iptcl=1,size(particles)
+                    ! get particle index
+                    pind = particles(iptcl)
+                    ! update state in self%os_ptcl2D
+                    call self%os_ptcl2D%set(pind, 'state', rstate)
+                    ! update state in self%os_ptcl3D
+                    call self%os_ptcl3D%set(pind, 'state', rstate)
+                end do
+                deallocate(particles)
+            endif
+        end do
+        ! state = 0 all entries that don't have a state label
+        do iptcl=1,noris_ptcl2D
+            if( .not. self%os_ptcl2D%isthere(iptcl, 'state') ) call self%os_ptcl2D%set(iptcl, 'state', 0.)
+            if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
+        end do
+    end subroutine map2ptcls_state
 
     ! printers
 

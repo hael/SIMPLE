@@ -25,6 +25,7 @@ contains
         name = params_glob%ptr2prg%get_name()
         if( str_has_substr(name, 'print')   ) return
         if( str_has_substr(name, 'info')    ) return
+        if( str_has_substr(name, 'report')  ) return
         call cline%gen_job_descr(job_descr, name)
         if( file_exists(params_glob%projfile) )then
             call spproj%read_non_data_segments(params_glob%projfile)
