@@ -614,9 +614,9 @@ contains
                     call cline%set('startit', real(params%startit))
                 endif
             end do
+            prev_refine_path = get_fpath(vol_fname)
             ! if we are doing fractional volume update, partial reconstructions need to be carried over
             if( params%l_frac_update )then
-                prev_refine_path = get_fpath(vol_fname)
                 call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                 nfiles = size(list)
                 err    = .false.
@@ -629,6 +629,16 @@ contains
                 if( err )then
                     THROW_HARD('# partitions not consistent with previous refinement round')
                 endif
+                do i=1,nfiles
+                    target_name = PATH_HERE//basename(trim(list(i)))
+                    call syslib_copy_file(trim(list(i)), target_name)
+                end do
+            endif
+            ! if we are doing objfun=euclid the sigm estimates need to be carried over
+            if( trim(params%objfun) .eq. 'euclid' )then
+                call simple_list_files(prev_refine_path//'sigma2_noise_part*', list)
+                nfiles = size(list)
+                if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
                 do i=1,nfiles
                     target_name = PATH_HERE//basename(trim(list(i)))
                     call syslib_copy_file(trim(list(i)), target_name)
