@@ -295,15 +295,30 @@ contains
         type(sp_project) :: spproj
         integer          :: iostatus
         call params%new(cline)
-        if( file_exists(PATH_HERE//trim(params%projname)) )then
-            write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
-            write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
-            THROW_HARD('ABORTING... exec_new_project')
+        if( cline%defined('projname') .and. cline%defined('dir') )then
+            THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
+        else if( cline%defined('projname') )then
+            if( file_exists(PATH_HERE//trim(params%projname)) )then
+                write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
+                write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            ! make project directory
+            call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
+            ! change to project directory
+            call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
+        else if( cline%defined('dir') )then
+            params%dir = simple_abspath(trim(params%dir))
+            if( .not. file_exists(trim(params%dir)) )then
+                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            call cline%set('projname', basename(params%dir))
+            ! change to project directory
+            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
+        else
+            THROW_HARD('neither projname nor dir defined on comman line; exec_new_project')
         endif
-        ! make project directory
-        call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
-        ! change to project directory
-        call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
         ! update project info
         call spproj%update_projinfo( cline )
         ! update computer environment

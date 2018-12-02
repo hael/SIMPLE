@@ -1825,14 +1825,16 @@ contains
         &file is mirrored by an abstract data type in the back-end, which manages the parameters and &
         &meta-data I/O required for execution of SIMPLE',& ! descr_longg
         &'simple_exec',&                     ! executable
-        &0, 2, 0, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
+        &0, 1, 2, 0, 0, 0, 8, .false.)       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call new_project%set_input('parm_ios', 1, projname)
-        call new_project%set_input('parm_ios', 2, user_email)
+        call new_project%set_input('parm_ios', 1, user_email)
         ! alternative inputs
+        call new_project%set_input('alt_ios', 1, projname)
+        new_project%alt_ios(1)%required = .false.
+        call new_project%set_input('alt_ios', 2, 'dir', 'dir', 'Project directory', 'Project directory', 'give dir', .false., '')
         ! <empty>
         ! search controls
         ! <empty>
