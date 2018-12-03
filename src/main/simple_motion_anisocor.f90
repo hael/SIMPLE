@@ -35,10 +35,9 @@ type :: motion_anisocor
     real                            :: motion_correctgtol
 contains
     procedure, private              :: eval_fdf
-    procedure, private              :: biquad_poly
     procedure, private              :: calc_mat_tld
     procedure, private              :: interp_bilin
-    procedure, private              :: interp_bilin_fdf    
+    procedure, private              :: interp_bilin_fdf
     procedure, private              :: calc_T_coords
     procedure, private              :: calc_T_coords_only
     procedure                       :: calc_T_out
@@ -60,15 +59,15 @@ contains
         if ((x(1) < 1.) .or. (x(1) >= self%ldim(1)) .or. (x(2) < 1.) .or. (x(2) >= self%ldim(2))) then
             val  = 0.
             return
-        end if        
+        end if
         x1_h = floor(x(1))
         x2_h = x1_h + 1
         y1_h = floor(x(2))
         y2_h = y1_h + 1
         y1 = self%rmat(x1_h, y1_h)
-        y2 = self%rmat(x2_h, y1_h)        
+        y2 = self%rmat(x2_h, y1_h)
         y3 = self%rmat(x2_h, y2_h)
-        y4 = self%rmat(x1_h, y2_h)        
+        y4 = self%rmat(x1_h, y2_h)
         t    = x(1) - x1_h
         u    = x(2) - y1_h
         val  =  (1. - t) * (1. - u) * y1 + &
@@ -76,28 +75,28 @@ contains
                       t  *       u  * y3 + &
                 (1. - t) *       u  * y4
     end function interp_bilin
-    
+
     subroutine interp_bilin_fdf( self, x, val, grad )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: x(2)
         real,                   intent(out)   :: val, grad(2)
-        logical                               :: x1_valid, x2_valid, y1_valid, y2_valid
-        integer                               :: x1_h, x2_h, y1_h, y2_h
-        real                                  :: y1, y2, y3, y4, t, u
+        logical :: x1_valid, x2_valid, y1_valid, y2_valid
+        integer :: x1_h, x2_h, y1_h, y2_h
+        real    :: y1, y2, y3, y4, t, u
         ! if outside of image
         if ((x(1) < 1.) .or. (x(1) >= self%ldim(1)) .or. (x(2) < 1.) .or. (x(2) >= self%ldim(2))) then
             val  = 0.
             grad = 0.
             return
-        end if       
+        end if
         x1_h = floor(x(1))
         x2_h = x1_h + 1
         y1_h = floor(x(2))
         y2_h = y1_h + 1
         y1 = self%rmat(x1_h, y1_h)
-        y2 = self%rmat(x2_h, y1_h)        
+        y2 = self%rmat(x2_h, y1_h)
         y3 = self%rmat(x2_h, y2_h)
-        y4 = self%rmat(x1_h, y2_h)       
+        y4 = self%rmat(x1_h, y2_h)
         t    = x(1) - x1_h
         u    = x(2) - y1_h
         val  =  (1. - t) * (1. - u) * y1 + &
@@ -113,19 +112,17 @@ contains
                             t  * y3 + &
                       (1. - t) * y4
     end subroutine interp_bilin_fdf
-    
+
     subroutine calc_T_coords( self, a )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
         integer :: i, j
-        real    :: x_tld(2)
         real    :: Nx, Ny
         real    :: x, y, xm, ym, xms, yms, z1, z2
-        Nx = self%ldim(1)        
+        Nx = self%ldim(1)
         Ny = self%ldim(2)
         do j = 1, self%ldim(2)
             do i = 1, self%ldim(1)
-                call self%biquad_poly(i, j, a, x_tld)
                 x   = real(i)
                 y   = real(j)
                 ! map x,y to [-1:1]
@@ -161,7 +158,6 @@ contains
         Ny = self%ldim(2)
         do j = 1, self%ldim(2)
             do i = 1, self%ldim(1)
-                call self%biquad_poly(i, j, a, x_tld)
                 x   = real(i)
                 y   = real(j)
                 ! map x,y to [-1:1]
@@ -192,9 +188,9 @@ contains
                 x_tld = self%T_coords(:,i,j)
                 self%rmat_out(i,j,1) = self%interp_bilin(x_tld)
             end do
-        end do        
+        end do
     end subroutine calc_T_out
-    
+
     subroutine calc_mat_tld( self )
         class(motion_anisocor), intent(inout) :: self
         integer :: i, j
@@ -203,7 +199,7 @@ contains
         do j = 1, self%ldim(2)
             do i = 1, self%ldim(1)
                 x_tld = self%T_coords(:,i,j)
-                call self%interp_bilin_fdf(x_tld, val, grad)                
+                call self%interp_bilin_fdf(x_tld, val, grad)
                 self%rmat_T     (i,j)   = val
                 self%rmat_T_grad(i,j,1) = grad(1)
                 self%rmat_T_grad(i,j,2) = grad(2)
@@ -211,39 +207,13 @@ contains
         end do
     end subroutine calc_mat_tld
 
-    subroutine biquad_poly( self, i, j, a, x_tld)
-        class(motion_anisocor), intent(inout) :: self
-        integer,                intent(in)    :: i, j
-        real,                   intent(in)    :: a(POLY_DIM)
-        real,                   intent(out)   :: x_tld(2)
-        real                                  :: x, y, xm, ym, xms, yms, z1, z2
-        real                                  :: Nx, Ny        
-        Nx  = self%ldim(1)
-        Ny  = self%ldim(2)
-        x   = real(i)
-        y   = real(j)
-        ! map x,y to [-1:1]
-        xm  = (2. * x - Nx - 1.) / (Nx - 1.)
-        ym  = (2. * y - Ny - 1.) / (Ny - 1.)
-        xms = xm * xm
-        yms = ym * ym
-        ! Polynomial:
-        ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
-        ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-        z1 = real(xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym)
-        z2 = real(ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym)
-        ! remap to [1:N]
-        x_tld(1) = ((Nx - 1.) * z1 + Nx + 1.) / 2.
-        x_tld(2) = ((Ny - 1.) * z2 + Ny + 1.) / 2.
-    end subroutine biquad_poly
-
     subroutine eval_fdf( self, a, f, grad )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
-        real                                  :: f, grad(POLY_DIM)
-        real                                  :: N, D_I, D_R, grad_tmp1, grad_tmp2
-        integer                               :: i, j, r
-        real                                  :: poly_dfs(POLY_DIM)
+        real    :: f, grad(POLY_DIM)
+        real    :: N, D_I, D_R, grad_tmp1, grad_tmp2
+        integer :: i, j, r
+        real    :: poly_dfs(POLY_DIM)
         call self%calc_T_coords(a)
         call self%calc_mat_tld()
         N   = sum( self%rmat_ref(:,:) * self%rmat_T  (:,:) )
@@ -268,7 +238,7 @@ contains
         ! poly_grad(11)    = yms
         ! poly_grad(12)    = xm*ym
         ! poly_grad( 1: 6) = poly_grad( 1: 6) * (Nx - 1.) / 2.
-        ! poly_grad( 7:12) = poly_grad( 7:12) * (Ny - 1.) / 2.         
+        ! poly_grad( 7:12) = poly_grad( 7:12) * (Ny - 1.) / 2.
         ! d/da1: poly_dfs=1
         grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,1) )
         grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,1) )
@@ -316,7 +286,7 @@ contains
         ! d/da12: poly_dfs=xm*ym
         grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,2) )
         grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,2) )
-        grad(12)  = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2        
+        grad(12)  = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
         grad = grad / sqrt(D_I*D_R)
     end subroutine eval_fdf
 
@@ -345,9 +315,9 @@ contains
         self%frame  => frame
         call frame%get_rmat_ptr( rmat_ptr )
         allocate( self%rmat(self%ldim(1), self%ldim(2)) )
-        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)        
+        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         call aniso_shifted_frame%get_rmat_ptr( self%rmat_out )
-        allocate( self%rmat_T         (    self%ldim(1), self%ldim(2)    ) )        
+        allocate( self%rmat_T         (    self%ldim(1), self%ldim(2)    ) )
         allocate( self%rmat_T_grad    (    self%ldim(1), self%ldim(2), 2 ) )
         allocate( self%T_coords       ( 2, self%ldim(1), self%ldim(2)    ) )
         allocate( self%T_coords_da    (    self%ldim(1), self%ldim(2), 2 ) )
@@ -428,7 +398,7 @@ contains
     end subroutine motion_anisocor_fdfcost_8
 
     !> Main search routine
-    function motion_anisocor_minimize( self ) result( cxy )
+    function motion_anisocor_minimize( self ) result(cxy)
         class(motion_anisocor), intent(inout) :: self
         real :: cxy(POLY_DIM+1) ! corr + model
         class(*), pointer :: fun_self => null()
@@ -437,7 +407,7 @@ contains
         call self%reference%get_rmat_ptr( rmat_ref_ptr )
         call self%frame    %get_rmat_ptr( rmat_ptr     )
         self%rmat_ref(1:self%ldim(1), 1:self%ldim(2)) = rmat_ref_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
-        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)        
+        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%ospec%x = 0.
         call self%nlopt%minimize(self%ospec, self, cxy(1))
         cxy(2:) = self%ospec%x
@@ -453,7 +423,7 @@ contains
         class(motion_anisocor), intent(inout) :: self
         !        if (allocated(self%rmat_grad)) deallocate(self%rmat_grad)
         if (allocated(self%rmat       )) deallocate(self%rmat       )
-        if (allocated(self%rmat_ref   )) deallocate(self%rmat_ref   )        
+        if (allocated(self%rmat_ref   )) deallocate(self%rmat_ref   )
         if (allocated(self%rmat_T     )) deallocate(self%rmat_T     )
         if (allocated(self%rmat_T_grad)) deallocate(self%rmat_T_grad)
         if (associated(self%nlopt)) then
@@ -463,7 +433,7 @@ contains
         if (allocated(self%T_coords      )) deallocate(self%T_coords      )
         if (allocated(self%T_coords_da   )) deallocate(self%T_coords_da   )
         if (allocated(self%T_coords_da_sq)) deallocate(self%T_coords_da_sq)
-        if (allocated(self%T_coords_da_cr)) deallocate(self%T_coords_da_cr)        
+        if (allocated(self%T_coords_da_cr)) deallocate(self%T_coords_da_cr)
         call self%ospec%kill()
         self%maxHWshift  = 0.
         self%reference   => null()
