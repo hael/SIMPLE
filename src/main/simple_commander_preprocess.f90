@@ -173,8 +173,8 @@ contains
                     cycle
             end select
             ! ctf_estimate
-            params_glob%hp   = params%hp_ctf_estimate
-            params_glob%lp   = max(params%fny, params%lp_ctf_estimate)
+            params_glob%hp = params%hp_ctf_estimate
+            params_glob%lp = max(params%fny, params%lp_ctf_estimate)
             call cfiter%iterate(ctfvars, moviename_forctf, o_mov, output_dir_ctf_estimate, .false.)
             ! update project
             call spproj%os_mic%set_ori(imovie, o_mov)
@@ -689,7 +689,7 @@ contains
                 endif
                 do i=1,size(boxfiles)
                     boxfile_name = simple_abspath(boxfiles(i), errmsg='simple_commander_preprocess::exec_extract',check_exists=.false.)
-                    boxfiles(i) = trim(boxfile_name)
+                    call make_relativepath(CWD_GLOB,boxfile_name,boxfiles(i))
                 enddo
             else
                 write(logfhandle,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
@@ -925,8 +925,8 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_picker  = trim(DIR_PICKER)
             output_dir_extract = trim(DIR_EXTRACT)
-            call simple_mkdir(output_dir_picker,errmsg="commander_preprocess :: preprocess;  ")
-            call simple_mkdir(output_dir_extract,errmsg="commander_preprocess :: preprocess;  ")
+            call simple_mkdir(output_dir_picker,errmsg="commander_preprocess :: preprocess; ")
+            call simple_mkdir(output_dir_extract,errmsg="commander_preprocess :: preprocess; ")
         else
             output_dir_picker  = PATH_HERE
             output_dir_extract = PATH_HERE

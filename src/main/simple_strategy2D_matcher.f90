@@ -54,9 +54,10 @@ contains
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
         real                  :: frac_srch_space, bfactor
         integer               :: iptcl, i, fnr, cnt, updatecnt
-        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc
+        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy
         l_partial_sums = .false.
         l_snhc         = .false.
+        l_greedy       = .false.
         l_frac_update  = .false.
         if( L_BENCH )then
             t_init = tic()
@@ -71,16 +72,23 @@ contains
             ! greedy start
             l_partial_sums = .false.
             l_snhc         = .false.
+            l_greedy       = .true.
             l_frac_update  = .false.
         else if( params_glob%extr_iter <= MAX_EXTRLIM2D )then
             ! extremal opt without fractional update
             l_partial_sums = .false.
-            l_snhc         = .true.
             l_frac_update  = .false.
+            l_greedy       = .false.
+            l_snhc         = .true.
+            if(params_glob%refine.eq.'greedy')then
+                l_greedy = .true.
+                l_snhc   = .false.
+            endif
         else
             ! optional fractional update, no snhc opt
             l_partial_sums = params_glob%l_frac_update
             l_snhc         = .false.
+            l_greedy       = (params_glob%refine.eq.'greedy')
             l_frac_update  = params_glob%l_frac_update
         endif
 
@@ -189,7 +197,7 @@ contains
                     updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                     if( params_glob%l_locres )then
                         allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                    else if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
+                    else if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
                         allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                     else
                         allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)

@@ -149,9 +149,9 @@ contains
         real,       intent(in)    :: power
         integer        :: tmp(nlabels), order(nptcls), config(nptcls)
         real           :: corrs(nptcls), rnincl
-        integer        :: iptcl, s, ind, i
+        integer        :: iptcl, s, ind, i, n95
         logical        :: mask(nincl_ptcls)
-        write(logfhandle,'(A)') '>>> GENERATING simultaneous draw'
+        write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM SAMPLING'
         config = 0
         rnincl = real(nincl_ptcls)
         mask   = .true.
@@ -160,8 +160,11 @@ contains
         where( states<=0 ) corrs = -1.
         call hpsort( corrs, order )
         call reverse(order)
+        ! 95% of the data is sampled following: first parttion follos squared distribution sampling,
+        ! all others are uniformly sampled
+        n95   = nint(0.95*real(nincl_ptcls)) + nlabels
         iptcl = 0
-        do i=1,nincl_ptcls+nlabels,nlabels
+        do i=1,n95,nlabels
             if(i>nincl_ptcls)exit
             ind = ceiling((ran3()**power)*rnincl)
             do while(.not.mask(ind))
@@ -180,6 +183,15 @@ contains
                 config(order(ind)) = s
                 mask(ind)          = .false.
             enddo
+        enddo
+        ! the remaining 5% are drawn uniformly to avoid overhead in big datasets
+        s = 0
+        do iptcl=1,nptcls
+            if( states(iptcl) == 0 )cycle
+            if( config(iptcl) /= 0 )cycle
+            s = s + 1
+            if( s > nlabels ) s = 1
+            config(iptcl) = s
         enddo
         ! update states
         where((states > 0) .and. (states <= nlabels)) states = config

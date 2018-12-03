@@ -666,10 +666,9 @@ contains
                 type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
                 write(logfhandle,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
-                ! folders handling
-                call simple_mkdir('buffer2D')
+                ! directory structure
                 call chdir('buffer2D')
-                call rename('../'//trim(PROJFILE_BUFFER),PROJFILE_BUFFER)
+                !call rename('../'//trim(PROJFILE_BUFFER),PROJFILE_BUFFER)
                 ! init
                 nptcls = buffer_proj%get_nptcls()
                 nparts = calc_nparts(buffer_proj, nptcls)
@@ -1014,6 +1013,10 @@ contains
                 integer :: fromp, top, istk, state, nmics_here, nptcls_tot
                 buffer_exists = .false.
                 call buffer_proj%kill
+                ! to account for directory structure
+                call simple_rmdir('buffer2D') ! clean previous round
+                call simple_mkdir('buffer2D')
+                call simple_chdir('buffer2D')
                 ! determines whether there are enough particles for a buffer
                 if( buffer_ptcls_range(2) > 0 )then
                     call pool_proj%map_ptcl_ind2stk_ind('ptcl2D', buffer_ptcls_range(2), stkind, ind_in_stk)
@@ -1033,7 +1036,10 @@ contains
                     top         = nint(pool_proj%os_stk%get(istk,'top'))
                     nptcls_here = nptcls_here + top-fromp+1
                 enddo
-                if( nptcls_here < nptcls_per_buffer )return
+                if( nptcls_here < nptcls_per_buffer )then
+                    call simple_chdir('..')
+                    return
+                endif
                 ! builds buffer if enough particles
                 buffer_proj%projinfo = pool_proj%projinfo
                 buffer_proj%compenv  = pool_proj%compenv
@@ -1049,6 +1055,9 @@ contains
                     state = pool_proj%os_stk%get_state(imic)
                     istk  = istk+1
                     call pool_proj%os_stk%getter(imic,'stk',stkname)
+                    ! to account for directory structure
+                    if( stkname(1:1) /= '/') stkname = '../'//trim(stkname)
+                    ! import
                     ctfparms = pool_proj%os_stk%get_ctfvars(imic)
                     call buffer_proj%add_stk(stkname, ctfparms)
                     fromp      = nint(buffer_proj%os_stk%get(istk,'fromp'))
@@ -1065,6 +1074,7 @@ contains
                 buffer_ptcls_range(1) = buffer_ptcls_range(2)+1
                 buffer_ptcls_range(2) = buffer_ptcls_range(1)+top-1
                 call buffer_proj%write
+                call simple_chdir('..')
                 buffer_exists = .true.
                 write(logfhandle,'(A,I4,A,I6,A)')'>>> BUILT NEW BUFFER WITH ', nmics_here, ' MICROGRAPHS, ',nptcls_here, ' PARTICLES'
             end subroutine gen_buffer_from_pool

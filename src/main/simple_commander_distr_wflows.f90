@@ -388,7 +388,7 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'))
+        call build%spproj%split_stk(params%nparts)
         ! prepare command lines from prototype master
         cline_check_2Dconv = cline
         cline_cavgassemble = cline
@@ -505,7 +505,7 @@ contains
             vol = 'startvol_state01'//params%ext
         endif
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -572,7 +572,7 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_check_3Dconv        = cline
@@ -899,7 +899,7 @@ contains
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then

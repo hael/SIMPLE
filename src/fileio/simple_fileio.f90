@@ -10,7 +10,7 @@ implicit none
 public :: fileiochk, fopen, fclose, nlines,  filelength, funit_size, is_funit_open, get_open_funits
 public :: add2fbody, swap_suffix, get_fbody, fname_new_ext, fname2ext, fname2iter, basename,  get_fpath
 public :: make_dirnames, make_filenames, filepath, del_files, fname2format, read_filetable, write_filetable
-public :: write_singlelineoftext, arr2file, file2rarr, simple_copy_file
+public :: write_singlelineoftext, arr2file, file2rarr, simple_copy_file, make_relativepath
 private
 #include "simple_local_flags.inc"
 
@@ -799,5 +799,48 @@ contains
         integer, intent(out), optional :: status
         call syslib_copy_file(fname1, fname2, status)
     end subroutine simple_copy_file
+
+    ! builds a relative path with respect to working directory
+    ! given absolute paths of directory and filename returns file relative path
+    ! with respect to working directory (minus execution directory, eg 1_xxx)
+    ! if the file lies outside the working directory then the absolute file path is kept
+    subroutine make_relativepath(cwd, fname, newfname)
+        character(len=*), intent(in)  :: cwd, fname
+        character(len=LONGSTRLEN), intent(out) :: newfname
+        character(LONGSTRLEN) :: cwd_here, projdir
+        integer :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
+        ! remove final '/' from cwd for safety
+        l_cwd = len_trim(cwd)
+        if(cwd(l_cwd:l_cwd)=='/')then
+            cwd_here = cwd(1:l_cwd-1)
+            l_cwd = l_cwd-1
+        else
+            cwd_here = cwd(1:l_cwd)
+        endif
+        ! removes execution directory from cwd
+        slashpos_left  = scan(cwd_here,'/',back=.false.)
+        slashpos_right = scan(cwd_here,'/',back=.true.)
+        if(slashpos_right > slashpos_left)then
+            projdir = cwd_here(1:slashpos_right-1)
+        else
+            THROW_HARD('Incorrect directory structure; simple_fileio :: make_relativepath')
+        endif
+        ! builds path
+        ipos = index(trim(fname),trim(projdir))
+        if( ipos == 1 )then
+            ! file inside project directory, use relative path
+            l = len_trim(projdir)
+            l_fname = len_trim(fname)
+            if(fname(l+1:l+1) == '/')then
+                newfname = '..'//fname(l+1:l_fname)
+            else
+                newfname = '../'//fname(l+1:l_fname)
+            endif
+        else
+            ! file outside of project directory or weird structure, use absolute path
+            newfname = trim(fname)
+        endif
+    end subroutine make_relativepath
+
 
 end module simple_fileio

@@ -160,7 +160,7 @@ contains
         call write_boxfile
         ! returns absolute path
         abs_boxname = simple_abspath(boxname, errmsg='simple_picker::exec_picker')
-        boxname_out = trim(abs_boxname)
+        call make_relativepath(CWD_GLOB, abs_boxname, boxname_out)
     end subroutine exec_picker
 
     subroutine extract_peaks

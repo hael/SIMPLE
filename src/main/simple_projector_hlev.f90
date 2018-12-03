@@ -105,23 +105,24 @@ contains
         class(image),     intent(inout) :: rovol_pad, rovol
         class(ori),       intent(inout) :: o
         real, optional,   intent(in)    :: shvec(3)
-        integer          :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3)
-        real             :: loc(3), rmat(3,3)
-        logical          :: l_shvec_present
+        integer :: sh,h,k,l,nyq,lims(3,2),logi(3),phys(3),lim_sq
+        real    :: loc(3), rmat(3,3), rlim_sq
+        logical :: l_shvec_present
         l_shvec_present = present(shvec)
         rovol_pad = cmplx(0.,0.)
         rovol     = 0.
         lims      = vol_pad%loop_lims(2)
         nyq       = vol_pad%get_lfny(1)
+        lim_sq    = (nyq + 1)**2
         rmat      = o%get_mat()
-        !$omp parallel do collapse(3) default(shared) private(sh,h,k,l,loc,logi,phys)&
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
+        !$omp parallel do collapse(2) default(shared) private(h,k,l,loc,logi,phys)&
+        !$omp schedule(dynamic) proc_bind(close)
+        do l=lims(3,1),lims(3,2)
             do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
+                if(l*l+k*k > lim_sq) cycle
+                do h=lims(1,1),lims(1,2)
+                    if(h*h+k*k+l*l > lim_sq) cycle
                     logi = [h,k,l]
-                    sh = nint(hyp(real(h),real(k),real(l)))
-                    if( sh > nyq + 1 )cycle
                     phys = rovol_pad%comp_addr_phys(logi)
                     loc  = matmul(real(logi), rmat)
                     if( l_shvec_present )then

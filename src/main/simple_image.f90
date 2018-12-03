@@ -5310,7 +5310,7 @@ end subroutine NLmean
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    function oshift_1( self, logi, shvec ) result( comp )
+    pure function oshift_1( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         real,         intent(in) :: logi(3)
         real,         intent(in) :: shvec(3)
@@ -5328,7 +5328,7 @@ end subroutine NLmean
 
     !>  \brief  returns the real and imaginary parts of the phase shift at point
     !!          logi in a Fourier transform caused by the origin shift in shvec
-    function oshift_2( self, logi, shvec ) result( comp )
+    pure function oshift_2( self, logi, shvec ) result( comp )
         class(image), intent(in) :: self
         integer,      intent(in) :: logi(3)
         real,         intent(in) :: shvec(3)

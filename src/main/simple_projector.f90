@@ -370,9 +370,9 @@ contains
     end subroutine fdf_project_polar_memo
 
     !>  \brief is to interpolate from the expanded complex matrix
-    function interp_fcomp( self, loc )result( comp )
-        class(projector), intent(inout) :: self
-        real,             intent(in)    :: loc(3)
+    pure function interp_fcomp( self, loc )result( comp )
+        class(projector), intent(in) :: self
+        real,             intent(in) :: loc(3)
         complex :: comp
         real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
         integer :: i, win(2,3) ! window boundary array in fortran contiguous format

@@ -27,6 +27,7 @@ contains
         class(ori),              intent(inout) :: orientation
         character(len=*),        intent(in)    :: moviename_intg, dir_out
         character(len=:), allocatable :: fbody_here, ext, fname
+        character(len=LONGSTRLEN) :: rel_fname
         type(image) :: img_jpg
         integer     :: ldim(3), ldim_thumb(3), nframes
         real        :: scale, smpd
@@ -64,9 +65,11 @@ contains
         call img_jpg%write_jpg(self%moviename_thumb, norm=.true., quality=90)
         ! report to ori object
         fname = simple_abspath(moviename_intg, errmsg='simple_pspec_thumb_iter::iterate 1')
-        call orientation%set('intg',   trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('intg',   trim(rel_fname))
         fname = simple_abspath(self%moviename_thumb, errmsg='simple_pspec_thumb_iter::iterate 2')
-        call orientation%set('thumb',  trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('thumb',  trim(rel_fname))
         call orientation%set('imgkind', 'intg')
         ! destruct
         call self%pspec%kill

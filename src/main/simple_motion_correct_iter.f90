@@ -42,10 +42,11 @@ contains
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:), aniso_shifts(:,:)
-        type(stats_struct) :: shstats(2)
-        integer            :: ldim(3), ldim_thumb(3)
-        real               :: scale, var
-        logical            :: err
+        type(stats_struct)            :: shstats(2)
+        character(len=LONGSTRLEN)     :: rel_fname
+        integer                       :: ldim(3), ldim_thumb(3)
+        real                          :: scale, var
+        logical                       :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -134,17 +135,22 @@ contains
         ! report to ori object
         call orientation%set('smpd',   ctfvars%smpd)
         fname = simple_abspath(self%moviename,  errmsg='simple_motion_correct_iter::iterate 1')
-        call orientation%set('movie',  trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('movie',  trim(rel_fname))
         fname = simple_abspath(self%moviename_intg, errmsg='simple_motion_correct_iter::iterate 2')
-        call orientation%set('intg',   trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('intg',   trim(rel_fname))
         fname = simple_abspath(self%moviename_forctf, errmsg='simple_motion_correct_iter::iterate 3')
-        call orientation%set('forctf', trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('forctf', trim(rel_fname))
         fname = simple_abspath(self%moviename_thumb, errmsg='simple_motion_correct_iter::iterate 4')
-        call orientation%set('thumb',  trim(fname))
+        call make_relativepath(CWD_GLOB,fname,rel_fname)
+        call orientation%set('thumb',  trim(rel_fname))
         call orientation%set('imgkind', 'mic')
         if( cline%defined('tof') )then
             fname = simple_abspath(self%moviename_intg_frames, errmsg='simple_motion_correct_iter::iterate 5')
-            call orientation%set('intg_frames', trim(self%moviename_intg_frames))
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('intg_frames',  trim(rel_fname))
         endif
         if( allocated(shifts) )       deallocate(shifts)
         if( allocated(aniso_shifts) ) deallocate(aniso_shifts)

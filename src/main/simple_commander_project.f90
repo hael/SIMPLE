@@ -357,7 +357,7 @@ contains
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
-        character(len=:),      allocatable :: phaseplate, boxf_abspath
+        character(len=:),          allocatable :: phaseplate, boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         call params%new(cline)
         ! parameter input management
@@ -404,8 +404,9 @@ contains
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
-                 boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
-                call spproj%os_mic%set(i, 'boxfile', boxf_abspath)
+                boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
+                call make_relativepath(CWD_GLOB,boxf_abspath,boxfnames(i))
+                call spproj%os_mic%set(i, 'boxfile', boxfnames(i))
             end do
         endif
         ! write project file
@@ -439,7 +440,8 @@ contains
         endif
         do i=1,nos_mic
             boxf_abspath = simple_abspath(trim(boxfnames(i)),errmsg='commander_project :: exec_import_movies')
-            call spproj%os_mic%set(i, 'boxfile', trim(boxf_abspath))
+            call make_relativepath(CWD_GLOB,boxf_abspath,boxfnames(i))
+            call spproj%os_mic%set(i, 'boxfile', trim(boxfnames(i)))
         end do
         ! write project file
         call spproj%write_segment_inside('mic') ! all that's needed here

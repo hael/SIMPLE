@@ -673,7 +673,7 @@ contains
             if(global_debug) write(logfhandle,*)' simple_rmdir removed ', count, ' items'
             deallocate(path)
         else
-            write(logfhandle,*)" Directory ", d, " does not exists, simple_rmdir ignoring request"
+            if(global_debug) write(logfhandle,*)" Directory ", d, " does not exists, simple_rmdir ignoring request"
         end if
         if(present(status)) status = io_status
     end subroutine simple_rmdir

@@ -83,7 +83,7 @@ contains
         ! refinement flag
         if(.not.cline%defined('refine')) call cline%set('refine','snhc')
         ! splitting
-        call spproj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! general options planning
         if( params%l_autoscale )then
             ! this workflow executes two stages of CLUSTER2D
@@ -377,7 +377,7 @@ contains
         if(params%nparts == 1 )then
             call work_proj1%write()
         else
-            call work_proj1%split_stk(params%nparts, .false.)
+            call work_proj1%split_stk(params%nparts)
         endif
         ! down-scale
         orig_box     = work_proj1%get_box()
@@ -548,7 +548,7 @@ contains
             if(params%nparts == 1)then
                 call work_proj2%write()
             else
-                call work_proj2%split_stk(params%nparts, .false.)
+                call work_proj2%split_stk(params%nparts)
             endif
         endif
         call work_proj2%kill
@@ -764,7 +764,7 @@ contains
         if( fall_over ) THROW_HARD('no particles found! exec_cluster3D')
         if( params%oritype.eq.'ptcl3D' )then
             ! just splitting
-            call work_proj%split_stk(params%nparts, (params%mkdir.eq.'yes'), dir=PATH_PARENT)
+            call work_proj%split_stk(params%nparts, dir=PATH_PARENT)
         else
             ! class-averages
             params%projfile = trim(cls3d_projfile)
@@ -807,7 +807,7 @@ contains
             call cline%set('projname', trim(get_fbody(trim(params%projfile),trim('simple'))))
             call work_proj%update_projinfo(cline)
             ! splitting in CURRENT directory
-            call work_proj%split_stk(params%nparts, .false., dir=PATH_HERE)
+            call work_proj%split_stk(params%nparts, dir=PATH_HERE)
             ! write
             call work_proj%write
         endif
@@ -1088,7 +1088,7 @@ contains
             call cline%set('projname', trim(get_fbody(trim(cls3D_projfile),trim('simple'))))
             call spproj_master%update_projinfo(cline)
             ! splitting in CURRENT directory
-            call spproj_master%split_stk(params%nparts, .false., dir=PATH_HERE)
+            call spproj_master%split_stk(params%nparts, dir=PATH_HERE)
             ! write
             call spproj_master%write
         endif
