@@ -92,6 +92,7 @@ contains
         call orientation%set('dferr',      dferr   )
         call orientation%set('ctfscore',   ctfscore)
         call orientation%set('cc90',       cc90)
+        call orientation%set('ctfjpg',     fname_diag)
     end subroutine iterate
 
 end module simple_ctf_estimate_iter
