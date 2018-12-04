@@ -678,16 +678,17 @@ contains
                 call cline_cluster2D_buffer%set('refine',    'snhc')
                 call cline_cluster2D_buffer%set('mkdir',     'no')
                 call cline_cluster2D_buffer%set('startit',   1.)
-                call cline_cluster2D_buffer%set('maxits',    10.)
+                call cline_cluster2D_buffer%set('maxits',    10.) ! guaranties 5 iterations with withdrawal
+                call cline_cluster2D_buffer%set('extr_iter', real(MAX_EXTRLIM2D-4)) ! and 5 without
                 call cline_cluster2D_buffer%set('ncls',      real(params%ncls_start))
                 call cline_cluster2D_buffer%set('nparts',    real(nparts))
                 call cline_cluster2D_buffer%set('autoscale', 'no')
                 call cline_cluster2D_buffer%set('box',      real(box))
                 call cline_cluster2D_buffer%set('msk',      real(msk))
-                call cline_cluster2D_buffer%delete('extr_iter')
                 call cline_cluster2D_buffer%delete('trs')
                 call cline_cluster2D_buffer%delete('update_frac')
                 call cline_cluster2D_buffer%delete('endit')
+                call cline_cluster2D_buffer%delete('converged')
                 params_glob%nptcls = nptcls
                 call xcluster2D_distr%execute(cline_cluster2D_buffer)
                 call getcwd(buffer_dir)

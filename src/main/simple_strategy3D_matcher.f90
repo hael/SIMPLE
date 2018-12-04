@@ -100,7 +100,6 @@ contains
         select case(params_glob%refine)
         case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 npeaks = 1
-                if( cline%defined('npeaks') .and. params_glob%refine.eq.'cluster' ) npeaks = params_glob%npeaks
             case('hard_single','hard_multi')
                 npeaks = 40
                 ! command line overrides

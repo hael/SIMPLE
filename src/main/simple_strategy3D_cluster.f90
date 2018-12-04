@@ -63,7 +63,7 @@ contains
             else
                 call statesrch_cluster3D(self%s, self%spec)
             endif
-            if(self%s%npeaks == 1) call self%oris_assign
+            call self%oris_assign
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
@@ -73,10 +73,8 @@ contains
     subroutine statesrch_cluster3D(s, spec)
         type(strategy3D_srch), intent(inout) :: s
         type(strategy3D_spec), intent(in)    :: spec
-        integer :: neigh_projs(s%nstates),projs(s%nnn,s%nstates),inds(s%nnn)
-        integer :: ind,iproj,iref,state,ineigh,inpl,i,bestloc
-        real    :: corrs(s%nstates),corrs_inpl(s%nrots),neigh_corrs(s%nnn,s%nstates)
-        real    :: corrs4sort(s%nnn),dists(s%npeaks),ws(s%npeaks),corr,mi_state,mi_proj
+        integer :: neigh_projs(s%nstates), ind,iproj,iref,state,ineigh,inpl,i
+        real    :: corrs(s%nstates),corrs_inpl(s%nrots), corr,mi_state,mi_proj
         corrs       = -1.
         neigh_projs = 0
         ! evaluate all correlations
@@ -89,7 +87,6 @@ contains
                     iref  = (state-1)*s%nprojs + iproj
                     call pftcc_glob%gencorrs(iref, s%iptcl, corrs_inpl)
                     inpl = maxloc(corrs_inpl,dim=1)
-                    neigh_corrs(ineigh,state) = corrs_inpl(inpl)
                     if( corrs_inpl(inpl) > corrs(state) )then
                         corrs(state)       = corrs_inpl(inpl)
                         neigh_projs(state) = iproj
@@ -114,88 +111,24 @@ contains
                     state = irnd_uni(s%nstates)
                 enddo
             endif
-            corr  = corrs(state)
-            iproj = s%prev_proj
+            corr         = corrs(state)
+            iproj        = s%prev_proj
             s%nrefs_eval = 1
-            if(s%npeaks > 1)then
-                call build_glob%spproj_field%set(s%iptcl,'frac',real(s%nrefs_eval) / real(s%nstates))
-                call build_glob%spproj_field%set(s%iptcl,'w',   1.)
-                call build_glob%spproj_field%set(s%iptcl,'ow',  1.)
-                call s3D%o_peaks(s%iptcl)%set(1,'w', 1.)
-                call s3D%o_peaks(s%iptcl)%set(1,'ow',1.)
-                call s3D%o_peaks(s%iptcl)%set_euler(1, build_glob%spproj_field%get_euler(s%iptcl))
-                call s3D%o_peaks(s%iptcl)%set_shift(1, build_glob%spproj_field%get_2Dshift(s%iptcl))
-                call s3D%o_peaks(s%iptcl)%set(1,'state', build_glob%spproj_field%get(s%iptcl,'state'))
-                call s3D%o_peaks(s%iptcl)%set(1,'corr',  build_glob%spproj_field%get(s%iptcl,'corr'))
-                call s3D%o_peaks(s%iptcl)%set(1,'proj',  build_glob%spproj_field%get(s%iptcl,'proj'))
-            endif
         else
             ! SHC state optimization
-            s%prev_corr = corrs(s%prev_state)
-            state = shcloc(s%nstates, corrs, s%prev_corr)
-            corr  = corrs(state)
+            s%prev_corr  = corrs(s%prev_state)
+            state        = shcloc(s%nstates, corrs, s%prev_corr)
+            corr         = corrs(state)
             s%nrefs_eval = count(corrs <= s%prev_corr)
             if( s%neigh )then
                 iproj = neigh_projs(state)
-                iref = (state-1)*s%nprojs + iproj
+                iref  = (state-1)*s%nprojs + iproj
                 call build_glob%spproj_field%e1set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,1)) ! inpl = 1
                 call build_glob%spproj_field%e2set(s%iptcl,s3D%proj_space_euls(s%ithr,iref,1,2))
             else
                 iproj = s%prev_proj
             endif
-            if( state == s%prev_state )then
-                if(s%npeaks == 1)then
-                    call greedy_inplsrch(s, corr, state, iproj)
-                else
-                    corrs4sort = neigh_corrs(:,state)
-                    inds = (/(ineigh,ineigh=1,s%nnn)/)
-                    call hpsort(corrs4sort,inds)
-                    do i=1,s%npeaks
-                        ineigh = inds(s%nnn-i+1)
-                        ind    = s%nrefs-s%npeaks+i
-                        iproj  = build_glob%nnmat(s%prev_proj,ineigh)
-                        iref   = (state-1)*s%nprojs + iproj
-                        s3D%proj_space_refinds_sorted_highest(s%ithr,ind) = iref
-                        s3D%proj_space_corrs_srchd(s%ithr,ind) = .true.
-                        call s3D%o_peaks(s%iptcl)%e1set(i,s3D%proj_space_euls(s%ithr,iref,1,1))
-                        call s3D%o_peaks(s%iptcl)%e2set(i,s3D%proj_space_euls(s%ithr,iref,1,2))
-                        call s3D%o_peaks(s%iptcl)%set(i,'state',real(state))
-                        call s3D%o_peaks(s%iptcl)%set(i,'iproj',real(state))
-                    enddo
-                    call s%inpl_srch
-                    do i=1,s%npeaks
-                        ineigh = inds(s%nnn-i+1)
-                        iref   = (state-1)*s%nprojs + build_glob%nnmat(s%prev_proj,ineigh)
-                        if( s3D%proj_space_corrs(s%ithr,iref,1) > neigh_corrs(ineigh,state) )then
-                            neigh_corrs(ineigh,state) = s3D%proj_space_corrs(s%ithr,iref,1)
-                            call s3D%o_peaks(s%iptcl)%set_shift(i,s%prev_shvec+s3D%proj_space_shift(s%ithr,iref,1,:))
-                            call s3D%o_peaks(s%iptcl)%e3set(i,s3D%proj_space_euls(s%ithr,iref,1,3))
-                        else
-                            call s3D%o_peaks(s%iptcl)%set_shift(i,s%prev_shvec)
-                            call s3D%o_peaks(s%iptcl)%e3set(i,360.-pftcc_glob%get_rot(s%prev_roind))
-                        endif
-                        dists(i) = 1.-neigh_corrs(ineigh,state) / params_glob%tau
-                    enddo
-                    ws = exp(-dists - maxval(-dists))
-                    ws = ws / sum(ws)
-                    where(ws <= 0.000001) ws=0.
-                    bestloc = maxloc(ws,dim=1)
-                    do i=1,s%npeaks
-                        ineigh = inds(s%nnn-i+1)
-                        call s3D%o_peaks(s%iptcl)%set(i,'ow',ws(i))
-                        call s3D%o_peaks(s%iptcl)%set(i,'w', 1.)
-                        if(i == bestloc) corr = neigh_corrs(ineigh,state) ! so the weighted correlation is not reported
-                    enddo
-                    ineigh = inds(s%nnn-bestloc+1)
-                    iproj  = build_glob%nnmat(s%prev_proj,ineigh)
-                    call build_glob%spproj_field%set_euler(s%iptcl,s3D%o_peaks(s%iptcl)%get_euler(bestloc))
-                    call build_glob%spproj_field%set_shift(s%iptcl,s3D%o_peaks(s%iptcl)%get_2Dshift(bestloc))
-                    call build_glob%spproj_field%set(s%iptcl,'w',1.)
-                    call build_glob%spproj_field%set(s%iptcl,'ow',ws(bestloc))
-                    call build_glob%spproj_field%set(s%iptcl,'npeaks',real(s%npeaks))
-                    call build_glob%spproj_field%set(s%iptcl,'frac',100.*real(s%nrefs_eval)/real(s%nstates))
-                endif
-            endif
+            if( state == s%prev_state ) call greedy_inplsrch(s, corr, state, iproj)
         endif
         ! reporting & convergence
         mi_state = merge(1.,0., state==s%prev_state)

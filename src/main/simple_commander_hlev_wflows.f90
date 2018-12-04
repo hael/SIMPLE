@@ -410,7 +410,7 @@ contains
         ! in stage 2 it follows optional user input and defaults to ccres
         call cline_refine3D_snhc%set('objfun', 'cc')
         call cline_refine3D_init%set('objfun', 'cc')
-        if( .not.cline%defined('objfun') )call cline_refine3D_refine%set('objfun', 'ccres')
+        if( .not.cline%defined('objfun') ) call cline_refine3D_refine%set('objfun', 'ccres')
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_reproject%delete('nparts')
@@ -848,27 +848,23 @@ contains
         cline_refine3D2                 = cline ! second stage, stochastic refinement
         cline_reconstruct3D_mixed_distr = cline
         ! first stage
-        call cline_refine3D1%set('prg', 'refine3D')
+        call cline_refine3D1%set('prg',    'refine3D')
         call cline_refine3D1%set('maxits', real(MAXITS1))
-        ! call cline_refine3D1%delete('neigh')
+        call cline_refine3D1%set('neigh',  'yes') ! always consider neighbours
+        call cline_refine3D1%set('nnn',    0.05*real(params%nspace))
         select case(trim(params%refine))
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
-                call cline_refine3D2%delete('neigh')
+                call cline_refine3D2%delete('neigh') ! no neighbour mode for symmetry
+                call cline_refine3D2%delete('nnn')
                 call cline_refine3D2%set('pgrp','c1')
             case DEFAULT
-                call cline_refine3D1%set('refine', params%refine)
+                call cline_refine3D1%set('refine', 'cluster')
         end select
         !call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg',    'refine3D')
         call cline_refine3D2%set('refine', 'multi')
-        if(.not.cline%defined('neigh'))then
-            if( .not.params%refine.eq.'sym' )then
-                call cline_refine3D2%set('neigh', 'yes')
-                call cline_refine3D2%set('nnn',   0.1*real(params%nspace))
-            endif
-        endif
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
         call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
