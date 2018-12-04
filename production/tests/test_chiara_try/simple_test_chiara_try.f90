@@ -25,18 +25,16 @@ program simple_test_chiara_try
   real, allocatable :: rmat(:,:,:), x(:)
   integer :: i, ldim(3), nptcls, npxls_at_mode
   real    ::  m(1), smpd
-  real :: vec(10)
+  integer :: thresh
   real,    allocatable :: xhist(:)
   integer, allocatable :: yhist(:)
 
   smpd = 1.32
-  call find_ldim_nptcls('/home/lenovoc30/Desktop/PickingResults/SomeExamples/0001_forctf.mrc', ldim, nptcls)
-  ! call find_ldim_nptcls('/home/lenovoc30/Desktop/PickingResults/SomeExamples/NegStainingWorking/shrunken_hpassfiltered.mrc', ldim, nptcls)
+  call find_ldim_nptcls('/home/chiara/Desktop/Chiara/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc', ldim, nptcls)
   call img%new(ldim, smpd)
-  call img%read('/home/lenovoc30/Desktop/PickingResults/SomeExamples/0001_forctf.mrc')
-  ! call img%read('/home/lenovoc30/Desktop/PickingResults/SomeExamples/NegStainingWorking/shrunken_hpassfiltered.mrc')
-  call img%hist_stretching(img_out)
-  call img_out%write('HistogramStretched.mrc')
+  call img%read('/home/chiara/Desktop/Chiara/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc')
+  call otsu(img, img_out)
+  call img_out%write('OtsuMic.mrc')
 end program simple_test_chiara_try
 ! matrix = reshape(real([ 1,1,1,0,0,6,5, &
 !                  & 1,1,0,0,6,6,6, &

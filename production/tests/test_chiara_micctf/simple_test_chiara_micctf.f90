@@ -26,17 +26,19 @@ ctfparms%fraca  = 0.1
 ctfparms%dfx    = 2.62365627
 ctfparms%dfy    = 2.60851598
 ctfparms%angast = -29.8392296
-call find_ldim_nptcls('/home/lenovoc30/Desktop/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
+call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
 call mic%new(ldim, ctfparms%smpd)
-call mic%read('/home/lenovoc30/Desktop/ANTERGOS/forctf/0001_forctf.mrc')
+call mic%read('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc')
 call mic%clip_inplace([3600,3600,1])
 call mic%write('mic_clip.mrc')
-call mic%bp(100., 0.)
-call mic%write('mic_hp.mrc')
 call mic%fft
 tfun = ctf(ctfparms%smpd,ctfparms%kv,ctfparms%cs,ctfparms%fraca)
-call tfun%apply_serial(mic,'ctf',ctfparms)
+call tfun%apply_serial(mic,'square',ctfparms)
 call mic%ifft
 call mic%write('mic_mul.mrc')
-! watch the results in ~/Desktop/ANTERGOS/forctf/test
+call mic%fft
+call mic%bp(100., 30.) !bp
+call mic%ifft
+call mic%write('mic_hp2.mrc')
+! watch the results in /home/chiara/Desktop/Chiara/ANTERGOS/forctf/test or /test_2/
 end program simple_test_chiara_micctf

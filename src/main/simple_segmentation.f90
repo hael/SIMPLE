@@ -318,53 +318,35 @@ contains
       deallocate(rmat, mask)
     end subroutine iterative_thresholding
 
-    ! !This subroutine calculates the probability q1, q2 of being in group1,2.
-    ! !it is for Otsu thresholding.
-    ! subroutine calc_prob_groups(p,T,q1,q2)
-    !   real, intent(in)  :: p(MIN_VAL:MAX_VAL)
-    !   real, intent(in)  :: T !threshold for group splitting
-    !   real, intent(out) :: q1, q2
-    !   integer :: i
-    !
-    !   if(T > MAX_VAL .or. T < MIN_VAL ) THROW_HARD('Invalid parameter! T; calc_prob_groups')
-    !   q1 = sum(p(i), i = MIN_VAL, T)
-    !   q2 = sum(p(i), i = T, MAX_VAL)
-    !
-    ! end subroutine calc_prob_groups
-
+    !This subroutine performs otsu binarization.
+    !It has been implemented according to what's written in
+    !Camelot slides.
     subroutine otsu(img_in,img_out, thresh)
       class(image),   intent(inout) :: img_in
       type(image),    intent(out)   :: img_out
       real, optional, intent(out)   :: thresh  !selected threshold for binarisation
-      integer :: i, T
-      integer, parameter :: MIN_VAL = 1, MAX_VAL = 256
-      ! integer :: MIN_VAL, MAX_VAL
-      real,    allocatable :: rmat(:,:,:)
-      real, allocatable :: p(:)
+      integer            :: i, T
+      integer, parameter :: MIN_VAL = 0, MAX_VAL = 255
+      real,  allocatable :: rmat(:,:,:), x(:)
+      real,  allocatable :: p(:)
       real :: q1, q2, m1, m2
       real :: sigma1, sigma2
       real :: sigma, sigma_next
       real :: sum1, sum2
       real :: threshold !threshold for binarisation
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! integer :: ldim(3)
-      ! ldim = img_in%get_ldim()
-      ! MIN_VAL = 1
-      ! MAX_VAL = ldim(1)*2+1
-      !!!!!!!!!!!!!
+      real,    allocatable :: xhist(:)
+      integer, allocatable :: yhist(:)
       call img_in%scale_pixels(real([MIN_VAL,MAX_VAL]))
-      ! call img_in%write('BeforeOtsu.mrc')
       call img_out%new(img_in%get_ldim(), img_in%get_smpd())
       rmat = img_in%get_rmat()
-      ! write(logfhandle,*) 'MIN = ', minval(rmat)
-      ! write(logfhandle,*) 'MAX_VAL = ', maxval(rmat)
-      ! write(logfhandle,*) count(abs(rmat-maxval(rmat)) < TINY)
-      allocate(p (MIN_VAL:MAX_VAL),     source = 0.)
+      allocate(p(MIN_VAL:MAX_VAL), source = 0.)
+      x = pack(rmat(:,:,:), .true.)
+      call create_hist_vector(x, MAX_VAL-MIN_VAL+1 ,xhist,yhist)
       do i = MIN_VAL, MAX_VAL
-          p(i) = count(abs(rmat-i) < 0.5)   !p = (count(abs(rmat-i) < 0.5), i = MIN_VAL, MAX_VAL)
+          p(i) = yhist(i+1)
       enddo
+      deallocate(xhist,yhist)
       p = p/(size(rmat, dim = 1)*size(rmat, dim = 2)*size(rmat, dim = 3)) !normalise, it's a probability
-      write(logfhandle,*) 'Is it 1? ', sum(p)
       q1 = 0.
       q2 = sum(p)
       sum1 = 0.
@@ -372,13 +354,11 @@ contains
       do i = MIN_VAL, MAX_VAL
         sum2 = sum2 + i*p(i)
       enddo
-      !sigma = 1000. !initialisation
+      sigma = HUGE(sigma) !initialisation, to get into the loop
       !FOLLOWING it
-      write(logfhandle,*) 'P = ', p
       do T = MIN_VAL, MAX_VAL-1
           q1 = q1 + p(T)
           q2 = q2 - p(T)
-          write(logfhandle,*) 'T = ', T, 'q1 = ', q1, 'q2 = ', q2
           sum1 = sum1 + T*p(T)
           sum2 = sum2 - T*p(T)
           m1 = sum1/q1
@@ -392,7 +372,7 @@ contains
               sigma1 = 0.
           endif
           sigma1 = sigma1/q1
-          print*, "T = ", T, 'sigma1= ', sigma1, 'm1 = ', m1, 'q1 = ', q1
+          sigma2 = 0.
           if(T < MAX_VAL-1) then
               do i = T+1, MAX_VAL
                   sigma2 = sigma2 + (i-m2)**2*p(i)
@@ -402,12 +382,8 @@ contains
           endif
           sigma2 = sigma2/q2
           sigma_next = q1*sigma1 +q2*sigma2
-          ! write(logfhandle,*) 'T = ', T, 'sigma = ', sigma, 'sigma_next = ', sigma_next, 'q1 = ', q1, 'q2 = ', q2
-          ! write(logfhandle,*) 'sigma1 = ', sigma1, 'sigma2 = ', sigma2
           if(sigma_next < sigma .and. T > MIN_VAL) then
               threshold = T !keep the minimum
-              write(logfhandle,*) 'I am into, T = ', T
-              !write(logfhandle,*) 'SIgma = ', sigma, 'SIgma_next = ', sigma_next
               sigma = sigma_next
           elseif(T == MIN_VAL) then
               sigma = sigma_next

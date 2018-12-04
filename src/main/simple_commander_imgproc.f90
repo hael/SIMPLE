@@ -25,7 +25,7 @@ type, extends(commander_base) :: binarise_commander
 end type binarise_commander
 type, extends(commander_base) :: edge_detector_commander
   contains
-    procedure :: execute      => exec_edge_detector  !!!!ADDED BY CHIARA
+    procedure :: execute      => exec_edge_detector
 end type edge_detector_commander
 type, extends(commander_base) :: convert_commander
   contains
@@ -120,7 +120,6 @@ contains
 
     end subroutine exec_binarise
 
-    !!!!!!!!!!ADDED BY CHIARA
     !> for edge detection of stacks
     subroutine exec_edge_detector( self, cline )
         use simple_image, only: image
@@ -324,7 +323,7 @@ contains
                     call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0., width=width)
                 ! real-space
                 else if( cline%defined('real_filter') )then
-                    if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
+                    if( .not. cline%defined('winsz') .and. trim(params%real_filter) .ne. 'NLmean') THROW_HARD('need winsz input for real-space filtering')
                     call real_filter_imgfile(params%stk, params%outstk, params%smpd, trim(params%real_filter), nint(params%winsz))
                 else
                     THROW_HARD('Nothing to do!')

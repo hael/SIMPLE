@@ -1138,7 +1138,7 @@ contains
         call filter%set_input('filt_ctrls', 6, 'width', 'num', 'Cosine low-pass filter falloff',&
         &'Number of cosine edge pixels of Fourier low-pass filter in pixels', '# pixels cosine edge', .false., 10.)
         call filter%set_input('filt_ctrls', 7, 'real_filter', 'multi', 'Real-space filter',&
-        &'Real-space filter(median|average|stdev|bman|no){no}', '(median|average|stdev|bman|no){no}', .false., 'no')
+        &'Real-space filter(median|average|stdev|bman|NLmean|no){no}', '(median|average|stdev|bman|NLmean|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls', 8, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
         call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
         call filter%set_input('filt_ctrls',10, frcs)

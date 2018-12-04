@@ -4325,6 +4325,9 @@ contains
                     end do
                 end do
                 !$omp end parallel do
+            case('NLmean')
+                call self%NLmean()
+                img_filt%rmat = self%rmat
             case DEFAULT
                 THROW_HARD('unknown filter type; real_space_filter')
             end select

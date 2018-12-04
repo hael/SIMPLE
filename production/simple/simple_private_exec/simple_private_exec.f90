@@ -655,7 +655,7 @@ select case(prg)
          keys_optional(6) = 'lp'
          call cline%parse_oldschool(keys_required(:4),keys_optional(:6))
          call xdetector%execute(cline)
-
+         
     ! MISCELLANOUS PROGRAMS
 
     case( 'masscen' )
