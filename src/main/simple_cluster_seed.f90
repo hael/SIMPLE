@@ -147,9 +147,9 @@ contains
     subroutine draw_squared_uniform(os, power)
         type(oris), intent(inout) :: os
         real,       intent(in)    :: power
-        integer        :: tmp(nlabels), order(nptcls), config(nptcls), pops(nlabels)
+        integer        :: order(nptcls), config(nptcls), pops(nlabels)
         real           :: corrs(nptcls), rnincl
-        integer        :: iptcl, s, ind, i, n98, pop
+        integer        :: iptcl, s, ind, i, n99, pop
         logical        :: mask(nincl_ptcls)
         write(logfhandle,'(A)') '>>> MIXED SQUARED & UNIFORM SAMPLING'
         config = 0
@@ -166,11 +166,11 @@ contains
             if(sum(pops)==nincl_ptcls)exit
             pops(s) = pops(s)+1
         enddo
-        ! 98% of the data is sampled following: first parttion follos squared distribution sampling,
+        ! 99% of the data is sampled following: first parttion follos squared distribution sampling,
         ! all others are uniformly sampled
-        n98   = nint(0.98*real(nincl_ptcls)) + nlabels
+        n99   = nint(0.99*real(nincl_ptcls)) + nlabels
         iptcl = 0
-        do i=1,n98,nlabels
+        do i=1,n99,nlabels
             if(i>nincl_ptcls)exit
             ind = ceiling((ran3()**power)*rnincl)
             do while(.not.mask(ind))
@@ -190,7 +190,7 @@ contains
                 mask(ind)          = .false.
             enddo
         enddo
-        ! remaing 2%:
+        ! remaining 1%:
         ! greedy assignment for first partition
         pop = count(config==1)
         do ind=1,nincl_ptcls

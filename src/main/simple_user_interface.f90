@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(65)
+type(simple_prg_ptr) :: prg_ptr_array(66)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -113,6 +113,7 @@ type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: reconstruct3D
+type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
 type(simple_program), target :: report_selection
@@ -271,6 +272,7 @@ contains
         call new_print_project_field
         call new_reproject
         call new_reconstruct3D
+        call new_reextract
         call new_refine3D
         call new_refine3D_init
         call new_report_selection
@@ -331,34 +333,36 @@ contains
         prg_ptr_array(34)%ptr2prg => orisops
         prg_ptr_array(35)%ptr2prg => oristats
         prg_ptr_array(36)%ptr2prg => pick
-        prg_ptr_array(37)%ptr2prg => postprocess
-        prg_ptr_array(38)%ptr2prg => preprocess
-        prg_ptr_array(39)%ptr2prg => preprocess_stream
-        prg_ptr_array(40)%ptr2prg => print_fsc
-        prg_ptr_array(41)%ptr2prg => print_magic_boxes
-        prg_ptr_array(42)%ptr2prg => print_project_info
-        prg_ptr_array(43)%ptr2prg => print_project_field
-        prg_ptr_array(44)%ptr2prg => reproject
-        prg_ptr_array(45)%ptr2prg => reconstruct3D
-        prg_ptr_array(46)%ptr2prg => refine3D
-        prg_ptr_array(47)%ptr2prg => refine3D_init
-        prg_ptr_array(48)%ptr2prg => report_selection
-        prg_ptr_array(49)%ptr2prg => scale
-        prg_ptr_array(50)%ptr2prg => scale_project
-        prg_ptr_array(51)%ptr2prg => select_
-        prg_ptr_array(52)%ptr2prg => shift
-        prg_ptr_array(53)%ptr2prg => simulate_movie
-        prg_ptr_array(54)%ptr2prg => simulate_noise
-        prg_ptr_array(55)%ptr2prg => simulate_particles
-        prg_ptr_array(56)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(57)%ptr2prg => stack
-        prg_ptr_array(58)%ptr2prg => stackops
-        prg_ptr_array(59)%ptr2prg => symaxis_search
-        prg_ptr_array(60)%ptr2prg => symmetry_test
-        prg_ptr_array(61)%ptr2prg => tseries_track
-        prg_ptr_array(62)%ptr2prg => update_project
-        prg_ptr_array(63)%ptr2prg => vizoris
-        prg_ptr_array(64)%ptr2prg => volops
+        prg_ptr_array(37)%ptr2prg => pick_extract_stream
+        prg_ptr_array(38)%ptr2prg => postprocess
+        prg_ptr_array(39)%ptr2prg => preprocess
+        prg_ptr_array(40)%ptr2prg => preprocess_stream
+        prg_ptr_array(41)%ptr2prg => print_fsc
+        prg_ptr_array(42)%ptr2prg => print_magic_boxes
+        prg_ptr_array(43)%ptr2prg => print_project_info
+        prg_ptr_array(44)%ptr2prg => print_project_field
+        prg_ptr_array(45)%ptr2prg => reproject
+        prg_ptr_array(46)%ptr2prg => reconstruct3D
+        prg_ptr_array(47)%ptr2prg => reextract
+        prg_ptr_array(48)%ptr2prg => refine3D
+        prg_ptr_array(49)%ptr2prg => refine3D_init
+        prg_ptr_array(50)%ptr2prg => report_selection
+        prg_ptr_array(51)%ptr2prg => scale
+        prg_ptr_array(52)%ptr2prg => scale_project
+        prg_ptr_array(53)%ptr2prg => select_
+        prg_ptr_array(54)%ptr2prg => shift
+        prg_ptr_array(55)%ptr2prg => simulate_movie
+        prg_ptr_array(56)%ptr2prg => simulate_noise
+        prg_ptr_array(57)%ptr2prg => simulate_particles
+        prg_ptr_array(58)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(59)%ptr2prg => stack
+        prg_ptr_array(60)%ptr2prg => stackops
+        prg_ptr_array(61)%ptr2prg => symaxis_search
+        prg_ptr_array(62)%ptr2prg => symmetry_test
+        prg_ptr_array(63)%ptr2prg => tseries_track
+        prg_ptr_array(64)%ptr2prg => update_project
+        prg_ptr_array(65)%ptr2prg => vizoris
+        prg_ptr_array(66)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -458,6 +462,8 @@ contains
                 ptr2prg => reproject
             case('reconstruct3D')
                 ptr2prg => reconstruct3D
+            case('reextract')
+                ptr2prg => reextract
             case('refine3D')
                 ptr2prg => refine3D
             case('refine3D_init')
@@ -554,6 +560,7 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') report_selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
@@ -2190,6 +2197,34 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_print_project_info
+
+    subroutine new_reextract
+        ! PROGRAM SPECIFICATION
+        call reextract%new(&
+        &'reextract', &                                                         ! name
+        &'Re-xtract particle images from integrated movies',&                   ! descr_short
+        &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
+        &'simple_exec',&                                                        ! executable
+        &1, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call reextract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
+        ! parameter input/output
+        call reextract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call reextract%set_input('parm_ios', 2, oritype)
+        call reextract%set_input('parm_ios', 3, pcontrast)
+        call reextract%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_reextract
 
     subroutine new_reproject
         ! PROGRAM SPECIFICATION
