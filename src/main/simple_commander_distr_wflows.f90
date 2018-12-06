@@ -342,10 +342,9 @@ contains
         ! prepare command lines from prototype master
         cline_cavgassemble = cline
         call cline_cavgassemble%set('prg', 'cavgassemble')
-        call cline_cavgassemble%set('projfile', trim(params%projfile))
         call cline_cavgassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! schedule
-        call qenv%gen_scripts_and_schedule_jobs( job_descr)
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
         ! assemble class averages
         call qenv%exec_simple_prg_in_queue(cline_cavgassemble, 'CAVGASSEMBLE_FINISHED')
         call qsys_cleanup
@@ -872,7 +871,7 @@ contains
         type(builder)                      :: build
         type(qsys_env)                     :: qenv
         type(cmdline)                      :: cline_volassemble
-        character(len=STDLEN)              :: volassemble_output, str_state
+        character(len=STDLEN)              :: volassemble_output, str_state, fsc_file, optlp_file
         character(len=STDLEN), allocatable :: state_assemble_finished(:)
         type(chash)                        :: job_descr
         integer                            :: state
@@ -927,7 +926,7 @@ contains
         endif
         call cline_volassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! parallel assembly
-        do state = 1, params%nstates
+        do state = 1,params%nstates
             str_state = int2str_pad(state,2)
             if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             call cline_volassemble%set( 'state', real(state) )
@@ -941,6 +940,19 @@ contains
             endif
         end do
         call qsys_watcher(state_assemble_finished)
+        ! updates project file only if was called from another workflow
+        if( params%mkdir.eq.'yes' )then
+            do state = 1,params%nstates
+                if( params%eo .ne. 'no' )then
+                    fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                    optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
+                    call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
+                    call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
+                endif
+                call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
+            enddo
+            call build%spproj%write_segment_inside('out',params%projfile)
+        endif
         ! termination
         call qsys_cleanup
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)

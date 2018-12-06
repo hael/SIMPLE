@@ -873,6 +873,8 @@ contains
                     absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 4')
                     self%projfile = trim(absname)
                     self%projname = get_fbody(basename(self%projfile), 'simple')
+                    ! so the projfile in cline and parameters are consistent
+                    call cline%set('projfile', self%projfile)
                     ! cwd of SP-project will be updated in the builder
                 endif
                 ! get new cwd

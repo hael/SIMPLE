@@ -918,7 +918,7 @@ contains
         integer,          allocatable :: micstk_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
         integer  :: nframes,imic,iptcl,istk,nstks,nmics,prev_box,box_foo, cnt,niter,ntot,ifoo,nptcls
-        integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top
+        integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,noutside_tot
         real    :: prev_shift(2), shift2d(2), shift3d(2)
         logical :: l_2d
         call params%new(cline)
@@ -978,7 +978,7 @@ contains
         call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, ptcl_msk)
         call mskimg%kill
         call micrograph%new([ldim(1),ldim(2),1], params%smpd)
-        noutside = 0
+        noutside_tot = 0
         nptcls   = 0
         nstks    = spproj%os_stk%get_noris()
         do istk = 1,nstks
@@ -1026,7 +1026,7 @@ contains
                         ! all done, border guaranteed
                     else
                         ! if out of mic keep previous position with new box
-                        ! at the risk of including a border. State could be set to zero here
+                        ! at the risk of including a border
                         center  = prev_pos + prev_box/2 - 1
                         new_pos = center - params%box/2 + 1
                     endif
@@ -1047,18 +1047,26 @@ contains
                 call spproj%os_ptcl2D%set_shift(iptcl,shift2d)
                 call spproj%os_ptcl3D%set_shift(iptcl,shift3d)
                 ! image extraction
+                noutside = 0
                 call micrograph%window(new_pos, params%box, img, noutside)
+                if( noutside > 0 )then
+                    noutside_tot = noutside_tot+1
+                    if( params%outside.ne.'yes')then
+                        call spproj%os_ptcl2D%set(iptcl,'state',0.)
+                        call spproj%os_ptcl3D%set(iptcl,'state',0.)
+                    endif
+                endif
                 if( params%pcontrast .eq. 'black' ) call img%neg()
                 call img%noise_norm(ptcl_msk)
                 call img%write(trim(adjustl(stack)), cnt)
                 nptcls = nptcls+1
             enddo
-            abs_stack = simple_abspath(trim(EXTRACT_STK_FBODY)//trim(basename(mic_name)))
+            abs_stack = simple_abspath(stack)
             call make_relativepath(CWD_GLOB, abs_stack, rel_stack)
             call spproj%os_stk%set(istk,'stk',rel_stack)
         enddo
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
-        write(logfhandle,'(A,I8)')'>>> OUT OF LIMITS PARTICLES: ', noutside
+        write(logfhandle,'(A,I8)')'>>> OUT OF LIMITS PARTICLES: ', noutside_tot
         call spproj%write
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
 
