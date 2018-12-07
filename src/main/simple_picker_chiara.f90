@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
-public :: extract_particles_NOmasscen
+public :: extract_particles_NOmasscen, center_cc !maybe to remove center_cc from public
 
 private
 #include "simple_local_flags.inc"
@@ -180,8 +180,8 @@ contains
       integer,              intent(in)  :: rmat_masked(:,:,:)
       integer, allocatable, intent(out) :: pos(:,:)
       integer :: s(3), i, j, cnt
-      if( any(rmat_masked > 1.0001) .or. any(rmat_masked < 0. ))&
-      &THROW_HARD('Input not binary; get_pixel_pos')
+      ! if( any(rmat_masked > 1.0001) .or. any(rmat_masked < 0. ))&
+      ! &THROW_HARD('Input not binary; get_pixel_pos')
       s = shape(rmat_masked)
       allocate(pos(3, count(rmat_masked > 0.5)), source = 0)
       cnt = 0

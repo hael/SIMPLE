@@ -39,6 +39,7 @@ type ctf
     procedure          :: apply
     procedure          :: ctf2img
     procedure          :: apply_serial
+    procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: apply_and_shift
     procedure          :: kV2wl
@@ -349,6 +350,47 @@ contains
             THROW_HARD('unsupported mode in ctf2img')
         end select
     end subroutine apply_serial
+
+    !>  \brief  is for applycation of wiener filter with SNR exponential assumption
+    subroutine wienerlike_restoration(self, img, ctfparms)
+        use simple_image, only: image
+        class(ctf),       intent(inout) :: self        !< instance
+        class(image),     intent(inout) :: img         !< image (output)
+        type(ctfparams),  intent(in)    :: ctfparms    !< CTF parameters
+        integer :: lims(3,2),h,k,phys(3),ldim(3)
+        real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
+        logical :: is_in_time
+        integer :: nyq, sh
+        real    :: w, snr, r
+        !fft controls
+        if(.not. img%is_ft()) call img%fft(); is_in_time = .true.
+        ! init object
+        call self%init(ctfparms%dfx, ctfparms%dfy, ctfparms%angast)
+        ! initialize
+        lims     = img%loop_lims(2)
+        ldim     = img%get_ldim()
+        inv_ldim = 1./real(ldim)
+        nyq = img%get_nyq()
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                hinv      = real(h) * inv_ldim(1)
+                kinv      = real(k) * inv_ldim(2)
+                spaFreqSq = hinv * hinv + kinv * kinv
+                r         = sqrt(spaFreqSq)
+                ang       = atan2(real(k),real(h))
+                tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
+                snr       = exp(-100.*r/ctfparms%smpd)
+                if(snr < 1.e-10) then
+                    w = 0.
+                else
+                    w = tval/(tval*tval + 1./snr)
+                endif
+                phys  = img%comp_addr_phys([h,k,0])
+                call img%mul_cmat_at(phys(1),phys(2),phys(3), w)
+            end do
+        end do
+        if(is_in_time) call img%ifft()
+    end subroutine wienerlike_restoration
 
     !>  \brief  is for optimised serial phase-flipping & shifting for use in prepimg4align
     subroutine phaseflip_and_shift_serial( self, img, x, y, ctfparms )

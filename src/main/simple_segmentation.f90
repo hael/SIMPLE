@@ -42,7 +42,7 @@ contains
         logical            :: DEBUG
         real               :: r                       !random # which guarantees me not to get stuck
         real               :: ave, sdev, minv, maxv
-        DEBUG  = .true.
+        DEBUG  = .false.
         ggoal = 2.
         if(present(goal)) ggoal = goal
         call img%calc_gradient(grad)
@@ -321,7 +321,7 @@ contains
     !This subroutine performs otsu binarization.
     !It has been implemented according to what's written in
     !Camelot slides.
-    subroutine otsu(img_in,img_out, thresh)
+    subroutine otsu(img_in, img_out, thresh)
       class(image),   intent(inout) :: img_in
       type(image),    intent(out)   :: img_out
       real, optional, intent(out)   :: thresh  !selected threshold for binarisation

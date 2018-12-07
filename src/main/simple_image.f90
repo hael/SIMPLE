@@ -208,14 +208,14 @@ contains
     procedure, private :: enumerate_connected_comps
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
-    procedure          :: is_cc_closed
+    ! procedure          :: is_cc_closed
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc
     procedure          :: dilatation
     procedure          :: erosion
     procedure          :: morpho_closing
     procedure          :: morpho_opening
-    procedure          :: border_mask                 !!!!!!!!!ADDED BY CHIARA
+    procedure, private :: border_mask
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -279,8 +279,7 @@ contains
     procedure, private :: oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
-    procedure          :: median_value !!!!!!!!!!!!!!ADDED BY CHIARA
-    procedure          :: center_edge  !!!!!!!!!!!!!!ADDED BY CHIARA
+    ! procedure          :: median_value
     ! MODIFIERS
     procedure          :: insert
     procedure          :: insert_lowres
@@ -299,7 +298,7 @@ contains
     procedure          :: noise_norm_pad
     procedure          :: salt_n_pepper
     procedure          :: square
-    procedure          :: draw_picked  !!!!!ADDED BY CHIARA
+    procedure          :: draw_picked
     procedure          :: corners
     procedure          :: before_after
     procedure, private :: gauimg_1
@@ -3264,35 +3263,35 @@ contains
         enddo
     end function size_connected_comps
 
-    ! This function takes in input a connected component (cc) image and the label
-    ! and the label of one of its cc. It returns true if the cc is closed, false
-    ! otherwise.
-    function is_cc_closed(self,label) result(yes_no)
-        class(image), intent(inout) :: self
-        integer, intent(in) :: label
-        logical :: yes_no
-        integer :: i, j, n
-        real, allocatable :: neigh_8(:)
-        yes_no = .true.
-        if(any(abs(self%rmat-real(label)) < TINY)) then   !if the label is present
-            do i = 1, self%ldim(1)
-              do j = 1, self%ldim(2)
-                      if(abs(self%get([i,j,1])-real(label)) < TINY) then        !just pixels in the selected cc
-                          call self%calc_neigh_8([i,j,1],neigh_8)
-                          n = count(abs(neigh_8(:size(neigh_8)-1)-real(label)) < TINY) !do not consider the pixel itself
-                          if(n < 2) then
-                              yes_no = .false.
-                              return
-                          endif
-                      endif
-              enddo
-            enddo
-        else
-            write(logfhandle,*) 'label ', label, 'cc selected not present; is_cc_closed'
-            yes_no = .false.
-            return
-        endif
-    end function is_cc_closed
+    ! ! This function takes in input a connected component (cc) image and the label
+    ! ! and the label of one of its cc. It returns true if the cc is closed, false
+    ! ! otherwise.
+    ! function is_cc_closed(self,label) result(yes_no)
+    !     class(image), intent(inout) :: self
+    !     integer, intent(in) :: label
+    !     logical :: yes_no
+    !     integer :: i, j, n
+    !     real, allocatable :: neigh_8(:)
+    !     yes_no = .true.
+    !     if(any(abs(self%rmat-real(label)) < TINY)) then   !if the label is present
+    !         do i = 1, self%ldim(1)
+    !           do j = 1, self%ldim(2)
+    !                   if(abs(self%get([i,j,1])-real(label)) < TINY) then        !just pixels in the selected cc
+    !                       call self%calc_neigh_8([i,j,1],neigh_8)
+    !                       n = count(abs(neigh_8(:size(neigh_8)-1)-real(label)) < TINY) !do not consider the pixel itself
+    !                       if(n < 2) then
+    !                           yes_no = .false.
+    !                           return
+    !                       endif
+    !                   endif
+    !           enddo
+    !         enddo
+    !     else
+    !         write(logfhandle,*) 'label ', label, 'cc selected not present; is_cc_closed'
+    !         yes_no = .false.
+    !         return
+    !     endif
+    ! end function is_cc_closed
 
     ! This function takes in input a connected component image and modifies
     ! it in order to prepare the centering process.
@@ -3412,6 +3411,7 @@ contains
      ! This subroutine builds the logical array 'border' of the same dims of
      ! the input image self. Border is true in corrispondence of
      ! the border pixels in self. Self is meant to be binary.
+     ! It is necessary for erosion operation
     subroutine border_mask(self, border)
         class(image), intent(in)            :: self
         logical, allocatable, intent(inout) :: border(:,:,:)
@@ -5363,40 +5363,40 @@ end subroutine NLmean
         end do
     end function gen_argtransf_comp
 
-   !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
-   ! The result of this funcion is the median value of the intensities
-   ! of the pixels in the image self.
-    function median_value(self) result(m)
-        class(image), intent(in) :: self
-        real              :: m
-        real, allocatable :: pixels(:), pixels_nodup(:)
-        pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-            & mask = .true.)
-        call elim_dup(pixels,pixels_nodup)
-        m = median(pixels_nodup)  !or median_nocopy?
-        deallocate(pixels,pixels_nodup)
-    end function median_value
 
-   !!!!!!!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!
-   ! This function has as output the coordinates of the mass center
-   ! of img_in, calculated on the basis of the biggest connected
-   ! component (cc) in img_in. If this cc is too small, than
-   ! discard = .true.
-    function center_edge( self, discard ) result( xyz )
-        class(image), intent(inout) :: self
-        logical,        intent(out) :: discard
-        type(image) :: imgcc
-        real        :: xyz(3)
-        integer     :: min_sz !minumum size of the biggest cc in img_in
-        min_sz = 20 !too small cc have already been eliminated, this control
-        ! is in order to discard too offcentered windows, in which it wouldn t
-        ! be possible to properly center the particle
-        ! find all the cc in img_in
-        call self%find_connected_comps(imgcc)
-        !find the biggest cc
-        call imgcc%prepare_connected_comps(discard, min_sz)
-        call imgcc%masscen(xyz)
-    end function center_edge
+   ! ! The result of this funcion is the median value of the intensities
+   ! ! of the pixels in the image self.
+   !  function median_value(self) result(m)
+   !      class(image), intent(in) :: self
+   !      real              :: m
+   !      real, allocatable :: pixels(:), pixels_nodup(:)
+   !      pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
+   !          & mask = .true.)
+   !      call elim_dup(pixels,pixels_nodup)
+   !      m = median(pixels_nodup)  !or median_nocopy?
+   !      deallocate(pixels,pixels_nodup)
+   !  end function median_value
+   !
+   !
+   ! ! This function has as output the coordinates of the mass center
+   ! ! of img_in, calculated on the basis of the biggest connected
+   ! ! component (cc) in img_in. If this cc is too small, than
+   ! ! discard = .true.
+   !  function center_edge( self, discard ) result( xyz )
+   !      class(image), intent(inout) :: self
+   !      logical,        intent(out) :: discard
+   !      type(image) :: imgcc
+   !      real        :: xyz(3)
+   !      integer     :: min_sz !minumum size of the biggest cc in img_in
+   !      min_sz = 20 !too small cc have already been eliminated, this control
+   !      ! is in order to discard too offcentered windows, in which it wouldn t
+   !      ! be possible to properly center the particle
+   !      ! find all the cc in img_in
+   !      call self%find_connected_comps(imgcc)
+   !      !find the biggest cc
+   !      call imgcc%prepare_connected_comps(discard, min_sz)
+   !      call imgcc%masscen(xyz)
+   !  end function center_edge
 
     ! MODIFIERS
 
