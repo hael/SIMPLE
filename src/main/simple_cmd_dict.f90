@@ -271,7 +271,7 @@ contains
         call chdict%push('voltab2',       'table 2(text file) of volume files(.txt)')
         call chdict%push('which_iter',    'iteration nr')
         call chdict%push('width',         'falloff of inner mask or filter(in pixels){10}')
-        call chdict%push('wiener',        'Wiener restoration mode(full|highres){highres}')
+        call chdict%push('wiener',        'Wiener restoration mode(yes|no){no}')
         call chdict%push('winsz',         'half-width of window for real-space filter(in pixels)')
         call chdict%push('wtype',         'type of orientation weights (factorial|flat){factorial}')
         call chdict%push('xcoord',        'x coordinate{0}')

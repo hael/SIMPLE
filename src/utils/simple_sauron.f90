@@ -2,7 +2,7 @@
 ! provides support for one-line per one particle input/output
 module simple_sauron
 use simple_defs
-use simple_strings, only: str2format, str2real, str2int, parsestr, split_str
+use simple_strings, only: str2format, str2real, str2int, parsestr, split_str, compact
 use simple_error,   only: allocchk
 use simple_hash,    only: hash
 use simple_chash,   only: chash
@@ -40,5 +40,64 @@ contains
         end do
         deallocate(keys, vals, line_trimmed)
     end subroutine sauron_line_parser
+
+    subroutine sauron_ori_parser( line, htab, chtab )
+        character(len=*), intent(inout) :: line
+        class(hash),      intent(inout) :: htab
+        class(chash),     intent(inout) :: chtab
+        character(len=32)     :: keys(128)
+        character(len=STDLEN) :: args(128), vals(128), val
+        real                  :: rvals(128)
+        logical               :: real_mask(128)
+        integer               :: nargs, iarg, ival, io_stat, lenstr, ipos, ipos_prev, nreals
+        call compact(line)
+        lenstr = len_trim(line)
+        if(lenstr == 0) return
+        ! split entries
+        nargs = 0
+        ipos_prev = 1
+        do ipos=2,lenstr-1
+            if( line(ipos:ipos) == ' ' )then
+                nargs       = nargs+1
+                args(nargs) = line(ipos_prev:ipos-1)
+                ipos_prev   = ipos+1
+            endif
+        enddo
+        nargs       = nargs+1
+        args(nargs) = line(ipos_prev:lenstr)
+        ! split key/values pairs
+        real_mask = .true.
+        nreals    = 0
+        do iarg=1,nargs
+            val  = trim(args(iarg))
+            ipos = scan(val,'=')
+            if(ipos==0)cycle
+            keys(iarg) = adjustl(trim(val(1:ipos-1)))
+            val  = adjustl(val(ipos+1:))
+            select case(str2format(val))
+                case('real')
+                    rvals(iarg) = str2real(val)
+                    nreals      = nreals + 1
+                case('file', 'dir', 'char')
+                    real_mask(iarg) = .false.
+                    vals(iarg)      = val
+                case('int')
+                    call str2int(val, io_stat, ival)
+                    rvals(iarg) = real(ival)
+                    nreals      = nreals + 1
+            end select
+        end do
+        ! alloc
+        if(nreals > 0) call htab%new(nreals)
+        if(nreals /= nargs) call chtab%new(nargs-nreals)
+        ! fill
+        do iarg=1,nargs
+            if(real_mask(iarg))then
+                call htab%push(keys(iarg), rvals(iarg))
+            else
+                call chtab%push(keys(iarg),vals(iarg))
+            endif
+        end do
+    end subroutine sauron_ori_parser
 
 end module simple_sauron

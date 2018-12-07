@@ -308,7 +308,7 @@ contains
         write(funit,'(a)') 'cd '//trim(cwd_glob)
         write(funit,'(a)') ''
         ! compose the command line
-        write(funit,'(a)',advance='no') trim(exec_bin)//' '//job_descr%chash2str()
+        write(funit,'(a)',advance='no') trim(exec_bin)//' '//trim(job_descr%chash2str())
         ! direct output
         if( present(outfile) )then
             ! unique output

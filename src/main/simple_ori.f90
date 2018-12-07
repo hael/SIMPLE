@@ -358,12 +358,12 @@ contains
 
     !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine str2ori( self, line )
-        use simple_sauron, only: sauron_line_parser
+        use simple_sauron, only: sauron_ori_parser
         class(ori),       intent(inout) :: self
         character(len=*), intent(inout) :: line
         logical :: isthere(3)
         call self%new
-        call sauron_line_parser(line, self%htab, self%chtab)
+        call sauron_ori_parser(line, self%htab, self%chtab)
         isthere(1) = self%htab%isthere('e1')
         isthere(2) = self%htab%isthere('e2')
         isthere(3) = self%htab%isthere('e3')
@@ -686,18 +686,11 @@ contains
 
     !>  \brief  reads all orientation info (by line) into the hash-tables
     subroutine read( self, fhandle )
-        use simple_sauron, only: sauron_line_parser
         class(ori), intent(inout) :: self
         integer,    intent(in)    :: fhandle
         character(len=2048) :: line
-        logical :: isthere(3)
         read(fhandle,fmt='(A)') line
-        call sauron_line_parser( line, self%htab, self%chtab )
-        isthere(1) = self%htab%isthere('e1')
-        isthere(2) = self%htab%isthere('e2')
-        isthere(3) = self%htab%isthere('e3')
-        if( any(isthere) )&
-          &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
+        call self%str2ori(line)
     end subroutine read
 
     ! CALCULATORS

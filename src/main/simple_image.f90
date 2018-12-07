@@ -157,6 +157,7 @@ contains
     procedure, private :: div_4
     generic            :: div => div_1, div_2, div_3, div_4
     procedure          :: ctf_dens_correct
+    procedure          :: ctf_dens_correct_wiener
     procedure, private :: mul_1
     procedure, private :: mul_2
     procedure, private :: mul_3
@@ -2524,6 +2525,36 @@ contains
             end do
         end do
     end subroutine ctf_dens_correct
+
+    subroutine ctf_dens_correct_wiener( self_sum, self_rho, ssnr )
+        class(image), intent(inout) :: self_sum
+        class(image), intent(in)    :: self_rho
+        real,         intent(in)    :: ssnr(:)
+        integer :: h, k, l, lims(3,2), phys(3), nyq, sh
+        real    :: denom
+        ! set constants
+        lims = self_sum%loop_lims(2)
+        nyq  = self_sum%get_lfny(1)
+        do h=lims(1,1),lims(1,2)
+            do k=lims(2,1),lims(2,2)
+                do l=lims(3,1),lims(3,2)
+                    sh   = nint(hyp(real(h),real(k),real(l)))
+                    phys = self_sum%comp_addr_phys([h,k,l])
+                    if(sh > nyq )then
+                        self_sum%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                    else
+                        if( sh==0 )then
+                            denom = real(self_rho%cmat(phys(1),phys(2),phys(3))) + 1.
+                            self_sum%cmat(phys(1),phys(2),phys(3)) = self_sum%cmat(phys(1),phys(2),phys(3))/denom
+                        else
+                            denom = ssnr(sh)*real(self_rho%cmat(phys(1),phys(2),phys(3))) + 1.
+                            self_sum%cmat(phys(1),phys(2),phys(3)) = ssnr(sh)*self_sum%cmat(phys(1),phys(2),phys(3))/denom
+                        endif
+                    endif
+                end do
+            end do
+        end do
+    end subroutine ctf_dens_correct_wiener
 
     !>  \brief conjugate is for complex conjugation of a FT
     function conjugate( self ) result ( self_out )
