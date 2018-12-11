@@ -13,7 +13,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical,          parameter :: DO_ANISO = .false.
+logical,          parameter :: DO_ANISO = .true.
 character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter
@@ -25,6 +25,8 @@ type :: motion_correct_iter
     ! these strings are part of the instance for reporting purposes
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
     character(len=STDLEN) :: moviename_forctf, moviename_thumb, moviename_pspec
+    character(len=STDLEN) :: moviename_aniso_intg, moviename_aniso_intg_frames
+    character(len=STDLEN) :: moviename_aniso_forctf, moviename_aniso_thumb, moviename_aniso_pspec
   contains
     procedure :: iterate
     procedure :: get_moviename
@@ -42,11 +44,11 @@ contains
         character(len=*), optional, intent(in)    :: gainref_fname
         character(len=:), allocatable :: fbody_here, ext, fname
         real,             allocatable :: shifts(:,:), aniso_shifts(:,:)
-        type(stats_struct)            :: shstats(2)
-        character(len=LONGSTRLEN)     :: rel_fname
-        integer                       :: ldim(3), ldim_thumb(3)
-        real                          :: scale, var
-        logical                       :: err
+        type(stats_struct)        :: shstats(2)
+        character(len=LONGSTRLEN) :: rel_fname
+        integer :: ldim(3), ldim_thumb(3)
+        real    :: scale, var
+        logical :: err
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -59,6 +61,7 @@ contains
         else
             fbody_here = get_fbody(trim(fbody_here), trim(ext))
         endif
+        ! isotropic ones
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
         self%moviename_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//POWSPEC_SUFFIX//trim(params_glob%ext)
@@ -66,6 +69,15 @@ contains
         if( cline%defined('tof') )then
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
             &//int2str(params_glob%tof)//INTGMOV_SUFFIX//params_glob%ext
+        endif
+        ! anisotropic ones
+        self%moviename_aniso_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_aniso'//INTGMOV_SUFFIX//trim(params_glob%ext)
+        self%moviename_aniso_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_aniso'//FORCTF_SUFFIX//trim(params_glob%ext)
+        self%moviename_aniso_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_aniso'//POWSPEC_SUFFIX//trim(params_glob%ext)
+        self%moviename_aniso_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_aniso'//THUMBNAIL_SUFFIX//trim(JPG_EXT)
+        if( cline%defined('tof') )then
+            self%moviename_aniso_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
+            &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_aniso_'//INTGMOV_SUFFIX//params_glob%ext
         endif
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
@@ -77,8 +89,7 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_movie(self%moviename, ctfvars, shifts, err, gainref_fname)
-        if( err ) return
+        call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
         call moment(shifts(1,:), shstats(1)%avg, shstats(1)%sdev, var, err)
         call moment(shifts(2,:), shstats(2)%avg, shstats(2)%sdev, var, err)
@@ -92,24 +103,20 @@ contains
         call orientation%set('ymin',  minval(shifts(2,:)))
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then
-            call motion_correct_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
+            call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
             if( cline%defined('tof') )then
                 ! order matters here, if anisotropic correction is on the subsum needs to be generated first
-                call motion_correct_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                call motion_correct_iso_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
+                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             else
-                call motion_correct_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
+                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
             endif
-            DebugPrint 'ldim(self%moviesum):           ', self%moviesum%get_ldim()
-            DebugPrint 'ldim(self%moviesum_corrected): ', self%moviesum_corrected%get_ldim()
-            DebugPrint 'ldim(self%moviesum_ctf):       ', self%moviesum_ctf%get_ldim()
         endif
-        if( DO_ANISO )then
-            call motion_correct_movie_aniso(ctfvars, aniso_shifts)
-        endif
-        ! generate power-spectra and cleanup
+        ! destruct before anisotropic correction
+        call motion_correct_iso_kill
+        ! generate power-spectra
         self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
@@ -147,13 +154,58 @@ contains
             call make_relativepath(CWD_GLOB,self%moviename_intg_frames,rel_fname)
             call orientation%set('intg_frames',  trim(rel_fname))
         endif
+        if( DO_ANISO )then
+            call motion_correct_aniso(aniso_shifts)
+            if( cline%defined('tof') )then
+                call motion_correct_aniso_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
+                call motion_correct_aniso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+            else
+                call motion_correct_aniso_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+            endif
+            call motion_correct_aniso_kill
+            ! generate power-spectra
+            self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
+            self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+            call self%pspec_half_n_half%scale_pspec4viz
+            ! write output
+            if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_aniso_intg_frames)
+            call self%moviesum_corrected%write(self%moviename_aniso_intg)
+            call self%moviesum_ctf%write(self%moviename_aniso_forctf)
+            call self%pspec_ctf%write(self%moviename_aniso_pspec)
+            ! generate thumbnail
+            call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
+            call self%moviesum_corrected%fft()
+            call self%moviesum_corrected%clip(self%thumbnail)
+            call self%thumbnail%ifft()
+            ! jpeg output
+            call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
+            call self%img_jpg%write_jpg(self%moviename_aniso_thumb, norm=.true., quality=90)
+            ! report to ori object
+            fname = simple_abspath(self%moviename_aniso_intg, errmsg='simple_motion_correct_iter::iterate 6')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('aniso_intg',   trim(rel_fname))
+            fname = simple_abspath(self%moviename_aniso_forctf, errmsg='simple_motion_correct_iter::iterate 7')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('aniso_forctf', trim(rel_fname))
+            fname = simple_abspath(self%moviename_aniso_thumb, errmsg='simple_motion_correct_iter::iterate 8')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('aniso_thumb',  trim(rel_fname))
+            call orientation%set('imgkind', 'mic')
+            if( cline%defined('tof') )then
+                fname = simple_abspath(self%moviename_aniso_intg_frames, errmsg='simple_motion_correct_iter::iterate 9')
+                call make_relativepath(CWD_GLOB,fname,rel_fname)
+                call orientation%set('aniso_intg_frames', trim(rel_fname))
+            endif
+        endif
+        call motion_correct_kill_common
+        ! deallocate
         if( allocated(shifts) )       deallocate(shifts)
         if( allocated(aniso_shifts) ) deallocate(aniso_shifts)
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )
         class(motion_correct_iter), intent(in) :: self
-        character(len=*),   intent(in) :: which
+        character(len=*),           intent(in) :: which
         character(len=:), allocatable  :: moviename
         select case( which )
             case('intg')
@@ -164,6 +216,14 @@ contains
                 allocate(moviename, source=trim(self%moviename_forctf))
             case('thumb')
                 allocate(moviename, source=trim(self%moviename_thumb))
+            case('aniso_intg')
+                allocate(moviename, source=trim(self%moviename_aniso_intg))
+            case('aniso_intg_frames')
+                allocate(moviename, source=trim(self%moviename_aniso_intg_frames))
+            case('aniso_forctf')
+                allocate(moviename, source=trim(self%moviename_aniso_forctf))
+            case('aniso_thumb')
+                allocate(moviename, source=trim(self%moviename_aniso_thumb))
             case DEFAULT
                 THROW_HARD('unsupported which flag; get_self%moviename')
         end select
