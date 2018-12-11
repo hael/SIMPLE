@@ -805,10 +805,19 @@ contains
     ! with respect to working directory (minus execution directory, eg 1_xxx)
     ! if the file lies outside the working directory then the absolute file path is kept
     subroutine make_relativepath(cwd, fname, newfname)
-        character(len=*), intent(in)  :: cwd, fname
+        character(len=*),          intent(in)  :: cwd, fname
         character(len=LONGSTRLEN), intent(out) :: newfname
-        character(LONGSTRLEN) :: cwd_here, projdir
-        integer :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
+        character(len=:), allocatable :: fname_here
+        character(LONGSTRLEN)         :: cwd_here, projdir
+        integer                       :: l_cwd, l_fname, l, slashpos_left, slashpos_right, ipos
+        ! get absolute filename if necessary
+        if( fname(1:1).eq.'/' )then
+            ! was already absolute
+            fname_here = trim(fname)
+            if( .not.file_exists(fname_here) )THROW_HARD('File does not exist: '//trim(fname_here))
+        else
+            fname_here = simple_abspath(fname, errmsg='simple_fileio::make_relativepath: '//trim(fname))
+        endif
         ! remove final '/' from cwd for safety
         l_cwd = len_trim(cwd)
         if(cwd(l_cwd:l_cwd)=='/')then
@@ -826,21 +835,20 @@ contains
             THROW_HARD('Incorrect directory structure; simple_fileio :: make_relativepath')
         endif
         ! builds path
-        ipos = index(trim(fname),trim(projdir))
+        ipos = index(trim(fname_here),trim(projdir))
         if( ipos == 1 )then
             ! file inside project directory, use relative path
             l = len_trim(projdir)
-            l_fname = len_trim(fname)
-            if(fname(l+1:l+1) == '/')then
-                newfname = '..'//fname(l+1:l_fname)
+            l_fname = len_trim(fname_here)
+            if(fname_here(l+1:l+1) == '/')then
+                newfname = '..'//fname_here(l+1:l_fname)
             else
-                newfname = '../'//fname(l+1:l_fname)
+                newfname = '../'//fname_here(l+1:l_fname)
             endif
         else
             ! file outside of project directory or weird structure, use absolute path
-            newfname = trim(fname)
+            newfname = trim(fname_here)
         endif
     end subroutine make_relativepath
-
 
 end module simple_fileio

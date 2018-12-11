@@ -28,7 +28,7 @@ contains
         character(len=*),         intent(in)    :: dir_out
         logical,                  intent(in)    :: l_gen_thumb
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb
         real                          :: dfx, dfy, angast, phshift, cc, dferr, ctfscore, cc90, scale
         integer                       :: nframes, ldim(3), ldim_thumb(3)
         if( .not. file_exists(moviename_forctf) )&
@@ -66,7 +66,7 @@ contains
             moviename_thumb = swap_suffix(moviename_thumb, THUMBNAIL_SUFFIX, INTGMOV_SUFFIX)
             moviename_thumb = trim(dir_out)//trim(adjustl(moviename_thumb))//trim(JPG_EXT)
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=90)
-            call make_relativepath(CWD_GLOB,simple_abspath(moviename_thumb, errmsg='simple_ctf_estimate_iter'),moviename_thumb)
+            call make_relativepath(CWD_GLOB,moviename_thumb, rel_moviename_thumb)
             call orientation%set('thumb', trim(moviename_thumb))
         endif
         ! deal with output

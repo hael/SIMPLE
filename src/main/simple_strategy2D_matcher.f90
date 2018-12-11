@@ -121,11 +121,14 @@ contains
         chunk_id = 1
 
         ! B-FACTOR
+        bfactor = 0.
         if( params_glob%cc_objfun == OBJFUN_RES )then
-            call build_glob%spproj_field%calc_bfac_srch(bfactor)
+            if( cline%defined('bfac') )then
+                bfactor = params_glob%bfac
+            else
+                call build_glob%spproj_field%calc_bfac_srch(bfactor)
+            endif
             write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
-        else
-            bfactor = 0.
         endif
 
         ! PREP REFERENCES

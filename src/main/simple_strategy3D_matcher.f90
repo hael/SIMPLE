@@ -75,7 +75,7 @@ contains
         type(convergence)     :: conv
         type(oris)            :: o_peak_prev
         real, allocatable     :: resarr(:)
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio, bfactor
         integer :: iptcl, i, fnr, i_batch, ithr, updatecnt, state, n_nozero
         integer :: ibatch, npeaks, iextr_lim, lpind_anneal, lpind_start, batchlims(2)
         logical :: doprint, do_extr
@@ -177,6 +177,15 @@ contains
                 endif
         end select
         if( L_BENCH ) rt_init = toc(t_init)
+
+        ! B-FACTOR
+        bfactor = -1.
+        if( params_glob%cc_objfun == OBJFUN_RES )then
+            if( cline%defined('bfac') .and. params_glob%bfac >= 0. )then
+                bfactor = params_glob%bfac
+                write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
+            endif
+        endif
 
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
@@ -292,6 +301,7 @@ contains
                         ! search spec
                         strategy3Dspec%iptcl =  iptcl
                         strategy3Dspec%szsn  =  params_glob%szsn
+                        strategy3Dspec%bfac  =  bfactor
                         strategy3Dspec%extr_score_thresh = extr_score_thresh
                         if( allocated(het_mask) ) strategy3Dspec%do_extr =  het_mask(iptcl)
                         if( allocated(symmat) )   strategy3Dspec%symmat  => symmat

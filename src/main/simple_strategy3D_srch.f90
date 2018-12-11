@@ -19,10 +19,10 @@ private
 logical, parameter :: DOCONTINUOUS = .false.
 
 type strategy3D_spec
-    integer, pointer :: symmat(:,:)   => null()
+    integer, pointer :: symmat(:,:) => null()
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
-    real    :: extr_score_thresh=0.
+    real    :: extr_score_thresh=0., bfac=-1.
 end type strategy3D_spec
 
 type strategy3D_srch
@@ -48,6 +48,7 @@ type strategy3D_srch
     integer                  :: prev_ref      = 0         !< previous reference index
     integer                  :: prev_proj     = 0         !< previous projection direction index
     real                     :: prev_corr     = 1.        !< previous best correlation
+    real                     :: bfac          = -1.
     real                     :: specscore     = 0.        !< spectral score
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                  :: neigh         = .false.   !< nearest neighbour refinement flag
@@ -81,7 +82,7 @@ contains
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
         ! calc B-factor & memoize
         bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
-        if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
+        if( params_glob%cc_objfun == OBJFUN_RES )call pftcc%memoize_bfac(pftcc_pind, bfac)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! update spproj_field
@@ -149,6 +150,7 @@ contains
         self%nnn          = params_glob%nnn
         self%nnnrefs      = self%nnn*self%nstates
         self%dowinpl      = (npeaks /= 1) .and. (self%nstates == 1)
+        self%bfac         = spec%bfac
         ! create in-plane search object
         lims(:,1)         = -params_glob%trs
         lims(:,2)         =  params_glob%trs
@@ -196,8 +198,11 @@ contains
         endif
         ! B-factor memoization
         bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
-        if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc_glob%memoize_bfac(self%iptcl, bfac)
         call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
+        if( params_glob%cc_objfun == OBJFUN_RES )then
+            if( self%bfac >= 0. ) bfac =  self%bfac
+            call pftcc_glob%memoize_bfac(self%iptcl, bfac)
+        endif
         ! calc specscore
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr

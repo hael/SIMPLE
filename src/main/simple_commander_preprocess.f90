@@ -693,8 +693,8 @@ contains
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
                 do i=1,size(boxfiles)
-                    boxfile_name = simple_abspath(boxfiles(i), errmsg='simple_commander_preprocess::exec_extract',check_exists=.false.)
-                    call make_relativepath(CWD_GLOB,boxfile_name,boxfiles(i))
+                    call make_relativepath(CWD_GLOB,boxfiles(i),boxfile_name)
+                    boxfiles(i) = trim(boxfile_name)
                 enddo
             else
                 write(logfhandle,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
@@ -913,7 +913,7 @@ contains
         type(ori)                     :: o_mic, o_stk
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: mic_name, imgkind, abs_stack
+        character(len=:), allocatable :: mic_name, imgkind
         logical,          allocatable :: ptcl_msk(:,:,:)
         integer,          allocatable :: micstk_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
@@ -1061,8 +1061,7 @@ contains
                 call img%write(trim(adjustl(stack)), cnt)
                 nptcls = nptcls+1
             enddo
-            abs_stack = simple_abspath(stack)
-            call make_relativepath(CWD_GLOB, abs_stack, rel_stack)
+            call make_relativepath(CWD_GLOB, stack, rel_stack)
             call spproj%os_stk%set(istk,'stk',rel_stack)
         enddo
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls

@@ -357,8 +357,9 @@ contains
         logical          :: inputted_boxtab
         integer          :: nmovf, nboxf, i
         type(ctfparams)  :: ctfvars
-        character(len=:),          allocatable :: phaseplate, boxf_abspath
+        character(len=:),          allocatable :: phaseplate
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
+        character(len=LONGSTRLEN)              :: boxfname
         call params%new(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
@@ -404,9 +405,8 @@ contains
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
-                boxf_abspath = simple_abspath(trim(boxfnames(i)), errmsg='commander_project :: exec_import_movies')
-                call make_relativepath(CWD_GLOB,boxf_abspath,boxfnames(i))
-                call spproj%os_mic%set(i, 'boxfile', boxfnames(i))
+                call make_relativepath(CWD_GLOB, boxfnames(i), boxfname)
+                call spproj%os_mic%set(i, 'boxfile', boxfname)
             end do
         endif
         ! write project file
@@ -423,6 +423,7 @@ contains
         integer          :: nos_mic, nboxf, i
         character(len=:),          allocatable :: boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
+        character(len=LONGSTRLEN)              :: boxfname
         call params%new(cline)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
@@ -439,9 +440,8 @@ contains
             THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
         endif
         do i=1,nos_mic
-            boxf_abspath = simple_abspath(trim(boxfnames(i)),errmsg='commander_project :: exec_import_movies')
-            call make_relativepath(CWD_GLOB,boxf_abspath,boxfnames(i))
-            call spproj%os_mic%set(i, 'boxfile', trim(boxfnames(i)))
+            call make_relativepath(CWD_GLOB,boxfnames(i),boxfname)
+            call spproj%os_mic%set(i, 'boxfile', boxfname)
         end do
         ! write project file
         call spproj%write_segment_inside('mic') ! all that's needed here

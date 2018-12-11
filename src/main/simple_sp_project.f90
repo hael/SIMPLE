@@ -470,8 +470,7 @@ contains
         endif
         ! update ori
         call os_ptr%new(1)
-        fname = simple_abspath(moviename,errmsg='simple_sp_project::add_single_movie')
-        call make_relativepath(CWD_GLOB, fname, rel_fname)
+        call make_relativepath(CWD_GLOB, moviename, rel_fname)
         call find_ldim_nptcls(trim(fname), ldim, nframes)
         if( nframes <= 0 )then
             THROW_WARN('# frames in movie: '//trim(fname)//' <= zero, omitting')
@@ -538,7 +537,6 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            moviename = simple_abspath(movienames(cnt),errmsg='simple_sp_project::add_movies')
             call make_relativepath(CWD_GLOB,moviename,rel_moviename)
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
             if( nframes <= 0 )then
@@ -646,14 +644,12 @@ contains
         character(len=*),  intent(in)    :: stk
         type(ctfparams),   intent(in)    :: ctfvars ! All CTF parameters associated with stk
         type(ori)                     :: o
-        character(len=:), allocatable :: stk_abspath
         character(len=LONGSTRLEN)     :: stk_relpath, cwd
         integer :: ldim(3), nptcls, n_os_stk, n_os_ptcl2D, n_os_ptcl3D
         integer :: i, fromp, top
         ! full path and existence check
         call simple_getcwd(cwd)
-        stk_abspath = simple_abspath(stk,errmsg='sp_project :: add_stk')
-        call make_relativepath(cwd, stk_abspath, stk_relpath)
+        call make_relativepath(cwd, stk, stk_relpath)
         ! find dimension of inputted stack
         call find_ldim_nptcls(stk_relpath, ldim, nptcls)
         if( ldim(1) /= ldim(2) )then
@@ -797,10 +793,10 @@ contains
         class(sp_project),   intent(inout) :: self
         character(len=*),    intent(in)    :: stktab
         class(oris),         intent(inout) :: os ! parameters associated with stktab
-        character(len=:),          allocatable :: stk_abspath
         character(len=LONGSTRLEN), allocatable :: stknames(:)
         integer,                   allocatable :: nptcls_arr(:)
-        type(ori) :: o_ptcl, o_stk
+        type(ori)                 :: o_ptcl, o_stk
+        character(len=LONGSTRLEN) :: stk_relpath
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
         ! file exists?
@@ -821,8 +817,8 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            stk_abspath = simple_abspath(stknames(istk),'sp_project :: add_stktab')
-            call make_relativepath(CWD_GLOB,stk_abspath,stknames(istk))
+            call make_relativepath(CWD_GLOB,stknames(istk),stk_relpath)
+            stknames(istk) = trim(stk_relpath)
             o_stk = os%get_ori(istk)
             ! logical dimension management
             call find_ldim_nptcls(trim(stknames(istk)), ldim, nptcls)
@@ -982,9 +978,7 @@ contains
                 allocate(dest_stkpart, source=trim(STKPARTFBODY)//int2str_pad(istk,numlen)//EXT)
             endif
             status = simple_rename(trim(stkpart), trim(dest_stkpart))
-            deallocate(stkpart)
-            stkpart = simple_abspath(dest_stkpart,'sp_project :: split_stk')
-            call make_relativepath(cwd, stkpart, stk_relpath)
+            call make_relativepath(cwd, dest_stkpart, stk_relpath)
             nptcls_part = parts(istk,2) - parts(istk,1) + 1
             ! set original before overriding
             call self%os_stk%set_ori(istk, orig_stk)
@@ -1080,10 +1074,9 @@ contains
             allocate(iimgkind, source='cavg')
         endif
         ! path and existence check
-        path = simple_abspath(stk,errmsg='sp_project :: add_cavgs2os_out')
-        call make_relativepath(CWD_GLOB, path, relpath)
+        call make_relativepath(CWD_GLOB, stk, relpath)
         ! find dimension of inputted stack
-        call find_ldim_nptcls(path, ldim, nptcls)
+        call find_ldim_nptcls(relpath, ldim, nptcls)
         ! add os_out entry
         call self%add_entry2os_out('cavg', ind)
         ! fill-in field
@@ -1104,9 +1097,8 @@ contains
     subroutine add_frcs2os_out( self, frc, which_imgkind )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: frc, which_imgkind
-        character(len=:), allocatable :: frc_abspath
-        character(len=LONGSTRLEN)     :: relpath
-        integer                       :: ind
+        character(len=LONGSTRLEN)        :: relpath
+        integer                          :: ind
         select case(trim(which_imgkind))
             case('frc2D','frc3D')
                 ! all good
@@ -1114,12 +1106,11 @@ contains
                 THROW_HARD('invalid FRC kind: '//trim(which_imgkind)//'; add_frcs2os_out')
         end select
         ! full path and existence check
-        frc_abspath = simple_abspath(frc,errmsg='sp_project :: add_frcs2os_out')
-        call make_relativepath(CWD_GLOB, frc_abspath, relpath)
+        call make_relativepath(CWD_GLOB, frc, relpath)
         ! add os_out entry
         call self%add_entry2os_out(which_imgkind, ind)
         ! fill-in field
-        call self%os_out%set(ind, 'frcs', trim(relpath))
+        call self%os_out%set(ind, 'frcs',    trim(relpath))
         call self%os_out%set(ind, 'imgkind', trim(which_imgkind))
     end subroutine add_frcs2os_out
 
@@ -1127,12 +1118,11 @@ contains
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: fsc
         integer,           intent(in)    :: state, box
-        character(len=:), allocatable :: fsc_abspath, imgkind
+        character(len=:), allocatable :: imgkind
         character(len=LONGSTRLEN)     :: relpath
         integer                       :: i, ind, n_os_out
         ! full path and existence check
-        fsc_abspath = simple_abspath(fsc,errmsg='sp_project :: add_fsc2os_out')
-        call make_relativepath(CWD_GLOB, fsc_abspath, relpath)
+        call make_relativepath(CWD_GLOB, fsc, relpath)
         ! add os_out entry
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
@@ -1172,15 +1162,13 @@ contains
         real,              intent(in)    :: smpd
         integer,           intent(in)    :: state
         integer, optional, intent(in)    :: box
-        character(len=:), allocatable :: vol_abspath, imgkind
+        character(len=:), allocatable :: imgkind
         character(len=LONGSTRLEN)     :: relpath
         integer                       :: n_os_out, ind, i, ldim(3), ifoo
         select case(trim(which_imgkind))
             case('vol_cavg','vol','vol_msk')
-                ! full path and existence check
-                vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
                 ! find_dimension of inputted volume
-                call find_ldim_nptcls(vol_abspath, ldim, ifoo)
+                call find_ldim_nptcls(vol, ldim, ifoo)
                 if(present(box))then
                     if( ldim(1) /= box )then
                         THROW_HARD('invalid dimensions for volume: '//trim(vol)//'; add_vol2os_out 1')
@@ -1192,12 +1180,11 @@ contains
                 else
                     ldim = box
                 endif
-                ! full path and existence check
-                vol_abspath = simple_abspath(vol,errmsg='sp_project :: add_vol2os_out')
             case DEFAULT
                 THROW_HARD('invalid VOL kind: '//trim(which_imgkind)//'; add_vol2os_out 3')
         end select
-        call make_relativepath(CWD_GLOB, vol_abspath, relpath)
+        ! path and existence check
+        call make_relativepath(CWD_GLOB, vol, relpath)
         ! check if field is empty
         n_os_out = self%os_out%get_noris()
         if( n_os_out == 0 )then

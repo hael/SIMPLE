@@ -148,7 +148,6 @@ contains
     subroutine exec_picker( boxname_out, nptcls_out )
         character(len=LONGSTRLEN), intent(out) :: boxname_out
         integer,                   intent(out) :: nptcls_out
-        character(len=:), allocatable :: abs_boxname
         call extract_peaks
         call distance_filter
         call refine_positions
@@ -159,8 +158,7 @@ contains
         peak_positions_refined = nint(PICKER_SHRINK_REFINE)*peak_positions_refined
         call write_boxfile
         ! returns absolute path
-        abs_boxname = simple_abspath(boxname, errmsg='simple_picker::exec_picker')
-        call make_relativepath(CWD_GLOB, abs_boxname, boxname_out)
+        call make_relativepath(CWD_GLOB, boxname, boxname_out)
     end subroutine exec_picker
 
     subroutine extract_peaks
