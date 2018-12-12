@@ -471,8 +471,7 @@ contains
         do iframe=1,nframes
             call movie_sum_global_threads(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
             call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
-            call motion_aniso(iframe)%new( ref=movie_sum_global_threads(iframe), &
-                frame=movie_frames_shifted(iframe), aniso_shifted_frame=movie_frames_shifted_aniso(iframe) )
+            call motion_aniso(iframe)%new()
         end do
         ! generate first average
         call gen_aniso_wsum_calc_corrs(0)
@@ -488,7 +487,8 @@ contains
                 ! subtract the movie frame being correlated to reduce bias
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
-                cxy = motion_aniso(iframe)%minimize()
+                cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
+                    frame=movie_frames_shifted(iframe))
                 ! update parameter arrays
                 opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
                 ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
@@ -537,7 +537,8 @@ contains
         ! apply nonlinear transformations
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
-            call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:))
+            call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
+                frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe))
         end do
         !$omp end parallel do
         ! we do not destruct search objects here (needed for sum production)

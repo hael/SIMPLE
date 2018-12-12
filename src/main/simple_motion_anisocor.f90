@@ -21,7 +21,6 @@ type :: motion_anisocor
     real                            :: maxHWshift = 0.      !< maximum half-width of shift
     class(image),       pointer     :: reference  => null() !< reference image ptr
     class(image),       pointer     :: frame      => null() !< particle image ptr
-    real(kind=c_float), pointer     :: rmat_out      (:,:,:)!< image after anisotropic motion correction (output)
     integer                         :: ldim(2)              !< dimensions of reference, particle
     integer                         :: ldim_out(2)          !< dimensions of output image
     real(kind=c_float), allocatable :: rmat_ref      (:,:)  !< reference matrix
@@ -40,6 +39,7 @@ contains
     procedure, private              :: calc_mat_tld
     procedure, private              :: interp_bilin
     procedure, private              :: interp_bilin_fdf
+    procedure, private              :: interp_bilin_out
     procedure, private              :: calc_T_coords
     procedure, private              :: calc_T_coords_only
     procedure, private              :: calc_T_coords_out
@@ -115,6 +115,35 @@ contains
                             t  * y3 + &
                       (1. - t) * y4
     end subroutine interp_bilin_fdf
+
+    function interp_bilin_out( self, x, rmat_in ) result(val)
+        class(motion_anisocor), intent(inout) :: self
+        real,                   intent(in)    :: x(2)
+        real, pointer,          intent(in)    :: rmat_in(:,:,:)
+        real                                  :: val
+        logical :: x1_valid, x2_valid, y1_valid, y2_valid
+        integer :: x1_h, x2_h, y1_h, y2_h
+        real    :: y1, y2, y3, y4, t, u
+        ! if outside of image
+        if ((x(1) < 1.) .or. (x(1) >= self%ldim_out(1)) .or. (x(2) < 1.) .or. (x(2) >= self%ldim_out(2))) then
+            val  = 0.
+            return
+        end if
+        x1_h = floor(x(1))
+        x2_h = x1_h + 1
+        y1_h = floor(x(2))
+        y2_h = y1_h + 1
+        y1 = rmat_in(x1_h, y1_h, 1)
+        y2 = rmat_in(x2_h, y1_h, 1)
+        y3 = rmat_in(x2_h, y2_h, 1)
+        y4 = rmat_in(x1_h, y2_h, 1)
+        t    = x(1) - x1_h
+        u    = x(2) - y1_h
+        val  =  (1. - t) * (1. - u) * y1 + &
+                      t  * (1. - u) * y2 + &
+                      t  *       u  * y3 + &
+                (1. - t) *       u  * y4
+    end function interp_bilin_out
 
     subroutine calc_T_coords( self, a )
         class(motion_anisocor), intent(inout) :: self
@@ -208,16 +237,42 @@ contains
         end do
     end subroutine calc_T_coords_out
 
-    subroutine calc_T_out( self, a )
+    subroutine calc_T_out( self, a, frame_in, frame_out )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(12)
-        integer :: i,j
-        real    :: x_tld(2), val
+        class(image), target,   intent(in)    :: frame_in
+        class(image), target,   intent(inout) :: frame_out
+        integer       :: i,j
+        real          :: x_tld(2), val
+        integer       :: ldim_out_here1(3), ldim_out_here2(3)
+        logical       :: do_alloc
+        real, pointer :: rmat_in_ptr(:,:,:), rmat_out_ptr(:,:,:)
+        ldim_out_here1 = frame_in%get_ldim()
+        ldim_out_here2 = frame_out%get_ldim()
+        if( any(ldim_out_here1(1:2) .ne. ldim_out_here2(1:2)) )then
+            THROW_HARD('calc_T_out: dimensions of particle and reference do not match; simple_motion_anisocor')
+        end if
+        self%ldim_out(1) = ldim_out_here1(1)
+        self%ldim_out(2) = ldim_out_here1(2)
+        call frame_in %get_rmat_ptr( rmat_in_ptr  )
+        call frame_out%get_rmat_ptr( rmat_out_ptr )
+        do_alloc = .false.
+        if (.not. allocated(self%T_coords_out)) then
+            do_alloc = .true.
+        else
+            if ((size(self%T_coords_out, 2) .ne. self%ldim_out(1)).or.(size(self%T_coords_out, 3) .ne. self%ldim_out(2))) then
+                do_alloc = .true.
+            end if
+        end if
+        if (do_alloc) then
+            if (allocated(self%T_coords_out)) deallocate(self%T_coords_out)
+            allocate(self%T_coords_out(2, self%ldim_out(1), self%ldim_out(2)))
+        end if
         call self%calc_T_coords_out(a)
         do j = 1, self%ldim_out(2)
             do i = 1, self%ldim_out(1)
                 x_tld = self%T_coords_out(:,i,j)
-                self%rmat_out(i,j,1) = self%interp_bilin(x_tld)
+                rmat_out_ptr(i,j,1) = self%interp_bilin_out(x_tld, rmat_in_ptr)
             end do
         end do
     end subroutine calc_T_out
@@ -322,42 +377,13 @@ contains
     end subroutine eval_fdf
 
     !> Initialise  ftexp_shsrch
-    subroutine motion_anisocor_new( self, ref, frame, aniso_shifted_frame, motion_correct_ftol, motion_correct_gtol )
+    subroutine motion_anisocor_new( self, motion_correct_ftol, motion_correct_gtol )
         class(motion_anisocor), intent(inout) :: self
-        class(image), target, intent(in) :: ref, frame, aniso_shifted_frame
         real,       optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
         type(opt_factory) :: ofac                 !< optimizer factory
         integer           :: i
         real              :: lims(POLY_DIM,2)
-        integer           :: ldim_here1(3), ldim_here2(3), ldim_out_here(3)
-        real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
         call self%kill()
-        ldim_here1 = ref  %get_ldim()
-        ldim_here2 = frame%get_ldim()
-        if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
-            THROW_HARD('motion_anisocor_new: dimensions of particle and reference do not match; simple_motion_anisocor')
-        end if
-        self%ldim(1) = ldim_here1(1)
-        self%ldim(2) = ldim_here1(2)
-        self%reference => ref
-        call ref%get_rmat_ptr( rmat_ref_ptr )
-        allocate( self%rmat_ref(self%ldim(1), self%ldim(2)) )
-        self%rmat_ref(1:self%ldim(1), 1:self%ldim(2)) = rmat_ref_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
-        self%frame  => frame
-        call frame%get_rmat_ptr( rmat_ptr )
-        allocate( self%rmat(self%ldim(1), self%ldim(2)) )
-        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
-        call aniso_shifted_frame%get_rmat_ptr( self%rmat_out )
-        ldim_out_here = aniso_shifted_frame%get_ldim()
-        self%ldim_out(1) = ldim_out_here(1)
-        self%ldim_out(2) = ldim_out_here(2)        
-        allocate( self%rmat_T         (    self%ldim(1),     self%ldim(2)       ) )
-        allocate( self%rmat_T_grad    (    self%ldim(1),     self%ldim(2),    2 ) )
-        allocate( self%T_coords       ( 2, self%ldim(1),     self%ldim(2)       ) )
-        allocate( self%T_coords_da    (    self%ldim(1),     self%ldim(2),    2 ) )
-        allocate( self%T_coords_da_sq (    self%ldim(1),     self%ldim(2),    2 ) )
-        allocate( self%T_coords_da_cr (    self%ldim(1),     self%ldim(2)       ) )
-        allocate( self%T_coords_out   (2,  self%ldim_out(1), self%ldim_out(2)   )  )
         self%maxHWshift = 0.1
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
@@ -433,25 +459,58 @@ contains
     end subroutine motion_anisocor_fdfcost_8
 
     !> Main search routine
-    function motion_anisocor_minimize( self ) result(cxy)
+    function motion_anisocor_minimize( self, ref, frame ) result(cxy)
         class(motion_anisocor), intent(inout) :: self
+        class(image), target,   intent(in)    :: ref, frame
         real :: cxy(POLY_DIM+1) ! corr + model
         class(*), pointer :: fun_self => null()
         integer           :: i, j
         real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
-        call self%reference%get_rmat_ptr( rmat_ref_ptr )
-        call self%frame    %get_rmat_ptr( rmat_ptr     )
+        integer           :: ldim_here1(3), ldim_here2(3)
+        logical           :: do_alloc
+        ldim_here1 = ref  %get_ldim()
+        ldim_here2 = frame%get_ldim()
+        if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
+            THROW_HARD('motion_anisocor_minimize: dimensions of particle and reference do not match; simple_motion_anisocor')
+        end if
+        self%ldim(1) = ldim_here1(1)
+        self%ldim(2) = ldim_here1(2)
+        self%reference => ref
+        call ref%get_rmat_ptr( rmat_ref_ptr )
+        do_alloc = .false.
+        if (.not. allocated(self%rmat_ref)) then
+            do_alloc = .true.
+        else
+            if ((size(self%rmat_ref, 1) .ne. self%ldim(1)).or.(size(self%rmat_ref, 2) .ne. self%ldim(2))) then
+                do_alloc = .true.
+            end if
+        end if
+        if (do_alloc) then
+            if (allocated(self%rmat_ref      )) deallocate(self%rmat_ref   )
+            if (allocated(self%rmat          )) deallocate(self%rmat       )
+            if (allocated(self%rmat_T        )) deallocate(self%rmat_T     )
+            if (allocated(self%rmat_T_grad   )) deallocate(self%rmat_T_grad)
+            if (allocated(self%T_coords      )) deallocate(self%rmat_ref)
+            if (allocated(self%T_coords_da   )) deallocate(self%rmat_ref)
+            if (allocated(self%T_coords_da_sq)) deallocate(self%rmat_ref)
+            if (allocated(self%T_coords_da_cr)) deallocate(self%rmat_ref)
+            allocate( self%rmat_ref(self%ldim(1), self%ldim(2)) )
+            allocate( self%rmat(self%ldim(1), self%ldim(2)) )
+            allocate( self%rmat_T         (    self%ldim(1),     self%ldim(2)       ) )
+            allocate( self%rmat_T_grad    (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords       ( 2, self%ldim(1),     self%ldim(2)       ) )
+            allocate( self%T_coords_da    (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_da_sq (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_da_cr (    self%ldim(1),     self%ldim(2)       ) )
+        end if
+        call ref%get_rmat_ptr( rmat_ref_ptr )
         self%rmat_ref(1:self%ldim(1), 1:self%ldim(2)) = rmat_ref_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
+        self%frame  => frame
+        call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%ospec%x = 0.
         call self%nlopt%minimize(self%ospec, self, cxy(1))
         cxy(2:) = self%ospec%x
-        call self%calc_T_coords_only( self%ospec%x )
-        do j = 1,self%ldim(2)
-            do i = 1,self%ldim(1)
-                self%rmat_out(i,j,1) = self%interp_bilin(self%T_coords(:,i,j))
-            end do
-        end do
     end function motion_anisocor_minimize
 
     subroutine motion_anisocor_kill( self )
