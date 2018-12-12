@@ -23,6 +23,7 @@ type :: motion_anisocor
     class(image),       pointer     :: frame      => null() !< particle image ptr
     real(kind=c_float), pointer     :: rmat_out      (:,:,:)!< image after anisotropic motion correction (output)
     integer                         :: ldim(2)              !< dimensions of reference, particle
+    integer                         :: ldim_out(2)          !< dimensions of output image
     real(kind=c_float), allocatable :: rmat_ref      (:,:)  !< reference matrix
     real(kind=c_float), allocatable :: rmat          (:,:)  !< particle  matrix
     real(kind=c_float), allocatable :: rmat_T        (:,:)  !< transformed (interpolated) particle matrix
@@ -31,6 +32,7 @@ type :: motion_anisocor
     real(kind=c_float), allocatable :: T_coords_da   (:,:,:)!< transformed coordinates, for use in derivative of obj. function
     real(kind=c_float), allocatable :: T_coords_da_sq(:,:,:)!< square of T_coords_da, memoized for speedup
     real(kind=c_float), allocatable :: T_coords_da_cr(:,:)  !< cross-product of square of T_coords, memoized for speedup
+    real(kind=c_float), allocatable :: T_coords_out  (:,:,:)!< transformed coordinates for output image
     real                            :: motion_correctftol
     real                            :: motion_correctgtol
 contains
@@ -40,6 +42,7 @@ contains
     procedure, private              :: interp_bilin_fdf
     procedure, private              :: calc_T_coords
     procedure, private              :: calc_T_coords_only
+    procedure, private              :: calc_T_coords_out
     procedure                       :: calc_T_out
     procedure                       :: new      => motion_anisocor_new
     procedure                       :: kill     => motion_anisocor_kill
@@ -151,7 +154,6 @@ contains
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
         integer :: i, j
-        real    :: x_tld(2)
         real    :: Nx, Ny
         real    :: x, y, xm, ym, xms, yms, z1, z2
         Nx = self%ldim(1)
@@ -177,15 +179,44 @@ contains
         end do
     end subroutine calc_T_coords_only
 
+    subroutine calc_T_coords_out( self, a )
+        class(motion_anisocor), intent(inout) :: self
+        real,                   intent(in)    :: a(POLY_DIM)
+        integer :: i, j
+        real    :: Nx, Ny
+        real    :: x, y, xm, ym, xms, yms, z1, z2
+        Nx = self%ldim_out(1)
+        Ny = self%ldim_out(2)
+        do j = 1, self%ldim_out(2)
+            do i = 1, self%ldim_out(1)
+                x   = real(i)
+                y   = real(j)
+                ! map x,y to [-1:1]
+                xm  = (2. * x - Nx - 1.) / (Nx - 1.)
+                ym  = (2. * y - Ny - 1.) / (Ny - 1.)
+                xms = xm * xm
+                yms = ym * ym
+                ! Polynomial:
+                ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
+                ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
+                z1 = real(xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym)
+                z2 = real(ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym)
+                ! remap to [1:N]
+                self%T_coords_out(1,i,j) = ((Nx - 1.) * z1 + Nx + 1.) / 2.
+                self%T_coords_out(2,i,j) = ((Ny - 1.) * z2 + Ny + 1.) / 2.
+            end do
+        end do
+    end subroutine calc_T_coords_out
+
     subroutine calc_T_out( self, a )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(12)
         integer :: i,j
         real    :: x_tld(2), val
-        call self%calc_T_coords_only(a)
-        do j = 1, self%ldim(2)
-            do i = 1, self%ldim(1)
-                x_tld = self%T_coords(:,i,j)
+        call self%calc_T_coords_out(a)
+        do j = 1, self%ldim_out(2)
+            do i = 1, self%ldim_out(1)
+                x_tld = self%T_coords_out(:,i,j)
                 self%rmat_out(i,j,1) = self%interp_bilin(x_tld)
             end do
         end do
@@ -298,7 +329,7 @@ contains
         type(opt_factory) :: ofac                 !< optimizer factory
         integer           :: i
         real              :: lims(POLY_DIM,2)
-        integer           :: ldim_here1(3), ldim_here2(3)
+        integer           :: ldim_here1(3), ldim_here2(3), ldim_out_here(3)
         real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
         call self%kill()
         ldim_here1 = ref  %get_ldim()
@@ -317,12 +348,16 @@ contains
         allocate( self%rmat(self%ldim(1), self%ldim(2)) )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         call aniso_shifted_frame%get_rmat_ptr( self%rmat_out )
-        allocate( self%rmat_T         (    self%ldim(1), self%ldim(2)    ) )
-        allocate( self%rmat_T_grad    (    self%ldim(1), self%ldim(2), 2 ) )
-        allocate( self%T_coords       ( 2, self%ldim(1), self%ldim(2)    ) )
-        allocate( self%T_coords_da    (    self%ldim(1), self%ldim(2), 2 ) )
-        allocate( self%T_coords_da_sq (    self%ldim(1), self%ldim(2), 2 ) )
-        allocate( self%T_coords_da_cr (    self%ldim(1), self%ldim(2)    ) )
+        ldim_out_here = aniso_shifted_frame%get_ldim()
+        self%ldim_out(1) = ldim_out_here(1)
+        self%ldim_out(2) = ldim_out_here(2)        
+        allocate( self%rmat_T         (    self%ldim(1),     self%ldim(2)       ) )
+        allocate( self%rmat_T_grad    (    self%ldim(1),     self%ldim(2),    2 ) )
+        allocate( self%T_coords       ( 2, self%ldim(1),     self%ldim(2)       ) )
+        allocate( self%T_coords_da    (    self%ldim(1),     self%ldim(2),    2 ) )
+        allocate( self%T_coords_da_sq (    self%ldim(1),     self%ldim(2),    2 ) )
+        allocate( self%T_coords_da_cr (    self%ldim(1),     self%ldim(2)       ) )
+        allocate( self%T_coords_out   (2,  self%ldim_out(1), self%ldim_out(2)   )  )
         self%maxHWshift = 0.1
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
@@ -434,6 +469,7 @@ contains
         if (allocated(self%T_coords_da   )) deallocate(self%T_coords_da   )
         if (allocated(self%T_coords_da_sq)) deallocate(self%T_coords_da_sq)
         if (allocated(self%T_coords_da_cr)) deallocate(self%T_coords_da_cr)
+        if (allocated(self%T_coords_out  )) deallocate(self%T_coords_out  )
         call self%ospec%kill()
         self%maxHWshift  = 0.
         self%reference   => null()
