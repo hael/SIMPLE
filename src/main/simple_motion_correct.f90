@@ -69,7 +69,7 @@ logical :: do_scale       = .false.  !< scale or not
 
 ! module global constants
 integer, parameter :: MITSREF       = 30 !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 1  !< max # iterations of anisotropic refinement optimisation
+integer, parameter :: MITSREF_ANISO = 5  !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2. !< small initial shift to blur out fixed pattern noise
 
 contains
@@ -439,42 +439,51 @@ contains
     !> anisotropid motion_correction of DDD movie
     subroutine motion_correct_aniso( shifts )
         real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identified
-        real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:)
+
         real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
-        integer :: iframe, nimproved, i
-        logical :: didsave, err_stat
+        real    :: scale, smpd4scale
+        integer :: iframe, nimproved, i, ldim4scale(3)
+        logical :: didsave, err_stat, doscale
+        smpd4scale = params_glob%lpstop / 3.
+        doscale = .false.
+        if( smpd4scale > params_glob%smpd )then
+            doscale = .true.
+            scale   = smpd_scaled / smpd4scale
+            ldim4scale(1) = round2even(scale * real(ldim_scaled(1)))
+            ldim4scale(2) = round2even(scale * real(ldim_scaled(2)))
+            ldim4scale(3) = 1
+        else
+            ldim4scale = ldim_scaled
+            smpd4scale = smpd_scaled
+        endif
         if( allocated(shifts) ) deallocate(shifts)
         ! construct
         allocate(motion_aniso(nframes), movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
-                &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_saved(nframes,POLY_DIM), shifts(nframes,POLY_DIM),&
-                &rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1))
+                &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_saved(nframes,POLY_DIM), shifts(nframes,POLY_DIM))
         opt_shifts_aniso       = 0.
         opt_shifts_aniso_saved = 0.
         shifts                 = 0.
-        rmat                   = 0.
-        rmat_sum               = 0.
         ! prepare the data structures for anisotropic correction
         ! save the isotropically corrected movie stack to disk
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%ifft
             call movie_frames_shifted(iframe)%write('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
         end do
-        ! prepare the images for anisotropic correction by band-pass filtering
-        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        ! prepare the images for anisotropic correction by scaling & band-pass filtering & create motion_aniso objs
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%fft
+            if( doscale ) call movie_frames_shifted(iframe)%clip_inplace(ldim4scale)
             call movie_frames_shifted(iframe)%bp(hp, lp)
             call movie_frames_shifted(iframe)%ifft
-        end do
-        !omp end parallel do
-        ! remember: this is NOT a threaded operation (no hidden parallelisation)
-        do iframe=1,nframes
-            call movie_sum_global_threads(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
+            call movie_sum_global_threads(iframe)%new(ldim4scale, smpd4scale, wthreads=.false.)
             call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
-            call motion_aniso(iframe)%new()
+            call motion_aniso(iframe)%new
         end do
         ! generate first average
         call gen_aniso_wsum_calc_corrs(0)
+
+        print *, 'generated first average'
+
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
         write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
@@ -531,6 +540,7 @@ contains
         write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! put back the unfiltered isotropically corrected frames for final anisotropic sum generation
         do iframe=1,nframes
+            call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
             call movie_frames_shifted(iframe)%read('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
             call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
         end do
@@ -547,9 +557,15 @@ contains
 
         subroutine gen_aniso_wsum_calc_corrs( imode )
             integer, intent(in) :: imode
-            real :: corr
-            rmat_sum  = 0.
+            real, allocatable   :: rmat(:,:,:), rmat_sum(:,:,:)
+            real    :: corr
+            integer :: ldim(3)
+            allocate( rmat(ldim4scale(1),ldim4scale(2),1), rmat_sum(ldim4scale(1),ldim4scale(2),1), source=0. )
             nimproved = 0
+
+
+
+
             ! FIRST LOOP TO OBTAIN WEIGHTED SUM
             !$omp parallel default(shared) private(iframe,rmat,corr) proc_bind(close)
             !$omp do schedule(static) reduction(+:rmat_sum)
@@ -558,6 +574,10 @@ contains
                 rmat_sum = rmat_sum + rmat * frameweights(iframe)
             end do
             !$omp end do nowait
+
+
+
+
             ! SECOND LOOP TO UPDATE movie_sum_global_threads AND CALCULATE CORRS
             !$omp do schedule(static) reduction(+:nimproved)
             do iframe=1,nframes
@@ -843,10 +863,10 @@ contains
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         if( do_dose_weight )then
-            sz = movie_frames_scaled(1)%get_filtsz()
+            sz = movie_frames_shifted_aniso(1)%get_filtsz()
             allocate(filtarr(nframes,sz))
             do iframe=1,nframes
-                filtarr(iframe,:) = acc_dose2filter(movie_frames_scaled(1), acc_doses(iframe), kV)
+                filtarr(iframe,:) = acc_dose2filter(movie_frames_shifted_aniso(1), acc_doses(iframe), kV)
             end do
         endif
         allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )

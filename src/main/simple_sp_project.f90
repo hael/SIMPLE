@@ -512,7 +512,7 @@ contains
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),               pointer     :: os_ptr
         character(len=LONGSTRLEN), allocatable :: movienames(:)
-        character(len=:),          allocatable :: name, moviename
+        character(len=:),          allocatable :: name
         character(len=LONGSTRLEN) :: rel_moviename
         integer                   :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
         logical                   :: is_movie
@@ -537,10 +537,10 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,moviename,rel_moviename)
+            call make_relativepath(CWD_GLOB,movienames(imic),rel_moviename)
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
             if( nframes <= 0 )then
-                THROW_WARN('# frames in movie: '//trim(moviename)//' <= zero, omitting')
+                THROW_WARN('# frames in movie: '//trim(movienames(imic))//' <= zero, omitting')
                 cycle
             else if( nframes > 1 )then
                 call os_ptr%set(imic, 'movie', trim(rel_moviename))
@@ -575,7 +575,6 @@ contains
                 case DEFAULT
                     THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_movies')
             end select
-            deallocate(moviename)
         enddo
         if( is_movie )then
             name = 'MOVIE(S)'

@@ -11,7 +11,6 @@ public :: motion_anisocor, POLY_DIM
 #include "simple_local_flags.inc"
 
 real,    parameter                  :: TOL      = 1e-7      !< tolerance parameter
-integer, parameter                  :: MAXITS   = 30        !< maximum number of iterations
 integer, parameter                  :: POLY_DIM = 12        !< dimensionality of polynomial dome model
 
 type :: motion_anisocor
@@ -379,8 +378,8 @@ contains
     !> Initialise  ftexp_shsrch
     subroutine motion_anisocor_new( self, motion_correct_ftol, motion_correct_gtol )
         class(motion_anisocor), intent(inout) :: self
-        real,       optional, intent(in) :: motion_correct_ftol, motion_correct_gtol
-        type(opt_factory) :: ofac                 !< optimizer factory
+        real,         optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
+        type(opt_factory) :: ofac !< optimizer factory
         integer           :: i
         real              :: lims(POLY_DIM,2)
         call self%kill()
