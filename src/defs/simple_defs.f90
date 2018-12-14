@@ -38,13 +38,13 @@ character(len=*), parameter   :: LOGFNAME   = 'simple.log' !< log file name
 integer                       :: logfhandle = OUTPUT_UNIT  !< log file handle, default to STDOUT
 logical, parameter            :: STDOUT2LOG = .false.
 
- ! other global variables
+! other global variables
 integer                       :: nthr_glob         !< number of threads global variable
 logical                       :: l_distr_exec_glob !< global distributed execution flag
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
 
-! ! plan for the CTF
+! plan for the CTF
 type ctfplan
    character(len=STDLEN) :: mode=''                !< astig/noastig
    character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
@@ -62,7 +62,7 @@ enum, bind(c)
     enumerator :: CTFFLAG_NO = 0, CTFFLAG_YES = 1,  CTFFLAG_FLIP = 2
 end enum
 
-! Objective function
+! Objective function type
 enum, bind(c)
     enumerator :: ENUM_OBJFUN= -1
     enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2
@@ -154,12 +154,12 @@ integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further 
 integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
 integer, parameter :: MINNPEAKS            = 6         !< minimum # of peaks in soft assignment
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
-integer, parameter :: GRIDCORR_MAXITS      = 5         !< # iterations for reconstruction gridding correction
+integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 
 ! criterion for even/odd averaging in gold-FSC
-real,    parameter :: FSC4EOAVG3D = 0.9                !< corr criterium for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
 integer, parameter :: K4EOAVGLB   = 4                  !< Fourier index lower-bound
 
@@ -171,7 +171,6 @@ integer, parameter :: SZSN_MAX   = 20
 ! computer related
 integer, parameter :: JOB_MEMORY_PER_TASK_DEFAULT = 16000
 integer, parameter :: TIME_PER_IMAGE_DEFAULT      = 100
-
 
 ! precision constants
 #ifndef IMAGE_SINGLE_PRECISION

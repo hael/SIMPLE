@@ -65,7 +65,7 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        logical, parameter            :: L_BENCH = .false.
+        logical, parameter            :: L_BENCH = .true.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_gen_projection_frcs, t_gen_anisotropic_optlp
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
@@ -102,7 +102,7 @@ contains
         endif
         do ss=1,params%nstates
             if( cline%defined('state') )then
-                s     = 1        ! index in reconstruct3D
+                s     = 1             ! index in reconstruct3D
                 state = params%state  ! actual state
             else
                 s     = ss
@@ -284,7 +284,7 @@ contains
 
             subroutine correct_for_sampling_density( recname )
                 character(len=*), intent(in) :: recname
-                call build%recvol%sampl_dens_correct()
+                call build%recvol%sampl_dens_correct
                 call build%recvol%ifft()
                 call build%recvol%clip(build%vol)
                 call build%vol%write(recname, del_if_exists=.true.)

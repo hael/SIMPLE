@@ -1402,7 +1402,7 @@ contains
         integer,           intent(in)    :: phys(3)
         real,              intent(in)    :: rval
         if( abs(rval) > 1.e-6 )then
-            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / cmplx(rval,0.)
+            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) / rval
         else
             self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
         endif
@@ -1413,7 +1413,7 @@ contains
         integer,      intent(in) :: h,k,l
         real,         intent(in) :: rval
         if( abs(rval) > 1.e-6 )then
-            self%cmat(h,k,l) = self%cmat(h,k,l) / cmplx(rval,0.)
+            self%cmat(h,k,l) = self%cmat(h,k,l) / rval
         else
             self%cmat(h,k,l) =cmplx(0.,0.)
         end if
@@ -2068,7 +2068,6 @@ contains
         self%rmat(i,j,k) = self%rmat(i,j,k)+rcomp
     end subroutine add_3
 
-    !>  \brief add_4 is for componentwise weighted summation with kernel division, not overloaded
     subroutine add_4( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -2196,7 +2195,6 @@ contains
         if( present(phys_out) ) phys_out = phys
     end subroutine subtr_2
 
-    !>  \brief subtr_3 is for componentwise weighted subtraction with kernel division, not overloaded
     subroutine subtr_3( self, logi, comp, w, k )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
@@ -2439,11 +2437,7 @@ contains
         if( self%ft )then
             phys = self%fit%comp_addr_phys(logi)
             if( abs(k(phys(1),phys(2),phys(3))) > 1e-6 )then
-                if( square )then
-                    self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/(k(phys(1),phys(2),phys(3))**2.)
-                else
-                    self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k(phys(1),phys(2),phys(3))
-                endif
+                self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))/k(phys(1),phys(2),phys(3))
             else
                 self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.) ! this is desirable for kernel division
             endif

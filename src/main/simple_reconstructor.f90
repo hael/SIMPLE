@@ -541,22 +541,21 @@ contains
 
     !>  is for uneven distribution of orientations correction
     !>  from Pipe & Menon 1999
-    subroutine sampl_dens_correct( self, maxits )
+    subroutine sampl_dens_correct( self )
         use simple_gridding, only: mul_w_instr
         class(reconstructor), intent(inout) :: self
-        integer,    optional, intent(in)    :: maxits
         type(kbinterpol)   :: kbwin
         type(image)        :: W_img, Wprev_img
-        real               :: winsz, val_prev, val, invrho
-        integer            :: h, k, m, phys(3), iter, maxits_here
+        real, allocatable  :: antialw(:)
+        real               :: winsz, val_prev, val, invrho, rsh_sq, w
+        integer            :: h, k, m, phys(3), iter, sh
         complex, parameter :: one   = cmplx(1.,0.)
         complex, parameter :: zero  = cmplx(0.,0.)
-        maxits_here = GRIDCORR_MAXITS
-        if( present(maxits) )maxits_here = maxits
         ! kernel
-        winsz = max(1., 2.*self%kbwin%get_winsz())
-        kbwin = kbinterpol(winsz, self%alpha)
-        if( maxits_here > 0 )then
+        winsz   = max(1., 2.*self%kbwin%get_winsz())
+        kbwin   = kbinterpol(winsz, self%alpha)
+        antialw = self%hannw()
+        if( GRIDCORR_MAXITS > 0 )then
             call W_img%new(self%ldim_img, self%get_smpd())
             call Wprev_img%new(self%ldim_img, self%get_smpd())
             call W_img%set_ft(.true.)
@@ -577,7 +576,7 @@ contains
             end do
             !$omp end parallel do
             W_img = one ! weights init to 1.
-            do iter = 1, maxits_here
+            do iter = 1, GRIDCORR_MAXITS
                 Wprev_img = W_img
                 ! W <- W * rho
                 !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -618,13 +617,21 @@ contains
             call Wprev_img%kill
             ! Fourier comps / rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,invrho) proc_bind(close)
+            !$omp private(h,k,m,phys,rsh_sq,sh,invrho,w) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
+                        rsh_sq = real(h*h + k*k + m*m)
+                        sh     = nint(sqrt(rsh_sq))
                         phys   = W_img%comp_addr_phys(h, k, m)
-                        invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
-                        call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho)
+                        if( sh > self%sh_lim )then
+                            ! outside Nyqvist, zero
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                        else
+                            w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
+                            invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
+                            call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho * w)
+                        endif
                     end do
                 end do
             end do
@@ -632,15 +639,18 @@ contains
         else
             ! division by rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys) proc_bind(close)
+            !$omp private(h,k,m,phys,rsh_sq,sh) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        phys = self%comp_addr_phys(h, k, m )
-                        if( self%rho(phys(1),phys(2),phys(3)) < 1.e-20 )then
+                        rsh_sq = real(h*h + k*k + m*m)
+                        sh     = nint(sqrt(rsh_sq))
+                        phys   = self%comp_addr_phys(h, k, m )
+                        if( sh > self%sh_lim )then
+                            ! outside Nyqvist, zero
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
                         else
-                            call self%mul_cmat_at(phys(1),phys(2),phys(3), 1./self%rho(phys(1),phys(2),phys(3)))
+                            call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
                         endif
                     end do
                 end do

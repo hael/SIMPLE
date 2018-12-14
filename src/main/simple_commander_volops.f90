@@ -298,7 +298,7 @@ contains
             call imgs(i)%write(params%outstk,i)
         end do
         call build%spproj_field%write('reproject_oris'//trim(TXT_EXT), [1,params%nptcls])
-        call simple_end('**** SIMPLE_PROJECT NORMAL STOP ****')
+        call simple_end('**** SIMPLE_REPROJECT NORMAL STOP ****')
     end subroutine exec_reproject
 
     !> volume calculations and operations - incl Guinier, snr, mirror or b-factor
