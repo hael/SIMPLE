@@ -51,6 +51,7 @@ logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
+logical                        :: l_fastinterp  = .false.       !< interpolation type, convolution by default
 logical                        :: exists        = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ   = 50
@@ -110,6 +111,8 @@ contains
         ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3) = 1
         filtsz     = build_glob%img%get_filtsz()
+        ! interpolation
+        l_fastinterp = trim(params_glob%wfun).eq.'bilinear'
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -356,10 +359,10 @@ contains
         integer,     allocatable      :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,     allocatable      :: ioris(:), cyc1(:), cyc2(:)
         complex   :: zero, fcomp
-        real      :: loc(2), mat(2,2), pw, add_phshift
-        integer   :: lims(3,2), nyq, lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz
-        integer   :: alloc_stat, wdim, h, k, l, m, incr, icls, iptcl, batchsz_max
+        real      :: loc(2), mat(2,2), dist(2), pw, add_phshift
+        integer   :: lims(3,2), lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
+        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq, nyq_sq
+        integer   :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
@@ -404,6 +407,7 @@ contains
         cmat_even  = cgrid_imgs(1)%get_cmat()
         cmat_odd   = cgrid_imgs(1)%get_cmat()
         nyq        = cgrid_imgs(1)%get_lfny(1)
+        nyq_sq     = nyq**2
         cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
@@ -447,7 +451,7 @@ contains
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                 if( L_BENCH ) t_gridding = tic()
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                !$omp private(fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
+                !$omp private(fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
                 do i=1,batchsz
                     iprec = iprecs(batches(batch,1) + i - 1)
@@ -493,43 +497,73 @@ contains
                     call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! rotation
                     call rotmat2d(-precs(iprec)%e3s(iori), mat)
-                    ! Fourier components loop
-                    do h=lims(1,1),lims(1,2)
-                        do k=lims(2,1),lims(2,2)
-                            sh = nint(hyp(real(h),real(k)))
-                            if( sh > nyq + 1 )cycle
-                            loc = matmul(real([h,k]),mat)
-                            win_corner = nint(loc) - iwinsz
-                            ! weights kernel
-                            w = 1.
-                            do l=1,wdim
-                                incr = l - 1
-                                ! circular addresses
-                                cyc1(l) = cyci_1d(cyc_limsR(:,1), win_corner(1) + incr)
-                                cyc2(l) = cyci_1d(cyc_limsR(:,2), win_corner(2) + incr)
-                                ! interpolation kernel matrix
-                                w(l,:) = w(l,:) * kbwin%apod( real(win_corner(1) + incr) - loc(1) )
-                                w(:,l) = w(:,l) * kbwin%apod( real(win_corner(2) + incr) - loc(2) )
-                            enddo
-                            w = pw * w / sum(w)
-                            ! interpolation
-                            fcomp = zero
-                            do l=1,wdim
-                                do m=1,wdim
-                                    if( w(l,m) < TINY ) cycle
-                                    fcomp = fcomp + cgrid_imgs(i)%get_fcomp2D(cyc1(l),cyc2(m)) * w(l,m)
-                                end do
+                    ! Interpolation
+                    if( l_fastinterp )then
+                        ! bi-linear interpolation
+                        do h=lims(1,1),lims(1,2)
+                            do k=lims(2,1),lims(2,2)
+                                if( h*h+k*k > nyq_sq )cycle
+                                loc = matmul(real([h,k]),mat)
+                                ! interpolation
+                                win_corner = floor(loc) ! bottom left corner
+                                dist  = loc - real(win_corner)
+                                l     = cyci_1d(cyc_limsR(:,1), win_corner(1))
+                                ll    = cyci_1d(cyc_limsR(:,1), win_corner(1)+1)
+                                m     = cyci_1d(cyc_limsR(:,2), win_corner(2))
+                                mm    = cyci_1d(cyc_limsR(:,2), win_corner(2)+1)
+                                fcomp =         (1.-dist(1))*(1.-dist(2)) * cgrid_imgs(i)%get_fcomp2D(l, m)  ! bottom left corner
+                                fcomp = fcomp + (1.-dist(1))*dist(2)      * cgrid_imgs(i)%get_fcomp2D(l, mm) ! bottom right corner
+                                fcomp = fcomp + dist(1)*(1.-dist(2))      * cgrid_imgs(i)%get_fcomp2D(ll,m)  ! upper left corner
+                                fcomp = fcomp + dist(1)*dist(2)           * cgrid_imgs(i)%get_fcomp2D(ll,mm) ! upper right corner
+                                ! addition
+                                phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
+                                select case(precs(iprec)%eo)
+                                    case(0,-1)
+                                        cmat_even(phys_cmat(1),phys_cmat(2),1) = cmat_even(phys_cmat(1),phys_cmat(2),1) + pw*fcomp
+                                    case(1)
+                                        cmat_odd(phys_cmat(1),phys_cmat(2),1)  = cmat_odd(phys_cmat(1),phys_cmat(2),1)  + pw*fcomp
+                                end select
                             end do
-                            ! addition
-                            phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
-                            select case(precs(iprec)%eo)
-                            case(0,-1)
-                                cmat_even(phys_cmat(1),phys_cmat(2),1) = cmat_even(phys_cmat(1),phys_cmat(2),1) + fcomp
-                            case(1)
-                                cmat_odd(phys_cmat(1),phys_cmat(2),1) = cmat_odd(phys_cmat(1),phys_cmat(2),1) + fcomp
-                            end select
                         end do
-                    end do
+                    else
+                        ! convolution interpolation
+                        do h=lims(1,1),lims(1,2)
+                            do k=lims(2,1),lims(2,2)
+                                sh = nint(hyp(real(h),real(k)))
+                                if( sh > nyq + 1 )cycle
+                                loc = matmul(real([h,k]),mat)
+                                win_corner = nint(loc) - iwinsz
+                                ! weights kernel
+                                w = 1.
+                                do l=1,wdim
+                                    incr = l - 1
+                                    ! circular addresses
+                                    cyc1(l) = cyci_1d(cyc_limsR(:,1), win_corner(1) + incr)
+                                    cyc2(l) = cyci_1d(cyc_limsR(:,2), win_corner(2) + incr)
+                                    ! interpolation kernel matrix
+                                    w(l,:) = w(l,:) * kbwin%apod( real(win_corner(1) + incr) - loc(1) )
+                                    w(:,l) = w(:,l) * kbwin%apod( real(win_corner(2) + incr) - loc(2) )
+                                enddo
+                                w = pw * w / sum(w)
+                                ! interpolation
+                                fcomp = zero
+                                do l=1,wdim
+                                    do m=1,wdim
+                                        if( w(l,m) < TINY ) cycle
+                                        fcomp = fcomp + cgrid_imgs(i)%get_fcomp2D(cyc1(l),cyc2(m)) * w(l,m)
+                                    end do
+                                end do
+                                ! addition
+                                phys_cmat = cgrid_imgs(i)%comp_addr_phys([h,k,0])
+                                select case(precs(iprec)%eo)
+                                case(0,-1)
+                                    cmat_even(phys_cmat(1),phys_cmat(2),1) = cmat_even(phys_cmat(1),phys_cmat(2),1) + fcomp
+                                case(1)
+                                    cmat_odd(phys_cmat(1),phys_cmat(2),1) = cmat_odd(phys_cmat(1),phys_cmat(2),1) + fcomp
+                                end select
+                            end do
+                        end do
+                    endif
                 enddo
                 !$omp end parallel do
                 if( L_BENCH ) rt_gridding = rt_gridding + toc(t_gridding)

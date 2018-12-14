@@ -117,8 +117,13 @@ contains
         endif
 
         ! CHUNKS
-        ! TODO
         chunk_id = 1
+        ! in dev
+        ! if( cline%defined('chunksz') .and. which_iter<=5 )then
+        !     do iptcl=params_glob%fromp,params_glob%top
+        !         chunk_id(iptcl) = mod(iptcl,params_glob%chunksz)+1
+        !     enddo
+        ! endif
 
         ! B-FACTOR
         bfactor = 0.
@@ -353,15 +358,21 @@ contains
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
                 call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
-                if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
-                    ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
-                    ! here we are passing in the shifts and do NOT map them back to classes
-                    call prep2Dref( cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
-                    call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+                if( params_glob%l_eo )then
+                    if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
+                        ! here we are passing in the shifts and do NOT map them back to classes
+                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
+                        ! here we are passing in the shifts and do NOT map them back to classes
+                        call prep2Dref( cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
+                    else
+                        ! put the merged class average in both even and odd positions
+                        call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
+                        call pftcc%cp_even2odd_ref(icls)
+                    endif
                 else
-                    ! put the merged class average in both even and odd positions
+                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif

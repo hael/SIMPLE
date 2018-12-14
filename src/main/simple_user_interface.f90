@@ -65,10 +65,11 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(66)
+type(simple_prg_ptr) :: prg_ptr_array(67)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
+type(simple_program), target :: cleanup2D
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
@@ -227,6 +228,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_center
+        call new_cleanup2D
         call new_cluster2D
         call new_cluster2D_stream
         call new_cluster3D
@@ -298,71 +300,72 @@ contains
 
     subroutine set_prg_ptr_array
         prg_ptr_array(1)%ptr2prg  => center
-        prg_ptr_array(2)%ptr2prg  => cluster2D
-        prg_ptr_array(3)%ptr2prg  => cluster2D_stream
-        prg_ptr_array(4)%ptr2prg  => cluster3D
-        prg_ptr_array(5)%ptr2prg  => cluster3D_refine
-        prg_ptr_array(6)%ptr2prg  => cluster_cavgs
-        prg_ptr_array(7)%ptr2prg  => convert
-        prg_ptr_array(8)%ptr2prg  => ctf_estimate
-        prg_ptr_array(9)%ptr2prg  => ctfops
-        prg_ptr_array(10)%ptr2prg => extract
-        prg_ptr_array(11)%ptr2prg => export_starproject
-        prg_ptr_array(12)%ptr2prg => filter
-        prg_ptr_array(13)%ptr2prg => fsc
-        prg_ptr_array(14)%ptr2prg => gen_pspecs_and_thumbs
-        prg_ptr_array(15)%ptr2prg => info_image
-        prg_ptr_array(16)%ptr2prg => info_stktab
-        prg_ptr_array(17)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(18)%ptr2prg => import_boxes
-        prg_ptr_array(19)%ptr2prg => import_cavgs
-        prg_ptr_array(20)%ptr2prg => import_movies
-        prg_ptr_array(21)%ptr2prg => import_particles
-        prg_ptr_array(22)%ptr2prg => import_starproject
-        prg_ptr_array(23)%ptr2prg => local_resolution
-        prg_ptr_array(24)%ptr2prg => local_resolution2D
-        prg_ptr_array(25)%ptr2prg => make_cavgs
-        prg_ptr_array(26)%ptr2prg => make_oris
-        prg_ptr_array(27)%ptr2prg => make_pickrefs
-        prg_ptr_array(28)%ptr2prg => mask
-        prg_ptr_array(29)%ptr2prg => mkdir_
-        prg_ptr_array(30)%ptr2prg => motion_correct
-        prg_ptr_array(31)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(32)%ptr2prg => new_project
-        prg_ptr_array(33)%ptr2prg => normalize_
-        prg_ptr_array(34)%ptr2prg => orisops
-        prg_ptr_array(35)%ptr2prg => oristats
-        prg_ptr_array(36)%ptr2prg => pick
-        prg_ptr_array(37)%ptr2prg => pick_extract_stream
-        prg_ptr_array(38)%ptr2prg => postprocess
-        prg_ptr_array(39)%ptr2prg => preprocess
-        prg_ptr_array(40)%ptr2prg => preprocess_stream
-        prg_ptr_array(41)%ptr2prg => print_fsc
-        prg_ptr_array(42)%ptr2prg => print_magic_boxes
-        prg_ptr_array(43)%ptr2prg => print_project_info
-        prg_ptr_array(44)%ptr2prg => print_project_field
-        prg_ptr_array(45)%ptr2prg => reproject
-        prg_ptr_array(46)%ptr2prg => reconstruct3D
-        prg_ptr_array(47)%ptr2prg => reextract
-        prg_ptr_array(48)%ptr2prg => refine3D
-        prg_ptr_array(49)%ptr2prg => refine3D_init
-        prg_ptr_array(50)%ptr2prg => report_selection
-        prg_ptr_array(51)%ptr2prg => scale
-        prg_ptr_array(52)%ptr2prg => scale_project
-        prg_ptr_array(53)%ptr2prg => select_
-        prg_ptr_array(54)%ptr2prg => shift
-        prg_ptr_array(55)%ptr2prg => simulate_movie
-        prg_ptr_array(56)%ptr2prg => simulate_noise
-        prg_ptr_array(57)%ptr2prg => simulate_particles
-        prg_ptr_array(58)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(59)%ptr2prg => stack
-        prg_ptr_array(60)%ptr2prg => stackops
-        prg_ptr_array(61)%ptr2prg => symaxis_search
-        prg_ptr_array(62)%ptr2prg => symmetry_test
-        prg_ptr_array(63)%ptr2prg => tseries_track
-        prg_ptr_array(64)%ptr2prg => update_project
-        prg_ptr_array(65)%ptr2prg => vizoris
-        prg_ptr_array(66)%ptr2prg => volops
+        prg_ptr_array(2)%ptr2prg  => cleanup2D
+        prg_ptr_array(3)%ptr2prg  => cluster2D
+        prg_ptr_array(4)%ptr2prg  => cluster2D_stream
+        prg_ptr_array(5)%ptr2prg  => cluster3D
+        prg_ptr_array(6)%ptr2prg  => cluster3D_refine
+        prg_ptr_array(7)%ptr2prg  => cluster_cavgs
+        prg_ptr_array(8)%ptr2prg  => convert
+        prg_ptr_array(9)%ptr2prg  => ctf_estimate
+        prg_ptr_array(10)%ptr2prg  => ctfops
+        prg_ptr_array(11)%ptr2prg => extract
+        prg_ptr_array(12)%ptr2prg => export_starproject
+        prg_ptr_array(13)%ptr2prg => filter
+        prg_ptr_array(14)%ptr2prg => fsc
+        prg_ptr_array(15)%ptr2prg => gen_pspecs_and_thumbs
+        prg_ptr_array(16)%ptr2prg => info_image
+        prg_ptr_array(17)%ptr2prg => info_stktab
+        prg_ptr_array(18)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(19)%ptr2prg => import_boxes
+        prg_ptr_array(20)%ptr2prg => import_cavgs
+        prg_ptr_array(21)%ptr2prg => import_movies
+        prg_ptr_array(22)%ptr2prg => import_particles
+        prg_ptr_array(23)%ptr2prg => import_starproject
+        prg_ptr_array(24)%ptr2prg => local_resolution
+        prg_ptr_array(25)%ptr2prg => local_resolution2D
+        prg_ptr_array(26)%ptr2prg => make_cavgs
+        prg_ptr_array(27)%ptr2prg => make_oris
+        prg_ptr_array(28)%ptr2prg => make_pickrefs
+        prg_ptr_array(29)%ptr2prg => mask
+        prg_ptr_array(30)%ptr2prg => mkdir_
+        prg_ptr_array(31)%ptr2prg => motion_correct
+        prg_ptr_array(32)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(33)%ptr2prg => new_project
+        prg_ptr_array(34)%ptr2prg => normalize_
+        prg_ptr_array(35)%ptr2prg => orisops
+        prg_ptr_array(36)%ptr2prg => oristats
+        prg_ptr_array(37)%ptr2prg => pick
+        prg_ptr_array(38)%ptr2prg => pick_extract_stream
+        prg_ptr_array(39)%ptr2prg => postprocess
+        prg_ptr_array(40)%ptr2prg => preprocess
+        prg_ptr_array(41)%ptr2prg => preprocess_stream
+        prg_ptr_array(42)%ptr2prg => print_fsc
+        prg_ptr_array(43)%ptr2prg => print_magic_boxes
+        prg_ptr_array(44)%ptr2prg => print_project_info
+        prg_ptr_array(45)%ptr2prg => print_project_field
+        prg_ptr_array(46)%ptr2prg => reproject
+        prg_ptr_array(47)%ptr2prg => reconstruct3D
+        prg_ptr_array(48)%ptr2prg => reextract
+        prg_ptr_array(49)%ptr2prg => refine3D
+        prg_ptr_array(50)%ptr2prg => refine3D_init
+        prg_ptr_array(51)%ptr2prg => report_selection
+        prg_ptr_array(52)%ptr2prg => scale
+        prg_ptr_array(53)%ptr2prg => scale_project
+        prg_ptr_array(54)%ptr2prg => select_
+        prg_ptr_array(55)%ptr2prg => shift
+        prg_ptr_array(56)%ptr2prg => simulate_movie
+        prg_ptr_array(57)%ptr2prg => simulate_noise
+        prg_ptr_array(58)%ptr2prg => simulate_particles
+        prg_ptr_array(59)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(60)%ptr2prg => stack
+        prg_ptr_array(61)%ptr2prg => stackops
+        prg_ptr_array(62)%ptr2prg => symaxis_search
+        prg_ptr_array(63)%ptr2prg => symmetry_test
+        prg_ptr_array(64)%ptr2prg => tseries_track
+        prg_ptr_array(65)%ptr2prg => update_project
+        prg_ptr_array(66)%ptr2prg => vizoris
+        prg_ptr_array(67)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -372,6 +375,8 @@ contains
         select case(trim(which_program))
             case('center')
                 ptr2prg => center
+            case('cleanup2D')
+                ptr2prg => cleanup2D
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_stream')
@@ -508,6 +513,7 @@ contains
     end subroutine get_prg_ptr
 
     subroutine list_distr_prgs_in_ui
+        write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
@@ -758,6 +764,43 @@ contains
         call center%set_input('comp_ctrls', 1, nthr)
     end subroutine new_center
 
+    subroutine new_cleanup2D
+        ! PROGRAM SPECIFICATION
+        call cleanup2D%new(&
+        &'cleanp2D',&                                                          ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm',& ! descr_long
+        &'simple_distr_exec',&                                                  ! executable
+        &1, 0, 0, 4, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call cleanup2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
+        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cleanup2D%set_input('srch_ctrls', 1, ncls)
+        call cleanup2D%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call cleanup2D%set_input('srch_ctrls', 3, maxits)
+        call cleanup2D%set_input('srch_ctrls', 4, update_frac)
+        ! filter controls
+        call cleanup2D%set_input('filt_ctrls', 1, hp)
+        call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call cleanup2D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 15.)
+        ! mask controls
+        call cleanup2D%set_input('mask_ctrls', 1, msk)
+        cleanup2D%mask_ctrls(1)%required = .false.
+        ! computer controls
+        call cleanup2D%set_input('comp_ctrls', 1, nparts)
+        call cleanup2D%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cleanup2D
+
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
         call cluster2D%new(&
@@ -791,7 +834,6 @@ contains
         call cluster2D%set_input('srch_ctrls',10, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         call cluster2D%set_input('srch_ctrls',11, nrestarts)
         call cluster2D%set_input('srch_ctrls',12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
-
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

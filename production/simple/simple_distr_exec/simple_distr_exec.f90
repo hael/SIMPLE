@@ -25,6 +25,7 @@ type(pick_extract_stream_distr_commander)   :: xpick_extract_stream_distr
 type(make_cavgs_distr_commander)            :: xmake_cavgs_distr
 type(cluster2D_autoscale_commander)         :: xcluster2D_distr
 type(cluster2D_stream_distr_commander)      :: xcluster2D_stream_distr
+type(cleanup2D_commander)                   :: xcleanup2D_distr
 
 ! REFINE3D
 type(refine3D_init_distr_commander)         :: xrefine3D_init_distr
@@ -119,17 +120,25 @@ select case(prg)
 
     case( 'make_cavgs' )
         call xmake_cavgs_distr%execute(cline)
+    case( 'cleanup2D' )
+        if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
+        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      100. )
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     20. )
+        if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
+        call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
-        if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     50. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
-        if( .not. cline%defined('eo')        ) call cline%set('eo',         'no')
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call xcluster2D_stream_distr%execute(cline)

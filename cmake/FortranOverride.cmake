@@ -279,7 +279,7 @@ if (CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(warn     "-Waliasing -Wampersand  -Wsurprising -Wline-truncation -Wreal-q-constant ")
   #-Wconversion, -Wc-binding-type, -Wintrinsics-std, -Wtabs, -Wintrinsic-shadow -Wtarget-lifetime
   #-Wcompare-reals, -Wunused-parameter and -Wdo-subscript
-  set(checks   "-frange-check -fstack-protector -fstack-check -fbounds-check ")                # checks
+  set(checks   "-frange-check -fstack-protector -fstack-check -fbounds-check -fcheck=all -fcheck=array-temps ")                # checks
   set(forspeed "-O3 -ffrontend-optimize -fno-stack-protector -fno-lifetime-dse")                # optimisation
   set(forpar   "" )# -fopenmp  -Wp,-fopenmp")                                                   # parallel flags
   set(target   "${GNUNATIVE} -fPIC ")                                                           # target platform

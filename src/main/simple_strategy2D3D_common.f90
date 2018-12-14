@@ -194,7 +194,7 @@ contains
             params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
                 params_glob%boxmatch, params_glob%smpd)
             call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
-            params_glob%kstop      = params_glob%kfromto(2)
+            params_glob%kstop = params_glob%kfromto(2)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%projfrcs%estimate_lp_for_align()

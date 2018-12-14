@@ -34,8 +34,9 @@ contains
     subroutine prep_strategy2D( ptcl_mask, which_iter )
         logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer, intent(in)  :: which_iter
+        !integer, allocatable :: chunk_parts(:,:)
         type(ran_tabu)       :: rt
-        integer              :: iptcl,prev_class,cnt,nptcls
+        integer              :: iptcl,prev_class,cnt,nptcls,ipart
         nptcls = count(ptcl_mask)
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
@@ -47,6 +48,14 @@ contains
         endif
         ! chunks, 1 by default
         allocate(s2D%cls_chunk(params_glob%ncls), source=1)
+        ! in dev
+        ! if( params_glob%chunksz>1 .and. which_iter<=5 )then
+        !     chunk_parts = split_nobjs_even(params_glob%ncls,params_glob%chunksz)
+        !     do ipart=1,params_glob%chunksz
+        !         s2D%cls_chunk(chunk_parts(ipart,1):chunk_parts(ipart,2)) = ipart
+        !     enddo
+        !     deallocate(chunk_parts)
+        ! endif
         ! in plane search
         allocate(s2D%do_inplsrch(1:nptcls), source=params_glob%l_doshift)
         ! stochastic search order

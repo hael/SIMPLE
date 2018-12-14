@@ -7,6 +7,7 @@ use simple_sp_project,     only: sp_project
 use simple_parameters,     only: parameters
 implicit none
 
+public :: cleanup2D_commander
 public :: cluster2D_autoscale_commander
 public :: initial_3Dmodel_commander
 public :: cluster3D_commander
@@ -14,6 +15,10 @@ public :: cluster3D_refine_commander
 private
 #include "simple_local_flags.inc"
 
+type, extends(commander_base) :: cleanup2D_commander
+  contains
+    procedure :: execute      => exec_cleanup2D
+end type cleanup2D_commander
 type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
     procedure :: execute      => exec_cluster2D_autoscale
@@ -32,6 +37,124 @@ type, extends(commander_base) :: cluster3D_refine_commander
 end type cluster3D_refine_commander
 
 contains
+
+    ! !> for distributed
+    subroutine exec_cleanup2D( self, cline )
+        use simple_commander_distr_wflows, only: cluster2D_distr_commander,scale_project_distr_commander
+        use simple_commander_imgproc,      only: scale_commander
+        use simple_commander_cluster2D,    only: rank_cavgs_commander
+        class(cleanup2D_commander), intent(inout) :: self
+        class(cmdline),             intent(inout) :: cline
+        ! commanders
+        type(cluster2D_distr_commander)     :: xcluster2D_distr
+        type(scale_commander)               :: xscale
+        type(scale_project_distr_commander) :: xscale_distr
+        type(rank_cavgs_commander)          :: xrank_cavgs
+        ! command lines
+        type(cmdline)                       :: cline_cluster2D, cline_rank_cavgs, cline_scalerefs, cline_scale
+        ! other variables
+        type(parameters)                    :: params
+        type(sp_project)                    :: spproj, spproj_sc
+        character(len=:),       allocatable :: projfile_sc
+        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, refs_sc
+        real                                :: scale_factor, smpd_target, smpd_sc, msk_sc, ring2_sc
+        integer                             :: nparts, last_iter
+        logical                             :: do_scaling
+        ! parameters
+        integer,                  parameter :: target_box = 64
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        call params%new(cline)
+        nparts = params%nparts
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! read project file
+        call spproj%read(params%projfile)
+        ! sanity checks
+        if( spproj%get_nptcls() == 0 )then
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
+        endif
+        ! delete any previous solution
+        call spproj%os_ptcl2D%delete_2Dclustering
+        call spproj%write_segment_inside(params%oritype)
+        ! splitting
+        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! Scaling
+        do_scaling   = params%box > target_box
+        scale_factor = 1.
+        if( do_scaling )then
+            do_scaling = .true.
+            smpd_target = params%smpd * real(params%box) / real(target_box)
+            call spproj%scale_projfile(smpd_target, projfile_sc, cline_cluster2D, cline_scale, dir=trim(STKPARTSDIR))
+            call spproj%kill
+            scale_factor = cline_scale%get_rarg('scale')
+            smpd_sc      = cline_scale%get_rarg('smpd')
+            call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
+            call xscale_distr%execute( cline_scale )
+            ! scale references
+            if( cline%defined('refs') )then
+                call cline_scalerefs%set('stk', trim(params%refs))
+                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+                call cline_scalerefs%set('outstk', trim(refs_sc))
+                call cline_scalerefs%set('smpd', params%smpd)
+                call cline_scalerefs%set('newbox', cline_scale%get_rarg('newbox'))
+                call xscale%execute(cline_scalerefs)
+                call cline_cluster2D%set('refs',trim(refs_sc))
+            endif
+            msk_sc = real(target_box/2-COSMSKHALFWIDTH+1)
+        else
+            smpd_sc     = params%smpd
+            projfile_sc = trim(params%projfile)
+            msk_sc      = real(params%box/2-COSMSKHALFWIDTH+1)
+        endif
+        ring2_sc = 0.7*msk_sc
+        if( cline%defined('msk') ) msk_sc = scale_factor*params%msk
+        ! high down-scaling for fast execution, SHC optimisation for
+        !          improved population distribution of clusters, no incremental learning,
+        !          objective function is standard cross-correlation (cc)
+        cline_cluster2D = cline
+        call cline_cluster2D%set('prg',        'cluster2D')
+        call cline_cluster2D%set('msk',        msk_sc)
+        call cline_cluster2D%set('ring2',      ring2_sc)
+        call cline_cluster2D%set('refine',     'greedy')
+        call cline_cluster2D%set('objfun',     'cc')
+        call cline_cluster2D%set('match_filt', 'no')
+        call cline_cluster2D%set('wfun',       'bilinear')
+        call cline_cluster2D%delete('locres')
+        ! execution
+        call cline_cluster2D%set('projfile', trim(projfile_sc))
+        call xcluster2D_distr%execute(cline_cluster2D)
+        last_iter  = nint(cline_cluster2D%get_rarg('endit'))
+        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+        ! update original project
+        if( do_scaling )then
+            call spproj_sc%read_segment(params%oritype, projfile_sc)
+            call spproj_sc%read_segment('cls2D', projfile_sc)
+            call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
+            call spproj%read(params%projfile)
+            spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+            spproj%os_cls2D = spproj_sc%os_cls2D
+            call spproj%add_cavgs2os_out(trim(finalcavgs), smpd_sc, imgkind='cavg')
+            call spproj%write(params%projfile)
+        else
+            call spproj%read_segment('out', params%projfile)
+            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+            call spproj%write_segment_inside('out', params%projfile)
+        endif
+        call spproj_sc%kill()
+        call spproj%kill()
+        ! ranking
+        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
+        call cline_rank_cavgs%set('projfile', trim(params%projfile))
+        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
+        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
+        call xrank_cavgs%execute( cline_rank_cavgs )
+        ! cleanup
+        call del_file(trim(projfile_sc))
+        call simple_rmdir(STKPARTSDIR)
+        call del_file('start2Drefs'//params%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
+    end subroutine exec_cleanup2D
 
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )
@@ -58,10 +181,10 @@ contains
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
-        character(len=:), allocatable :: projfile_sc, stk
+        character(len=:), allocatable :: projfile_sc
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2
-        integer  :: istk, nparts, last_iter_stage1, last_iter_stage2
+        integer  :: nparts, last_iter_stage1, last_iter_stage2
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
@@ -138,13 +261,7 @@ contains
                 call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
                 ! clean stacks
-                call spproj_sc%read_segment( 'stk', projfile_sc )
-                do istk=1,spproj_sc%os_stk%get_noris()
-                    call spproj_sc%os_stk%getter(istk, 'stk', stk)
-                    call del_file(trim(stk))
-                enddo
-                call spproj_sc%kill()
-                call del_file(trim(projfile_sc))
+                call simple_rmdir(STKPARTSDIR)
             endif
             deallocate(projfile_sc)
             ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
@@ -188,11 +305,7 @@ contains
                 call spproj%write_segment_inside('ptcl2D')
                 call spproj%kill()
                 ! clean stacks
-                call spproj_sc%read_segment( 'stk', projfile_sc )
-                do istk=1,spproj_sc%os_stk%get_noris()
-                    call spproj_sc%os_stk%getter(istk, 'stk', stk)
-                    call del_file(trim(stk))
-                enddo
+                call simple_rmdir(STKPARTSDIR)
                 call spproj_sc%kill()
                 call del_file(trim(projfile_sc))
                 ! original scale references

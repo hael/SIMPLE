@@ -577,8 +577,8 @@ contains
         real                  :: shvec(3)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        ! center volume
         call build%vol%read(params%vols(1))
+        ! center volume
         shvec = 0.
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
@@ -587,7 +587,11 @@ contains
             call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
-        call build%vol%mask(params%msk, 'soft')
+        if( params_glob%l_innermsk )then
+            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+        else
+            call build%vol%mask(params%msk, 'soft')
+        endif
         ! init search object
         call volpft_symsrch_init(build%vol, params%pgrp, params%hp, params%lp)
         ! search
@@ -660,17 +664,19 @@ contains
         integer, parameter    :: MAXBOX = 256
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        ! center volume
         call build%vol%read(params%vols(1))
         ! possible downscaling of input vol
         ldim = build%vol%get_ldim()
+        scale = 1.
         if( ldim(1) > MAXBOX )then
             scale = real(MAXBOX) / real(ldim(1))
             call build%vol%fft
             call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
             call build%vol%ifft
-            params%smpd = build%vol%get_smpd()
-            params%msk  = round2even(scale * params%msk)
+            params%smpd  = build%vol%get_smpd()
+            params%msk   = round2even(scale * params%msk)
+            params%inner = round2even(scale * params%inner)
+            params%width = scale * params%width
         endif
         ! low-pass limit safety
         params%lp = max(2. * params%smpd, params%lp)
@@ -683,7 +689,11 @@ contains
             call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
-        call build%vol%mask(params%msk, 'soft')
+        if( params_glob%l_innermsk )then
+            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+        else
+            call build%vol%mask(params%msk, 'soft')
+        endif
         ! run test
         call symmetry_tester(build%vol, params%msk, params%hp,&
         &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp_best)
