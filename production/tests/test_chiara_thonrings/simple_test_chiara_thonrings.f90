@@ -1,4 +1,4 @@
-module simple_test_chiara_thonrings
+module simple_test_chiara_thonrings_mod
   include 'simple_lib.f08'
   use simple_image, only : image
   implicit none
@@ -18,13 +18,13 @@ module simple_test_chiara_thonrings
           !          -) 4 - 3
           !          -) 3 - NyFr
       end subroutine build_resolutions_vector
-end module simple_test_chiara_thonrings
+end module simple_test_chiara_thonrings_mod
 
-program simple_test_chiara_try
+program simple_test_chiara_thonrings
   include 'simple_lib.f08'
   use simple_image
   use simple_math
-  use simple_test_chiara_thonrings
+  use simple_test_chiara_thonrings_mod
   integer :: i, j, ldim(3)
   real :: matrix(7,7,1)
   integer            :: sh, h, k, ind(2)
@@ -71,4 +71,4 @@ call vis_mat(vector)
 where(counter > 0) vector(:,1) = vector(:,1) / counter(:)
 print *, 'vector normalized'
 call vis_mat(vector)
-end program simple_test_chiara_try
+end program simple_test_chiara_thonrings

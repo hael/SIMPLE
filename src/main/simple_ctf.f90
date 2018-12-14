@@ -351,17 +351,20 @@ contains
         end select
     end subroutine apply_serial
 
-    !>  \brief  is for applycation of wiener filter with SNR exponential assumption
-    subroutine wienerlike_restoration(self, img, ctfparms)
+    !>  \brief  is for applycation of wiener-like filter with SNR exponential assumption
+    subroutine wienerlike_restoration(self, img, ctfparms, b_fac)
         use simple_image, only: image
-        class(ctf),       intent(inout) :: self        !< instance
-        class(image),     intent(inout) :: img         !< image (output)
-        type(ctfparams),  intent(in)    :: ctfparms    !< CTF parameters
-        integer :: lims(3,2),h,k,phys(3),ldim(3)
+        class(ctf),        intent(inout) :: self        !< instance
+        class(image),      intent(inout) :: img         !< image (output)
+        type(ctfparams),   intent(in)    :: ctfparms    !< CTF parameters
+        integer, optional, intent(in)    :: b_fac       !< b_fact value
+        integer :: lims(3,2),h,k,phys(3),ldim(3), bb_fac
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         logical :: is_in_time
         integer :: nyq, sh
         real    :: w, snr, r
+        bb_fac = -50 !default value
+        if(present(b_fac)) bb_fac = b_fac
         !fft controls
         if(.not. img%is_ft()) call img%fft(); is_in_time = .true.
         ! init object
@@ -379,7 +382,7 @@ contains
                 r         = sqrt(spaFreqSq)
                 ang       = atan2(real(k),real(h))
                 tval      = self%eval(spaFreqSq, ang, ctfparms%phshift)
-                snr       = exp(-100.*r/ctfparms%smpd)
+                snr       = exp(bb_fac*r/ctfparms%smpd)
                 if(snr < 1.e-10) then
                     w = 0.
                 else

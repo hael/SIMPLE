@@ -205,8 +205,6 @@ contains
     procedure          :: increment
     procedure          :: bin2logical
     procedure          :: collage
-    procedure, private :: enumerate_white_pixels
-    procedure, private :: enumerate_connected_comps
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
     ! procedure          :: is_cc_closed
@@ -280,7 +278,6 @@ contains
     procedure, private :: oshift_2
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
-    ! procedure          :: median_value
     ! MODIFIERS
     procedure          :: insert
     procedure          :: insert_lowres
@@ -3191,86 +3188,73 @@ contains
         call img_pad%kill()
     end subroutine collage
 
-    ! This subroutine creates the initial label map of a binary image in order
-    ! to identify the connected components of the image
-    subroutine enumerate_white_pixels(self, label_matrix)
-        class(image),      intent(in)   :: self
-        real, allocatable, intent(out)  :: label_matrix(:,:,:)
-        integer           :: i, j, cnt
-        if( allocated(label_matrix) ) deallocate(label_matrix)
-        allocate(label_matrix(self%ldim(1),self%ldim(2),1), source = 0.)
-        cnt = 0 ! # labels
-        do i = 1, self%ldim(1)
-            do j = 1, self%ldim(2)
-                if( self%rmat(i,j,1) > 0.5 )then
-                    cnt = cnt + 1
-                    label_matrix(i,j,1) = cnt
-                endif
-            enddo
-        enddo
-    end subroutine enumerate_white_pixels
-
-
-
-    !This subroutine enumerates (increasing order) the connected components
-    !of the image. This connected components are selected by
-    !'find_connected_comps' procedure.
-    subroutine enumerate_connected_comps(self_in, self_out)
-        class(image), intent(inout) :: self_in
-        class(image), intent(out)   :: self_out
-        integer :: i, j, cnt
-        real    :: tmp
-        if(self_out%existence) call self_out%kill()  !Reset if present
-        call self_out%new(self_in%ldim,self_in%smpd)
-        if(self_in%ldim(3) /= 1) THROW_HARD('enumerate_connected_comps. Only for 2D images!')
-        cnt = 0   !it is going to be the new label of the connected component
-        do i = 1, self_in%ldim(1)
-            do j = 1, self_in%ldim(2)
-                if( self_in%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
-                    cnt = cnt + 1
-                    tmp = self_in%rmat(i,j,1)
-                    where(self_in%rmat == tmp)
-                        self_out%rmat = cnt
-                        self_in%rmat  = 0.            !Not to consider this cc again
-                    endwhere
-                endif
-            enddo
-        enddo
-    end subroutine enumerate_connected_comps
-
     ! Img_in should be a binary image. Img_out is the connected component image.
     subroutine find_connected_comps(img_in, img_out)
         class(image), intent(in)  :: img_in
         type(image),  intent(out) :: img_out
         type(image)       :: img_cc   !in this img will be stored the cc with no specific order
-        real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:),neigh_8(:)
-        integer           :: i, j, n_it, n_maxit
+        real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:)
+        real              :: neigh_8(9), tmp, diff
+        integer           :: i, j, ii, jj, n_it, n_maxit, nsz, cnt
         logical           :: finished_job
-        if(img_out%existence) call img_out%kill()
-        finished_job = .false.
         call img_cc%new (img_in%ldim,img_in%smpd)
-        allocate(mat4compare(img_in%ldim(1),img_in%ldim(2),1), source = 0.)
-        call enumerate_white_pixels(img_in, label_matrix)
-        call img_cc%set_rmat(label_matrix)
-        n_maxit = maxval(label_matrix)
+        call img_out%new (img_in%ldim,img_in%smpd)
+        ! enumerate white pixels
+        cnt     = 0 ! # labels
+        n_maxit = 0
+        do i = 1, img_in%ldim(1)
+            do j = 1, img_in%ldim(2)
+                if( img_in%rmat(i,j,1) > 0.5 )then
+                    cnt = cnt + 1
+                    img_cc%rmat(i,j,1) = real(cnt)
+                    n_maxit = max(cnt,n_maxit)
+                endif
+            enddo
+        enddo
+        ! find connected components in parallel
+        finished_job = .false.
+        allocate(mat4compare(img_cc%ldim(1),img_cc%ldim(2),img_cc%ldim(3)), source = 0.)
+        !$omp parallel default(shared) private(i,j,neigh_8,nsz,ii,jj) proc_bind(close)
         do n_it = 1, n_maxit
-            if( all(abs(mat4compare - img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))) < TINY) )then
-                finished_job = .true.! the matrices are identical
-            endif
-            if(.not. finished_job) then
-                mat4compare = img_cc%rmat
+            if( .not. finished_job )then
+                !$omp workshare
+                mat4compare = img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))
+                !$omp end workshare nowait
+                !$omp single
+                diff = 0.
+                !$omp end single nowait
+                !$omp do collapse(2) schedule(static) reduction(+:diff)
                 do i = 1, img_in%ldim(1)
                     do j = 1, img_in%ldim(2)
-                        if(img_in%rmat(i,j,1) > 0.5) then  !not background
-                            call img_cc%calc_neigh_8([i,j,1], neigh_8)
-                            img_cc%rmat(i,j,1) = minval(neigh_8, neigh_8 > 0.5)
+                        if( img_in%rmat(i,j,1) > 0.5) then ! not background
+                            call img_cc%calc_neigh_8([i,j,1], neigh_8, nsz)
+                            img_cc%rmat(i,j,1) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
+                            diff = diff + abs(mat4compare(i,j,1) - img_cc%rmat(i,j,1))
                         endif
                     enddo
                 enddo
+                !$omp end do nowait
+                !$omp single
+                if( diff <= TINY ) finished_job = .true.
+                !$omp end single nowait
             endif
         enddo
-        call img_cc%enumerate_connected_comps(img_out)
-        deallocate(label_matrix, mat4compare)
+        !$omp end parallel
+        ! enumerate connected components
+        cnt = 0
+        do i = 1, img_cc%ldim(1)
+            do j = 1, img_cc%ldim(2)
+                if( img_cc%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
+                    cnt = cnt + 1
+                    tmp = img_cc%rmat(i,j,1)
+                    where(img_cc%rmat == tmp)
+                        img_out%rmat = cnt
+                        img_cc%rmat  = 0.            !Not to consider this cc again
+                    endwhere
+                endif
+            enddo
+        enddo
+        deallocate(mat4compare)
     end subroutine find_connected_comps
 
     ! The result of the function is the size(# of pixels) of each cc. This
@@ -3372,9 +3356,9 @@ contains
      ! the morphological operation dilatation.
     subroutine dilatation(self)
         class(image), intent(inout) :: self
-        integer, allocatable :: neigh_8(:,:,:)
+        integer     :: neigh_8(3,8,1)
         type(image) :: self_copy
-        integer     :: i, j, k
+        integer     :: i, j, k, nsz
         call self_copy%copy(self)
         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; dilatation')
         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
@@ -3382,11 +3366,10 @@ contains
         do i = 1, self%ldim(1)
             do j = 1, self%ldim(2)
                 if(self_copy%rmat(i,j,1) == 1.) then  !just for white pixels
-                    call self%calc_neigh_8([i,j,1], neigh_8)
-                    do k = 1, size(neigh_8, dim=2)
+                    call self%calc_neigh_8([i,j,1], neigh_8, nsz)
+                    do k = 1, nsz
                         call self%set(neigh_8(1:3,k,1), 1.) !self%rmat(neigh_8) = 1.
                     enddo
-                    deallocate(neigh_8)
                 endif
             enddo
         enddo
@@ -3440,8 +3423,8 @@ contains
     subroutine border_mask(self, border)
         class(image), intent(in)            :: self
         logical, allocatable, intent(inout) :: border(:,:,:)
-        real, allocatable :: neigh_8(:)
-        integer :: i, j
+        real    :: neigh_8(9)
+        integer :: i, j, nsz
         if(self%ldim(3)/=1) THROW_HARD('This subroutine is for 2D images!; calc_border')
         if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
             THROW_HARD('input to calculate border not binary; calc_border')
@@ -3450,9 +3433,8 @@ contains
         do i = 1,self%ldim(1)
             do j = 1, self%ldim(2)
                 if(abs(self%rmat(i,j,1)-1.) < TINY ) then !white pixels
-                    call self%calc_neigh_8([i,j,1], neigh_8)
-                    if(any(abs(neigh_8)<TINY)) border(i,j,1) = .true.
-                    deallocate(neigh_8)
+                    call self%calc_neigh_8([i,j,1], neigh_8, nsz)
+                    if(any(abs(neigh_8(:nsz))<TINY)) border(i,j,1) = .true.
                 endif
             enddo
         enddo
@@ -4827,83 +4809,72 @@ end subroutine NLmean
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! and the value of the pixel itself (the last one).
-    subroutine calc_neigh_8_1(self, px, neigh_8)
-        class(image),      intent(in)    :: self
-        integer,           intent(in)    :: px(3)
-        real, allocatable, intent(inout) :: neigh_8(:)
+    subroutine calc_neigh_8_1(self, px, neigh_8, nsz )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: px(3)
+        real,         intent(inout) :: neigh_8(9)
+        integer,      intent(out)   :: nsz
         integer :: i, j
-        if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
-            THROW_HARD('image has to be 2D; calc_neigh_8')
-        endif
         i = px(1)
         j = px(2) ! Assumes to have a 2-dim matrix
-        ! sanity check
-        if( i < 1 .or. i > self%ldim(1) )then
-            THROW_HARD('x-coordinate out of bound; calc_neigh_8')
-        endif
-        if( j < 1 .or. j > self%ldim(2) )then
-            THROW_HARD('y-coordinate out of bound; calc_neigh_8')
-        endif
-        if(allocated(neigh_8)) deallocate(neigh_8)
         ! identify neighborhood
         if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
-            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i+1,j,1)
             neigh_8(2) = self%rmat(i+1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
             neigh_8(4) = self%rmat(i,j,1)
+            nsz = 4
         else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then ! SE corner
-            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
             neigh_8(4) = self%rmat(i,j,1)
+            nsz = 4
         else if (j-1 < 1  .and. i+1 >self%ldim(1)) then            ! SW corner
-            allocate(neigh_8(4), source = 0.)
             neigh_8(3) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(1) = self%rmat(i,j+1,1)
             neigh_8(4) = self%rmat(i,j,1)
+            nsz = 4
         else if (j+1 > self%ldim(2) .and. i-1 < 1) then            ! NE corner
-            allocate(neigh_8(4), source = 0.)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
             neigh_8(4) = self%rmat(i,j,1)
+            nsz = 4
         else if( j-1 < 1 ) then                                    ! N border
-            allocate(neigh_8(6), source = 0.)
             neigh_8(5) = self%rmat(i-1,j,1)
             neigh_8(4) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i,j+1,1)
             neigh_8(2) = self%rmat(i+1,j+1,1)
             neigh_8(1) = self%rmat(i+1,j,1)
             neigh_8(6) = self%rmat(i,j,1)
+            nsz = 6
         else if ( j+1 > self%ldim(2) ) then                        ! S border
-            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i-1,j,1)
             neigh_8(2) = self%rmat(i-1,j-1,1)
             neigh_8(3) = self%rmat(i,j-1,1)
             neigh_8(4) = self%rmat(i+1,j-1,1)
             neigh_8(5) = self%rmat(i+1,j,1)
             neigh_8(6) = self%rmat(i,j,1)
+            nsz = 6
         else if ( i-1 < 1 ) then                                   ! W border
-            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i,j-1,1)
             neigh_8(2) = self%rmat(i+1,j-1,1)
             neigh_8(3) = self%rmat(i+1,j,1)
             neigh_8(4) = self%rmat(i+1,j+1,1)
             neigh_8(5) = self%rmat(i,j+1,1)
             neigh_8(6) = self%rmat(i,j,1)
+            nsz = 6
         else if ( i+1 > self%ldim(1) ) then                       ! E border
-            allocate(neigh_8(6), source = 0.)
             neigh_8(1) = self%rmat(i,j+1,1)
             neigh_8(2) = self%rmat(i-1,j+1,1)
             neigh_8(3) = self%rmat(i-1,j,1)
             neigh_8(4) = self%rmat(i-1,j-1,1)
             neigh_8(5) = self%rmat(i,j-1,1)
             neigh_8(6) = self%rmat(i,j,1)
+            nsz = 6
         else                                                     ! DEFAULT
-            allocate(neigh_8(9), source = 0.)
             neigh_8(1) = self%rmat(i-1,j-1,1)
             neigh_8(2) = self%rmat(i,j-1,1)
             neigh_8(3) = self%rmat(i+1,j-1,1)
@@ -4913,6 +4884,7 @@ end subroutine NLmean
             neigh_8(7) = self%rmat(i-1,j+1,1)
             neigh_8(8) = self%rmat(i-1,j,1)
             neigh_8(9) = self%rmat(i,j,1)
+            nsz = 9
         endif
     end subroutine calc_neigh_8_1
 
@@ -4920,67 +4892,63 @@ end subroutine NLmean
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
     ! starting from any 8-neigh. It doesn't consider the pixel itself.
-    subroutine calc_neigh_8_2(self, px, neigh_8)
-        class(image),         intent(in)   :: self
-        integer,              intent(in)   :: px(3)
-        integer, allocatable, intent(inout):: neigh_8(:,:,:)
+    subroutine calc_neigh_8_2(self, px, neigh_8, nsz)
+        class(image), intent(in)   :: self
+        integer,      intent(in)   :: px(3)
+        integer,      intent(inout):: neigh_8(3,8,1)
+        integer,      intent(out)  :: nsz
         integer :: i, j
-        if( px(3) /= 1 .or. self%ldim(3) /= 1 ) then
-            THROW_HARD('The image has to be 2D!; calc_neigh_8_2')
-        endif
         i = px(1)
         j = px(2)            !Assumes to have a 2-dim matrix
-        if(allocated(neigh_8)) deallocate(neigh_8)
         if ( i-1 < 1 .and. j-1 < 1 ) then
-            allocate(neigh_8(3,3,1), source = 0)
             neigh_8(1:3,1,1) = [i+1,j,1]
             neigh_8(1:3,2,1) = [i+1,j+1,1]
             neigh_8(1:3,3,1) = [i,j+1,1]
+            nsz = 3
         else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
-            allocate(neigh_8(3,3,1), source = 0)
             neigh_8(1:3,1,1) = [i-1,j,1]
             neigh_8(1:3,2,1) = [i-1,j-1,1]
             neigh_8(1:3,3,1) = [i,j-1,1]
+            nsz = 3
         else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
-            allocate(neigh_8(3,3,1), source = 0)
             neigh_8(1:3,3,1) = [i-1,j,1]
             neigh_8(1:3,2,1) = [i-1,j+1,1]
             neigh_8(1:3,1,1) = [i,j+1,1]
+            nsz = 3
         else if (j+1 > self%ldim(2) .and. i-1 < 1) then
-            allocate(neigh_8(3,3,1), source = 0)
             neigh_8(1:3,1,1) = [i,j-1,1]
             neigh_8(1:3,2,1) = [i+1,j-1,1]
             neigh_8(1:3,3,1) = [i+1,j,1]
+            nsz = 3
         else if( j-1 < 1 ) then
-            allocate(neigh_8(3,5,1), source = 0)
             neigh_8(1:3,5,1) = [i-1,j,1]
             neigh_8(1:3,4,1) = [i-1,j+1,1]
             neigh_8(1:3,3,1) = [i,j+1,1]
             neigh_8(1:3,2,1) = [i+1,j+1,1]
             neigh_8(1:3,1,1) = [i+1,j,1]
+            nsz = 5
         else if ( j+1 > self%ldim(2) ) then
-            allocate(neigh_8(3,5,1), source = 0)
             neigh_8(1:3,1,1) = [i-1,j,1]
             neigh_8(1:3,2,1) = [i-1,j-1,1]
             neigh_8(1:3,3,1) = [i,j-1,1]
             neigh_8(1:3,4,1) = [i+1,j-1,1]
             neigh_8(1:3,5,1) = [i+1,j,1]
+            nsz = 5
         else if ( i-1 < 1 ) then
-            allocate(neigh_8(3,5,1), source = 0)
             neigh_8(1:3,1,1) = [i,j-1,1]
             neigh_8(1:3,2,1) = [i+1,j-1,1]
             neigh_8(1:3,3,1) = [i+1,j,1]
             neigh_8(1:3,4,1) = [i+1,j+1,1]
             neigh_8(1:3,5,1) = [i,j+1,1]
+            nsz = 5
         else if ( i+1 > self%ldim(1) ) then
-            allocate(neigh_8(3,5,1), source = 0)
             neigh_8(1:3,1,1) = [i,j+1,1]
             neigh_8(1:3,2,1) = [i-1,j+1,1]
             neigh_8(1:3,3,1) = [i-1,j,1]
             neigh_8(1:3,4,1) = [i-1,j-1,1]
             neigh_8(1:3,5,1) = [i,j-1,1]
+            nsz = 5
         else
-            allocate(neigh_8(3,8,1), source = 0)
             neigh_8(1:3,1,1) = [i-1,j-1,1]
             neigh_8(1:3,2,1) = [i,j-1,1]
             neigh_8(1:3,3,1) = [i+1,j-1,1]
@@ -4989,6 +4957,7 @@ end subroutine NLmean
             neigh_8(1:3,6,1) = [i,j+1,1]
             neigh_8(1:3,7,1) = [i-1,j+1,1]
             neigh_8(1:3,8,1) = [i-1,j,1]
+            nsz = 8
         endif
     end subroutine calc_neigh_8_2
 
@@ -5387,41 +5356,6 @@ end subroutine NLmean
             endif
         end do
     end function gen_argtransf_comp
-
-
-   ! ! The result of this funcion is the median value of the intensities
-   ! ! of the pixels in the image self.
-   !  function median_value(self) result(m)
-   !      class(image), intent(in) :: self
-   !      real              :: m
-   !      real, allocatable :: pixels(:), pixels_nodup(:)
-   !      pixels = pack(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)),&
-   !          & mask = .true.)
-   !      call elim_dup(pixels,pixels_nodup)
-   !      m = median(pixels_nodup)  !or median_nocopy?
-   !      deallocate(pixels,pixels_nodup)
-   !  end function median_value
-   !
-   !
-   ! ! This function has as output the coordinates of the mass center
-   ! ! of img_in, calculated on the basis of the biggest connected
-   ! ! component (cc) in img_in. If this cc is too small, than
-   ! ! discard = .true.
-   !  function center_edge( self, discard ) result( xyz )
-   !      class(image), intent(inout) :: self
-   !      logical,        intent(out) :: discard
-   !      type(image) :: imgcc
-   !      real        :: xyz(3)
-   !      integer     :: min_sz !minumum size of the biggest cc in img_in
-   !      min_sz = 20 !too small cc have already been eliminated, this control
-   !      ! is in order to discard too offcentered windows, in which it wouldn t
-   !      ! be possible to properly center the particle
-   !      ! find all the cc in img_in
-   !      call self%find_connected_comps(imgcc)
-   !      !find the biggest cc
-   !      call imgcc%prepare_connected_comps(discard, min_sz)
-   !      call imgcc%masscen(xyz)
-   !  end function center_edge
 
     ! MODIFIERS
 
@@ -7286,7 +7220,7 @@ end subroutine NLmean
         call create_hist_vector(x,N,xhist,yhist)
         deallocate(x)
         call find_stretch_minmax(xhist,yhist,m,npxls_at_mode,stretch_lim)
-        self_out%rmat = (LAMBDA-1)*(rmat-stretch_lim(1))/(stretch_lim(2)-stretch_lim(1))
+        self_out%rmat(:self_in%ldim(1),:self_in%ldim(2),:self_in%ldim(3)) = (LAMBDA-1)*(rmat-stretch_lim(1))/(stretch_lim(2)-stretch_lim(1))
     end subroutine hist_stretching
 
     !>  \brief  is the image class unit test

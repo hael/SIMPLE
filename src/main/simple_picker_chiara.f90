@@ -3,11 +3,33 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
-public :: extract_particles_NOmasscen, center_cc !maybe to remove center_cc from public
+public :: extract_particles, center_cc, discard_borders !maybe to remove center_cc from public
 
 private
 #include "simple_local_flags.inc"
 contains
+
+    ! This function takes in input an image and gives in output another image
+    ! with smaller size in which are discarded about 4% of the borders. It
+    ! is meantt o deal with border effects.
+    subroutine discard_borders(img_in, img_out, reduce_ldim)
+        class(image),      intent(in)  :: img_in
+        class(image),      intent(out) :: img_out
+        integer, optional, intent(out) :: reduce_ldim(3)
+        logical :: outside
+        integer :: ldim(3), rreduce_ldim(3), box
+        real    :: smpd
+        outside = .false. !initialization
+        ldim = img_in%get_ldim()
+        smpd = img_in%get_smpd()
+        rreduce_ldim = nint(4.*minval(ldim(:2))/100.)
+        rreduce_ldim(3) = 1
+        if(present(reduce_ldim)) reduce_ldim = rreduce_ldim
+        box = minval(ldim(:2))- 2*rreduce_ldim(1)
+        call img_out%new([box,box,1], smpd)
+        call img_in%window_slim(rreduce_ldim(:2),box, img_out, outside)
+        if(outside) THROW_HARD('It is outside! discard_borders')
+    end subroutine discard_borders
 
     ! This function tells whether the new_coord of a likely particle
     ! have already been identified.
@@ -75,11 +97,11 @@ contains
   ! This subroutine takes in input an image, its connected components image,
   ! and extract particles. It doesn't use mass_center.
   ! notation:: cc = connected component.
-  subroutine extract_particles_NOmasscen(self, img_cc, part_radius)
+  subroutine extract_particles(self, img_cc, part_radius)
       type(image),  intent(inout) :: self        !original image
       type(image),  intent(inout) :: img_cc      !connected components image
       integer,      intent(in)    :: part_radius !extimated particle radius, to discard aggregations
-      type(image)          :: imgwin_particle, imgwin_bin
+      type(image)          :: imgwin_particle!, imgwin_bin
       type(image)          :: self_back
       integer              :: box
       integer              :: n_cc                            !n_cc  = # cc in the input image
@@ -99,7 +121,7 @@ contains
       box  = (part_radius)*4 + 10
       rmat = img_cc%get_rmat()
       call imgwin_particle%new([box,box,1],1.)
-      call imgwin_bin%new([box,box,1],1.)
+      !call imgwin_bin%new([box,box,1],1.)
       outside = .false.
       allocate(xyz_saved(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
       allocate(rmat_masked(ldim(1),ldim(2),1))
@@ -123,11 +145,11 @@ contains
           if( abs(xyz_norep_noagg(n_cc,1)) >  0) then !useless?
               if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3)
               call   self%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_particle, outside)
-              call img_cc%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_bin, outside)
+              !call img_cc%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_bin, outside)
               if( .not. outside) then
                   cnt_particle = cnt_particle + 1
                   call imgwin_particle%write('centered_particles.mrc', cnt_particle)
-                  call imgwin_bin%write('centered_particles_BIN.mrc',  cnt_particle)
+                  ! call imgwin_bin%write('centered_particles_BIN.mrc',  cnt_particle)
                   ! BINARY IMAGE STATS
                   !   TO START AGAIN FROM HEREEEEE
                   ! write(unit = 17, fmt = "(a,i0,2(a,f0.0))") &
@@ -138,7 +160,7 @@ contains
       call self_back%write('picked_particles.mrc')
       deallocate(xyz_saved, xyz_norep_noagg, rmat)
     !  close(17, status = "keep")
-  end subroutine extract_particles_NOmasscen
+  end subroutine extract_particles
 
     ! This function returns the index of a pixel (assuming to have a 2D)
     ! image in a connected component. The pixel identified is the one

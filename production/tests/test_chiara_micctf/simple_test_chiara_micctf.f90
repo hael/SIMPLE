@@ -28,7 +28,7 @@ tfun = ctf(ctfparms%smpd,ctfparms%kv,ctfparms%cs,ctfparms%fraca)
 call tfun%wienerlike_restoration(mic, ctfparms)
 call mic%bp(500., 0.) !hp
 call mic%ifft
-call mic%write('mic_wiener_restored_hp.mrc')
+call mic%write('mic_wienerlike_restored_hp.mrc')
 ! watch the results in /home/chiara/Desktop/Chiara/ANTERGOS/forctf/test or /test_2/
 ! other results in /home/chiara/Desktop/Chiara/WienerLikeRestoration
 end program simple_test_chiara_micctf

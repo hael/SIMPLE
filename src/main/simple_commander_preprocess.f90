@@ -622,7 +622,7 @@ contains
         max_sz = 70*int(part_radius)
         call imgcc%elim_cc([min_sz,max_sz])
         call imgcc%write('ConnectedComponentsElimin.mrc')
-        call extract_particles_NOmasscen(mic_shrunken, imgcc, int(part_radius))
+        call extract_particles(mic_shrunken, imgcc, int(part_radius))
         open(unit = 17, file = "PickerInfo.txt")
         write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
         write(unit = 17, fmt = '(a)') ''

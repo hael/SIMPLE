@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu
+public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img
 
 private
 #include "simple_local_flags.inc"
@@ -226,10 +226,10 @@ contains
         real,           intent(in)    :: thresh(2)  !low and high thresholds
         real, optional, intent(in)    :: lp(1)        !lp filtering
         type(image) :: Gr !gradient image
-        integer     :: ldim(3), s(3), r(3), k, i, j                        !just for implementation
+        integer     :: ldim(3), s(3), r(3), k, i, j, nsz                   !just for implementation
         real,    allocatable :: dir_mat(:,:,:), Dc(:,:,:), Dr(:,:,:), grad(:,:,:)   !derivates, gradient
-        integer, allocatable :: neigh_8(:,:,:) !8-neighborhoods of a pixel
-        real :: smpd, llp(1)
+        integer :: neigh_8(3,8,1) !8-neighborhoods of a pixel
+        real    :: smpd, llp(1)
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
         if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
@@ -264,9 +264,8 @@ contains
             do j = 1, ldim(2)
                 if( abs( Gr%get([i,j,1]) - 0.5 ) < TINY ) then
                     call Gr%set([i,j,1],0.)                         !suppress this edge, later I might re-build it
-                    call Gr%calc_neigh_8([i,j,1], neigh_8)
-                    s = shape(neigh_8)
-                    do k = 1, s(2)
+                    call Gr%calc_neigh_8([i,j,1], neigh_8, nsz)
+                    do k = 1, nsz
                         r = neigh_8(1:3,k,1)                                !indexes of 8 neighbourhoods
                         if(is_equal( Gr%get([r(1),r(2),1]), 1.) ) then      !one of the 8 neigh is a strong edge
                             call Gr%set([i,j,1], 1.)                         !re-build edge
@@ -318,95 +317,16 @@ contains
       deallocate(rmat, mask)
     end subroutine iterative_thresholding
 
-    !This subroutine performs otsu binarization.
-    !It has been implemented according to what's written in
-    !Camelot slides.
-    subroutine otsu(img_in, img_out, thresh)
-      class(image),   intent(inout) :: img_in
-      type(image),    intent(out)   :: img_out
-      real, optional, intent(out)   :: thresh  !selected threshold for binarisation
-      integer            :: i, T
-      integer, parameter :: MIN_VAL = 0, MAX_VAL = 255
-      real,  allocatable :: rmat(:,:,:), x(:)
-      real,  allocatable :: p(:)
-      real :: q1, q2, m1, m2
-      real :: sigma1, sigma2
-      real :: sigma, sigma_next
-      real :: sum1, sum2
-      real :: threshold !threshold for binarisation
-      real,    allocatable :: xhist(:)
-      integer, allocatable :: yhist(:)
-      call img_in%scale_pixels(real([MIN_VAL,MAX_VAL]))
-      call img_out%new(img_in%get_ldim(), img_in%get_smpd())
-      rmat = img_in%get_rmat()
-      allocate(p(MIN_VAL:MAX_VAL), source = 0.)
-      x = pack(rmat(:,:,:), .true.)
-      call create_hist_vector(x, MAX_VAL-MIN_VAL+1 ,xhist,yhist)
-      do i = MIN_VAL, MAX_VAL
-          p(i) = yhist(i+1)
-      enddo
-      deallocate(xhist,yhist)
-      p = p/(size(rmat, dim = 1)*size(rmat, dim = 2)*size(rmat, dim = 3)) !normalise, it's a probability
-      q1 = 0.
-      q2 = sum(p)
-      sum1 = 0.
-      sum2 = 0.
-      do i = MIN_VAL, MAX_VAL
-        sum2 = sum2 + i*p(i)
-      enddo
-      sigma = HUGE(sigma) !initialisation, to get into the loop
-      !FOLLOWING it
-      do T = MIN_VAL, MAX_VAL-1
-          q1 = q1 + p(T)
-          q2 = q2 - p(T)
-          sum1 = sum1 + T*p(T)
-          sum2 = sum2 - T*p(T)
-          m1 = sum1/q1
-          m2 = sum2/q2
-          sigma1 = 0.
-          if(T > MIN_VAL) then  !do not know if it is necessary
-              do i = MIN_VAL, T
-                  sigma1 = sigma1 + (i-m1)**2*p(i)
-              enddo
-          else
-              sigma1 = 0.
-          endif
-          sigma1 = sigma1/q1
-          sigma2 = 0.
-          if(T < MAX_VAL-1) then
-              do i = T+1, MAX_VAL
-                  sigma2 = sigma2 + (i-m2)**2*p(i)
-              enddo
-          else
-              sigma2 = 0.
-          endif
-          sigma2 = sigma2/q2
-          sigma_next = q1*sigma1 +q2*sigma2
-          if(sigma_next < sigma .and. T > MIN_VAL) then
-              threshold = T !keep the minimum
-              sigma = sigma_next
-          elseif(T == MIN_VAL) then
-              sigma = sigma_next
-          endif
-      enddo
-      if(present(thresh)) thresh = threshold
-      where(rmat > threshold)
-          rmat = 1.
-      elsewhere
-          rmat = 0.
-      endwhere
-      call img_out%set_rmat(rmat)
-      deallocate(rmat, p)
-    end subroutine otsu
+    subroutine otsu_img(img)
+        use simple_math, only : otsu
+        class(image), intent(inout) :: img
+        real, allocatable :: rmat(:,:,:), x(:), x_out(:)
+        rmat = img%get_rmat()
+        x = pack(rmat(:,:,:), .true.)
+        call otsu(x, x_out)
+        deallocate(x)
+        rmat = reshape(x_out, shape(rmat))
+        call img%set_rmat(rmat)
+        deallocate(rmat,x_out)
+    end subroutine otsu_img
 end module simple_segmentation
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!TESTS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! call img%new([2048,2048,1],1.)
-! !call img%read('/home/lenovoc30/Desktop/MassCenter/simple_test_chiara_mass_center/shrunken_hpassfiltered.mrc')
-! call img%read('ImgNOnoise.mrc')
-! call iterative_thresholding(img,img_out,thresh)
-! call img%write('Img_inParticle.mrc')
-! call img_out%write('Img_outParticle_iterative_thresholding.mrc')
-! write(logfhandle,*) 'selected threshold: ' , thresh
-! call otsu(img,img_out,thresh)
-! call img_out%write('Img_outParticle_otsu.mrc')
-! write(logfhandle,*) 'selected threshold: ' , thresh

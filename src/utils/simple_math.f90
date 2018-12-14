@@ -2152,4 +2152,92 @@ contains
         132 continue
         stretch_lim(2) = xhist(i)
     end subroutine find_stretch_minmax
+
+    ! This subroutine rescales the vector to a new input range.
+    subroutine scale_vector(x, new_range)
+          real, intent(inout) :: x(:)
+          real, intent(in)    :: new_range(2)
+          real :: old_range(2), sc
+          old_range(1) = minval(x)
+          old_range(2) = maxval(x)
+          sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
+          x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
+    end subroutine scale_vector
+
+
+        !This subroutine performs otsu.
+        !It has been implemented according to what's written in
+        !Camelot slides.
+        subroutine otsu(x,x_out,thresh)
+          real,              intent(inout) :: x(:)
+          real, allocatable, intent(out)   :: x_out(:)
+          real, optional, intent(out)   :: thresh  !selected threshold for binarisation
+          integer            :: i, T
+          integer, parameter :: MIN_VAL = 0, MAX_VAL = 255
+          real,  allocatable :: p(:)
+          real :: q1, q2, m1, m2
+          real :: sigma1, sigma2
+          real :: sigma, sigma_next
+          real :: sum1, sum2
+          real :: threshold !threshold for binarisation
+          real,    allocatable :: xhist(:)
+          integer, allocatable :: yhist(:)
+          call scale_vector(x,real([MIN_VAL,MAX_VAL]))
+          allocate(x_out(size(x)), source = 0.)
+          allocate(p(MIN_VAL:MAX_VAL), source = 0.)
+          call create_hist_vector(x, MAX_VAL-MIN_VAL+1 ,xhist,yhist)
+          do i = MIN_VAL, MAX_VAL
+              p(i) = yhist(i+1)
+          enddo
+          deallocate(xhist,yhist)
+          p = p/size(x, dim = 1) !normalise, it's a probability
+          q1 = 0.
+          q2 = sum(p)
+          sum1 = 0.
+          sum2 = 0.
+          do i = MIN_VAL, MAX_VAL
+            sum2 = sum2 + i*p(i)
+          enddo
+          sigma = HUGE(sigma) !initialisation, to get into the loop
+          !FOLLOWING it
+          do T = MIN_VAL, MAX_VAL-1
+              q1 = q1 + p(T)
+              q2 = q2 - p(T)
+              sum1 = sum1 + T*p(T)
+              sum2 = sum2 - T*p(T)
+              m1 = sum1/q1
+              m2 = sum2/q2
+              sigma1 = 0.
+              if(T > MIN_VAL) then  !do not know if it is necessary
+                  do i = MIN_VAL, T
+                      sigma1 = sigma1 + (i-m1)**2*p(i)
+                  enddo
+              else
+                  sigma1 = 0.
+              endif
+              sigma1 = sigma1/q1
+              sigma2 = 0.
+              if(T < MAX_VAL-1) then
+                  do i = T+1, MAX_VAL
+                      sigma2 = sigma2 + (i-m2)**2*p(i)
+                  enddo
+              else
+                  sigma2 = 0.
+              endif
+              sigma2 = sigma2/q2
+              sigma_next = q1*sigma1 +q2*sigma2
+              if(sigma_next < sigma .and. T > MIN_VAL) then
+                  threshold = T !keep the minimum
+                  sigma = sigma_next
+              elseif(T == MIN_VAL) then
+                  sigma = sigma_next
+              endif
+          enddo
+          if(present(thresh)) thresh = threshold
+          where(x > threshold)
+              x_out = 1.
+          elsewhere
+              x_out = 0.
+          endwhere
+        end subroutine otsu
 end module simple_math

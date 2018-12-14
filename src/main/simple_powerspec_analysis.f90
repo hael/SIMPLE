@@ -14,31 +14,82 @@ integer           :: nn_shells
 
 contains
 
+    ! !img has to be the connected component (cc) image
+    ! function is_symmetric(img, label) result(yes_no)
+    !     type(image), intent(inout) :: img
+    !     integer,     intent(in)    :: label
+    !     logical :: yes_no
+    !     integer :: sz_cc, ldim(3)
+    !     integer, allocatable :: vector(:), vector_sym(:)
+    !     real,    allocatable :: rmat(:,:,:), rmat_t(:,:,:)
+    !     logical, allocatable :: mask(:,:,:)
+    !     real, parameter      :: THRESH = 0.2
+    !     rmat = img%get_rmat()
+    !     ldim = img%get_ldim()
+    !     allocate(mask  (ldim(1),ldim(2),1), source = .false.)
+    !     allocate(rmat_t(ldim(1),ldim(2),1), source = 0.)
+    !     rmat_t(:,:,1) = transpose(rmat(:,:,1))
+    !     where(abs(rmat - real(label)) < TINY) mask = .true.
+    !     sz_cc = count(abs(rmat-real(label)) < TINY)
+    !     allocate(vector(sz_cc),vector_sym(sz_cc), source = 0)
+    !     vector     = pack(rmat,  mask)
+    !     vector_sym = pack(rmat_t,mask)
+    !     yes_no = .false.
+    !     if((norm2(real(vector-vector_sym)))/(norm2(real(vector))+norm2(real(vector_sym)))< THRESH) yes_no = .true.
+    !     deallocate(rmat,rmat_t,vector,vector_sym)
+    ! end function is_symmetric
+
     !img has to be the connected component (cc) image
+    ! I have to think what happens when the image is not SQUARE
+    ! I will just look at the ccs in the first and second quadrant
+    ! For now I suppose to have the cc in the first quadrant, then I will
+    ! adapt the code for the other quadrant
     function is_symmetric(img, label) result(yes_no)
         type(image), intent(inout) :: img
         integer,     intent(in)    :: label
         logical :: yes_no
-        integer :: sz_cc, ldim(3)
-        integer, allocatable :: vector(:), vector_sym(:)
+        integer :: sz_cc, ldim(3), center(2), i, j
+        integer, allocatable :: vector(:), vector_sym(:), m(:)
         real,    allocatable :: rmat(:,:,:), rmat_t(:,:,:)
         logical, allocatable :: mask(:,:,:)
         real, parameter      :: THRESH = 0.2
+        logical :: second_quadrant
         rmat = img%get_rmat()
         ldim = img%get_ldim()
+        center(1) = nint(real(ldim(1))/2.)
+        center(2) = nint(real(ldim(2))/2.)
         allocate(mask  (ldim(1),ldim(2),1), source = .false.)
         allocate(rmat_t(ldim(1),ldim(2),1), source = 0.)
-        rmat_t(:,:,1) = transpose(rmat(:,:,1))
         where(abs(rmat - real(label)) < TINY) mask = .true.
+        m = minloc(abs(rmat - real(label)))
+        second_quadrant = .false.
+        if(m(1) < center(1) .or. m(2) < center(2)) second_quadrant = .true.
+        print *, 'label = ', label, 'second_quadarnt = ', second_quadrant
+        print *, 'minloc = ', m
+        !where(mask .eqv. .true.) rmat_t(center(1)-:,center(2)-:,1) = 1.
+        if(.not. second_quadrant) then
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    if(mask(i,j,1) .eqv. .true.) rmat_t(center(1)-i,center(2)-j,1) = 1.
+                enddo
+            enddo
+        else
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    if(mask(i,j,1) .eqv. .true.) rmat_t(center(1)+2*i,center(2)-2*j,1) = 1.
+                enddo
+            enddo
+        endif
         sz_cc = count(abs(rmat-real(label)) < TINY)
         allocate(vector(sz_cc),vector_sym(sz_cc), source = 0)
         vector     = pack(rmat,  mask)
+        mask = .false.
+        where(abs(rmat_t - 1.) < TINY) mask = .true.
         vector_sym = pack(rmat_t,mask)
         yes_no = .false.
         if((norm2(real(vector-vector_sym)))/(norm2(real(vector))+norm2(real(vector_sym)))< THRESH) yes_no = .true.
         deallocate(rmat,rmat_t,vector,vector_sym)
     end function is_symmetric
-
 
     !This function  takes in input the box sz and the smpd
     !of a power spectra image and consequentially builds an
