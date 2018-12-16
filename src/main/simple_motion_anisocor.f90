@@ -295,7 +295,7 @@ contains
     subroutine eval_fdf( self, a, f, grad )
         class(motion_anisocor), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
-        real    :: f, grad(POLY_DIM)
+        real,                   intent(out)   :: f, grad(POLY_DIM)
         real    :: N, D_I, D_R, grad_tmp1, grad_tmp2
         integer :: i, j, r
         real    :: poly_dfs(POLY_DIM)
@@ -450,7 +450,7 @@ contains
         select type(fun_self)
         class is (motion_anisocor)
             call fun_self%eval_fdf(real(vec), spf, spgrad)
-            f    = -real(f,      kind=dp)
+            f    = -real(spf,    kind=dp)
             grad = -real(spgrad, kind=dp)
         class default
             THROW_HARD('error in motion_anisocor_fdfcost_8: unknown type; simple_motion_anisocor')
