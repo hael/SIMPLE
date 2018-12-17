@@ -3,12 +3,14 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,     only: ft_expanded, ft_exp_reset_tmp_pointers
-use simple_motion_anisocor, only: motion_anisocor, POLY_DIM
-use simple_image,           only: image
-use simple_parameters,      only: params_glob
-use simple_estimate_ssnr,   only: acc_dose2filter
-use simple_oris,            only: oris
+use simple_ft_expanded,         only: ft_expanded, ft_exp_reset_tmp_pointers
+use simple_motion_anisocor,     only: motion_anisocor, POLY_DIM
+use simple_motion_anisocor_sgl, only: motion_anisocor_sgl
+use simple_motion_anisocor_dbl, only: motion_anisocor_dbl
+use simple_image,               only: image
+use simple_parameters,          only: params_glob
+use simple_estimate_ssnr,       only: acc_dose2filter
+use simple_oris,                only: oris
 implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
@@ -35,11 +37,12 @@ real,              allocatable :: opt_shifts(:,:)                   !< optimal s
 real,              allocatable :: opt_shifts_saved(:,:)             !< optimal shifts for local opt saved
 
 ! data structures for anisotropic correction
-type(motion_anisocor), allocatable :: motion_aniso(:)
-type(image),           allocatable :: movie_frames_shifted_aniso(:) !< shifted movie frames
-type(image),           allocatable :: movie_sum_global_threads(:)   !< array of global movie sums for parallel refinement (image)
-real,                  allocatable :: opt_shifts_aniso(:,:)         !< optimal anisotropic shifts identified
-real,                  allocatable :: opt_shifts_aniso_saved(:,:)   !< optimal anisotropic shifts for local opt saved
+class(motion_anisocor), allocatable :: motion_aniso(:)
+type(image),            allocatable :: movie_frames_shifted_aniso(:) !< shifted movie frames
+type(image),            allocatable :: movie_sum_global_threads(:)   !< array of global movie sums for parallel refinement (image)
+real(dp),               allocatable :: opt_shifts_aniso(:,:)         !< optimal anisotropic shifts identified
+real,                   allocatable :: opt_shifts_aniso_sp(:,:)      !< optimal anisotropic shifts identified, single precision
+real(dp),               allocatable :: opt_shifts_aniso_saved(:,:)   !< optimal anisotropic shifts for local opt saved
 
 ! data structures used by both isotropic & anisotropic correction
 type(image), allocatable :: movie_frames_shifted(:)      !< shifted movie frames
@@ -68,9 +71,10 @@ logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
 
 ! module global constants
-integer, parameter :: MITSREF       = 30 !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 5  !< max # iterations of anisotropic refinement optimisation
-real,    parameter :: SMALLSHIFT    = 2. !< small initial shift to blur out fixed pattern noise
+integer, parameter :: MITSREF       = 30      !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF_ANISO = 3       !< max # iterations of anisotropic refinement optimisation
+real,    parameter :: SMALLSHIFT    = 2.      !< small initial shift to blur out fixed pattern noise
+logical, parameter :: ANISO_DBL     = .false. !< use double-precision for anisotropic motion correct?
 
 contains
 
@@ -444,6 +448,7 @@ contains
         real    :: scale, smpd4scale
         integer :: iframe, nimproved, i, ldim4scale(3)
         logical :: didsave, err_stat, doscale
+        write (*,*) 'motion_correct_aniso' ; call flush(6)
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -458,10 +463,17 @@ contains
         endif
         if( allocated(shifts) ) deallocate(shifts)
         ! construct
-        allocate(motion_aniso(nframes), movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
-                &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_saved(nframes,POLY_DIM), shifts(nframes,POLY_DIM))
-        opt_shifts_aniso       = 0.
-        opt_shifts_aniso_saved = 0.
+        if (ANISO_DBL) then
+            allocate(motion_anisocor_dbl :: motion_aniso(nframes))
+        else
+            allocate(motion_anisocor_sgl :: motion_aniso(nframes))
+        end if
+        allocate(movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
+            &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_sp(nframes,POLY_DIM), &
+            &opt_shifts_aniso_saved(nframes,POLY_DIM), shifts(nframes,POLY_DIM))
+        opt_shifts_aniso       = 0._dp
+        opt_shifts_aniso_sp    = 0.
+        opt_shifts_aniso_saved = 0._dp
         shifts                 = 0.
         ! prepare the data structures for anisotropic correction
         ! save the isotropically corrected movie stack to disk
@@ -525,7 +537,8 @@ contains
         frameweights     = frameweights_saved
         ! output shifts
         if( allocated(shifts) ) deallocate(shifts)
-        allocate(shifts(nframes,POLY_DIM), source=opt_shifts_aniso)
+        opt_shifts_aniso_sp = real(opt_shifts_aniso)
+        allocate(shifts(nframes,POLY_DIM), source=opt_shifts_aniso_sp)
         ! print
         if( corr < 0. )then
             write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
@@ -636,6 +649,7 @@ contains
             deallocate(motion_aniso, movie_frames_shifted_aniso, movie_sum_global_threads)
         endif
         if( allocated(opt_shifts_aniso)       ) deallocate(opt_shifts_aniso)
+        if( allocated(opt_shifts_aniso_sp)    ) deallocate(opt_shifts_aniso_sp)
         if( allocated(opt_shifts_aniso_saved) ) deallocate(opt_shifts_aniso_saved)
     end subroutine motion_correct_aniso_kill
 

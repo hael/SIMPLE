@@ -1,27 +1,18 @@
-! parametric image registration using a biquadratic polynomial with L-BFGS-B in real-space (used in motion_correct)
-module simple_motion_anisocor
+! parametric image registration using a biquadratic polynomial with L-BFGS-B in real-space (used in motion_correct), single precision
+module simple_motion_anisocor_sgl
 include 'simple_lib.f08'
-use simple_opt_factory, only: opt_factory
-use simple_opt_spec,    only: opt_spec
-use simple_optimizer,   only: optimizer
-use simple_image,       only: image
+use simple_opt_factory,     only: opt_factory
+use simple_opt_spec,        only: opt_spec
+use simple_optimizer,       only: optimizer
+use simple_image,           only: image
+use simple_motion_anisocor, only: motion_anisocor, POLY_DIM, TOL
 implicit none
 private
-public :: motion_anisocor, POLY_DIM
+public :: motion_anisocor_sgl
 #include "simple_local_flags.inc"
 
-real,    parameter                  :: TOL      = 1e-7      !< tolerance parameter
-integer, parameter                  :: POLY_DIM = 12        !< dimensionality of polynomial dome model
-
-type :: motion_anisocor
+type, extends(motion_anisocor) :: motion_anisocor_sgl
     private
-    type(opt_spec)                  :: ospec                !< optimizer specification object
-    class(optimizer),   pointer     :: nlopt      => null() !< pointer to nonlinear optimizer
-    real                            :: maxHWshift = 0.      !< maximum half-width of shift
-    class(image),       pointer     :: reference  => null() !< reference image ptr
-    class(image),       pointer     :: frame      => null() !< particle image ptr
-    integer                         :: ldim(2)              !< dimensions of reference, particle
-    integer                         :: ldim_out(2)          !< dimensions of output image
     real(kind=c_float), allocatable :: rmat_ref      (:,:)  !< reference matrix
     real(kind=c_float), allocatable :: rmat          (:,:)  !< particle  matrix
     real(kind=c_float), allocatable :: rmat_T        (:,:)  !< transformed (interpolated) particle matrix
@@ -31,8 +22,6 @@ type :: motion_anisocor
     real(kind=c_float), allocatable :: T_coords_da_sq(:,:,:)!< square of T_coords_da, memoized for speedup
     real(kind=c_float), allocatable :: T_coords_da_cr(:,:)  !< cross-product of square of T_coords, memoized for speedup
     real(kind=c_float), allocatable :: T_coords_out  (:,:,:)!< transformed coordinates for output image
-    real                            :: motion_correctftol
-    real                            :: motion_correctgtol
 contains
     procedure, private              :: eval_fdf
     procedure, private              :: calc_mat_tld
@@ -42,16 +31,16 @@ contains
     procedure, private              :: calc_T_coords
     procedure, private              :: calc_T_coords_only
     procedure, private              :: calc_T_coords_out
-    procedure                       :: calc_T_out
-    procedure                       :: new      => motion_anisocor_new
-    procedure                       :: kill     => motion_anisocor_kill
-    procedure                       :: minimize => motion_anisocor_minimize
-end type motion_anisocor
+    procedure                       :: calc_T_out => motion_anisocor_sgl_calc_T_out
+    procedure                       :: new        => motion_anisocor_sgl_new
+    procedure                       :: kill       => motion_anisocor_sgl_kill
+    procedure                       :: minimize   => motion_anisocor_sgl_minimize
+end type motion_anisocor_sgl
 
 contains
 
     function interp_bilin( self, x ) result(val)
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: x(2)
         real                                  :: val
         logical :: x1_valid, x2_valid, y1_valid, y2_valid
@@ -79,7 +68,7 @@ contains
     end function interp_bilin
 
     subroutine interp_bilin_fdf( self, x, val, grad )
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: x(2)
         real,                   intent(out)   :: val, grad(2)
         logical :: x1_valid, x2_valid, y1_valid, y2_valid
@@ -116,7 +105,7 @@ contains
     end subroutine interp_bilin_fdf
 
     function interp_bilin_out( self, x, rmat_in ) result(val)
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: x(2)
         real, pointer,          intent(in)    :: rmat_in(:,:,:)
         real                                  :: val
@@ -145,7 +134,7 @@ contains
     end function interp_bilin_out
 
     subroutine calc_T_coords( self, a )
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
         integer :: i, j
         real    :: Nx, Ny
@@ -179,7 +168,7 @@ contains
     end subroutine calc_T_coords
 
     subroutine calc_T_coords_only( self, a )
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
         integer :: i, j
         real    :: Nx, Ny
@@ -208,8 +197,8 @@ contains
     end subroutine calc_T_coords_only
 
     subroutine calc_T_coords_out( self, a )
-        class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: a(POLY_DIM)
+        class(motion_anisocor_sgl), intent(inout) :: self
+        real,                       intent(in)    :: a(POLY_DIM)
         integer :: i, j
         real    :: Nx, Ny
         real    :: x, y, xm, ym, xms, yms, z1, z2
@@ -236,9 +225,9 @@ contains
         end do
     end subroutine calc_T_coords_out
 
-    subroutine calc_T_out( self, a, frame_in, frame_out )
-        class(motion_anisocor), intent(inout) :: self
-        real,                   intent(in)    :: a(12)
+    subroutine motion_anisocor_sgl_calc_T_out( self, a, frame_in, frame_out )
+        class(motion_anisocor_sgl), intent(inout) :: self
+        real(dp),                   intent(in)    :: a(12)
         class(image), target,   intent(in)    :: frame_in
         class(image), target,   intent(inout) :: frame_out
         integer       :: i,j
@@ -249,7 +238,7 @@ contains
         ldim_out_here1 = frame_in%get_ldim()
         ldim_out_here2 = frame_out%get_ldim()
         if( any(ldim_out_here1(1:2) .ne. ldim_out_here2(1:2)) )then
-            THROW_HARD('calc_T_out: dimensions of particle and reference do not match; simple_motion_anisocor')
+            THROW_HARD('calc_T_out: dimensions of particle and reference do not match; simple_motion_anisocor_sgl')
         end if
         self%ldim_out(1) = ldim_out_here1(1)
         self%ldim_out(2) = ldim_out_here1(2)
@@ -267,17 +256,17 @@ contains
             if (allocated(self%T_coords_out)) deallocate(self%T_coords_out)
             allocate(self%T_coords_out(2, self%ldim_out(1), self%ldim_out(2)))
         end if
-        call self%calc_T_coords_out(a)
+        call self%calc_T_coords_out(real(a))
         do j = 1, self%ldim_out(2)
             do i = 1, self%ldim_out(1)
                 x_tld = self%T_coords_out(:,i,j)
                 rmat_out_ptr(i,j,1) = self%interp_bilin_out(x_tld, rmat_in_ptr)
             end do
         end do
-    end subroutine calc_T_out
+    end subroutine motion_anisocor_sgl_calc_T_out
 
     subroutine calc_mat_tld( self )
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         integer :: i, j
         real    :: x_tld(2)
         real    :: val, grad(2)
@@ -293,7 +282,7 @@ contains
     end subroutine calc_mat_tld
 
     subroutine eval_fdf( self, a, f, grad )
-        class(motion_anisocor), intent(inout) :: self
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,                   intent(in)    :: a(POLY_DIM)
         real,                   intent(out)   :: f, grad(POLY_DIM)
         real    :: N, D_I, D_R, grad_tmp1, grad_tmp2
@@ -376,8 +365,8 @@ contains
     end subroutine eval_fdf
 
     !> Initialise  ftexp_shsrch
-    subroutine motion_anisocor_new( self, motion_correct_ftol, motion_correct_gtol )
-        class(motion_anisocor), intent(inout) :: self
+    subroutine motion_anisocor_sgl_new( self, motion_correct_ftol, motion_correct_gtol )
+        class(motion_anisocor_sgl), intent(inout) :: self
         real,         optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
         type(opt_factory) :: ofac !< optimizer factory
         integer           :: i
@@ -397,80 +386,81 @@ contains
         lims(:,1) = - self%maxHWshift
         lims(:,2) =   self%maxHWshift
         call self%ospec%specify('lbfgsb', POLY_DIM, ftol=self%motion_correctftol, gtol=self%motion_correctgtol, limits=lims)
-        call self%ospec%set_costfun_8   (motion_anisocor_cost_8)
-        call self%ospec%set_gcostfun_8  (motion_anisocor_gcost_8)
-        call self%ospec%set_fdfcostfun_8(motion_anisocor_fdfcost_8)
+        call self%ospec%set_costfun_8   (motion_anisocor_sgl_cost_8)
+        call self%ospec%set_gcostfun_8  (motion_anisocor_sgl_gcost_8)
+        call self%ospec%set_fdfcostfun_8(motion_anisocor_sgl_fdfcost_8)
         ! generate optimizer object with the factory
         if( associated(self%nlopt) )then
             call self%nlopt%kill()
             deallocate(self%nlopt)
         end if
         call ofac%new(self%ospec, self%nlopt)
-    end subroutine motion_anisocor_new
+    end subroutine motion_anisocor_sgl_new
 
     !> Cost function, double precision
-    function motion_anisocor_cost_8( fun_self, vec, D ) result(cost)
+    function motion_anisocor_sgl_cost_8( fun_self, vec, D ) result(cost)
         class(*),     intent(inout) :: fun_self
         integer,      intent(in)    :: D
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
         real                        :: f, grad(POLY_DIM)
         select type(fun_self)
-        class is (motion_anisocor)
+        class is (motion_anisocor_sgl)
             call fun_self%eval_fdf(real(vec), f, grad)
             cost = -real(f, kind=dp)
         class default
-            THROW_HARD('error in motion_anisocor_cost_8: unknown type; simple_motion_anisocor')
+            THROW_HARD('error in motion_anisocor_sgl_cost_8: unknown type; simple_motion_anisocor_sgl')
         end select
-    end function motion_anisocor_cost_8
+    end function motion_anisocor_sgl_cost_8
 
     !> Gradient function, double precision
-    subroutine motion_anisocor_gcost_8( fun_self, vec, grad, D )
+    subroutine motion_anisocor_sgl_gcost_8( fun_self, vec, grad, D )
         class(*),     intent(inout) :: fun_self
         integer,      intent(in)    :: D
         real(dp),     intent(inout) :: vec( D )
         real(dp),     intent(out)   :: grad( D )
         real                        :: f, spgrad(POLY_DIM)
         select type(fun_self)
-        class is (motion_anisocor)
+        class is (motion_anisocor_sgl)
             call fun_self%eval_fdf(real(vec), f, spgrad)
             grad = -real(spgrad, kind=dp)
         class default
-            THROW_HARD('error in motion_anisocor_gcost_8: unknown type; simple_motion_anisocor')
+            THROW_HARD('error in motion_anisocor_sgl_gcost_8: unknown type; simple_motion_anisocor_sgl')
         end select
-    end subroutine motion_anisocor_gcost_8
+    end subroutine motion_anisocor_sgl_gcost_8
 
     !> Gradient & cost function, double precision
-    subroutine motion_anisocor_fdfcost_8( fun_self, vec, f, grad, D )
+    subroutine motion_anisocor_sgl_fdfcost_8( fun_self, vec, f, grad, D )
         class(*),     intent(inout) :: fun_self
         integer,      intent(in)    :: D
         real(kind=8), intent(inout) :: vec(D)
         real(kind=8), intent(out)   :: f, grad(D)
         real                        :: spf, spgrad(POLY_DIM)
         select type(fun_self)
-        class is (motion_anisocor)
-            call fun_self%eval_fdf(real(vec), spf, spgrad)
+        class is (motion_anisocor_sgl)
+            call fun_self%eval_fdf(real(vec), spf, spgrad)            
             f    = -real(spf,    kind=dp)
             grad = -real(spgrad, kind=dp)
         class default
-            THROW_HARD('error in motion_anisocor_fdfcost_8: unknown type; simple_motion_anisocor')
+            THROW_HARD('error in motion_anisocor_sgl_fdfcost_8: unknown type; simple_motion_anisocor_sgl')
         end select
-    end subroutine motion_anisocor_fdfcost_8
+    end subroutine motion_anisocor_sgl_fdfcost_8
 
     !> Main search routine
-    function motion_anisocor_minimize( self, ref, frame ) result(cxy)
-        class(motion_anisocor), intent(inout) :: self
+    function motion_anisocor_sgl_minimize( self, ref, frame ) result(cxy)
+        class(motion_anisocor_sgl), intent(inout) :: self
         class(image), target,   intent(in)    :: ref, frame
-        real :: cxy(POLY_DIM+1) ! corr + model
+        real(dp) :: cxy(POLY_DIM+1) ! corr + model
         class(*), pointer :: fun_self => null()
         integer           :: i, j
         real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
         integer           :: ldim_here1(3), ldim_here2(3)
-        logical           :: do_alloc
+        logical           :: do_alloc        
+        real              :: cxy1
         ldim_here1 = ref  %get_ldim()
         ldim_here2 = frame%get_ldim()
         if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
-            THROW_HARD('motion_anisocor_minimize: dimensions of particle and reference do not match; simple_motion_anisocor')
+            THROW_HARD('motion_anisocor_sgl_minimize: dimensions of particle and reference do not match; simple_motion_anisocor_sgl')
         end if
         self%ldim(1) = ldim_here1(1)
         self%ldim(2) = ldim_here1(2)
@@ -508,13 +498,13 @@ contains
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%ospec%x = 0.
-        call self%nlopt%minimize(self%ospec, self, cxy(1))
+        call self%nlopt%minimize(self%ospec, self, cxy1)
+        cxy(1)  = real(cxy1, dp)
         cxy(2:) = self%ospec%x
-    end function motion_anisocor_minimize
+    end function motion_anisocor_sgl_minimize
 
-    subroutine motion_anisocor_kill( self )
-        class(motion_anisocor), intent(inout) :: self
-        !        if (allocated(self%rmat_grad)) deallocate(self%rmat_grad)
+    subroutine motion_anisocor_sgl_kill( self )
+        class(motion_anisocor_sgl), intent(inout) :: self
         if (allocated(self%rmat       )) deallocate(self%rmat       )
         if (allocated(self%rmat_ref   )) deallocate(self%rmat_ref   )
         if (allocated(self%rmat_T     )) deallocate(self%rmat_T     )
@@ -533,6 +523,6 @@ contains
         self%reference   => null()
         self%frame       => null()
         self%ldim        = 0
-    end subroutine motion_anisocor_kill
+    end subroutine motion_anisocor_sgl_kill
 
-end module simple_motion_anisocor
+end module simple_motion_anisocor_sgl
