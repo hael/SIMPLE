@@ -8,7 +8,7 @@ implicit none
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
-public :: subtr_backgr_imgfile
+public :: subtr_backgr_imgfile, random_cls_from_imgfile
 !! Normalisation
 public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
 public :: shellnorm_imgfile, matchfilt_imgfile
@@ -1027,5 +1027,45 @@ contains
         call img%kill
         call img_scaled%kill
     end subroutine random_selection_from_imgfile
+
+    !>  random_selection_from_imgfile
+    !! \param fname2selfrom  output filename
+    !! \param fname  input filename
+    !! \param ncls number of classes
+    subroutine random_cls_from_imgfile( spproj, fname, ncls )
+        use simple_sp_project, only: sp_project
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: ncls
+        type(image)                      :: img, img_avg
+        character(len=:), allocatable    :: stkname
+        real               :: smpd
+        integer            :: nptcls, ldim(3), i, j, ii, ind, box
+        integer, parameter :: navg = 100
+        ! dimensions
+        nptcls = spproj%get_nptcls()
+        smpd   = spproj%os_stk%get(1,'smpd')
+        box    = nint(spproj%os_stk%get(1,'box'))
+        ldim   = [box,box,1]
+        call raise_exception_imgfile( nptcls, ldim, 'random_selection_from_imgfile' )
+        call img%new(ldim,smpd)
+        call img_avg%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> RANDOMLY GENERATING CLUSTER CENTERS'
+        do i = 1,ncls
+            call progress(i, ncls)
+            img_avg = 0.
+            do j = 1,navg
+                ii = irnd_uni(nptcls)
+                call spproj%get_stkname_and_ind('ptcl2D', ii, stkname, ind)
+                call img%read(stkname, ind)
+                call img%norm()
+                call img_avg%add(img)
+            enddo
+            call img_avg%norm()
+            call img_avg%write(fname, i)
+        enddo
+        call img%kill
+        call img_avg%kill
+    end subroutine random_cls_from_imgfile
 
 end module simple_procimgfile

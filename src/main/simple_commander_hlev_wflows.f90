@@ -41,30 +41,31 @@ contains
     ! !> for distributed
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_distr_wflows, only: cluster2D_distr_commander,scale_project_distr_commander
-        use simple_commander_imgproc,      only: scale_commander
+        use simple_procimgfile,            only: random_selection_from_imgfile, random_cls_from_imgfile
         use simple_commander_cluster2D,    only: rank_cavgs_commander
         class(cleanup2D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! commanders
         type(cluster2D_distr_commander)     :: xcluster2D_distr
-        type(scale_commander)               :: xscale
         type(scale_project_distr_commander) :: xscale_distr
         type(rank_cavgs_commander)          :: xrank_cavgs
         ! command lines
-        type(cmdline)                       :: cline_cluster2D, cline_rank_cavgs, cline_scalerefs, cline_scale
+        type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
+        type(cmdline)                       :: cline_rank_cavgs, cline_scale
         ! other variables
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
-        character(len=:),       allocatable :: projfile_sc
-        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, refs_sc
-        real                                :: scale_factor, smpd_target, smpd_sc, msk_sc, ring2_sc
-        integer                             :: nparts, last_iter
+        character(len=:),       allocatable :: projfile, orig_projfile
+        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked
+        real                                :: scale_factor, smpd_target, smpd, msk, ring2, lp1, lp2
+        integer                             :: last_iter, box
         logical                             :: do_scaling
         ! parameters
-        integer,                  parameter :: target_box = 64
+        integer,                  parameter :: target_box = 72
+        real,                     parameter :: target_lp  = 15.
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
-        nparts = params%nparts
+        orig_projfile = params%projfile
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
         ! read project file
@@ -78,66 +79,98 @@ contains
         call spproj%write_segment_inside(params%oritype)
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! high down-scaling for fast execution, grredy optimisation for
+        !          no incremental learning, objective function is standard cross-correlation (cc)
+        cline_cluster2D1 = cline
+        cline_scale      = cline
+        call cline_cluster2D1%set('prg',        'cluster2D')
+        call cline_cluster2D1%set('refine',     'greedy')
+        call cline_cluster2D1%set('objfun',     'cc')
+        call cline_cluster2D1%set('match_filt', 'no')
+        call cline_cluster2D1%set('wfun',       'bilinear')
+        call cline_cluster2D1%delete('locres')
+        call cline_cluster2D1%delete('updat_frac')
+        cline_cluster2D2 = cline_cluster2D1
+        call cline_cluster2D1%set('maxits',      10.)
+        call cline_cluster2D2%set('trs',         MINSHIFT)
+        if( cline%defined('update_frac') ) call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling   = params%box > target_box
         scale_factor = 1.
         if( do_scaling )then
             do_scaling = .true.
             smpd_target = params%smpd * real(params%box) / real(target_box)
-            call spproj%scale_projfile(smpd_target, projfile_sc, cline_cluster2D, cline_scale, dir=trim(STKPARTSDIR))
+            call spproj%scale_projfile(smpd_target, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
             call spproj%kill
             scale_factor = cline_scale%get_rarg('scale')
-            smpd_sc      = cline_scale%get_rarg('smpd')
+            smpd         = cline_scale%get_rarg('smpd')
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
             call xscale_distr%execute( cline_scale )
-            ! scale references
-            if( cline%defined('refs') )then
-                call cline_scalerefs%set('stk', trim(params%refs))
-                refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                call cline_scalerefs%set('outstk', trim(refs_sc))
-                call cline_scalerefs%set('smpd', params%smpd)
-                call cline_scalerefs%set('newbox', cline_scale%get_rarg('newbox'))
-                call xscale%execute(cline_scalerefs)
-                call cline_cluster2D%set('refs',trim(refs_sc))
-            endif
-            msk_sc = real(target_box/2-COSMSKHALFWIDTH+1)
+            msk = real(target_box/2-COSMSKHALFWIDTH+1)
+            box = target_box
         else
-            smpd_sc     = params%smpd
-            projfile_sc = trim(params%projfile)
-            msk_sc      = real(params%box/2-COSMSKHALFWIDTH+1)
+            smpd     = params%smpd
+            projfile = trim(params%projfile)
+            msk      = real(params%box/2-COSMSKHALFWIDTH+1)
+            box      = params%box
         endif
-        ring2_sc = 0.7*msk_sc
-        if( cline%defined('msk') ) msk_sc = scale_factor*params%msk
-        ! high down-scaling for fast execution, SHC optimisation for
-        !          improved population distribution of clusters, no incremental learning,
-        !          objective function is standard cross-correlation (cc)
-        cline_cluster2D = cline
-        call cline_cluster2D%set('prg',        'cluster2D')
-        call cline_cluster2D%set('msk',        msk_sc)
-        call cline_cluster2D%set('ring2',      ring2_sc)
-        call cline_cluster2D%set('refine',     'greedy')
-        call cline_cluster2D%set('objfun',     'cc')
-        call cline_cluster2D%set('match_filt', 'no')
-        call cline_cluster2D%set('wfun',       'bilinear')
-        call cline_cluster2D%delete('locres')
-        ! execution
-        call cline_cluster2D%set('projfile', trim(projfile_sc))
-        call xcluster2D_distr%execute(cline_cluster2D)
-        last_iter  = nint(cline_cluster2D%get_rarg('endit'))
+        ring2 = 0.7*msk
+        lp1   = max(2.*smpd, max(params%lp,target_lp))
+        lp2   = max(2.*smpd, params%lp)
+        if( cline%defined('msk') ) msk = scale_factor*params%msk
+        ! execute initialiser
+        params%refs = 'start2Drefs' // params%ext
+        call spproj%read(projfile)
+        if( params%avg.eq.'yes' )then
+            call random_cls_from_imgfile(spproj, params%refs, params%ncls)
+        else
+            call random_selection_from_imgfile(spproj, params%refs, box, params%ncls)
+        endif
+        call spproj%kill
+        ! updates command-lines
+        call cline_cluster2D1%set('refs',   params%refs)
+        call cline_cluster2D1%set('msk',    msk)
+        call cline_cluster2D1%set('ring2',  ring2)
+        call cline_cluster2D1%set('lp',     lp1)
+        call cline_cluster2D2%set('wiener', 'no')
+        call cline_cluster2D2%set('msk',    msk)
+        call cline_cluster2D2%set('ring2',  ring2)
+        call cline_cluster2D2%set('lp',     lp2)
+        call cline_cluster2D2%set('wiener', 'yes')
+        ! execution 1
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
+        write(logfhandle,'(A)') '>>>'
+        call cline_cluster2D1%set('projfile', trim(projfile))
+        call xcluster2D_distr%execute(cline_cluster2D1)
+        last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+        ! execution 2
+        write(logfhandle,'(A)') '>>>'
+        write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
+        write(logfhandle,'(A)') '>>>'
+        call cline_cluster2D2%set('projfile', trim(projfile))
+        call cline_cluster2D2%set('startit',  real(last_iter+1))
+        call cline_cluster2D2%set('refs',     trim(finalcavgs))
+        call xcluster2D_distr%execute(cline_cluster2D2)
+        last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
+        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+        ! restores project file name
+        params%projfile = trim(orig_projfile)
         ! update original project
         if( do_scaling )then
-            call spproj_sc%read_segment(params%oritype, projfile_sc)
-            call spproj_sc%read_segment('cls2D', projfile_sc)
-            call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
+            call spproj_sc%read(projfile)
             call spproj%read(params%projfile)
+            call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
+            call spproj%add_cavgs2os_out(trim(finalcavgs), smpd, imgkind='cavg')
+            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-            spproj%os_cls2D = spproj_sc%os_cls2D
-            call spproj%add_cavgs2os_out(trim(finalcavgs), smpd_sc, imgkind='cavg')
+            spproj%os_cls2D  = spproj_sc%os_cls2D
             call spproj%write(params%projfile)
         else
             call spproj%read_segment('out', params%projfile)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
             call spproj%write_segment_inside('out', params%projfile)
         endif
         call spproj_sc%kill()
@@ -147,11 +180,10 @@ contains
         call cline_rank_cavgs%set('projfile', trim(params%projfile))
         call cline_rank_cavgs%set('stk',      trim(finalcavgs))
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call xrank_cavgs%execute( cline_rank_cavgs )
+        call xrank_cavgs%execute(cline_rank_cavgs)
         ! cleanup
-        call del_file(trim(projfile_sc))
+        if(do_scaling ) call del_file(trim(projfile))
         call simple_rmdir(STKPARTSDIR)
-        call del_file('start2Drefs'//params%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
     end subroutine exec_cleanup2D

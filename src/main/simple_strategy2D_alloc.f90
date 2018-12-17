@@ -57,7 +57,7 @@ contains
         !     deallocate(chunk_parts)
         ! endif
         ! in plane search
-        allocate(s2D%do_inplsrch(1:nptcls), source=params_glob%l_doshift)
+        allocate(s2D%do_inplsrch(1:nptcls), source=(params_glob%l_doshift .and. which_iter>2))
         ! stochastic search order
         allocate(s2D%srch_order(1:nptcls, params_glob%ncls), source=0)
         rt  = ran_tabu(params_glob%ncls)

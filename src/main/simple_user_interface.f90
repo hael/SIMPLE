@@ -771,11 +771,10 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm',& ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 0, 0, 4, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 4, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cleanup2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
-        &'Initial 2D references used to bootstrap the search', 'xxx.mrc file with references', .false., 'refs.mrc')
+        ! <empty>
         ! parameter input/output
         ! <empty>
         ! alternative inputs
