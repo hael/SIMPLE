@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(65)
+type(simple_prg_ptr) :: prg_ptr_array(66)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -2930,7 +2930,7 @@ contains
         &'is a program that implements a statistical test for point-group symmetry. &
         &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry.',& ! descr long
         &'simple_exec',&                                                                                              ! executable
-        &1, 1, 0, 3, 3, 1, 1, .false.)                                                                                ! # entries in each group, requires sp_project
+        &1, 1, 0, 3, 3, 2, 1, .false.)                                                                                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
@@ -2952,6 +2952,7 @@ contains
         &Angstroms{30}', .false., 30.)
         ! mask controls
         call symmetry_test%set_input('mask_ctrls', 1, msk)
+        call symmetry_test%set_input('mask_ctrls', 2, inner)
         ! computer controls
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test

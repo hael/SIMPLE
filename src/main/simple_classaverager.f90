@@ -1,5 +1,6 @@
 module simple_classaverager
 include 'simple_lib.f08'
+!$ use omp_lib
 use simple_builder,    only: build_glob
 use simple_parameters, only: params_glob
 use simple_ctf,        only: ctf

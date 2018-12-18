@@ -246,6 +246,7 @@ contains
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
         character(len=STDLEN), parameter   :: PROJFILE2D          = 'cluster2D.simple'
         character(len=STDLEN), parameter   :: SCALE_DIR           = './scaled_stks/'
+        logical,               parameter   :: debug_here = .false.
         type(parameters)                   :: params
         type(make_cavgs_distr_commander)   :: xmake_cavgs
         type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer
@@ -258,7 +259,6 @@ contains
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk
         character(len=STDLEN)              :: str_iter, refs_glob
         character(len=LONGSTRLEN)          :: buffer_dir
-
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
@@ -302,17 +302,22 @@ contains
         call cline_cluster2D%set('autoscale', 'no')
         call cline_cluster2D%set('extr_iter', 100.) ! variable neighbourhood size de-activated
         call cline_cluster2D%set('trs',       MINSHIFT)
-        call cline_cluster2D%set('stream',    'no')
         call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
+        call cline_cluster2D%delete('wfun')
         call cline_cluster2D_buffer%set('prg',       'cluster2D')
         call cline_cluster2D_buffer%set('projfile',  trim(PROJFILE_BUFFER))
         call cline_cluster2D_buffer%set('projname',  trim(get_fbody(trim(PROJFILE_BUFFER),trim('simple'))))
-        call cline_cluster2D_buffer%set('objfun',    'cc') ! always
+        call cline_cluster2D_buffer%set('objfun',    'cc')       ! always cross-correlation
+        call cline_cluster2D_buffer%set('wfun',      'bilinear') ! bi-linear interpolation
+        call cline_cluster2D_buffer%set('center',    'no')
+        call cline_cluster2D_buffer%set('match_filt','no')
+        call cline_cluster2D_buffer%set('autoscale', 'no')
         call cline_cluster2D_buffer%delete('update_frac')
         call cline_make_cavgs%set('prg', 'make_cavgs')
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%delete('remap_cls')
+        call cline_make_cavgs%delete('wfun')
         ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
@@ -471,13 +476,15 @@ contains
                 logical, allocatable :: cls_mask(:)
                 character(STDLEN)    :: refs_buffer
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
-                integer              :: boxmatch, icls, endit, ncls_here
+                integer              :: boxmatch, icls, endit, ncls_here, cnt
+                if( debug_here ) print *,'in reject from_buffer'; call flush(6)
                 ncls_rejected   = 0
                 nptcls_rejected = 0
                 ncls_here       = buffer_proj%os_cls2D%get_noris()
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_here), source=.true.)
-                call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask, 2.)
+                call buffer_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask,1.5)
+                if( debug_here ) call buffer_proj%os_cls2D%write('buffer_'//trim(str_iter)//'.txt')
                 if( any(cls_mask) )then
                     ncls_rejected = count(.not.cls_mask)
                     do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
@@ -493,36 +500,41 @@ contains
                             call buffer_proj%os_cls2D%set(icls,'corr',-1.)
                         endif
                     enddo
-                    !!! DEBUG
-                    call img%new([box,box,1],smpd)
-                    endit       = nint(cline_cluster2D_buffer%get_rarg('endit'))
-                    refs_buffer = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
-                    do icls=1,ncls_here
-                        if( cls_mask(icls) ) cycle
-                        call img%read(refs_buffer,icls)
-                        call img%write('rejected_'//int2str(iter)//'.mrc',icls)
-                        img = 0.
-                        call img%write(refs_buffer,icls)
-                    enddo
-                    call img%read(refs_buffer, params%ncls_start)
-                    call img%write(refs_buffer,params%ncls_start)
-                    call img%kill
-                    !!! END DEBUG
+                    if( debug_here )then
+                        call img%new([box,box,1],smpd)
+                        cnt         = 0
+                        endit       = nint(cline_cluster2D_buffer%get_rarg('endit'))
+                        refs_buffer = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
+                        do icls=1,ncls_here
+                            if( cls_mask(icls) ) cycle
+                            cnt = cnt+1
+                            call img%read(refs_buffer,icls)
+                            call img%write('rejected_'//int2str(iter)//'.mrc',cnt)
+                            img = 0.
+                            call img%write(refs_buffer,icls)
+                        enddo
+                        call img%read(refs_buffer, params%ncls_start)
+                        call img%write(refs_buffer,params%ncls_start)
+                        call img%kill
+                    endif
                     deallocate(cls_mask)
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                 endif
+                if( debug_here ) print *,'end reject from_buffer'; call flush(6)
             end subroutine reject_from_buffer
 
             subroutine reject_from_pool
                 type(image)          :: img
                 logical, allocatable :: cls_mask(:)
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
-                integer              :: boxmatch, icls
+                integer              :: boxmatch, icls, cnt
+                if( debug_here ) print *,'in reject from_pool'; call flush(6)
                 ncls_rejected   = 0
                 nptcls_rejected = 0
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_glob), source=.true.)
-                call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask, 2.)
+                call pool_proj%os_cls2D%find_best_classes(boxmatch,smpd,cls_mask, 1.8)
+                if( debug_here )call pool_proj%os_cls2D%write('pool_'//int2str(pool_iter)//'.txt')
                 if( .not.all(cls_mask) )then
                     ncls_rejected = count(.not.cls_mask)
                     do iptcl=1,pool_proj%os_ptcl2D%get_noris()
@@ -539,29 +551,33 @@ contains
                                 call pool_proj%os_cls2D%set(icls,'corr',-1.)
                             endif
                         enddo
-                        !!! DEBUG
-                        call img%new([box,box,1],smpd)
-                        do icls=1,ncls_glob
-                            if( cls_mask(icls) ) cycle
-                            call img%read(refs_glob,icls)
-                            call img%write('rejected_pool_'//int2str(iter)//'.mrc',icls)
-                            img = 0.
-                            call img%write(refs_glob,icls)
-                        enddo
-                        call img%read(refs_glob, ncls_glob)
-                        call img%write(refs_glob, ncls_glob)
-                        call img%kill
-                        !!! END DEBUG
+                        if( debug_here )then
+                            cnt = 0
+                            call img%new([box,box,1],smpd)
+                            do icls=1,ncls_glob
+                                if( cls_mask(icls) ) cycle
+                                cnt = cnt+1
+                                call img%read(refs_glob,icls)
+                                call img%write('rejected_pool_'//int2str(iter)//'.mrc',cnt)
+                                img = 0.
+                                call img%write(refs_glob,icls)
+                            enddo
+                            call img%read(refs_glob, ncls_glob)
+                            call img%write(refs_glob, ncls_glob)
+                            call img%kill
+                        endif
                         deallocate(cls_mask)
                         write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM POOL: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                     endif
                 else
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> NO PARTICLES FLAGGED FOR REJECTION FROM POOL'
                 endif
+                if( debug_here ) print *,'end reject from_pool'; call flush(6)
             end subroutine reject_from_pool
 
             subroutine append_new_mics
                 integer :: n_spprojs_prev, n_new_spprojs, cnt, iptcl, n_new_ptcls
+                if( debug_here ) print *,'in append_new_mics'; call flush(6)
                 if( .not.is_file_open(spproj_list_fname) )then
                     do_wait        = .false.
                     n_spprojs_prev = n_spprojs
@@ -607,6 +623,7 @@ contains
                 else
                     do_wait = .true.
                 endif
+                if( debug_here ) print *,'end append_new_mics'; call flush(6)
             end subroutine append_new_mics
 
             !>  flags mics and stacks segements with selection
@@ -665,10 +682,10 @@ contains
                 use simple_commander_hlev_wflows, only: cluster2D_autoscale_commander
                 type(cluster2D_distr_commander) :: xcluster2D_distr
                 integer :: nptcls, nparts
+                if( debug_here ) print *,'in classify_buffer'; call flush(6)
                 write(logfhandle,'(A)')'>>> 2D CLASSIFICATION OF NEW BUFFER'
                 ! directory structure
                 call chdir('buffer2D')
-                !call rename('../'//trim(PROJFILE_BUFFER),PROJFILE_BUFFER)
                 ! init
                 nptcls = buffer_proj%get_nptcls()
                 nparts = calc_nparts(buffer_proj, nptcls)
@@ -678,15 +695,14 @@ contains
                 call cline_cluster2D_buffer%set('refine',    'snhc')
                 call cline_cluster2D_buffer%set('mkdir',     'no')
                 call cline_cluster2D_buffer%set('startit',   1.)
-                call cline_cluster2D_buffer%set('maxits',    10.) ! guaranties 5 iterations with withdrawal
-                call cline_cluster2D_buffer%set('extr_iter', real(MAX_EXTRLIM2D-4)) ! and 5 without
+                call cline_cluster2D_buffer%set('maxits',    12.) ! guaranties 3 iterations with withdrawal
+                call cline_cluster2D_buffer%set('extr_iter', real(MAX_EXTRLIM2D-2)) ! and 7 without
                 call cline_cluster2D_buffer%set('ncls',      real(params%ncls_start))
                 call cline_cluster2D_buffer%set('nparts',    real(nparts))
-                call cline_cluster2D_buffer%set('autoscale', 'no')
-                call cline_cluster2D_buffer%set('box',      real(box))
-                call cline_cluster2D_buffer%set('msk',      real(msk))
+                call cline_cluster2D_buffer%set('box',       real(box))
+                call cline_cluster2D_buffer%set('msk',       real(box/2)-3.)
+                call cline_cluster2D_buffer%set('stream',    'yes')
                 call cline_cluster2D_buffer%delete('trs')
-                call cline_cluster2D_buffer%delete('update_frac')
                 call cline_cluster2D_buffer%delete('endit')
                 call cline_cluster2D_buffer%delete('converged')
                 params_glob%nptcls = nptcls
@@ -697,6 +713,7 @@ contains
                 call buffer_proj%read(PROJFILE_BUFFER)
                 params_glob%nparts   = orig_nparts
                 params_glob%projfile = trim(orig_projfile)
+                if( debug_here ) print *,'end classify_buffer'; call flush(6)
             end subroutine classify_buffer
 
             !>  runs one iteration of cluster2D for the merged buffers in the cwd
@@ -963,6 +980,7 @@ contains
                 call o%kill
                 if(allocated(cls_pop))deallocate(cls_pop)
                 if(allocated(cls_buffer_pop))deallocate(cls_buffer_pop)
+                if( debug_here )print *,'end transfer_buffer_to_pool'; call flush(6)
             end subroutine transfer_buffer_to_pool
 
             subroutine read_mics
@@ -970,6 +988,7 @@ contains
                 type(oris)                    :: mics_sel
                 integer                       :: nptcls, nmics, imic
                 logical                       :: included, do_selection
+                if( debug_here )print *,'in read_mics'; call flush(6)
                 do_selection = file_exists(MICS_SELECTION_FILE)
                 call read_filetable(spproj_list_fname, spproj_list)
                 if( do_selection )then
@@ -1004,6 +1023,7 @@ contains
                     n_spprojs = 0
                 endif
                 if(do_selection)call mics_sel%kill
+                if( debug_here )print *,'end read_mics'; call flush(6)
             end subroutine read_mics
 
             !> builds and writes new buffer project from the pool
@@ -1012,6 +1032,7 @@ contains
                 character(len=:), allocatable :: stkname
                 integer :: iptcl, stkind, ind_in_stk, imic, micind, nptcls_here
                 integer :: fromp, top, istk, state, nmics_here, nptcls_tot
+                if( debug_here )print *,'in gen_buffer_from_pool'; call flush(6)
                 buffer_exists = .false.
                 call buffer_proj%kill
                 ! to account for directory structure
@@ -1151,6 +1172,7 @@ contains
                 call o_stks%kill
                 if(allocated(mic_list))deallocate(mic_list)
                 if(allocated(stk_list))deallocate(stk_list)
+                if( debug_here )print *,'end update_orig_proj'; call flush(6)
             end subroutine update_orig_proj
 
             subroutine scale_stks( stk_fnames )

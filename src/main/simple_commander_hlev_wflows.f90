@@ -57,12 +57,13 @@ contains
         type(sp_project)                    :: spproj, spproj_sc
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked
-        real                                :: scale_factor, smpd_target, smpd, msk, ring2, lp1, lp2
+        real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
         integer                             :: last_iter, box
         logical                             :: do_scaling
         ! parameters
-        integer,                  parameter :: target_box = 72
-        real,                     parameter :: target_lp  = 15.
+        integer, parameter :: MINBOX      = 92
+        real, parameter    :: target_lp   = 15.
+        real               :: smpd_target = 5.
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         orig_projfile = params%projfile
@@ -95,24 +96,28 @@ contains
         call cline_cluster2D2%set('trs',         MINSHIFT)
         if( cline%defined('update_frac') ) call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
-        do_scaling   = params%box > target_box
-        scale_factor = 1.
-        if( do_scaling )then
-            do_scaling = .true.
-            smpd_target = params%smpd * real(params%box) / real(target_box)
+        do_scaling = .true.
+        if( params%box < MINBOX )then
+            do_scaling   = .false.
+            smpd         = params%smpd
+            scale_factor = 1.
+            box          = params%box
+            projfile     = trim(params%projfile)
+        else
+            call autoscale(params%box, params%smpd, smpd_target, box, smpd, scale_factor)
+            if( box < MINBOX ) smpd_target = params%smpd * real(params%box) / real(MINBOX)
             call spproj%scale_projfile(smpd_target, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
             call spproj%kill
             scale_factor = cline_scale%get_rarg('scale')
             smpd         = cline_scale%get_rarg('smpd')
+            box          = nint(cline_scale%get_rarg('newbox'))
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
             call xscale_distr%execute( cline_scale )
-            msk = real(target_box/2-COSMSKHALFWIDTH+1)
-            box = target_box
+        endif
+        if( cline%defined('msk') )then
+            msk = msk*scale_factor
         else
-            smpd     = params%smpd
-            projfile = trim(params%projfile)
-            msk      = real(params%box/2-COSMSKHALFWIDTH+1)
-            box      = params%box
+            msk = real(box/2)-3.
         endif
         ring2 = 0.7*msk
         lp1   = max(2.*smpd, max(params%lp,target_lp))
@@ -162,8 +167,8 @@ contains
             call spproj_sc%read(projfile)
             call spproj%read(params%projfile)
             call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
-            call spproj%add_cavgs2os_out(trim(finalcavgs), smpd, imgkind='cavg')
-            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+            call rescale_cavgs(finalcavgs)
+            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
             spproj%os_cls2D  = spproj_sc%os_cls2D
             call spproj%write(params%projfile)
@@ -182,10 +187,31 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute(cline_rank_cavgs)
         ! cleanup
-        if(do_scaling ) call del_file(trim(projfile))
+        if( do_scaling ) call del_file(trim(projfile))
         call simple_rmdir(STKPARTSDIR)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
+        contains
+
+            subroutine rescale_cavgs(cavgs)
+                use simple_image, only: image
+                character(len=*), intent(in) :: cavgs
+                type(image)                  :: img, img_pad
+                integer                      :: icls, iostat
+                call img%new([box,box,1],smpd)
+                call img_pad%new([params%box,params%box,1],params%smpd)
+                do icls = 1,params%ncls
+                    call img%read(cavgs,icls)
+                    call img%fft
+                    call img%pad(img_pad, backgr=0.)
+                    call img_pad%ifft
+                    call img_pad%write('tmp_cavgs.mrc',icls)
+                enddo
+                iostat = simple_rename('tmp_cavgs.mrc',cavgs)
+                call img%kill
+                call img_pad%kill
+            end subroutine
+
     end subroutine exec_cleanup2D
 
     !> for distributed CLUSTER2D with two-stage autoscaling

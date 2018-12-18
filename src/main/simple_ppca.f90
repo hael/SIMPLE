@@ -195,8 +195,10 @@ contains
 
     !>  \brief  EM algorithm
     subroutine em_opt( self, p, err )
-        !$ use omp_lib
-        !$ use omp_lib_kinds
+        !!$ use omp_lib
+        !!$ use omp_lib_kinds
+        ! OpenMP has been deactivated here has it conflicts with gcc6 compilation
+        ! 18/12/2018
         use simple_math, only: matinv
         class(ppca), intent(inout) :: self
         integer, intent(out)       :: err
@@ -213,42 +215,42 @@ contains
         do i=1,self%N
             ! read data vec
             read(self%funit, rec=i) self%X(:,1)
-            !$omp parallel default(shared)
-            !$omp workshare
+            !!$omp parallel default(shared)
+            !!$omp workshare
             ! Expectation step (calculate expectations using the old W)
             self%E_zn(i,:,:) = matmul(self%MinvWt,self%X)
             self%E_znzn = matmul(self%E_zn(i,:,:),transpose(self%E_zn(i,:,:)))
             ! Prepare for update of W (M-step)
             self%W_1 = self%W_1+matmul(self%X,transpose(self%E_zn(i,:,:)))
             self%W_2 = self%W_2+self%E_znzn
-            !$omp end workshare nowait
-            !$omp end parallel
+            !!$omp end workshare nowait
+            !!$omp end parallel
         end do
 
         ! M-STEP
         call matinv(self%W_2, self%W_3, self%Q, err)
         if( err == -1 ) return
         ! update W
-        !$omp parallel default(shared)
-        !$omp workshare
+        !!$omp parallel default(shared)
+        !!$omp workshare
         self%W = matmul(self%W_1,self%W_3)
         ! update Wt
         self%Wt = transpose(self%W)
         ! set W_2 to WtW
         self%W_2 = matmul(self%Wt,self%W)
-        !$omp end workshare nowait
-        !$omp end parallel
+        !!$omp end workshare nowait
+        !!$omp end parallel
 
         ! EVAL REC ERR
         p = 0.
         do i=1,self%N
             ! read data vec
             read(self%funit, rec=i) self%X(:,1)
-            !$omp parallel default(shared)
-            !$omp workshare
+            !!$omp parallel default(shared)
+            !!$omp workshare
             tmp = matmul(self%W,self%E_zn(i,:,:))
-            !$omp end workshare nowait
-            !$omp end parallel
+            !!$omp end workshare nowait
+            !!$omp end parallel
             p = p+sqrt(sum((self%X(:,1)-tmp(:,1))**2.))
         end do
     end subroutine em_opt

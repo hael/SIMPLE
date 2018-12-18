@@ -22,7 +22,7 @@ type convergence
     real :: mi_state  = 0. !< state parameter distribution overlap
     real :: spread    = 0. !< angular spread
     real :: shwmean   = 0. !< shift increment, weighted mean
-    real :: shwstdev  = 0. !< shift increment, weighted std deviation    
+    real :: shwstdev  = 0. !< shift increment, weighted std deviation
     real :: bfac      = 0. !< average per-particle B-factor (search)
     real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
   contains
@@ -77,7 +77,7 @@ contains
         ! determine convergence
         if( ncls > 1 )then
             converged = .false.
-            if( params_glob%l_frac_update )then
+            if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
                 if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
             else
                 if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
