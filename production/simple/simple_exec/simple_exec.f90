@@ -40,7 +40,6 @@ type(import_starproject_commander)     :: ximport_starproject
 type(print_starproject_info_commander) :: xprint_starproject_info
 
 ! PART OF SP WORKFLOW
-type(make_pickrefs_commander)    :: xmake_pickrefs
 type(extract_commander)          :: xextract
 type(reextract_commander)        :: xreextract
 type(cluster_cavgs_commander)    :: xcluster_cavgs
@@ -154,11 +153,6 @@ select case(prg)
 
     ! PART OF SP WORKFLOW
 
-    case( 'make_pickrefs' )
-        if( .not. cline%defined('mkdir') )    call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('pcontrast')) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('pgrp')     ) call cline%set('pgrp',         'd1')
-        call xmake_pickrefs%execute(cline)
     case( 'extract' )
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')

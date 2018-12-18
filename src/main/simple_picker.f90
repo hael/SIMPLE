@@ -18,10 +18,9 @@ integer,          parameter   :: SSCORE   = 4
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
 real,             parameter   :: BOXFRAC = 0.5
-logical,          parameter   :: WRITESHRUNKEN = .true., DOPRINT = .true., GAUPICK = .false.
+logical,          parameter   :: WRITESHRUNKEN = .true., DOPRINT = .true.
 ! VARS
 type(image)                   :: micrograph, mic_shrunken, mic_shrunken_copy, mic_shrunken_refine, ptcl_target
-type(image)                   :: gaussimg
 type(image),      allocatable :: refs(:), refs_refine(:)
 logical,          allocatable :: selected_peak_positions(:)
 real,             allocatable :: sxx(:), sxx_refine(:), corrmat(:,:), peak_stats(:,:)
@@ -121,28 +120,6 @@ contains
         call mic_shrunken_refine%bp(hp, lp)
         call mic_shrunken%ifft()
         call mic_shrunken_refine%ifft()
-        if( GAUPICK )then
-            mic_shrunken_copy = mic_shrunken
-            ! create variance image
-            call mic_shrunken%subtr_avg_and_square
-            ! call mic_shrunken%write('varimg.mrc', 1)
-            call mic_shrunken%fft()
-            ! create Gaussian image
-            call gaussimg%new(ldim_shrink, smpd_shrunken)
-            sigma = real(orig_box)/PICKER_SHRINK/GAUPICK_SIGMA_SHRINK
-            call gaussimg%gauimg2D(sigma, sigma)
-            ! call gaussimg%write('gaussimg.mrc', 1)
-            call gaussimg%fft()
-            call gaussimg%neg()
-            ! convolve
-            call gaussimg%mul(mic_shrunken)
-            call gaussimg%ifft()
-            cnt_glob = cnt_glob + 1
-            call gaussimg%write('peakimgs.mrc', cnt_glob)
-            ! put back the original shrunken micrograph
-            mic_shrunken = gaussimg
-            if( WRITESHRUNKEN ) call mic_shrunken%write('shrunken_ones.mrc', cnt_glob)
-        endif
     end subroutine init_picker
 
     subroutine exec_picker( boxname_out, nptcls_out )

@@ -68,7 +68,7 @@ if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
 
     ! PRE-PROCESSING
-
+    
     case( 'preprocess' )
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
@@ -111,6 +111,7 @@ select case(prg)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         call xpick_distr%execute(cline)
     case( 'pick_extract_stream' )
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')

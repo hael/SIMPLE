@@ -472,21 +472,38 @@ contains
         call simple_end('**** SIMPLE_MAP_SELECTION NORMAL STOP ****')
     end subroutine exec_map_cavgs_selection
 
-    subroutine exec_pick( self, cline)
-        use simple_binoris_io,  only: binwrite_oritab
-        use simple_ori,         only: ori
-        use simple_picker_iter, only: picker_iter
+    subroutine exec_pick( self, cline )
+        use simple_binoris_io,     only: binwrite_oritab
+        use simple_ori,            only: ori
+        use simple_oris,           only: oris
+        use simple_picker_iter,    only: picker_iter
+        use simple_image,          only: image
+        use simple_projector_hlev, only: reproject
+        use simple_sym,            only: sym
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
-        type(parameters)                     :: params
-        type(sp_project)                     :: spproj
-        type(picker_iter)                    :: piter
-        type(ori)                            :: o
-        character(len=:),        allocatable :: output_dir, intg_name, imgkind
-        character(len=LONGSTRLEN)            :: boxfile
-        integer :: fromto(2), imic, ntot, nptcls_out, cnt, state
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(picker_iter)             :: piter
+        type(ori)                     :: o
+        type(oris)                    :: os
+        type(sym)                     :: pgrpsyms
+        type(image)                   :: ref3D, ref2D
+        type(image),      allocatable :: projs(:)
+        character(len=:), allocatable :: output_dir, intg_name, imgkind
+        character(len=:), allocatable :: volname, volcavgname, cavgname
+        real,             allocatable :: states(:)
+        character(len=LONGSTRLEN)     :: boxfile
+        integer, parameter :: NREFS=100, NPROJS=20
+        real    :: ang, rot
+        integer :: nrots, iref, irot, status, ldim(3), ifoo, ncavgs
+        integer :: icavg, ncls2D, fromto(2), imic, ntot, nptcls_out
+        integer :: cnt, state, n_os_out, i, nsel
         call cline%set('oritype', 'mic')
         call params%new(cline)
+        if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
+        ! point-group object
+        call pgrpsyms%new(trim(params%pgrp))
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
@@ -502,10 +519,103 @@ contains
             endif
         endif
         ntot = fromto(2) - fromto(1) + 1
-        ! read in integrated movies
-        call spproj%read_segment('mic', params%projfile, fromto)
+        ! read project file
+        call spproj%read(params%projfile)
+        ! look for movies
         if( spproj%get_nintgs() == 0 )then
             THROW_HARD('No integrated micrograph to process!')
+        endif
+        ! make picking references
+        n_os_out = spproj%os_out%get_noris()
+        if( n_os_out == 0 )then
+            THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
+        endif
+        ! interrogate project for vol / cavgs
+        do i=1,n_os_out
+            if( spproj%os_out%isthere(i,'imgkind') )then
+                call spproj%os_out%getter(i,'imgkind',imgkind)
+                select case(imgkind)
+                    case( 'vol' )
+                        call spproj%os_out%getter(i, 'vol',      volname)
+                    case( 'vol_cavg' )
+                        call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
+                    case( 'cavg' )
+                        call spproj%os_out%getter(i, 'cavg',     cavgname)
+                end select
+            endif
+        enddo
+        if( allocated(volname) )then
+            ! have 3D reference
+        else if( allocated(volcavgname) )then
+            ! have 3D reference
+            volname = volcavgname
+        else if( allocated(cavgname) )then
+            ! have 2D references
+        else
+            THROW_HARD('Could not identify vol / cavgs in project for creating picking references!')
+        endif
+        if( allocated(volname) )then
+            ! find logical dimension & read reference volume
+            call find_ldim_nptcls(volname, ldim, ifoo)
+            call ref3D%new(ldim, params%smpd)
+            call ref3D%read(volname)
+            ! make projection directions
+            call os%new(NPROJS)
+            call pgrpsyms%build_refspiral(os)
+            ! generate reprojections
+            projs = reproject(ref3D, os)
+            nrots = NREFS / NPROJS
+            nsel  = NPROJS
+        else
+            ! find logical dimension & read class averages
+            call find_ldim_nptcls(cavgname, ldim, ncavgs)
+            ldim(3) = 1
+            ! check consistency with cls2D field
+            ncls2D = spproj%os_cls2D%get_noris()
+            if( ncavgs /= ncls2D )then
+                print *, '# cavgs in file:          ', ncls2D
+                print *, '# entries in cls2D field: ', ncavgs
+                THROW_HARD('inconsistent # cavgs in file vs. project field')
+            endif
+            ! manage selection
+            states = spproj%os_cls2D%get_all('state')
+            nsel   = count(states > 0.5)
+            if( nsel > NREFS / 4 )then
+                THROW_HARD('too many class averages selected as references for picking, select max 25')
+            endif
+            ! read selected cavgs
+            allocate( projs(nsel) )
+            cnt = 0
+            do icavg=1,ncavgs
+                if( states(icavg) > 0.5 )then
+                    cnt = cnt + 1
+                    call projs(cnt)%new(ldim, params%smpd)
+                    call projs(cnt)%read(cavgname, icavg)
+                endif
+            end do
+            nrots  = NREFS / nsel
+        endif
+        ! expand in in-plane rotation and write to file
+        params%refs = 'pickrefs_part'//int2str(params%part)//params%ext
+        call ref2D%new([ldim(1),ldim(2),1], params%smpd)
+        if( nrots > 1 )then
+            ang = 360./real(nrots)
+            rot = 0.
+            cnt = 0
+            do iref=1,nsel
+                do irot=1,nrots
+                    cnt = cnt + 1
+                    call projs(iref)%rtsq(rot, 0., 0., ref2D)
+                    if( params%pcontrast .eq. 'black' ) call ref2D%neg
+                    call ref2D%write(trim(params%refs), cnt)
+                    rot = rot + ang
+                end do
+            end do
+        else
+            ! should never happen
+            do iref=1,nsel
+                call projs(iref)%write(trim(params%refs), iref)
+            end do
         endif
         ! main loop
         cnt = 0

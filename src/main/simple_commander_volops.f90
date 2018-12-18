@@ -24,7 +24,6 @@ public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
 public :: symmetry_test_commander
-public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -68,10 +67,6 @@ type, extends(commander_base) :: symmetry_test_commander
   contains
     procedure :: execute      => exec_symmetry_test
 end type symmetry_test_commander
-type, extends(commander_base) :: make_pickrefs_commander
-contains
-    procedure :: execute      => exec_make_pickrefs
-end type make_pickrefs_commander
 
 contains
 
@@ -700,66 +695,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
-
-    !> for making picker references
-    subroutine exec_make_pickrefs( self, cline )
-        use simple_procimgfile, only: neg_imgfile
-        class(make_pickrefs_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline !< command line input
-        integer,          parameter :: NREFS=100, NPROJS=20
-        character(len=*), parameter :: ORIFILE='pickrefs_oris'//trim(TXT_EXT)
-        type(parameters)            :: params
-        type(builder)               :: build
-        type(cmdline)               :: cline_project
-        type(reproject_commander)   :: xproject
-        integer                     :: nrots, cnt, iref, irot, status
-        real                        :: ang, rot
-        call cline%set('mkdir','no')
-        call build%init_params_and_build_general_tbox(cline,params)
-        if( cline%defined('stk') .or. cline%defined('vol1') )then
-            if( cline%defined('vol1') )then
-                params%nptcls = NPROJS
-                call build%spproj_field%new(NPROJS)
-                call build%pgrpsyms%build_refspiral(build%spproj_field)
-                call build%spproj_field%write(trim(ORIFILE), [1,NPROJS])
-                cline_project = cline
-                call cline_project%set('nspace', real(NPROJS))
-                params%stk = 'even_projs'//params%ext
-                call cline_project%set('outstk', trim(params%stk)  )
-                call cline_project%set('oritab', trim(ORIFILE))
-                call cline_project%set('smpd',   PICKER_SHRINK)
-                call cline_project%set('neg',    'no'         )
-                call cline_project%set('msk',    real(params%box/2-5))
-                call xproject%execute(cline_project)
-            endif
-            ! expand in in-plane rotation
-            nrots = NREFS/params%nptcls
-            if( nrots > 1 )then
-                ang = 360./real(nrots)
-                rot = 0.
-                cnt  = 0
-                do iref=1,params%nptcls
-                    call build%img%read(params%stk, iref)
-                    do irot=1,nrots
-                        cnt = cnt + 1
-                        call build%img%rtsq(rot, 0., 0., build%img_copy)
-                        call build%img_copy%write('rotated_from_make_pickrefs'//params%ext, cnt)
-                        rot = rot + ang
-                    end do
-                end do
-                call cline%set('stk', 'rotated_from_make_pickrefs'//params%ext)
-            endif
-            if( params%pcontrast .eq. 'black' )then
-                call neg_imgfile('rotated_from_make_pickrefs'//params%ext, 'pickrefs'//params%ext, params%smpd)
-            else
-                status= simple_rename('rotated_from_make_pickrefs'//params%ext, 'pickrefs'//params%ext)
-            endif
-        else
-            THROW_HARD('need input volume (vol1) or class averages (stk) to generate picking references')
-        endif
-        call del_file('rotated_from_make_pickrefs'//params%ext)
-        ! end gracefully
-        call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
-    end subroutine exec_make_pickrefs
 
 end module simple_commander_volops

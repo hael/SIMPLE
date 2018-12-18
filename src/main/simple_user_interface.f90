@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(67)
+type(simple_prg_ptr) :: prg_ptr_array(65)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -95,7 +95,6 @@ type(simple_program), target :: local_resolution
 type(simple_program), target :: local_resolution2D
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
-type(simple_program), target :: make_pickrefs
 type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
 type(simple_program), target :: motion_correct
@@ -254,7 +253,6 @@ contains
         call new_local_resolution2D
         call new_make_cavgs
         call new_make_oris
-        call new_make_pickrefs
         call new_mask
         call new_mkdir_
         call new_motion_correct
@@ -326,46 +324,45 @@ contains
         prg_ptr_array(25)%ptr2prg => local_resolution2D
         prg_ptr_array(26)%ptr2prg => make_cavgs
         prg_ptr_array(27)%ptr2prg => make_oris
-        prg_ptr_array(28)%ptr2prg => make_pickrefs
-        prg_ptr_array(29)%ptr2prg => mask
-        prg_ptr_array(30)%ptr2prg => mkdir_
-        prg_ptr_array(31)%ptr2prg => motion_correct
-        prg_ptr_array(32)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(33)%ptr2prg => new_project
-        prg_ptr_array(34)%ptr2prg => normalize_
-        prg_ptr_array(35)%ptr2prg => orisops
-        prg_ptr_array(36)%ptr2prg => oristats
-        prg_ptr_array(37)%ptr2prg => pick
-        prg_ptr_array(38)%ptr2prg => pick_extract_stream
-        prg_ptr_array(39)%ptr2prg => postprocess
-        prg_ptr_array(40)%ptr2prg => preprocess
-        prg_ptr_array(41)%ptr2prg => preprocess_stream
-        prg_ptr_array(42)%ptr2prg => print_fsc
-        prg_ptr_array(43)%ptr2prg => print_magic_boxes
-        prg_ptr_array(44)%ptr2prg => print_project_info
-        prg_ptr_array(45)%ptr2prg => print_project_field
-        prg_ptr_array(46)%ptr2prg => reproject
-        prg_ptr_array(47)%ptr2prg => reconstruct3D
-        prg_ptr_array(48)%ptr2prg => reextract
-        prg_ptr_array(49)%ptr2prg => refine3D
-        prg_ptr_array(50)%ptr2prg => refine3D_init
-        prg_ptr_array(51)%ptr2prg => report_selection
-        prg_ptr_array(52)%ptr2prg => scale
-        prg_ptr_array(53)%ptr2prg => scale_project
-        prg_ptr_array(54)%ptr2prg => select_
-        prg_ptr_array(55)%ptr2prg => shift
-        prg_ptr_array(56)%ptr2prg => simulate_movie
-        prg_ptr_array(57)%ptr2prg => simulate_noise
-        prg_ptr_array(58)%ptr2prg => simulate_particles
-        prg_ptr_array(59)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(60)%ptr2prg => stack
-        prg_ptr_array(61)%ptr2prg => stackops
-        prg_ptr_array(62)%ptr2prg => symaxis_search
-        prg_ptr_array(63)%ptr2prg => symmetry_test
-        prg_ptr_array(64)%ptr2prg => tseries_track
-        prg_ptr_array(65)%ptr2prg => update_project
-        prg_ptr_array(66)%ptr2prg => vizoris
-        prg_ptr_array(67)%ptr2prg => volops
+        prg_ptr_array(28)%ptr2prg => mask
+        prg_ptr_array(29)%ptr2prg => mkdir_
+        prg_ptr_array(30)%ptr2prg => motion_correct
+        prg_ptr_array(31)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(32)%ptr2prg => new_project
+        prg_ptr_array(33)%ptr2prg => normalize_
+        prg_ptr_array(34)%ptr2prg => orisops
+        prg_ptr_array(35)%ptr2prg => oristats
+        prg_ptr_array(36)%ptr2prg => pick
+        prg_ptr_array(37)%ptr2prg => pick_extract_stream
+        prg_ptr_array(38)%ptr2prg => postprocess
+        prg_ptr_array(39)%ptr2prg => preprocess
+        prg_ptr_array(40)%ptr2prg => preprocess_stream
+        prg_ptr_array(41)%ptr2prg => print_fsc
+        prg_ptr_array(42)%ptr2prg => print_magic_boxes
+        prg_ptr_array(43)%ptr2prg => print_project_info
+        prg_ptr_array(44)%ptr2prg => print_project_field
+        prg_ptr_array(45)%ptr2prg => reproject
+        prg_ptr_array(46)%ptr2prg => reconstruct3D
+        prg_ptr_array(47)%ptr2prg => reextract
+        prg_ptr_array(48)%ptr2prg => refine3D
+        prg_ptr_array(49)%ptr2prg => refine3D_init
+        prg_ptr_array(50)%ptr2prg => report_selection
+        prg_ptr_array(51)%ptr2prg => scale
+        prg_ptr_array(52)%ptr2prg => scale_project
+        prg_ptr_array(53)%ptr2prg => select_
+        prg_ptr_array(54)%ptr2prg => shift
+        prg_ptr_array(55)%ptr2prg => simulate_movie
+        prg_ptr_array(56)%ptr2prg => simulate_noise
+        prg_ptr_array(57)%ptr2prg => simulate_particles
+        prg_ptr_array(58)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(59)%ptr2prg => stack
+        prg_ptr_array(60)%ptr2prg => stackops
+        prg_ptr_array(61)%ptr2prg => symaxis_search
+        prg_ptr_array(62)%ptr2prg => symmetry_test
+        prg_ptr_array(63)%ptr2prg => tseries_track
+        prg_ptr_array(64)%ptr2prg => update_project
+        prg_ptr_array(65)%ptr2prg => vizoris
+        prg_ptr_array(66)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -427,8 +424,6 @@ contains
                 ptr2prg => make_cavgs
             case('make_oris')
                 ptr2prg => make_oris
-            case('make_pickrefs')
-                ptr2prg => make_pickrefs
             case('mask')
                 ptr2prg => mask
             case('mkdir')
@@ -554,7 +549,6 @@ contains
         write(logfhandle,'(A)') local_resolution%name
         write(logfhandle,'(A)') local_resolution2D%name
         write(logfhandle,'(A)') make_oris%name
-        write(logfhandle,'(A)') make_pickrefs%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') new_project%name
@@ -1668,33 +1662,6 @@ contains
         call make_oris%set_input('comp_ctrls', 1, nthr)
     end subroutine new_make_oris
 
-    subroutine new_make_pickrefs
-        ! PROGRAM SPECIFICATION
-        call make_pickrefs%new(&
-        &'make_pickrefs', &                            ! name
-        &'Generate picking references',&               ! descr_short
-        &'is a program for generating references for template-based particle picking',& ! descr_long
-        &'simple_exec',&                               ! executable
-        &0, 2, 2, 1, 0, 0, 1, .false.)                 ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call make_pickrefs%set_input('parm_ios', 1, smpd)
-        call make_pickrefs%set_input('parm_ios', 2, pcontrast)
-        ! alternative inputs
-        call make_pickrefs%set_input('alt_ios', 1, 'stk', 'file', 'Stack of 2D picking references', 'Stack of 2D picking references', 'e.g. refs.mrc', .false., '')
-        call make_pickrefs%set_input('alt_ios', 2, 'vol1', 'file', 'Volume', 'Volume to re-project', 'vol.mrc file', .false., '')
-        ! search controls
-        call make_pickrefs%set_input('srch_ctrls', 1, pgrp)
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        call make_pickrefs%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_make_pickrefs
-
     subroutine new_mask
         ! PROGRAM SPECIFICATION
         call mask%new(&
@@ -1910,19 +1877,20 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &0, 2, 0, 2, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &0, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call pick%set_input('parm_ios', 1, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
-        call pick%set_input('parm_ios', 2, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
+        call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
+        call pick%set_input('parm_ios', 2, pcontrast)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call pick%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
-        call pick%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick%set_input('srch_ctrls', 1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
+        call pick%set_input('srch_ctrls', 2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick%set_input('srch_ctrls', 3, pgrp)
+        pick%srch_ctrls(3)%required = .false.
         ! filter controls
         call pick%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
@@ -1939,22 +1907,22 @@ contains
         &'Template-based particle picking and extraction in streaming mode',& ! descr_short
         &'is a distributed workflow for template-based particle picking and extraction in streaming mode',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &1, 4, 0, 2, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &1, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick_extract_stream%set_input('img_ios', 1, 'dir_target', 'file', 'Target directory',&
         &'Directory where the preprocess_stream application is running', 'e.g. 1_preprocess_stream', .true., '')
         ! parameter input/output
-        call pick_extract_stream%set_input('parm_ios', 1, 'refs', 'file', 'picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .true., '')
-        call pick_extract_stream%set_input('parm_ios', 2, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
-        call pick_extract_stream%set_input('parm_ios', 3, pcontrast)
-        call pick_extract_stream%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call pick_extract_stream%set_input('parm_ios', 1, 'box_extract', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call pick_extract_stream%set_input('parm_ios', 2, pcontrast)
+        call pick_extract_stream%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
         call pick_extract_stream%set_input('srch_ctrls',1, 'thres', 'num', 'Distance threshold','Distance filer (in pixels)', 'in pixels', .false., 0.)
         call pick_extract_stream%set_input('srch_ctrls',2, 'ndev', 'num', '# of sigmas for clustering', '# of standard deviations threshold for one cluster clustering{2}', '{2}', .false., 2.)
+        call pick_extract_stream%set_input('srch_ctrls', 3, pgrp)
+        pick_extract_stream%srch_ctrls(3)%required = .false.
         ! filter controls
         call pick_extract_stream%set_input('filt_ctrls', 1, 'lp', 'num', 'Low-pass limit','Low-pass limit in Angstroms{20}', 'in Angstroms{20}', .false., 20.)
         ! mask controls
@@ -2014,7 +1982,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 9, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &1, 8, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2024,12 +1992,10 @@ contains
         call preprocess%set_input('parm_ios', 3,  scale_movies)
         call preprocess%set_input('parm_ios', 4,  pcontrast)
         call preprocess%set_input('parm_ios', 5,  'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess%set_input('parm_ios', 6,  'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
-        call preprocess%set_input('parm_ios', 7,  'fbody', 'string', 'Template output micrograph name',&
+        call preprocess%set_input('parm_ios', 6,  'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess%set_input('parm_ios', 8,  pspecsz)
-        call preprocess%set_input('parm_ios', 9,  numlen)
+        call preprocess%set_input('parm_ios', 7,  pspecsz)
+        call preprocess%set_input('parm_ios', 8,  numlen)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2047,6 +2013,8 @@ contains
         call preprocess%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls', 14, pgrp)
+        preprocess%srch_ctrls(14)%required = .false.
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
@@ -2073,7 +2041,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &2, 12, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &2, 11, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2084,19 +2052,17 @@ contains
         call preprocess_stream%set_input('parm_ios', 3, scale_movies)
         call preprocess_stream%set_input('parm_ios', 4, pcontrast)
         call preprocess_stream%set_input('parm_ios', 5, 'box_extract', 'num', 'Box size on extraction', 'Box size on extraction in pixels', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('parm_ios', 6, 'refs', 'file', 'Picking 2D references',&
-        &'2D references used for automated picking', 'e.g. pickrefs.mrc file with references', .false., 'pickrefs.mrc')
-        call preprocess_stream%set_input('parm_ios', 7, 'fbody', 'string', 'Template output micrograph name',&
+        call preprocess_stream%set_input('parm_ios', 6, 'fbody', 'string', 'Template output micrograph name',&
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
-        call preprocess_stream%set_input('parm_ios', 8, pspecsz)
-        call preprocess_stream%set_input('parm_ios', 9, kv)
+        call preprocess_stream%set_input('parm_ios', 7, pspecsz)
+        call preprocess_stream%set_input('parm_ios', 8, kv)
+        preprocess_stream%parm_ios(8)%required = .true.
+        call preprocess_stream%set_input('parm_ios', 9, cs)
         preprocess_stream%parm_ios(9)%required = .true.
-        call preprocess_stream%set_input('parm_ios', 10, cs)
+        call preprocess_stream%set_input('parm_ios', 10, fraca)
         preprocess_stream%parm_ios(10)%required = .true.
-        call preprocess_stream%set_input('parm_ios', 11, fraca)
+        call preprocess_stream%set_input('parm_ios', 11, smpd)
         preprocess_stream%parm_ios(11)%required = .true.
-        call preprocess_stream%set_input('parm_ios', 12, smpd)
-        preprocess_stream%parm_ios(12)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2114,6 +2080,8 @@ contains
         call preprocess_stream%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls', 14, pgrp)
+        preprocess_stream%srch_ctrls(14)%required = .false.
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
