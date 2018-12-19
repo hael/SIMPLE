@@ -44,13 +44,6 @@ logical                       :: l_distr_exec_glob !< global distributed executi
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
 
-! plan for the CTF
-type ctfplan
-   character(len=STDLEN) :: mode=''                !< astig/noastig
-   character(len=STDLEN) :: flag=''                !< flag: <mul|flip|no>
-   logical               :: l_phaseplate = .false. !< image obtained with Volta phaseplate
-end type ctfplan
-
 ! type for arrays of allocatable strings
 type str4arr
     character(len=:), allocatable :: str

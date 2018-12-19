@@ -86,6 +86,7 @@ contains
     procedure          :: merge_algndocs
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
+    procedure          :: gen_ptcls_subset
     ! I/O
     ! printers
     procedure          :: print_info
@@ -2092,6 +2093,89 @@ contains
             if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
         end do
     end subroutine map2ptcls_state
+
+    subroutine gen_ptcls_subset( self_in, self_out, nptcls_subset )
+        use simple_image,   only: image
+        use simple_cmdline, only: cmdline
+        class(sp_project), intent(inout) :: self_in
+        type(sp_project),  intent(out)   :: self_out
+        integer,           intent(in)    :: nptcls_subset
+        character(len=STDLEN), parameter :: newstkname = 'stk_subset.mrc'
+        character(len=:),    allocatable :: stkname, projname, new_projname, projfile, new_projfile
+        type(cmdline)        :: cline
+        type(ctfparams)      :: ctfparms
+        type(oris)           :: ctftab
+        type(image)          :: img
+        type(ran_tabu)       :: rt
+        integer, allocatable :: order(:)
+        real    :: smpd
+        integer :: inds(nptcls_subset)
+        integer :: i, iptcl, nonzero_nptcls, nptcls_tot, cnt, box, ind_in_stk
+        call self_out%kill
+        if( self_in%os_ptcl2D%get_noris() < nptcls_subset )THROW_HARD('Asking for too many particles 1; sp_project :: gen_ptcls_subset')
+        nptcls_tot = self_in%get_nptcls()
+        if( nptcls_subset > nptcls_tot )THROW_HARD('Asking for too many particles 2; sp_project :: gen_ptcls_subset')
+        order = (/(iptcl,iptcl=1,nptcls_tot)/)
+        rt    = ran_tabu(nptcls_tot)
+        call rt%shuffle(order)
+        call rt%kill
+        cnt  = 0
+        inds = 0
+        do i = 1,nptcls_tot
+            iptcl = order(i)
+            if( self_in%os_ptcl2D%get(iptcl,'state') > 0.5 )then
+                cnt = cnt + 1
+                if( cnt > nptcls_subset )exit
+                inds(cnt) = iptcl
+            endif
+        enddo
+        nonzero_nptcls = count(inds>0)
+        if( nonzero_nptcls /= nptcls_subset ) THROW_HARD('Asking for too many particles 3; sp_project :: gen_ptcls_subset')
+        ! gather defocus and create stack
+        call ctftab%new(nptcls_subset)
+        box  = self_in%get_box()
+        smpd = self_in%get_smpd()
+        call img%new([box,box,1],smpd)
+        do i=1,nptcls_subset
+            iptcl = inds(i)
+            call ctftab%set_ctfvars(i, self_in%get_ctfparams('ptcl2D',iptcl))
+            call self_in%get_stkname_and_ind('ptcl2D', iptcl, stkname, ind_in_stk )
+            call img%read(stkname,ind_in_stk)
+            call img%write(newstkname,i)
+        enddo
+        ! import stack into new project
+        ctfparms = self_in%get_ctfparams('ptcl2D',inds(1))
+        call self_out%add_single_stk(newstkname, ctfparms, ctftab)
+        ! transfer orientation parameters
+        do i=1,nptcls_subset
+            iptcl = inds(i)
+            if( self_in%os_ptcl2D%has_been_searched(iptcl) )then
+                call self_out%os_ptcl2D%set_euler(i, self_in%os_ptcl2D%get_euler(iptcl))
+                call self_out%os_ptcl2D%set_shift(i, self_in%os_ptcl2D%get_2Dshift(iptcl))
+            endif
+            if( self_in%os_ptcl3D%has_been_searched(iptcl) )then
+                call self_out%os_ptcl3D%set_euler(i, self_in%os_ptcl3D%get_euler(iptcl))
+                call self_out%os_ptcl3D%set_shift(i, self_in%os_ptcl3D%get_2Dshift(iptcl))
+            endif
+        enddo
+        ! update other fields & write
+        self_out%projinfo = self_in%projinfo
+        self_out%compenv  = self_in%compenv
+        if( self_in%jobproc%get_noris()  > 0 ) self_out%jobproc = self_in%jobproc
+        call self_out%projinfo%getter(1, 'projfile', projfile)
+        call self_out%projinfo%getter(1, 'projname', projname)
+        if( trim(projname).eq.'' ) projname = get_fbody(projfile, METADATA_EXT, separator=.false.)
+        new_projname = trim(projname)//'_subset'
+        new_projfile = trim(new_projname)//'.simple'
+        call cline%set('projname', trim(new_projname))
+        call cline%delete('projfile')
+        call self_out%update_projinfo(cline)
+        call self_out%write(new_projfile)
+        ! cleanup
+        call img%kill
+        call ctftab%kill
+        deallocate(order)
+    end subroutine gen_ptcls_subset
 
     ! printers
 

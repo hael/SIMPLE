@@ -209,16 +209,17 @@ contains
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
         integer :: pops(params_glob%ncls)
-        real    :: corrs(params_glob%ncls), ws(params_glob%ncls)
+        real    :: corrs(params_glob%ncls), ws(params_glob%ncls), specscores(params_glob%ncls)
         real    :: frc05, frc0143, rstate
         integer :: iptcl, icls, pop, nptcls
         if( spproj%os_cls2D%get_noris() /= params_glob%ncls )then
             call spproj%os_cls2D%new(params_glob%ncls)
         endif
-        nptcls = spproj%os_ptcl2D%get_noris()
-        pops   = 0
-        corrs  = 0.
-        ws     = 0.
+        nptcls     = spproj%os_ptcl2D%get_noris()
+        pops       = 0
+        corrs      = 0.
+        ws         = 0.
+        specscores = 0.
         !$omp parallel do default(shared) private(iptcl,rstate,icls) schedule(static)&
         !$omp proc_bind(close) reduction(+:pops,corrs,ws)
         do iptcl=1,nptcls
@@ -226,26 +227,30 @@ contains
             if( rstate < 0.5 )cycle
             icls = nint(spproj%os_ptcl2D%get(iptcl,'class'))
             if( icls<1 .or. icls>params_glob%ncls )cycle
-            pops(icls)  = pops(icls)+1
-            corrs(icls) = corrs(icls)+spproj%os_ptcl2D%get(iptcl,'corr')
-            ws(icls)    = ws(icls)+spproj%os_ptcl2D%get(iptcl,'w')
+            pops(icls)       = pops(icls)+1
+            corrs(icls)      = corrs(icls)+spproj%os_ptcl2D%get(iptcl,'corr')
+            ws(icls)         = ws(icls)+spproj%os_ptcl2D%get(iptcl,'w')
+            specscores(icls) = specscores(icls)+spproj%os_ptcl2D%get(iptcl,'specscore')
         enddo
         !$omp end parallel do
         where(pops>1)
-            corrs = corrs / real(pops)
-            ws    = ws / real(pops)
+            corrs      = corrs / real(pops)
+            ws         = ws / real(pops)
+            specscores = specscores / real(pops)
         elsewhere
-            corrs = -1.
-            ws    = 0.
+            corrs      = -1.
+            ws         = 0.
+            specscores = 0.
         end where
         do icls=1,params_glob%ncls
             pop = pops(icls)
             call build_glob%projfrcs%estimate_res(icls, frc05, frc0143)
-            call spproj%os_cls2D%set(icls, 'class', real(icls))
-            call spproj%os_cls2D%set(icls, 'pop',   real(pop))
-            call spproj%os_cls2D%set(icls, 'res',   frc0143)
-            call spproj%os_cls2D%set(icls, 'corr', corrs(icls))
-            call spproj%os_cls2D%set(icls, 'w',    ws(icls))
+            call spproj%os_cls2D%set(icls, 'class',     real(icls))
+            call spproj%os_cls2D%set(icls, 'pop',       real(pop))
+            call spproj%os_cls2D%set(icls, 'res',       frc0143)
+            call spproj%os_cls2D%set(icls, 'corr',      corrs(icls))
+            call spproj%os_cls2D%set(icls, 'w',         ws(icls))
+            call spproj%os_cls2D%set(icls, 'specscore', specscores(icls))
             if( pop > 0 )then
                 call spproj%os_cls2D%set(icls, 'state', 1.0) ! needs to be default val if no selection has been done
             else

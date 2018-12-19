@@ -2333,16 +2333,16 @@ contains
         endif
     end subroutine calc_bfac_srch
 
-    subroutine find_best_classes( self, box, smpd, cls_mask, ndev )
+    subroutine find_best_classes( self, box, smpd, res_thresh,cls_mask, ndev )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: box
-        real,        intent(in)    :: smpd, ndev
+        real,        intent(in)    :: smpd, res_thresh, ndev
         logical,     intent(inout) :: cls_mask(1:self%n)
         real,    allocatable :: rfinds(:), corrs(:)
         logical, allocatable :: msk(:)
         real    :: ave, sdev, res, res_threshold, corr_threshold
         integer :: icls, nincl
-        logical :: has_corr
+        logical :: has_res, has_corr
         allocate(msk(self%n), source=.true.)
         if( self%isthere('pop') )then
             do icls=1,self%n
@@ -2355,18 +2355,24 @@ contains
                 if(self%get(icls,'corr') < 0.0001) msk(icls) = .false.
             enddo
         endif
+        has_res = self%isthere('res')
+        if( has_res )then
+            do icls=1,self%n
+                if(self%get(icls,'res') > res_thresh) msk(icls) = .false.
+            enddo
+        endif
         nincl    = count(msk)
         cls_mask = msk
-        if( self%isthere('res') )then
+        if( has_res )then
             allocate(rfinds(self%n), source=0.)
             do icls=1,self%n
                 res = self%get(icls, 'res')
                 rfinds(icls) = real(calc_fourier_index(res,box,smpd))
-                ! call self%set(icls,'find',rfinds(icls))
+                call self%set(icls,'find',rfinds(icls))
             enddo
             ave  = sum(rfinds,mask=msk)/real(nincl)
             sdev = sqrt(sum((rfinds-ave)**2.,mask=msk)/real(nincl))
-            res_threshold = ave-ndev*sdev
+            res_threshold = max(ave-ndev*sdev,2.)
         else
             allocate(rfinds(self%n), source=huge(res_threshold))
             res_threshold = 0.

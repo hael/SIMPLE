@@ -68,7 +68,7 @@ if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
 
     ! PRE-PROCESSING
-    
+
     case( 'preprocess' )
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
@@ -123,10 +123,10 @@ select case(prg)
         call xmake_cavgs_distr%execute(cline)
     case( 'cleanup2D' )
         if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
-        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      100. )
+        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     20. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
         if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
@@ -142,6 +142,8 @@ select case(prg)
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
         call xcluster2D_stream_distr%execute(cline)
 
     ! REFINE3D

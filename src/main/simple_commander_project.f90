@@ -21,6 +21,7 @@ public :: import_movies_commander
 public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
+public :: subset_project_commander
 private
 #include "simple_local_flags.inc"
 
@@ -72,6 +73,10 @@ type, extends(commander_base) :: import_cavgs_commander
   contains
     procedure :: execute      => exec_import_cavgs
 end type import_cavgs_commander
+type, extends(commander_base) :: subset_project_commander
+  contains
+    procedure :: execute      => exec_subset_project
+end type subset_project_commander
 
 contains
 
@@ -687,5 +692,25 @@ contains
         call spproj%write ! full write since this is guaranteed to be the first import
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
+
+    !> for generating a subset of a project
+    subroutine exec_subset_project( self, cline )
+        class(subset_project_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj, spproj_new
+        call params%new(cline)
+        if( file_exists(trim(params%projfile)) )call spproj%read(params%projfile)
+        select case(trim(params%oritype))
+            case('mic')
+                write(logfhandle,*)'Not implemented yet'
+            case('stk','ptcl2D','ptcl3D')
+                call spproj%gen_ptcls_subset(spproj_new, params%nran)
+                call spproj_new%write
+            case DEFAULT
+                write(logfhandle,*)'nonsensical for this oritype'
+        end select
+        call simple_end('**** SUBSET_PROJECT NORMAL STOP ****')
+    end subroutine exec_subset_project
 
 end module simple_commander_project

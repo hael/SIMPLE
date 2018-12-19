@@ -62,8 +62,8 @@ contains
         logical                             :: do_scaling
         ! parameters
         integer, parameter :: MINBOX      = 92
-        real, parameter    :: target_lp   = 15.
-        real               :: smpd_target = 5.
+        real, parameter    :: TARGET_LP   = 15.
+        real               :: SMPD_TARGET = 5.
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         orig_projfile = params%projfile
@@ -80,21 +80,34 @@ contains
         call spproj%write_segment_inside(params%oritype)
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! high down-scaling for fast execution, grredy optimisation for
-        !          no incremental learning, objective function is standard cross-correlation (cc)
+        ! first stage
+        ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
+        ! no incremental learning, objective function is standard cross-correlation (cc), no centering
         cline_cluster2D1 = cline
+        cline_cluster2D2 = cline
         cline_scale      = cline
         call cline_cluster2D1%set('prg',        'cluster2D')
         call cline_cluster2D1%set('refine',     'greedy')
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
+        call cline_cluster2D1%set('autoscale',  'no')
+        call cline_cluster2D1%set('maxits',     10.)
         call cline_cluster2D1%delete('locres')
-        call cline_cluster2D1%delete('updat_frac')
-        cline_cluster2D2 = cline_cluster2D1
-        call cline_cluster2D1%set('maxits',      10.)
+        call cline_cluster2D1%delete('update_frac')
+        ! second stage
+        ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
+        ! objective function is standard cross-correlation (cc)
+        call cline_cluster2D2%set('prg',        'cluster2D')
+        call cline_cluster2D2%set('refine',     'greedy')
+        call cline_cluster2D2%set('objfun',     'cc')
+        call cline_cluster2D2%set('match_filt', 'no')
+        call cline_cluster2D2%set('wfun',       'bilinear')
+        call cline_cluster2D2%set('maxits',      30.)
+        call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
-        if( cline%defined('update_frac') ) call cline_cluster2D2%set('update_frac',params%update_frac)
+        call cline_cluster2D2%delete('locres')
+        if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
         if( params%box < MINBOX )then
@@ -104,9 +117,9 @@ contains
             box          = params%box
             projfile     = trim(params%projfile)
         else
-            call autoscale(params%box, params%smpd, smpd_target, box, smpd, scale_factor)
-            if( box < MINBOX ) smpd_target = params%smpd * real(params%box) / real(MINBOX)
-            call spproj%scale_projfile(smpd_target, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
+            call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor)
+            if( box < MINBOX ) SMPD_TARGET = params%smpd * real(params%box) / real(MINBOX)
+            call spproj%scale_projfile(SMPD_TARGET, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
             call spproj%kill
             scale_factor = cline_scale%get_rarg('scale')
             smpd         = cline_scale%get_rarg('smpd')
@@ -119,8 +132,8 @@ contains
         else
             msk = real(box/2)-3.
         endif
-        ring2 = 0.7*msk
-        lp1   = max(2.*smpd, max(params%lp,target_lp))
+        ring2 = 0.8*msk
+        lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2   = max(2.*smpd, params%lp)
         if( cline%defined('msk') ) msk = scale_factor*params%msk
         ! execute initialiser
@@ -137,11 +150,9 @@ contains
         call cline_cluster2D1%set('msk',    msk)
         call cline_cluster2D1%set('ring2',  ring2)
         call cline_cluster2D1%set('lp',     lp1)
-        call cline_cluster2D2%set('wiener', 'no')
         call cline_cluster2D2%set('msk',    msk)
         call cline_cluster2D2%set('ring2',  ring2)
         call cline_cluster2D2%set('lp',     lp2)
-        call cline_cluster2D2%set('wiener', 'yes')
         ! execution 1
         write(logfhandle,'(A)') '>>>'
         write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
@@ -374,6 +385,7 @@ contains
                 call cline_make_cavgs%set('projfile', params%projfile)
                 call cline_make_cavgs%set('nparts',   real(nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
+                call cline_make_cavgs%set('wiener',   'yes')
                 call xmake_cavgs%execute(cline_make_cavgs)
             endif
         else

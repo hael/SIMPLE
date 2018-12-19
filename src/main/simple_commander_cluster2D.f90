@@ -211,12 +211,13 @@ contains
             order = (/(iclass,iclass=1,params%ncls)/)
             call hpsort(res, order)
             do iclass=1,params%ncls
-                call clsdoc_ranked%set(iclass, 'class', real(order(iclass)))
-                call clsdoc_ranked%set(iclass, 'rank',  real(iclass))
-                call clsdoc_ranked%set(iclass, 'pop',   build%spproj_field%get(order(iclass),  'pop'))
-                call clsdoc_ranked%set(iclass, 'res',   build%spproj_field%get(order(iclass),  'res'))
-                call clsdoc_ranked%set(iclass, 'corr',  build%spproj_field%get(order(iclass), 'corr'))
-                call clsdoc_ranked%set(iclass, 'w',     build%spproj_field%get(order(iclass),    'w'))
+                call clsdoc_ranked%set(iclass, 'class',     real(order(iclass)))
+                call clsdoc_ranked%set(iclass, 'rank',      real(iclass))
+                call clsdoc_ranked%set(iclass, 'pop',       build%spproj_field%get(order(iclass),  'pop'))
+                call clsdoc_ranked%set(iclass, 'res',       build%spproj_field%get(order(iclass),  'res'))
+                call clsdoc_ranked%set(iclass, 'corr',      build%spproj_field%get(order(iclass), 'corr'))
+                call clsdoc_ranked%set(iclass, 'w',         build%spproj_field%get(order(iclass),    'w'))
+                call clsdoc_ranked%set(iclass, 'specscore', build%spproj_field%get(order(iclass), 'specscore'))
                 write(logfhandle,'(a,1x,i5,1x,a,1x,i5,1x,a,i5,1x,a,1x,f6.2)') 'CLASS:', order(iclass),&
                     &'RANK:', iclass ,'POP:', nint(build%spproj_field%get(order(iclass), 'pop')),&
                     &'RES:', build%spproj_field%get(order(iclass), 'res')

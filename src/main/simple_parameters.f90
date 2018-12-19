@@ -350,7 +350,7 @@ type :: parameters
     real    :: lpmed=20.
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
-    real    :: lpvalid=20.
+    real    :: lpthresh=30.
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
@@ -740,7 +740,7 @@ contains
         call check_rarg('lplim_crit',     self%lplim_crit)
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
-        call check_rarg('lpvalid',        self%lpvalid)
+        call check_rarg('lpthresh',       self%lpthresh)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('msk',            self%msk)
         call check_rarg('mul',            self%mul)
