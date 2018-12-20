@@ -229,6 +229,7 @@ contains
     subroutine exec_cluster2D_stream_distr( self, cline )
         use simple_projection_frcs,        only: projection_frcs
         use simple_commander_distr_wflows, only: cluster2D_distr_commander, make_cavgs_distr_commander
+        use simple_commander_cluster2D,    only: rank_cavgs_commander
         use simple_image,                  only: image
         use simple_oris,                   only: oris
         use simple_ori,                    only: ori
@@ -251,15 +252,16 @@ contains
         logical,               parameter   :: debug_here = .false.
         type(parameters)                   :: params
         type(make_cavgs_distr_commander)   :: xmake_cavgs
+        type(rank_cavgs_commander)         :: xrank_cavgs
         type(cmdline)                      :: cline_cluster2D, cline_cluster2D_buffer
-        type(cmdline)                      :: cline_make_cavgs
+        type(cmdline)                      :: cline_make_cavgs, cline_rank_cavgs
         type(sp_project)                   :: orig_proj, stream_proj, buffer_proj, pool_proj
         type(ctfparams)                    :: ctfvars
         type(oris)                         :: os_stk
         type(ori)                          :: o_stk
         character(LONGSTRLEN), allocatable :: spproj_list(:), stk_list(:)
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk
-        character(len=STDLEN)              :: str_iter, refs_glob
+        character(len=STDLEN)              :: str_iter, refs_glob, refs_glob_ranked
         character(len=LONGSTRLEN)          :: buffer_dir
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
         integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
@@ -302,7 +304,7 @@ contains
         cline_make_cavgs        = cline
         ! buffer classification
         ! down-scaling for fast execution, aggressive stochastic optimisation, no match filter, bi-linear interpolation,
-        ! no incremental learning, objective function is standard cross-correlation (cc), no centering
+        ! no incremental learning, objective function default is standard cross-correlation (cc), no centering
         call cline_cluster2D_buffer%set('prg',       'cluster2D')
         call cline_cluster2D_buffer%set('projfile',  trim(PROJFILE_BUFFER))
         call cline_cluster2D_buffer%set('projname',  trim(get_fbody(trim(PROJFILE_BUFFER),trim('simple'))))
@@ -322,17 +324,23 @@ contains
         call cline_cluster2D%set('extr_iter', 100.)
         call cline_cluster2D%set('trs',       MINSHIFT)
         call cline_cluster2D%set('wfun',      'bilinear')
-        call cline_cluster2D%set('objfun',    'cc')
         call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
-        if( .not.cline%defined('match_filt') )call cline_cluster2D%set('match_filt','no')
+        call cline_cluster2D%set('objfun',    'cc')
+        if( cline%defined('objfun') )then
+            if( cline%get_carg('objfun').eq.'ccres' )then
+                call cline_cluster2D%set('objfun', 'ccres')
+                call cline_cluster2D%set('bfac',   1000.)
+            endif
+        endif
+        if( .not.cline%defined('match_filt') ) call cline_cluster2D%set('match_filt','no')
         call cline_cluster2D%delete('update_frac')
         ! scaling
-        call cline_make_cavgs%set('prg', 'make_cavgs')
+        call cline_make_cavgs%set('prg',    'make_cavgs')
         call cline_make_cavgs%set('wiener', 'yes')
+        call cline_make_cavgs%set('wfun',   'bilinear')
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%delete('remap_cls')
-        call cline_make_cavgs%delete('wfun')
         ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
@@ -476,13 +484,24 @@ contains
         if ( do_autoscale )then
             nptcls_glob = orig_proj%get_nptcls()
             nparts      = calc_nparts(orig_proj, nptcls_glob)
+            call orig_proj%kill
             call cline_make_cavgs%set('nparts', real(nparts))
             call cline_make_cavgs%set('ncls',   real(ncls_glob))
             call cline_make_cavgs%set('refs',   refs_glob)
+            call cline_make_cavgs%set('wiener', 'yes')
             call xmake_cavgs%execute(cline_make_cavgs)
+            call orig_proj%read(orig_projfile)
         endif
         call orig_proj%add_cavgs2os_out(refs_glob, orig_smpd)
-        call orig_proj%write
+        call orig_proj%add_frcs2os_out(trim(FRCS_FILE), 'frc2D')
+        call orig_proj%write_segment_inside('out',orig_projfile)
+        call orig_proj%kill()
+        ! ranking
+        refs_glob_ranked = add2fbody(refs_glob,params%ext,'_ranked')
+        call cline_rank_cavgs%set('projfile', orig_projfile)
+        call cline_rank_cavgs%set('stk',      refs_glob)
+        call cline_rank_cavgs%set('outstk',   trim(refs_glob_ranked))
+        call xrank_cavgs%execute(cline_rank_cavgs)
         ! cleanup
         call qsys_cleanup
         call simple_rmdir(SCALE_DIR)
@@ -490,12 +509,11 @@ contains
         call del_file(PROJFILE_BUFFER)
         call del_file(PROJFILE2D)
         ! end gracefully
-        call simple_end('**** SIMPLE_DISTR_CLUSTER2D_STREAM NORMAL STOP ****')
-
+        call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
         contains
 
             subroutine reject_from_buffer
-                type(image)          :: img, mskimg
+                type(image)          :: img
                 logical, allocatable :: cls_mask(:)
                 character(STDLEN)    :: refs_buffer
                 real                 :: ave, sdev, maxv, minv
@@ -512,10 +530,9 @@ contains
                 if( debug_here )then
                     ! variance
                     call img%new([box,box,1],smpd)
-                    call mskimg%disc([box,box,1], smpd, msk)
                     do icls=1,ncls_here
                         call img%read(refs_buffer,icls)
-                        call img%stats(ave, sdev, maxv, minv, mskimg)
+                        call img%stats(ave, sdev, maxv, minv)
                         call buffer_proj%os_cls2D%set(icls,'sdev',sdev)
                     enddo
                 endif
@@ -542,17 +559,16 @@ contains
                     do icls=1,ncls_here
                         if( cls_mask(icls) ) cycle
                         cnt = cnt+1
-                        if( debug_here )then
+                        !if( debug_here )then
                             call img%read(refs_buffer,icls)
                             call img%write('rejected_'//int2str(pool_iter)//'.mrc',cnt)
-                        endif
+                        !endif
                         img = 0.
                         call img%write(refs_buffer,icls)
                     enddo
                     call img%read(refs_buffer, params%ncls_start)
                     call img%write(refs_buffer,params%ncls_start)
                     call img%kill
-                    call mskimg%kill
                     deallocate(cls_mask)
                     write(logfhandle,'(A,I4,A,I6,A)')'>>> REJECTED FROM BUFFER: ',nptcls_rejected,' PARTICLES IN ',ncls_rejected,' CLUSTERS'
                 endif
@@ -560,7 +576,7 @@ contains
             end subroutine reject_from_buffer
 
             subroutine reject_from_pool
-                type(image)          :: img, mskimg
+                type(image)          :: img
                 logical, allocatable :: cls_mask(:)
                 real                 :: ave, sdev, minv, maxv, ndev_here
                 integer              :: nptcls_rejected, ncls_rejected, iptcl
@@ -571,13 +587,11 @@ contains
                 boxmatch        = find_boxmatch(box, msk)
                 allocate(cls_mask(ncls_glob), source=.true.)
                 if( debug_here )then
-                    ! variance
                     call img%new([box,box,1],smpd)
-                    call mskimg%disc([box,box,1], smpd, msk)
                     do icls=1,ncls_glob
                         if( pool_proj%os_cls2D%get_state(icls)==0 .or. pool_proj%os_cls2D%get(icls,'pop')<1. ) cycle
                         call img%read(refs_glob,icls)
-                        call img%stats(ave, sdev, maxv, minv, mskimg)
+                        call img%stats(ave, sdev, maxv, minv)
                         call pool_proj%os_cls2D%set(icls,'sdev',sdev)
                     enddo
                 endif
@@ -607,10 +621,10 @@ contains
                         do icls=1,ncls_glob
                             if( cls_mask(icls) ) cycle
                             cnt = cnt+1
-                            if( debug_here )then
+                            !if( debug_here )then
                                 call img%read(refs_glob,icls)
                                 call img%write('rejected_pool_'//int2str(pool_iter)//'.mrc',cnt)
-                            endif
+                            !endif
                             img = 0.
                             call img%write(refs_glob,icls)
                         enddo

@@ -62,8 +62,8 @@ contains
         logical                             :: do_scaling
         ! parameters
         integer, parameter :: MINBOX      = 92
-        real, parameter    :: TARGET_LP   = 15.
-        real               :: SMPD_TARGET = 5.
+        real,    parameter :: TARGET_LP   = 15.
+        real               :: SMPD_TARGET = 4.
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         orig_projfile = params%projfile
@@ -90,6 +90,7 @@ contains
         call cline_cluster2D1%set('refine',     'greedy')
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
+        call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('maxits',     10.)
@@ -97,15 +98,21 @@ contains
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
-        ! objective function is standard cross-correlation (cc)
+        ! objective function default is standard cross-correlation (cc)
         call cline_cluster2D2%set('prg',        'cluster2D')
         call cline_cluster2D2%set('refine',     'greedy')
-        call cline_cluster2D2%set('objfun',     'cc')
         call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('wfun',       'bilinear')
         call cline_cluster2D2%set('maxits',      30.)
-        call cline_cluster2D1%set('autoscale',  'no')
+        call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
+        call cline_cluster2D2%set('objfun',     'cc')
+        if( cline%defined('objfun') )then
+            if( cline%get_carg('objfun').eq.'ccres' )then
+                call cline_cluster2D2%set('objfun', 'ccres')
+                call cline_cluster2D2%set('bfac',   1000.)
+            endif
+        endif
         call cline_cluster2D2%delete('locres')
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
@@ -151,7 +158,6 @@ contains
         call cline_cluster2D1%set('ring2',  ring2)
         call cline_cluster2D1%set('lp',     lp1)
         call cline_cluster2D2%set('msk',    msk)
-        call cline_cluster2D2%set('ring2',  ring2)
         call cline_cluster2D2%set('lp',     lp2)
         ! execution 1
         write(logfhandle,'(A)') '>>>'

@@ -765,7 +765,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm',& ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &0, 0, 0, 4, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -779,6 +779,8 @@ contains
         &gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call cleanup2D%set_input('srch_ctrls', 3, maxits)
         call cleanup2D%set_input('srch_ctrls', 4, update_frac)
+        call cleanup2D%set_input('srch_ctrls', 5, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+
         ! filter controls
         call cleanup2D%set_input('filt_ctrls', 1, hp)
         call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -859,7 +861,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
         &'simple_distr_exec',&                                                                                            ! executable
-        &0, 1, 0, 7, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
+        &0, 1, 0, 8, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -879,21 +881,22 @@ contains
         &for accelerated convergence rate. Initial/Final low-pass limits control the degree of down-scaling(yes|no){yes}',&
         &'(yes|no){yes}', .false., 'yes')
         call cluster2D_stream%set_input('srch_ctrls', 4, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
-            &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+            &gravity and map shifts back to the particles(yes|no){no}', '(yes|no){no}', .false., 'no')
         call cluster2D_stream%set_input('srch_ctrls', 5, remap_cls)
         call cluster2D_stream%set_input('srch_ctrls', 6, ncls)
         cluster2D_stream%srch_ctrls(6)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 7, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster2D_stream%set_input('srch_ctrls',8, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
-        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 15.)
         call cluster2D_stream%set_input('filt_ctrls', 4, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
-        &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
+        &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){no}',&
         '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
