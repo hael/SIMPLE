@@ -1,7 +1,7 @@
 ! executes the shared-memory parallelised programs in SIMPLE
 program simple_exec
 include 'simple_lib.f08'
-use simple_user_interface, only: make_user_interface ,list_shmem_prgs_in_ui, write_ui_json
+use simple_user_interface, only: make_user_interface ,list_shmem_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_spproj_hlev
 use simple_commander_project
@@ -256,8 +256,6 @@ select case(prg)
         call pfrcs%print_frcs('frcs.bin')
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
-    case( 'write_ui_json')
-        call write_ui_json
 
     ! SIMULATORS
 

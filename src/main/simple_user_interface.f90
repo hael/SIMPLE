@@ -827,7 +827,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 9, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
         call cluster2D%set_input('srch_ctrls',10, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         call cluster2D%set_input('srch_ctrls',11, nrestarts)
-        call cluster2D%set_input('srch_ctrls',12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls',12, 'refine', 'binary', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -3405,6 +3405,8 @@ contains
         type(json_core)           :: json
         type(json_value), pointer :: program_entry, program, all_programs
         integer :: iprg
+        ! init UI descriptions
+        call make_user_interface
         ! JSON init
         call json%initialize()
         ! create array of program entries

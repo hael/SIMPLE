@@ -1,7 +1,8 @@
 ! shared-memory parallelised programs executed by distributed commanders
 program simple_private_exec
 include 'simple_lib.f08'
-use simple_cmdline, only: cmdline, cmdline_err
+use simple_cmdline,        only: cmdline, cmdline_err
+use simple_user_interface, only: write_ui_json
 use simple_commander_project
 use simple_commander_checks
 use simple_commander_distr
@@ -104,6 +105,10 @@ pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
 select case(prg)
+
+    ! not a bona fide simple_program
+    case( 'write_ui_json')
+        call write_ui_json
 
     ! PRE-PROCESSING PROGRAMS
 
@@ -655,7 +660,7 @@ select case(prg)
          keys_optional(6) = 'lp'
          call cline%parse_oldschool(keys_required(:4),keys_optional(:6))
          call xdetector%execute(cline)
-         
+
     ! MISCELLANOUS PROGRAMS
 
     case( 'masscen' )
