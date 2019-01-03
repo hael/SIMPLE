@@ -86,7 +86,6 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: ptcl_bfac_norms(:)    !< normalisation constants for B-factor weighted ccres
     real(sp),            allocatable :: inv_resarrsq(:)       !< memoized -1./(4*res^2) for B-factors calculation
     real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
-    real(sp),            allocatable :: sqsums_ptcls_frange(:)!< memoized square sums for the correlation calculations (taken from kfromto(1):kfromto(2); full range)
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
     real(sp),            allocatable :: argtransf(:,:)        !< argument transfer constants for shifting the references
     real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
@@ -336,7 +335,6 @@ contains
                  &self%pfts_drefs_odd (self%pftsz,params_glob%kfromto(1):params_glob%kstop,3,params_glob%nthr),&
                  &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
-                 &self%sqsums_ptcls_frange(1:self%nptcls),&
                  &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),&
                  &self%heap_vars(params_glob%nthr),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
@@ -371,7 +369,6 @@ contains
         self%pfts_refs_odd       = zero
         self%pfts_ptcls          = zero
         self%sqsums_ptcls        = 0.
-        self%sqsums_ptcls_frange = 0.
         ! set CTF flag
         self%with_ctf = .false.
         if( params_glob%ctf .ne. 'no' ) self%with_ctf = .true.
@@ -714,8 +711,7 @@ contains
     subroutine memoize_sqsum_ptcl( self, i )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i
-        self%sqsums_ptcls(i)        = sum(csq(self%pfts_ptcls(:,params_glob%kfromto(1):params_glob%kstop,i)))
-        self%sqsums_ptcls_frange(i) = sum(csq(self%pfts_ptcls(:,:,                                       i)))
+        self%sqsums_ptcls(i) = sum(csq(self%pfts_ptcls(:,params_glob%kfromto(1):params_glob%kstop,i)))
     end subroutine memoize_sqsum_ptcl
 
     ! memoize all particles ffts
@@ -2576,7 +2572,7 @@ contains
             if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
             if( allocated(self%inv_resarrsq)      ) deallocate(self%inv_resarrsq)
             if( allocated(self%ctfmats)           ) deallocate(self%ctfmats)
-            deallocate( self%sqsums_ptcls, self%sqsums_ptcls_frange, self%angtab, self%argtransf,&
+            deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
                 &self%iseven, self%pinds, self%heap_vars)

@@ -698,15 +698,14 @@ contains
         class(subset_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
-        type(sp_project) :: spproj, spproj_new
+        type(sp_project) :: spproj
         call params%new(cline)
         if( file_exists(trim(params%projfile)) )call spproj%read(params%projfile)
         select case(trim(params%oritype))
             case('mic')
-                write(logfhandle,*)'Not implemented yet'
+                write(logfhandle,*)'Micrograph not implemented yet'
             case('stk','ptcl2D','ptcl3D')
-                call spproj%gen_ptcls_subset(spproj_new, params%nran)
-                call spproj_new%write
+                call spproj%gen_ptcls_subset(params%nptcls)
             case DEFAULT
                 write(logfhandle,*)'nonsensical for this oritype'
         end select

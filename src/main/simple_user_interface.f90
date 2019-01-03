@@ -65,7 +65,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(66)
+type(simple_prg_ptr) :: prg_ptr_array(67)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -128,6 +128,7 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
+type(simple_program), target :: subset_project
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_track
@@ -286,6 +287,7 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
+        call new_subset_project
         call new_symaxis_search
         call new_symmetry_test
         call new_tseries_track
@@ -357,12 +359,13 @@ contains
         prg_ptr_array(58)%ptr2prg => simulate_subtomogram
         prg_ptr_array(59)%ptr2prg => stack
         prg_ptr_array(60)%ptr2prg => stackops
-        prg_ptr_array(61)%ptr2prg => symaxis_search
-        prg_ptr_array(62)%ptr2prg => symmetry_test
-        prg_ptr_array(63)%ptr2prg => tseries_track
-        prg_ptr_array(64)%ptr2prg => update_project
-        prg_ptr_array(65)%ptr2prg => vizoris
-        prg_ptr_array(66)%ptr2prg => volops
+        prg_ptr_array(61)%ptr2prg => subset_project
+        prg_ptr_array(62)%ptr2prg => symaxis_search
+        prg_ptr_array(63)%ptr2prg => symmetry_test
+        prg_ptr_array(64)%ptr2prg => tseries_track
+        prg_ptr_array(65)%ptr2prg => update_project
+        prg_ptr_array(66)%ptr2prg => vizoris
+        prg_ptr_array(67)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -490,6 +493,8 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
+            case('subset_project')
+                ptr2prg => subset_project
             case('symaxis_search')
                 ptr2prg => symaxis_search
             case('symmetry_test')
@@ -572,6 +577,7 @@ contains
         write(logfhandle,'(A)') scale%name
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
+        write(logfhandle,'(A)') subset_project%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') update_project%name
@@ -2888,6 +2894,32 @@ contains
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
+
+    subroutine new_subset_project
+        ! PROGRAM SPECIFICATION
+        call subset_project%new(&
+        &'subset_project',&                          ! name
+        &'generates a random subset of a project',&  ! descr_short
+        &'is a program that generates a random subset of an existing project',& ! descr_long
+        &'simple_exec',&                             ! executable
+        &0, 2, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call subset_project%set_input('parm_ios', 1, projfile)
+        call subset_project%set_input('parm_ios', 2,  nptcls)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_subset_project
 
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION

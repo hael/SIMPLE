@@ -2094,14 +2094,14 @@ contains
         end do
     end subroutine map2ptcls_state
 
-    subroutine gen_ptcls_subset( self_in, self_out, nptcls_subset )
+    subroutine gen_ptcls_subset( self_in, nptcls_subset )
         use simple_image,   only: image
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self_in
-        type(sp_project),  intent(out)   :: self_out
         integer,           intent(in)    :: nptcls_subset
-        character(len=STDLEN), parameter :: newstkname = 'stk_subset.mrc'
+        character(len=STDLEN), parameter :: newstkname = 'substk/stk_subset.mrc'
         character(len=:),    allocatable :: stkname, projname, new_projname, projfile, new_projfile
+        type(sp_project)     :: self_out
         type(cmdline)        :: cline
         type(ctfparams)      :: ctfparms
         type(oris)           :: ctftab
@@ -2132,6 +2132,8 @@ contains
         nonzero_nptcls = count(inds>0)
         if( nonzero_nptcls /= nptcls_subset ) THROW_HARD('Asking for too many particles 3; sp_project :: gen_ptcls_subset')
         ! gather defocus and create stack
+        write(logfhandle,'(A)')'>>> GENERATING STACK'
+        call simple_mkdir('substk')
         call ctftab%new(nptcls_subset)
         box  = self_in%get_box()
         smpd = self_in%get_smpd()
@@ -2142,11 +2144,13 @@ contains
             call self_in%get_stkname_and_ind('ptcl2D', iptcl, stkname, ind_in_stk )
             call img%read(stkname,ind_in_stk)
             call img%write(newstkname,i)
+            call progress(i,nptcls_subset)
         enddo
         ! import stack into new project
         ctfparms = self_in%get_ctfparams('ptcl2D',inds(1))
         call self_out%add_single_stk(newstkname, ctfparms, ctftab)
         ! transfer orientation parameters
+        write(logfhandle,'(A)')'>>> UPDATING PROJECT FILE'
         do i=1,nptcls_subset
             iptcl = inds(i)
             if( self_in%os_ptcl2D%has_been_searched(iptcl) )then
@@ -2157,6 +2161,7 @@ contains
                 call self_out%os_ptcl3D%set_euler(i, self_in%os_ptcl3D%get_euler(iptcl))
                 call self_out%os_ptcl3D%set_shift(i, self_in%os_ptcl3D%get_2Dshift(iptcl))
             endif
+            call progress(i,nptcls_subset)
         enddo
         ! update other fields & write
         self_out%projinfo = self_in%projinfo
