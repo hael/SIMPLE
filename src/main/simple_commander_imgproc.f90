@@ -295,7 +295,7 @@ contains
     end subroutine exec_ctfops
 
     subroutine exec_filter( self, cline )
-        use simple_procimgfile, only:bp_imgfile, real_filter_imgfile, phase_rand_imgfile, matchfilt_imgfile
+        use simple_procimgfile
         use simple_estimate_ssnr, only: fsc2optlp
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
@@ -321,6 +321,9 @@ contains
                     call bp_imgfile(params%stk, params%outstk, params%smpd, 0., params%lp, width=width)
                 else if( cline%defined('hp') )then
                     call bp_imgfile(params%stk, params%outstk, params%smpd, params%hp, 0., width=width)
+                ! B-factor
+            else if( cline%defined('bfac') )then
+                    call apply_bfac_imgfile(params%stk, params%outstk, params%smpd, params%bfac)
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') .and. trim(params%real_filter) .ne. 'NLmean') THROW_HARD('need winsz input for real-space filtering')

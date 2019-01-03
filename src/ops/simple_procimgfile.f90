@@ -16,7 +16,7 @@ public :: shellnorm_imgfile, matchfilt_imgfile
 public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
 !! Filters
-public :: ft2img_imgfile, masscen_imgfile, cure_imgfile
+public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
 public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile
 private
@@ -698,13 +698,6 @@ contains
     end subroutine shift_imgfile
 
     !>  \brief  is for band-pass filtering
-    !> bp_imgfile
-    !! \param fname2filter output filename
-    !! \param fname input filename
-    !! \param smpd sampling distance
-    !! \param hp high-pass cutoff freq
-    !! \param lp low-pass cutoff freq
-    !!
     subroutine bp_imgfile( fname2filter, fname, smpd, hp, lp, width )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd, hp, lp
@@ -728,13 +721,27 @@ contains
         call img%kill
     end subroutine bp_imgfile
 
+    !>  \brief  is for applying B-factor
+    subroutine apply_bfac_imgfile( fname2filter, fname, smpd, bfac )
+        character(len=*), intent(in) :: fname2filter, fname
+        real,             intent(in) :: smpd, bfac
+        type(image) :: img
+        integer     :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2filter, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'apply_bfac_imgfile' )
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> APPLYING B-FACTOR TO THE IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2filter, i)
+            call img%apply_bfac(bfac)
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine apply_bfac_imgfile
+
     !>  \brief real_filter_imgfile is for real-space filtering
-    !! \param fname2filter input filename
-    !! \param fname output filename
-    !! \param smpd sampling distance
-    !! \param which_filter filter tag
-    !! \param winsz window size
-    !!
     subroutine real_filter_imgfile( fname2filter, fname, smpd, which_filter, winsz )
         character(len=*), intent(in) :: fname2filter, fname
         real,             intent(in) :: smpd
@@ -757,11 +764,6 @@ contains
     end subroutine real_filter_imgfile
 
     !>  \brief  is for phase randomization
-    !! \param fname2process output filename
-    !! \param fname input filename
-    !! \param smpd sampling distance
-    !! \param lp low-pass cutoff freq
-    !!
     subroutine phase_rand_imgfile( fname2process, fname, smpd, lp )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lp
@@ -782,12 +784,6 @@ contains
     end subroutine phase_rand_imgfile
 
     !>  \brief  is for applying CTF
-    !! \param fname2process output filename
-    !! \param fname input filename
-    !! \param smpd sampling distance
-    !! \param mode,bfac ctf mode and bfac args
-    !! \param o orientation object used for ctf
-    !!
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )
         use simple_oris,  only: oris
         use simple_ctf,   only: ctf
