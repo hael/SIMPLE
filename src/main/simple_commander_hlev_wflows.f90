@@ -135,14 +135,13 @@ contains
             call xscale_distr%execute( cline_scale )
         endif
         if( cline%defined('msk') )then
-            msk = msk*scale_factor
+            msk = params%msk*scale_factor
         else
             msk = real(box/2)-3.
         endif
         ring2 = 0.8*msk
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
         lp2   = max(2.*smpd, params%lp)
-        if( cline%defined('msk') ) msk = scale_factor*params%msk
         ! execute initialiser
         params%refs = 'start2Drefs' // params%ext
         call spproj%read(projfile)
