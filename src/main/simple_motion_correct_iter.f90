@@ -13,7 +13,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical,          parameter :: DO_ANISO = .true.
+logical,          parameter :: DO_ANISO = .false.
 character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter

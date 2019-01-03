@@ -1,5 +1,7 @@
 ! parametric image registration using a biquadratic polynomial with L-BFGS-B in real-space (used in motion_correct), double precision
 module simple_motion_anisocor_dbl
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_opt_factory,     only: opt_factory
 use simple_opt_spec,        only: opt_spec
@@ -130,8 +132,8 @@ contains
         t    = x(1) - x1_h
         u    = x(2) - y1_h
         val  =  (1._dp - t) * (1._dp - u) * y1 + &
-                      t  * (1._dp - u) * y2 + &
-                      t  *       u  * y3 + &
+                         t  * (1._dp - u) * y2 + &
+                         t  *       u  * y3 + &
                 (1._dp - t) *       u  * y4
     end function interp_bilin_out
 
@@ -141,8 +143,8 @@ contains
         integer  :: i, j
         real(dp) :: Nx, Ny
         real(dp) :: x, y, xm, ym, xms, yms, z1, z2
-        Nx = self%ldim(1)
-        Ny = self%ldim(2)
+        Nx = real(self%ldim(1), dp)
+        Ny = real(self%ldim(2), dp)
         do j = 1, self%ldim(2)
             do i = 1, self%ldim(1)
                 x   = real(i, dp)
@@ -160,8 +162,8 @@ contains
                 ! remap to [1:N]
                 self%T_coords      (1,i,j) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 self%T_coords      (2,i,j) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
-                self%T_coords_da   (i,j,1) =  (Nx - 1._dp) * z1            / 2._dp
-                self%T_coords_da   (i,j,2) =  (Ny - 1._dp) * z2            / 2._dp
+                self%T_coords_da   (i,j,1) =  (Nx - 1._dp) * z1               / 2._dp
+                self%T_coords_da   (i,j,2) =  (Ny - 1._dp) * z2               / 2._dp
                 self%T_coords_da_sq(i,j,1) = (self%T_coords_da(i,j,1)) ** 2
                 self%T_coords_da_sq(i,j,2) = (self%T_coords_da(i,j,2)) ** 2
                 self%T_coords_da_cr(i,j)   =  self%T_coords_da(i,j,1) * self%T_coords_da(i,j,2)
@@ -175,8 +177,8 @@ contains
         integer  :: i, j
         real(dp) :: Nx, Ny
         real(dp) :: x, y, xm, ym, xms, yms, z1, z2
-        Nx = self%ldim(1)
-        Ny = self%ldim(2)
+        Nx = real(self%ldim(1), dp)
+        Ny = real(self%ldim(2), dp)
         do j = 1, self%ldim(2)
             do i = 1, self%ldim(1)
                 x   = real(i, dp)
@@ -204,8 +206,8 @@ contains
         integer  :: i, j
         real(dp) :: Nx, Ny
         real(dp) :: x, y, xm, ym, xms, yms, z1, z2
-        Nx = self%ldim_out(1)
-        Ny = self%ldim_out(2)
+        Nx = real(self%ldim_out(1), dp)
+        Ny = real(self%ldim_out(2), dp)
         do j = 1, self%ldim_out(2)
             do i = 1, self%ldim_out(1)
                 x   = real(i, dp)
@@ -237,11 +239,16 @@ contains
         integer       :: ldim_out_here1(3), ldim_out_here2(3)
         logical       :: do_alloc
         real, pointer :: rmat_in_ptr(:,:,:), rmat_out_ptr(:,:,:)
+        integer :: ithr
         ldim_out_here1 = frame_in%get_ldim()
         ldim_out_here2 = frame_out%get_ldim()
         if( any(ldim_out_here1(1:2) .ne. ldim_out_here2(1:2)) )then
             THROW_HARD('calc_T_out: dimensions of particle and reference do not match; simple_motion_anisocor_dbl')
         end if
+        ithr = omp_get_thread_num() + 1
+        if (ithr .eq. 1) then
+            write (*,*) 'calc_T_out, ldim=', ldim_out_here1
+        endif
         self%ldim_out(1) = ldim_out_here1(1)
         self%ldim_out(2) = ldim_out_here1(2)
         call frame_in %get_rmat_ptr( rmat_in_ptr  )
@@ -282,7 +289,7 @@ contains
             end do
         end do
     end subroutine calc_mat_tld
-    
+
     subroutine eval_fdf( self, a, f, grad )
         class(motion_anisocor_dbl), intent(inout) :: self
         real(dp),                   intent(in)    :: a(POLY_DIM)
@@ -374,7 +381,7 @@ contains
         integer           :: i
         real              :: lims(POLY_DIM,2)
         call self%kill()
-        self%maxHWshift = 0.1
+        self%maxHWshift = 0.01
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -396,6 +403,7 @@ contains
             call self%nlopt%kill()
             deallocate(self%nlopt)
         end if
+        self%ospec%maxits = 300
         call ofac%new(self%ospec, self%nlopt)
     end subroutine motion_anisocor_dbl_new
 
@@ -406,10 +414,18 @@ contains
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
         real(kind=8)                :: f, grad(POLY_DIM)
+        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
             call fun_self%eval_fdf(vec, f, grad)
             cost = -f
+            ithr = omp_get_thread_num() + 1
+            if (ithr .eq. 1) then
+                write (*,*) 'cost_8'
+                write (*,*) 'vec=', vec
+                write (*,*) 'f=', f
+                call flush(6)
+            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_cost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -422,10 +438,17 @@ contains
         real(dp),     intent(inout) :: vec( D )
         real(dp),     intent(out)   :: grad( D )
         real(dp)                    :: f, agrad( D )
+        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
             call fun_self%eval_fdf(vec, f, agrad)
             grad = -agrad
+            if (ithr .eq. 1) then
+                write (*,*) 'gcost_8'
+                write (*,*) 'vec=', vec
+                write (*,*) 'grad=', grad
+                call flush(6)
+            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_gcost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -437,12 +460,21 @@ contains
         integer,      intent(in)    :: D
         real(kind=8), intent(inout) :: vec(D)
         real(kind=8), intent(out)   :: f, grad(D)
-        real(kind=8)                :: agrad( D ) 
+        real(kind=8)                :: agrad( D )
+        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
-            call fun_self%eval_fdf(vec, f, agrad)            
+            call fun_self%eval_fdf(vec, f, agrad)
             f    = -f
             grad = -agrad
+            ithr = omp_get_thread_num() + 1
+            if (ithr .eq. 1) then
+                write (*,*) 'fdfcost_8'
+                write (*,*) 'vec=', vec
+                write (*,*) 'f=', f
+                write (*,*) 'grad=', grad
+                call flush(6)
+            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_fdfcost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -500,6 +532,7 @@ contains
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%ospec%x_8 = 0._dp
+        self%ospec%x   = 0.
         call self%nlopt%minimize(self%ospec, self, cxy1)
         cxy(1)  = real(cxy1)
         cxy(2:) = self%ospec%x_8

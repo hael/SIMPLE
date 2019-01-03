@@ -11,6 +11,7 @@ use simple_image,               only: image
 use simple_parameters,          only: params_glob
 use simple_estimate_ssnr,       only: acc_dose2filter
 use simple_oris,                only: oris
+use simple_opt_lbfgsb,          only: PRINT_NEVALS
 implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
@@ -71,10 +72,10 @@ logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
 
 ! module global constants
-integer, parameter :: MITSREF       = 30      !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 3       !< max # iterations of anisotropic refinement optimisation
-real,    parameter :: SMALLSHIFT    = 2.      !< small initial shift to blur out fixed pattern noise
-logical, parameter :: ANISO_DBL     = .false. !< use double-precision for anisotropic motion correct?
+integer, parameter :: MITSREF       = 30     !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF_ANISO = 9      !< max # iterations of anisotropic refinement optimisation
+real,    parameter :: SMALLSHIFT    = 2.     !< small initial shift to blur out fixed pattern noise
+logical, parameter :: ANISO_DBL     = .true. !< use double-precision for anisotropic motion correct?
 
 contains
 
@@ -295,6 +296,7 @@ contains
                 ! (see below)
             end do
             !$omp end parallel do
+            write (*,*) 'iso, it=', i, 'corrs=', corrs
             frac_improved = real(nimproved) / real(nframes) * 100.
             write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
             call shift_wsum_calc_corrs( opt_shifts, i )
@@ -442,13 +444,11 @@ contains
 
     !> anisotropid motion_correction of DDD movie
     subroutine motion_correct_aniso( shifts )
-        real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identified
-
+        real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identifie
         real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
         real    :: scale, smpd4scale
-        integer :: iframe, nimproved, i, ldim4scale(3)
+        integer :: iframe, nimproved, i, ldim4scale(3), ithr
         logical :: didsave, err_stat, doscale
-        write (*,*) 'motion_correct_aniso' ; call flush(6)
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -493,25 +493,31 @@ contains
         end do
         ! generate first average
         call gen_aniso_wsum_calc_corrs(0)
-
-        print *, 'generated first average'
-
         ! calc avg corr to weighted avg
         corr = sum(corrs)/real(nframes)
         write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
+        PRINT_NEVALS = .true.
         do i=1,MITSREF_ANISO
             nimproved = 0
-            !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
+            !$omp parallel do schedule(static) default(shared) private(iframe,cxy,ithr) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
                 ! subtract the movie frame being correlated to reduce bias
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
                 cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
                     frame=movie_frames_shifted(iframe))
+                ithr = omp_get_thread_num() + 1
+                if( ithr == 1 )then
+                    write (*,*) 'aniso: cxy=', cxy
+                    call flush(6)
+                endif
                 ! update parameter arrays
                 opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
+                ! apply deformation
+                call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
+                    frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe))
                 ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
                 ! (see below)
             end do
@@ -531,6 +537,7 @@ contains
             if( nimproved == 0 .and. i > 2 )  exit
             if( i > 5 .and. corrfrac > 0.9999 ) exit
         end do
+        PRINT_NEVALS = .false.
         ! put the best local optimum back
         corr             = corr_saved
         opt_shifts_aniso = opt_shifts_aniso_saved
@@ -575,10 +582,6 @@ contains
             integer :: ldim(3)
             allocate( rmat(ldim4scale(1),ldim4scale(2),1), rmat_sum(ldim4scale(1),ldim4scale(2),1), source=0. )
             nimproved = 0
-
-
-
-
             ! FIRST LOOP TO OBTAIN WEIGHTED SUM
             !$omp parallel default(shared) private(iframe,rmat,corr) proc_bind(close)
             !$omp do schedule(static) reduction(+:rmat_sum)
@@ -587,10 +590,6 @@ contains
                 rmat_sum = rmat_sum + rmat * frameweights(iframe)
             end do
             !$omp end do nowait
-
-
-
-
             ! SECOND LOOP TO UPDATE movie_sum_global_threads AND CALCULATE CORRS
             !$omp do schedule(static) reduction(+:nimproved)
             do iframe=1,nframes

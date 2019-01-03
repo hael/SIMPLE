@@ -5,11 +5,11 @@ use simple_optimizer, only: optimizer
 use simple_opt_helpers
 implicit none
 
-public :: opt_lbfgsb
+public :: opt_lbfgsb, PRINT_NEVALS
 private
 #include "simple_local_flags.inc"
 
-logical, parameter  :: PRINT_NEVALS = .false.
+logical  :: PRINT_NEVALS = .false.
 real(dp), parameter :: zero=0.0d0,one=1.0d0,p5=0.5d0,p66=0.66d0
 real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
 real(dp), parameter :: big=1.0d+10
