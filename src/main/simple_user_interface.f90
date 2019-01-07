@@ -786,7 +786,6 @@ contains
         call cleanup2D%set_input('srch_ctrls', 3, maxits)
         call cleanup2D%set_input('srch_ctrls', 4, update_frac)
         call cleanup2D%set_input('srch_ctrls', 5, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
-
         ! filter controls
         call cleanup2D%set_input('filt_ctrls', 1, hp)
         call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

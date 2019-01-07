@@ -795,8 +795,8 @@ contains
     end function file2rarr
 
     subroutine simple_copy_file(fname1, fname2, status)
-        character(len=*), intent(in) :: fname1, fname2 !< input filenames
-        integer, intent(out), optional :: status
+        character(len=*),  intent(in)  :: fname1, fname2 !< input filenames
+        integer, optional, intent(out) :: status
         call syslib_copy_file(fname1, fname2, status)
     end subroutine simple_copy_file
 

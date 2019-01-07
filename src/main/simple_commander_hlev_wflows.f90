@@ -58,12 +58,15 @@ contains
         character(len=:),       allocatable :: projfile, orig_projfile
         character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked
         real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
-        integer                             :: last_iter, box
+        integer                             :: last_iter, box, status
         logical                             :: do_scaling
         ! parameters
-        integer, parameter :: MINBOX      = 92
-        real,    parameter :: TARGET_LP   = 15.
-        real               :: SMPD_TARGET = 4.
+        character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
+        integer, parameter    :: MINBOX      = 92
+        real,    parameter    :: TARGET_LP   = 15.
+        real,    parameter    :: MINITS      = 5.
+        real,    parameter    :: MAXITS      = 15.
+        real                  :: SMPD_TARGET = 4.
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         orig_projfile = params%projfile
@@ -88,12 +91,13 @@ contains
         cline_scale      = cline
         call cline_cluster2D1%set('prg',        'cluster2D')
         call cline_cluster2D1%set('refine',     'greedy')
+        call cline_cluster2D1%set('maxits',     MINITS)
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
-        call cline_cluster2D1%set('maxits',     10.)
+        call cline_cluster2D1%set('wiener',     'yes')
         call cline_cluster2D1%delete('locres')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
@@ -103,10 +107,11 @@ contains
         call cline_cluster2D2%set('refine',     'greedy')
         call cline_cluster2D2%set('match_filt', 'no')
         call cline_cluster2D2%set('wfun',       'bilinear')
-        call cline_cluster2D2%set('maxits',      30.)
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
+        call cline_cluster2D2%set('wiener',     'yes')
+        if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
         if( cline%defined('objfun') )then
             if( cline%get_carg('objfun').eq.'ccres' )then
                 call cline_cluster2D2%set('objfun', 'ccres')
@@ -133,6 +138,16 @@ contains
             box          = nint(cline_scale%get_rarg('newbox'))
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
             call xscale_distr%execute( cline_scale )
+            ! rename scaled projfile and stash original project file
+            ! such that the scaled project file has the same name as the original and can be followed from the GUI
+            call simple_copy_file(orig_projfile, orig_projfile_bak)
+            call spproj%read_non_data_segments(projfile)
+            call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
+            call spproj%projinfo%set(1,'projfile',orig_projfile)
+            call spproj%write_non_data_segments(projfile)
+            call spproj%kill
+            status   = simple_rename(projfile,orig_projfile)
+            projfile = trim(orig_projfile)
         endif
         if( cline%defined('msk') )then
             msk = params%msk*scale_factor
@@ -167,35 +182,41 @@ contains
         last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
         finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
         ! execution 2
-        write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
-        write(logfhandle,'(A)') '>>>'
-        call cline_cluster2D2%set('projfile', trim(projfile))
-        call cline_cluster2D2%set('startit',  real(last_iter+1))
-        call cline_cluster2D2%set('refs',     trim(finalcavgs))
-        call xcluster2D_distr%execute(cline_cluster2D2)
-        last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
-        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+        if( cline%defined('maxits') )then
+            if( last_iter < params%maxits )then
+                write(logfhandle,'(A)') '>>>'
+                write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
+                write(logfhandle,'(A)') '>>>'
+                call cline_cluster2D2%set('projfile', trim(projfile))
+                call cline_cluster2D2%set('startit',  real(last_iter+1))
+                call cline_cluster2D2%set('refs',     trim(finalcavgs))
+                call xcluster2D_distr%execute(cline_cluster2D2)
+                last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
+                finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+            endif
+        endif
         ! restores project file name
         params%projfile = trim(orig_projfile)
         ! update original project
         if( do_scaling )then
             call spproj_sc%read(projfile)
-            call spproj%read(params%projfile)
+            call spproj%read(orig_projfile_bak)
             call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
             call rescale_cavgs(finalcavgs)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
             spproj%os_cls2D  = spproj_sc%os_cls2D
+            ! restores original project and deletes backup & scaled
             call spproj%write(params%projfile)
+            call del_file(orig_projfile_bak)
         else
             call spproj%read_segment('out', params%projfile)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
             call spproj%write_segment_inside('out', params%projfile)
         endif
-        call spproj_sc%kill()
-        call spproj%kill()
+        call spproj_sc%kill
+        call spproj%kill
         ! ranking
         finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
         call cline_rank_cavgs%set('projfile', trim(params%projfile))
@@ -203,7 +224,6 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute(cline_rank_cavgs)
         ! cleanup
-        if( do_scaling ) call del_file(trim(projfile))
         call simple_rmdir(STKPARTSDIR)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')

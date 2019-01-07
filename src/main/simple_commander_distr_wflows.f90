@@ -630,7 +630,7 @@ contains
                 endif
                 do i=1,nfiles
                     target_name = PATH_HERE//basename(trim(list(i)))
-                    call syslib_copy_file(trim(list(i)), target_name)
+                    call simple_copy_file(trim(list(i)), target_name)
                 end do
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
@@ -640,7 +640,7 @@ contains
                 if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
                 do i=1,nfiles
                     target_name = PATH_HERE//basename(trim(list(i)))
-                    call syslib_copy_file(trim(list(i)), target_name)
+                    call simple_copy_file(trim(list(i)), target_name)
                 end do
             endif
         endif

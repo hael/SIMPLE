@@ -869,7 +869,7 @@ contains
                 call simple_chdir( filepath(PATH_HERE, trim(self%exec_dir)), errmsg="parameters:: new 3")
                 if( self%sp_required )then
                     ! copy the project file
-                    call syslib_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
+                    call simple_copy_file(trim(self%projfile), filepath(PATH_HERE, basename(self%projfile)))
                     ! update the projfile/projname
                     self%projfile = filepath(PATH_HERE, basename(self%projfile))
                     absname       = simple_abspath(self%projfile,errmsg='simple_parameters::new 4')
