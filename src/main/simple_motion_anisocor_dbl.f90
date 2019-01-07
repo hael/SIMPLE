@@ -10,20 +10,21 @@ use simple_image,           only: image
 use simple_motion_anisocor, only: motion_anisocor, POLY_DIM, TOL
 implicit none
 private
-public :: motion_anisocor_dbl, POLY_DIM, TOL
+public :: motion_anisocor_dbl
 #include "simple_local_flags.inc"
 
 type, extends(motion_anisocor)       :: motion_anisocor_dbl
     private
-    real(kind=c_double), allocatable :: rmat_ref      (:,:)  !< reference matrix
-    real(kind=c_double), allocatable :: rmat          (:,:)  !< particle  matrix
-    real(kind=c_double), allocatable :: rmat_T        (:,:)  !< transformed (interpolated) particle matrix
-    real(kind=c_double), allocatable :: rmat_T_grad   (:,:,:)!< gradient of transformed particle matrix
-    real(kind=c_double), allocatable :: T_coords      (:,:,:)!< transformed coordinates
-    real(kind=c_double), allocatable :: T_coords_da   (:,:,:)!< transformed coordinates, for use in derivative of obj. function
-    real(kind=c_double), allocatable :: T_coords_da_sq(:,:,:)!< square of T_coords_da, memoized for speedup
-    real(kind=c_double), allocatable :: T_coords_da_cr(:,:)  !< cross-product of square of T_coords, memoized for speedup
-    real(kind=c_double), allocatable :: T_coords_out  (:,:,:)!< transformed coordinates for output image
+    real(kind=c_double), allocatable :: rmat_ref      (:,:)   !< reference matrix
+    real(kind=c_double), allocatable :: rmat          (:,:)   !< particle  matrix
+    real(kind=c_double), allocatable :: rmat_T        (:,:)   !< transformed (interpolated) particle matrix
+    real(kind=c_double), allocatable :: rmat_T_grad   (:,:,:) !< gradient of transformed particle matrix
+    real(kind=c_double), allocatable :: T_coords      (:,:,:) !< transformed coordinates
+    real(kind=c_double), allocatable :: T_coords_xm   (:,:,:) !< transformed coordinates, for use in derivative of obj. function
+    real(kind=c_double), allocatable :: T_coords_xm_sq(:,:,:) !< square of T_coords_xm, memoized for speedup
+    real(kind=c_double), allocatable :: T_coords_xm_cr(:,:)   !< cross-product of square of T_coords_xm, memoized for speedup
+    real(kind=c_double), allocatable :: T_coords_out  (:,:,:) !< transformed coordinates for output image
+    real(dp)                         :: sc_alpha_x, sc_alpha_y!< scaling factors, used for gradients
 contains
     procedure, private               :: eval_fdf
     procedure, private               :: calc_mat_tld
@@ -65,9 +66,9 @@ contains
         t    = x(1) - x1_h
         u    = x(2) - y1_h
         val  =  (1._dp - t) * (1._dp - u) * y1 + &
-                      t  * (1._dp - u) * y2 + &
-                      t  *       u  * y3 + &
-                (1._dp - t) *       u  * y4
+                         t  * (1._dp - u) * y2 + &
+                         t  *          u  * y3 + &
+                (1._dp - t) *          u  * y4
     end function interp_bilin
 
     subroutine interp_bilin_fdf( self, x, val, grad )
@@ -94,18 +95,18 @@ contains
         y4 = self%rmat(x1_h, y2_h)
         t    = x(1) - x1_h
         u    = x(2) - y1_h
-        val  =  (1._dp - t) * (1._dp - u) * y1 + &
-                      t  * (1._dp - u) * y2 + &
-                      t  *       u  * y3 + &
-                (1._dp - t) *       u  * y4
-        grad(1) =   - (1._dp - u) * y1 + &
-                      (1._dp - u) * y2 + &
-                            u  * y3 - &
-                            u  * y4
-        grad(2) =   - (1._dp - t) * y1 - &
-                            t  * y2 + &
-                            t  * y3 + &
-                      (1._dp - t) * y4
+        val     =   (1._dp - t) * (1._dp - u) * y1 + &
+                             t  * (1._dp - u) * y2 + &
+                             t  *          u  * y3 + &
+                    (1._dp - t) *          u  * y4
+        grad(1) = -               (1._dp - u) * y1 + &
+                                  (1._dp - u) * y2 + &
+                                           u  * y3 - &
+                                           u  * y4
+        grad(2) = - (1._dp - t) *               y1 - &
+                             t  *               y2 + &
+                             t  *               y3 + &
+                    (1._dp - t) *               y4
     end subroutine interp_bilin_fdf
 
     function interp_bilin_out( self, x, rmat_in ) result(val)
@@ -133,8 +134,8 @@ contains
         u    = x(2) - y1_h
         val  =  (1._dp - t) * (1._dp - u) * y1 + &
                          t  * (1._dp - u) * y2 + &
-                         t  *       u  * y3 + &
-                (1._dp - t) *       u  * y4
+                         t  *          u  * y3 + &
+                (1._dp - t) *          u  * y4
     end function interp_bilin_out
 
     subroutine calc_T_coords( self, a )
@@ -142,7 +143,7 @@ contains
         real(dp),                   intent(in)    :: a(POLY_DIM)
         integer  :: i, j
         real(dp) :: Nx, Ny
-        real(dp) :: x, y, xm, ym, xms, yms, z1, z2
+        real(dp) :: x, y, xm, ym, xms, yms, xym, z1, z2
         Nx = real(self%ldim(1), dp)
         Ny = real(self%ldim(2), dp)
         do j = 1, self%ldim(2)
@@ -154,19 +155,20 @@ contains
                 ym  = (2._dp * y - Ny - 1._dp) / (Ny - 1._dp)
                 xms = xm * xm
                 yms = ym * ym
+                xym = xm * ym
+                self%T_coords_xm   (i,j,1) = xm
+                self%T_coords_xm   (i,j,2) = ym
+                self%T_coords_xm_sq(i,j,1) = xms
+                self%T_coords_xm_sq(i,j,2) = yms
+                self%T_coords_xm_cr(i,j)   = xym
                 ! Polynomial:
                 ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
                 ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym
-                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym
+                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
+                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
                 ! remap to [1:N]
                 self%T_coords      (1,i,j) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 self%T_coords      (2,i,j) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
-                self%T_coords_da   (i,j,1) =  (Nx - 1._dp) * z1               / 2._dp
-                self%T_coords_da   (i,j,2) =  (Ny - 1._dp) * z2               / 2._dp
-                self%T_coords_da_sq(i,j,1) = (self%T_coords_da(i,j,1)) ** 2
-                self%T_coords_da_sq(i,j,2) = (self%T_coords_da(i,j,2)) ** 2
-                self%T_coords_da_cr(i,j)   =  self%T_coords_da(i,j,1) * self%T_coords_da(i,j,2)
             end do
         end do
     end subroutine calc_T_coords
@@ -239,16 +241,11 @@ contains
         integer       :: ldim_out_here1(3), ldim_out_here2(3)
         logical       :: do_alloc
         real, pointer :: rmat_in_ptr(:,:,:), rmat_out_ptr(:,:,:)
-        integer :: ithr
         ldim_out_here1 = frame_in%get_ldim()
         ldim_out_here2 = frame_out%get_ldim()
         if( any(ldim_out_here1(1:2) .ne. ldim_out_here2(1:2)) )then
             THROW_HARD('calc_T_out: dimensions of particle and reference do not match; simple_motion_anisocor_dbl')
         end if
-        ithr = omp_get_thread_num() + 1
-        if (ithr .eq. 1) then
-            write (*,*) 'calc_T_out, ldim=', ldim_out_here1
-        endif
         self%ldim_out(1) = ldim_out_here1(1)
         self%ldim_out(2) = ldim_out_here1(2)
         call frame_in %get_rmat_ptr( rmat_in_ptr  )
@@ -297,6 +294,7 @@ contains
         real(dp) :: N, D_I, D_R, grad_tmp1, grad_tmp2
         integer  :: i, j, r
         real(dp) :: poly_dfs(POLY_DIM)
+        real(dp), allocatable :: atmp(:,:)
         call self%calc_T_coords(a)
         call self%calc_mat_tld()
         N   = sum( self%rmat_ref(:,:) * self%rmat_T  (:,:) )
@@ -307,7 +305,6 @@ contains
         ! Polynomial:
         ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
         ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-        ! previously:
         ! poly_grad( 1)    = 1.
         ! poly_grad( 2)    = xm
         ! poly_grad( 3)    = ym
@@ -325,51 +322,53 @@ contains
         ! d/da1: poly_dfs=1
         grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,1) )
         grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,1) )
-        grad(1)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad(1)   = grad_tmp1 - N *  grad_tmp2 / D_I
         ! d/da2: poly_dfs=xm
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da   (:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da   (:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad(2)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
+        grad(2)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da3: poly_dfs=ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da   (:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da   (:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad(3)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
+        grad(3)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da4: poly_dfs=xm^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad(4)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
+        grad(4)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da5: poly_dfs=ym^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad(5)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
+        grad(5)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da6: poly_dfs=xm*ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,1) )
-        grad(6)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
+        grad(6)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da7: poly_dfs=1
         grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,2) )
         grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,2) )
-        grad(7)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad(7)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da8: poly_dfs=xm
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da   (:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da   (:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad(8)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
+        grad(8)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da9: poly_dfs=ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da   (:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da   (:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad(9)   = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
+        grad(9)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da10: poly_dfs=xm^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad(10)  = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
+        grad(10)  = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da11: poly_dfs=ym^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad(11)  = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
+        grad(11)  = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da12: poly_dfs=xm*ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_da_cr(:,:)   * self%rmat_T_grad(:,:,2) )
-        grad(12)  = grad_tmp1 - f * sqrt(D_I / D_R) * grad_tmp2
+        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
+        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
+        grad(12)  = grad_tmp1 - N * grad_tmp2 / D_I
+        grad(1: 6) = grad(1: 6) / self%sc_alpha_x
+        grad(7:12) = grad(7:12) / self%sc_alpha_y
         grad = grad / sqrt(D_I*D_R)
     end subroutine eval_fdf
 
@@ -381,7 +380,7 @@ contains
         integer           :: i
         real              :: lims(POLY_DIM,2)
         call self%kill()
-        self%maxHWshift = 0.01
+        self%maxHWshift = 0.2
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -403,7 +402,8 @@ contains
             call self%nlopt%kill()
             deallocate(self%nlopt)
         end if
-        self%ospec%maxits = 300
+        self%ospec%x   = 0.
+        self%ospec%x_8 = 0._dp
         call ofac%new(self%ospec, self%nlopt)
     end subroutine motion_anisocor_dbl_new
 
@@ -414,18 +414,10 @@ contains
         real(kind=8), intent(in)    :: vec(D)
         real(kind=8)                :: cost
         real(kind=8)                :: f, grad(POLY_DIM)
-        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
             call fun_self%eval_fdf(vec, f, grad)
             cost = -f
-            ithr = omp_get_thread_num() + 1
-            if (ithr .eq. 1) then
-                write (*,*) 'cost_8'
-                write (*,*) 'vec=', vec
-                write (*,*) 'f=', f
-                call flush(6)
-            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_cost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -438,17 +430,10 @@ contains
         real(dp),     intent(inout) :: vec( D )
         real(dp),     intent(out)   :: grad( D )
         real(dp)                    :: f, agrad( D )
-        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
             call fun_self%eval_fdf(vec, f, agrad)
             grad = -agrad
-            if (ithr .eq. 1) then
-                write (*,*) 'gcost_8'
-                write (*,*) 'vec=', vec
-                write (*,*) 'grad=', grad
-                call flush(6)
-            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_gcost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -461,20 +446,11 @@ contains
         real(kind=8), intent(inout) :: vec(D)
         real(kind=8), intent(out)   :: f, grad(D)
         real(kind=8)                :: agrad( D )
-        integer :: ithr
         select type(fun_self)
         class is (motion_anisocor_dbl)
             call fun_self%eval_fdf(vec, f, agrad)
             f    = -f
             grad = -agrad
-            ithr = omp_get_thread_num() + 1
-            if (ithr .eq. 1) then
-                write (*,*) 'fdfcost_8'
-                write (*,*) 'vec=', vec
-                write (*,*) 'f=', f
-                write (*,*) 'grad=', grad
-                call flush(6)
-            endif
         class default
             THROW_HARD('error in motion_anisocor_dbl_fdfcost_8: unknown type; simple_motion_anisocor_dbl')
         end select
@@ -509,30 +485,33 @@ contains
             end if
         end if
         if (do_alloc) then
-            if (allocated(self%rmat_ref      )) deallocate(self%rmat_ref   )
-            if (allocated(self%rmat          )) deallocate(self%rmat       )
-            if (allocated(self%rmat_T        )) deallocate(self%rmat_T     )
-            if (allocated(self%rmat_T_grad   )) deallocate(self%rmat_T_grad)
-            if (allocated(self%T_coords      )) deallocate(self%rmat_ref)
-            if (allocated(self%T_coords_da   )) deallocate(self%rmat_ref)
-            if (allocated(self%T_coords_da_sq)) deallocate(self%rmat_ref)
-            if (allocated(self%T_coords_da_cr)) deallocate(self%rmat_ref)
+            if (allocated(self%rmat_ref      )) deallocate(self%rmat_ref      )
+            if (allocated(self%rmat          )) deallocate(self%rmat          )
+            if (allocated(self%rmat_T        )) deallocate(self%rmat_T        )
+            if (allocated(self%rmat_T_grad   )) deallocate(self%rmat_T_grad   )
+            if (allocated(self%T_coords      )) deallocate(self%T_coords      )
+            if (allocated(self%T_coords_xm   )) deallocate(self%T_coords_xm   )
+            if (allocated(self%T_coords_xm_sq)) deallocate(self%T_coords_xm_sq)
+            if (allocated(self%T_coords_xm_cr)) deallocate(self%T_coords_xm_cr)
             allocate( self%rmat_ref(self%ldim(1), self%ldim(2)) )
             allocate( self%rmat(self%ldim(1), self%ldim(2)) )
             allocate( self%rmat_T         (    self%ldim(1),     self%ldim(2)       ) )
             allocate( self%rmat_T_grad    (    self%ldim(1),     self%ldim(2),    2 ) )
             allocate( self%T_coords       ( 2, self%ldim(1),     self%ldim(2)       ) )
-            allocate( self%T_coords_da    (    self%ldim(1),     self%ldim(2),    2 ) )
-            allocate( self%T_coords_da_sq (    self%ldim(1),     self%ldim(2),    2 ) )
-            allocate( self%T_coords_da_cr (    self%ldim(1),     self%ldim(2)       ) )
+            allocate( self%T_coords_xm    (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_xm_sq (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_xm_cr (    self%ldim(1),     self%ldim(2)       ) )
+            self%sc_alpha_x = 2._dp / (real(self%ldim(1), dp) - 1._dp)
+            self%sc_alpha_y = 2._dp / (real(self%ldim(2), dp) - 1._dp)
         end if
         call ref%get_rmat_ptr( rmat_ref_ptr )
         self%rmat_ref(1:self%ldim(1), 1:self%ldim(2)) = rmat_ref_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%frame  => frame
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
-        self%ospec%x_8 = 0._dp
-        self%ospec%x   = 0.
+        self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.001 ! randomized (yet small) starting point
+        self%ospec%x_8 = real(self%ospec%x, dp)
+        self%ospec%maxits = 200
         call self%nlopt%minimize(self%ospec, self, cxy1)
         cxy(1)  = real(cxy1)
         cxy(2:) = self%ospec%x_8
@@ -549,9 +528,9 @@ contains
             self%nlopt => null()
         end if
         if (allocated(self%T_coords      )) deallocate(self%T_coords      )
-        if (allocated(self%T_coords_da   )) deallocate(self%T_coords_da   )
-        if (allocated(self%T_coords_da_sq)) deallocate(self%T_coords_da_sq)
-        if (allocated(self%T_coords_da_cr)) deallocate(self%T_coords_da_cr)
+        if (allocated(self%T_coords_xm   )) deallocate(self%T_coords_xm   )
+        if (allocated(self%T_coords_xm_sq)) deallocate(self%T_coords_xm_sq)
+        if (allocated(self%T_coords_xm_cr)) deallocate(self%T_coords_xm_cr)
         if (allocated(self%T_coords_out  )) deallocate(self%T_coords_out  )
         call self%ospec%kill()
         self%maxHWshift  = 0.
