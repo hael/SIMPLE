@@ -151,6 +151,10 @@ integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for recon
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 
+! weighting scheme
+logical, parameter :: WEIGHT_SCHEME_GLOBAL = .false.   !< per-particle or global orientation weighting scheme
+real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
+
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D

@@ -20,8 +20,8 @@ end type strategy3D_single
 contains
 
     subroutine oris_assign_single( self )
-        use simple_ori,  only: ori
-        use simple_strategy3D_utils, only: extract_peaks, corrs2softmax_weights, estimate_ang_spread, estimate_shift_increment
+        use simple_ori, only: ori
+        use simple_strategy3D_utils
         class(strategy3D_single), intent(inout) :: self
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
@@ -31,8 +31,11 @@ contains
         logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks( self%s, corrs )
-        ! stochastic weights
-        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr )
+        if( WEIGHT_SCHEME_GLOBAL )then
+            call corrs2softmax_weights_glob(self%s, self%s%npeaks, corrs, ws, best_loc, wcorr)      ! stochastic weights
+        else
+            call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr) ! stochastic weights
+        endif
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)

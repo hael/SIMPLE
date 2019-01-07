@@ -1,5 +1,6 @@
 ! concrete strategy3D: greedy single-state refinement
 module simple_strategy3D_greedy_single
+include 'simple_lib.f08'
 use simple_strategy3D_alloc         ! use all in there
 use simple_strategy3D_utils         ! use all in there
 use simple_strategy3D_greedy_multi, only: strategy3D_greedy_multi
@@ -26,16 +27,19 @@ contains
         type(ori) :: osym
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
-        real      :: shwmean, shwstdev        
+        real      :: shwmean, shwstdev
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks(self%s, corrs)
-        ! stochastic weights
-        call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr)
+        if( WEIGHT_SCHEME_GLOBAL )then
+            call corrs2softmax_weights_glob(self%s, self%s%npeaks, corrs, ws, best_loc, wcorr)      ! stochastic weights
+        else
+            call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr) ! stochastic weights
+        endif
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
-        call estimate_shift_increment(self%s, shwmean, shwstdev)        
+        call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
             & s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )

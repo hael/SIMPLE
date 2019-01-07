@@ -74,10 +74,11 @@ contains
         type(ctfparams)       :: ctfvars
         type(convergence)     :: conv
         type(oris)            :: o_peak_prev
-        real, allocatable     :: resarr(:)
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio, bfactor
-        integer :: iptcl, i, fnr, i_batch, ithr, updatecnt, state, n_nozero
-        integer :: ibatch, npeaks, iextr_lim, lpind_anneal, lpind_start, batchlims(2)
+        real, allocatable     :: resarr(:), weights(:), weights_glob(:)
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
+        real    :: weight_thres, bfactor, wsum
+        integer :: iptcl, i, fnr, i_batch, ithr, updatecnt, state, n_nozero, nweights, cnt
+        integer :: ibatch, npeaks, iextr_lim, lpind_anneal, lpind_start, batchlims(2), sz
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -98,7 +99,7 @@ contains
 
         ! DETERMINE THE NUMBER OF PEAKS
         select case(params_glob%refine)
-        case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
+            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 npeaks = 1
             case('hard_single','hard_multi')
                 npeaks = 40
@@ -346,6 +347,49 @@ contains
 
         ! UPDATE PARTICLE STATS
         call calc_ptcl_stats
+
+        ! GLOBAL ORIENTATION WEIGHT ZEROING AND RE-NORMALIZATION
+        select case(params_glob%refine)
+            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
+                ! nothing to do
+            case DEFAULT
+                if( WEIGHT_SCHEME_GLOBAL )then
+                    ! extract weights
+                    nweights = npeaks * nptcls2update
+                    allocate(weights_glob(nweights), source=0.)
+                    cnt = 0
+                    do iptcl=params_glob%fromp,params_glob%top
+                        if( ptcl_mask(iptcl) )then
+                            weights = s3D%o_peaks(iptcl)%get_all('ow')
+                            do i=1,size(weights)
+                                cnt = cnt + 1
+                                weights_glob(cnt) = weights(i)
+                            end do
+                        endif
+                    end do
+                    ! find threshold
+                    call hpsort(weights_glob(:cnt))
+                    weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
+                    ! zero and renormalize weights
+                    do iptcl=params_glob%fromp,params_glob%top
+                        if( ptcl_mask(iptcl) )then
+                            weights = s3D%o_peaks(iptcl)%get_all('ow')
+                            where( weights < weight_thres ) weights = 0.
+                            wsum = sum(weights)
+                            if( wsum > TINY )then
+                                weights = weights / wsum
+                                call s3D%o_peaks(iptcl)%set_all('ow', weights)
+                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
+                                call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
+                            else
+                                call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
+                                call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)
+                            endif
+                        endif
+                    end do
+                    deallocate(weights_glob)
+                endif
+        end select
 
         ! O_PEAKS I/O & CONVERGENCE STATS
         select case(trim(params_glob%refine))

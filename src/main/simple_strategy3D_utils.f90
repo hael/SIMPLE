@@ -7,8 +7,9 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peaks, prob_select_peak, corrs2softmax_weights, states_reweight
-public :: estimate_ang_spread, estimate_shift_increment, set_state_overlap, sort_corrs
+public :: extract_peaks, prob_select_peak, corrs2softmax_weights, corrs2softmax_weights_glob
+public :: states_reweight, states_reweight_glob, estimate_ang_spread, estimate_shift_increment
+public :: set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
@@ -224,6 +225,49 @@ contains
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine corrs2softmax_weights
 
+    ! for dealing with the weights in a global sense:
+    ! (1) Calculate normalised softmax weights per particle
+    ! (2) Select the fraction (16%) of highest weights globally for inclusion in the 3D rec
+    subroutine corrs2softmax_weights_glob( s, n, corrs, ws, best_loc, best_corr )
+        use simple_ori, only: ori
+        class(strategy3D_srch), intent(inout) :: s
+        integer,                intent(in)    :: n
+        real,                   intent(in)    :: corrs(n)
+        real,                   intent(out)   :: ws(n), best_corr
+        integer,                intent(out)   :: best_loc(1)
+        real    :: dists(n), arg4softmax(n), wsum
+        integer :: i, loc(MINNPEAKS)
+        s%npeaks_eff = 1
+        if( n == 1 )then
+            best_loc(1)  = 1
+            ws(1)        = 1.
+        else
+            ! find highest corr pos
+            best_loc  = maxloc(corrs)
+            best_corr = corrs(best_loc(1))
+            if( .not. pftcc_glob%is_euclid(s%iptcl) )then
+                ! convert correlations to distances
+                dists = 1.0 - corrs
+                ! scale distances with TAU
+                dists = dists / params_glob%tau
+            else
+                dists = - corrs / params_glob%sigma2_fudge
+            end if
+            ! argument for softmax function is negative distances
+            arg4softmax = -dists
+            ! subtract maxval of negative distances for numerical stability
+            arg4softmax = arg4softmax - maxval(arg4softmax)
+            ! calculate softmax weights
+            ws = exp(arg4softmax)
+            if( .not. pftcc_glob%is_euclid(s%iptcl) ) where( corrs <= TINY ) ws = 0.
+            ! normalise
+            wsum = sum(ws)
+            ws = ws / wsum
+        endif
+        ! update npeaks individual weights
+        call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
+    end subroutine corrs2softmax_weights_glob
+
     subroutine states_reweight( s, npeaks, ws, included, state, best_loc, wcorr )
         class(strategy3D_srch), intent(inout) :: s
         integer,                intent(in)    :: npeaks
@@ -261,6 +305,37 @@ contains
             wcorr    = s3D%o_peaks(s%iptcl)%get(1,'corr')
         endif
     end subroutine states_reweight
+
+    subroutine states_reweight_glob( s, npeaks, ws, state, best_loc )
+        class(strategy3D_srch), intent(inout) :: s
+        integer,                intent(in)    :: npeaks
+        real,                   intent(inout) :: ws(npeaks)
+        integer,                intent(out)   :: state, best_loc(1)
+        integer :: istate, ipeak, states(npeaks)
+        real    :: corrs(npeaks), state_ws(s%nstates)
+        if( npeaks > 1 .and. s%nstates > 1 )then
+            ! states weights
+            do ipeak = 1, npeaks
+                corrs(ipeak)  = s3D%o_peaks(s%iptcl)%get(ipeak,'corr')
+                states(ipeak) = s3D%o_peaks(s%iptcl)%get_state(ipeak)
+            enddo
+            ! greedy state assignment
+            state_ws = 0.
+            do istate = 1, s%nstates
+                state_ws(istate) = sum(ws,mask=(states==istate))
+            enddo
+            state = maxloc(state_ws, dim=1)
+            ! in-state re-weighing
+            where( .not. states==state ) ws = 0.
+            ws       = ws / sum(ws)
+            best_loc = maxloc(ws)
+            ! update individual weights
+            call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
+        else if( npeaks == 1 .and. s%nstates > 1 )then
+            best_loc = 1
+            state    = s3D%o_peaks(s%iptcl)%get_state(1)
+        endif
+    end subroutine states_reweight_glob
 
     function estimate_ang_spread( s ) result( ang_spread )
         use simple_ori,  only: ori
