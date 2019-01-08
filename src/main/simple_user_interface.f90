@@ -2,7 +2,8 @@ module simple_user_interface
 include 'simple_lib.f08'
 implicit none
 
-public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui, list_shmem_prgs_in_ui, write_ui_json
+public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui
+public :: list_shmem_prgs_in_ui, write_ui_json
 private
 #include "simple_local_flags.inc"
 

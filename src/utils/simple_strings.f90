@@ -77,6 +77,23 @@ contains
         allocate( format, source='char' )
     end function str2format
 
+    function str2latex( str2convert ) result( str_latex )
+        character(len=*), intent(in)  :: str2convert
+        character(len=:), allocatable :: str_latex, str
+        allocate(str_latex, source=adjustl(trim(str2convert)))
+        call replace_substr(str_latex, '{', '\{', str)
+        deallocate(str_latex)
+        call replace_substr(str, '}', '\}', str_latex)
+        deallocate(str)
+        call replace_substr(str_latex, '_', '\_', str)
+        deallocate(str_latex)
+        call replace_substr(str, '%', '\%', str_latex)
+        deallocate(str)
+        call replace_substr(str_latex, '#', '\#', str)
+        deallocate(str_latex)
+        call replace_substr(str, 'in A', 'in \AA{}', str_latex)
+    end function str2latex
+
     logical function char_is_a_letter( c )
         character(len=1), intent(in) :: c
         integer :: itst1, itst2
@@ -376,6 +393,32 @@ contains
         character(len=*), intent(in) :: str, substr
         str_has_substr = .not. (index(str, substr) == 0)
     end function str_has_substr
+
+    subroutine replace_substr( str, substr, repl, str_out )
+        character(len=*), intent(inout) :: str
+        character(len=*), intent(in)    :: substr, repl
+        character(len=:), allocatable   :: str_out
+        integer :: nargs, iarg, iback, ls
+        character(len=STDLEN) :: args(32)
+        logical :: back_occur
+        iback      = index(str, substr, back=.true.)
+        ls         = len(substr)
+        back_occur = len(str) - ls + 1 == iback
+        call parsestr(str,substr,args,nargs)
+        if( nargs == 0 )then
+            allocate(str_out, source=str)
+            return
+        else
+            str_out = ''
+            do iarg=1,nargs
+                if( iarg == nargs .and. .not. back_occur )then
+                    str_out = str_out // trim(args(iarg))
+                else
+                    str_out = str_out // trim(args(iarg)) // repl
+                endif
+            end do
+        endif
+    end subroutine replace_substr
 
     !>  \brief  Convert string to all upper case
     !!  Adapted from

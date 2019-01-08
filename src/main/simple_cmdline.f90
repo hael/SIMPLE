@@ -118,7 +118,7 @@ contains
         endif
         if( self%argcnt < nargs_required )then
             call ptr2prg%print_cmdline()
-                call exit(EXIT_FAILURE2)
+            call exit(EXIT_FAILURE2)
         else
             ! indicate which variables are required
             if( sz_keys_req > 0 )then

@@ -7,6 +7,7 @@
 \setlength{\bibsep}{0.0pt}
 \usepackage[font=small,labelfont=bf]{caption}
 \usepackage[OT2,T1]{fontenc}
+\usepackage{fancyvrb,courier}
 % Set formats for each heading level
 \usepackage{sectsty}
 \allsectionsfont{\usefont{OT1}{phv}{bc}{n}\selectfont}
@@ -103,7 +104,19 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
     \item[--]
 \end{itemize}
 
+
+
 \section{File Formats}
+
+\begin{Verbatim}[commandchars=+\[\]]
+    The +underline[quick brown fox] jumped over the lazy dog.
+    The +textbf[quick brown fox] jumped over the lazy dog.
+    The +textit[quick brown fox] jumped over the lazy dog.
+\end{Verbatim}
+
+\begin{Verbatim}[commandchars=+\[\]]
+    The +textbf[quick brown fox] jumped over the lazy dog.
+\end{Verbatim}
 
 \subsection{Image File Formats}
 SIMPLE supports SPIDER (\texttt{*.spi}) and MRC (\texttt{*.mrc}) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction \citep{Rohou:2014aa}. RELION \citep{Scheres:2012aa} uses the convention that MRC stacks have the suffix \texttt{*.mrcs} and volumes the suffix \texttt{*.mrc}. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the \texttt{*.mrcs} or \texttt{*.mrc} suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs \texttt{vol1=rec.mrc} and \texttt{vol2=rec2.mrc} refer to volumes whereas the key-value pairs \texttt{stk=ptcls.mrc} and \texttt{stk2=ptcls2.mrc} refer to stacks.
