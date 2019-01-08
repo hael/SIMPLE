@@ -348,7 +348,7 @@ contains
         ! UPDATE PARTICLE STATS
         call calc_ptcl_stats
 
-        ! GLOBAL ORIENTATION WEIGHT ZEROING AND RE-NORMALIZATION
+        ! GLOBAL ORIENTATION WEIGHT ZEROING AND NORMALIZATION
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
                 ! nothing to do
@@ -370,7 +370,7 @@ contains
                     ! find threshold
                     call hpsort(weights_glob(:cnt))
                     weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
-                    ! zero and renormalize weights
+                    ! zero and normalize weights
                     do iptcl=params_glob%fromp,params_glob%top
                         if( ptcl_mask(iptcl) )then
                             weights = s3D%o_peaks(iptcl)%get_all('ow')

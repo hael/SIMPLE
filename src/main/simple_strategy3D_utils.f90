@@ -260,9 +260,7 @@ contains
             ! calculate softmax weights
             ws = exp(arg4softmax)
             if( .not. pftcc_glob%is_euclid(s%iptcl) ) where( corrs <= TINY ) ws = 0.
-            ! normalise
-            wsum = sum(ws)
-            ws = ws / wsum
+            ! NO WEIGHT NORMALISATION HERE (NORMALISATION IN 3D MATCHER)
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
@@ -327,7 +325,7 @@ contains
             state = maxloc(state_ws, dim=1)
             ! in-state re-weighing
             where( .not. states==state ) ws = 0.
-            ws       = ws / sum(ws)
+            ! NO WEIGHT NORMALISATION HERE (NORMALISATION IN 3D MATCHER)
             best_loc = maxloc(ws)
             ! update individual weights
             call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
