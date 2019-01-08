@@ -97,7 +97,6 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
-        call cline_cluster2D1%set('wiener',     'yes')
         call cline_cluster2D1%delete('locres')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
@@ -110,7 +109,6 @@ contains
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
-        call cline_cluster2D2%set('wiener',     'yes')
         if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
         if( cline%defined('objfun') )then
             if( cline%get_carg('objfun').eq.'ccres' )then
@@ -371,6 +369,10 @@ contains
                     call cline_cluster2D_stage2%set('objfun', 'ccres')
                 endif
             endif
+            if( trim(params%bfac_filt).eq.'yes' )then
+                ! overrides objective function
+                call cline_cluster2D_stage2%set('objfun', 'cc')
+            endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
@@ -410,7 +412,6 @@ contains
                 call cline_make_cavgs%set('projfile', params%projfile)
                 call cline_make_cavgs%set('nparts',   real(nparts))
                 call cline_make_cavgs%set('refs',     trim(finalcavgs))
-                call cline_make_cavgs%set('wiener',   'yes')
                 call xmake_cavgs%execute(cline_make_cavgs)
             endif
         else

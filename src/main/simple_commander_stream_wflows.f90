@@ -337,7 +337,6 @@ contains
         call cline_cluster2D%delete('update_frac')
         ! scaling
         call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%set('wiener', 'yes')
         call cline_make_cavgs%set('wfun',   'bilinear')
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%delete('remap_cls')
@@ -488,7 +487,6 @@ contains
             call cline_make_cavgs%set('nparts', real(nparts))
             call cline_make_cavgs%set('ncls',   real(ncls_glob))
             call cline_make_cavgs%set('refs',   refs_glob)
-            call cline_make_cavgs%set('wiener', 'yes')
             call xmake_cavgs%execute(cline_make_cavgs)
             call orig_proj%read(orig_projfile)
         endif

@@ -21,6 +21,7 @@ type :: parameters
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
+    character(len=3)      :: bfac_filt='no'       !< particles b-factor filter on(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
@@ -388,7 +389,6 @@ type :: parameters
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)        = .false.
     logical :: l_autoscale      = .false.
-    logical :: l_cc_bfac        = .true.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
@@ -398,6 +398,7 @@ type :: parameters
     logical :: l_innermsk       = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
+    logical :: l_bfac_filt      = .false.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
@@ -465,6 +466,7 @@ contains
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
+        call check_carg('bfac_filt',      self%bfac_filt)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
@@ -1322,12 +1324,16 @@ contains
                 self%l_match_filt = .true.
             end select
         endif
+        ! bfactor filter
+        if( self%bfac_filt.eq.'yes' )then
+            self%l_bfac_filt = .true.
+            if( self%cc_objfun /= OBJFUN_CC )then
+                THROW_HARD('bfac_filt=yes incompatible with objfun='//trim(self%objfun))
+            endif
+        endif
         ! local resolution for filtering or  not
         self%l_locres = .false.
         if( trim(self%locres) .eq. 'yes' ) self%l_locres = .true.
-        ! B-factor weighted corr or not
-        self%l_cc_bfac = .false.
-        if( cline%defined('bfac') ) self%l_cc_bfac = .true.
         ! global dev (development) flag
         self%l_dev = .false.
         if( trim(self%dev) .eq. 'yes' ) self%l_dev = .true.

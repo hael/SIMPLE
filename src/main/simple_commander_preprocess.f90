@@ -313,7 +313,6 @@ contains
         use simple_pspec_thumb_iter, only: pspec_thumb_iter
         class(gen_pspecs_and_thumbs_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
-        character(len=LONGSTRLEN), allocatable :: imgnames(:)
         type(parameters)              :: params
         type(pspec_thumb_iter)        :: ptiter
         type(sp_project)              :: spproj
@@ -496,7 +495,7 @@ contains
         character(len=LONGSTRLEN)     :: boxfile
         integer, parameter :: NREFS=100, NPROJS=20
         real    :: ang, rot
-        integer :: nrots, iref, irot, status, ldim(3), ifoo, ncavgs
+        integer :: nrots, iref, irot, ldim(3), ifoo, ncavgs
         integer :: icavg, ncls2D, fromto(2), imic, ntot, nptcls_out
         integer :: cnt, state, n_os_out, i, nsel
         call cline%set('oritype', 'mic')
@@ -717,7 +716,7 @@ contains
         endif
         call mic_copy%write('Bin1.mrc')
         if( cline%defined('winsz')) then
-            winsz = params%winsz
+            winsz = nint(params%winsz)
         else
             winsz = 4
         endif
@@ -770,11 +769,11 @@ contains
         type(ori)                               :: o_mic
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
-        character(len=:),           allocatable :: output_dir, mic_name, boxfile_name, imgkind
+        character(len=:),           allocatable :: output_dir, mic_name, imgkind, boxfile_name
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:)
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN) :: stack, dir_box
+        character(len=LONGSTRLEN) :: stack, dir_box, boxfname
         integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
         integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob
         real                      :: particle_position(2)
@@ -803,8 +802,8 @@ contains
                     THROW_HARD('No box file found; exec_extract 2')
                 endif
                 do i=1,size(boxfiles)
-                    call make_relativepath(CWD_GLOB,boxfiles(i),boxfile_name)
-                    boxfiles(i) = trim(boxfile_name)
+                    call make_relativepath(CWD_GLOB,boxfiles(i),boxfname)
+                    boxfiles(i) = trim(boxfname)
                 enddo
             else
                 write(logfhandle,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
@@ -1027,7 +1026,7 @@ contains
         logical,          allocatable :: ptcl_msk(:,:,:)
         integer,          allocatable :: micstk_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
-        integer  :: nframes,imic,iptcl,istk,nstks,nmics,prev_box,box_foo, cnt,niter,ntot,ifoo,nptcls
+        integer  :: nframes,imic,iptcl,istk,nstks,nmics,prev_box,box_foo,cnt,ntot,nptcls
         integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,noutside_tot
         real    :: prev_shift(2), shift2d(2), shift3d(2)
         logical :: l_2d

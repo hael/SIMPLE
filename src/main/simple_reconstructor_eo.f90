@@ -25,7 +25,6 @@ type :: reconstructor_eo
     integer             :: box=0, nstates=1, numlen=2, hpind_fsc=0
     logical             :: phaseplate = .false.
     logical             :: automsk    = .false.
-    logical             :: wiener     = .false.
     logical             :: exists     = .false.
   contains
     ! CONSTRUCTOR
