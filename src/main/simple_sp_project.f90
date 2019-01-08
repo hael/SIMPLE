@@ -45,6 +45,7 @@ contains
     ! os_mic related methods
     procedure          :: add_single_movie
     procedure          :: add_movies
+    procedure          :: add_intgs
     procedure          :: get_movies_table
     procedure          :: get_mics_table
     procedure          :: get_micparams
@@ -507,6 +508,7 @@ contains
         end select
     end subroutine add_single_movie
 
+    !> Add/append movies or micrographs without ctf parameters
     subroutine add_movies( self, filetab, ctfvars )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: filetab
@@ -585,6 +587,106 @@ contains
         write(logfhandle,'(A13,I6,A1,A)')'>>> IMPORTED ', nmics,' ', trim(name)
         write(logfhandle,'(A20,A,A1,I6)')'>>> TOTAL NUMBER OF ', trim(name),':',ntot
     end subroutine add_movies
+
+    !> Add/append micrographs with ctf parameters
+    subroutine add_intgs( self, filetab, os, ctfvars )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: filetab
+        class(oris),               intent(in)    :: os
+        type(ctfparams),           intent(in)    :: ctfvars
+        character(len=LONGSTRLEN),   allocatable :: micnames(:)
+        type(ctfparams)           :: prev_ctfvars, ctfparms
+        character(len=LONGSTRLEN) :: rel_micname
+        real                      :: intg_smpd
+        integer                   :: imic,ldim(3),nframes,nintgs,nprev_intgs,nprev_mics,cnt,ntot
+        ! file exists?
+        if( .not. file_exists(filetab) )then
+            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_intgs')
+        endif
+        nprev_mics  = self%os_mic%get_noris()
+        nprev_intgs = self%get_nintgs()
+        if( nprev_mics > 0 )then
+            if( nprev_mics /= nprev_intgs )then
+                THROW_HARD('Cannot add lone micrographs to a project with movies; add_intgs')
+            endif
+            if( nprev_intgs == 0 )then
+                THROW_HARD('Cannot add micrographs to a project with movies only; add_intgs')
+            endif
+            ! previous micrographs parameters
+            prev_ctfvars = self%os_mic%get_ctfvars(1)
+            if(ctfvars%smpd    /= prev_ctfvars%smpd ) THROW_HARD('Inconsistent sampling distance; add_intgs')
+            if(ctfvars%cs      /= prev_ctfvars%cs   ) THROW_HARD('Inconsistent spherical aberration; add_intgs')
+            if(ctfvars%kv      /= prev_ctfvars%kv   ) THROW_HARD('Inconsistent voltage; add_intgs')
+            if(ctfvars%fraca   /= prev_ctfvars%fraca) THROW_HARD('Inconsistent amplituce contrast; add_intgs')
+            if(ctfvars%ctfflag /= prev_ctfvars%ctfflag) THROW_HARD('Incompatible CTF flag; add_intgs')
+        endif
+        ! read movie names
+        call read_filetable(filetab, micnames)
+        nintgs = size(micnames)
+        if( nintgs /= os%get_noris() )then
+            THROW_HARD('Inconsistent # of mics & ctf parameters; add_intgs')
+        endif
+        ! update oris
+        if( nprev_intgs == 0 )then
+            ! first import
+            call self%os_mic%new(nintgs)
+            ntot = nintgs
+        else
+            ! append
+            ntot = nintgs+nprev_intgs
+            call self%os_mic%reallocate(ntot)
+        endif
+        cnt = 0
+        do imic=nprev_intgs+1,ntot
+            cnt = cnt + 1
+            call make_relativepath(CWD_GLOB,micnames(cnt),rel_micname)
+            call find_ldim_nptcls(trim(rel_micname), ldim, nframes, smpd=intg_smpd)
+            if( nframes <= 0 )then
+                THROW_HARD('# frames in movie: '//trim(micnames(cnt))//' <= zero; add_intgs')
+            else if( nframes > 1 )then
+                THROW_HARD('Not the interface for adding movies; add_intgs')
+            endif
+            if( nprev_intgs > 0 )then
+                if( intg_smpd /= prev_ctfvars%smpd )then
+                    THROW_HARD('Incompatible sampling distance: '//trim(micnames(cnt))//'; add_intgs')
+                endif
+            endif
+            ! updates segment
+            ctfparms = os%get_ctfvars(cnt)
+            call self%os_mic%set(imic, 'intg', rel_micname)
+            call self%os_mic%set(imic, 'imgkind', 'intg')
+            call self%os_mic%set(imic, 'xdim',    real(ldim(1)))
+            call self%os_mic%set(imic, 'ydim',    real(ldim(2)))
+            call self%os_mic%set(imic, 'smpd',    ctfvars%smpd)
+            call self%os_mic%set(imic, 'kv',      ctfvars%kv)
+            call self%os_mic%set(imic, 'cs',      ctfvars%cs)
+            call self%os_mic%set(imic, 'fraca',   ctfvars%fraca)
+            if( os%isthere(cnt,'state') )then
+                call self%os_mic%set(imic, 'state', os%get(cnt,'state'))
+            else
+                call self%os_mic%set(imic, 'state', 1.0)
+            endif
+            if( ctfvars%l_phaseplate )then
+                call self%os_mic%set(imic, 'phaseplate', 'yes')
+            else
+                call self%os_mic%set(imic, 'phaseplate', 'no')
+            endif
+            select case(ctfvars%ctfflag)
+                case(CTFFLAG_NO)
+                    call self%os_mic%set(imic, 'ctf', 'no')
+                case(CTFFLAG_YES)
+                    call self%os_mic%set(imic, 'ctf',    'yes')
+                    call self%os_mic%set(imic, 'dfx',    ctfparms%dfx)
+                    call self%os_mic%set(imic, 'dfy',    ctfparms%dfy)
+                    call self%os_mic%set(imic, 'angast', ctfparms%angast)
+                    call self%os_mic%set(imic, 'phshift',ctfparms%phshift)
+                case(CTFFLAG_FLIP)
+                    call self%os_mic%set(imic, 'ctf', 'flip')
+            end select
+        enddo
+        write(logfhandle,'(A,I6,A)')'>>> IMPORTED ', nintgs,' INTEGRATED MOVIES'
+        write(logfhandle,'(A,I6)')'>>> TOTAL NUMBER OF MICROGRAPHS:',ntot
+    end subroutine add_intgs
 
     subroutine get_movies_table( self, moviestab )
         class(sp_project),                      intent(inout) :: self

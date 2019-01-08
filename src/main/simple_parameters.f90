@@ -425,7 +425,7 @@ contains
         character(len=:),          allocatable   :: debug_local, verbose_local
         logical                       :: vol_defined(MAXS)
         character(len=1)              :: checkupfile(50)
-        character(len=:), allocatable :: absname, executable
+        character(len=:), allocatable :: absname
         type(binoris)    :: bos
         type(sp_project) :: spproj
         type(ori)        :: o

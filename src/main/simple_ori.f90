@@ -438,9 +438,9 @@ contains
 
     !>  \brief  is a getter with fixed length return string
     function get_static( self, key )result( val )
-        class(ori),           intent(inout) :: self
-        character(len=*),     intent(in)    :: key
-        character(len=STDLEN)               :: val
+        class(ori),       intent(in) :: self
+        character(len=*), intent(in) :: key
+        character(len=STDLEN)        :: val
         val = trim(self%chtab%get_static(key))
     end function get_static
 
@@ -601,24 +601,24 @@ contains
     end subroutine write2bild
 
     function get_ctfvars(self) result(ctfvars)
-        class(ori), intent(inout) :: self
-        type(ctfparams) :: ctfvars
-        character(len=:), allocatable :: ctfstr, phplate
+        class(ori), intent(in) :: self
+        type(ctfparams)        :: ctfvars
+        character(len=STDLEN)  :: ctfstr, phplate
         if( self%isthere('ctf') )then
-            call self%getter('ctf', ctfstr)
-            ctfvars%ctfflag = 1
+            ctfstr = self%get_static('ctf')
+            ctfvars%ctfflag = CTFFLAG_YES
             select case( trim(ctfstr) )
                 case('no')
-                    ctfvars%ctfflag = 0
+                    ctfvars%ctfflag = CTFFLAG_NO
                 case('yes')
-                    ctfvars%ctfflag = 1
+                    ctfvars%ctfflag = CTFFLAG_YES
                 case('flip')
-                    ctfvars%ctfflag = 2
+                    ctfvars%ctfflag = CTFFLAG_FLIP
             end select
         endif
         ctfvars%l_phaseplate = .false.
         if( self%isthere('phaseplate') )then
-            call self%getter('phaseplate', phplate)
+            phplate = self%get_static('phaseplate')
             ctfvars%l_phaseplate = phplate .eq. 'yes'
         endif
         ctfvars%smpd    = self%get('smpd')

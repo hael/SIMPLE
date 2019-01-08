@@ -1400,7 +1400,7 @@ contains
         &'accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected '&
         &'and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
-        &1, 7, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
+        &1, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call import_movies%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
@@ -1416,6 +1416,8 @@ contains
         import_movies%parm_ios(5)%required = .true.
         call import_movies%set_input('parm_ios', 6, phaseplate)
         call import_movies%set_input('parm_ios', 7, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
+        call import_movies%set_input('parm_ios', 8, 'deftab', 'file','Pre-determined per-micrograph CTF parameters',&
+        &'List of CTF parmeters for micrographs import only', 'e.g. deftab.txt', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls

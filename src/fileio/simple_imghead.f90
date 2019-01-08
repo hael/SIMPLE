@@ -1196,14 +1196,15 @@ contains
     end subroutine get_spifile_info
 
     !>  \brief  is for finding logical dimension and number of particles in stack
-    subroutine find_ldim_nptcls( fname, ldim, nptcls, doprint, formatchar )
+    subroutine find_ldim_nptcls( fname, ldim, nptcls, smpd, doprint, formatchar )
         character(len=*),           intent(in)  :: fname      !< filename
         integer,                    intent(out) :: ldim(3)    !< logical dimension
         integer,                    intent(out) :: nptcls     !< number of particles
+        real,             optional, intent(out) :: smpd       !< do print or not
         logical,          optional, intent(in)  :: doprint    !< do print or not
         character(len=1), optional, intent(in)  :: formatchar !< input format
+        real                          :: smpd_here
         integer                       :: iform, maxim
-        real                          :: smpd
         character(len=:), allocatable :: conv
         character(len=1)              :: form
         logical                       :: ddoprint
@@ -1217,14 +1218,15 @@ contains
         nptcls = 0
         select case (form)
             case('M','F')
-                call get_mrcfile_info(fname, ldim, form, smpd, ddoprint )
+                call get_mrcfile_info(fname, ldim, form, smpd_here, ddoprint )
                 nptcls = ldim(3)
             case('S')
-                call get_spifile_info(fname, ldim, iform, maxim, smpd, conv, ddoprint)
+                call get_spifile_info(fname, ldim, iform, maxim, smpd_here, conv, ddoprint)
                 nptcls = maxim
             case DEFAULT
                 THROW_HARD('format of file: '//trim(fname)//' not supported')
         end select
+        if( present(smpd) )smpd = smpd_here
     end subroutine find_ldim_nptcls
 
     !>  \brief  is for checking logical dimension and number of particles in stack

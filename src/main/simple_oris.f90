@@ -1238,8 +1238,8 @@ contains
     end function ori2str
 
     function get_ctfvars( self, i ) result( ctfvars )
-        class(oris), intent(inout) :: self
-        integer,     intent(in)    :: i
+        class(oris), intent(in) :: self
+        integer,     intent(in) :: i
         type(ctfparams) :: ctfvars
         ctfvars = self%o(i)%get_ctfvars()
     end function get_ctfvars

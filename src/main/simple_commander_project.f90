@@ -298,7 +298,6 @@ contains
         class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        integer          :: iostatus
         call params%new(cline)
         if( cline%defined('projname') .and. cline%defined('dir') )then
             THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
@@ -340,7 +339,6 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        integer          :: iostatus
         call params%new(cline)
         ! read relevant segments
         call spproj%read_non_data_segments(trim(params%projfile))
@@ -359,8 +357,9 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
-        logical          :: inputted_boxtab
+        logical          :: inputted_boxtab, inputted_deftab
         integer          :: nmovf, nboxf, i
+        type(oris)       :: deftab
         type(ctfparams)  :: ctfvars
         character(len=:),          allocatable :: phaseplate
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
@@ -368,6 +367,7 @@ contains
         call params%new(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
+        inputted_deftab = cline%defined('deftab')
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
@@ -385,11 +385,11 @@ contains
         ctfvars%fraca = params%fraca
         select case(params%ctf)
             case('yes')
-                ctfvars%ctfflag = 1
+                ctfvars%ctfflag = CTFFLAG_YES
             case('no')
-                ctfvars%ctfflag = 0
+                ctfvars%ctfflag = CTFFLAG_NO
             case('flip')
-                ctfvars%ctfflag = 2
+                ctfvars%ctfflag = CTFFLAG_FLIP
             case DEFAULT
                 THROW_HARD('ctf flag: '//trim(params%ctf)//' not supported; exec_import_movies')
         end select
@@ -398,7 +398,15 @@ contains
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
-        call spproj%add_movies(params%filetab, ctfvars)
+        if( inputted_deftab )then
+            ! micrographs with pre-determined CTF parameters
+            call deftab%new(nlines(params%deftab))
+            call deftab%read_ctfparams_state_eo(params%deftab)
+            call spproj%add_intgs(params%filetab, deftab, ctfvars)
+        else
+            ! movies/micrographs
+            call spproj%add_movies(params%filetab, ctfvars)
+        endif
         ! add boxtab
         if( inputted_boxtab )then
             call read_filetable(params%boxtab, boxfnames)
@@ -426,7 +434,6 @@ contains
         type(parameters) :: params
         type(sp_project) :: spproj
         integer          :: nos_mic, nboxf, i
-        character(len=:),          allocatable :: boxf_abspath
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
         call params%new(cline)
