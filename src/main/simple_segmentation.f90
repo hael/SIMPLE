@@ -16,7 +16,7 @@ contains
         real,  allocatable :: grad(:,:,:), rmat(:,:,:)  !matrices
         integer :: ldim(3)
         ldim = img_in%get_ldim()
-        allocate(rmat(ldim(1),ldim(2),1 ), source = 0.)
+        allocate(rmat(ldim(1),ldim(2),ldim(3)), source = 0.)
         call img_in%calc_gradient(grad)
         where(grad > thresh(1) ) rmat = 1.
         call img_in%set_rmat(rmat)

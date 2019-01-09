@@ -254,7 +254,10 @@ contains
     procedure          :: checkimg4nans
     procedure          :: cure
     procedure          :: loop_lims
+    procedure, private :: calc_gradient1
+    procedure, private :: calc_gradient2
     procedure          :: calc_gradient
+    procedure          :: calc_gradient_improved
     procedure, private :: calc_neigh_8_1
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
@@ -335,7 +338,7 @@ contains
     procedure          :: img2ft
     procedure          :: cure_outliers
     procedure          :: zero_below
-    procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
+    ! procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
     procedure          :: ellipse          !!!!!!!!!!!!!!ADDED BY CHIARA
     procedure          :: hist_stretching  !!!!!!!!!!!!!!ADDED BY CHIARA
     ! FFTs
@@ -3224,7 +3227,6 @@ contains
                 !$omp single
                 diff = 0.
                 !$omp end single nowait
-                !$omp do collapse(2) schedule(static) reduction(+:diff)
                 do i = 1, img_in%ldim(1)
                     do j = 1, img_in%ldim(2)
                         if( img_in%rmat(i,j,1) > 0.5) then ! not background
@@ -3234,7 +3236,6 @@ contains
                         endif
                     enddo
                 enddo
-                !$omp end do nowait
                 !$omp single
                 if( diff <= TINY ) finished_job = .true.
                 !$omp end single nowait
@@ -3248,7 +3249,7 @@ contains
                 if( img_cc%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
                     cnt = cnt + 1
                     tmp = img_cc%rmat(i,j,1)
-                    where(img_cc%rmat == tmp)
+                    where(abs(img_cc%rmat - tmp) < TINY)
                         img_out%rmat = cnt
                         img_cc%rmat  = 0.            !Not to consider this cc again
                     endwhere
@@ -3269,7 +3270,7 @@ contains
         allocate(sz(2,int(maxval(self%rmat))), source = 0)
         do n_cc = int(maxval(self%rmat)),1,-1
             sz(1, n_cc) = n_cc
-            sz(2, n_cc) = count(self%rmat == n_cc)
+            sz(2, n_cc) = count(abs(self%rmat-real(n_cc)) < TINY)
         enddo
     end function size_connected_comps
 
@@ -4818,7 +4819,9 @@ end subroutine NLmean
     ! This function returns a the gradient matrix of the input image.
     ! It is also possible to have derivates row and column
     ! as output (optional).
-    subroutine calc_gradient(self, grad, Dc, Dr)
+    ! It uses Sobel masks for gradient estimation. (classical implementation)
+    ! 2D version
+    subroutine calc_gradient1(self, grad, Dc, Dr)
         class(image),                intent(inout) :: self
         real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
         real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
@@ -4856,7 +4859,137 @@ end subroutine NLmean
         if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
         if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
         deallocate(Ddc,Ddr)
+        call img_p%kill
+    end subroutine calc_gradient1
+
+    ! This function returns a the gradient matrix of the input volume.
+    ! It uses Sobel masks for gradient estimation.
+    ! The code has been retrived from
+    ! https://stackoverflow.com/questions/26851430/calculating-the-gradient-of-a-3d-matrix
+    ! 3D version
+    subroutine calc_gradient2(self, grad3D)
+        class(image),      intent(inout) :: self
+        real, allocatable, intent(out)   :: grad3D(:,:,:)
+        real, allocatable :: sx(:,:), sy(:,:)                   !sobel masks 2D
+        real, allocatable :: szx(:,:,:), szy(:,:,:), szz(:,:,:) !sobel masks 3D
+        integer :: L
+        type(image) :: img_p !padded image
+        integer :: i,j,k
+        integer :: m,n,o
+        real, allocatable :: Ddx(:,:,:), Ddy(:,:,:), Ddz(:,:,:)
+        L = 3
+        allocate(sx (-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2),sy(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), source = 0.)
+        allocate(szx(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), &
+        &        szy(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), &
+        &        szz(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), source = 0.)
+        sx = reshape([-1,-2,-1,0,0,0,1,2,1],[3,3])
+        sy = reshape([-1,0,1,-2,0,2,-1,0,1],[3,3])
+        szx(:,:,-1) = sx
+        szx(:,:,0)  = sx
+        szx(:,:,1)  = sx
+        szy(:,:,-1) = sy
+        szy(:,:,0)  = sy
+        szy(:,:,1)  = sy
+        szz(:,:,-1) = reshape([1.,1.,1.,1.,1.,1.,1.,1.,1.], [3,3])
+        szz(:,:,1)  = reshape([-1.,-1.,-1.,-1.,-1.,-1.,-1.,-1.,-1.], [3,3])
+        szx = (1./24.)*szx !normalise
+        szy = (1./24.)*szy
+        szz = (1./18.)*szz
+        allocate( Ddx(self%ldim(1),self%ldim(2),self%ldim(3)), Ddy(self%ldim(1),self%ldim(2),self%ldim(3)), &
+        &         Ddz(self%ldim(1),self%ldim(2),self%ldim(3)), &
+        &      grad3D(self%ldim(1),self%ldim(2),self%ldim(3)),source = 0.)
+        call img_p%new([self%ldim(1)+L-1,self%ldim(2)+L-1,self%ldim(3)+L-1],1.)
+        call self%pad(img_p)
+        !$omp parallel do collapse(3) default(shared) private(i,j,k,m,n,o)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                do k = 1, self%ldim(3)
+                        do m = -(L-1)/2,(L-1)/2
+                            do n = -(L-1)/2,(L-1)/2
+                                do o = -(L-1)/2,(L-1)/2
+                                    Ddx(i,j,k) = Ddx(i,j,k)+img_p%rmat(i+m+1,j+n+1,k+o+1)*szx(m,n,o)
+                                    Ddy(i,j,k) = Ddy(i,j,k)+img_p%rmat(i+m+1,j+n+1,k+o+1)*szy(m,n,o)
+                                    Ddz(i,j,k) = Ddz(i,j,k)+img_p%rmat(i+m+1,j+n+1,k+o+1)*szz(m,n,o)
+                                enddo
+                            enddo
+                        enddo
+                enddo
+            enddo
+        enddo
+        !omp end parallel do
+        grad3D = sqrt(Ddx**2. + Ddy**2. + Ddz**2.)
+        deallocate(sx,sy,szx,szy,szz)
+        deallocate(Ddx,Ddy,Ddz)
+        call img_p%kill
+    end subroutine calc_gradient2
+
+    ! This subroutine takes in input an image and according
+    ! to its dims decides whether to perform calc_gradient1
+    ! o calc_gradient2 for the gradient calculation, which
+    ! result is going to be stored in grad.
+    subroutine calc_gradient(self, grad, Dc, Dr)
+        class(image),                intent(inout) :: self
+        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
+        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        if(self%ldim(1) .ne. 1) then
+            if(present(Dc)) THROW_HARD('Dc/Dr option not availale for volumes; calc_gradient')
+            call calc_gradient2(self,grad)
+            return
+        else
+            if(present(Dc)) then
+                call calc_gradient1(self,grad)
+                return
+            else
+                call calc_gradient1(self,grad)
+                return
+            endif
+        endif
     end subroutine calc_gradient
+
+    ! This function returns a the gradient matrix of the input image.
+    ! It is also possible to have derivates row and column
+    ! as output (optional).
+    ! It uses masks found in http://www.holoborodko.com/pavel/image-processing/edge-detection/
+    ! which is better than Sobel masks because of:
+    !                     1) isotropic noise suppression
+    !                     2) the estimation of the gradient is still precise
+    subroutine calc_gradient_improved(self, grad, Dc, Dr)
+        class(image),                intent(inout) :: self
+        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
+        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        type(image)        :: img_p                         !padded image
+        real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
+        integer, parameter :: L1 = 5 , L2 = 3               !dimension of the masks
+        integer            :: ldim(3)                       !dimension of the image, save just for comfort
+        integer            :: i,j,m,n                       !loop indeces
+        real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+        ldim = self%ldim
+        allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
+               & wc(-(L2-1)/2:(L2-1)/2,-(L2-1)/2:(L2-1)/2,1),wr(-(L1-1)/2:(L1-1)/2,-(L1-1)/2:(L1-1)/2,1), source = 0.)
+        wr = (1./32.)*reshape([-1,-2,0,2,1,-2,-4,0,4,2,-1,-2,0,2,1], [L1,L2,1])
+        wc = (1./32.)*reshape([-1,-2,-1,-2,-4,-2,0,0,0,2,4,2,1,2,1], [L2,L1,1])
+        call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,1],1.)
+        call self%pad(img_p)                    ! padding
+        !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
+        !$omp schedule(static) proc_bind(close)
+        do i = 1, ldim(1)
+          do j = 1, ldim(2)
+              do m = -(L1-1)/2,(L1-1)/2
+                  do n = -(L2-1)/2,(L2-1)/2
+                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n,1)
+                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n,1)
+                  end do
+              end do
+          end do
+        end do
+        !omp end parallel do
+        deallocate(wc,wr)
+        grad = sqrt(Ddc**2. + Ddr**2.)
+        if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
+        if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
+        deallocate(Ddc,Ddr)
+    end subroutine calc_gradient_improved
 
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
@@ -7190,7 +7323,7 @@ end subroutine NLmean
         if(self%ldim(3) /= 1) THROW_HARD('For 2D images only; ellipse')
         do i = 1, self%ldim(1)
             do j = 1, self%ldim(2)
-                if((real(i)-center(1))**2/(axes(1)**2) + (real(j)-center(2))**2/(axes(2)**2) - 1 < TINY) then
+                if((real(i)-real(center(1)))**2/(axes(1)**2) + (real(j)-real(center(2)))**2/(axes(2)**2) - 1 < TINY) then
                     if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
                       self%rmat(i,j,1) = maxval(self%rmat(:,:,:))
                     else
@@ -7203,7 +7336,7 @@ end subroutine NLmean
             if(hole .eq. 'yes') then
               do i = 1, self%ldim(1)
                   do j = 1, self%ldim(2)
-                      if((real(i)-center(1))**2/(axes(1)-1)**2 + (real(j)-center(2))**2/(axes(2)-1)**2 - 1 < TINY) then
+                      if((real(i)-real(center(1)))**2/(axes(1)-1)**2 + (real(j)-real(center(2)))**2/(axes(2)-1)**2 - 1 < TINY) then
                           if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
                               self%rmat(i,j,1) = minval(self%rmat(:,:,:))
                           else
@@ -7219,37 +7352,36 @@ end subroutine NLmean
     end subroutine ellipse
 
 
-    ! build_ellipse construts an ellipse centered in center
-    ! with axes length equal to axes and ROTATION angle rot.
-    ! This supposes self has already been created.
-    subroutine build_ellipse(self, center, axes, rot)
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: center(2), axes(2), rot
-        real, allocatable :: theta(:)
-        integer           :: i, j, k
-        if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
-        if(self%ldim(3) /= 1) THROW_HARD("the image has to be 2D!")
-        theta = (/ (deg2rad(real(i)),i=1,360,2) /)
-        do k = 1,size(theta)
-            do i = 1, self%ldim(1)
-                do j = 1,self%ldim(2)
-                    if(abs(real(i) - center(1) - axes(1)*cos(theta(k))*cos(deg2rad(rot))&
-                                             & + axes(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
-                    &  abs(real(j) - center(1) - axes(1)*cos(theta(k))*sin(deg2rad(rot))&
-                                             & - axes(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
-                        call self%set([i,j,1], 1.)
-                        call self%set([i+1,j+1,1], 0.)
-                        call self%set([i-1,j-1,1], 0.)
-                        call self%set([i+2,j+2,1], 0.)
-                        call self%set([i-2,j-2,1], 0.)
-                    end if
-                enddo
-            enddo
-        enddo
-        deallocate(theta)
-    end subroutine build_ellipse
+    ! ! build_ellipse construts an ellipse centered in center
+    ! ! with axes length equal to axes and ROTATION angle rot.
+    ! ! This supposes self has already been created.
+    ! subroutine build_ellipse(self, center, axes, rot)
+    !     class(image), intent(inout) :: self
+    !     real,         intent(in)    :: center(2), axes(2), rot
+    !     real, allocatable :: theta(:)
+    !     integer           :: i, j, k
+    !     if(rot < 0. .or. rot > 360. ) THROW_HARD("please insert an angle in the range [0,360]")
+    !     if(self%ldim(3) /= 1) THROW_HARD("the image has to be 2D!")
+    !     theta = (/ (deg2rad(real(i)),i=1,360,2) /)
+    !     do k = 1,size(theta)
+    !         do i = 1, self%ldim(1)
+    !             do j = 1,self%ldim(2)
+    !                 if(abs(real(i) - center(1) - axes(1)*cos(theta(k))*cos(deg2rad(rot))&
+    !                                          & + axes(2)*sin(theta(k))*sin(deg2rad(rot)))<1 .and. &
+    !                 &  abs(real(j) - center(1) - axes(1)*cos(theta(k))*sin(deg2rad(rot))&
+    !                                          & - axes(2)*sin(theta(k))*cos(deg2rad(rot)))<1) then
+    !                     call self%set([i,j,1], 1.)
+    !                     call self%set([i+1,j+1,1], 0.)
+    !                     call self%set([i-1,j-1,1], 0.)
+    !                     call self%set([i+2,j+2,1], 0.)
+    !                     call self%set([i-2,j-2,1], 0.)
+    !                 end if
+    !             enddo
+    !         enddo
+    !     enddo
+    !     deallocate(theta)
+    ! end subroutine build_ellipse
 
-    !!!!!!!!!!!!!ADDED BY CHIARAAAAA!!!!!!
     !This function performs standardization by selective histogram stretching.
     !It consists of stretching only a selected part of the histogram that contains
     !most of the pixels. It is developed as explained in Adiga's paper about

@@ -52,7 +52,7 @@ ldim = [box,box,1]
 allocate( rmat(box,box,1) )
 call img_e%new(ldim,1.)
 center = [floor(real(box/2)), floor(real(box/2))]
-call img_e%ellipse( center , [50.,60.], 'yes')
+!call img_e%ellipse( center , [50.,60.], 'yes')
 rmat = img_e%get_rmat()
 N    = count(rmat > 0.5) ! number of points of interest, whites are 1
 allocate(x_inds(N), y_inds(N), source = 0)
@@ -109,6 +109,6 @@ print *, "b= ", Bb
 print *, "Max reached ", H(max_pos(1), max_pos(2))
 print *, "Number of voting points ", N
 print *, "Number of votes ",        sum(H)
-call img_e%build_ellipse([real(floor(real(box/2))), real(floor(real(box/2)))],[Aa,Bb], 0.)
+!call img_e%build_ellipse([real(floor(real(box/2))), real(floor(real(box/2)))],[Aa,Bb], 0.)
 call img_e%write('Final.mrc')
 end program Ht_project

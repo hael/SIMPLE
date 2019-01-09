@@ -30,7 +30,7 @@ program simple_test_chiara_pick_edge
   !                         5) Binarization (sobel|otsu|bin)
   !                         6) Connected components (cc) identification
   !                         7) cc size filtering
-  !                         8) Particles extraction 
+  !                         8) Particles extraction
 
   if( command_argument_count() < 4 )then
       write(logfhandle,'(a)',advance='no') 'simple_test_chiara_try smpd=<sampling distance(in A)> [fname = file name] [part_radius = <radius of the particle (# pixels)] [detector= <binarisation method> (sobel|otsu|bin)]'

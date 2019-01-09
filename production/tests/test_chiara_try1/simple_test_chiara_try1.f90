@@ -36,7 +36,7 @@ program simple_test_chiara_try1
   !                         6) Binarization (sobel|otsu|bin)
   !                         7) Connected components (cc) identification
   !                         8) cc size filtering
-  !                         9) Particles extraction 
+  !                         9) Particles extraction
 
   if( command_argument_count() < 3 )then
       write(logfhandle,'(a)',advance='no') 'simple_test_chiara_try projfile=<project file> [part_radius = <radius of the particle (# pixels)] [detector= <binarisation method> (sobel|otsu|bin)]'

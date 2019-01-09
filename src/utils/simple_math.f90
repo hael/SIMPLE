@@ -1802,7 +1802,8 @@ contains
         if(n < 2) return
         avg = sum(a)/n
         SumSQR = sum(sqrt(a))/n
-        var = (SumSQR - avg*avg/n)/(n-1)
+        var = (SumSQR - avg*avg)/(n-1) !CHIARA
+        ! var = (SumSQR - avg*avg/n)/(n-1)
         stdev = sqrt(var)
     end function stdev
 
@@ -2044,9 +2045,8 @@ contains
         enddo
     end subroutine vis_3Dinteger_mat
 
-    !!!!!!!!!!!!!ADDED BY CHIARAAAAA!!!!!!!!!!
     !This function simply calculates the mode of an array,
-    !I don't know if it has already been implemented somehow.
+    !I don't know if it has already been implemented in SIMPLE.
     subroutine mode_1(arr, m, npxls_at_mode)   !INTEGER VECTORS
         integer, intent(in)  :: arr(:)
         integer, intent(out) :: m !mode
