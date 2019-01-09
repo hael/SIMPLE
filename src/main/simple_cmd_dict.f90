@@ -324,7 +324,7 @@ contains
                 allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
                 call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                call chdict%print_key_val_pairs(fhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
         endif
@@ -338,7 +338,7 @@ contains
                 allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
                 call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(sorted_keys, fhandle)
+                call chdict%print_key_val_pairs(fhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
         endif

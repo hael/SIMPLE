@@ -11,7 +11,7 @@ use simple_commander_hlev_wflows
 implicit none
 #include "simple_local_flags.inc"
 
-! PRE-PROCESSING
+! PRE-PROCESSING WORKFLOWS
 type(preprocess_distr_commander)            :: xpreprocess
 type(preprocess_stream_commander)           :: xpreprocess_stream
 type(motion_correct_distr_commander)        :: xmotion_correct_distr
@@ -21,26 +21,28 @@ type(ctf_estimate_distr_commander)          :: xctf_estimate_distr
 type(pick_distr_commander)                  :: xpick_distr
 type(pick_extract_stream_distr_commander)   :: xpick_extract_stream_distr
 
-! CLUSTER2D
+! CLUSTER2D WORKFLOWS
 type(make_cavgs_distr_commander)            :: xmake_cavgs_distr
 type(cluster2D_autoscale_commander)         :: xcluster2D_distr
 type(cluster2D_stream_distr_commander)      :: xcluster2D_stream_distr
 type(cleanup2D_commander)                   :: xcleanup2D_distr
 
-! REFINE3D
+! AB INITIO 3D RECONSTRUCTION WORKFLOW
+type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
+
+! REFINE3D WORKFLOWS
 type(refine3D_init_distr_commander)         :: xrefine3D_init_distr
 type(refine3D_distr_commander)              :: xprime3D_distr
 type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 
-! HIGH-LEVEL WORKFLOWS
-type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
+! CLUSTER3D WORKFLOWS
 type(cluster3D_commander)                   :: xcluster3D
 type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES WORKFLOWS
 type(tseries_track_distr_commander)         :: xtseries_track_distr
 
-! SUPORTING DISTRIBUTED WORKFLOWS
+! MISCELLANEOUS WORKFLOWS
 type(scale_project_distr_commander)         :: xscale_project
 
 ! OTHER DECLARATIONS
@@ -67,7 +69,7 @@ if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 
 select case(prg)
 
-    ! PRE-PROCESSING
+    ! PRE-PROCESSING WORKFLOWS
 
     case( 'preprocess' )
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
@@ -117,7 +119,7 @@ select case(prg)
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         call xpick_extract_stream_distr%execute(cline)
 
-    ! CLUSTER2D
+    ! CLUSTER2D WORKFLOWS
 
     case( 'make_cavgs' )
         call xmake_cavgs_distr%execute(cline)
@@ -148,7 +150,14 @@ select case(prg)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
         call xcluster2D_stream_distr%execute(cline)
 
-    ! REFINE3D
+    ! AB INITIO 3D RECONSTRUCTION WORKFLOW
+
+    case( 'initial_3Dmodel' )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
+        call execute_commander(xinitial_3Dmodel, cline)
+
+    ! REFINE3D WORKFLOWS
 
     case( 'refine3D_init' )
         call xrefine3D_init_distr%execute( cline )
@@ -165,12 +174,8 @@ select case(prg)
         if( .not. cline%defined('eo')   ) call cline%set('eo',     'no')
         call xreconstruct3D_distr%execute( cline )
 
-    ! HIGH-LEVEL DISTRIBUTED WORKFLOWS
+    ! CLUSTER3D WORKFLOWS
 
-    case( 'initial_3Dmodel' )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
-        call execute_commander(xinitial_3Dmodel, cline)
     case( 'cluster3D' )
         if( .not. cline%defined('refine') )  call cline%set('refine', 'cluster')
         if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
@@ -180,7 +185,7 @@ select case(prg)
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xcluster3D_refine%execute( cline )
 
-    ! TIME-SERIES DISTRIBUTED WORKFLOWS
+    ! TIME-SERIES WORKFLOWS
 
     case( 'tseries_track' )
         call cline%set('nthr', 1.0)
@@ -189,7 +194,7 @@ select case(prg)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   5.0)
         call xtseries_track_distr%execute( cline )
 
-    ! SUPPORTING DISTRIBUTED WORKFLOWS
+    ! SUPPORTING WORKFLOWS
 
     case( 'scale_project' )
         call xscale_project%execute(cline )

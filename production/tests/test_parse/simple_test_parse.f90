@@ -9,6 +9,6 @@ str = 'micrograph=mymovie.mrc ctf_movie=mymovie_forctf.mrc e1=10.0 e2=20.0 e3=30
 chtab = chash()
 htab = hash()
 call sauron_line_parser( str, htab, chtab )
-call chtab%print_key_val_pairs
+call chtab%print_key_val_pairs(logfhandle)
 call htab%print()
 end program simple_test_parse

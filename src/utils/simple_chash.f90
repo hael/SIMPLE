@@ -55,7 +55,6 @@ type :: chash
     !< PRINTERS
     procedure, private :: print_key_val_pair_1
     procedure, private :: print_key_val_pair_2
-    generic            :: print_key_val_pair => print_key_val_pair_1, print_key_val_pair_2
     procedure          :: print_key_val_pairs
     !< I/O
     procedure          :: read
@@ -447,100 +446,95 @@ contains
     ! PRINTERS
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, advance, ansi_flag )
+    subroutine print_key_val_pair_1( self, key, maxlen, fhandle, ansi_flag, latex_bold )
         class(chash),               intent(in) :: self
         character(len=*),           intent(in) :: key
         integer,                    intent(in) :: maxlen
-        integer,          optional, intent(in) :: fhandle
-        logical,          optional, intent(in) :: advance
+        integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: ansi_flag
-        character(len=:), allocatable :: aansi_flag
+        logical,          optional, intent(in) :: latex_bold
+        character(len=:), allocatable :: aansi_flag, str2print
         character(len=maxlen) :: key_padded
         integer               :: which
-        logical               :: aadvance
-        aadvance = .true.
-        if( present(advance) ) aadvance = .false.
+        logical               :: latex_format
         if( present(ansi_flag) )then
             allocate(aansi_flag, source=trim(ansi_flag))
         else
             allocate(aansi_flag, source=C_WHITE)
         endif
+        latex_format = present(latex_bold)
         which = self%lookup(key)
         if( which > 0 )then
-            if( present(advance) )then
-                ! print one-liner (for command-line execution)
-                if( present(fhandle) )then
-                    if( aadvance )then
-                        write(fhandle,'(a)')              format_str(trim(key)//'='//trim(self%values(which)%str), aansi_flag)
-                    else
-                        write(fhandle,'(a)',advance='no') format_str(trim(key)//'='//trim(self%values(which)%str)//' ', aansi_flag)
-                    endif
+            ! print table (for easy to read instructions)
+            key_padded = trim(self%keys(which)%str)
+            do while(len(key_padded) < maxlen)
+                key_padded = trim(key_padded)//' '
+            end do
+            if( latex_format )then
+                if( latex_bold )then
+                    allocate(str2print, source='+textbf['//key_padded//' = '//trim(self%values(which)%str)//']')
                 else
-                    if( aadvance )then
-                        write(logfhandle,'(a)')                    format_str(trim(key)//'='//trim(self%values(which)%str), aansi_flag)
-                    else
-                        write(logfhandle,'(a)',advance='no')       format_str(trim(key)//'='//trim(self%values(which)%str)//' ', aansi_flag)
-                    endif
+                    allocate(str2print, source=key_padded//' = '//trim(self%values(which)%str))
                 endif
             else
-                ! print table (for easy to read instructions)
-                key_padded = trim(self%keys(which)%str)
-                do while(len(key_padded) < maxlen)
-                    key_padded = trim(key_padded)//' '
-                end do
-                if( present(fhandle) )then
-                    write(fhandle,'(a,1x,a)') format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag)
-                else
-                    write(logfhandle,'(a,1x,a)')       format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag)
-                endif
+                allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(which)%str), aansi_flag))
             endif
+            write(fhandle, '(a,1x,a)') str2print
         else
             THROW_HARD('key: '//trim(key)//' does not exist in the chash; print_key_val_pair_1')
         endif
     end subroutine print_key_val_pair_1
 
     !>  \brief  pretty printing of a key-value pair
-    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, ansi_flag )
+    subroutine print_key_val_pair_2( self, ikey, maxlen, fhandle, ansi_flag, latex_bold )
         class(chash), intent(in)      :: self
         integer,                    intent(in) :: ikey
         integer,                    intent(in) :: maxlen
-        integer,          optional, intent(in) :: fhandle
+        integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: ansi_flag
+        logical,          optional, intent(in) :: latex_bold
         character(len=maxlen)         :: key_padded
-        character(len=:), allocatable :: aansi_flag
+        character(len=:), allocatable :: aansi_flag, str2print
+        logical :: latex_format
         if( present(ansi_flag) )then
             allocate(aansi_flag, source=trim(ansi_flag))
         else
             allocate(aansi_flag, source=C_WHITE)
         endif
-        key_padded = trim(self%keys(ikey)%str)
+        latex_format = present(latex_bold)
+        key_padded   = trim(self%keys(ikey)%str)
         do while(len(key_padded) < maxlen)
             key_padded = trim(key_padded)//' '
         end do
-        if( present(fhandle) .and. is_open(fhandle) )then
-            write(fhandle,'(a,1x,a)') format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag)
+        if( latex_format )then
+            if( latex_bold )then
+                allocate(str2print, source='+textbf['//key_padded//' = '//trim(self%values(ikey)%str)//']')
+            else
+                allocate(str2print, source=key_padded//' = '//trim(self%values(ikey)%str))
+            endif
         else
-            write(logfhandle,      '(a,1x,a)') format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag)
+            allocate(str2print, source=format_str(key_padded//' = '//trim(self%values(ikey)%str), aansi_flag))
         endif
+        write(fhandle, '(a,1x,a)') str2print
     end subroutine print_key_val_pair_2
 
-    !>  \brief  pretty printing of all key-value pairs
-    subroutine print_key_val_pairs( self, keys2print, fhandle, oneline, mask )
+    !>  \brief  pretty printing of all key-value  pairs
+    subroutine print_key_val_pairs( self, fhandle, keys2print, mask, latex )
         class(chash),               intent(in) :: self
+        integer,                    intent(in) :: fhandle
         character(len=*), optional, intent(in) :: keys2print(:)
-        integer,          optional, intent(in) :: fhandle
-        logical,          optional, intent(in) :: oneline
         logical,          optional, intent(in) :: mask(:) ! mask true -> C_BOLD
+        logical,          optional, intent(in) :: latex
         logical, allocatable :: mmask(:)
-        logical :: ooneline, present_mask
+        logical :: present_mask, llatex
         integer :: maxlen, ikey, sz, keylen
         maxlen  = 0
         ikey    = 0
         sz      = 0
         keylen  = 0
-        ooneline = .false.
-        if( present(oneline) ) ooneline = oneline
         present_mask = present(mask)
+        llatex  = .false.
+        if( present(latex) ) llatex = latex
         if( present(keys2print) )then
             sz = size(keys2print)
             if( present_mask )then
@@ -549,31 +543,24 @@ contains
             else
                 allocate(mmask(sz), source=.false.)
             endif
-            if( ooneline )then
-                ! non-advancing printing
-                do ikey=1,sz
-                    if( mmask(ikey) )then
-                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, advance=.false., ansi_flag=C_BOLD)
-                    else
-                        call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, advance=.false.)
-                    endif
-                end do
-            else
-                ! find max key len in keys2print
-                maxlen = 0
-                do ikey=1,sz
-                    keylen = len_trim(keys2print(ikey))
-                    if( keylen > maxlen ) maxlen = keylen
-                end do
-                ! print selected key-value pairs
-                do ikey=1,sz
+            ! find max key len in keys2print
+            maxlen = 0
+            do ikey=1,sz
+                keylen = len_trim(keys2print(ikey))
+                if( keylen > maxlen ) maxlen = keylen
+            end do
+            ! print selected key-value pairs
+            do ikey=1,sz
+                if( llatex )then
+                    call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, latex_bold=mmask(ikey))
+                else
                     if( mmask(ikey) )then
                         call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle, ansi_flag=C_BOLD)
                     else
                         call self%print_key_val_pair_1(keys2print(ikey), maxlen, fhandle)
                     endif
-                end do
-            endif
+                endif
+            end do
         else
             if( self%chash_index > 0 )then
                 if( present_mask )then
@@ -590,10 +577,14 @@ contains
                 end do
                 ! print all key-value pairs
                 do ikey=1,self%chash_index
-                    if( mmask(ikey) )then
-                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
+                    if( llatex )then
+                        call self%print_key_val_pair_2(ikey, maxlen, fhandle, latex_bold=mmask(ikey))
                     else
-                        call self%print_key_val_pair_2(ikey, maxlen, fhandle)
+                        if( mmask(ikey) )then
+                            call self%print_key_val_pair_2(ikey, maxlen, fhandle, ansi_flag=C_BOLD)
+                        else
+                            call self%print_key_val_pair_2(ikey, maxlen, fhandle)
+                        endif
                     endif
                 end do
             endif
@@ -638,7 +629,7 @@ contains
         call fopen(funit, fname, iostat=ios, status='replace')
         call fileiochk('simple_chash :: write; Error when opening file for writing: '&
             //trim(fname), ios)
-        call self%print_key_val_pairs(fhandle=funit)
+        call self%print_key_val_pairs(funit)
         call fclose(funit, errmsg='simple_chash :: write; ')
     end subroutine write
 

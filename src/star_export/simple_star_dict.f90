@@ -338,9 +338,9 @@ contains
     subroutine print_star_dict( self )
         class(star_dict), intent(inout) :: self
         !call self%htab%print()
-        call self%keywords_filename%print_key_val_pairs
-        call self%keywords_general%print_key_val_pairs
-        call self%keywords_class3D%print_key_val_pairs
+        call self%keywords_filename%print_key_val_pairs(logfhandle)
+        call self%keywords_general%print_key_val_pairs(logfhandle)
+        call self%keywords_class3D%print_key_val_pairs(logfhandle)
     end subroutine print_star_dict
 
     !>  \brief  looks up the index of a key value in the chash

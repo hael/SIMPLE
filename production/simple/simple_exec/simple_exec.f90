@@ -24,23 +24,21 @@ use simple_projection_frcs
 implicit none
 #include "simple_local_flags.inc"
 
-! PROJECT MANAGEMENT
-type(new_project_commander)         :: xnew_project
-type(update_project_commander)      :: xupdate_project
-type(print_project_info_commander)  :: xprint_project_info
-type(print_project_field_commander) :: xprint_project_field
-type(import_movies_commander)       :: ximport_movies
-type(import_boxes_commander)        :: ximport_boxes
-type(import_particles_commander)    :: ximport_particles
-type(import_cavgs_commander)        :: ximport_cavgs
-type(subset_project_commander)      :: xsubset_project
-
-! STAR PROJECT SUPPORT
+! PROJECT MANAGEMENT PROGRAMS
+type(new_project_commander)            :: xnew_project
+type(update_project_commander)         :: xupdate_project
+type(print_project_info_commander)     :: xprint_project_info
+type(print_project_field_commander)    :: xprint_project_field
+type(import_movies_commander)          :: ximport_movies
+type(import_boxes_commander)           :: ximport_boxes
+type(import_particles_commander)       :: ximport_particles
+type(import_cavgs_commander)           :: ximport_cavgs
+type(subset_project_commander)         :: xsubset_project
 type(export_starproject_commander)     :: xexport_starproject
 type(import_starproject_commander)     :: ximport_starproject
 type(print_starproject_info_commander) :: xprint_starproject_info
 
-! PART OF SP WORKFLOW
+! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(extract_commander)          :: xextract
 type(reextract_commander)        :: xreextract
 type(cluster_cavgs_commander)    :: xcluster_cavgs
@@ -49,7 +47,7 @@ type(symmetry_test_commander)    :: xsymtst
 type(postprocess_commander)      :: xpostprocess
 type(report_selection_commander) :: xreport_selection
 
-! IMAGE PROCESSING
+! IMAGE PROCESSING PROGRAMS
 type(mask_commander)           :: xmask
 type(fsc_commander)            :: xfsc
 type(local_res_commander)      :: xlocal_res
@@ -66,25 +64,25 @@ type(stack_commander)          :: xstack
 type(stackops_commander)       :: xstackops
 type(shift_commander)          :: xshift
 
-! ORIENTATION PROCESSING
+! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
 type(orisops_commander)   :: xorisops
 type(oristats_commander)  :: xoristats
 type(vizoris_commander)   :: xvizoris
 
-! PRINT INFO
+! PRINT INFO PROGRAMS
 type(info_image_commander)        :: xinfo_image
 type(info_stktab_commander)       :: xinfo_stktab
 type(print_fsc_commander)         :: xprint_fsc
 type(print_magic_boxes_commander) :: xprint_magic_boxes
 
-! SIMULATORS
+! SIMULATOR PROGRAMS
 type(simulate_noise_commander)       :: xsimulate_noise
 type(simulate_particles_commander)   :: xsimulate_particles
 type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
-! SYSTEM
+! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
 
 ! OTHER DECLARATIONS
@@ -110,7 +108,7 @@ call cline%parse
 
 select case(prg)
 
-    ! PROJECT MANAGEMENT
+    ! PROJECT MANAGEMENT PROGRAMS
 
     case( 'new_project' )
         call xnew_project%execute(cline)
@@ -140,9 +138,6 @@ select case(prg)
     case( 'subset_project' )
         call cline%set('mkdir', 'yes')
         call xsubset_project%execute(cline)
-
-    ! STAR SUPPORT
-
     case( 'export_starproject' )
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
@@ -155,7 +150,7 @@ select case(prg)
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call xprint_starproject_info%execute(cline)
 
-    ! PART OF SP WORKFLOW
+    ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 
     case( 'extract' )
         if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
@@ -186,7 +181,7 @@ select case(prg)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)
 
-    ! IMAGE PROCESSING
+    ! IMAGE PROCESSING PROGRAMS
 
     case( 'mask' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -237,7 +232,7 @@ select case(prg)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xshift%execute(cline)
 
-    ! ORIENTATION PROCESSING
+    ! ORIENTATION PROCESSING PROGRAMS
 
     case( 'make_oris' )
         call xmake_oris%execute(cline)
@@ -248,7 +243,7 @@ select case(prg)
     case( 'vizoris' )
         call xvizoris%execute(cline)
 
-    ! PRINT INFO
+    ! PRINT INFO PROGRAMS
 
     case( 'info_image' )
         call xinfo_image%execute(cline)
@@ -261,7 +256,7 @@ select case(prg)
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
 
-    ! SIMULATORS
+    ! SIMULATOR PROGRAMS
 
     case( 'simulate_noise' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -294,7 +289,7 @@ select case(prg)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xsimulate_subtomogram%execute(cline)
 
-    ! SYSTEM
+    ! SYSTEM INTERACTION PROGRAMS
 
     case( 'mkdir' )
         call cline%set('mkdir', 'yes')

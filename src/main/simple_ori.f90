@@ -672,7 +672,7 @@ contains
     subroutine print_ori( self )
         class(ori), intent(inout) :: self
         call self%htab%print()
-        call self%chtab%print_key_val_pairs
+        call self%chtab%print_key_val_pairs(logfhandle)
     end subroutine print_ori
 
     !>  \brief  writes orientation info

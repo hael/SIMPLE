@@ -50,6 +50,7 @@ type :: simple_program
     generic,   private :: set_input => set_input_1, set_input_2, set_input_3
     procedure          :: print_ui
     procedure          :: print_cmdline
+    procedure          :: print_cmdline_latex
     procedure          :: print_prg_descr_long
     procedure          :: write2json
     procedure          :: get_name
@@ -3293,7 +3294,7 @@ contains
         call ch%push('descr_short', self%descr_short)
         call ch%push('descr_long',  self%descr_long)
         call ch%push('executable',  self%executable)
-        call ch%print_key_val_pairs
+        call ch%print_key_val_pairs(logfhandle)
         call ch%kill
         write(logfhandle,'(a)') ''
         write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
@@ -3336,7 +3337,7 @@ contains
                         else
                             call ch%push('required', 'F')
                         endif
-                        call ch%print_key_val_pairs
+                        call ch%print_key_val_pairs(logfhandle)
                         call ch%kill
                     end do
                 endif
@@ -3347,14 +3348,13 @@ contains
     subroutine print_cmdline( self )
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
-        type(chash) :: ch
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
         write(logfhandle,'(a)') format_str('USAGE', C_UNDERLINED)
         if( l_distr_exec )then
-            write(logfhandle,'(a)') format_str('bash-3.2$ simple_distr_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+            write(logfhandle,'(a)') format_str('bash-3.2$ simple_distr_exec prg=' //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         else
-            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='//self%name//' key1=val1 key2=val2 ...', C_ITALIC)
+            write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='       //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         endif
         write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
 
@@ -3379,55 +3379,93 @@ contains
         if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
 
-        contains
-
-            subroutine print_param_hash( arr )
-                type(simple_input_param), allocatable, intent(in) :: arr(:)
-                character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
-                logical,                  allocatable :: required(:)
-                integer,                  allocatable :: inds(:)
-                integer :: i, nparams, nreq, iopt
-                if( allocated(arr) )then
-                    nparams = size(arr)
-                    call ch%new(nparams)
-                    allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
-                    do i=1,nparams
-                        call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
-                        sorted_keys(i) = arr(i)%key
-                        required(i)    = arr(i)%required
-                    end do
-                    call lexSort(sorted_keys, inds=inds)
-                    required = required(inds)
-                    if( any(required) )then
-                        ! fish out the required ones
-                        nreq = 0
-                        do i=1,nparams
-                            if( required(i) )then
-                                nreq = nreq + 1
-                                rearranged_keys(nreq) = sorted_keys(i)
-                            endif
-                        enddo
-                        ! fish out the optional ones
-                        iopt = nreq
-                        do i=1,nparams
-                            if( .not. required(i) )then
-                                iopt = iopt + 1
-                                rearranged_keys(iopt) = sorted_keys(i)
-                            endif
-                        end do
-                        ! replace string array
-                        sorted_keys = rearranged_keys
-                        ! modify logical mask
-                        required(:nreq)     = .true.
-                        required(nreq + 1:) = .false.
-                    endif
-                    call ch%print_key_val_pairs(sorted_keys, mask=required)
-                    call ch%kill
-                    deallocate(sorted_keys, required)
-                endif
-            end subroutine print_param_hash
-
     end subroutine print_cmdline
+
+    subroutine print_cmdline_latex( self )
+        use simple_ansi_ctrls
+        class(simple_program), intent(in) :: self
+        logical     :: l_distr_exec
+        l_distr_exec = self%executable .eq. 'simple_distr_exec'
+        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\]]'
+        write(logfhandle,'(a)') '+underline[USAGE]'
+        if( l_distr_exec )then
+            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_distr_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
+        else
+            write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg='       // self%name // ' key1=val1 key2=val2 ...]'
+        endif
+        write(logfhandle,'(a)') 'Required input parameters in ' // '+textbf[bold]' // ' (ensure terminal support)'
+
+        if( allocated(self%img_ios) )    write(logfhandle,'(a)') '+underline[IMAGE INPUT/OUTPUT]'
+        call print_param_hash(self%img_ios,   latex=.true.)
+
+        if( allocated(self%parm_ios) )   write(logfhandle,'(a)') '+underline[PARAMETER INPUT/OUTPUT]'
+        call print_param_hash(self%parm_ios,  latex=.true.)
+
+        if( allocated(self%alt_ios) )    write(logfhandle,'(a)') '+underline[ALTERNATIVE INPUTS]'
+        call print_param_hash(self%alt_ios,   latex=.true.)
+
+        if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') '+underline[SEARCH CONTROLS]'
+        call print_param_hash(self%srch_ctrls, latex=.true.)
+
+        if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') '+underline[FILTER CONTROLS]'
+        call print_param_hash(self%filt_ctrls, latex=.true.)
+
+        if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') '+underline[MASK CONTROLS]'
+        call print_param_hash(self%mask_ctrls, latex=.true.)
+
+        if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') '+underline[COMPUTER CONTROLS]'
+        call print_param_hash(self%comp_ctrls, latex=.true.)
+
+        write(logfhandle,'(a)') '\end{Verbatim}'
+    end subroutine print_cmdline_latex
+
+    subroutine print_param_hash( arr, latex )
+        type(simple_input_param), allocatable, intent(in) :: arr(:)
+        logical, optional,                     intent(in) :: latex
+        character(len=KEYLEN),    allocatable :: sorted_keys(:), rearranged_keys(:)
+        logical,                  allocatable :: required(:)
+        integer,                  allocatable :: inds(:)
+        type(chash) :: ch
+        integer     :: i, nparams, nreq, iopt
+        if( allocated(arr) )then
+            nparams = size(arr)
+            call ch%new(nparams)
+            allocate(sorted_keys(nparams), rearranged_keys(nparams), required(nparams))
+            do i=1,nparams
+                call ch%push(arr(i)%key, arr(i)%descr_short//'; '//arr(i)%descr_placeholder)
+                sorted_keys(i) = arr(i)%key
+                required(i)    = arr(i)%required
+            end do
+            call lexSort(sorted_keys, inds=inds)
+            required = required(inds)
+            if( any(required) )then
+                ! fish out the required ones
+                nreq = 0
+                do i=1,nparams
+                    if( required(i) )then
+                        nreq = nreq + 1
+                        rearranged_keys(nreq) = sorted_keys(i)
+                    endif
+                enddo
+                ! fish out the optional ones
+                iopt = nreq
+                do i=1,nparams
+                    if( .not. required(i) )then
+                        iopt = iopt + 1
+                        rearranged_keys(iopt) = sorted_keys(i)
+                    endif
+                end do
+                ! replace string array
+                sorted_keys = rearranged_keys
+                ! modify logical mask
+                required(:nreq)     = .true.
+                required(nreq + 1:) = .false.
+            endif
+            call ch%print_key_val_pairs(logfhandle, sorted_keys, mask=required, latex=latex)
+            call ch%kill
+            deallocate(sorted_keys, required)
+        endif
+    end subroutine print_param_hash
 
     subroutine print_prg_descr_long( self )
         class(simple_program), intent(in) :: self
