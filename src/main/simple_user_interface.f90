@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 implicit none
 
 public :: simple_program, make_user_interface, get_prg_ptr, list_distr_prgs_in_ui
-public :: list_shmem_prgs_in_ui, write_ui_json
+public :: list_shmem_prgs_in_ui, write_ui_json, print_ui_latex
 private
 #include "simple_local_flags.inc"
 
@@ -310,7 +310,7 @@ contains
         prg_ptr_array(7)%ptr2prg  => cluster_cavgs
         prg_ptr_array(8)%ptr2prg  => convert
         prg_ptr_array(9)%ptr2prg  => ctf_estimate
-        prg_ptr_array(10)%ptr2prg  => ctfops
+        prg_ptr_array(10)%ptr2prg => ctfops
         prg_ptr_array(11)%ptr2prg => extract
         prg_ptr_array(12)%ptr2prg => export_starproject
         prg_ptr_array(13)%ptr2prg => filter
@@ -769,7 +769,7 @@ contains
     subroutine new_cleanup2D
         ! PROGRAM SPECIFICATION
         call cleanup2D%new(&
-        &'cleanp2D',&                                                          ! name
+        &'cleanup2D',&                                                          ! name
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm',& ! descr_long
         &'simple_distr_exec',&                                                  ! executable
@@ -3386,7 +3386,7 @@ contains
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
-        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\]]'
+        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\],fontsize=\small]'
         write(logfhandle,'(a)') '+underline[USAGE]'
         if( l_distr_exec )then
             write(logfhandle,'(a)') '+textit[bash-3.2$ simple_distr_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
@@ -3419,6 +3419,7 @@ contains
         write(logfhandle,'(a)') '\end{Verbatim}'
     end subroutine print_cmdline_latex
 
+    ! supporting the print_cmdline routines (above)
     subroutine print_param_hash( arr, latex )
         type(simple_input_param), allocatable, intent(in) :: arr(:)
         logical, optional,                     intent(in) :: latex
@@ -3466,6 +3467,22 @@ contains
             deallocate(sorted_keys, required)
         endif
     end subroutine print_param_hash
+
+    subroutine print_ui_latex
+        integer :: i
+        type(simple_program), pointer :: ptr => null()
+        ! init UI descriptions
+        call make_user_interface
+        ! do i=1,size(prg_ptr_array)
+        do i=1,2
+            ptr => prg_ptr_array(i)%ptr2prg
+            write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
+            write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
+            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // ', executed by ' // ptr%executable)
+            call ptr%print_cmdline_latex
+            write(logfhandle, '(a)') ''
+        end do
+    end subroutine print_ui_latex
 
     subroutine print_prg_descr_long( self )
         class(simple_program), intent(in) :: self

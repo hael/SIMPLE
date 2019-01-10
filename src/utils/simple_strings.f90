@@ -90,8 +90,10 @@ contains
         call replace_substr(str, '%', '\%', str_latex)
         deallocate(str)
         call replace_substr(str_latex, '#', '\#', str)
-        deallocate(str_latex)
-        call replace_substr(str, 'in A', 'in \AA{}', str_latex)
+        ! deallocate(str_latex)
+        ! call replace_substr(str, 'in A', 'in \AA{}', str_latex)
+        ! THE ISSUE HERE IS THAT THE SUBSTRING CANNOT HAVE SPACES
+        str_latex = str
     end function str2latex
 
     logical function char_is_a_letter( c )

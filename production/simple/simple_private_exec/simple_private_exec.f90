@@ -2,7 +2,7 @@
 program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: write_ui_json
+use simple_user_interface, only: write_ui_json, print_ui_latex
 use simple_commander_project
 use simple_commander_checks
 use simple_commander_distr
@@ -104,11 +104,14 @@ call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
+
 select case(prg)
 
-    ! not a bona fide simple_program
+    ! not bona fide simple programs
     case( 'write_ui_json')
         call write_ui_json
+    case( 'print_ui_latex')
+        call print_ui_latex
 
     ! PRE-PROCESSING PROGRAMS
 

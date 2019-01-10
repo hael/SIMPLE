@@ -1,6 +1,6 @@
 % Document layout
 \documentclass[a4paper,11pt]{article}
-\usepackage[a4paper, inner=2.5cm , outer=2.5cm, top=2cm, bottom=2cm]{geometry}
+\usepackage[a4paper, inner=2cm , outer=2cm, top=2cm, bottom=2cm]{geometry}
 \usepackage[usenames,dvipsnames]{color}
 % Referencing & fonts
 \usepackage[sort&compress]{natbib}
@@ -116,6 +116,49 @@ SIMPLE is free software: you can redistribute it and/or modify it under the term
 
 \begin{Verbatim}[commandchars=+\[\]]
     The +textbf[quick brown fox] jumped over the lazy dog.
+\end{Verbatim}
+
+\subsection{center}
+\label{center}
+\prgname{center} is a program for centering a volume and mapping the shift parameters back to the particle images, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=center key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = Volume; input volume e.g. vol.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+oritab  = Orientation and CTF parameter file; .simple|.txt parameter file
+outfile = Output orientation and CTF parameter file; .simple|.txt parameter file
++underline[FILTER CONTROLS]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cleanup2D}
+\label{cleanup2D}
+\prgname{cleanup2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cleanup2D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[SEARCH CONTROLS]
++textbf[ncls        = Number of 2D clusters; # 2D clusters]
+center      = Center class averages; (yes|no){no}
+maxits      = Max iterations; Max # iterations
+objfun      = Objective function; (cc|ccres){cc}
+update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp    = High-pass limit; high-pass limit in Angstroms
+lp    = Static low-pass limit; low-pass limit in Angstroms
++underline[MASK CONTROLS]
+msk = Mask radius; mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
 \end{Verbatim}
 
 \subsection{Image File Formats}
