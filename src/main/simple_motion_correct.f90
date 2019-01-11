@@ -379,6 +379,7 @@ contains
 
     subroutine motion_correct_iso_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        integer :: iframe
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
@@ -386,6 +387,11 @@ contains
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
+        ! save the isotropically corrected movie stack to disk for anisotropic movie alignment
+        do iframe=1,nframes
+            call movie_frames_shifted(iframe)%ifft
+            call movie_frames_shifted(iframe)%write('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
+        end do
         call movie_sum_ctf%ifft()
         ! re-calculate the weighted sum
         call wsum_movie_frames(opt_shifts)
@@ -475,12 +481,6 @@ contains
         opt_shifts_aniso_sp    = 0.
         opt_shifts_aniso_saved = 0._dp
         shifts                 = 0.
-        ! prepare the data structures for anisotropic correction
-        ! save the isotropically corrected movie stack to disk
-        do iframe=1,nframes
-            call movie_frames_shifted(iframe)%ifft
-            call movie_frames_shifted(iframe)%write('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
-        end do
         ! prepare the images for anisotropic correction by scaling & band-pass filtering & create motion_aniso objs
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%fft
@@ -510,7 +510,7 @@ contains
                     frame=movie_frames_shifted(iframe))
                 ithr = omp_get_thread_num() + 1
                 if( ithr == 1 )then
-                    write (*,*) 'aniso: cxy=', cxy
+                    write (*,*) 'frame=', iframe, 'aniso: cxy=', cxy
                     call flush(6)
                 endif
                 ! update parameter arrays

@@ -380,7 +380,7 @@ contains
         integer           :: i
         real              :: lims(POLY_DIM,2)
         call self%kill()
-        self%maxHWshift = 0.2
+        self%maxHWshift = 0.4
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -511,7 +511,7 @@ contains
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.001 ! randomized (yet small) starting point
         self%ospec%x_8 = real(self%ospec%x, dp)
-        self%ospec%maxits = 200
+        self%ospec%maxits = 400
         call self%nlopt%minimize(self%ospec, self, cxy1)
         cxy(1)  = real(cxy1)
         cxy(2:) = self%ospec%x_8
