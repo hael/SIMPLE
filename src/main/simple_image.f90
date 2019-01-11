@@ -66,6 +66,7 @@ contains
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
+    procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
@@ -1261,6 +1262,12 @@ contains
         allocate(cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3)), source=self%cmat)
     end function get_cmat
 
+    subroutine get_cmat_ptr( self, cmat_ptr )
+        class(image), target,                   intent(in)  :: self
+        complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
+        cmat_ptr => self%cmat
+    end subroutine get_cmat_ptr
+    
     !>  \brief   get_cmat get the image object's complex matrix
     pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self
