@@ -355,15 +355,15 @@ contains
     subroutine exec_import_movies( self, cline )
         class(import_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        logical          :: inputted_boxtab, inputted_deftab
-        integer          :: nmovf, nboxf, i
-        type(oris)       :: deftab
-        type(ctfparams)  :: ctfvars
+        type(parameters)                       :: params
+        type(sp_project)                       :: spproj
+        type(oris)                             :: deftab
+        type(ctfparams)                        :: ctfvars, prev_ctfvars
         character(len=:),          allocatable :: phaseplate
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
+        logical :: inputted_boxtab, inputted_deftab, first_import
+        integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
         call params%new(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
@@ -373,6 +373,9 @@ contains
             THROW_HARD('project file: '//trim(params%projfile)//' does not exists! exec_import_movies')
         endif
         call spproj%read(params%projfile)
+        nprev_intgs  = spproj%get_nintgs()
+        nprev_movies = spproj%get_nmovies()
+        first_import = nprev_movies==0 .and. nprev_intgs==0
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -395,6 +398,28 @@ contains
         end select
         ctfvars%l_phaseplate = .false.
         if( trim(params%phaseplate) .eq. 'yes' ) ctfvars%l_phaseplate = .true.
+        ! sanity checks
+        if( first_import )then
+            if( spproj%get_nstks()>0)then
+                THROW_HARD('Can only import movies/micrographs to an empty project! exec_import_movies')
+            endif
+        else
+            if( spproj%get_nstks()>0)then
+                THROW_HARD('Can only import movies/micrographs to a project with movies/micrographs only! exec_import_movies')
+            endif
+            if( inputted_boxtab )then
+                if( .not.spproj%has_boxfile() )then
+                    THROW_HARD('Can only import boxes to a project with existing boxes! exec_import_movies')
+                endif
+            endif
+            prev_ctfvars = spproj%get_micparams(1)
+            if( ctfvars%ctfflag /= prev_ctfvars%ctfflag ) THROW_HARD('CTF infos do not match! exec_import_movies')
+            if( ctfvars%smpd    /= prev_ctfvars%smpd    ) THROW_HARD('The sampling distances do not match! exec_import_movies')
+            if( ctfvars%cs      /= prev_ctfvars%cs      ) THROW_HARD('The spherical aberrations do not match! exec_import_movies')
+            if( ctfvars%kv      /= prev_ctfvars%kv      ) THROW_HARD('The voltages do not match! exec_import_movies')
+            if( ctfvars%fraca   /= prev_ctfvars%fraca   ) THROW_HARD('The amplitude contrasts do not match! exec_import_movies')
+            if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! exec_import_movies')
+        endif
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
@@ -403,6 +428,7 @@ contains
             call deftab%new(nlines(params%deftab))
             call deftab%read_ctfparams_state_eo(params%deftab)
             call spproj%add_intgs(params%filetab, deftab, ctfvars)
+            call deftab%kill
         else
             ! movies/micrographs
             call spproj%add_movies(params%filetab, ctfvars)
@@ -419,7 +445,11 @@ contains
             endif
             do i=1,nmovf
                 call make_relativepath(CWD_GLOB, boxfnames(i), boxfname)
-                call spproj%os_mic%set(i, 'boxfile', boxfname)
+                if( first_import )then
+                    call spproj%os_mic%set(i, 'boxfile', boxfname)
+                else
+                    call spproj%os_mic%set(nprev_intgs+i, 'boxfile', boxfname)
+                endif
             end do
         endif
         ! write project file

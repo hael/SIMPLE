@@ -83,7 +83,7 @@ contains
         if(alloc_stat.ne.0)call allocchk("In: simple_eo_volassemble res05s res0143s",alloc_stat)
         res0143s = 0.
         res05s   = 0.
-        ! rebuild build%vol according to box size (beacuse it is otherwise boxmatch)
+        ! rebuild build%vol according to box size (because it is otherwise boxmatch)
         call build%vol%new([params%box,params%box,params%box], params%smpd)
         call eorecvol_read%new( build%spproj)
         call eorecvol_read%kill_exp ! reduced memory usage

@@ -419,7 +419,7 @@ contains
                 l_bfac_filt  = params_glob%l_bfac_filt  .and. (params_glob%nstates==1)
                 l_match_filt = params_glob%l_match_filt .and. (params_glob%nstates==1) .and. (ifrc/=0)
             else
-                ifrc = build_glob%eulspace_red%find_closest_proj(build_glob%spproj_field%get_ori(iptcl))
+                ifrc = 0
             endif
         else
             if( build_glob%spproj_field%isthere(iptcl,'class') )then

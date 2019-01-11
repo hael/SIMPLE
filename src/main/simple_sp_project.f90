@@ -73,9 +73,11 @@ contains
     procedure          :: get_smpd
     procedure          :: get_nmovies
     procedure          :: get_nintgs
+    procedure          :: get_nstks
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
     procedure          :: has_phaseplate
+    procedure          :: has_boxfile
     procedure          :: get_ctfparams
     procedure          :: get_sp_oris
     procedure          :: ptr2oritype
@@ -514,6 +516,7 @@ contains
         character(len=*),          intent(in)    :: filetab
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),               pointer     :: os_ptr
+        type(ctfparams)                        :: prev_ctfvars
         character(len=LONGSTRLEN), allocatable :: movienames(:)
         character(len=:),          allocatable :: name
         character(len=LONGSTRLEN) :: rel_moviename
@@ -535,12 +538,19 @@ contains
         if( nprev_mics == 0 )then
             call os_ptr%new(ntot)
         else
+            prev_ctfvars = self%get_micparams(1)
+            if( ctfvars%ctfflag /= prev_ctfvars%ctfflag ) THROW_HARD('CTF infos do not match! add_movies')
+            if( ctfvars%smpd    /= prev_ctfvars%smpd    ) THROW_HARD('The sampling distances do not match! add_movies')
+            if( ctfvars%cs      /= prev_ctfvars%cs      ) THROW_HARD('The spherical aberrations do not match! add_movies')
+            if( ctfvars%kv      /= prev_ctfvars%kv      ) THROW_HARD('The voltages do not match! add_movies')
+            if( ctfvars%fraca   /= prev_ctfvars%fraca   ) THROW_HARD('The amplitude contrasts do not match! add_movies')
+            if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! add_movies')
             call os_ptr%reallocate(ntot)
         endif
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,movienames(imic),rel_moviename)
+            call make_relativepath(CWD_GLOB,movienames(cnt),rel_moviename)
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
             if( nframes <= 0 )then
                 THROW_WARN('# frames in movie: '//trim(movienames(imic))//' <= zero, omitting')
@@ -619,6 +629,7 @@ contains
             if(ctfvars%kv      /= prev_ctfvars%kv   ) THROW_HARD('Inconsistent voltage; add_intgs')
             if(ctfvars%fraca   /= prev_ctfvars%fraca) THROW_HARD('Inconsistent amplituce contrast; add_intgs')
             if(ctfvars%ctfflag /= prev_ctfvars%ctfflag) THROW_HARD('Incompatible CTF flag; add_intgs')
+            if(ctfvars%l_phaseplate .neqv. prev_ctfvars%l_phaseplate ) THROW_HARD('Incompatible phaseplate info; add_intgs')
         endif
         ! read movie names
         call read_filetable(filetab, micnames)
@@ -899,7 +910,7 @@ contains
         integer,                   allocatable :: nptcls_arr(:)
         type(ori)                 :: o_ptcl, o_stk
         character(len=LONGSTRLEN) :: stk_relpath
-        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
+        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
         ! file exists?
         if( .not. file_exists(stktab) )then
@@ -987,15 +998,17 @@ contains
             call self%os_stk%set(stk_ind, 'top',     real(top))
             call self%os_stk%set(stk_ind, 'stkkind', 'split')
             call self%os_stk%set(stk_ind, 'imgkind', 'ptcl')
-            call self%os_stk%set(stk_ind, 'state',   1.0) ! default on import
+            istate = 1 ! default on import
+            if( o_stk%isthere('state') ) istate = o_stk%get_state()
+            call self%os_stk%set(stk_ind, 'state', real(istate))
             ! updates particles segment
             call o_ptcl%new
-            call o_ptcl%set('dfx',     o_stk%get('dfx'))
-            call o_ptcl%set('dfy',     o_stk%get('dfy'))
-            call o_ptcl%set('angast',  o_stk%get('angast'))
+            call o_ptcl%set('dfx',    o_stk%get('dfx'))
+            call o_ptcl%set('dfy',    o_stk%get('dfy'))
+            call o_ptcl%set('angast', o_stk%get('angast'))
             if( o_stk%isthere('phshift') ) call o_ptcl%set('phshift', o_stk%get('phshift'))
             call o_ptcl%set('stkind', real(stk_ind))
-            call o_ptcl%set('state',1.) ! default on import
+            call o_ptcl%set('state',  real(istate))
             do i=1,nptcls_arr(istk)
                 call self%os_ptcl2D%set_ori(fromp+i-1, o_ptcl)
                 call self%os_ptcl3D%set_ori(fromp+i-1, o_ptcl)
@@ -1167,9 +1180,9 @@ contains
         character(len=*),           intent(in)    :: stk
         real,                       intent(in)    :: smpd ! sampling distance of images in stk
         character(len=*), optional, intent(in)    :: imgkind
-        character(len=:), allocatable :: path, iimgkind
+        character(len=:), allocatable :: iimgkind
         character(len=LONGSTRLEN)     :: relpath
-        integer                       :: ldim(3), nptcls, ind, ipos, l
+        integer                       :: ldim(3), nptcls, ind
         if( present(imgkind) )then
             allocate(iimgkind, source=trim(imgkind))
         else
@@ -1657,6 +1670,11 @@ contains
         enddo
     end function get_nintgs
 
+    integer function get_nstks( self )
+        class(sp_project), target, intent(in) :: self
+        get_nstks = self%os_stk%get_noris()
+    end function get_nstks
+
     character(len=STDLEN) function get_ctfflag( self, oritype )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -1726,6 +1744,11 @@ contains
         has_phaseplate = trim(phaseplate).eq.'yes'
     end function has_phaseplate
 
+    logical function has_boxfile( self )
+        class(sp_project), target, intent(inout) :: self
+        has_boxfile = self%os_mic%isthere('boxfile')
+    end function has_boxfile
+
     function get_ctfparams( self, oritype, iptcl ) result( ctfvars )
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
@@ -1777,7 +1800,6 @@ contains
             write(logfhandle,*) 'stkind/iptcl: ', stkind, iptcl
             THROW_HARD('unsupported ctf flag: '// trim(ctfflag)//'; get_ctfparams')
         end select
-
         ! acceleration voltage
         if( self%os_stk%isthere(stkind, 'kv') )then
             ctfvars%kv = self%os_stk%get(stkind, 'kv')

@@ -961,7 +961,7 @@ contains
             end do
             ! IMPORT INTO PROJECT
             call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
-            ! add box coordinates to ptcl2D field
+            ! add box coordinates to ptcl2D field only
             do iptcl=1,nptcls
                 if( .not.oris_mask(iptcl) )cycle
                 iptcl_glob = iptcl_glob + 1
