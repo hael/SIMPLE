@@ -40,4 +40,4 @@ doc/html/
 *.synctex.gz
 *.toc
 *.orig
-
+/node_modules

@@ -1,0 +1,54 @@
+
+body{
+	font-family: arial;
+	margin: 0px;
+	overflow: hidden;
+	background-color: white;
+	
+}
+
+#view {
+	display: flex;
+	flex-flow: column;
+	align-items: stretch;
+	height: 100vh;
+}
+
+#viewheader {
+	height: 65px;
+	background-color: #f4f4f4;
+	text-align: center;
+}
+
+#viewheader #headerimage{
+	height: 40px;
+	padding-top: 12px;
+}
+
+#viewheader #refreshimage{
+	position: absolute;
+	left: 5px;
+	top: 5px;
+}
+
+#viewheader #projectselector{
+	position: absolute;
+	right: 18px;
+	top: 18px;
+	height: 30px;
+	width: 200px;
+}
+
+#viewwindow{
+	flex: 1;
+}
+
+#viewfooter{
+	height: 40px;
+	background-color: #f4f4f4;
+}
+
+#viewfooter img{
+	padding-top: 4px;
+	padding-left: 10px;
+}

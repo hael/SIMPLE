@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "outDir": "build",
+    "sourceMap": false
+  },
+  "files":[
+    "src/server/httpserver.ts"	  
+  ],
+  "exclude":[
+  ]
+}
+
+

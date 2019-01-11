@@ -1,0 +1,8 @@
+{
+  "name": "simple_gui",
+  "productName": "Simple GUI",
+  "version": "2.0.0",
+  "scripts": {
+    "init": "electron-forge init simple-gui"
+  }
+}
