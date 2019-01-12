@@ -8,6 +8,7 @@
 \usepackage[font=small,labelfont=bf]{caption}
 \usepackage[OT2,T1]{fontenc}
 \usepackage{fancyvrb,courier}
+\usepackage{fvextra,courier}
 % Set formats for each heading level
 \usepackage{sectsty}
 \allsectionsfont{\usefont{OT1}{phv}{bc}{n}\selectfont}
@@ -33,6 +34,7 @@
 \usepackage{verbatim}
 \usepackage{wrapfig}
 \usepackage{xcolor}
+\usepackage{tabto}
 % Declarations
 \DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
 \DeclareSymbolFont{cyrletters}{OT2}{wncyr}{m}{n}
@@ -51,22 +53,22 @@
 %\caption{}
 \end{figure}
 
-\title{\prgname{The SIMPLE 3.0 Manual}}
-\date{Jan 24, 2017}
+\title{\prgname{The SIMPLE 3.0 Command-line Manual}}
+\date{Jan 11, 2019}
 \maketitle
 
 \vspace{1em}
-\begin{minipage}[ht]{0.48\textwidth}
+\begin{minipage}[ht]{0.50\textwidth}
 \textbf{Contributors:}\\
 cyril.reboul@monash.edu\\
-michael.eager@monash.edu\\
+simon.kiesewetter@monash.edu\\
+chiara.machello@monash.edu\\
 dominika.elmlund@monash.edu\\
 hans.elmlund@monash.edu\\
 \textbf{Adress:}\\
-Dept. Biochemistry and Molecular Biology\\
-School of Biomedical Sciences\\
-Monash University, Bldg. 77\\
-Clayton, VIC, Australia, 3800\\
+Biomedicine Discovery Institute\\
+Monash University\\
+3800 Clayton, VIC, Australia\\
 \textbf{Webpage:}\\
 www.simplecryoem.com\\
 \textbf{Contact:}\\
@@ -93,73 +95,252 @@ dominika@simplecryoem.com\\
 
 \section{About SIMPLE}
 
-\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, focusing on \textit{ab initio} 3D reconstruction of single-particles with any point-group symmetry. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. The SIMPLE front-end consists of many standalone, interoperable components developed according to the ``Unix toolkit philosophy''.
-
+\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, covering all aspects of the single-particle analysis workflow. SIMPLE also provides tools for atomic-resolution 3D reconstruction from time-series of nanoparticles imaged in solution with graphene liquid cell TEM. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. In the latest SIMPLE release (version 3.0), we have revised the way that meta-data and input parameters are handled, providing a project-based execution model (described below). This model has made SIMPLE easier to use, improved output data organisation and increased performance. This document describes the command-line interface of SIMPLE and is intended for advanced users and/or developers that wish to build applications utilising the high-performance image processing algorithms in SIMPLE. <REFERENCE FOR LESS EXPERIENCED USERS>
+ 
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} for more details.
 
 \subsection{What is new in SIMPLE release 3.0?}
+The number of changes we have made to the suite compared to the previously released version (2.5) are too many to list here. If you have experience with previous SIMPLE releases, please have a quick browse through the manual. We promise you will catch-up quickly. Most (but not all) of the algorithms implemented in SIMPLE have been published (REFS). If you want to understand the theory, we recommend you read the papers. This document exclusively describes the command-line driven SIMPLE user interface and basic knowledge about EM and single-particle analysis is assumed. 
+
+\subsubsection{SIMPLE program naming convention}
+The first big change you will notice is that all program names have changed to plain English descriptions of their functionality.  For example, \prgname{PRIME2D} that does simultaneous 2D alignment and clustering in a reference-free manner is now called \prgname{cluster2D}, the workflow for \textit{ab initio} 3D reconstruction from class averages is called \prgname{initial\_3Dmodel}, the 3D refinement application is called \prgname{refine3D} and the heterogeneity analysis tool is called \prgname{cluster3D}. In SIMPLE, we distinguish between \textit{distributed workflows} (executed with \texttt{simple\_distr\_exec}) and \textit{programs} (executed with \texttt{simple\_exec}). Programs perform smaller tasks (subjected exclusively to OpenMP-thread-based parallelisation), whereas distributed workflows are major image processing steps that typically require a multi-core workstation or a computer cluster. 
+
+\subsubsection{SIMPLE input parameter categorisation}
+Another noticeable change is they way the command-line instructions are provided when you execute a SIMPLE program or distributed workflow. For example, this is what is written in the terminal when executing \texttt{simple\_distr\_exec prg=refine3D}
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=refine3D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+vol1 = Reference volume; input volume e.g. vol.mrc
++underline[SEARCH CONTROLS]
++textbf[pgrp         = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+center       = Center reference volume(s); (yes|no){yes}
+continue     = Continue previous refinement; (yes|no){no}
+frac         = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+maxits       = Max iterations; Max # iterations
+neigh        = Neighbourhood refinement; (yes|no){no}
+nnn          = Number of nearest neighbours; # projection neighbours{10% of search space}
+nrestarts    = Number of restarts; # restarts{1}
+nspace       = Number of projection directions; # projections
+nstates      = Number of states; # states to reconstruct
+objfun       = Objective function; (cc|ccres|euclid){cc}
+refine       = Refinement mode; (snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}
+sigma2_fudge = Sigma2-fudge factor; {100.}
+trs          = Maximum translational shift; max shift per iteration in pixels{5}
+update_frac  = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp      = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+eo         = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+hp         = High-pass limit; high-pass limit in Angstroms
+lp         = Static low-pass limit; low-pass limit in Angstroms
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
+lpstop     = Low-pass limit for frequency limited refinement; low-pass limit in Angstroms
+shellw     = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk      = Mask radius; mask radius in pixels]
+focusmsk = Mask radius in focused refinement; focused mask radius in pixels
+inner    = Inner mask radius; inner mask radius in pixels
+mskfile  = Input mask file; e.g. automask.mrc from postprocess
+width    = Falloff of inner mask; # pixels cosine edge{10}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\noindent{}The number of input parameters can be daunting and to simplify the representation we have divided them into the following categories.
+
 \begin{itemize}
-    \item[--] 
-    \item[--]
-    \item[--]
+    \item[--] \textbf{IMAGE INPUT/OUTPUT} consists of MRC format stacks or volumes.
+    \item[--] \textbf{PARAMETER INPUT/OUTPUT} are parameters associated with the inputted images.
+    \item[--] \textbf{ALTERNATIVE INPUTS} is for programs that accept alternative inputs: volume or stack, for example.
+    \item[--] \textbf{SEARCH CONTROLS} are parameters that control optimisation.
+    \item[--] \textbf{FILTER CONTROLS} are parameters that control Fourier filtering options.
+    \item[--] \textbf{MASK CONTROLS} are parameters that control real-space masking options.
+    \item[--] \textbf{COMPUTER CONTROLS} are parameters that specifies how to utilise the computing environment.
 \end{itemize}
+
+\noindent{}The required command-line parameters are printed in \textbf{bold}. Hence, the execution of  \texttt{simple\_distr\_exec prg=refine3D} could be as trivial as
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_distr_exec prg=refine3D pgrp=c1 msk=120 nparts=4 nthr=8
+\end{Verbatim}
+
+\noindent{}We have encapsulated all the details of the SIMPLE user interface in an abstract data type. A JSON description of the SIMPLE user interface can be obtained through 
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_private_exec prg=write_ui_json
+\end{Verbatim}
+
+\noindent{}This produces the file \texttt{simple\_user\_interface.json} describing all distributed workflows and programs in SIMPLE. This may be useful for building GUI applications on top of the SIMPLE back-end.
+
+\subsubsection{SIMPLE project execution model}
+
+The final major change that affects SIMPLE usage is the project-based execution model that encapsulates all meta-data in a single file and provides a complete and reversible history of the SIMPLE project. This is best illustrated by example. Below, we provide the commands executed for reconstructing HCN (EMPIAR-10081) to 3.4 A resolution.
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_exec prg=new_project projname=hcn_test
+\end{Verbatim}
+
+\noindent{}This creates the project, represented by a directory created in the current working directory called \texttt{hcn\_test} and in that directory a binary file called \texttt{hcn\_test.simple} that will be filled up with meta-data as the project progresses. Next, we change directory to the project directory and import some data.
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cd hcn_test
+simple_exec prg=import_particles cs=2.7 ctf=yes fraca=0.1 kv=300 smpd=1.3 stk=/media/hael/LongTermStorage/EM-data/HCN/hcn_shiny.mrc deftab=/media/hael/LongTermStorage/EM-data/HCN/deftab.txt
+\end{Verbatim}
+
+\noindent{}This imports an MRC stack with associated CTF parameters to the project. If you list the content of the project directory you will see that the directory \texttt{1\_import\_particles} was created, containing a \texttt{hcn\_test.simple} file. What happened here? First, the import program created its execution directory, then made a copy of the project file and in that copy it imported the stack file path and CTF parameter information. The next command is for running a 2D analysis
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+nohup simple_distr_exec prg=cluster2D ncls=200 msk=65 nparts=4 nthr=32 > CLS2D &
+\end{Verbatim}
+
+\noindent{}By default, SIMPLE looks in the project directory and picks the project file from the execution directory with the highest number as a starting point for the next process. In this example, the 2D analysis picks the project file from the \texttt{1\_import\_particles}. Sometimes you may want to start from another project file and selecting the highest numbered one is not desired. Therefore, the possibility to provide a project file on the command line is given.
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+projfile=X_execution_dir/project_file.simple
+\end{Verbatim}
+
+\noindent{}If desired, it is also possible to turn off the execution directory generation and run the process straight in the current working directory. This is done by giving
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+mkdir=no
+\end{Verbatim}
+\noindent{}on the command line. In a realistic situation, you would have used \prgname{cleanup2D} in replacement of \prgname{cluster2D} to remove junk and identify good particles. If you have a GUI running on top of the SIMPLE back-end you would then like to report any selections made in the GUI to the project file. Below, we describe how to do this. This data set was already cleaned with RELION, so we proceed using all class averages for initial 3D model production.
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+nohup simple_distr_exec prg=initial_3Dmodel pgrp=c4 hp=60 msk=65 nparts=4 nthr=32 > INI3D &
+\end{Verbatim}
+
+\noindent{}Finally, we execute the refinement command
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+nohup simple_distr_exec prg=refine3D pgrp=c4 frac=0.9 maxits=15 trs=5 update_frac=0.2 eo=yes hp=60 msk=65 nparts=4 nthr=32 > REFINE3D &
+\end{Verbatim}
+
+\noindent{}The final and intermittent results are neatly organised in directories in the project directory
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+ls
+1_import_particles  3_initial_3Dmodel  CLS2D            INI3D     stack_parts
+2_cluster2D         4_refine3D         hcn_test.simple  REFINE3D
+\end{Verbatim}
+
+\noindent{}and it is possible to go back to any point in the project history to re-run a job with different parameters or try a different algorithm for the task. Now, let's look closer at the project file.
+
+\subsubsection{Structure, interrogation and manipulation of the binary project file}
+In SIMPLE v3.0 we have implemented an abstract data type called sp\_project that manages all meta-data generated throughout a single-particle analysis project. The multi-segment binary project file is simply a mirror of this data type on disk. Segments 1-10 are reserved  for simple program outputs, orientations and files. Currently implemented segments are
+
+\begin{enumerate}
+    \item micrographs
+    \item per-micrograph stacks
+    \item per-particle 2D orientations
+    \item per-cluster 2D orientations
+    \item per-cluster 3D orientations
+    \item per-particle 3D orientations
+    \item critical project outputs
+\end{enumerate}
+
+\noindent{}Segments 11-20 are reserved for project info, job management etc. Currently implemented segments are
+
+\begin{enumerate}
+   \setcounter{enumi}{10}
+    \item project information
+    \item command lines of processes executed
+    \item computing environment specification
+\end{enumerate}
+
+\noindent{}All of these segments utilise the SIMPLE orientation container object for data storage and we therefore refer to the different segment types as ``oritype'' with shorthand descriptors
+
+\begin{enumerate}
+    \item micrographs, \tab{}\texttt{oritype = \textbf{mic}}
+    \item per-micrograph stacks, \tab{}\texttt{oritype = \textbf{stk}}
+    \item per-particle 2D orientations, \tab{}\texttt{oritype = \textbf{ptcl2D}}
+    \item per-cluster 2D orientations, \tab{}\texttt{oritype = \textbf{cls2D}}
+    \item per-cluster 3D orientations, \tab{}\texttt{oritype = \textbf{cls3D}}
+    \item per-particle 3D orientations, \tab{}\texttt{oritype = \textbf{ptcl3D}}
+    \item critical project outputs,\tab{}\texttt{oritype = \textbf{out}}
+\end{enumerate}
+
+\begin{enumerate}
+   \setcounter{enumi}{10}
+    \item project information, \tab{}\texttt{oritype = \textbf{projinfo}}
+    \item command lines of processes executed, \tab{}\texttt{oritype = \textbf{jobproc}}
+    \item computing environment specification, \tab{}\texttt{oritype = \textbf{compenv}}
+\end{enumerate}
+
+\noindent{}The first method of choice for interrogating the project file is
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_exec prg=print_project_info
+\end{Verbatim}
+
+\noindent{}Going back to out HCN example, we cd to the \texttt{hcn\_test/4\_refine3D} execution directory and execute \texttt{simple\_exec prg=print\_project\_info}. This produces the output
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[+textbf[SEGMENT 02 of type: stk]]
++textit[4 record(s) of stack (extracted particles) info, one per stack of particles]
++textbf[first record:] stk=../stack_parts/stack_part1.mrc stkkind=split imgkind=ptcl phaseplate=no ctf=yes box=256.000000 nptcls=13968.0000 fromp=1.00000000 top=13968.0000 smpd=1.29999995 kv=300.000000 cs=2.70000005 fraca=0.100000001 state=1.00000000
++underline[+textbf[SEGMENT 03 of type: ptcl2D]]
++textit[55870 record(s) of 2D information generated by cluster2D, one per particle]
++textbf[first record:] kv=300.000000 cs=2.70000005 fraca=0.100000001 dfx=4.13821840 dfy=4.34016752 angast=11.1103058 state=1.00000000 eo=0.00000000 stkind=1.00000000 x=-1.87167823 y=-3.53704500 updatecnt=18.0000000 w=1.00000000 bfac_rec=0.00000000 lp=7.16521692 e3=280.975616 inpl=37.0000000 class=128.000000 corr=0.342293173 specscore=0.198325723 bfac=514.059692 dist_inpl=0.00000000 mi_class=1.00000000 frac=100.000000 e1=0.00000000 e2=0.00000000
++underline[+textbf[SEGMENT 04 of type: cls2D]]
++textit[200 record(s) of data generated by cluster2D, one per 2D cluster]
++textbf[first record:] class=1.00000000 pop=254.000000 res=7.53409100 corr=0.340087920 w=1.00000000 specscore=0.242327988 state=1.00000000
++underline[+textbf[SEGMENT 05 of type: cls3D]]
++textit[200 record(s) of 3D information for class averages, one per class]
++textbf[first record:] dfx=0.00000000 dfy=0.00000000 angast=0.00000000 state=1.00000000 x=-1.16237819 y=-1.83902657 e1=12.5358458 e2=158.906311 e3=305.373138 proj=2409.00000 w=1.00000000 bfac=23.9044113 mi_proj=1.00000000 mi_state=1.00000000 dist=6.78878576E-02 dist_inpl=0.00000000 frac=100.000000 corr=0.943886340 specscore=0.941106677 inpl=1.00000000 spread=0.986059248 shwmean=0.169503510 shwstdev=7.38897547E-02 npeaks=11.0000000 updatecnt=23.0000000 ow=0.173722118 class=1.00000000 lp=10.1947365 stkind=1.00000000
++underline[+textbf[SEGMENT 06 of type: ptcl3D]]
++textit[55870 record(s) of 3D information, one per particle]
++textbf[first record:] kv=300.000000 cs=2.70000005 fraca=0.100000001 dfx=4.13821840 dfy=4.34016752 angast=11.1103058 state=1.00000000 eo=0.00000000 stkind=1.00000000 x=-2.17266393 y=-3.59118795 w=0.00000000 bfac_rec=0.00000000 lp=3.52181816 e3=300.895508 inpl=2.00000000 class=128.000000 corr=0.106535442 specscore=6.47827759E-02 bfac=143.173950 dist_inpl=0.895474195 mi_class=1.00000000 frac=100.000000 e1=1.58313191 e2=92.8490295 proj=1295.00000 updatecnt=3.00000000 dist=2.52782822 ow=2.80490033E-02 spread=3.31418705 shwmean=0.493733585 shwstdev=0.237732679 npeaks=74.0000000 mi_proj=0.857142866
++underline[+textbf[SEGMENT 07 of type: out]]
++textit[6 record(s) of crtitical project outputs: class averages, 3D volumes, FSC/FRC files etc.]
++textbf[first record:] frcs=../2_cluster2D/frcs.bin imgkind=frc2D
++underline[+textbf[SEGMENT 11 of type: projinfo]]
++textit[1 record(s) of information about the project, project name etc.]
++textbf[first record:] projname=hcn_test projfile=hcn_test.simple cwd=/Processing/HCN/hcn_test
++underline[+textbf[SEGMENT 12 of type: jobproc]]
++textit[4 record(s) of all command-lines executed throughout the project]
++textbf[first record:] prg=import_particles ctf=yes stk=/media/hael/LongTermStorage/EM-data/HCN/hcn_shiny.mrc deftab=/media/hael/LongTermStorage/EM-data/HCN/deftab.txt mkdir=yes projfile=/Processing/HCN/hcn_test/1_import_particles/hcn_test.simple projname=hcn_test exec_dir=1_import_particles date=20190104.0 time=161342.797 cs=2.70000005 fraca=0.100000001 kv=300.000000 smpd=1.29999995
++underline[+textbf[SEGMENT 13 of type: compenv]]
++textit[1 record(s) of computing environment specifications, queue system, memory per job etc.]
++textbf[first record:] simple_path=/home/hael/src/SIMPLE3.0/build qsys_name=local user_email=my.name@uni.edu job_name=simple_hcn_test time_per_image=100.000000 job_memory_per_task=16000.0000
+\end{Verbatim}
+
+\noindent{}You notice that what happened in the HCN workflow is directly reflected in the project file structure. The \prgname{cluster2D} analysis split the imported stack into four parts (one per partition used), which is why the \texttt{\textbf{stk}} segment contains 4 records. The first record of the segment is also printed and we see that the first record of the \texttt{\textbf{stk}} segment contains the filename in addition to a number of parameters associated with the stack file, represented by key-value entries. Next, the \prgname{cluster2D} analysis filled-in the \texttt{\textbf{ptcl2D}} segment with 55870 records (one per particle) and the \texttt{\textbf{cls2D}} segment with 200 records (one per class). Subsequently, the \prgname{initial\_3Dmodel} workflow provided 200 records in the \texttt{\textbf{cls3D}} segment, describing class average orientations. Finally, the  \prgname{refine3D} workflow provided 55870 records of 3D orientations and various other statistics (one per particle) in the \prgname{ptcl3D} segment. There are 7 records of critical project outputs in the \texttt{\textbf{out}} segment (SEGMENT 07) and to inspect them closer we use the following command
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_exec prg=print_project_field oritype=out
+\end{Verbatim}
+
+\noindent{}This produces the ouput
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+frcs=../2_cluster2D/frcs.bin imgkind=frc2D
+stk=../2_cluster2D/cavgs_iter018.mrc stkkind=single imgkind=cavg ctf=no box=256.000000 nptcls=200.000000 fromp=1.00000000 top=200.000000 smpd=1.29999995
+vol=../3_initial_3Dmodel/rec_final.mrc imgkind=vol_cavg box=256.000000 smpd=1.29999995 state=1.00000000
+fsc=../4_refine3D/fsc_state01.bin imgkind=fsc state=1.00000000 box=256.000000
+vol=../4_refine3D/aniso_optlp_state01.mrc imgkind=vol_filt box=256.000000 smpd=1.29999995 state=1.00000000
+vol=../4_refine3D/recvol_state01_iter015.mrc imgkind=vol box=256.000000 smpd=1.29999995 state=1.00000000
+\end{Verbatim}
+
+\noindent{}\prgname{cluster2D} provided two critical outputs: a file of Fourier Ring Correlations (\texttt{frcs}) and a stack of class averages (\texttt{stk}). \prgname{initial\_3Dmodel} provided one volume output. Finally, \prgname{refine3D} provided three outputs: Fourier Shell Correlations (\texttt{fsc}) and two volumes. 
+
+
+
 
 
 
 \section{File Formats}
 
-\begin{Verbatim}[commandchars=+\[\]]
-    The +underline[quick brown fox] jumped over the lazy dog.
-    The +textbf[quick brown fox] jumped over $ the lazy dog.
-    The +textit[quick brown fox] jumped over the lazy dog.
-\end{Verbatim}
+%\begin{Verbatim}[commandchars=+\[\]]
+%    The +underline[quick brown fox] jumped over the lazy dog.
+%    The +textbf[quick brown fox] jumped over $ the lazy dog.
+%    The +textit[quick brown fox] jumped over the lazy dog.
+%\end{Verbatim}
 
-\begin{Verbatim}[commandchars=+\[\]]
-    The +textbf[quick brown fox] jumped over the lazy dog.
-\end{Verbatim}
+%\begin{Verbatim}[commandchars=+\[\]]
+%    The +textbf[quick brown fox] jumped over the lazy dog.
+%\end{Verbatim}
 
-\subsection{center}
-\label{center}
-\prgname{center} is a program for centering a volume and mapping the shift parameters back to the particle images, executed by simple\_exec
-\begin{Verbatim}[commandchars=+\[\],fontsize=\small]
-+underline[USAGE]
-+textit[bash-3.2$ simple_exec prg=center key1=val1 key2=val2 ...]
-Required input parameters in +textbf[bold] (ensure terminal support)
-+underline[IMAGE INPUT/OUTPUT]
-+textbf[vol1 = Volume; input volume e.g. vol.mrc]
-+underline[PARAMETER INPUT/OUTPUT]
-+textbf[smpd    = Sampling distance; pixel size in Angstroms]
-oritab  = Orientation and CTF parameter file; .simple|.txt parameter file
-outfile = Output orientation and CTF parameter file; .simple|.txt parameter file
-+underline[FILTER CONTROLS]
-cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
-+underline[COMPUTER CONTROLS]
-+textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
-\end{Verbatim}
 
-\subsection{cleanup2D}
-\label{cleanup2D}
-\prgname{cleanup2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm, executed by simple\_distr\_exec
-\begin{Verbatim}[commandchars=+\[\],fontsize=\small]
-+underline[USAGE]
-+textit[bash-3.2$ simple_distr_exec prg=cleanup2D key1=val1 key2=val2 ...]
-Required input parameters in +textbf[bold] (ensure terminal support)
-+underline[SEARCH CONTROLS]
-+textbf[ncls        = Number of 2D clusters; # 2D clusters]
-center      = Center class averages; (yes|no){no}
-maxits      = Max iterations; Max # iterations
-objfun      = Objective function; (cc|ccres){cc}
-update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
-+underline[FILTER CONTROLS]
-cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
-hp    = High-pass limit; high-pass limit in Angstroms
-lp    = Static low-pass limit; low-pass limit in Angstroms
-+underline[MASK CONTROLS]
-msk = Mask radius; mask radius in pixels
-+underline[COMPUTER CONTROLS]
-+textbf[nparts = Number of parts; divide job into # parts]
-+textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
-\end{Verbatim}
 
 \subsection{Image File Formats}
 SIMPLE supports SPIDER (\texttt{*.spi}) and MRC (\texttt{*.mrc}) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction \citep{Rohou:2014aa}. RELION \citep{Scheres:2012aa} uses the convention that MRC stacks have the suffix \texttt{*.mrcs} and volumes the suffix \texttt{*.mrc}. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the \texttt{*.mrcs} or \texttt{*.mrc} suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs \texttt{vol1=rec.mrc} and \texttt{vol2=rec2.mrc} refer to volumes whereas the key-value pairs \texttt{stk=ptcls.mrc} and \texttt{stk2=ptcls2.mrc} refer to stacks.

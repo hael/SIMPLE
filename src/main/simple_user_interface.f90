@@ -3345,6 +3345,22 @@ contains
 
     end subroutine print_ui
 
+    subroutine print_ui_latex
+        integer :: i
+        type(simple_program), pointer :: ptr => null()
+        ! init UI descriptions
+        call make_user_interface
+        ! do i=1,size(prg_ptr_array)
+        do i=48,48
+            ptr => prg_ptr_array(i)%ptr2prg
+            write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
+            write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
+            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // ', executed by ' // ptr%executable)
+            call ptr%print_cmdline_latex
+            write(logfhandle, '(a)') ''
+        end do
+    end subroutine print_ui_latex
+
     subroutine print_cmdline( self )
         use simple_ansi_ctrls
         class(simple_program), intent(in) :: self
@@ -3386,7 +3402,7 @@ contains
         class(simple_program), intent(in) :: self
         logical     :: l_distr_exec
         l_distr_exec = self%executable .eq. 'simple_distr_exec'
-        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\],fontsize=\small]'
+        write(logfhandle,'(a)') '\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]'
         write(logfhandle,'(a)') '+underline[USAGE]'
         if( l_distr_exec )then
             write(logfhandle,'(a)') '+textit[bash-3.2$ simple_distr_exec prg=' // self%name // ' key1=val1 key2=val2 ...]'
@@ -3467,22 +3483,6 @@ contains
             deallocate(sorted_keys, required)
         endif
     end subroutine print_param_hash
-
-    subroutine print_ui_latex
-        integer :: i
-        type(simple_program), pointer :: ptr => null()
-        ! init UI descriptions
-        call make_user_interface
-        ! do i=1,size(prg_ptr_array)
-        do i=1,2
-            ptr => prg_ptr_array(i)%ptr2prg
-            write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
-            write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
-            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // ', executed by ' // ptr%executable)
-            call ptr%print_cmdline_latex
-            write(logfhandle, '(a)') ''
-        end do
-    end subroutine print_ui_latex
 
     subroutine print_prg_descr_long( self )
         class(simple_program), intent(in) :: self
