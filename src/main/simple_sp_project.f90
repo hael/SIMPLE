@@ -461,7 +461,6 @@ contains
         character(len=*),          intent(in)    :: moviename
         type(ctfparams),           intent(in)    :: ctfvars
         class(oris),      pointer     :: os_ptr
-        character(len=:), allocatable :: fname
         character(len=LONGSTRLEN)     :: rel_fname
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
@@ -474,10 +473,13 @@ contains
         endif
         ! update ori
         call os_ptr%new(1)
+        print *,trim(CWD_GLOB)
+        print *,trim(CWD_GLOB)
+        print *,trim(CWD_GLOB)
         call make_relativepath(CWD_GLOB, moviename, rel_fname)
-        call find_ldim_nptcls(trim(fname), ldim, nframes)
+        call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
         if( nframes <= 0 )then
-            THROW_WARN('# frames in movie: '//trim(fname)//' <= zero, omitting')
+            THROW_WARN('# frames in movie: '//trim(rel_fname)//' <= zero, omitting')
         else if( nframes > 1 )then
             call os_ptr%set(1, 'movie', trim(rel_fname))
             call os_ptr%set(1, 'imgkind', 'movie')
