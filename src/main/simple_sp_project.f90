@@ -473,9 +473,6 @@ contains
         endif
         ! update ori
         call os_ptr%new(1)
-        print *,trim(CWD_GLOB)
-        print *,trim(CWD_GLOB)
-        print *,trim(CWD_GLOB)
         call make_relativepath(CWD_GLOB, moviename, rel_fname)
         call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
         if( nframes <= 0 )then
