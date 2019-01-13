@@ -53,6 +53,9 @@
 %\caption{}
 \end{figure}
 
+%2do
+% Volta phase-plate support
+
 \title{\prgname{The SIMPLE 3.0 Command-line Manual}}
 \date{Jan 11, 2019}
 \maketitle
@@ -247,13 +250,13 @@ module load gcc/4.9.1
 \end{Verbatim}
 The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
 
-\subsection{What is new in SIMPLE release 3.0?}
+\section{What is new in SIMPLE release 3.0?}
 The number of changes we have made to the suite compared to the previously released version (2.5) are too many to list here. If you have experience with previous SIMPLE releases, please have a quick browse through the manual. We promise you will catch-up quickly. Most (but not all) of the algorithms implemented in SIMPLE have been published (REFS). If you want to understand the theory, we recommend you read the papers. This document exclusively describes the command-line driven SIMPLE user interface and basic knowledge about EM and single-particle analysis is assumed. 
 
-\subsubsection{SIMPLE program naming convention}
+\subsection{SIMPLE program naming convention}
 The first big change you will notice is that all program names have changed to plain English descriptions of their functionality.  For example, \prgname{PRIME2D} that does simultaneous 2D alignment and clustering in a reference-free manner is now called \prgname{cluster2D}, the workflow for \textit{ab initio} 3D reconstruction from class averages is called \prgname{initial\_3Dmodel}, the 3D refinement application is called \prgname{refine3D} and the heterogeneity analysis tool is called \prgname{cluster3D}. In SIMPLE, we distinguish between \textit{distributed workflows} (executed with \texttt{simple\_distr\_exec}) and \textit{programs} (executed with \texttt{simple\_exec}). Programs perform smaller tasks (subjected exclusively to OpenMP-thread-based parallelisation), whereas distributed workflows are major image processing steps that typically require a multi-core workstation or a computer cluster. Finally, there is a third executable \texttt{simple\_private\_exec} that is used internally by SIMPLE, by the SIMPLE developers and by very advanced users that want to test experimental aspects of SIMPLE or use functionality to support building GUI applications on top of SIMPLE.
 
-\subsubsection{SIMPLE input parameter categorisation}
+\subsection{SIMPLE input parameter categorisation}
 Another noticeable change is they way the command-line instructions are provided when you execute a SIMPLE program or distributed workflow. For example, this is what is written in the terminal when executing \texttt{simple\_distr\_exec prg=refine3D}
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
@@ -322,7 +325,7 @@ simple_private_exec prg=write_ui_json
 
 \noindent{}This produces the file \texttt{simple\_user\_interface.json} describing all distributed workflows and programs in SIMPLE. This may be useful for building GUI applications on top of the SIMPLE back-end.
 
-\subsubsection{SIMPLE project execution model}
+\subsection{SIMPLE project execution model}
 
 The final major change that affects SIMPLE usage is the project-based execution model that encapsulates all meta-data in a single file and provides a complete and reversible history of the SIMPLE project. This is best illustrated by example. Below, we provide the commands executed for reconstructing HCN (EMPIAR-10081) to 3.4 A resolution.
 
@@ -349,9 +352,11 @@ projfile=X_execution_dir/project_file.simple
 \end{Verbatim}
 
 \noindent{}If desired, it is also possible to turn off the execution directory generation and run the process straight in the current working directory. This is done by giving
+
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 mkdir=no
 \end{Verbatim}
+
 \noindent{}on the command line. In a realistic situation, you would have used \prgname{cleanup2D} in replacement of \prgname{cluster2D} to remove junk and identify good particles. If you have a GUI running on top of the SIMPLE back-end you would then like to report any selections made in the GUI to the project file. Below, we describe how to do this. This data set was already cleaned with RELION, so we proceed using all class averages for initial 3D model production.
 
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
@@ -374,7 +379,7 @@ ls
 
 \noindent{}and it is possible to go back to any point in the project history to re-run a job with different parameters or try a different algorithm for the task. Now, let's look closer at the project file.
 
-\subsubsection{Structure, interrogation and manipulation of the binary project file}
+\subsection{Structure, interrogation and manipulation of the binary project file}
 In SIMPLE v3.0 we have implemented an abstract data type called sp\_project that manages all meta-data generated throughout a single-particle analysis project. The multi-segment binary project file is simply a mirror of this data type on disk. Segments 1-10 are reserved  for simple program outputs, orientations and files. Currently implemented segments are
 
 \begin{enumerate}
@@ -471,11 +476,6 @@ vol=../4_refine3D/recvol_state01_iter015.mrc imgkind=vol box=256.000000 smpd=1.2
 
 \noindent{}\prgname{cluster2D} provided two critical outputs: a file of Fourier Ring Correlations (\texttt{frcs}) and a stack of class averages (\texttt{stk}). \prgname{initial\_3Dmodel} provided one volume output. Finally, \prgname{refine3D} provided three outputs: Fourier Shell Correlations (\texttt{fsc}) and two volumes. 
 
-
-
-% Volta phase-plate support
-
-
 \section{File formats}
 
 \subsection{Image file formats}
@@ -561,7 +561,7 @@ To obtain a description of the what command line options are available, execute
 simple_distr_exec prg=cluster2D
 \end{Verbatim}
 
-\subsection{Categorisation and description of SIMPLE distributed workflows}
+\subsection{SIMPLE distributed workflows, categorisation and description}
 
 \subsubsection{PRE-PROCESSING WORKFLOWS}
 \begin{itemize}
@@ -611,7 +611,7 @@ simple_distr_exec prg=cluster2D
 \item[--] \prgname{scale\_project} is a distributed workflow for re-scaling MRC \& SPIDER stacks part of project specification
 \end{itemize}
 
-\subsection{Categorisation and description of SIMPLE programs}
+\subsection{SIMPLE programs, categorisation and description of }
 
 \subsubsection{PROJECT MANAGEMENT PROGRAMS}
 \begin{itemize}
@@ -668,26 +668,1541 @@ simple_distr_exec prg=cluster2D
 
 \subsubsection{PRINT INFO PROGRAMS}
 \begin{itemize}
-\item[--] \prgname{info\_image}
-\item[--] \prgname{info\_stktab}
-\item[--] \prgname{print\_fsc}
-\item[--] \prgname{print\_frcs}
-\item[--] \prgname{print\_magic\_boxes}
+\item[--] \prgname{info\_image} is a program for printing header information in MRC and SPIDER stacks and volumes
+\item[--] \prgname{info\_stktab} is a program for printing information about stktab (list of stacks)
+\item[--] \prgname{print\_fsc} is a program for printing the binary FSC files produced by \prgname{refine3D}
+\item[--] \prgname{print\_magic\_boxes} is a program for printing magic box sizes (fast FFT)
 \end{itemize}
 
 \subsubsection{SIMULATOR PROGRAMS}
 \begin{itemize}
-\item[--] \prgname{simulate\_noise}
-\item[--] \prgname{simulate\_particles}
-\item[--] \prgname{simulate\_movie}
-\item[--] \prgname{simulate\_subtomogram}
+\item[--] \prgname{simulate\_noise} is a program for generating pure noise images
+\item[--] \prgname{simulate\_particles} is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20\% of the total noise is added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed before the remaining 80\% of the noise (white noise) is added
+\item[--] \prgname{simulate\_movie} is a program for crude simulation of a DDD movie. Input is a set of projection images to place. Movie frames are then generated related by randomly shifting the base image and applying noise
+\item[--] \prgname{simulate\_subtomogram} is a program for crude simulation of a subtomogram
 \end{itemize}
 
 \subsubsection{SYSTEM INTERACTION PROGRAMS}
 \begin{itemize}
-\item[--] \prgname{mkdir}
+\item[--] \prgname{mkdir} is a program for making an automatically numbered directory
 \end{itemize}
 
+\section{Command line instructions for SIMPLE programs and distributed workflows in alphabetical order}
+
+\subsection{center}
+\label{center}
+\prgname{center} is a program for centering a volume and mapping the shift parameters back to the particle images, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=center key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = Volume; input volume e.g. vol.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+oritab  = Orientation and CTF parameter file; .simple|.txt parameter file
+outfile = Output orientation and CTF parameter file; .simple|.txt parameter file
++underline[FILTER CONTROLS]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cleanup2D}
+\label{cleanup2D}
+\prgname{cleanup2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm suitable for the first pass of cleanup after picking, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cleanup2D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[SEARCH CONTROLS]
++textbf[ncls        = Number of 2D clusters; # 2D clusters]
+center      = Center class averages; (yes|no){no}
+maxits      = Max iterations; Max # iterations
+objfun      = Objective function; (cc|ccres){cc}
+update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp    = High-pass limit; high-pass limit in Angstroms
+lp    = Static low-pass limit; low-pass limit in Angstroms
++underline[MASK CONTROLS]
+msk = Mask radius; mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cluster2D}
+\label{cluster2D}
+\prgname{cluster2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cluster2D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+refs = Initial references; xxx.mrc file with references
++underline[SEARCH CONTROLS]
++textbf[ncls        = Number of 2D clusters; # 2D clusters]
+autoscale   = Automatic down-scaling; (yes|no){yes}
+bfac        = Correlation B-factor; B-factor in Angstroms^2(>0.0){200}
+center      = Center class averages; (yes|no){yes}
+frac        = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+maxits      = Max iterations; Max # iterations
+nrestarts   = Number of restarts; # restarts{1}
+objfun      = Objective function; (cc|ccres){cc}
+refine      = Refinement mode; (snhc|greedy){snhc}
+startit     = First iteration; start iterations from here
+trs         = Maximum translational shift; max shift per iteration in pixels{5}
+update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp      = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp         = High-pass limit; high-pass limit in Angstroms
+locres     = Iterative local resolution estimation and filtering in last phase; (yes|no){no}
+lp         = Static low-pass limit; low-pass limit in Angstroms
+lpstart    = Initial low-pass limit; initial low-pass limit in Angstroms
+lpstop     = Final low-pass limit; final low-pass limit in Angstroms
+match_filt = Matched filter; (yes|no){yes}
+shellw     = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cluster2D\_stream}
+\label{cluster2D_stream}
+\prgname{cluster2D\_stream} is a distributed workflow implementing cluster2D in streaming mode, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cluster2D_stream key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[dir_target = Target directory; e.g. 1_preprocess_stream]
++underline[SEARCH CONTROLS]
++textbf[ncls           = Number of 2D clusters; # 2D clusters]
++textbf[ncls_start     = Starting number of clusters; initial # clusters]
++textbf[nptcls_per_cls = Particles per cluster; # particles per cluster]
+autoscale      = Automatic down-scaling; (yes|no){yes}
+center         = Center class averages; (yes|no){no}
+lpthresh       = Resolution rejection threshold; Resolution rejection threshold in angstroms{30}
+objfun         = Objective function; (cc|ccres){cc}
+remap_cls      = Whether to remap 2D clusters; (yes|no){no}
++underline[FILTER CONTROLS]
+cenlp      = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp         = High-pass limit; high-pass limit in Angstroms
+lp         = Static low-pass limit; low-pass limit in Angstroms
+match_filt = Matched filter; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cluster3D}
+\label{cluster3D}
+\prgname{cluster3D} is a distributed workflow for heterogeneity analysis by 3D clustering, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cluster3D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[nstates = Number of states; # states to separate]
++underline[SEARCH CONTROLS]
++textbf[pgrp    = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+frac    = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+maxits  = Max iterations; Max # iterations
+neigh   = Neighbourhood refinement; (yes|no){no}
+nspace  = Number of projection directions; # projections
+objfun  = Objective function; (cc|ccres|euclid){cc}
+refine  = Refinement mode; (cluster|clustersym){cluster}
+startit = First iteration; start iterations from here
++underline[FILTER CONTROLS]
+eo         = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+hp         = High-pass limit; high-pass limit in Angstroms
+lp         = Static low-pass limit; low-pass limit in Angstroms
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
+lpstart    = Initial low-pass limit; low-pass limit in Angstroms
+lpstop     = Low-pass limit for frequency limited refinement; low-pass limit in Angstroms
++underline[MASK CONTROLS]
++textbf[msk      = Mask radius; mask radius in pixels]
+focusmsk = Mask radius in focused refinement; focused mask radius in pixels
+inner    = Inner mask radius; inner mask radius in pixels
+mskfile  = Input mask file; e.g. automask.mrc from postprocess
+width    = Falloff of inner mask; # pixels cosine edge{10}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cluster3D\_refine}
+\label{cluster3D_refine}
+\prgname{cluster3D\_refine} is a distributed workflow based on probabilistic projection matching for refinement of 3D heterogeneity analysis by cluster3D, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=cluster3D_refine key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+msklist = List of mask files; e.g. mskfiles.txt
+vollist = List of reference volumes files; e.g. refvols.txt
++underline[PARAMETER INPUT/OUTPUT]
+state = State to refine; give state index
++underline[SEARCH CONTROLS]
++textbf[pgrp        = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+center      = Center reference volume(s); (yes|no){yes}
+frac        = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+maxits      = Max iterations; Max # iterations
+neigh       = Neighbourhood refinement; (yes|no){no}
+nnn         = Number of nearest neighbours; # projection neighbours{10% of search space}
+nspace      = Number of projection directions; # projections
+objfun      = Objective function; (cc|ccres|euclid){cc}
+startit     = First iteration; start iterations from here
+trs         = Maximum translational shift; max shift per iteration in pixels{5}
+update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp      = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+eo         = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+hp         = High-pass limit; high-pass limit in Angstroms
+lp         = Static low-pass limit; low-pass limit in Angstroms
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
+lpstop     = Low-pass limit for frequency limited refinement; low-pass limit in Angstroms
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
+width = Falloff of inner mask; # pixels cosine edge{10}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{cluster\_cavgs}
+\label{cluster_cavgs}
+\prgname{cluster\_cavgs} is a program for analyzing class averages with affinity propagation, in order to get a better understanding of the view distribution. The balance flag is used to apply a balancing restraint (on the class population). Adjust balance until you are satisfied
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=cluster_cavgs key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk = Stack of class averages; e.g. cavgs.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[SEARCH CONTROLS]
+balance = Max population for balance restraint; max # cluster members
+objfun  = Objective function; (cc|ccres|euclid){cc}
++underline[FILTER CONTROLS]
+hp = High-pass limit; high-pass limit in Angstroms
+lp = Low-pass limit; low-pass limit in Angstroms
++underline[MASK CONTROLS]
++textbf[msk = Mask radius; mask radius in pixels]
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{convert}
+\label{convert}
+\prgname{convert} is a program for converting between SPIDER and MRC formats, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=convert key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+outstk = Output stack name; e.g. outstk.mrc
+outvol = Output volume name; e.g. outvol.mrc
++underline[ALTERNATIVE INPUTS]
+stk  = Stack; input stack e.g. imgs.spi
+vol1 = Volume; input volume e.g. vol.spi
+\end{Verbatim}
+
+\subsection{ctf\_estimate}
+\label{ctf_estimate}
+\prgname{ctf\_estimate} is a distributed SIMPLE workflow for CTF parameter fitting, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=ctf_estimate key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+pspecsz = Size of power spectrum; in pixels
++underline[SEARCH CONTROLS]
+astigtol = Expected astigmatism; in microns{0.05}
+dfmax    = Expected maximum defocus; in microns{5.0}
+dfmin    = Expected minimum defocus; in microns{0.5}
+dfstep   = Defocus step size; in microns{0.05}
++underline[FILTER CONTROLS]
+hp = High-pass limit; high-pass limit in Angstroms
+lp = Low-pass limit; low-pass limit in Angstroms
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{ctfops}
+\label{ctfops}
+\prgname{ctfops} is a program for applying CTF to stacked images, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=ctfops key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+outstk = Output stack name; e.g. outstk.mrc
+stk    = Particle image stack; xxx.mrc file with particles
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd   = Sampling distance; pixel size in Angstroms]
+deftab = CTF parameter file; .simple|.txt parameter file
+neg    = Invert contrast; (yes|no){no}
+oritab = Orientation and CTF parameter file; .simple|.txt parameter file
++underline[FILTER CONTROLS]
++textbf[ctf  = CTF status; (yes|no|flip){no}]
+bfac = CTF B-factor; B-factor in Angstroms^2(>0.0){0}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{extract}
+\label{extract}
+\prgname{extract} is a program for extracting particle images from integrated movies, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=extract key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+dir_box = Box files directory; e.g. boxes/
++underline[PARAMETER INPUT/OUTPUT]
+box       = Box size; in pixels
+ctf       = Whether to extract particles with phases flipped; (flip|no){no}
+outside   = Extract outside boundaries; (yes|no){no}
+pcontrast = Input particle contrast; (black|white){black}
+\end{Verbatim}
+
+\subsection{export\_starproject}
+\label{export_starproject}
+\prgname{export\_starproject} is a program for exporting a SIMPLE project as a STAR-formatted EM project, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=export_starproject key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+starfile = STAR-formatted project filename for export; e.g. myproj.star
+startype = Export type for STAR project; e.g. micrographs or class2D
+\end{Verbatim}
+
+\subsection{filter}
+\label{filter}
+\prgname{filter} is a program for filtering stack/volume, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=filter key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+outstk = Output stack name; e.g. outstk.mrc
+outvol = Output volume name; e.g. outvol.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[ALTERNATIVE INPUTS]
+stk  = Stack to filter; e.g. refs.mrc
+vol1 = Volume to filter; e.g. vol.mrc file
++underline[FILTER CONTROLS]
+bfac        = B-factor of Gaussian low-/high-pass filter; B-factor in Angstroms^2{0}
+frcs        = Projection FRCs file; e.g. frcs.bin
+fsc         = FSC file; e.g. fsc_state01.bin file
+hp          = High-pass limit; high-pass limit in Angstroms
+lp          = Low-pass limit; low-pass limit in Angstroms
+phrand      = Phase randomization; (yes|no){no}
+real_filter = Real-space filter; (median|average|stdev|bman|NLmean|no){no}
+vol_filt    = Volume filter; e.g. aniso_optlp.mrc file
+width       = Cosine low-pass filter falloff; # pixels cosine edge
+winsz       = Half-window size; winsz in pixels
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{fsc}
+\label{fsc}
+\prgname{fsc} is a program for calculating the FSC between the two input volumes, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=fsc key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = Odd volume; vol1.mrc file]
++textbf[vol2 = Even volume; vol2.mrc file]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[MASK CONTROLS]
++textbf[msk     = Mask radius; mask radius in pixels]
+mskfile = Input mask file; e.g. automask.mrc from postprocess
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{gen\_pspecs\_and\_thumbs}
+\label{gen_pspecs_and_thumbs}
+\prgname{gen\_pspecs\_and\_thumbs} is a distributed workflow for generating power spectra and thumbnails for imported integrated movies, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=gen_pspecs_and_thumbs key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+pspecsz = Size of power spectrum; in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{info\_image}
+\label{info_image}
+\prgname{info\_image} is a program for printing header information in MRC and SPIDER stacks and volumes, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=info_image key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[fname = Name of image file; xxx.mrc file]
++underline[PARAMETER INPUT/OUTPUT]
+stats = Output statistics; (yes|no){no}
+vis   = Visualize image; (yes|no){no}
+\end{Verbatim}
+
+\subsection{info\_stktab}
+\label{info_stktab}
+\prgname{info\_stktab} is a program for printing information about stktab (list of stacks), executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=info_stktab key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stktab = List of per-micrograph particle stacks; stktab.txt file containing file names]
+\end{Verbatim}
+
+\subsection{initial\_3Dmodel}
+\label{initial_3Dmodel}
+\prgname{initial\_3Dmodel} is a distributed workflow for generating an initial 3D model from class averages obtained with cluster2D, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=initial_3Dmodel key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[SEARCH CONTROLS]
++textbf[pgrp        = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+autoscale   = Automatic down-scaling; (yes|no){yes}
+center      = Center reference volume(s); (yes|no){yes}
+frac        = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+nrestarts   = Number of restarts; # restarts{1}
+pgrp_start  = Initial point-group symmetry; point-group(cn|dn|t|o|i){c1}
+update_frac = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+eo      = Gold-standard FSC for filtering and resolution estimation; (yes|no){yes}
+hp      = High-pass limit; high-pass limit in Angstroms
+locres  = Use class averages filtered according to local resolution estimation; (yes|no){no}
+lpstart = Initial low-pass limit; low-pass limit in Angstroms
+lpstop  = Final low-pass limit; low-pass limit in Angstroms
+shellw  = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
+width = Falloff of inner mask; # pixels cosine edge
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{import\_boxes}
+\label{import_boxes}
+\prgname{import\_boxes} is a program for importing EMAN1.9 box coordinates to the project. The *box (text) files should be listed in boxtab, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=import_boxes key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[boxtab = List of box files; e.g. boxes.txt]
+\end{Verbatim}
+
+\subsection{import\_cavgs}
+\label{import_cavgs}
+\prgname{import\_cavgs} is a program for importing class averages movies to the project, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=import_cavgs key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk = Stack of class averages; e.g. cavgs.mrcs]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
+\end{Verbatim}
+
+\subsection{import\_movies}
+\label{import_movies}
+\prgname{import\_movies} is a program for importing DDD movies to the project. The movies can be located in any read-only location accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected and integrated. Box files (in EMAN
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=import_movies key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[filetab = List of movie files; e.g. movies.txt]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[cs         = Spherical aberration; in mm{2.7}]
++textbf[ctf        = CTF status; (yes|no|flip){yes}]
++textbf[fraca      = Amplitude contrast fraction; fraction{0.1}]
++textbf[kv         = Acceleration voltage; in kV{300}]
++textbf[smpd       = Sampling distance; pixel size in Angstroms]
+boxtab     = List of box files; e.g. boxes.txt
+deftab     = Pre-determined per-micrograph CTF parameters; e.g. deftab.txt
+phaseplate = Phase-plate images; (yes|no){no}
+\end{Verbatim}
+
+\subsection{import\_particles}
+\label{import_particles}
+\prgname{import\_particles} is a program for importing extracted particle images to the project, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=import_particles key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[cs           = Spherical aberration; in mm{2.7}]
++textbf[ctf          = CTF status; (yes|no|flip){yes}]
++textbf[fraca        = Amplitude contrast fraction; fraction{0.1}]
++textbf[kv           = Acceleration voltage; in kV{300}]
++textbf[smpd         = Sampling distance; pixel size in Angstroms]
+angastunit   = Angle of astigmatism unit; (radians|degrees){degrees}
+deftab       = CTF parameter file; .simple|.txt parameter file
+dfunit       = Underfocus unit; (A|microns){microns}
+oritab       = Orientation and CTF parameter file; .simple|.txt parameter file
+phaseplate   = Phase-plate images; (yes|no){no}
+phshiftunit  = Phase-shift unit; (radians|degrees){radians}
+plaintexttab = Plain text file of input parameters; e.g. params.txt
++underline[ALTERNATIVE INPUTS]
+stk    = Stack of particles; e.g. stk.mrcs
+stktab = List of per-micrograph particle stacks; per-micrograph stack list; e.g. stktab.txt
+\end{Verbatim}
+
+\subsection{import\_starproject}
+\label{import_starproject}
+\prgname{import\_starproject} is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=import_starproject key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[ctf          = CTF status; (yes|no|flip){yes}]
++textbf[smpd         = Sampling distance; pixel size in Angstroms]
++textbf[starfile     = STAR-formatted text file of input parameters; e.g. params.star]
++textbf[startype     = Export type for STAR project; e.g. m|micrographs or ctf|ctf_estimation or p|ptcl|particles or cavgs|classaverages]
+boxtab       = List of box files; e.g. boxes.txt
+cs           = Spherical aberration; in mm{2.7}
+deftab       = CTF parameter file; .simple|.txt parameter file
+dose_rate    = Dose rate; in e/Ang^2/sec
+exp_time     = Exposure time; in seconds
+fraca        = Amplitude contrast fraction; fraction{0.1}
+kv           = Acceleration voltage; in kV{300}
+oritab       = Orientation and CTF parameter file; .simple|.txt parameter file
+phaseplate   = Phase-plate images; (yes|no){no}
+plaintexttab = Plain text file of input parameters; e.g. params.txt
+scale        = Down-scaling factor(0-1); (0-1)
+star_datadir = Pathname of STAR data/image files; e.g. Micrographs/
++underline[ALTERNATIVE INPUTS]
+stk    = Stack of particles; e.g. stk.mrcs
+stktab = List of per-micrograph particle stacks; per-micrograph stack list; e.g. stktab.txt
+\end{Verbatim}
+
+\subsection{local\_resolution}
+\label{local_resolution}
+\prgname{local\_resolution} is a program for estimating local resolution based on neighbourhood correlation analysis in e/o maps, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=local_resolution key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = Odd volume; vol1.mrc file]
++textbf[vol2 = Even volume; vol2.mrc file]
+vol3 = Volume to filter; vol3.mrc file
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[FILTER CONTROLS]
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
++underline[MASK CONTROLS]
++textbf[msk     = Mask radius; mask radius in pixels]
+mskfile = Input mask file; e.g. automask.mrc from postprocess
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{local\_resolution2D}
+\label{local_resolution2D}
+\prgname{local\_resolution2D} is a program for estimating local resolution based on neighbourhood correlation analysis in e/o cavgs, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=local_resolution2D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk  = Odd cavgs; cavgs_odd.mrc file]
++textbf[stk2 = Even cavgs; cavgs_even.mrc file]
+stk3 = Cavgs to filter; cavgs2filter.mrc file
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[FILTER CONTROLS]
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
++underline[MASK CONTROLS]
++textbf[msk = Mask radius; mask radius in pixels]
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{make\_cavgs}
+\label{make_cavgs}
+\prgname{make\_cavgs} is a distributed workflow for generating class averages or initial random references for cluster2D execution, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=make_cavgs key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+refs = Output 2D references; xxx.mrc file with references
++underline[PARAMETER INPUT/OUTPUT]
++textbf[ncls      = Number of 2D clusters; # 2D clusters]
+mul       = Shift multiplication factor; 1/scale in pixels{1}
+remap_cls = Whether to remap 2D clusters; (yes|no){no}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{make\_oris}
+\label{make_oris}
+\prgname{make\_oris} is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated. If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection direc
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=make_oris key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[nptcls    = Number of per-particle orientations; # per-ptcl oris]
+angerr    = Rotation angle error half-width; rotation error in degrees
+even      = Generate even projections; (yes|no){no}
+ncls      = Number of random class labels; # classes
+ndiscrete = Number of discrete projection directions; # discrete projs
+nstates   = Number of random state labels; # states
+oritype   = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+outfile   = Output orientation and CTF parameter file; .simple|.txt parameter file
+pgrp      = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+sherr     = Shift error half-width; shift error in pixels
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{mask}
+\label{mask}
+\prgname{mask} is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft falloff, set msk to the radius in pixels, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=mask key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+oritab  = Orientation and CTF parameter file; .simple|.txt parameter file
+outfile = Output orientation and CTF parameter file; .simple|.txt parameter file
++underline[ALTERNATIVE INPUTS]
+stk  = Particle image stack; xxx.mrc file with particles
+vol1 = Volume; input volume e.g. vol.mrc
++underline[SEARCH CONTROLS]
+center = Center input volume; (yes|no){yes}
++underline[FILTER CONTROLS]
+amsklp = Low-pass limit for envelope mask generation; low-pass limit in Angstroms
++underline[MASK CONTROLS]
+edge        = Envelope mask soft edge; # pixels cosine edge
+inner       = Inner mask radius; inner mask radius in pixels
+msk         = Mask radius; mask radius in pixels
+mskfile     = Input mask file; e.g. automask.mrc from postprocess
+msktype     = Mask type; (soft|hard){soft}
+mw          = Molecular weight; in kDa
+outer       = Outer mask radius; outer mask radius in pixels
+pdbfile     = PDB for 3D envelope masking; e.g. molecule.pdb
+taper_edges = Taper edges; (yes|no){no}
+width       = Inner mask falloff; # pixels cosine edge
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{mkdir}
+\label{mkdir}
+\prgname{mkdir} is a program for making an automatically numbered directory, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=mkdir key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[dir = Name of directory to create; e.g. X_dir/]
+\end{Verbatim}
+
+\subsection{motion\_correct}
+\label{motion_correct}
+\prgname{motion\_correct} is a distributed workflow for motion correction of movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=motion_correct key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+gainref = Gain reference; input image e.g. gainref.mrc
++underline[PARAMETER INPUT/OUTPUT]
+dose_rate = Dose rate; in e/Ang^2/sec
+exp_time  = Exposure time; in seconds
+fbody     = Template output micrograph name; e.g. mic_
+pspecsz   = Size of power spectrum; in pixels
+scale     = Down-scaling factor(0-1); (0-1)
++underline[SEARCH CONTROLS]
+fromf      = First frame to include in subsum; give index
+nframesgrp = Number of contigous frames to sum; {0}
+nsig       = Number of sigmas for outlier removal; # standard deviations{6}
+startit    = First iteration; start iterations from here
+tof        = Last frame to include in subsum; give index
+trs        = Maximum translational shift; max shift per iteration in pixels{5}
++underline[FILTER CONTROLS]
+lpstart = Initial low-pass limit; in Angstroms
+lpstop  = Final low-pass limit; in Angstroms
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{motion\_correct\_tomo}
+\label{motion_correct_tomo}
+\prgname{motion\_correct\_tomo} is a distributed workflow for motion correction of tomography movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous op
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=motion_correct_tomo key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[exp_doc    = .txt file with exp_time and dose_rate per tomogram; e.g. exp_doc.txt]
++textbf[smpd       = Sampling distance; pixel size in Angstroms]
++textbf[tomoseries = .txt filetable of filetables of tomograms; e.g. filetab_of_filetabs.txt]
+dir        = Output directory; e.g. motion_correct/
+numlen     = Length of number string; # characters
+pspecsz    = Size of power spectrum; in pixels
+scale      = Down-scaling factor(0-1); (0-1)
++underline[SEARCH CONTROLS]
+nframesgrp = Number of contigous frames to sum; {0}
+nsig       = Number of sigmas for outlier removal; # standard deviations{6}
+startit    = First iteration; start iterations from here
+trs        = Maximum translational shift; max shift per iteration in pixels{5}
++underline[FILTER CONTROLS]
+kv      = Acceleration voltage; in kV{300}
+lpstart = Initial low-pass limit; in Angstroms
+lpstop  = Final low-pass limit; in Angstroms
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{new\_project}
+\label{new_project}
+\prgname{new\_project} is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed and shared-memory systems and for unified meta-data management. This program creates a directory named projname and a file projn
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=new_project key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+user_email = Your e-mail address; e.g. myname@uni.edu
++underline[ALTERNATIVE INPUTS]
+dir      = Project directory; give dir
+projname = Project name; e.g. to create ./myproject/myproject.simple
++underline[COMPUTER CONTROLS]
+job_memory_per_task = Memory per part; MB per part{16000}
+qsys_name           = Queue system kind; (local|slurm|pbs)
+qsys_partition      = Name of SLURM/PBS partition; give part name
+qsys_qos            = Schedule priority; give priority
+qsys_reservation    = Name of reserved partition; give yourpart
+time_per_image      = Time per image; in seconds{100}
+user_account        = User account name in SLURM/PBS; e.g. Account084
+user_project        = User project name in SLURM/PBS; e.g. Project001
+\end{Verbatim}
+
+\subsection{normalize}
+\label{normalize}
+\prgname{normalize} is a program for normalization of MRC or SPIDER stacks and volumes, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=normalize key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd       = Sampling distance; pixel size in Angstroms]
+noise_norm = Noise normalize; (yes|no){no}
+norm       = Normalize; (yes|no){no}
+shell_norm = Power whitening; (yes|no){no}
++underline[ALTERNATIVE INPUTS]
+stk  = Stack to normalize; e.g. imgs.mrc
+vol1 = Volume to normalize; e.g. vol.mrc
++underline[MASK CONTROLS]
++textbf[msk = Mask radius; mask radius in pixels]
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{orisops}
+\label{orisops}
+\prgname{orisops} is a program for modifying SIMPLE orientation/parameter files. If errify=yes, uniform random angular errors, and uniform origin shift errors, and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned. If mirr=2d, then
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=orisops key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[oritab    = Orientation and CTF parameter file; .simple|.txt parameter file]
+angerr    = Rotation angle error half-width; rotation error in degrees
+ctf       = CTF status; (yes|no|flip){no}
+dferr     = Underfocus error half-width; defocus error in microns
+e1        = Rotation along Phi; in degrees
+e2        = Rotation along Theta; in degrees
+e3        = Rotation along Psi; in degrees
+errify    = Errify input orientations/CTF parameters; (yes|no){no}
+mirr      = Mirror orientations; (2d|3d|no){no}
+mul       = Shift multiplication factor; 1/scale in pixels{1}
+ndiscrete = Number of discrete projection directions; # discrete projs
+nstates   = Number of random state labels; # states
+oritype   = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+outfile   = Output orientation and CTF parameter file; .simple|.txt parameter file
+pgrp      = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+sherr     = Shift error half-width; shift error in pixels
+state     = State to modify; give state index
+symrnd    = Randomize over subgroubs of point-group; (yes|no){no}
+zero      = Zero shifts; (yes|no){no}
+\end{Verbatim}
+
+\subsection{oristats}
+\label{oristats}
+\prgname{oristats} is a program for analyzing SIMPLE orientation/parameter files. If two orientation tables (oritab and oritab2) are inputted, statistics of the distances between the orientations in the two documents are provided, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=oristats key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[oritab    = Orientation and CTF parameter file; .simple|.txt parameter file]
+classtats = Class statistics; (yes|no){no}
+ctfstats  = CTF statistics; (yes|no){no}
+nspace    = Number of projection directions; # projections
+oritab2   = 2nd orientation and CTF parameter file; .simple|.txt parameter file
+oritype   = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+pgrp      = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+projstats = Projection statistics; (yes|no){no}
+trsstats  = Shift statistics; (yes|no){no}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{pick}
+\label{pick}
+\prgname{pick} is a distributed workflow for template-based particle picking, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=pick key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+dir       = Output directory; e.g. pick/
+pcontrast = Input particle contrast; (black|white){black}
++underline[SEARCH CONTROLS]
+ndev  = # of sigmas for clustering; {2}
+pgrp  = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+thres = Distance threshold; in pixels
++underline[FILTER CONTROLS]
+lp = Low-pass limit; in Angstroms{20}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{pick\_extract\_stream}
+\label{pick_extract_stream}
+\prgname{pick\_extract\_stream} is a distributed workflow for template-based particle picking and extraction in streaming mode, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=pick_extract_stream key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[dir_target = Target directory; e.g. 1_preprocess_stream]
++underline[PARAMETER INPUT/OUTPUT]
+box_extract = Box size; in pixels
+outside     = Extract outside boundaries; (yes|no){no}
+pcontrast   = Input particle contrast; (black|white){black}
++underline[SEARCH CONTROLS]
+ndev  = # of sigmas for clustering; {2}
+pgrp  = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+thres = Distance threshold; in pixels
++underline[FILTER CONTROLS]
+lp = Low-pass limit; in Angstroms{20}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{postprocess}
+\label{postprocess}
+\prgname{postprocess} is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=postprocess key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+state = State to postprocess; Input state{1}
++underline[FILTER CONTROLS]
+amsklp = Low-pass limit for envelope mask generation; low-pass limit in Angstroms
+bfac   = B-factor for sharpening; B-factor in Angstroms^2
+lp     = Low-pass limit for map filtering; low-pass limit in Angstroms
+mirr   = Perform mirroring; (no|x|y){no}
++underline[MASK CONTROLS]
++textbf[msk      = Mask radius; mask radius in pixels]
+automsk  = Perform envelope masking; (yes|no){no}
+binwidth = Envelope binary layers width; Molecular envelope binary layers width in pixels{1}
+edge     = Envelope mask soft edge; # pixels cosine edge
+inner    = Inner mask radius; inner mask radius in pixels
+mskfile  = Input mask file; e.g. automask.mrc from postprocess
+mw       = Molecular weight; in kDa
+thres    = Volume threshold; Volume threshold
+width    = Inner mask falloff; # pixels cosine edge
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{preprocess}
+\label{preprocess}
+\prgname{preprocess} is a distributed workflow that executes motion\_correct, ctf\_estimate and pick in sequence, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=preprocess key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+gainref = Gain reference; input image e.g. gainref.mrc
++underline[PARAMETER INPUT/OUTPUT]
+box_extract = Box size on extraction; in pixels
+dose_rate   = Dose rate; in e/Ang^2/sec
+exp_time    = Exposure time; in seconds
+fbody       = Template output micrograph name; e.g. mic_
+numlen      = Length of number string; # characters
+pcontrast   = Input particle contrast; (black|white){black}
+pspecsz     = Size of power spectrum; in pixels
+scale       = Down-scaling factor(0-1); (0-1)
++underline[SEARCH CONTROLS]
+astigtol    = Expected astigmatism; in microns{0.05}
+dfmax       = Expected maximum defocus; in microns{5.0}
+dfmin       = Expected minimum defocus; in microns{0.5}
+dfstep      = Defocus step size; in microns{0.05}
+fromf       = First frame to include in subsum; give index
+ndev        = # of sigmas for picking clustering; {2}
+nframesgrp  = Number of contigous frames to sum; {0}
+nsig        = Number of sigmas for outlier removal; # standard deviations{6}
+pgrp        = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+rm_outliers = Remove micrograph image outliers for picking; (yes|no){yes}
+startit     = First iteration; start iterations from here
+thres       = Picking distance threshold; in pixels
+tof         = Last frame to include in subsum; give index
+trs         = Maximum translational shift; max shift per iteration in pixels{5}
++underline[FILTER CONTROLS]
+hp_ctf_estimate = High-pass limit for CTF parameter estimation; in Angstroms{30}
+lpstart         = Initial low-pass limit for movie alignment; in Angstroms{15}
+lpstop          = Final low-pass limit for movie alignment; in Angstroms{8}
+lp_ctf_estimate = Low-pass limit for CTF parameter estimation; in Angstroms{5}
+lp_pick         = Low-pass limit for picking; in Angstroms{20}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{preprocess\_stream}
+\label{preprocess_stream}
+\prgname{preprocess\_stream} is a distributed workflow that executes motion\_correct, ctf\_estimate and pick in streaming mode as the microscope collects the data, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=preprocess_stream key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[dir_movies = Input movies directory; e.g. data/]
+gainref    = Gain reference; input image e.g. gainref.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[cs          = Spherical aberration; in mm{2.7}]
++textbf[fraca       = Amplitude contrast fraction; fraction{0.1}]
++textbf[kv          = Acceleration voltage; in kV{300}]
++textbf[smpd        = Sampling distance; pixel size in Angstroms]
+box_extract = Box size on extraction; in pixels
+dose_rate   = Dose rate; in e/Ang^2/sec
+exp_time    = Exposure time; in seconds
+fbody       = Template output micrograph name; e.g. mic_
+pcontrast   = Input particle contrast; (black|white){black}
+pspecsz     = Size of power spectrum; in pixels
+scale       = Down-scaling factor(0-1); (0-1)
++underline[SEARCH CONTROLS]
+astigtol    = Expected astigmatism; in microns{0.05}
+dfmax       = Expected maximum defocus; in microns{5.0}
+dfmin       = Expected minimum defocus; in microns{0.5}
+dfstep      = Defocus step size; in microns{0.05}
+fromf       = First frame to include in subsum; give index
+ndev        = # of sigmas for picking clustering; {2}
+nframesgrp  = Number of contigous frames to sum; {0}
+nsig        = Number of sigmas for outlier removal; # standard deviations{6}
+pgrp        = Point-group symmetry; point-group(cn|dn|t|o|i){c1}
+rm_outliers = Remove micrograph image outliers for picking; (yes|no){yes}
+startit     = First iteration; start iterations from here
+thres       = Picking distance threshold; in pixels
+tof         = Last frame to include in subsum; give index
+trs         = Maximum translational shift; max shift per iteration in pixels{5}
++underline[FILTER CONTROLS]
+hp_ctf_estimate = High-pass limit for CTF parameter estimation; in Angstroms{30}
+lpstart         = Initial low-pass limit for movie alignment; in Angstroms{15}
+lpstop          = Final low-pass limit for movie alignment; in Angstroms{8}
+lp_ctf_estimate = Low-pass limit for CTF parameter estimation; in Angstroms{5}
+lp_pick         = Low-pass limit for picking; in Angstroms{20}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{print\_fsc}
+\label{print_fsc}
+\prgname{print\_fsc} is a program for printing the binary FSC files produced by REFINE3D, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=print_fsc key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[box  = Square image size; # pixels of box]
++textbf[fsc  = FSC file; input binary file e.g. fsc_state01.bin]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
+\end{Verbatim}
+
+\subsection{print\_magic\_boxes}
+\label{print_magic_boxes}
+\prgname{print\_magic\_boxes} is a program for printing magic box sizes (fast FFT), executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=print_magic_boxes key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[box     = Square image size; # pixels of box]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+moldiam = Molecular diameter; give # pixels of diameter
+\end{Verbatim}
+
+\subsection{print\_project\_info}
+\label{print_project_info}
+\prgname{print\_project\_info} is a program prints information about a *.simple project file, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=print_project_info key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
+\end{Verbatim}
+
+\subsection{print\_project\_field}
+\label{print_project_field}
+\prgname{print\_project\_field} is a program for printing an orientation field in the project data structure (segment in *.simple project file), executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=print_project_field key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}]
+\end{Verbatim}
+
+\subsection{reproject}
+\label{reproject}
+\prgname{reproject} is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections are generated by extracting central sections from the Fourie
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=reproject key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1   = Volume; input volume e.g. vol.mrc]
+outstk = Output stack name; e.g. outstk.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd   = Sampling distance; pixel size in Angstroms]
+neg    = Invert contrast; (yes|no){no}
+oritab = Orientation and CTF parameter file; .simple|.txt parameter file
++underline[SEARCH CONTROLS]
++textbf[pgrp   = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+nspace = Number of projection directions; # projections
++underline[MASK CONTROLS]
+msk = Mask radius; mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{reconstruct3D}
+\label{reconstruct3D}
+\prgname{reconstruct3D} is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel, executed by simple\_distr\_e
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=reconstruct3D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[SEARCH CONTROLS]
++textbf[pgrp = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+frac = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
++underline[FILTER CONTROLS]
+eo     = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+shellw = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk     = Mask radius; mask radius in pixels]
+mskfile = Input mask file; e.g. automask.mrc from postprocess
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{reextract}
+\label{reextract}
+\prgname{reextract} is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=reextract key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+dir_box = Box files directory; e.g. boxes/
++underline[PARAMETER INPUT/OUTPUT]
+box       = Box size; in pixels
+oritype   = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+outside   = Extract outside boundaries; (yes|no){no}
+pcontrast = Input particle contrast; (black|white){black}
+\end{Verbatim}
+
+\subsection{refine3D}
+\label{refine3D}
+\prgname{refine3D} is a distributed workflow for 3D refinement based on probabilistic projection matching, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=refine3D key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+vol1 = Reference volume; input volume e.g. vol.mrc
++underline[SEARCH CONTROLS]
++textbf[pgrp         = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+center       = Center reference volume(s); (yes|no){yes}
+continue     = Continue previous refinement; (yes|no){no}
+frac         = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+maxits       = Max iterations; Max # iterations
+neigh        = Neighbourhood refinement; (yes|no){no}
+nnn          = Number of nearest neighbours; # projection neighbours{10% of search space}
+nrestarts    = Number of restarts; # restarts{1}
+nspace       = Number of projection directions; # projections
+nstates      = Number of states; # states to reconstruct
+objfun       = Objective function; (cc|ccres|euclid){cc}
+refine       = Refinement mode; (snhc|single|multi|greedy_single|cont_single|greedy_multi|cluster|clustersym){single}
+sigma2_fudge = Sigma2-fudge factor; {100.}
+trs          = Maximum translational shift; max shift per iteration in pixels{5}
+update_frac  = Fractional update per iteration; update this fraction per iter(0.1-0.5){1.0}
++underline[FILTER CONTROLS]
+cenlp      = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+eo         = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+hp         = High-pass limit; high-pass limit in Angstroms
+lp         = Static low-pass limit; low-pass limit in Angstroms
+lplim_crit = Low-pass limit FSC criterion; low-pass FSC criterion(0.143-0.5){0.3}
+lpstop     = Low-pass limit for frequency limited refinement; low-pass limit in Angstroms
+shellw     = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk      = Mask radius; mask radius in pixels]
+focusmsk = Mask radius in focused refinement; focused mask radius in pixels
+inner    = Inner mask radius; inner mask radius in pixels
+mskfile  = Input mask file; e.g. automask.mrc from postprocess
+width    = Falloff of inner mask; # pixels cosine edge{10}
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{refine3D\_init}
+\label{refine3D_init}
+\prgname{refine3D\_init} is a distributed workflow for generating a random initial 3D model for initialisation of refine3D, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=refine3D_init key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[SEARCH CONTROLS]
++textbf[pgrp   = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+nran   = Number of random samples; # random samples
+nspace = Number of projection directions; # projections
++underline[FILTER CONTROLS]
+eo     = Gold-standard FSC for filtering and resolution estimation; (yes|no){no}
+shellw = B-factor weighted reconstruction; (yes|no){no}
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{report\_selection}
+\label{report_selection}
+\prgname{report\_selection} is a program for reporting external (GUI) selections to the SIMPLE project, executed by simple\_distr\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=report_selection key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[infile  = File with selection state (0/1) flags; give .txt selection file]
+oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+\end{Verbatim}
+
+\subsection{scale}
+\label{scale}
+\prgname{scale} is a program for re-scaling, clipping and padding MRC \& SPIDER stacks and volumes, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=scale key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+clip    = Clipped box size; in pixels
+newbox  = Scaled box size; new box in pixels
+outstk  = Output stack name; e.g. outstk.mrc
+outstk2 = Second output stack name; e.g. outstk2.mrc
+outvol  = Output volume name; e.g. outvol.mrc
+scale   = Scaling ratio; (0-1)
+scale2  = Second scaling ratio; (0-1)
++underline[ALTERNATIVE INPUTS]
+filetab = Stacks list; list input e.g. stktab.txt
+stk     = Particle image stack; xxx.mrc file with particles
+vol1    = Input volume; input volume e.g. vol.mrc
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{scale\_project}
+\label{scale_project}
+\prgname{scale\_project} is a distributed workflow for re-scaling MRC \& SPIDER stacks part of project specification, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=scale_project key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
+newbox = Scaled box size; new box in pixels
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
++textbf[nthr   = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{select}
+\label{select}
+\prgname{select} is a program for selecting files based on image correlation matching, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=select key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk2       = Stack of selected images; e.g. selected(cavgs).mrc]
+dir_reject = Directory for rejected images; reject dir
+dir_select = Directory for selected images; select dir
+filetab    = List of files to select from; e.g. filetab.txt
+outfile    = Output orientation and CTF parameter file; .simple|.txt parameter file
+outstk     = Output stack name; e.g. outstk.mrc
+stk        = Particle image stack; xxx.mrc file with particles
+stk3       = Stack of images to select from; e.g. (cavgs)2selectfrom.mrc
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{shift}
+\label{shift}
+\prgname{shift} is a program for shifting a stack according to origin shifts in oritab, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=shift key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk    = Particle image stack; xxx.mrc file with particles]
+outstk = Output stack name; e.g. outstk.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+mul     = Shift multiplication factor; multiplier
+oritab  = Orientation and CTF parameter file; .simple|.txt parameter file
+oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{simulate\_movie}
+\label{simulate_movie}
+\prgname{simulate\_movie} is a program for crude simulation of a DDD movie. Input is a set of projection images to place. Movie frames are then generated related by randomly shifting the base image and applying noise, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=simulate_movie key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+stk = Particle image stack; xxx.mrc file with particles
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
+cs      = Spherical aberration; in mm{2.7}
+defocus = Underfocus; in microns
+fraca   = Amplitude contrast fraction; fraction{0.1}
+kv      = Acceleration voltage; in kV{300}
+nframes = Number of frames; # frames
+snr     = SNR; signal-to-noise ratio(0.)
+trs     = Maximum translational shift; max shift per iteration in pixels{5}
+xdim    = x-dimension; # pixels in x
+ydim    = y-dimension; # pixels in y
++underline[FILTER CONTROLS]
+bfac = CTF B-factor; B-factor in Angstroms^2(>0.0){0}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{simulate\_noise}
+\label{simulate_noise}
+\prgname{simulate\_noise} is a program for generating pure noise images, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=simulate_noise key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[box    = Square image size; # pixels of box]
++textbf[nptcls = Number of particles; # particles]
+\end{Verbatim}
+
+\subsection{simulate\_particles}
+\label{simulate_particles}
+\prgname{simulate\_particles} is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing he
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=simulate_particles key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = Volume; input volume e.g. vol.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[nptcls    = Number of particles; # particles]
++textbf[smpd      = Sampling distance; pixel size in Angstroms]
++textbf[snr       = SNR; signal-to-noise ratio(0.)]
+astigerr  = Astigmatism error; error in microns
+cs        = Spherical aberration; in mm{2.7}
+defocus   = Underfocus; in microns
+deftab    = CTF parameter file; .simple|.txt parameter file
+dferr     = Underfocus error half-width; defocus error in microns
+fraca     = Amplitude contrast fraction; fraction{0.1}
+kv        = Acceleration voltage; in kV{300}
+ndiscrete = Number of discrete projection directions; # discrete projs
+oritab    = Orientation and CTF parameter file; .simple|.txt parameter file
+outfile   = Output orientation and CTF parameter file; .simple|.txt parameter file
+outstk    = Output stack name; e.g. outstk.mrc
+sherr     = Shift error half-width; shift error in pixels
++underline[SEARCH CONTROLS]
++textbf[pgrp = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
++underline[FILTER CONTROLS]
+bfac    = CTF B-factor; B-factor in Angstroms^2(>0.0){0}
+bfacerr = B-factor error; error(in Angstroms^2)
++underline[MASK CONTROLS]
++textbf[msk = Mask radius; mask radius in pixels]
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{simulate\_subtomogram}
+\label{simulate_subtomogram}
+\prgname{simulate\_subtomogram} is a program for crude simulation of a subtomogram, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=simulate_subtomogram key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
+vol1 = Volume; input volume e.g. vol.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[nptcls = Number of particles; # particles]
++textbf[smpd   = Sampling distance; pixel size in Angstroms]
+snr    = SNR; signal-to-noise ratio(0.)
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{stack}
+\label{stack}
+\prgname{stack} is a program for stacking individual images (list) or multiple stacks into one, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=stack key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[filetab = Stacks list; list input e.g. stktab.txt]
+outstk  = Output stack name; e.g. outstk.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
+clip = Clipped box size; in pixels
+\end{Verbatim}
+
+\subsection{stackops}
+\label{stackops}
+\prgname{stackops} is a program that provides standard single-particle image processing routines for MRC or SPIDER stacks. To extract a particular state, give oritab and set state. To select the fraction of best particles, give oritab and set frac. State and frac options can
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=stackops key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[stk    = Particle image stack; xxx.mrc file with particles]
+outstk = Output stack name; e.g. outstk.mrc
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd        = Sampling distance; pixel size in Angstroms]
+acf         = Autocorrelation, A * conjg(A); (yes|no){no}
+avg         = Average stack; (yes|no){no}
+class       = Class index; give class index
+frac        = Fraction of particles to include; fraction of particles(0.1-0.9){1.0}
+fromp       = From particle index; start index
+mirr        = Perform mirroring; (no|x|y){no}
+neg         = Invert contrast; (yes|no){no}
+nframesgrp  = Number of stack entries to group & average; # frames
+nran        = Number of random samples; # random samples
+oritab      = Orientation and CTF parameter file; .simple|.txt parameter file
+outfile     = Output orientation and CTF parameter file; .simple|.txt parameter file
+snr         = Apply noise to give SNR; signal-to-noise ratio(0.)
+state       = State index; give state index
+stats       = Provide statistics; (yes|no){no}
+subtr_backr = Subtract background; (yes|no){no}
+top         = To particle index; stop index
+vis         = Visualize stack images; (yes|no){no}
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{subset\_project}
+\label{subset_project}
+\prgname{subset\_project} is a program that generates a random subset of an existing project, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=subset_project key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[nptcls   = Number of particles; # particles]
++textbf[projfile = Project file; e.g. myproject.simple]
+\end{Verbatim}
+
+\subsection{symaxis\_search}
+\label{symaxis_search}
+\prgname{symaxis\_search} is a program for searching for the principal symmetry axis of a volume reconstructed in C1. The rotational transformation is applied to the oritype field in the project and the project file is updated. If you are unsure about the point-group, use the symme
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=symaxis_search key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = C1 Volume to identify symmetry axis of; input volume e.g. vol_C1.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[SEARCH CONTROLS]
++textbf[pgrp   = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+center = Center input volume; (yes|no){yes}
++underline[FILTER CONTROLS]
++textbf[lp    = Low-pass limit; low-pass limit in Angstroms]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp    = High-pass limit; high-pass limit in Angstroms
++underline[MASK CONTROLS]
++textbf[msk = Mask radius; mask radius in pixels]
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{symmetry\_test}
+\label{symmetry_test}
+\prgname{symmetry\_test} is a program that implements a statistical test for point-group symmetry. Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=symmetry_test key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1 = C1 Volume to identify symmetry of; input volume e.g. vol_C1.mrc]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[smpd = Sampling distance; pixel size in Angstroms]
++underline[SEARCH CONTROLS]
+center   = Center input volume; (yes|no){yes}
+cn_stop  = Rotational symmetry order stop index; give stop index
+platonic = Search for Platonic symmetries; (yes|no){no}
++underline[FILTER CONTROLS]
++textbf[lp    = Low-pass limit; low-pass limit in Angstroms]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{30}
+hp    = High-pass limit; high-pass limit in Angstroms
++underline[MASK CONTROLS]
++textbf[msk   = Mask radius; mask radius in pixels]
+inner = Inner mask radius; inner mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\subsection{tseries\_track}
+\label{tseries_track}
+\prgname{tseries\_track} is a distributed workflow for particle tracking in time-series data, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=tseries_track key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[filetab = List of of movie frames; e.g. movie_frames.txt]
++underline[PARAMETER INPUT/OUTPUT]
++textbf[boxfile = List of particle coordiantes; e.g. coords.box]
++textbf[fbody   = Template output tracked series; e.g. tracked_ptcl]
++textbf[smpd    = Sampling distance; pixel size in Angstroms]
++underline[SEARCH CONTROLS]
+offset = Shift half-width search bound; e.g. pixels window halfwidth
++underline[FILTER CONTROLS]
+cenlp = Centering low-pass limit; centering low-pass limit in Angstroms{5}
+lp    = Low-pass limit; low-pass limit in Angstroms
++underline[COMPUTER CONTROLS]
++textbf[nparts = Number of parts; divide job into # parts]
+\end{Verbatim}
+
+\subsection{update\_project}
+\label{update_project}
+\prgname{update\_project} is a program for updating an existing project: changing the name/user\_email/computer controls, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=update_project key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[projfile   = Project file; e.g. myproject.simple]
+user_email = Your e-mail address; e.g. myname@uni.edu
++underline[COMPUTER CONTROLS]
+job_memory_per_task = Memory per part; MB per part{16000}
+qsys_name           = Queue system kind; (local|slurm|pbs)
+qsys_partition      = Name of SLURM/PBS partition; give part name
+qsys_qos            = Schedule priority; give priority
+qsys_reservation    = Name of reserved partition; give yourpart
+time_per_image      = Time per image; in seconds{100}
+user_account        = User account name in SLURM/PBS; e.g. Account084
+user_project        = User project name in SLURM/PBS; e.g. Project001
+\end{Verbatim}
+
+\subsection{vizoris}
+\label{vizoris}
+\prgname{vizoris} is a program for extracting projection directions from orientations for visualization in UCSF Chimera, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=vizoris key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[oritab  = Orientation and CTF parameter file; .simple|.txt parameter file]
++textbf[pgrp    = Point-group symmetry; point-group(cn|dn|t|o|i){c1}]
+nspace  = Number of projection directions; # projections
+oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+tseries = Time series anlysis; (yes|no){no}
+\end{Verbatim}
+
+\subsection{volops}
+\label{volops}
+\prgname{volops} is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes, executed by simple\_exec
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
++underline[USAGE]
++textit[bash-3.2$ simple_exec prg=volops key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[IMAGE INPUT/OUTPUT]
++textbf[vol1   = Volume; input volume e.g. vol.mrc]
+outvol = Output volume name; e.g. outvol.mrc
++underline[PARAMETER INPUT/OUTPUT]
+e1      = Rotation along Phi; in degrees
+e2      = Rotation along Theta; in degrees
+e3      = Rotation along Psi; in degrees
+guinier = Guinier plot; (yes|no){no}
+mirr    = Perform mirroring; (no|x|y){no}
+neg     = Invert contrast; (yes|no){no}
+outfile = Output orientation and CTF parameter file; .simple|.txt parameter file
+smpd    = Sampling distance; pixel size in Angstroms
+snr     = SNR; signal-to-noise ratio(0.)
+xsh     = Translation along x-axis; in pixels
+ysh     = Translation along y-axis; in pixels
+zsh     = Translation along z-axis; in pixels
++underline[FILTER CONTROLS]
+bfac = B-factor for sharpening; B-factor in Angstroms^2
+hp   = High-pass limit; high-pass limit in Angstroms
+lp   = Low-pass limit; low-pass limit in Angstroms
++underline[MASK CONTROLS]
+msk = Mask radius; mask radius in pixels
++underline[COMPUTER CONTROLS]
++textbf[nthr = Number of threads per part, give 0 if unsure; # shared-memory CPU threads]
+\end{Verbatim}
+
+\begin{comment}
 \subsection{Execution of SIMPLE}
 SIMPLE is executed primarily via \texttt{simple\_distr\_exec} that implements higher level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory). SIMPLE can also be executed via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that the high-level workflows (\prgname{prime2D} and \prgname{ini3D\_from\_cavgs}, for example) can \textit{only} be executed via the distributed execution route. In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
@@ -769,6 +2284,7 @@ In addition to providing algorithms for analysis of electron microscopic project
 \item Use the \texttt{*.box} file created in the previous step in conjunction with the motion-corrected frames as input to the program \prgname{tseries\_track} to generate individual stacks of images representing the windowed nanoparticles as a function of time from the first to the last frame. Please execute \prgname{tseries\_track} using the \texttt{simple\_distr\_exec} binary. This will run the tracker in parallel mode with one CPU allocated per particle. The \texttt{ncunit} parameter controls the number of CPUs being used and this number cannot be larger than the number of particles to track in parallel.
 Once the pre-processing workflow has been finalised, the problem becomes a standard single-particle reconstruction problem (one per particle stack). However, as SIMPLE was originally designed for biological single-particle EM image processing, there are a few parameter tuning strategies to consider (described below).
 \end{enumerate}
+\end{comment}
 
 \def\bibfont{\footnotesize}
 \bibliographystyle{cell}

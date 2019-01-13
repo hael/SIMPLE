@@ -2746,17 +2746,17 @@ contains
     subroutine new_simulate_particles
         ! PROGRAM SPECIFICATION
         call simulate_particles%new(&
-        &'simulate_particles',&                                          ! name
-        &'Simulate single-particle images',&                             ! descr_short
-        &'is a program for simulating single-particle cryo-EM images. It is not a verysophisticated simulator, but &
-        &it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be &
-        &used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input &
-        &is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is &
-        &projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are &
-        &then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed &
-        &before the remaining 80% of the noise (white noise) is added',& ! descr_long
-        &'simple_exec',&                                                 ! executable
-        &1, 15, 0, 1, 2, 1, 1, .false.)                                  ! # entries in each group, requires sp_project
+        &'simulate_particles',&                                           ! name
+        &'Simulate single-particle images',&                              ! descr_short
+        &'is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but&
+        & it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be&
+        & used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input&
+        & is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is&
+        & projected using Fourier interpolation, 20% of the total noise is added to the images (pink noise), they are&
+        & then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed&
+        & before the remaining 80% of the noise (white noise) is added',& ! descr_long
+        &'simple_exec',&                                                  ! executable
+        &1, 15, 0, 1, 2, 1, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call simulate_particles%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Volume to project', 'input volume e.g. vol.mrc', .false., '')
@@ -3349,8 +3349,7 @@ contains
         type(simple_program), pointer :: ptr => null()
         ! init UI descriptions
         call make_user_interface
-        ! do i=1,size(prg_ptr_array)
-        do i=48,48
+        do i=1,size(prg_ptr_array)
             ptr => prg_ptr_array(i)%ptr2prg
             write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
             write(logfhandle, '(a)') '\label{'      // ptr%name // '}'

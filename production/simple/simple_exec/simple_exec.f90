@@ -249,8 +249,6 @@ select case(prg)
         call xinfo_stktab%execute(cline)
     case( 'print_fsc' )
         call xprint_fsc%execute(cline)
-    case( 'print_frcs' )
-        call pfrcs%print_frcs('frcs.bin')
     case( 'print_magic_boxes' )
         call xprint_magic_boxes%execute(cline)
 
