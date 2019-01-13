@@ -99,11 +99,159 @@ dominika@simplecryoem.com\\
  
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} for more details.
 
+\section{Installation instructions}
+
+\subsection{System requirements}
+\begin{itemize}
+	\item[--] Linux (we use Ubuntu 15.04 and above)
+	\item[--] MacOSX: 10.10 and above
+	\item[--] CMake 3.2 and above
+	\item[--] FFTW 3.3 and above
+	\item[--] GNU toolchain (gcc \& gfortran) 4.9 to 5.4
+\end{itemize}
+
+\subsection{Installation}
+\noindent{}\textbf{Step 1:} Create the directory in which you are going to install SIMPLE (referred to here as \texttt{<simple\_path>})
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+mkdir <simple_path>
+\end{Verbatim}
+
+\noindent{}\textbf{Step 2:} Unzip the SIMPLE 3.0 tar ball in this directory (assuming you have downloaded the tar ball in the \texttt{<downloads>} directory)
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+mv <downloads>/SIMPLE3.0.tgz <simple path>
+cd <simple path>
+tar -xzf SIMPLE3.0.tgz
+\end{Verbatim}
+
+\noindent{}\textbf{Step 3:} Create a directory for the build
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cd simple3.0
+mkdir build
+cd build
+\end{Verbatim}
+
+\noindent{}\textbf{Step 4:} Compile and install SIMPLE 3.0
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cmake ../
+make -j install
+\end{Verbatim}
+
+\noindent{}This will install SIMPLE in the \texttt{'build'} directory, clean out all unnecessary
+files and will finish with the following message (a reminder for step 5 below):
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+Installation complete.
+==========================================================================
+Please ensure the following variables are set properly in add2.*rc file:
+    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
+To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
+  bash$ cat add2.bashrc >> ~/.bashrc
+  tcsh$ cat add2.tcshrc >> ~/.tcshrc
+==========================================================================
+For minimal installation to work correctly add:
+<your src path>/Simple-release/build/bin and
+<your src path>/Simple-release/build/scripts
+to your PATH environment variable.
+==========================================================================
+\end{Verbatim}
+
+\noindent{}When the build and installation directories are the same (default) and you are
+happy with the install, you may want to clean compilation-generated and
+unnecessary files using \texttt{distclean}.
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+make distclean
+\end{Verbatim}
+
+\noindent{}If you wish to provide an alternative installation directory, substitute step 4 with
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
+make -j install
+\end{Verbatim}
+
+\noindent{}Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a 
+more exotic setup you can provide the paths pointing to your custom gcc/gfortran \& FFTW by substituting step 4 with
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+FC=<gcc/gfortran path> FFTW_DIR=<FFTW path> cmake ../
+make -j install
+\end{Verbatim}
+
+\noindent{}For instance, on MacOS:
+\begin{itemize}
+	\item[--] Macports users may use: FC=/opt/local/bin/gfortran FFTW\_DIR=/opt/local;
+	\item[--] Fink users: FC=/sw/bin/gfortran FFTW\_DIR=/sw/; and
+	\item[--] Homebrew users: FC=/usr/local/bin/gfortran FFTW\_DIR=/usr/local/
+\end{itemize}
+
+\noindent{}\\\textbf{Step 5:} Set the environment variables.
+
+\noindent{}\\To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
+variable. The \texttt{SIMPLE\_PATH} environment variable must also be defined. The 
+shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary
+instructions were generated during the build step. For immediate use for running and testing, execute
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+source add2.bashrc
+\end{Verbatim}
+
+\noindent{}or, for TCSH/CSH users:
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+source add2.tcshrc
+\end{Verbatim}
+
+\noindent{}For permanent installation \texttt{BASH} users should add the contents of \texttt{add2.bashrc} to your \texttt{<HOME>/.bashrc}
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cat add2.bashrc >> ~/.bashrc
+\end{Verbatim}
+
+\noindent{}or for TCSH/CSH users:
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+cat add2.tcshrc >> ~/.tcshrc
+\end{Verbatim}
+
+\subsection{Testing the build}
+
+\noindent{}To ensure that SIMPLE has been correctly installed, we recommend running the application \texttt{simple\_test\_install}. It will test the most 
+important components in the SIMPLE library  (those used by prime2D and  prime3D). Execute
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_test_install 
+\end{Verbatim}
+
+\noindent{}The program will create its own folder \texttt{SIMPLE\_TEST\_INSTALL*date*} where temporary files and information about each 
+test are stored. Upon succesful completion you should see
+
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+ **** SIMPLE_TEST_INSTALL NORMAL STOP ****
+\end{Verbatim}
+
+\noindent{}\texttt{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual 
+tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations 
+and the gfortran version. If you still have issues, please file a help ticket on the webpage.
+
+\subsection{Installation/configuration on a Linux cluster}
+
+Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+module load fftw/3.3.4-gcc
+module load gcc/4.9.1
+\end{Verbatim}
+The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
+
 \subsection{What is new in SIMPLE release 3.0?}
 The number of changes we have made to the suite compared to the previously released version (2.5) are too many to list here. If you have experience with previous SIMPLE releases, please have a quick browse through the manual. We promise you will catch-up quickly. Most (but not all) of the algorithms implemented in SIMPLE have been published (REFS). If you want to understand the theory, we recommend you read the papers. This document exclusively describes the command-line driven SIMPLE user interface and basic knowledge about EM and single-particle analysis is assumed. 
 
 \subsubsection{SIMPLE program naming convention}
-The first big change you will notice is that all program names have changed to plain English descriptions of their functionality.  For example, \prgname{PRIME2D} that does simultaneous 2D alignment and clustering in a reference-free manner is now called \prgname{cluster2D}, the workflow for \textit{ab initio} 3D reconstruction from class averages is called \prgname{initial\_3Dmodel}, the 3D refinement application is called \prgname{refine3D} and the heterogeneity analysis tool is called \prgname{cluster3D}. In SIMPLE, we distinguish between \textit{distributed workflows} (executed with \texttt{simple\_distr\_exec}) and \textit{programs} (executed with \texttt{simple\_exec}). Programs perform smaller tasks (subjected exclusively to OpenMP-thread-based parallelisation), whereas distributed workflows are major image processing steps that typically require a multi-core workstation or a computer cluster. 
+The first big change you will notice is that all program names have changed to plain English descriptions of their functionality.  For example, \prgname{PRIME2D} that does simultaneous 2D alignment and clustering in a reference-free manner is now called \prgname{cluster2D}, the workflow for \textit{ab initio} 3D reconstruction from class averages is called \prgname{initial\_3Dmodel}, the 3D refinement application is called \prgname{refine3D} and the heterogeneity analysis tool is called \prgname{cluster3D}. In SIMPLE, we distinguish between \textit{distributed workflows} (executed with \texttt{simple\_distr\_exec}) and \textit{programs} (executed with \texttt{simple\_exec}). Programs perform smaller tasks (subjected exclusively to OpenMP-thread-based parallelisation), whereas distributed workflows are major image processing steps that typically require a multi-core workstation or a computer cluster. Finally, there is a third executable \texttt{simple\_private\_exec} that is used internally by SIMPLE, by the SIMPLE developers and by very advanced users that want to test experimental aspects of SIMPLE or use functionality to support building GUI applications on top of SIMPLE.
 
 \subsubsection{SIMPLE input parameter categorisation}
 Another noticeable change is they way the command-line instructions are provided when you execute a SIMPLE program or distributed workflow. For example, this is what is written in the terminal when executing \texttt{simple\_distr\_exec prg=refine3D}
@@ -310,7 +458,7 @@ simple_exec prg=print_project_info
 simple_exec prg=print_project_field oritype=out
 \end{Verbatim}
 
-\noindent{}This produces the ouput
+\noindent{}This produces the output
 
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 frcs=../2_cluster2D/frcs.bin imgkind=frc2D
@@ -325,273 +473,224 @@ vol=../4_refine3D/recvol_state01_iter015.mrc imgkind=vol box=256.000000 smpd=1.2
 
 
 
+% Volta phase-plate support
 
 
+\section{File formats}
 
-\section{File Formats}
-
-%\begin{Verbatim}[commandchars=+\[\]]
-%    The +underline[quick brown fox] jumped over the lazy dog.
-%    The +textbf[quick brown fox] jumped over $ the lazy dog.
-%    The +textit[quick brown fox] jumped over the lazy dog.
-%\end{Verbatim}
-
-%\begin{Verbatim}[commandchars=+\[\]]
-%    The +textbf[quick brown fox] jumped over the lazy dog.
-%\end{Verbatim}
-
-
-
-\subsection{Image File Formats}
+\subsection{Image file formats}
 SIMPLE supports SPIDER (\texttt{*.spi}) and MRC (\texttt{*.mrc}) formats for image stacks and volumes. The MRC file handling classes are shared with the the FREALIX program for helical reconstruction \citep{Rohou:2014aa}. RELION \citep{Scheres:2012aa} uses the convention that MRC stacks have the suffix \texttt{*.mrcs} and volumes the suffix \texttt{*.mrc}. This is to overcome the annoyance that it is not possible to tell from an MRC file header whether a MRC file is a volume or a stack. With SIMPLE you can select to use either the \texttt{*.mrcs} or \texttt{*.mrc} suffix for stacks. The way that we keep track of whether a file is a volume or stack is via the command line key value. The key-value pairs \texttt{vol1=rec.mrc} and \texttt{vol2=rec2.mrc} refer to volumes whereas the key-value pairs \texttt{stk=ptcls.mrc} and \texttt{stk2=ptcls2.mrc} refer to stacks.
 
-\subsection{SIMPLE Parameter File Format}
+\subsection{SIMPLE parameter file format}
 The SIMPLE text-files used for parameter input/output use a \texttt{key=value} syntax of the form
-\begin{verbatim}
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 e1=80. e2=100. e3=5.5 x=1.23 y=4.25 dfx=2.56 dfy=2.54 angast=30.5 state=1
-\end{verbatim}
+\end{Verbatim}
 to represent per-particle information. Internally, the orientation information is stored in a dynamic hash data structure, which gives the file format high flexibility. Therefore, writing conversion scripts to allow interchange of parameters between SIMPLE and other packages is easy. SIMPLE uses the same conventions as FREALIGN \citep{Grigorieff:2007aa} to represent orientations and CTF parameters. The CTF parameterisation obtained by CTFFIND \citep{Mindell:2003aa} can be directly plugged into SIMPLE, for example by creating a file \texttt{deftab.txt}, looking like
-\begin{verbatim}
-kv=300 cs=2.7 fraca=0.07 dfx=2.56 dfy=2.76 angast=30.5
-kv=300 cs=2.7 fraca=0.07 dfx=3.50 dfy=3.33 angast=60.0
-kv=300 cs=2.7 fraca=0.07 dfx=1.98 dfy=2.02 angast=120.5
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+dfx=2.56 dfy=2.76 angast=30.5
+dfx=3.50 dfy=3.33 angast=60.0
+dfx=1.98 dfy=2.02 angast=120.5
 ...
-\end{verbatim}
-and adding \texttt{deftab=deftab.txt} and \texttt{ctf=yes} to the PRIME command line (if the images are phase-flipped, this should be indicated by \texttt{ctf=flip}). Note that we now include \texttt{kv}, \texttt{cs}, and \texttt{fraca} in the document listing the CTF parameters. Having all the CTF parameters listed per particle allows easy merging of data sets from different microscopes. SIMPLE now implements a wrapper program for CTFFIND version 4.1.X and newer, producing a SIMPLE conforming document by executing CTFFIND in parallel (via \texttt{simple\_distr\_exec prg=ctffind}). If you have obtained CTF parameters with CTFFIND by other means (via RELION, for example) you can provide a plain text file with the two defocus values and the angle of astigmatism to the SIMPLE program \prgname{makedeftab} and it will take care of the formatting and unit conversions for you.
+\end{Verbatim}
+It is also possible to import data using plain text files, as described below.
 
 \subsection{Parameter File Conversions}
-The \texttt{SIMPLE/scripts} folder contains a perl-script (\texttt{convert\_frealign2simple.pl}) to convert a Frealing parameter file to a SIMPLE parameter file. This is easy, since both software internally use the \href{http://spider.wadsworth.org/spider_doc/spider/docs/euler.html}{\textbf{\textcolor{BurntOrange}{Spider Euler angle convention}}}. Other packages may use other conventions. There's also a \texttt{convert\_relion2simple.pl} for extracting CTF parameters from RELION \texttt{*.star} files and a \texttt{relion2emanbox.pl} script for converting box files obtained with RELION to the EMAN \texttt{*.box} format used by SIMPLE.
+The \texttt{SIMPLE/scripts} folder contains perl-scripts (\texttt{convert\_frealign2simple.pl}) and\\ (\texttt{convert\_relion2simple.pl}) to convert FREALIGN and RELION parameter files, respectively, file to a SIMPLE parameter file. This is easy, since these software packages internally use the \href{http://spider.wadsworth.org/spider_doc/spider/docs/euler.html}{\textbf{\textcolor{BurntOrange}{Spider Euler angle convention}}}. Other packages may use other conventions. There's also a \texttt{relion2emanbox.pl} script for converting box files obtained with RELION to the EMAN \texttt{*.box} format used by SIMPLE.
 
-\section{Installation Instructions}
 
-\subsection{System requirements}
-\begin{itemize}
-	\item[--] Linux (we use Ubuntu 15.04 and above)
-	\item[--] MacOSX: 10.10 and above
-	\item[--] CMake 3.2 and above
-	\item[--] FFTW 3.3 and above
-	\item[--] GNU toolchain (gcc \& gfortran) 4.9 to 5.4
-\end{itemize}
 
-\subsection{Installation}
-\noindent{}\textbf{Step 1:} Create the directory in which you are going to install SIMPLE (referred to here as \texttt{<simple\_path>})
+\section{SIMPLE usage}
 
-\begin{verbatim}
-        @!#> mkdir <simple_path>
-\end{verbatim}
-
-\noindent{}\textbf{Step 2:} Unzip the SIMPLE 3.0 tar ball in this directory (assuming you have downloaded the tar ball in the \texttt{<downloads>} directory)
-
-\begin{verbatim}
-        @!#> mv <downloads>/SIMPLE3.0.tgz <simple path>
-        @!#> cd <simple path>
-        @!#> tar -xzf SIMPLE3.0.tgz
-\end{verbatim}
-
-\noindent{}\textbf{Step 3:} Create a directory for the build
-
-\begin{verbatim}
-        @!#> cd simple3.0
-        @!#> mkdir build
-        @!#> cd build
-\end{verbatim}
-
-\noindent{}\textbf{Step 4:} Compile and install SIMPLE 3.0
-
-\begin{verbatim}
-        @!#> cmake ../
-        @!#> make -j install
-\end{verbatim}
-
-\noindent{}This will install SIMPLE in the \texttt{'build'} directory, clean out all unnecessary
-files and will finish with the following message (a reminder for step 5 below):
-
-\begin{verbatim}
-Installation complete.
-==========================================================================
-Please ensure the following variables are set properly in add2.*rc file:
-    SIMPLE_EMAIL SIMPLE_QSYS SIMPLE_PATH SIMPLE_SOURCE_PATH
-To use SIMPLE, append the relevant add2.* to your HOME shell rc file:
-  bash$ cat add2.bashrc >> ~/.bashrc
-  tcsh$ cat add2.tcshrc >> ~/.tcshrc
-==========================================================================
-For minimal installation to work correctly add:
-<your src path>/Simple-release/build/bin and
-<your src path>/Simple-release/build/scripts
-to your PATH environment variable.
-==========================================================================
-\end{verbatim}
-
-\noindent{}When the build and installation directories are the same (default) and you are
-happy with the install, you may want to clean compilation-generated and
-unnecessary files using \texttt{distclean}.
-
-\begin{verbatim}
-        @!#> make distclean
-\end{verbatim}
-
-\noindent{}If you wish to provide an alternative installation directory, substitute step 4 with
-
-\begin{verbatim}
-        @!#> cmake -DCMAKE_INSTALL_PREFIX=<alternative directory> ../
-        @!#> make -j install
-\end{verbatim}
-
-\noindent{}Step 4 assumes that gcc/gfortran and FFTW are installed in fairly standard directories on your machine. In case you have a 
-more exotic setup you can provide the paths pointing to your custom gcc/gfortran \& FFTW by substituting step 4 with
-
-\begin{verbatim}
-        @!#> FC=<gcc/gfortran path> FFTW_DIR=<FFTW path> cmake ../
-        @!#> make -j install
-\end{verbatim}
-
-\noindent{}For instance, on MacOS:
-\begin{itemize}
-	\item[--] Macports users may use: FC=/opt/local/bin/gfortran FFTW\_DIR=/opt/local;
-	\item[--] Fink users: FC=/sw/bin/gfortran FFTW\_DIR=/sw/; and
-	\item[--] Homebrew users: FC=/usr/local/bin/gfortran FFTW\_DIR=/usr/local/
-\end{itemize}
-
-\noindent{}\\\textbf{Step 5:} Set the environment variables.
-
-\noindent{}\\To run SIMPLE, the bin and scripts paths need to be in the \texttt{PATH} environment
-variable. The \texttt{SIMPLE\_PATH} environment variable must also be defined. The 
-shell scripts \texttt{add2.bashrc} and \texttt{add2.tcshrc} containing the necessary
-instructions were generated during the build step. For immediate use for running and testing, execute
-\begin{verbatim}
-    @!#> source add2.bashrc
-\end{verbatim}
-\noindent{}or, for TCSH/CSH users:
-\begin{verbatim}
-    @!#> source add2.tcshrc
-\end{verbatim}
-
-\noindent{}For permanent installation \texttt{BASH} users should add the contents of \texttt{add2.bashrc} to your \texttt{<HOME>/.bashrc}
-\begin{verbatim}
-    @!#> cat add2.bashrc >> ~/.bashrc
-\end{verbatim}
-\noindent{}or for TCSH/CSH users:
-\begin{verbatim}
-    @!#> cat add2.tcshrc >> ~/.tcshrc
-\end{verbatim}
-
-\subsection{Testing the Build}
-
-\noindent{}To ensure that SIMPLE has been correctly installed, we recommend running the application \texttt{simple\_test\_install}. It will test the most 
-important components in the SIMPLE library  (those used by prime2D and  prime3D). Execute
-
-\begin{verbatim}
-        @!#> simple_test_install 
-\end{verbatim}
-
-\noindent{}The program will create its own folder \texttt{SIMPLE\_TEST\_INSTALL*date*} where temporary files and information about each 
-test are stored. Upon succesful completion you should see
-
-\begin{verbatim}
-        @!#> **** SIMPLE_TEST_INSTALL NORMAL STOP ****
-\end{verbatim}
-
-\noindent{}\texttt{simple\_test\_install} can be executed anywhere. After execution, the folder created can be safely removed. If any of the individual 
-tests fail an error message will be displayed. If you detect an error, please carefully check the SIMPLE and FFTW installations 
-and the gfortran version. If you still have issues, please file a help ticket on the webpage.
-
-\subsection{Installation/Configuration on a Linux Cluster}
-
-Installation on a Linux cluster is essentially the same as on a Linux workstation with the exception that the appropriate modules need to be loaded before installation and execution. On a typical SLURM cluster
-\begin{verbatim}
-        @!#> module load fftw/3.3.4-gcc
-        @!#> module load gcc/4.9.1
-\end{verbatim}
-The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
-
-\section{SIMPLE Usage}
-
-\subsection{SIMPLE Help Tools}
+\subsection{SIMPLE help tools}
 In attempt to reduce the dependency on the manual, we have packaged a lot of the documentation in the software itself. For example
-\begin{verbatim}
-@!#> simple_exec prg=list
-automask2D
-automask3D
-binarise
-boxconvs
-cavgassemble
-cenvol
-check2D_conv
-check3D_conv
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_exec prg=list
+center
+cluster_cavgs
+convert
+ctfops
+export_starproject
+extract
+filter
+fsc
+info_image
+info_stktab
+import_boxes
 ...
-\end{verbatim}
+\end{Verbatim}
 lists all programs executed with \texttt{simple\_exec} (shared-memory parallelisation) and
-\begin{verbatim}
-@!#> simple_distr_exec prg=list
-comlin_smat
-ctffind
-ini3D_from_cavgs
-makecavgs
-prime2D
-prime3D
-prime3D_init
-recvol
-symsrch
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_distr_exec prg=list
+cleanup2D
+cluster2D
+cluster2D_stream
+cluster3D
+cluster3D_refine
+ctf_estimate
+gen_pspecs_and_thumbs
+initial_3Dmodel
+make_cavgs
+motion_correct
+motion_correct_tomo
+pick
+pick_extract_stream
+preprocess
+preprocess_stream
+reconstruct3D
+refine3D
+refine3D_init
+scale_project
 tseries_track
-unblur
-unblur_ctffind
-unblur_tomo
-\end{verbatim}
-lists all distributed workflows executed with \texttt{simple\_distr\_exec}. If you don't quite remember which program you are looking for but remember that it was called \texttt{prime} something, you could execute
-\begin{verbatim}
-@!#> simple_distr_exec prg=list | grep prime
-prime2D
-prime3D
-prime3D_init
-\end{verbatim}
-If you want a description for a particular program, for example \prgname{prime2D}, execute
-\begin{verbatim}
-@!#> simple_distr_exec prg=prime2D describe=yes
-is a reference-free 2D alignment/clustering algorithm adopted from the 
-prime3D probabilistic ab initio 3D reconstruction algorithm
-\end{verbatim}
+\end{Verbatim}
+lists all distributed workflows executed with \texttt{simple\_distr\_exec}. If you don't quite remember which program you are looking for but remember that it was called \texttt{cluster} something, you could execute
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_distr_exec prg=list | grep cluster
+cluster2D
+cluster2D_stream
+cluster3D
+cluster3D_refine
+\end{Verbatim}
+If you want a description for a particular program, for example \prgname{cluster2D}, execute
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_distr_exec prg=cluster2D describe=yes
+is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm
+\end{Verbatim}
 To obtain a description of the what command line options are available, execute
-\begin{verbatim}
-@!#> simple_distr_exec prg=prime2D
-USAGE:
-bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_distr_exec prg=cluster2D
+\end{Verbatim}
 
-REQUIRED
-stk  = particle stack with all images(ptcls.ext)
-smpd = sampling distance, same as EMANs apix(in A)
-msk  = mask radius(in pixels)
-ncls = # clusters
-ctf  = ctf flag(yes|no|flip)
+\subsection{Categorisation and description of SIMPLE distributed workflows}
 
-OPTIONAL
-nparts    = # partitions in distributed exection
-chunksz   = # images/orientations in chunk
-nthr      = # OpenMP threads{1}
-ncunits   = # computing units, can be < nparts{nparts}
-deftab    = text file with CTF info(*.txt/*.asc)
-refs      = initial2Dreferences.ext
-oritab    = table (text file) of orientations(*.asc/*.txt)
-hp        = high-pass limit(in A)
-lp        = low-pass limit(in A)
-lpstart   = start low-pass limit(in A){15}
-lpstop    = stop low-pass limit(in A){8}
-cenlp     = low-pass limit for binarisation in centering(in A){30 A}
-trs       = maximum halfwidth shift(in pixels)
-automsk   = envelope masking(yes|no|cavg){no}
-amsklp    = low-pass limit for envelope mask generation(in A)
-inner     = inner mask radius(in pixels)
-width     = falloff of inner mask(in pixels){10}
-startit   = start iterating from here
-maxits    = maximum # iterations
-filwidth  = width of filament (in A)
-center    = center image(s)/class average(s)/volume(s)(yes|no){no}
-autoscale = automatic down-scaling(yes|no){yes}
-oritab3D  = table (text file) of 3D orientations(*.asc/*.txt)
-\end{verbatim}
+\subsubsection{PRE-PROCESSING WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{preprocess} is a distributed workflow that executes \prgname{motion\_correct}, \prgname{ctf\_estimate} and \prgname{pick} in sequence
+\item[--] \prgname{preprocess\_stream} is a distributed workflow that executes \prgname{motion\_correct}, \prgname{ctf\_estimate} and \prgname{pick} in streaming mode as the microscope collects the data
+\item[--] \prgname{motion\_correct} is a distributed workflow for motion correction of movies based on the same principal strategy as Grigorieff's program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied
+\item[--] \prgname{gen\_pspecs\_and\_thumbs} is a distributed workflow for generating power spectra and thumbnails for imported integrated movies
+\item[--] \prgname{motion\_correct\_tomo} is a distributed workflow for motion correction of movies based on the same principal strategy as Grigorieff's program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). The exp\_doc document should contain per line \texttt{exp\_time=X} and \texttt{dose\_rate=Y}. It is assumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If \texttt{nframesgrp} is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies)
+\item[--] \prgname{ctf\_estimate} is a distributed SIMPLE workflow for CTF parameter fitting
+\item[--] \prgname{pick} is a distributed workflow for template-based particle picking
+\item[--] \prgname{pick\_extract\_stream} is a distributed workflow for template-based particle picking and extraction in streaming mode
+\end{itemize}
+
+\subsubsection{CLUSTER2D WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{make\_cavgs} is a distributed workflow for generating class averages or initial random references for \prgname{cluster2D} execution
+\item[--] \prgname{cleanup2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm suitable for the first pass of cleanup after picking
+\item[--] \prgname{cluster2D} is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D probabilistic ab initio 3D reconstruction algorithm
+\item[--] \prgname{cluster2D\_stream} is a distributed workflow implementing \prgname{cluster2D} in streaming mode
+\end{itemize}
+
+\subsubsection{AB INITIO 3D RECONSTRUCTION WORKFLOW}
+\begin{itemize}
+\item[--] \prgname{initial\_3Dmodel} is a distributed workflow for generating an initial 3D model from class averages obtained with \prgname{cluster2D}
+\end{itemize}
+
+\subsubsection{REFINE3D WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{refine3D\_init} is a distributed workflow for generating a random initial 3D model for initialisation of \prgname{refine3D}
+\item[--] \prgname{refine3D} is a distributed workflow for 3D refinement based on probabilistic projection matching
+\item[--] \prgname{reconstruct3D} is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel
+\end{itemize}
+
+\subsubsection{CLUSTER3D WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{cluster3D} is a distributed workflow for heterogeneity analysis by 3D clustering
+\item[--] \prgname{cluster3D\_refine} is a distributed workflow based on probabilistic projection matching for refinement of 3D heterogeneity analysis by \prgname{cluster3D}
+\end{itemize}
+
+\subsubsection{TIME-SERIES WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{tseries\_track} is a distributed workflow for particle tracking in time-series data
+\end{itemize}
+
+\subsubsection{MISCELLANEOUS WORKFLOWS}
+\begin{itemize}
+\item[--] \prgname{scale\_project} is a distributed workflow for re-scaling MRC \& SPIDER stacks part of project specification
+\end{itemize}
+
+\subsection{Categorisation and description of SIMPLE programs}
+
+\subsubsection{PROJECT MANAGEMENT PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{new\_project} is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed and shared-memory systems and for unified meta-data management. This program creates a directory named projname and a file projname.simple inside that directory that contains all information about the project as well as all meta data generated by the different SIMPLE programs. This file is mirrored by an abstract data type in the back-end, which manages the parameters and meta-data I/O required for execution of SIMPLE
+\item[--] \prgname{update\_project} is a program for updating an existing project: changing the name/user\_email/ computer controls
+\item[--] \prgname{print\_project\_info} is a program prints information about a *.simple project file
+\item[--] \prgname{print\_project\_field} is a program for printing an orientation field in the project data structure (segment in *.simple project file)
+\item[--] \prgname{import\_movies} is a program for importing DDD movies to the project. The movies can be located in any read-only location accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected and integrated. Box files (in EMAN1.9 format) can be imported along with the movies
+\item[--] \prgname{import\_boxes} is a program for importing EMAN1.9 box coordinates to the project. The *box (text) files should be listed in boxtab
+\item[--] \prgname{import\_particles} is a program for importing extracted particle images to the project
+\item[--] \prgname{import\_cavgs} is a program for importing class averages movies to the project
+\item[--] \prgname{subset\_project} is a program that generates a random subset of an existing project
+\item[--] \prgname{export\_starproject} is a program for exporting a SIMPLE project as a STAR-formatted EM project
+\item[--] \prgname{import\_starproject} is a program for importing STAR-formatted EM project files to the current SIMPLE project and saving as a SIMPLE project
+\item[--] \prgname{report\_selection} is a program for reporting external (GUI) selections to the SIMPLE project
+\end{itemize}
+
+\subsubsection{SINGLE-PARTICLE WORKFLOW PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{extract} is a program for extracting particle images from integrated movies
+\item[--] \prgname{reextract} is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts
+\item[--] \prgname{cluster\_cavgs} is a program for analyzing class averages with affinity propagation, in order to get a better understanding of the view distribution. The balance flag is used to apply a balancing restraint (on the class population). Adjust balance until you are satisfied with the shape of the histogram
+\item[--] \prgname{symaxis\_search} is a program for searching for the principal symmetry axis of a volume reconstructed in C1. The rotational transformation is applied to the oritype field in the project and the project file is updated. If you are unsure about the point-group, use the \prgname{symmetry\_test} program instead
+\item[--] \prgname{symmetry\_test} is a program that implements a statistical test for point-group symmetry. Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry
+\item[--] \prgname{postprocess} is a program for map post-processing. Use program volops to estimate the B-factor with the Guinier plot
+\end{itemize}
+
+\subsubsection{IMAGE PROCESSING PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{mask} is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft  falloff, set msk to the radius in pixels
+\item[--] \prgname{fsc} is a program for calculating the FSC between the two input volumes
+\item[--] \prgname{local\_resolution} is a program for estimating local resolution based on neighbourhood correlation analysis in e/o maps
+\item[--] \prgname{local\_resolution2D} is a program for estimating local resolution based on neighbourhood correlation analysis in e/o cavgs
+\item[--] \prgname{center} is a program for centering a volume and mapping the shift parameters back to the particle images
+\item[--] \prgname{reproject} is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. nspace controls the number of projection directions. The  oritab parameter allows you to input the orientations that you wish to have your volume projected in. pgrp controls the point-group symmetry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is used to restrict the set of projections to within the asymmetric unit. neg inverts the contrast of the projections
+\item[--] \prgname{volops} is a program that provides standard single-particle image processing routines for MRC or SPIDER volumes
+\item[--] \prgname{convert} is a program for converting between SPIDER and MRC formats
+\item[--] \prgname{ctfops} is a program for applying CTF to stacked images
+\item[--] \prgname{filter} is a program for filtering stack/volume
+\item[--] \prgname{normalize} is a program for normalization of MRC or SPIDER stacks and volumes
+\item[--] \prgname{scale} is a program for re-scaling, clipping and padding MRC \& SPIDER stacks and volumes
+\item[--] \prgname{stack} is a program for stacking individual images (list) or multiple stacks into one
+\item[--] \prgname{stackops} is a program that provides standard single-particle image processing routines for MRC or SPIDER stacks. To extract a particular state, give \texttt{oritab} and set \texttt{state}. To select the fraction of best particles, give \texttt{oritab} and set frac. State and frac options can be combined. To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation function, set acf=yes. To extract a contiguous subset of images from the stack, set fromp and top. To extract a number of particle images at random, set nran to the desired number. With avg=yes the global average of the stack is calculated. If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images
+\item[--] \prgname{shift} is a program for shifting a stack according to origin shifts in oritab
+\end{itemize}
+
+\subsubsection{ORIENTATION PROCESSING PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{make\_oris} is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated. If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even is set to yes, then all nptcls orientations are assigned quasi-even projection directions and  random in-plane parameters. If nstates is set to some integer number > 0, then states are assigned randomly
+\item[--] \prgname{orisops} is a program for modifying SIMPLE orientation/parameter files. If errify=yes, uniform random angular errors, and uniform origin shift errors,  and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation e1=e1, e2=180+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a 3D reflection matrix. If e1, e2, or e3 is inputted, the orientations are rotated correspondingly. If you input state, only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. If zero=yes, then the shifts are zeroed
+\item[--] \prgname{oristats} is a program for analyzing SIMPLE orientation/parameter files. If two orientation tables (oritab and oritab2) are inputted, statistics of the distances between the orientations in the two documents are provided
+\item[--] \prgname{vizoris} is a program for extracting projection directions from orientations for visualization in UCSF Chimera
+\end{itemize}
+
+\subsubsection{PRINT INFO PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{info\_image}
+\item[--] \prgname{info\_stktab}
+\item[--] \prgname{print\_fsc}
+\item[--] \prgname{print\_frcs}
+\item[--] \prgname{print\_magic\_boxes}
+\end{itemize}
+
+\subsubsection{SIMULATOR PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{simulate\_noise}
+\item[--] \prgname{simulate\_particles}
+\item[--] \prgname{simulate\_movie}
+\item[--] \prgname{simulate\_subtomogram}
+\end{itemize}
+
+\subsubsection{SYSTEM INTERACTION PROGRAMS}
+\begin{itemize}
+\item[--] \prgname{mkdir}
+\end{itemize}
 
 \subsection{Execution of SIMPLE}
 SIMPLE is executed primarily via \texttt{simple\_distr\_exec} that implements higher level workflows intended for distributed execution on workstations and clusters using a hybrid parallelisation model (distributed \textit{and} shared memory). SIMPLE can also be executed via \texttt{simple\_exec}, which implements all individual SIMPLE programs and runs in shared-memory parallelisation mode. Please, beware that the high-level workflows (\prgname{prime2D} and \prgname{ini3D\_from\_cavgs}, for example) can \textit{only} be executed via the distributed execution route. In cluster environments using a job scheduler (PBS, SLURM and SGE are supported by SIMPLE) the file \texttt{simple\_distr\_config.env} in the current working directory controls the execution.
-\begin{verbatim}
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 bash-3.2$ cat simple_distr_config.env 
 # CONFIGURATION FILE FOR DISTRIBUTED SIMPLE EXECUTION
 
@@ -617,7 +716,7 @@ job_ntasks            = 1
 job_memory_per_task   = 48000
 job_name              = taf-dna-part2
 job_ntasks_per_socket = 1
-\end{verbatim}
+\end{Verbatim}
 This file is auto-generated on workstations, but it needs to be edited by the user in cluster environments. If you need help configuring distributed SIMPLE execution, please file a help ticket on the webpage. The two most important parameters for distributed execution is the number of partitions \texttt{nparts} and the number of shared-memory CPU threads \texttt{nthr}. A rule of thumb for good performance on multi-socket workstations is to minimise the number of parts and maximising the number of threads subject to never having fewer parts than sockets. The shared memory parallelisation does not benefit from the use of a larger number of threads than the number of logical threads available on a socket. To check the number of processors on a linux system, execute \texttt{nproc} in the terminal. Consider a heterogeneous cluster with N nodes, two CPU sockets per node and six CPUs per socket.
 \begin{SCfigure}[][h]
 \includegraphics[keepaspectratio=true,scale=0.6]{../CPUtopo/cputopo}
@@ -626,22 +725,22 @@ This file is auto-generated on workstations, but it needs to be edited by the us
 If you are unsure how to configure your SIMPLE execution please file a help ticket.
 
 We normally let \prgname{simple\_distr\_exec} run in the background on the login node of our cluster. An example of how to distribute \prgname{prime2D} using ten nodes is provided below.
-\begin{verbatim}
-@!#> nohup simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+nohup simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100
 ncls=600 nthr=8 nparts=10 >> PRIME2DOUT &
-\end{verbatim}
+\end{Verbatim}
 Another option available on clusters that use the SLURM scheduler is to use the \texttt{srun} command for \prgname{simple\_distr\_exec} via
-\begin{verbatim}
-@!#> srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=1 --mem=32000 
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+srun --ntasks=1 --ntasks-per-socket=1 --cpus-per-task=1 --mem=32000 
 --time=2-0:0:0 --output=PRIME2DOUT.%j --error=PRIME2DERR.%j
 simple_distr_exec prg=prime2D stk=ptcls.mrc smpd=1.77 msk=100
 ncls=600 nthr=8 nparts=10 &
-\end{verbatim}
+\end{Verbatim}
 However, beta testers have reported that srun job sometimes dies with no warning, possibly because of the low tolerance for network errors. A more robust route may be to use \texttt{sbatch} as follows
-\begin{verbatim}
-@!#>  sbatch -p MYCLUSTER --wrap="simple_distr_exec prg=prime2D stk=ptcls.mrc 
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+sbatch -p MYCLUSTER --wrap="simple_distr_exec prg=prime2D stk=ptcls.mrc 
 smpd=1.77 msk=100 ncls=600 nthr=8 nparts=10 >> PRIME2DOUT"
-\end{verbatim}
+\end{Verbatim}
 where the \texttt{--wrap} flag automatically generates a bash script for the given command.
 
 \subsection{From Movies to Near-atomic Resolution Map}

@@ -25,44 +25,44 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)            :: xnew_project
-type(update_project_commander)         :: xupdate_project
-type(print_project_info_commander)     :: xprint_project_info
-type(print_project_field_commander)    :: xprint_project_field
-type(import_movies_commander)          :: ximport_movies
-type(import_boxes_commander)           :: ximport_boxes
-type(import_particles_commander)       :: ximport_particles
-type(import_cavgs_commander)           :: ximport_cavgs
-type(subset_project_commander)         :: xsubset_project
-type(export_starproject_commander)     :: xexport_starproject
-type(import_starproject_commander)     :: ximport_starproject
-type(print_starproject_info_commander) :: xprint_starproject_info
+type(new_project_commander)         :: xnew_project
+type(update_project_commander)      :: xupdate_project
+type(print_project_info_commander)  :: xprint_project_info
+type(print_project_field_commander) :: xprint_project_field
+type(import_movies_commander)       :: ximport_movies
+type(import_boxes_commander)        :: ximport_boxes
+type(import_particles_commander)    :: ximport_particles
+type(import_cavgs_commander)        :: ximport_cavgs
+type(subset_project_commander)      :: xsubset_project
+type(export_starproject_commander)  :: xexport_starproject
+type(import_starproject_commander)  :: ximport_starproject
+type(report_selection_commander)    :: xreport_selection
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(extract_commander)          :: xextract
-type(reextract_commander)        :: xreextract
-type(cluster_cavgs_commander)    :: xcluster_cavgs
-type(symaxis_search_commander)   :: xsymsrch
-type(symmetry_test_commander)    :: xsymtst
-type(postprocess_commander)      :: xpostprocess
-type(report_selection_commander) :: xreport_selection
+type(extract_commander)        :: xextract
+type(reextract_commander)      :: xreextract
+type(cluster_cavgs_commander)  :: xcluster_cavgs
+type(symaxis_search_commander) :: xsymsrch
+type(symmetry_test_commander)  :: xsymtst
+type(postprocess_commander)    :: xpostprocess
+
 
 ! IMAGE PROCESSING PROGRAMS
-type(mask_commander)           :: xmask
-type(fsc_commander)            :: xfsc
-type(local_res_commander)      :: xlocal_res
-type(local_res2D_commander)    :: xlocal_res2D
-type(centervol_commander)      :: xcenter
-type(reproject_commander)      :: xreproject
-type(volops_commander)         :: xvolops
-type(convert_commander)        :: xconvert
-type(ctfops_commander)         :: xctfops
-type(filter_commander)         :: xfilter
-type(normalize_commander)      :: xnormalize
-type(scale_commander)          :: xscale
-type(stack_commander)          :: xstack
-type(stackops_commander)       :: xstackops
-type(shift_commander)          :: xshift
+type(mask_commander)        :: xmask
+type(fsc_commander)         :: xfsc
+type(local_res_commander)   :: xlocal_res
+type(local_res2D_commander) :: xlocal_res2D
+type(centervol_commander)   :: xcenter
+type(reproject_commander)   :: xreproject
+type(volops_commander)      :: xvolops
+type(convert_commander)     :: xconvert
+type(ctfops_commander)      :: xctfops
+type(filter_commander)      :: xfilter
+type(normalize_commander)   :: xnormalize
+type(scale_commander)       :: xscale
+type(stack_commander)       :: xstack
+type(stackops_commander)    :: xstackops
+type(shift_commander)       :: xshift
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
@@ -118,9 +118,6 @@ select case(prg)
         call xprint_project_info%execute(cline)
     case( 'print_project_field' )
         call xprint_project_field%execute(cline)
-    case( 'report_selection' )
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call xreport_selection%execute(cline)
     case( 'import_movies' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
@@ -146,9 +143,9 @@ select case(prg)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call ximport_starproject%execute(cline)
-    case( 'print_starproject_info' )
-        if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
-        call xprint_starproject_info%execute(cline)
+    case( 'report_selection' )
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call xreport_selection%execute(cline)
 
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 
@@ -180,6 +177,7 @@ select case(prg)
     case( 'postprocess' )
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)
+
 
     ! IMAGE PROCESSING PROGRAMS
 

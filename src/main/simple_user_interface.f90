@@ -771,9 +771,10 @@ contains
         call cleanup2D%new(&
         &'cleanup2D',&                                                          ! name
         &'Simultaneous 2D alignment and clustering of single-particle images',& ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm',& ! descr_long
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
+        & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &0, 0, 0, 5, 3, 1, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 5, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -864,11 +865,11 @@ contains
     subroutine new_cluster2D_stream
         ! PROGRAM SPECIFICATION
         call cluster2D_stream%new(&
-        &'cluster2D_stream',&                                                                                             ! name
-        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',&                         ! descr_short
-        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm in streaming mode',&  ! descr_long
-        &'simple_distr_exec',&                                                                                            ! executable
-        &0, 1, 0, 8, 4, 2, 2, .true.)                                                                                     ! # entries in each group, requires sp_project
+        &'cluster2D_stream',&                                                                     ! name
+        &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
+        &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
+        &'simple_distr_exec',&                                                                    ! executable
+        &0, 1, 0, 8, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1310,8 +1311,8 @@ contains
         call initial_3Dmodel%new(&
         &'initial_3Dmodel',&                                                          ! name
         &'3D ab initio model generation from class averages',&                        ! descr_short
-        &'is a distributed workflow for generating an initial 3D model from class'&
-        &' averages obtained with cluster2D',&                                        ! descr_long
+        &'is a distributed workflow for generating an initial 3D model from class&
+        & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
         &0, 0, 0, 7, 6, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1398,9 +1399,9 @@ contains
         call import_movies%new(&
         &'import_movies',&                                       ! name
         &'Import movies to SIMPLE project',&                     ! descr_short
-        &'is a program for importing DDD movies to the project. The movies can be located in any read-only location '&
-        &'accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected '&
-        &'and integrated. Box files (in EMAN format) can be imported along with the movies',&
+        &'is a program for importing DDD movies to the project. The movies can be located in any read-only location&
+        & accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected&
+        & and integrated. Box files (in EMAN format) can be imported along with the movies',&
         &'simple_exec',&                                         ! executable
         &1, 8, 0, 0, 0, 0, 0, .true.)                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1526,7 +1527,7 @@ contains
         call export_starproject%new(&
         &'export_starproject',&                                       ! name
         &'Import STAR project ',&                                     ! descr_short
-        &'is a program for importing STAR-formatted EM project files to the project and saving as SIMPLE project',&
+        &'is a program for exporting a SIMPLE project as a STAR-formatted EM project',&
         &'simple_exec',&                                              ! executable
         &0, 2, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1608,7 +1609,7 @@ contains
         &'make_cavgs', &                           ! name
         &'Make class averages',&                   ! descr_short
         &'is a distributed workflow for generating class averages or initial random references&
-        &for cluster2D execution',&                ! descr_long
+        & for cluster2D execution',&                ! descr_long
         &'simple_distr_exec',&                     ! executable
         &1, 3, 0, 0, 0, 0, 2, .true.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1638,12 +1639,11 @@ contains
         call make_oris%new(&
         &'make_oris',&                       ! name
         &'Make orientations',&               ! descr_short
-        &'is a program for making SIMPLE orientation files. Make_oris generates random Euler angles e1.in.[0,360], e2.in.[0,180] '&
-        &'and e3.in.[0,360] and random origin shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number '&
-        &'> 0, the shifts x.in.[-trs,yrs] and y.in.[-trs,yrs]. If ndiscrete is set to an integer number > 0, the orientations '&
-        &'produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters '&
-        &'are assigned randomly. If even=yes, then all nptcls orientations are assigned quasi-even projection directions and '&
-        &'random in-plane parameters. If nstates is set to some integer number > 0, then states are assigned randomly .in.[1,nstates]',&
+        &'is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated.&
+        & If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of&
+        & ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even is set&
+        & to yes, then all nptcls orientations are assigned quasi-even projection directions and  random in-plane parameters.&
+        & If nstates is set to some integer number > 0, then states are assigned randomly',&
         &'simple_exec',&                     ! executable
         &0, 10, 0, 0, 0, 0, 1, .false.)      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -1802,7 +1802,7 @@ contains
         &weighting of the frames using a correlation-based M-estimator and continuous optimisation of &
         &the shift parameters. If dose_rate and exp_time are given, the individual frames will be &
         &low-pass filtered accordingly (dose-weighting strategy). The exp_doc document should contain &
-        &per line exp_time=X and dose_rate=Y. It is asssumed that the input list of movies (one per tilt) &
+        &per line exp_time=X and dose_rate=Y. It is assumed that the input list of movies (one per tilt) &
         &are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. &
         &If scale is given, the movie will be Fourier cropped according to the down-scaling factor &
         &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
@@ -2198,7 +2198,7 @@ contains
         call print_project_info%new(&
         &'print_project_info', &                                             ! name
         &'Print project info',&                                              ! descr_short
-        &'is a program prints information abourt a *.simple project file',&  ! descr_long
+        &'is a program prints information about a *.simple project file',&   ! descr_long
         &'simple_exec',&                                                     ! executable
         &0, 0, 0, 0, 0, 0, 0, .true.)                                        ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2318,16 +2318,16 @@ contains
         call orisops%new(&
         &'orisops',&                      ! name
         &'Standard orientation editing',& ! descr_short
-        &'is a program for modifying SIMPLE orientation/parameter files. If errify=yes, '&
-        &'uniform random angular errors .in.[-angerr,angerr], and uniform origin shift errors .in.[-sherr,sherr], '&
-        &'and uniform random defocus errors .in.[-dferr,dferr] are introduced. If nstates > 1 then random states are assigned '&
-        &'.in.[1,nstates]. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation '&
-        &'e1=e1, e2=180.+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the '&
-        &'relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a '&
-        &'3D reflection matrix. If e1, e2, or e3 is '&
-        &'inputted, the orientations are rotated correspondingly. If you input state, '&
-        &'only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. '&
-        &'If zero=yes, then the shifts are zeroed',&
+        &'is a program for modifying SIMPLE orientation/parameter files. If errify=yes,&
+        & uniform random angular errors, and uniform origin shift errors, &
+        & and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned.&
+        & If mirr=2d, then the Euler angles in oritab are mirrored according to the relation&
+        & e1=e1, e2=180+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the&
+        & relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a&
+        & 3D reflection matrix. If e1, e2, or e3 is&
+        & inputted, the orientations are rotated correspondingly. If you input state,&
+        & only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul.&
+        & If zero=yes, then the shifts are zeroed',&
         &'simple_exec',&                  ! executable
         &0, 19, 0, 0, 0, 0, 0, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2377,9 +2377,9 @@ contains
         call oristats%new(&
         &'oristats',&                             ! name
         &'Statistical analyses of orientations',& ! descr_short
-        &'is a program for analyzing SIMPLE orientation/parameter files. If two orientation '&
-        &'tables (oritab and oritab2) are inputted, statistics of the distances between the orientations '&
-        &'in the two documents are provided',&
+        &'is a program for analyzing SIMPLE orientation/parameter files. If two orientation&
+        & tables (oritab and oritab2) are inputted, statistics of the distances between the orientations&
+        & in the two documents are provided',&
         &'simple_exec',&                          ! executable
         &0, 9, 0, 0, 0, 0, 1, .false.)            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2414,9 +2414,9 @@ contains
         call reconstruct3D%new(&
         &'reconstruct3D',&                                                     ! name
         &'3D reconstruction from oriented particles',&                         ! descr_long
-        &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, '&
-        &'given input orientations and state assignments. The algorithm is based on direct Fourier inversion '&
-        &'with a Kaiser-Bessel (KB) interpolation kernel',&
+        &'is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks,&
+        & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
+        & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
         &0, 0, 0, 2, 2, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2598,7 +2598,7 @@ contains
         call scale_project%new(&
         &'scale_project', &                                                                ! name
         &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
-        &'is a program for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
+        &'is a distributed workflow for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2850,16 +2850,16 @@ contains
         call stackops%new(&
         &'stackops',&                                ! name
         &'Standard stack editing',&                  ! descr_short
-        &'is a program that provides standard single-particle image processing routines for MRC or SPIDER '&
-        &'stacks. To extract a particular state, give oritab and set state. '&
-        &'To select the fraction of best particles, give oritab '&
-        &'and set frac. State and frac options can be combined. '&
-        &'To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation '&
-        &'function, set acf=yes. To extract a contiguous subset of images from the stack, set '&
-        &'fromp and top. To extract a number of particle images at random, set nran to the desired number.'&
-        &'With avg=yes the global average of the stack is calculated. '&
-        &'If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, '&
-        &'which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
+        &'is a program that provides standard single-particle image processing routines for MRC or SPIDER&
+        & stacks. To extract a particular state, give oritab and set state.&
+        & To select the fraction of best particles, give oritab&
+        & and set frac. State and frac options can be combined.&
+        & To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation&
+        & function, set acf=yes. To extract a contiguous subset of images from the stack, set&
+        & fromp and top. To extract a number of particle images at random, set nran to the desired number.&
+        & With avg=yes the global average of the stack is calculated.&
+        & If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced,&
+        & which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images',& ! descr_long
         &'simple_exec',&                             ! executable
         &2, 18, 0, 0, 0, 0, 1, .false.)              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2927,14 +2927,13 @@ contains
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION
         call symaxis_search%new(&
-        &'symaxis_search',&                                                                                        ! name
-        &'Search for symmetry axis',&                                                                              ! descr_short
+        &'symaxis_search',&                                                                                 ! name
+        &'Search for symmetry axis',&                                                                       ! descr_short
         &'is a program for searching for the principal symmetry axis of a volume reconstructed in C1. &
         &The rotational transformation is applied to the oritype field in the project and the project &
-        &file is updated. If you are unsure about the point-group, use the compare=yes mode and input the highest &
-        &conceviable point-group. The program then calculates probabilities for all lower groups inclusive',&      ! descr_long
-        &'simple_exec',&                                                                                           ! executable
-        &1, 1, 0, 2, 3, 1, 1, .false.)                                                                             ! # entries in each group, requires sp_project
+        &file is updated. If you are unsure about the point-group, use the symmetry_test program instead',& ! descr_long
+        &'simple_exec',&                                                                                    ! executable
+        &1, 1, 0, 2, 3, 1, 1, .false.)                                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symaxis_search%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry axis of', 'C1 Volume to identify symmetry axis of', &
@@ -2962,12 +2961,12 @@ contains
     subroutine new_symmetry_test
         ! PROGRAM SPECIFICATION
         call symmetry_test%new(&
-        &'symmetry_test',&                                                                                            ! name
-        &'Statistical test for symmetry',&                                                                            ! descr_short
+        &'symmetry_test',&                                                                                           ! name
+        &'Statistical test for symmetry',&                                                                           ! descr_short
         &'is a program that implements a statistical test for point-group symmetry. &
-        &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry.',& ! descr long
-        &'simple_exec',&                                                                                              ! executable
-        &1, 1, 0, 3, 3, 2, 1, .false.)                                                                                ! # entries in each group, requires sp_project
+        &Input is a volume reconstructed without symmetry (c1) and output is the most likely point-group symmetry',& ! descr long
+        &'simple_exec',&                                                                                             ! executable
+        &1, 1, 0, 3, 3, 2, 1, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call symmetry_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
