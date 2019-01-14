@@ -790,7 +790,6 @@ contains
         ! input directory
         if( cline%defined('dir_box') )then
             dir_box = trim(params%dir_box)
-            print *, dir_box(1:1)
             if( params%mkdir.eq.'yes' .AND. dir_box(1:1).ne.'/') dir_box=trim(filepath(PATH_PARENT,dir_box))
             if( file_exists(dir_box) )then
                 call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
