@@ -150,7 +150,7 @@ contains
         if( cline%defined('msk') )then
             msk = params%msk*scale_factor
         else
-            msk = real(box/2)-3.
+            msk = real(box/2)-COSMSKHALFWIDTH
         endif
         ring2 = 0.8*msk
         lp1   = max(2.*smpd, max(params%lp,TARGET_LP))

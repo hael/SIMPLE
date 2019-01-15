@@ -259,11 +259,10 @@ contains
         ! updates relevant segments
         select case(iseg)
             case(MIC_SEG)
+                call spproj%os_mic%set_all('state', real(states))
                 nstks = spproj%os_stk%get_noris()
                 if(nstks > 0)then
-                    if( noris == nstks )then
-                        call spproj%os_mic%set_all('state', real(states))
-                    else
+                    if( noris /= nstks )then
                         THROW_HARD('This project file has already undergone some selection, use parent project instead')
                     endif
                     call spproj%report_state2stk(states)
