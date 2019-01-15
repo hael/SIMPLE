@@ -68,6 +68,7 @@ contains
     procedure          :: get_frcs
     procedure          :: get_imginfo_from_osout
     ! getters
+    procedure          :: get_n_insegment
     procedure          :: get_nptcls
     procedure          :: get_box
     procedure          :: get_smpd
@@ -90,6 +91,7 @@ contains
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
     procedure          :: gen_ptcls_subset
+    procedure          :: report_state2stk
     ! I/O
     ! printers
     procedure          :: print_info
@@ -438,15 +440,16 @@ contains
         do icls=1,sz_cls3D
             call self%os_cls3D%set(icls, 'state', real(states(icls)))
         end do
-        ! map selection to self%os_ptcl2D
+        ! map selection to self%os_ptcl2D & os_ptcl3D
         ncls = sz_states
-        if( self%os_ptcl2D%get_noris() > 0 )then
+        if( self%os_ptcl2D%get_noris()>0 .and. self%os_ptcl3D%get_noris() > 0)then
             do icls=1,ncls
                 call self%os_ptcl2D%get_pinds(icls, 'class', pinds)
                 if( allocated(pinds) )then
                     rstate = real(states(icls))
                     do i=1,size(pinds)
                         call self%os_ptcl2D%set(pinds(i), 'state', rstate)
+                        call self%os_ptcl3D%set(pinds(i), 'state', rstate)
                     end do
                     deallocate(pinds)
                 endif
@@ -1608,6 +1611,28 @@ contains
 
     ! getters
 
+    integer function get_n_insegment( self, oritype )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: oritype
+        class(oris), pointer :: pos => NULL()
+        get_n_insegment = 0
+        select case(oritype)
+            case('stk')
+                get_n_insegment = self%get_nstks()
+            case('ptcl2D','ptcl3D')
+                ! # ptcl2D = # ptcl3D
+                get_n_insegment = self%get_nptcls()
+                if( get_n_insegment /= self%os_ptcl2D%get_noris() .or.&
+                   &get_n_insegment /= self%os_ptcl3D%get_noris() )then
+                   THROW_HARD('Inconstitent number of particles in STK/PTCL2D/PTCL3D segments; get_n_insegment')
+                endif
+            case DEFAULT
+                call self%ptr2oritype(oritype, pos)
+                get_n_insegment = pos%get_noris()
+                nullify(pos)
+        end select
+    end function get_n_insegment
+
     integer function get_nptcls( self )
         class(sp_project), target, intent(inout) :: self
         integer :: i, nos
@@ -2210,6 +2235,14 @@ contains
                 deallocate(particles)
             endif
         end do
+        ! cls3D mirrors cls2D
+        if( self%os_cls3D%get_noris() == ncls)then
+            do icls=1,ncls
+                call self%os_cls3D%set(icls, 'state', self%os_cls2D%get(icls,'state'))
+            enddo
+        else if( self%os_cls3D%get_noris() > 0 )then
+            THROW_WARN('Inconsistent number of classes in cls2D & cls3D segments')
+        endif
         ! state = 0 all entries that don't have a state label
         do iptcl=1,noris_ptcl2D
             if( .not. self%os_ptcl2D%isthere(iptcl, 'state') ) call self%os_ptcl2D%set(iptcl, 'state', 0.)
@@ -2304,6 +2337,47 @@ contains
         call ctftab%kill
         deallocate(order)
     end subroutine gen_ptcls_subset
+
+    ! report state selection to os_stk & os_ptcl2D/3D
+    subroutine report_state2stk( self, states )
+        class(sp_project), intent(inout) :: self
+        integer,           intent(in)    :: states(:)
+        integer   :: iptcl, noris_ptcl3D, noris_ptcl2D, istk, fromp, top, nstks, nptcls
+        real      :: rstate
+        nstks = self%get_nstks()
+        if( nstks == 0 )then
+            THROW_WARN('empty STK field. Nothing to do; report_state2stk')
+            return
+        endif
+        if(size(states) /= nstks)then
+            THROW_WARN('Inconsistent # number of states & stacks; report_state2stk')
+            return
+        endif
+        ! update stacks
+        do istk=1,nstks
+            call self%os_stk%set(istk, 'state', real(states(istk)))
+        enddo
+        ! ensure ptcl fields congruent
+        noris_ptcl2D = self%os_ptcl2D%get_noris()
+        noris_ptcl3D = self%os_ptcl3D%get_noris()
+        if( noris_ptcl3D /= noris_ptcl2D )then
+            THROW_HARD('Inconsistent # number of 2D/3D particles; report_state2stk')
+        else
+            do istk=1,nstks
+                rstate = real(states(istk))
+                fromp  = nint(self%os_stk%get(istk,'fromp'))
+                top    = nint(self%os_stk%get(istk,'top'))
+                nptcls = nint(self%os_stk%get(istk,'nptcls'))
+                if(top-fromp+1 /= nptcls)then
+                    THROW_HARD('Incorrect # number of particles in stack; report_state2stk')
+                endif
+                do iptcl=fromp,top
+                    call self%os_ptcl2D%set(iptcl, 'state', rstate)
+                    call self%os_ptcl3D%set(iptcl, 'state', rstate)
+                enddo
+            enddo
+        endif
+    end subroutine report_state2stk
 
     ! printers
 

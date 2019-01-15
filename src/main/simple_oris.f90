@@ -71,7 +71,9 @@ type :: oris
     procedure, private :: assign
     generic            :: assignment(=) => assign
     procedure          :: reject
-    procedure          :: delete_entry
+    generic            :: delete_entry => delete_entry_1, delete_entry_2
+    procedure          :: delete_entry_1
+    procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
     procedure          :: set_euler
     procedure          :: set_shift
@@ -1263,14 +1265,25 @@ contains
         call self%o(i)%reject
     end subroutine reject
 
-    subroutine delete_entry( self, key )
+    subroutine delete_entry_1( self, key )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: key
         integer :: i
         do i=1,self%n
             call self%o(i)%delete_entry(key)
         end do
-    end subroutine delete_entry
+    end subroutine delete_entry_1
+
+    subroutine delete_entry_2( self, ind, key )
+        class(oris),      intent(inout) :: self
+        integer,          intent(in)    :: ind
+        character(len=*), intent(in)    :: key
+        if( ind < 0 .or. ind > self%n )then
+            THROW_WARN('index out of range; simple_oris % delete_entry_2')
+            return
+        endif
+        call self%o(ind)%delete_entry(key)
+    end subroutine delete_entry_2
 
     subroutine delete_2Dclustering( self )
         class(oris), intent(inout) :: self

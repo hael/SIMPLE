@@ -89,7 +89,6 @@ type(mkdir_commander) :: xmkdir
 character(len=STDLEN) :: xarg, prg, entire_line
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
-type(projection_frcs) :: pfrcs
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)

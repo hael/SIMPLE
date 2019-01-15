@@ -972,6 +972,7 @@ contains
             ! clean
             call boxfile%kill()
         enddo
+        call progress(1,1)
         ! we do a full write here as multiple fields are updated
         call build%spproj%write
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
@@ -1032,6 +1033,7 @@ contains
         logical :: l_2d
         call params%new(cline)
         if(cline%defined('oritype'))then
+            ! whether to use shifts from 2D or 3D
             l_2d = params%oritype=='ptcl2D'
         else
             l_2d= .true.
@@ -1173,6 +1175,7 @@ contains
             call make_relativepath(CWD_GLOB, stack, rel_stack)
             call spproj%os_stk%set(istk,'stk',rel_stack)
         enddo
+        call progress(1,1)
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         write(logfhandle,'(A,I8)')'>>> OUT OF LIMITS PARTICLES: ', noutside_tot
         call spproj%write
