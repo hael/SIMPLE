@@ -345,6 +345,8 @@ contains
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
+    procedure          :: fft_noshift
+
     ! DESTRUCTOR
     procedure :: kill
 end type image
@@ -6258,6 +6260,13 @@ end subroutine NLmean
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
     end subroutine bwd_ft
+
+    subroutine fft_noshift( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) return
+        call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
+        self%ft = .true.
+    end subroutine fft_noshift
 
     !> \brief ft2img  generates images for visualization of a Fourier transform
     subroutine ft2img( self, which, img )

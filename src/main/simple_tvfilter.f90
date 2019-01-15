@@ -22,7 +22,7 @@ contains
 end type tvfilter
 
 contains
-
+    
     subroutine apply_filter( self, img, lambda, idx )
         class(tvfilter),   intent(inout) :: self
         class(image),      intent(inout) :: img
@@ -33,34 +33,44 @@ contains
         real    :: img_smpd
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
+        logical :: do_alloc
+        integer :: dims1
         if (.not. present(idx)) then
             idx_here = 1
         else
             idx_here = idx
         end if        
         img_ldim = img%get_ldim()
+        self%img_dims(1:2) = img_ldim(1:2) 
         if (idx_here > img_ldim(3)) then
             THROW_HARD('tvfilter::apply_filter : idx greater than stack size')
         end if
         img_smpd = img%get_smpd()
-        rb_ldim  = self%r_img%get_ldim()
-        if (any(img_ldim(1:2) .ne. rb_ldim(1:2))) then
+        do_alloc = .true.
+        if (self%r_img%exists()) then
+            rb_ldim  = self%r_img%get_ldim()
+            if (all(img_ldim(1:2) == rb_ldim(1:2))) then
+                do_alloc = .false.
+            end if
+        end if
+        if (do_alloc) then
             rb_ldim(1:2) = img_ldim(1:2)
             rb_ldim(3)   = 1
             call self%r_img%new(rb_ldim, img_smpd)
             call self%b_img%new(rb_ldim, img_smpd)
             call self%fill_b()
             call self%fill_r()
-            call self%r_img%fft()
-            call self%b_img%fft()
+            call self%r_img%fft_noshift()
+            call self%b_img%fft_noshift()
         end if
         img_ft_prev = img%is_ft()
         if (.not. img_ft_prev) call img%fft()
         call self%b_img%get_cmat_ptr(cmat_b)
         call self%r_img%get_cmat_ptr(cmat_r)
         call img%get_cmat_ptr(cmat_img)
-        cmat_img(:,:,idx_here) = cmat_img(:,:,idx_here) * conjg(cmat_b(:,:,1)) / &
-            (real(cmat_b(:,:,1))**2 + aimag(cmat_b(:,:,1))**2 + lambda * cmat_r(:,:,1))
+        dims1 = int(img_ldim(1)/2)+1
+        cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * conjg(cmat_b(1:dims1,:,1)) / &
+            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
 
@@ -69,28 +79,14 @@ contains
         self%existence   = .true.
     end subroutine new_tvfilter
 
-    subroutine assign_image( self, image_in )
-        class(tvfilter),      intent(inout) :: self
-        class(image), target, intent(in)    :: image_in
-        integer :: ldim_here(3)
-        self%image_ptr     => image_in
-        ldim_here          =  image_in%get_ldim()
-        if (any(self%img_dims(:) .ne. ldim_here(1:2))) then
-            self%img_dims(1:2) = ldim_here(1:2)
-            call self%fill_b()
-            call self%fill_r()            
-        end if
-    end subroutine assign_image
-
     subroutine fill_b(self)
         class(tvfilter), intent(inout) :: self
         integer :: nonzero_x(3), nonzero_y(3)         ! indices of non-zero entries in x- and y-component
         real    :: nonzero_pt_x(3),  nonzero_pt_y(3)  ! points of non-zero entries
         real    :: nonzero_val_x(3), nonzero_val_y(3) ! values of non-zero entries
-        real    :: tmp
         integer :: i, j, x, y
-        real, pointer     :: b(:,:,:)
-        call self%b_img%get_rmat_ptr(b)        
+        real, pointer :: b(:,:,:)
+        call self%b_img%get_rmat_ptr(b)
         nonzero_x   (1) = 1
         nonzero_pt_x(1) = 0.
         nonzero_x   (2) = 2
