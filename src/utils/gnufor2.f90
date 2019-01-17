@@ -972,7 +972,7 @@ contains
         nx=size(x)
         xmin=minval(x)
         xmax=maxval(x)
-        dx=(xmax+1-xmin)/n
+        dx=(xmax+0.0001-xmin)/n
         do i=0,n
             xhist(i)=xmin+i*dx
         end do

@@ -66,7 +66,6 @@ contains
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
-    procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
@@ -215,7 +214,7 @@ contains
     procedure          :: erosion
     procedure          :: morpho_closing
     procedure          :: morpho_opening
-    procedure, private :: border_mask
+    procedure          :: border_mask
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -238,6 +237,10 @@ contains
     procedure, private :: apply_filter_2
     generic            :: apply_filter => apply_filter_1, apply_filter_2
     procedure          :: apply_filter_serial
+    procedure, private :: imfilter1
+    procedure, private :: imfilter2
+    procedure, private :: imfilter3
+    generic            :: imfilter => imfilter1, imfilter2, imfilter3
     procedure          :: phase_rand
     procedure          :: hannw
     procedure          :: real_space_filter
@@ -261,6 +264,7 @@ contains
     procedure, private :: calc_neigh_8_1
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
+    procedure          :: calc3D_neigh_8
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -345,8 +349,6 @@ contains
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
-    procedure          :: fft_noshift
-
     ! DESTRUCTOR
     procedure :: kill
 end type image
@@ -3207,24 +3209,31 @@ contains
         real              :: neigh_8(9), tmp, diff
         integer           :: i, j, ii, jj, n_it, n_maxit, nsz, cnt
         logical           :: finished_job
-        call img_cc%new (img_in%ldim,img_in%smpd)
+        call img_cc%new  (img_in%ldim,img_in%smpd)
         call img_out%new (img_in%ldim,img_in%smpd)
+        if(img_in%ldim(3) > 1) then
+            allocate(neigh_8(27), source = 0.)
+        else
+            allocate(neigh_8(9),  source = 0.)
+        endif
         ! enumerate white pixels
         cnt     = 0 ! # labels
         n_maxit = 0
         do i = 1, img_in%ldim(1)
             do j = 1, img_in%ldim(2)
-                if( img_in%rmat(i,j,1) > 0.5 )then
-                    cnt = cnt + 1
-                    img_cc%rmat(i,j,1) = real(cnt)
-                    n_maxit = max(cnt,n_maxit)
-                endif
+                do k = 1, img_in%ldim(3)
+                    if( img_in%rmat(i,j,k) > 0.5 )then
+                        cnt = cnt + 1
+                        img_cc%rmat(i,j,k) = real(cnt)
+                        n_maxit = max(cnt,n_maxit)
+                    endif
+                enddo
             enddo
         enddo
         ! find connected components in parallel
         finished_job = .false.
         allocate(mat4compare(img_cc%ldim(1),img_cc%ldim(2),img_cc%ldim(3)), source = 0.)
-        !$omp parallel default(shared) private(i,j,neigh_8,nsz,ii,jj) proc_bind(close)
+        !$omp parallel default(shared) private(i,j,k,neigh_8,nsz) proc_bind(close)
         do n_it = 1, n_maxit
             if( .not. finished_job )then
                 !$omp workshare
@@ -3235,11 +3244,17 @@ contains
                 !$omp end single nowait
                 do i = 1, img_in%ldim(1)
                     do j = 1, img_in%ldim(2)
-                        if( img_in%rmat(i,j,1) > 0.5) then ! not background
-                            call img_cc%calc_neigh_8([i,j,1], neigh_8, nsz)
-                            img_cc%rmat(i,j,1) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
-                            diff = diff + abs(mat4compare(i,j,1) - img_cc%rmat(i,j,1))
-                        endif
+                        do k = 1, img_in%ldim(3)
+                            if( img_in%rmat(i,j,k) > 0.5) then ! not background
+                                if(img_in%ldim(3) > 1) then
+                                    call img_cc%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                                else
+                                    call img_cc%calc_neigh_8  ([i,j,1], neigh_8, nsz)
+                                endif
+                                img_cc%rmat(i,j,k) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
+                                diff = diff + abs(mat4compare(i,j,k) - img_cc%rmat(i,j,k))
+                            endif
+                        enddo
                     enddo
                 enddo
                 !$omp single
@@ -3252,14 +3267,16 @@ contains
         cnt = 0
         do i = 1, img_cc%ldim(1)
             do j = 1, img_cc%ldim(2)
-                if( img_cc%rmat(i,j,1) > 0.5 ) then  !rmat == 0  --> background
-                    cnt = cnt + 1
-                    tmp = img_cc%rmat(i,j,1)
-                    where(abs(img_cc%rmat - tmp) < TINY)
-                        img_out%rmat = cnt
-                        img_cc%rmat  = 0.            !Not to consider this cc again
-                    endwhere
-                endif
+                do k = 1, img_cc%ldim(3)
+                    if( img_cc%rmat(i,j,k) > 0.5 ) then  !rmat == 0  --> background
+                        cnt = cnt + 1
+                        tmp = img_cc%rmat(i,j,k)
+                        where(abs(img_cc%rmat - tmp) < TINY)
+                            img_out%rmat = cnt
+                            img_cc%rmat  = 0.            !Not to consider this cc again
+                        endwhere
+                    endif
+                enddo
             enddo
         enddo
         deallocate(mat4compare)
@@ -3271,10 +3288,11 @@ contains
     function size_connected_comps(self) result(sz)
         class(image), intent(in) :: self
         integer, allocatable :: sz(:,:)
-        integer :: n_cc
+        integer :: n_cc,imax
         if(allocated(sz)) deallocate(sz)
-        allocate(sz(2,int(maxval(self%rmat))), source = 0)
-        do n_cc = int(maxval(self%rmat)),1,-1
+        imax = nint(maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))))
+        allocate(sz(2,imax), source = 0)
+        do n_cc = imax,1,-1
             sz(1, n_cc) = n_cc
             sz(2, n_cc) = count(abs(self%rmat-real(n_cc)) < TINY)
         enddo
@@ -3428,22 +3446,33 @@ contains
      ! the input image self. Border is true in corrispondence of
      ! the border pixels in self. Self is meant to be binary.
      ! It is necessary for erosion operation
-    subroutine border_mask(self, border)
-        class(image), intent(in)            :: self
+    subroutine border_mask(self, border, label)
+        class(image),         intent(in)    :: self
         logical, allocatable, intent(inout) :: border(:,:,:)
-        real    :: neigh_8(9)
-        integer :: i, j, nsz
-        if(self%ldim(3)/=1) THROW_HARD('This subroutine is for 2D images!; calc_border')
-        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-            THROW_HARD('input to calculate border not binary; calc_border')
+        integer, optional,    intent(in)    :: label
+        real,    allocatable :: neigh_8(:)
+        integer              :: i, j, k, nsz, llabel
+        llabel = 1
+        if(present(label)) llabel = label
         if(allocated(border)) deallocate(border)
         allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
+        if(self%ldim(3) == 1) then
+            allocate(neigh_8(9), source = 0.)
+        else
+            allocate(neigh_8(27), source = 0.)
+        endif
         do i = 1,self%ldim(1)
             do j = 1, self%ldim(2)
-                if(abs(self%rmat(i,j,1)-1.) < TINY ) then !white pixels
-                    call self%calc_neigh_8([i,j,1], neigh_8, nsz)
-                    if(any(abs(neigh_8(:nsz))<TINY)) border(i,j,1) = .true.
-                endif
+                do k = 1, self%ldim(3)
+                    if(abs(self%rmat(i,j,k)-real(llabel)) < TINY ) then !white pixels
+                        if(self%ldim(3) == 1) then
+                            call self%calc_neigh_8  ([i,j,k], neigh_8, nsz)
+                        else
+                            call self%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                        endif
+                        if(any(abs(neigh_8(:nsz))<TINY)) border(i,j,k) = .true.
+                    endif
+                enddo
             enddo
         enddo
     end subroutine border_mask
@@ -4183,6 +4212,116 @@ contains
         end do
     end subroutine apply_filter_serial
 
+   ! This function performs image filtering by convolution
+   ! with the 1D kernel filt. REAL SPACE.
+   subroutine imfilter1(img,filt)
+       class(image), intent(inout) :: img
+       type(image) :: img_p
+       real, allocatable   ::  rmat(:,:,:)
+       real, intent(in)    :: filt(:)
+       real, allocatable   :: shifted_filt(:)
+       real, allocatable   :: rmat_t(:,:,:)
+       integer :: ldim(3), sz_f(1), L1, L2, L3
+       integer :: i, j, k, m, n, o
+       ldim = img%get_ldim()
+       sz_f = shape(filt)
+       L1 = sz_f(1)
+       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2), source = filt)
+       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+       call img_p%new([ldim(1)+L1-1,ldim(2)+L1-1,1],1.)
+       call img%pad(img_p)
+       rmat = img_p%get_rmat()
+       !$omp parallel do collapse(2) default(shared) private(i,j,m)&
+       !$omp schedule(static) proc_bind(close)
+       do i = 1, ldim(1)
+         do j = 1, ldim(2)
+                 do m = -(L1-1)/2,(L1-1)/2
+                   rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m)
+             enddo
+         end do
+       end do
+       !omp end parallel do
+       call img%set_rmat(rmat_t)
+       deallocate(rmat, rmat_t, shifted_filt)
+   end subroutine imfilter1
+
+   ! This function performs image filtering by convolution
+   ! with the 2D kernel filt. REAL SPACE.
+   subroutine imfilter2(img,filt)
+       class(image), intent(inout) :: img
+       type(image) :: img_p
+       real, allocatable   ::  rmat(:,:,:)
+       real, intent(in)    :: filt(:,:)
+       real, allocatable   :: shifted_filt(:,:)
+       real, allocatable   :: rmat_t(:,:,:)
+       integer :: ldim(3), sz_f(2), L1, L2, L3
+       integer :: i, j, k, m, n, o
+       ldim = img%get_ldim()
+       sz_f = shape(filt)
+       L1 = sz_f(1)
+       L2 = sz_f(2)
+       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2, -(L2-1)/2:(L2-1)/2), source = filt)
+       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+       call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,1],1.)
+       call img%pad(img_p)
+       rmat = img_p%get_rmat()
+       !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
+       !$omp schedule(static) proc_bind(close)
+       do i = 1, ldim(1)
+           do j = 1, ldim(2)
+               do m = -(L1-1)/2,(L1-1)/2
+                   do n = -(L2-1)/2,(L2-1)/2
+                       rmat_t(i,j,1) = rmat_t(i,j,1)+rmat(i+m+1,j+n+1,1)*shifted_filt(m,n)
+                   enddo
+               enddo
+           end do
+       end do
+       !omp end parallel do
+       call img%set_rmat(rmat_t)
+       deallocate(rmat, rmat_t, shifted_filt)
+   end subroutine imfilter2
+
+   ! This function performs image filtering by convolution
+   ! with the 3D kernel filt. REAL SPACE.
+   subroutine imfilter3(img,filt)
+       class(image), intent(inout) :: img
+       type(image) :: img_p
+       real, allocatable   ::  rmat(:,:,:)
+       real, intent(in)    :: filt(:,:,:)
+       real, allocatable   :: shifted_filt(:,:,:)
+       real, allocatable   :: rmat_t(:,:,:)
+       integer :: ldim(3), sz_f(3), L1, L2, L3
+       integer :: i, j, k, m, n, o
+       ldim = img%get_ldim()
+       sz_f = shape(filt)
+       L1 = sz_f(1)
+       L2 = sz_f(2)
+       L3 = sz_f(3)
+       allocate(shifted_filt(-(L1-1)/2:(L1-1)/2,-(L2-1)/2:(L2-1)/2,-(L3-1)/2:(L3-1)/2), source = filt)
+       allocate(rmat_t(ldim(1),ldim(2),ldim(3)), source = 0.)
+       call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,ldim(3)+L3-1],1.)
+       call img%pad(img_p)
+       rmat = img_p%get_rmat()
+       !$omp parallel do collapse(2) default(shared) private(i,j,k,m,n,o)&
+       !$omp schedule(static) proc_bind(close)
+       do i = 1, ldim(1)
+           do j = 1, ldim(2)
+               do k = 1, ldim(3)
+                   do m = -(L1-1)/2,(L1-1)/2
+                       do n = -(L2-1)/2,(L2-1)/2
+                           do o = -(L3-1)/2,(L3-1)/2
+                               rmat_t(i,j,k) = rmat_t(i,j,k)+rmat(i+m+1,j+n+1,k+o+1)*shifted_filt(m,n,o)
+                           enddo
+                       enddo
+                   enddo
+               enddo
+           end do
+       end do
+       !omp end parallel do
+       call img%set_rmat(rmat_t)
+       deallocate(rmat, rmat_t, shifted_filt)
+   end subroutine imfilter3
+
     !> \brief phase_rand  is for randomzing the phases of the FT of an image from lp and out
     subroutine phase_rand( self, lp )
         class(image), intent(inout) :: self
@@ -4260,6 +4399,7 @@ contains
         type(winfuns)         :: fwin
         character(len=STDLEN) :: wstr
         type(image)           :: img_filt
+        real                  :: k2(3,3), k3(3,3,3) !laplacian kernels (2D-3D)
         ! check the number of pixels in window
         if( self%is_3d() )then
             npix = (2*winsz+1)**3
@@ -4356,6 +4496,10 @@ contains
             case('NLmean')
                 call self%NLmean()
                 img_filt%rmat = self%rmat
+            case('laplacian')
+                k2 = (1./8.)*reshape([0.,1.,0.,1.,-4., 1., 0., 1., 0.], [3,3])
+                call self%imfilter(k2)
+                img_filt = self
             case DEFAULT
                 THROW_HARD('unknown filter type; real_space_filter')
             end select
@@ -4405,6 +4549,11 @@ contains
                     end do
                 end do
                 !$omp end parallel do
+            case('laplacian')
+                k3 = (1./12.)*reshape([0.,0.,0., 0.,1.,0., 0.,0.,0.,&
+                &                     0.,1.,0., 1.,-6.,1., 0.,1.,0.,0.,0.,0., 0.,1.,0., 0.,0.,0.], [3,3,3])
+                call self%imfilter(k3)
+                img_filt = self
             case DEFAULT
                 THROW_HARD('unknown filter type; real_space_filter')
             end select
@@ -5033,7 +5182,193 @@ contains
         endif
     end subroutine calc_neigh_8_1
 
-    !!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!!
+    ! Returns 8-neighborhoods of the pixel position px in self
+    ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
+    ! of the first slice, then central slice and finally third slice.
+    ! The value of the pixel itself is saved as the last one.
+    ! This function is for volumes.
+    subroutine calc3D_neigh_8(self, px, neigh_8, nsz )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: px(3)
+        real,         intent(inout) :: neigh_8(27)
+        integer,      intent(out)   :: nsz
+        integer :: i, j, k
+        i = px(1)
+        j = px(2)
+        k = px(3)
+        if(k-1 < 0 .or. k+1 > self%ldim(3)) then
+            write(logfhandle,*) 'Please consider padding on the 3rd dim, I didn t implement all the cases :) '
+            THROW_HARD('Neigh of this px would exceed dim of the img; calc3D_neigh_8')
+        endif
+        ! identify neighborhood
+        if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
+            neigh_8(1) = self%rmat(i+1,j,k-1)
+            neigh_8(2) = self%rmat(i+1,j+1,k-1)
+            neigh_8(3) = self%rmat(i,j+1,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i+1,j,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i,j+1,k)
+            neigh_8(8) = self%rmat(i+1,j,k+1)
+            neigh_8(9) = self%rmat(i+1,j+1,k+1)
+            neigh_8(10) = self%rmat(i,j+1,k+1)
+            neigh_8(11) = self%rmat(i,j,k+1)
+            neigh_8(12) = self%rmat(i,j,k)
+            nsz = 12
+        else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then ! SE corner
+            neigh_8(1) = self%rmat(i-1,j,k-1)
+            neigh_8(2) = self%rmat(i-1,j-1,k-1)
+            neigh_8(3) = self%rmat(i,j-1,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i-1,j,k)
+            neigh_8(6) = self%rmat(i-1,j-1,k)
+            neigh_8(7) = self%rmat(i,j-1,k)
+            neigh_8(8) = self%rmat(i-1,j,k+1)
+            neigh_8(9) = self%rmat(i-1,j-1,k+1)
+            neigh_8(10) = self%rmat(i,j-1,k+1)
+            neigh_8(11) = self%rmat(i,j,k+1)
+            neigh_8(12) = self%rmat(i,j,k)
+            nsz = 12
+        else if (j-1 < 1  .and. i+1 >self%ldim(1)) then            ! SW corner
+            neigh_8(1) = self%rmat(i,j+1,k-1)
+            neigh_8(2) = self%rmat(i-1,j+1,k-1)
+            neigh_8(3) = self%rmat(i-1,j,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i,j+1,k)
+            neigh_8(6) = self%rmat(i-1,j+1,k)
+            neigh_8(7) = self%rmat(i-1,j,k)
+            neigh_8(8) = self%rmat(i,j+1,k+1)
+            neigh_8(9) = self%rmat(i-1,j+1,k+1)
+            neigh_8(10) = self%rmat(i-1,j,k+1)
+            neigh_8(11) = self%rmat(i,j,k+1)
+            neigh_8(12) = self%rmat(i,j,k)
+            nsz = 12
+        else if (j+1 > self%ldim(2) .and. i-1 < 1) then            ! NE corner
+            neigh_8(1) = self%rmat(i,j-1,k-1)
+            neigh_8(2) = self%rmat(i+1,j-1,k-1)
+            neigh_8(3) = self%rmat(i+1,j,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i,j-1,k)
+            neigh_8(6) = self%rmat(i+1,j-1,k)
+            neigh_8(7) = self%rmat(i+1,j,k)
+            neigh_8(8) = self%rmat(i,j-1,k+1)
+            neigh_8(9) = self%rmat(i+1,j-1,k+1)
+            neigh_8(10) = self%rmat(i+1,j,k+1)
+            neigh_8(11) = self%rmat(i,j,k+1)
+            neigh_8(12) = self%rmat(i,j,k)
+            nsz = 12
+        else if( j-1 < 1 ) then                                    ! N border
+            neigh_8(1) = self%rmat(i+1,j,k-1)
+            neigh_8(2) = self%rmat(i+1,j+1,k-1)
+            neigh_8(3) = self%rmat(i,j+1,k-1)
+            neigh_8(4) = self%rmat(i-1,j+1,k-1)
+            neigh_8(5) = self%rmat(i-1,j,k-1)
+            neigh_8(6) = self%rmat(i,j,k-1)
+            neigh_8(7) = self%rmat(i+1,j,k)
+            neigh_8(8) = self%rmat(i+1,j+1,k)
+            neigh_8(9) = self%rmat(i,j+1,k)
+            neigh_8(10) = self%rmat(i-1,j+1,k)
+            neigh_8(11) = self%rmat(i-1,j,k)
+            neigh_8(12) = self%rmat(i+1,j,k+1)
+            neigh_8(13) = self%rmat(i+1,j+1,k+1)
+            neigh_8(14) = self%rmat(i,j+1,k+1)
+            neigh_8(15) = self%rmat(i-1,j+1,k+1)
+            neigh_8(16) = self%rmat(i-1,j,k+1)
+            neigh_8(17) = self%rmat(i,j,k+1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+        else if ( j+1 > self%ldim(2) ) then                        ! S border
+            neigh_8(1) = self%rmat(i-1,j,k-1)
+            neigh_8(2) = self%rmat(i-1,j-1,k-1)
+            neigh_8(3) = self%rmat(i,j-1,k-1)
+            neigh_8(4) = self%rmat(i+1,j-1,k-1)
+            neigh_8(5) = self%rmat(i+1,j,k-1)
+            neigh_8(6) = self%rmat(i,j,k-1)
+            neigh_8(7) = self%rmat(i-1,j,k)
+            neigh_8(8) = self%rmat(i-1,j-1,k)
+            neigh_8(9) = self%rmat(i,j-1,k)
+            neigh_8(10) = self%rmat(i+1,j-1,k)
+            neigh_8(11) = self%rmat(i+1,j,k)
+            neigh_8(12) = self%rmat(i-1,j,k+1)
+            neigh_8(13) = self%rmat(i-1,j-1,k+1)
+            neigh_8(14) = self%rmat(i,j-1,k+1)
+            neigh_8(15) = self%rmat(i+1,j-1,k+1)
+            neigh_8(16) = self%rmat(i+1,j,k+1)
+            neigh_8(17) = self%rmat(i,j,k+1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+        else if ( i-1 < 1 ) then                                   ! W border
+            neigh_8(1) = self%rmat(i,j-1,k-1)
+            neigh_8(2) = self%rmat(i+1,j-1,k-1)
+            neigh_8(3) = self%rmat(i+1,j,k-1)
+            neigh_8(4) = self%rmat(i+1,j+1,k-1)
+            neigh_8(5) = self%rmat(i,j+1,k-1)
+            neigh_8(6) = self%rmat(i,j,k-1)
+            neigh_8(7) = self%rmat(i,j-1,k)
+            neigh_8(8) = self%rmat(i+1,j-1,k)
+            neigh_8(9) = self%rmat(i+1,j,k)
+            neigh_8(10) = self%rmat(i+1,j+1,k)
+            neigh_8(11) = self%rmat(i,j+1,k)
+            neigh_8(12) = self%rmat(i,j-1,k+1)
+            neigh_8(13) = self%rmat(i+1,j-1,k+1)
+            neigh_8(14) = self%rmat(i+1,j,k+1)
+            neigh_8(15) = self%rmat(i+1,j+1,k+1)
+            neigh_8(16) = self%rmat(i,j+1,k+1)
+            neigh_8(17) = self%rmat(i,j,k+1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+        else if ( i+1 > self%ldim(1) ) then                       ! E border
+            neigh_8(1) = self%rmat(i,j+1,k-1)
+            neigh_8(2) = self%rmat(i-1,j+1,k-1)
+            neigh_8(3) = self%rmat(i-1,j,k-1)
+            neigh_8(4) = self%rmat(i-1,j-1,k-1)
+            neigh_8(5) = self%rmat(i,j-1,k-1)
+            neigh_8(6) = self%rmat(i,j,k-1)
+            neigh_8(7) = self%rmat(i,j+1,k)
+            neigh_8(8) = self%rmat(i-1,j+1,k)
+            neigh_8(9) = self%rmat(i-1,j,k)
+            neigh_8(10) = self%rmat(i-1,j-1,k)
+            neigh_8(11) = self%rmat(i,j-1,k)
+            neigh_8(12) = self%rmat(i,j+1,k+1)
+            neigh_8(13) = self%rmat(i-1,j+1,k+1)
+            neigh_8(14) = self%rmat(i-1,j,k+1)
+            neigh_8(15) = self%rmat(i-1,j-1,k+1)
+            neigh_8(16) = self%rmat(i,j-1,k+1)
+            neigh_8(17) = self%rmat(i,j,k+1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+        else                                                     ! DEFAULT
+            neigh_8(1) = self%rmat(i-1,j-1,k-1)
+            neigh_8(2) = self%rmat(i,j-1,k-1)
+            neigh_8(3) = self%rmat(i+1,j-1,k-1)
+            neigh_8(4) = self%rmat(i+1,j,k-1)
+            neigh_8(5) = self%rmat(i+1,j+1,k-1)
+            neigh_8(6) = self%rmat(i,j+1,k-1)
+            neigh_8(7) = self%rmat(i-1,j+1,k-1)
+            neigh_8(8) = self%rmat(i-1,j,k-1)
+            neigh_8(9) = self%rmat(i,j,k-1)
+            neigh_8(10) = self%rmat(i-1,j-1,k)
+            neigh_8(11) = self%rmat(i,j-1,k)
+            neigh_8(12) = self%rmat(i+1,j-1,k)
+            neigh_8(13) = self%rmat(i+1,j,k)
+            neigh_8(14) = self%rmat(i+1,j+1,k)
+            neigh_8(15) = self%rmat(i,j+1,k)
+            neigh_8(16) = self%rmat(i-1,j+1,k)
+            neigh_8(17) = self%rmat(i-1,j,k)
+            neigh_8(18) = self%rmat(i-1,j-1,k+1)
+            neigh_8(19) = self%rmat(i,j-1,k+1)
+            neigh_8(20) = self%rmat(i+1,j-1,k+1)
+            neigh_8(21) = self%rmat(i+1,j,k+1)
+            neigh_8(22) = self%rmat(i+1,j+1,k+1)
+            neigh_8(23) = self%rmat(i,j+1,k+1)
+            neigh_8(24) = self%rmat(i-1,j+1,k+1)
+            neigh_8(25) = self%rmat(i-1,j,k+1)
+            neigh_8(26) = self%rmat(i,j,k+1)
+            neigh_8(27) = self%rmat(i,j,k)
+            nsz = 27
+        endif
+    end subroutine calc3D_neigh_8
+
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
     ! starting from any 8-neigh. It doesn't consider the pixel itself.
@@ -6238,13 +6573,6 @@ contains
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
     end subroutine bwd_ft
-
-    subroutine fft_noshift( self )
-        class(image), intent(inout) :: self
-        if( self%ft ) return
-        call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
-        self%ft = .true.
-    end subroutine fft_noshift
 
     !> \brief ft2img  generates images for visualization of a Fourier transform
     subroutine ft2img( self, which, img )

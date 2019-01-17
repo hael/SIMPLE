@@ -3,9 +3,9 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
-public :: extract_particles, center_cc, discard_borders !maybe to remove center_cc from public
-
-private
+! public :: extract_particles, center_cc, discard_borders !maybe to remove center_cc from public
+!
+! private
 #include "simple_local_flags.inc"
 contains
 
@@ -108,7 +108,7 @@ contains
       integer              :: cnt_particle, cnt_likely        !counters
       integer              :: xyz(3)                          !mass center coordinates
       integer :: ldim(3)
-      real    :: pos(2)                                       !central position of each cc
+      real    :: pos(3)                                       !central position of each cc
       real    :: ave, sdev, maxv, minv, med                   !stats
       real    :: aveB, sdevB, maxvB, minvB, medB      !stats
       ! character (len = *), parameter :: fmt_1 = "(a)" !I/O
@@ -153,7 +153,7 @@ contains
                   ! BINARY IMAGE STATS
                   !   TO START AGAIN FROM HEREEEEE
                   ! write(unit = 17, fmt = "(a,i0,2(a,f0.0))") &
-                  ! &'image=', cnt_particle,' diameter=', part_diameter(imgwin_bin), ' nforeground=', imgwin_bin%nforeground()
+                  ! &'image=', cnt_particle,' diameter=', part_longest_dim(imgwin_bin), ' nforeground=', imgwin_bin%nforeground()
               endif
           endif
       end do
@@ -167,9 +167,9 @@ contains
     ! that minimizes the distance between itself and all the other pixels of
     ! the connected component.
     function center_cc(masked_mat) result (px)
-        integer, allocatable,  intent(in) :: masked_mat(:,:,:)
-        integer     :: px(2)               !index of the central px of the cc
-        integer     :: i, j
+        integer, intent(in) :: masked_mat(:,:,:)
+        integer     :: px(3)               !index of the central px of the cc
+        integer     :: i, j, k
         integer     :: s(3)                !shape of the input matrix
         integer     :: n_px                !counter
         integer     :: idx(2)
@@ -178,30 +178,33 @@ contains
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
         s = shape(masked_mat)
         call get_pixel_pos(masked_mat, pos)
-        allocate(dist(3,size(pos, dim = 2)), source = 0.)
-        allocate(mask(3,size(pos, dim = 2)), source = .false.)
-        mask(3,:) = .true.
+        if(size(pos, dim = 2) < 1) print *, 'SHIT'
+        allocate(dist(4,size(pos, dim = 2)), source = 0.)
+        allocate(mask(4,size(pos, dim = 2)), source = .false.)
+        mask(4,:) = .true.
         n_px = 0
         do i = 1, s(1)
             do j = 1, s(2)
-                if(masked_mat(i,j,1) > 0.5) then
-                    n_px = n_px + 1
-                    dist( 3, n_px) = pixels_dist( [i,j,1], pos, 'sum')
-                    dist(:2, n_px) = [i,j]
-                endif
+                do k = 1, s(3)
+                    if(masked_mat(i,j,k) > 0.5) then
+                        n_px = n_px + 1
+                        dist( 4, n_px) = pixels_dist( [i,j,k], pos, 'sum')
+                        dist(:3, n_px) = [real(i),real(j),real(k)]
+                    endif
+                enddo
             enddo
         enddo
         idx   = minloc(dist, mask)
-        px(:) = int(dist(:2, idx(2)))
+        px(:) = int(dist(1:3, idx(2)))
         deallocate(pos, mask, dist)
     end function center_cc
 
-  ! This function stores in pos the indeces corresponding to
+  ! This subroutine stores in pos the indeces corresponding to
   ! the pixels with value > 0 in the binary matrix rmat_masked.
   subroutine get_pixel_pos(rmat_masked, pos)
       integer,              intent(in)  :: rmat_masked(:,:,:)
       integer, allocatable, intent(out) :: pos(:,:)
-      integer :: s(3), i, j, cnt
+      integer :: s(3), i, j, k, cnt
       ! if( any(rmat_masked > 1.0001) .or. any(rmat_masked < 0. ))&
       ! &THROW_HARD('Input not binary; get_pixel_pos')
       s = shape(rmat_masked)
@@ -209,10 +212,12 @@ contains
       cnt = 0
       do i = 1, s(1)
             do j = 1, s(2)
-                if(rmat_masked(i,j,1) > 0.5) then !rmat_masked is binary
-                    cnt = cnt + 1
-                    pos(:,cnt) = [i,j,1]
-                endif
+                do k = 1, s(3)
+                    if(rmat_masked(i,j,k) > 0.5) then !rmat_masked is binary
+                        cnt = cnt + 1
+                        pos(:,cnt) = [i,j,k]
+                    endif
+                enddo
             enddo
         enddo
     end subroutine get_pixel_pos
@@ -220,50 +225,88 @@ contains
     !>   calculates the euclidean distance between one pixel and a list of other pixels.
     ! if which == 'max' then distance is the maximum value of the distance between
     !              the selected pixel and all the others
+    ! if which == 'min' then distance is the minimum value of the distance between
+    !              the selected pixel and all the others
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
     function pixels_dist( px, vec, which) result( dist )
         integer, intent(in)           :: px(3)
         integer, intent(in)           :: vec(:,:)
         character(len=*),  intent(in) :: which
-        real :: dist
+        logical :: mask(size(vec, dim = 2))
+        real    :: dist
+        integer :: i
+        mask(:) = .true. !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+        do i = 1, size(vec, dim = 2)
+            if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) ) mask(i) = .false.
+        enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+        case('min')
+            dist =  minval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.), mask)
         case('sum')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
         case DEFAULT
             write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
             THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
         end select
     end function pixels_dist
 
-    function part_diameter(img) result(diameter)
+    function points_dist( px, vec, which) result( dist )
+        real,    intent(in)           :: px(3)
+        integer, intent(in)           :: vec(:,:)
+        character(len=*),  intent(in) :: which
+        logical :: mask(size(vec, dim = 2))
+        real    :: dist
+        integer :: i
+        mask(:) = .true. !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+        do i = 1, size(vec, dim = 2)
+            if(      abs(px(1)-real(vec(1,i))) < TINY .and. abs(px(2)-real(vec(2,i))) < TINY  &
+            &  .and. abs(px(3)-real(vec(3,i))) < TINY ) mask(i) = .false.
+        enddo
+        select case(which)
+        case('max')
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+        case('min')
+            dist =  minval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.), mask)
+        case('sum')
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+        case DEFAULT
+            write(logfhandle,*) 'Points_dist kind: ', trim(which)
+            THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
+        end select
+    end function points_dist
+
+    ! This function calculates the longest dimension of the biggest connected
+    ! component in the image img. Img is supposed to be either a binary
+    ! image or a connected component image.
+    ! The connected component whose longest dimension is calculated is
+    ! supposed to be circular.
+    function part_longest_dim(img) result(diameter)
         type(image), intent(inout) :: img
         real, allocatable    :: rmat(:,:,:), dist(:)
         integer, allocatable :: rmat_masked(:,:,:), pos(:,:)
         real :: diameter
-        integer :: ldim(3), i, j, cnt
+        integer :: ldim(3), i, j,k, cnt
         ldim = img%get_ldim()
         rmat = img%get_rmat()
-        if(ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; part_diameter')
-        if( any(rmat > 1.0001) .or. any(rmat < 0. ))&
-            THROW_HARD('input for part_diameter not binary; part_diameter')
-        deallocate(rmat)
         call img%prepare_connected_comps() !consider just one particle, not multiple
-        allocate(rmat_masked(ldim(1),ldim(2),1), source = 0)
+        allocate(rmat_masked(ldim(1),ldim(2),ldim(3)), source = 0)
         rmat_masked = int(img%get_rmat())
         call get_pixel_pos(rmat_masked,pos)
         cnt = 0
         allocate(dist(count(rmat_masked > 0.5))) !one for each white px
         do i = 1, ldim(1)
             do j = 1, ldim(2)
-                if(rmat_masked(i,j,1) > 0.5) then  !just ones
-                    cnt = cnt + 1
-                    dist(cnt) = pixels_dist([i,j,1],pos, 'max')
-                endif
+                do k = 1, ldim(3)
+                    if(rmat_masked(i,j,k) > 0.5) then  !just ones
+                        cnt = cnt + 1
+                        dist(cnt) = pixels_dist([i,j,k],pos, 'max')
+                    endif
+                enddo
             enddo
         enddo
         diameter = maxval(dist)
-    end function part_diameter
+    end function part_longest_dim
 end module simple_picker_chiara
