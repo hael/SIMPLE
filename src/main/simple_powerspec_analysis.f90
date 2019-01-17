@@ -159,8 +159,9 @@ contains
     !This function takes in input the name of a stack of power spectra images (fname2process),
     !the name of a stack in which store the results (fname), the smpd and a low-pass parameter.
     !It binarises all the images in the stack and estimates how far do the detected rings go.
-    subroutine process_ps_stack(fname2process, fname, smpd, lp,winsz, n_shells)
+    subroutine process_ps_stack(fname2process, fname, smpd, lp, winsz, n_shells)
       use gnufor2
+      use simple_tvfilter
       use simple_stackops, only : prepare_stack
       character(len=*),  intent(in) :: fname2process, fname
       real,              intent(in) :: smpd, lp
@@ -178,6 +179,9 @@ contains
       character(len = 100) :: iom
       integer              :: status
       logical              :: discard
+      type(tvfilter)       :: tvf
+      real                 :: lambda ! parameter for Total Variation denoising
+      lambda = 0.2
       call find_ldim_nptcls(fname2process, ldim, n)
       ldim(3) = 1
       box = ldim(1)
@@ -219,6 +223,7 @@ contains
           discard = discard_ps(img,ldim)
           if(discard) write(unit = 17, fmt = '(a)') 'Empty micrograph ', n_image ; continue
           if(.not. discard) then
+              !call tvf%apply_filter(img, lambda)
               rmat = img%get_rmat()
               counter = 0
               do i = 1, ldim(1)

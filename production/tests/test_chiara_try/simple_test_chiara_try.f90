@@ -45,6 +45,7 @@ program simple_test_chiara_try
   use simple_segmentation
   use simple_parameters, only: parameters
   use simple_cmdline,    only: cmdline
+  use simple_tvfilter
   type(image)       :: img, img_cc, img_bin
   real, allocatable :: rmat(:,:,:), rmat_t(:,:,:), lap(:,:,:)
   integer :: i,j, ldim(3), nptcls, box, nthr, n_vol
@@ -53,7 +54,7 @@ program simple_test_chiara_try
   real :: smpd, seleted_t(1)
   integer :: h, k, sh, cnt
   real :: ave, sdev, maxv, minv, SumSQR
-  real :: thresh
+  real :: thresh(1)
   real, allocatable :: x(:)
   integer, allocatable :: sz(:,:)
   real,    allocatable :: xhist(:) !discretization of the values
@@ -62,9 +63,20 @@ program simple_test_chiara_try
   real :: dist, diameter, ratio
   real, allocatable :: ratios(:), x_cc(:)
   logical, allocatable :: border(:,:,:)
+  type(tvfilter) :: tvf
+  real :: lambda
+  real :: grad(100,100,1)
+ !call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 75., 2, 10)! ORIGINAL
+!call process_ps_stack('pspecs_saga_polii.mrc',     'saga_analysis_TVdenoising.mrc', 1.14, 50., 1, 10)
+!call process_ps_stack('pspecs_sphire_tstdat.mrc', 'sphire_analysis_TVdenoising.mrc', 1.41, 20.,1, 10)
 
-  call img%new([4096,4096,1],1.)
-  call img%read('/home/chiara/Desktop/Chiara/Denoising/TotalVariation/NegativeSTORIGINAL.mrc')
+
+  call img%new([128,128,1],1.)
+  call img%read('/home/chiara/Desktop/Chiara/Segmentation/EdgeDetection/one_projection.mrc')
+  call canny(img)
+  call img%write('CannyNoThresh.mrc')
+
+
 
  end program simple_test_chiara_try
 ! !call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
@@ -100,7 +112,7 @@ program simple_test_chiara_try
 ! call img%new([128,128,1],1.)
 ! call Gr_original%new([128,128,1],1.)
 ! call Gr_improved%new([128,128,1],1.)
-!
+!  ALLOCATE THE GRADUIENTS PLEASE
 ! call img%read('/home/chiara/Desktop/Chiara/Segmentation/EdgeDetection/one_projection.mrc')
 ! call img%calc_gradient(grad_original)
 ! call Gr_original%set_rmat(grad_original)

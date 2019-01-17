@@ -66,6 +66,7 @@ contains
     procedure          :: get_rmat_ptr
     procedure          :: get_rmat_sub
     procedure          :: get_cmat
+    procedure          :: get_cmat_ptr
     procedure          :: get_cmat_sub
     procedure, private :: get_cmat_at_1
     procedure, private :: get_cmat_at_2
@@ -349,6 +350,7 @@ contains
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
+    procedure          :: fft_noshift
     ! DESTRUCTOR
     procedure :: kill
 end type image
@@ -4931,23 +4933,27 @@ contains
     ! It uses Sobel masks for gradient estimation. (classical implementation)
     ! 2D version
     subroutine calc_gradient1(self, grad, Dc, Dr)
-        class(image),                intent(inout) :: self
-        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
-        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        class(image),      intent(inout) :: self
+        real,              intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3))  !gradient matrix
+        real, optional,    intent(out)   :: Dc  (self%ldim(1), self%ldim(2), self%ldim(3)) !column derivate
+        real, optional,    intent(out)   :: Dr  (self%ldim(1), self%ldim(2), self%ldim(3))  !raw derivate
         type(image)        :: img_p                         !padded image
         real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
         integer, parameter :: L = 3                         !dimension of the masks
         integer            :: ldim(3)                       !dimension of the image, save just for comfort
         integer            :: i,j,m,n                       !loop indeces
-        real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+        real :: Ddc(self%ldim(1), self%ldim(2), self%ldim(3))
+        real :: Ddr(self%ldim(1), self%ldim(2), self%ldim(3))         !column and row derivates
         ldim = self%ldim
         if(ldim(3) /= 1) then
             THROW_HARD('image has to be 2D! calc_gradient')
         endif
-        allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
-               & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
-        wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
-        wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+        allocate(wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
+        wc   = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
+        wr   = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+        Ddc  = 0. !initialisation
+        Ddr  = 0.
+        grad = 0.
         call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
         call self%pad(img_p)                                 ! padding
         !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
@@ -4965,9 +4971,8 @@ contains
         !omp end parallel do
         deallocate(wc,wr)
         grad = sqrt(Ddc**2. + Ddr**2.)
-        if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
-        if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
-        deallocate(Ddc,Ddr)
+        if(present(Dc)) Dc = Ddc
+        if(present(Dr)) Dr = Ddr
         call img_p%kill
     end subroutine calc_gradient1
 
@@ -4977,16 +4982,17 @@ contains
     ! https://stackoverflow.com/questions/26851430/calculating-the-gradient-of-a-3d-matrix
     ! 3D version
     subroutine calc_gradient2(self, grad3D)
-        class(image),      intent(inout) :: self
-        real, allocatable, intent(out)   :: grad3D(:,:,:)
+        class(image), intent(inout) :: self
+        real,         intent(out)   :: grad3D(self%ldim(1), self%ldim(2), self%ldim(3))
+        integer, parameter :: L = 3
         real, allocatable :: sx(:,:), sy(:,:)                   !sobel masks 2D
         real, allocatable :: szx(:,:,:), szy(:,:,:), szz(:,:,:) !sobel masks 3D
-        integer :: L
         type(image) :: img_p !padded image
         integer :: i,j,k
         integer :: m,n,o
-        real, allocatable :: Ddx(:,:,:), Ddy(:,:,:), Ddz(:,:,:)
-        L = 3
+        real :: Ddx(self%ldim(1), self%ldim(2), self%ldim(3))
+        real :: Ddy(self%ldim(1), self%ldim(2), self%ldim(3))
+        real :: Ddz(self%ldim(1), self%ldim(2), self%ldim(3))
         allocate(sx (-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2),sy(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), source = 0.)
         allocate(szx(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), &
         &        szy(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), &
@@ -5004,9 +5010,9 @@ contains
         szx = (1./24.)*szx !normalise
         szy = (1./24.)*szy
         szz = (1./18.)*szz
-        allocate( Ddx(self%ldim(1),self%ldim(2),self%ldim(3)), Ddy(self%ldim(1),self%ldim(2),self%ldim(3)), &
-        &         Ddz(self%ldim(1),self%ldim(2),self%ldim(3)), &
-        &      grad3D(self%ldim(1),self%ldim(2),self%ldim(3)),source = 0.)
+        Ddx    = 0.    !initializations
+        Ddy    = 0.
+        grad3D = 0.
         call img_p%new([self%ldim(1)+L-1,self%ldim(2)+L-1,self%ldim(3)+L-1],1.)
         call self%pad(img_p)
         !$omp parallel do collapse(3) default(shared) private(i,j,k,m,n,o)&
@@ -5029,7 +5035,6 @@ contains
         !omp end parallel do
         grad3D = sqrt(Ddx**2. + Ddy**2. + Ddz**2.)
         deallocate(sx,sy,szx,szy,szz)
-        deallocate(Ddx,Ddy,Ddz)
         call img_p%kill
     end subroutine calc_gradient2
 
@@ -5038,10 +5043,10 @@ contains
     ! o calc_gradient2 for the gradient calculation, which
     ! result is going to be stored in grad.
     subroutine calc_gradient(self, grad, Dc, Dr)
-        class(image),                intent(inout) :: self
-        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
-        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
-        if(self%ldim(1) .ne. 1) then
+        class(image),   intent(inout) :: self
+        real,           intent(out)   :: grad(:,:,:)  !gradient matrix
+        real, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        if(self%ldim(3) .ne. 1) then
             if(present(Dc)) THROW_HARD('Dc/Dr option not availale for volumes; calc_gradient')
             call calc_gradient2(self,grad)
             return
@@ -5064,9 +5069,9 @@ contains
     !                     1) isotropic noise suppression
     !                     2) the estimation of the gradient is still precise
     subroutine calc_gradient_improved(self, grad, Dc, Dr)
-        class(image),                intent(inout) :: self
-        real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
-        real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        class(image),   intent(inout) :: self
+        real,           intent(out)   :: grad(:,:,:)  !gradient matrix
+        real, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
         type(image)        :: img_p                         !padded image
         real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
         integer, parameter :: L1 = 5 , L2 = 3               !dimension of the masks
@@ -5074,7 +5079,7 @@ contains
         integer            :: i,j,m,n                       !loop indeces
         real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
         ldim = self%ldim
-        allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
+        allocate( Ddc(ldim(1),ldim(2),ldim(3)), Ddr(ldim(1),ldim(2),ldim(3)), &
                & wc(-(L2-1)/2:(L2-1)/2,-(L2-1)/2:(L2-1)/2,1),wr(-(L1-1)/2:(L1-1)/2,-(L1-1)/2:(L1-1)/2,1), source = 0.)
         wr = (1./32.)*reshape([-1,-2,0,2,1,-2,-4,0,4,2,-1,-2,0,2,1], [L1,L2,1])
         wc = (1./32.)*reshape([-1,-2,-1,-2,-4,-2,0,0,0,2,4,2,1,2,1], [L2,L1,1])
@@ -5095,8 +5100,8 @@ contains
         !omp end parallel do
         deallocate(wc,wr)
         grad = sqrt(Ddc**2. + Ddr**2.)
-        if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
-        if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
+        if(present(Dc)) Dc = Ddc
+        if(present(Dr)) Dr = Ddr
         deallocate(Ddc,Ddr)
     end subroutine calc_gradient_improved
 
@@ -6574,6 +6579,13 @@ contains
         endif
     end subroutine bwd_ft
 
+    subroutine fft_noshift( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) return
+        call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
+        self%ft = .true.
+    end subroutine fft_noshift
+
     !> \brief ft2img  generates images for visualization of a Fourier transform
     subroutine ft2img( self, which, img )
         class(image),     intent(inout) :: self
@@ -7641,8 +7653,10 @@ contains
         integer,                    intent(in)    :: center(2)
         character(len=*), optional, intent(in)    :: hole
         integer :: i, j
+        real, allocatable :: rmat_t(:,:,:)
         if(.not. self%existence) THROW_HARD('Image has to be created before; ellipse')
         if(self%ldim(3) /= 1) THROW_HARD('For 2D images only; ellipse')
+        rmat_t = self%get_rmat()
         do i = 1, self%ldim(1)
             do j = 1, self%ldim(2)
                 if((real(i)-real(center(1)))**2/(axes(1)**2) + (real(j)-real(center(2)))**2/(axes(2)**2) - 1 < TINY) then
@@ -7660,9 +7674,9 @@ contains
                   do j = 1, self%ldim(2)
                       if((real(i)-real(center(1)))**2/(axes(1)-1)**2 + (real(j)-real(center(2)))**2/(axes(2)-1)**2 - 1 < TINY) then
                           if( maxval(self%rmat(:,:,:)) - minval(self%rmat(:,:,:)) > TINY) then
-                              self%rmat(i,j,1) = minval(self%rmat(:,:,:))
+                              self%rmat(i,j,1) = rmat_t(i,j,1)!minval(self%rmat(:,:,:))
                           else
-                              self%rmat(i,j,1) = 0.
+                              self%rmat(i,j,1) = rmat_t(i,j,1)
                           endif
                         endif
                   enddo

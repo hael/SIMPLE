@@ -9,6 +9,54 @@ private
 #include "simple_local_flags.inc"
 contains
 
+    ! This function returns a the gradient matrix of the input image.
+! It is also possible to have derivates row and column
+! as output (optional).
+! It uses Sobel masks for gradient estimation. (classical implementation)
+! 2D version
+subroutine calc_gradient_old(self, grad, Dc, Dr)
+    type(image),                intent(inout) :: self
+    real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
+    real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+    type(image)        :: img_p                         !padded image
+    real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
+    integer, parameter :: L = 3                         !dimension of the masks
+    integer            :: ldim(3)                       !dimension of the image, save just for comfort
+    integer            :: i,j,m,n                       !loop indeces
+    real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+    real, allocatable :: rmat_p(:,:,:)
+    ldim = self%get_ldim()
+    if(ldim(3) /= 1) then
+        THROW_HARD('image has to be 2D! calc_gradient')
+    endif
+    allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
+           & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
+    wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
+    wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+    call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
+    call self%pad(img_p)
+    rmat_p = img_p%get_rmat()                            ! padding
+    !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
+    !$omp schedule(static) proc_bind(close)
+    do i = 1, ldim(1)
+      do j = 1, ldim(2)
+          do m = -(L-1)/2,(L-1)/2
+              do n = -(L-1)/2,(L-1)/2
+                  Ddc(i,j,1) = Ddc(i,j,1)+rmat_p(i+m+1,j+n+1,1)*wc(m,n,1)
+                  Ddr(i,j,1) = Ddr(i,j,1)+rmat_p(i+m+1,j+n+1,1)*wr(m,n,1)
+              end do
+          end do
+      end do
+    end do
+    !omp end parallel do
+    deallocate(wc,wr)
+    grad = sqrt(Ddc**2. + Ddr**2.)
+    if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
+    if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
+    deallocate(Ddc,Ddr)
+    call img_p%kill
+end subroutine calc_gradient_old
+
     ! Classic Sobel edge detection routine.
     subroutine sobel(img_in,thresh)
         class(image), intent(inout) :: img_in           !image input and output
@@ -16,7 +64,7 @@ contains
         real,  allocatable :: grad(:,:,:), rmat(:,:,:)  !matrices
         integer :: ldim(3)
         ldim = img_in%get_ldim()
-        allocate(rmat(ldim(1),ldim(2),ldim(3)), source = 0.)
+        allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source = 0.)
         call img_in%calc_gradient(grad)
         where(grad > thresh(1) ) rmat = 1.
         call img_in%set_rmat(rmat)
@@ -38,12 +86,14 @@ contains
         real               :: ratio(3)                !n_foreground/nbackground for 3 different values of the thresh
         real               :: diff(3)                 !difference between the ideal ratio (= goal) and the obtained 3 ratios
         integer, parameter :: N_MAXIT = 100           !max number of iterations
-        integer            :: n_it
+        integer            :: n_it, ldim(3)
         logical            :: DEBUG
         real               :: r                       !random # which guarantees me not to get stuck
         real               :: ave, sdev, minv, maxv
         DEBUG  = .false.
         ggoal = 2.
+        ldim = img%get_ldim()
+        allocate(grad(ldim(1), ldim(2), ldim(3)), source = 0.)
         if(present(goal)) ggoal = goal
         call img%calc_gradient(grad)
         !grad = img%get_rmat()
@@ -116,14 +166,16 @@ contains
       real, allocatable          :: grad(:,:,:), vector(:)
       integer                    :: ldim(3)
       ldim = img_in%get_ldim()
-      call img_in%scale_pixels([1.,real(ldim(1))*2.+1.])
+      call img_in%scale_pixels([1.,real(ldim(1))*real(ldim(2))*real(ldim(3))+1.])
       ! call img_in%scale_pixels([0.,255.])  !to be coherent with the other case
       if(present(thresh)) then
          call canny_edge(img_in,thresh)
          return
       endif
       sigma = 0.33
-      call img_in%calc_gradient(grad)
+      allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
+      !call img_in%calc_gradient(grad)
+      call calc_gradient_old(img_in,grad)
       allocate(vector(size(grad)), source = pack(grad, .true.))
       m = median(vector) !Use the gradient, the source talks about the image itself
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
@@ -232,6 +284,8 @@ contains
         real    :: smpd, llp(1)
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
+        allocate(grad(ldim(1), ldim(2), ldim(3)), Dc(ldim(1), ldim(2), ldim(3)),Dr(ldim(1), ldim(2), ldim(3)), &
+        & source = 0.)
         if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
         call Gr%new(ldim,smpd)
         !STEP 1: SMOOTHING

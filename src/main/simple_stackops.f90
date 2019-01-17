@@ -227,7 +227,6 @@ contains
         deallocate(rmat)
     end subroutine calc_log_stack
 
-    !!!!ADDED BY CHIAAARA!!!!!!!!!
     ! This subroutine takes in input a stack of images and performs
     ! a series of operations on it in order to prepare it to be
     ! binarised. It is written for power spectra stacks.

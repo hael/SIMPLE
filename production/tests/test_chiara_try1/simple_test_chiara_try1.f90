@@ -105,6 +105,7 @@ program simple_test_chiara_try1
       !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
       !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>BINARIZATION>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+      allocate(grad(reduced_ldim(1),reduced_ldim(2),reduced_ldim(3)), source = 0.)
       ! 7) Binarization
       if(params%detector .eq. 'sobel') then
         call mic_small%calc_gradient(grad)

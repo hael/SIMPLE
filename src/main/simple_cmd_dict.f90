@@ -196,6 +196,7 @@ contains
         call chdict%push('outstk2',       'output image stack 2')
         call chdict%push('outvol',        'output volume{outvol.ext}')
         call chdict%push('part',          'partition in distributed execution{1}')
+        call chdict%push('part_radius',   'particle radius (in pixels)')
         call chdict%push('pcontrast',     'particle contrast(black|white){black}')
         call chdict%push('pdbfile',       'input PDB formatted file')
         call chdict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
