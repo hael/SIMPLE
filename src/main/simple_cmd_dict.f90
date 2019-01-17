@@ -297,9 +297,8 @@ contains
         call chdict%write(fname)
     end subroutine print_cmd_key_descr
 
-    subroutine print_cmdline( keys_required, keys_optional, fhandle, distr )
+    subroutine print_cmdline( keys_required, keys_optional, distr )
         character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
-        integer,               optional, intent(in) :: fhandle
         logical,               optional, intent(in) :: distr
         character(len=KEYLEN), allocatable :: sorted_keys(:)
         integer :: nreq, nopt
@@ -324,7 +323,7 @@ contains
                 allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
                 call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(fhandle, sorted_keys)
+                call chdict%print_key_val_pairs(logfhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
         endif
@@ -338,7 +337,7 @@ contains
                 allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
                 if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
                 call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(fhandle, sorted_keys)
+                call chdict%print_key_val_pairs(logfhandle, sorted_keys)
                 deallocate(sorted_keys)
             endif
         endif
