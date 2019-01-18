@@ -200,7 +200,6 @@ contains
         call img%kill
     end subroutine stats_imgfile
 
-    !ADDED BY CHIAARAAA
     ! This subroutine calculates the logaritm of all the micrographs in a stack.
     ! It is meant to be applied to power spectra images, in order to decrease
     ! the influence of the central pixel.
@@ -227,6 +226,31 @@ contains
         deallocate(rmat)
     end subroutine calc_log_stack
 
+    ! This subroutine calculates the logaritm of all the micrographs in a stack.
+    ! It is meant to be applied to power spectra images, in order to decrease
+    ! the influence of the central pixel.
+    subroutine apply_tvf_stack( fname2process, fname, smpd, lambda)
+        use simple_tvfilter
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: smpd
+        real,             intent(in) :: lambda ! parameter for tv filtering
+        type(image)       :: img
+        integer           :: n, ldim(3), i
+        type(tvfilter)    :: tvf
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        call tvf%new()
+        call raise_exception( n, ldim, 'apply_tvf_imgfile' )
+        call img%new(ldim,smpd)
+        do i=1,n
+            call img%read(fname2process, i)
+            !call img%scale_pixels([1.,real(ldim(1))*2.+1.]) !not to have problems in calculating the log
+             call tvf%apply_filter(img, lambda)
+             call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine apply_tvf_stack
+
     ! This subroutine takes in input a stack of images and performs
     ! a series of operations on it in order to prepare it to be
     ! binarised. It is written for power spectra stacks.
@@ -241,11 +265,15 @@ contains
         integer,          intent(in) :: winsz !for median filtering
         integer     :: n, ldim(3), i
         type(image) :: img
+        real        :: lambda !for tv filtering
         call find_ldim_nptcls(fname2process, ldim, n)
         ldim(3) = 1
         call img%new(ldim,smpd)
+        lambda = 1.
         call raise_exception( n, ldim, 'calc_log_imgfile' )
+        !call apply_tvf_stack(fname2process,fname,smpd,lambda)
         call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
+        call apply_tvf_stack(fname,fname,smpd,lambda)
         call subtr_backgr_imgfile( fname, fname, smpd, lp )
         call real_filter_imgfile(fname, fname, smpd, 'median', winsz)
         call img%kill

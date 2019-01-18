@@ -65,19 +65,17 @@ program simple_test_chiara_try
   logical, allocatable :: border(:,:,:)
   type(tvfilter) :: tvf
   real :: lambda
-  real :: grad(100,100,1)
- !call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 75., 2, 10)! ORIGINAL
+  real :: grad(128,128,1)
+ !  call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 40., 2, 10) !lp = 35
 !call process_ps_stack('pspecs_saga_polii.mrc',     'saga_analysis_TVdenoising.mrc', 1.14, 50., 1, 10)
 !call process_ps_stack('pspecs_sphire_tstdat.mrc', 'sphire_analysis_TVdenoising.mrc', 1.41, 20.,1, 10)
 
-
   call img%new([128,128,1],1.)
-  call img%read('/home/chiara/Desktop/Chiara/Segmentation/EdgeDetection/one_projection.mrc')
-  call canny(img)
-  call img%write('CannyNoThresh.mrc')
-
-
-
+  call img%ellipse([30,30], [11.,10.], 'no' )
+  call img%ellipse([50,50], [11.,20.], 'no' )
+  call img%write('ToyImg.mrc')
+  call img%grow_bin()
+  call img%write('GrowBin.mrc')
  end program simple_test_chiara_try
 ! !call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
 
@@ -104,22 +102,3 @@ program simple_test_chiara_try
 ! call img_cc%new([128,128,1], 1.)
 ! call img%ellipse([30,30], [11.,10.], 'no' )
 ! call img%ellipse([50,50], [11.,20.], 'no' )
-
-!FOR improved gradient calculation
-! type(image) :: img, Gr_original, Gr_improved
-! real, allocatable :: grad_original(:,:,:), grad_improved(:,:,:)
-! real :: thresh(1)
-! call img%new([128,128,1],1.)
-! call Gr_original%new([128,128,1],1.)
-! call Gr_improved%new([128,128,1],1.)
-!  ALLOCATE THE GRADUIENTS PLEASE
-! call img%read('/home/chiara/Desktop/Chiara/Segmentation/EdgeDetection/one_projection.mrc')
-! call img%calc_gradient(grad_original)
-! call Gr_original%set_rmat(grad_original)
-! call Gr_original%write('Grad_original_one_projection.mrc')
-! call img%calc_gradient_improved(grad_improved)
-! call Gr_improved%set_rmat(grad_improved)
-! call Gr_improved%write('Grad_improved_one_projection.mrc')
-! thresh(1) = 0.05
-! call sobel(img, thresh)
-! call img%write('Sobel_improved_thresh005.mrc')

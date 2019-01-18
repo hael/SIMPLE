@@ -4933,24 +4933,24 @@ contains
     ! It uses Sobel masks for gradient estimation. (classical implementation)
     ! 2D version
     subroutine calc_gradient1(self, grad, Dc, Dr)
-        class(image),      intent(inout) :: self
-        real,              intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3))  !gradient matrix
-        real, optional,    intent(out)   :: Dc  (self%ldim(1), self%ldim(2), self%ldim(3)) !column derivate
-        real, optional,    intent(out)   :: Dr  (self%ldim(1), self%ldim(2), self%ldim(3))  !raw derivate
-        type(image)        :: img_p                         !padded image
-        real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
-        integer, parameter :: L = 3                         !dimension of the masks
-        integer            :: ldim(3)                       !dimension of the image, save just for comfort
-        integer            :: i,j,m,n                       !loop indeces
+        class(image),   intent(inout) :: self
+        real,           intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3)) !gradient matrix
+        real, optional, intent(out)   :: Dc  (self%ldim(1), self%ldim(2), self%ldim(3)) !column derivate
+        real, optional, intent(out)   :: Dr  (self%ldim(1), self%ldim(2), self%ldim(3)) !raw derivate
+        type(image)        :: img_p                     !padded image
+        real, allocatable  :: wc(:,:), wr(:,:)          !row and column Sobel masks
+        integer, parameter :: L = 3                     !dimension of the masks
+        integer            :: ldim(3)                   !dimension of the image, save just for comfort
+        integer            :: i,j,m,n                   !loop indeces
         real :: Ddc(self%ldim(1), self%ldim(2), self%ldim(3))
         real :: Ddr(self%ldim(1), self%ldim(2), self%ldim(3))         !column and row derivates
         ldim = self%ldim
         if(ldim(3) /= 1) then
             THROW_HARD('image has to be 2D! calc_gradient')
         endif
-        allocate(wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
-        wc   = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
-        wr   = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
+        allocate(wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2), source = 0.)
+        wc   = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[L,L]) ! Sobel masks
+        wr   = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[L,L])
         Ddc  = 0. !initialisation
         Ddr  = 0.
         grad = 0.
@@ -4962,8 +4962,8 @@ contains
           do j = 1, ldim(2)
               do m = -(L-1)/2,(L-1)/2
                   do n = -(L-1)/2,(L-1)/2
-                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n,1)
-                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n,1)
+                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n)
+                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n)
                   end do
               end do
           end do
@@ -5052,7 +5052,7 @@ contains
             return
         else
             if(present(Dc)) then
-                call calc_gradient1(self,grad)
+                call calc_gradient1(self,grad,Dc,Dr)
                 return
             else
                 call calc_gradient1(self,grad)
@@ -5073,26 +5073,41 @@ contains
         real,           intent(out)   :: grad(:,:,:)  !gradient matrix
         real, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
         type(image)        :: img_p                         !padded image
-        real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
+        real, allocatable  :: wc(:,:), wr(:,:)          !row and column Sobel masks
         integer, parameter :: L1 = 5 , L2 = 3               !dimension of the masks
         integer            :: ldim(3)                       !dimension of the image, save just for comfort
         integer            :: i,j,m,n                       !loop indeces
-        real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
+        real :: Ddc(self%ldim(1),self%ldim(2),self%ldim(3))
+        real :: Ddr(self%ldim(1),self%ldim(2),self%ldim(3))         !column and row derivates
         ldim = self%ldim
-        allocate( Ddc(ldim(1),ldim(2),ldim(3)), Ddr(ldim(1),ldim(2),ldim(3)), &
-               & wc(-(L2-1)/2:(L2-1)/2,-(L2-1)/2:(L2-1)/2,1),wr(-(L1-1)/2:(L1-1)/2,-(L1-1)/2:(L1-1)/2,1), source = 0.)
-        wr = (1./32.)*reshape([-1,-2,0,2,1,-2,-4,0,4,2,-1,-2,0,2,1], [L1,L2,1])
-        wc = (1./32.)*reshape([-1,-2,-1,-2,-4,-2,0,0,0,2,4,2,1,2,1], [L2,L1,1])
-        call img_p%new([ldim(1)+L1-1,ldim(2)+L2-1,1],1.)
-        call self%pad(img_p)                    ! padding
+        allocate(wc((-(L1-1)/2):((L1-1)/2),(-(L2-1)/2):((L2-1)/2)),&
+        &        wr(-(L2-1)/2:(L2-1)/2,-(L1-1)/2:(L1-1)/2), source = 0.)
+        print *, -(L1-1)/2,-(L2-1)/2
+        wc = (1./32.)*reshape([-1,-2,0,2,1,-2,-4,0,4,2,-1,-2,0,2,1], [L1,L2])
+        wr = (1./32.)*reshape([-1,-2,-1,-2,-4,-2,0,0,0,2,4,2,1,2,1], [L2,L1])
+        print *, 'WR = '
+        call vis_mat(wr)
+        print *, 'WC = '
+        call vis_mat(wc)
+        call img_p%new([ldim(1)+L1-1,ldim(2)+L1-1,1],1.) !pad with the biggest among L1 and L2
+        call self%pad(img_p) ! padding
         !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
         !$omp schedule(static) proc_bind(close)
         do i = 1, ldim(1)
           do j = 1, ldim(2)
               do m = -(L1-1)/2,(L1-1)/2
                   do n = -(L2-1)/2,(L2-1)/2
-                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wc(m,n,1)
-                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+1,j+n+1,1)*wr(m,n,1)
+                      Ddc(i,j,1) = Ddc(i,j,1)+img_p%rmat(i+m+2,j+n+2,1)*wc(m,n)
+                  end do
+              end do
+          end do
+        end do
+        !omp end parallel do
+        do i = 1, ldim(1)
+          do j = 1, ldim(2)
+              do m = -(L2-1)/2,(L2-1)/2
+                  do n = -(L1-1)/2,(L1-1)/2
+                      Ddr(i,j,1) = Ddr(i,j,1)+img_p%rmat(i+m+2,j+n+2,1)*wr(m,n)
                   end do
               end do
           end do
@@ -5102,7 +5117,6 @@ contains
         grad = sqrt(Ddc**2. + Ddr**2.)
         if(present(Dc)) Dc = Ddc
         if(present(Dr)) Dr = Ddr
-        deallocate(Ddc,Ddr)
     end subroutine calc_gradient_improved
 
     ! Returns 8-neighborhoods of the pixel position px in self

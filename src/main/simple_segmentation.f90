@@ -3,59 +3,12 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
+logical, parameter :: IMPROVED = .true.
 public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img
 
 private
 #include "simple_local_flags.inc"
 contains
-
-    ! This function returns a the gradient matrix of the input image.
-! It is also possible to have derivates row and column
-! as output (optional).
-! It uses Sobel masks for gradient estimation. (classical implementation)
-! 2D version
-subroutine calc_gradient_old(self, grad, Dc, Dr)
-    type(image),                intent(inout) :: self
-    real, allocatable,           intent(out)   :: grad(:,:,:)  !gradient matrix
-    real, allocatable, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
-    type(image)        :: img_p                         !padded image
-    real, allocatable  :: wc(:,:,:), wr(:,:,:)          !row and column Sobel masks
-    integer, parameter :: L = 3                         !dimension of the masks
-    integer            :: ldim(3)                       !dimension of the image, save just for comfort
-    integer            :: i,j,m,n                       !loop indeces
-    real, allocatable  :: Ddc(:,:,:),Ddr(:,:,:)         !column and row derivates
-    real, allocatable :: rmat_p(:,:,:)
-    ldim = self%get_ldim()
-    if(ldim(3) /= 1) then
-        THROW_HARD('image has to be 2D! calc_gradient')
-    endif
-    allocate( Ddc(ldim(1),ldim(2),1), Ddr(ldim(1),ldim(2),1), grad(ldim(1),ldim(2),1), &
-           & wc(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1),wr(-(L-1)/2:(L-1)/2,-(L-1)/2:(L-1)/2,1), source = 0.)
-    wc = (1./8.)*reshape([-1,0,1,-2,0,2,-1,0,1],[3,3,1]) ! Sobel masks
-    wr = (1./8.)*reshape([-1,-2,-1,0,0,0,1,2,1],[3,3,1])
-    call img_p%new([ldim(1)+L-1,ldim(2)+L-1,1],1.)
-    call self%pad(img_p)
-    rmat_p = img_p%get_rmat()                            ! padding
-    !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&
-    !$omp schedule(static) proc_bind(close)
-    do i = 1, ldim(1)
-      do j = 1, ldim(2)
-          do m = -(L-1)/2,(L-1)/2
-              do n = -(L-1)/2,(L-1)/2
-                  Ddc(i,j,1) = Ddc(i,j,1)+rmat_p(i+m+1,j+n+1,1)*wc(m,n,1)
-                  Ddr(i,j,1) = Ddr(i,j,1)+rmat_p(i+m+1,j+n+1,1)*wr(m,n,1)
-              end do
-          end do
-      end do
-    end do
-    !omp end parallel do
-    deallocate(wc,wr)
-    grad = sqrt(Ddc**2. + Ddr**2.)
-    if(present(Dc)) allocate(Dc(ldim(1),ldim(2),1), source = Ddc)
-    if(present(Dr)) allocate(Dr(ldim(1),ldim(2),1), source = Ddr)
-    deallocate(Ddc,Ddr)
-    call img_p%kill
-end subroutine calc_gradient_old
 
     ! Classic Sobel edge detection routine.
     subroutine sobel(img_in,thresh)
@@ -65,7 +18,11 @@ end subroutine calc_gradient_old
         integer :: ldim(3)
         ldim = img_in%get_ldim()
         allocate(grad(ldim(1),ldim(2),ldim(3)), rmat(ldim(1),ldim(2),ldim(3)), source = 0.)
-        call img_in%calc_gradient(grad)
+        if(IMPROVED) then
+            call img_in%calc_gradient_improved(grad)
+        else
+            call img_in%calc_gradient(grad)
+        endif
         where(grad > thresh(1) ) rmat = 1.
         call img_in%set_rmat(rmat)
         deallocate(grad,rmat)
@@ -93,10 +50,13 @@ end subroutine calc_gradient_old
         DEBUG  = .false.
         ggoal = 2.
         ldim = img%get_ldim()
-        allocate(grad(ldim(1), ldim(2), ldim(3)), source = 0.)
+        allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
         if(present(goal)) ggoal = goal
-        call img%calc_gradient(grad)
-        !grad = img%get_rmat()
+        if(IMPROVED) then
+            call img%calc_gradient_improved(grad)
+        else
+            call img%calc_gradient(grad)
+        endif
         tthresh(1) = (maxval(grad) + minval(grad))/2   !initial guessing
         diff = 1.     !initialization
         if(DEBUG) print*, 'Initial guessing: ', tthresh
@@ -166,16 +126,18 @@ end subroutine calc_gradient_old
       real, allocatable          :: grad(:,:,:), vector(:)
       integer                    :: ldim(3)
       ldim = img_in%get_ldim()
-      call img_in%scale_pixels([1.,real(ldim(1))*real(ldim(2))*real(ldim(3))+1.])
-      ! call img_in%scale_pixels([0.,255.])  !to be coherent with the other case
+      call img_in%scale_pixels([1.,real(ldim(1))*2+1.]) !to be coherent with the other case
       if(present(thresh)) then
          call canny_edge(img_in,thresh)
          return
       endif
       sigma = 0.33
       allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-      !call img_in%calc_gradient(grad)
-      call calc_gradient_old(img_in,grad)
+      if(IMPROVED) then
+          call img_in%calc_gradient_improved(grad)
+      else
+        call img_in%calc_gradient(grad)
+      endif
       allocate(vector(size(grad)), source = pack(grad, .true.))
       m = median(vector) !Use the gradient, the source talks about the image itself
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
@@ -296,7 +258,11 @@ end subroutine calc_gradient_old
         call img_in%ifft()
         !STEP 2: FINDING GRADIENTS
         allocate(dir_mat(ldim(1),ldim(2),1), source = 0.)
-        call img_in%calc_gradient(grad, Dc, Dr)
+        if(IMPROVED) then
+            call img_in%calc_gradient_improved(grad, Dc, Dr)
+        else
+            call img_in%calc_gradient(grad, Dc, Dr)
+        endif
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 if(.not. is_zero(Dc(i,j,1))) then                     !Do not divide by 0
@@ -332,7 +298,7 @@ end subroutine calc_gradient_old
         img_in = Gr
         deallocate(grad)
     end subroutine canny_edge
-
+  !
     !This subroutine binarises an image through iterative thresholding.
     !ALGORITHM: -) select initial threshold T
     !           -) split the image in 2 groups according to T
@@ -371,6 +337,7 @@ end subroutine calc_gradient_old
       deallocate(rmat, mask)
     end subroutine iterative_thresholding
 
+   !Otsu binarization for images
     subroutine otsu_img(img)
         use simple_math, only : otsu
         class(image), intent(inout) :: img
@@ -383,4 +350,5 @@ end subroutine calc_gradient_old
         call img%set_rmat(rmat)
         deallocate(rmat,x_out)
     end subroutine otsu_img
+
 end module simple_segmentation

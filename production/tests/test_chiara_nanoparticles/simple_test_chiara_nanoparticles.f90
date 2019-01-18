@@ -25,7 +25,7 @@ module simple_test_chiara_nanoparticles_mod
       integer :: ldim(3)
       real :: shortest_dist, longest_dist
       type(image) :: img_aux
-      logical, parameter :: DEBUG = .false.
+      logical, parameter :: DEBUG = .true.
       rmat = img_cc%get_rmat()
       ldim = img_cc%get_ldim()
       allocate(imat(ldim(1), ldim(2), ldim(3)), source = nint(rmat))
@@ -34,6 +34,8 @@ module simple_test_chiara_nanoparticles_mod
       !where (imat .ne. label) imat = 0
       call img_aux%set_rmat(rmat)
       call img_aux%masscen(centers(:3, counter))
+      !call img_cc%grow_bin()
+      ! print *, 'GROWN BORDERS '
       call img_cc%border_mask(border, label)
       where(border .eqv. .true.)
           imat = 1
@@ -41,8 +43,8 @@ module simple_test_chiara_nanoparticles_mod
           imat = 0
       endwhere
       call get_pixel_pos(imat,pos)
-      shortest_dist = points_dist(centers(:,counter)+real(ldim/2.),pos,'min')
-      longest_dist  = points_dist(centers(:,counter)+real(ldim/2.),pos,'max')
+      shortest_dist = points_dist(centers(:,counter)+real(ldim/2.),real(pos),'min')
+      longest_dist  = points_dist(centers(:,counter)+real(ldim/2.),real(pos),'max')
       ratio = shortest_dist/longest_dist
       if(DEBUG) then
           print *, '>>>>>>>>'
@@ -52,7 +54,7 @@ module simple_test_chiara_nanoparticles_mod
           print *, 'RATIO = ', ratio
       endif
       call img_aux%kill
-      !deallocate(rmat, border, imat, pos)
+      deallocate(rmat, border, imat, pos)
   end subroutine calc_aspect_ratio
 end module simple_test_chiara_nanoparticles_mod
 
@@ -123,7 +125,7 @@ do n_vol = 1, 7
     call img_cc%bin(0.5) !binarize to re-calculate the cc, to have them in order again
     img_bin = img_cc
     call img_bin%find_connected_comps(img_cc) !cc re-calculation
-    call img_cc%write(int2str(n_vol)//'PolishedOrderedAGAIN.mrc')
+    call img_cc%write(int2str(n_vol)//'PolishedOrdered1801.mrc')
     rmat   = img_cc%get_rmat()
     allocate(ratios    (nint(maxval(rmat))), source = 0.)
     allocate(centers (3,nint(maxval(rmat))), source = 0.)

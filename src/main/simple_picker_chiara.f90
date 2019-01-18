@@ -255,15 +255,15 @@ contains
 
     function points_dist( px, vec, which) result( dist )
         real,    intent(in)           :: px(3)
-        integer, intent(in)           :: vec(:,:)
+        real, intent(in)           :: vec(:,:)
         character(len=*),  intent(in) :: which
         logical :: mask(size(vec, dim = 2))
         real    :: dist
         integer :: i
         mask(:) = .true. !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
         do i = 1, size(vec, dim = 2)
-            if(      abs(px(1)-real(vec(1,i))) < TINY .and. abs(px(2)-real(vec(2,i))) < TINY  &
-            &  .and. abs(px(3)-real(vec(3,i))) < TINY ) mask(i) = .false.
+            if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
+            &  .and. abs(px(3)-vec(3,i)) < TINY ) mask(i) = .false.
         enddo
         select case(which)
         case('max')
@@ -271,7 +271,7 @@ contains
         case('min')
             dist =  minval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.), mask)
         case('sum')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+            dist =  sum(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
         case DEFAULT
             write(logfhandle,*) 'Points_dist kind: ', trim(which)
             THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
