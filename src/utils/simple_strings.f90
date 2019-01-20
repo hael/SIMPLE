@@ -401,7 +401,7 @@ contains
         character(len=*), intent(in)    :: substr, repl
         character(len=:), allocatable   :: str_out
         integer :: nargs, iarg, iback, ls
-        character(len=STDLEN) :: args(32)
+        character(len=LONGSTRLEN) :: args(32)
         logical :: back_occur
         iback      = index(str, substr, back=.true.)
         ls         = len(substr)

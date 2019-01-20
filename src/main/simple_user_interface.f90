@@ -2560,8 +2560,8 @@ contains
         ! PROGRAM SPECIFICATION
         call scale%new(&
         &'scale', &                                                                             ! name
-        &'Re-scaling MRC & SPIDER stacks and volumes',&                                         ! descr_short
-        &'is a program for re-scaling, clipping and padding MRC & SPIDER stacks and volumes',&  ! descr_long
+        &'Re-scaling MRC and SPIDER stacks and volumes',&                                         ! descr_short
+        &'is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes',&  ! descr_long
         &'simple_exec',&                                                                        ! executable
         &0, 8, 3, 0, 0, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2597,8 +2597,8 @@ contains
         ! PROGRAM SPECIFICATION
         call scale_project%new(&
         &'scale_project', &                                                                ! name
-        &'Re-scaling of MRC & SPIDER stacks',&                                             ! descr_short
-        &'is a distributed workflow for re-scaling MRC & SPIDER stacks part of project specification',& ! descr_long
+        &'Re-scaling of MRC and SPIDER stacks',&                                             ! descr_short
+        &'is a distributed workflow for re-scaling MRC and SPIDER stacks part of project specification',& ! descr_long
         &'simple_exec',&                                                                   ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3353,7 +3353,7 @@ contains
             ptr => prg_ptr_array(i)%ptr2prg
             write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
             write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
-            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // ', executed by ' // ptr%executable)
+            write(logfhandle, '(a)') '\prgname{' // str2latex(ptr%name) // '} ' // str2latex(ptr%descr_long // '. Executed by ' // ptr%executable)
             call ptr%print_cmdline_latex
             write(logfhandle, '(a)') ''
         end do

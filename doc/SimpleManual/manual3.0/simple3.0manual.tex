@@ -98,7 +98,7 @@ dominika@simplecryoem.com\\
 
 \section{About SIMPLE}
 
-\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, covering all aspects of the single-particle analysis workflow. SIMPLE also provides tools for atomic-resolution 3D reconstruction from time-series of nanoparticles imaged in solution with graphene liquid cell TEM. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. In the latest SIMPLE release (version 3.0), we have revised the way that meta-data and input parameters are handled, providing a project-based execution model (described below). This model has made SIMPLE easier to use, improved output data organisation and increased performance. This document describes the command-line interface of SIMPLE and is intended for advanced users and/or developers that wish to build applications utilising the high-performance image processing algorithms in SIMPLE. <REFERENCE FOR LESS EXPERIENCED USERS>
+\textbf{S}ingle-particle \textbf{IM}age \textbf{P}rocessing \textbf{L}inux \textbf{E}ngine (\href{www.simplecryoem.com}{\textbf{\textcolor{BurntOrange}{SIMPLE}}}) is a program package for cryo-EM image processing, covering all aspects of the single-particle analysis workflow. SIMPLE also provides tools for atomic-resolution 3D reconstruction from time-series of nanoparticles imaged in solution with graphene liquid cell TEM. The SIMPLE back-end consists of an object-oriented numerical library written in modern Fortran. In the latest SIMPLE release (version 3.0), we have revised the way that meta-data and input parameters are handled, providing a project-based execution model (described below). This model has made SIMPLE easier to use, improved output data organisation and increased performance. This document describes the command-line interface of SIMPLE and is intended for advanced users and/or developers that wish to build applications utilising the high-performance image processing algorithms in SIMPLE.
  
 SIMPLE is free software: you can redistribute it and/or modify it under the terms of the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} as published by the Free Software Foundation, either version 3 of the license, or (at your option) any later version. SIMPLE is distributed with the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the \href{http://www.gnu.org/copyleft/gpl.html}{\textbf{\textcolor{BurntOrange}{GNU General Public License}}} for more details.
 
@@ -251,7 +251,7 @@ module load gcc/4.9.1
 The instructions for how to execute SIMPLE in distributed environments (clusters or workstations with more than one CPU socket) are described below \label{distr}.
 
 \section{What is new in SIMPLE release 3.0?}
-The number of changes we have made to the suite compared to the previously released version (2.5) are too many to list here. If you have experience with previous SIMPLE releases, please have a quick browse through the manual. We promise you will catch-up quickly. Most (but not all) of the algorithms implemented in SIMPLE have been published (REFS). If you want to understand the theory, we recommend you read the papers. This document exclusively describes the command-line driven SIMPLE user interface and basic knowledge about EM and single-particle analysis is assumed. 
+The number of changes we have made to the suite compared to the previously released version (2.5) are too many to list here. If you have experience with previous SIMPLE releases, please have a quick browse through the manual. We promise you will catch-up quickly. Most (but not all) of the algorithms implemented in SIMPLE have been published \citep{reboul2016stochastic,Elmlund:2013aa,Elmlund:2012aa,Reboul:2018aa}. If you want to understand the theory, we recommend you read the papers. This document exclusively describes the command-line driven SIMPLE user interface and basic knowledge about EM and single-particle analysis is assumed. 
 
 \subsection{SIMPLE program naming convention}
 The first big change you will notice is that all program names have changed to plain English descriptions of their functionality.  For example, \prgname{PRIME2D} that does simultaneous 2D alignment and clustering in a reference-free manner is now called \prgname{cluster2D}, the workflow for \textit{ab initio} 3D reconstruction from class averages is called \prgname{initial\_3Dmodel}, the 3D refinement application is called \prgname{refine3D} and the heterogeneity analysis tool is called \prgname{cluster3D}. In SIMPLE, we distinguish between \textit{distributed workflows} (executed with \texttt{simple\_distr\_exec}) and \textit{programs} (executed with \texttt{simple\_exec}). Programs perform smaller tasks (subjected exclusively to OpenMP-thread-based parallelisation), whereas distributed workflows are major image processing steps that typically require a multi-core workstation or a computer cluster. Finally, there is a third executable \texttt{simple\_private\_exec} that is used internally by SIMPLE, by the SIMPLE developers and by very advanced users that want to test experimental aspects of SIMPLE or use functionality to support building GUI applications on top of SIMPLE.
@@ -426,7 +426,7 @@ In SIMPLE v3.0 we have implemented an abstract data type called sp\_project that
 simple_exec prg=print_project_info
 \end{Verbatim}
 
-\noindent{}Going back to out HCN example, we cd to the \texttt{hcn\_test/4\_refine3D} execution directory and execute \texttt{simple\_exec prg=print\_project\_info}. This produces the output
+\noindent{}Going back to the HCN example, we cd to the \texttt{hcn\_test/4\_refine3D} execution directory and execute \texttt{simple\_exec prg=print\_project\_info}. This produces the output
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[+textbf[SEGMENT 02 of type: stk]]
 +textit[4 record(s) of stack (extracted particles) info, one per stack of particles]
@@ -474,7 +474,22 @@ vol=../4_refine3D/aniso_optlp_state01.mrc imgkind=vol_filt box=256.000000 smpd=1
 vol=../4_refine3D/recvol_state01_iter015.mrc imgkind=vol box=256.000000 smpd=1.29999995 state=1.00000000
 \end{Verbatim}
 
-\noindent{}\prgname{cluster2D} provided two critical outputs: a file of Fourier Ring Correlations (\texttt{frcs}) and a stack of class averages (\texttt{stk}). \prgname{initial\_3Dmodel} provided one volume output. Finally, \prgname{refine3D} provided three outputs: Fourier Shell Correlations (\texttt{fsc}) and two volumes. 
+\noindent{}\prgname{cluster2D} provided two critical outputs: a file of Fourier Ring Correlations (\texttt{frcs}) and a stack of class averages (\texttt{stk}). \prgname{initial\_3Dmodel} provided one volume output. Finally, \prgname{refine3D} provided three outputs: Fourier Shell Correlations (\texttt{fsc}) and two volumes.
+
+\subsection{Reporting selections made by external processes to the project file}
+
+A common task when you have a GUI controlling SIMPLE is to report selections of micrographs, class averages or other images to the project file. This is done through the program \texttt{report\_selection}
+\begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
+simple_exec prg=report_selection
++underline[USAGE]
++textit[bash-3.2$ simple_distr_exec prg=report_selection key1=val1 key2=val2 ...]
+Required input parameters in +textbf[bold] (ensure terminal support)
++underline[PARAMETER INPUT/OUTPUT]
++textbf[infile  = File with selection state (0/1) flags; give .txt selection file]
+oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|projinfo|jobproc|compenv){ptcl3D}
+\end{Verbatim}
+
+where \texttt{infile} is a plain text file with 0/1 entries communicating the selection and \texttt{oritype} controls which project segment is updated. 
 
 \section{File formats}
 
@@ -497,8 +512,6 @@ It is also possible to import data using plain text files, as described below.
 
 \subsection{Parameter File Conversions}
 The \texttt{SIMPLE/scripts} folder contains perl-scripts (\texttt{convert\_frealign2simple.pl}) and\\ (\texttt{convert\_relion2simple.pl}) to convert FREALIGN and RELION parameter files, respectively, file to a SIMPLE parameter file. This is easy, since these software packages internally use the \href{http://spider.wadsworth.org/spider_doc/spider/docs/euler.html}{\textbf{\textcolor{BurntOrange}{Spider Euler angle convention}}}. Other packages may use other conventions. There's also a \texttt{relion2emanbox.pl} script for converting box files obtained with RELION to the EMAN \texttt{*.box} format used by SIMPLE.
-
-
 
 \section{SIMPLE usage}
 
@@ -611,7 +624,7 @@ simple_distr_exec prg=cluster2D
 \item[--] \prgname{scale\_project} is a distributed workflow for re-scaling MRC \& SPIDER stacks part of project specification
 \end{itemize}
 
-\subsection{SIMPLE programs, categorisation and description of }
+\subsection{SIMPLE programs, categorisation and description}
 
 \subsubsection{PROJECT MANAGEMENT PROGRAMS}
 \begin{itemize}
@@ -880,7 +893,7 @@ width = Falloff of inner mask; # pixels cosine edge{10}
 
 \subsection{cluster\_cavgs}
 \label{cluster_cavgs}
-\prgname{cluster\_cavgs} is a program for analyzing class averages with affinity propagation, in order to get a better understanding of the view distribution. The balance flag is used to apply a balancing restraint (on the class population). Adjust balance until you are satisfied
+\prgname{cluster\_cavgs} is a program for analyzing class averages with affinity propagation, in order to get a better understanding of the view distribution. The balance flag is used to apply a balancing restraint (on the class population). Adjust balance until you are satisfied with the shape of the histogram, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=cluster_cavgs key1=val1 key2=val2 ...]
@@ -1133,7 +1146,7 @@ Required input parameters in +textbf[bold] (ensure terminal support)
 
 \subsection{import\_movies}
 \label{import_movies}
-\prgname{import\_movies} is a program for importing DDD movies to the project. The movies can be located in any read-only location accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected and integrated. Box files (in EMAN
+\prgname{import\_movies} is a program for importing DDD movies to the project. The movies can be located in any read-only location accessible to the project. If the movies contain only a single frame, they will be interpreted as motion-corrected and integrated. Box files (in EMAN format) can be imported along with the movies, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=import_movies key1=val1 key2=val2 ...]
@@ -1268,7 +1281,7 @@ remap_cls = Whether to remap 2D clusters; (yes|no){no}
 
 \subsection{make\_oris}
 \label{make_oris}
-\prgname{make\_oris} is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated. If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection direc
+\prgname{make\_oris} is a program for making SIMPLE orientation files. Random Euler angles and random origin shifts are generated. If ndiscrete is set to an integer number > 0, the orientations produced are randomly sampled from the set of ndiscrete quasi-even projection directions, and the in-plane parameters are assigned randomly. If even is set to yes, then all nptcls orientations are assigned quasi-even projection directions and random in-plane parameters. If nstates is set to some integer number > 0, then states are assigned randomly, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=make_oris key1=val1 key2=val2 ...]
@@ -1334,7 +1347,7 @@ Required input parameters in +textbf[bold] (ensure terminal support)
 
 \subsection{motion\_correct}
 \label{motion_correct}
-\prgname{motion\_correct} is a distributed workflow for motion correction of movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation
+\prgname{motion\_correct} is a distributed workflow for motion correction of movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. If dose\_rate and exp\_time are given the individual frames will be low-pass filtered accordingly (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a contiguous subset of frames will be averaged without any dose-weighting applied, executed by simple\_distr\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_distr_exec prg=motion_correct key1=val1 key2=val2 ...]
@@ -1364,7 +1377,7 @@ lpstop  = Final low-pass limit; in Angstroms
 
 \subsection{motion\_correct\_tomo}
 \label{motion_correct_tomo}
-\prgname{motion\_correct\_tomo} is a distributed workflow for motion correction of tomography movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous op
+\prgname{motion\_correct\_tomo} is a distributed workflow for motion correction of tomography movies based on the same principal strategy as Grigorieffs program. There are two important differences: automatic weighting of the frames using a correlation-based M-estimator and continuous optimisation of the shift parameters. If dose\_rate and exp\_time are given, the individual frames will be low-pass filtered accordingly (dose-weighting strategy). The exp\_doc document should contain per line exp\_time=X and dose\_rate=Y. It is assumed that the input list of movies (one per tilt) are ordered temporally. This is necessary for correct dose-weighting of tomographic tilt series. If scale is given, the movie will be Fourier cropped according to the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given chunk size (Falcon 3 movies), executed by simple\_distr\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_distr_exec prg=motion_correct_tomo key1=val1 key2=val2 ...]
@@ -1392,7 +1405,7 @@ lpstop  = Final low-pass limit; in Angstroms
 
 \subsection{new\_project}
 \label{new_project}
-\prgname{new\_project} is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed and shared-memory systems and for unified meta-data management. This program creates a directory named projname and a file projn
+\prgname{new\_project} is a program for creating a new project. SIMPLE3.0 relies on a monolithic project file for controlling execution on distributed and shared-memory systems and for unified meta-data management. This program creates a directory named projname and a file projname.simple inside that directory that contains all information about the project as well as all meta data generated by the different SIMPLE programs. This file is mirrored by an abstract data type in the back-end, which manages the parameters and meta-data I/O required for execution of SIMPLE, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=new_project key1=val1 key2=val2 ...]
@@ -1436,7 +1449,7 @@ vol1 = Volume to normalize; e.g. vol.mrc
 
 \subsection{orisops}
 \label{orisops}
-\prgname{orisops} is a program for modifying SIMPLE orientation/parameter files. If errify=yes, uniform random angular errors, and uniform origin shift errors, and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned. If mirr=2d, then
+\prgname{orisops} is a program for modifying SIMPLE orientation/parameter files. If errify=yes, uniform random angular errors, and uniform origin shift errors, and uniform random defocus errors are introduced. If nstates > 1 then random states are assigned. If mirr=2d, then the Euler angles in oritab are mirrored according to the relation e1=e1, e2=180+e2, e3=-e3. If mirr=3d, then the Euler angles in oritab are mirrored according to the relation R=M(M*R), where R is the rotation matrix calculated from the Euler angle triplet and M is a 3D reflection matrix. If e1, e2, or e3 is inputted, the orientations are rotated correspondingly. If you input state, only the orientations assigned to state state are rotated. If mul is defined, the origin shifts are multiplied with mul. If zero=yes, then the shifts are zeroed, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=orisops key1=val1 key2=val2 ...]
@@ -1697,7 +1710,7 @@ Required input parameters in +textbf[bold] (ensure terminal support)
 
 \subsection{reproject}
 \label{reproject}
-\prgname{reproject} is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections are generated by extracting central sections from the Fourie
+\prgname{reproject} is a program for re-projecting a volume using Fourier interpolation. Input is a SPIDER or MRC volume. Output is a stack of projection images of the same format as the inputted volume. Projections are generated by extracting central sections from the Fourier volume and back transforming the 2D FTs. nspace controls the number of projection directions. The oritab parameter allows you to input the orientations that you wish to have your volume projected in. pgrp controls the point-group symmetry c (rotational), d (dihedral), t (tetrahedral), o (octahedral) or i (icosahedral). The point-group symmetry is used to restrict the set of projections to within the asymmetric unit. neg inverts the contrast of the projections, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=reproject key1=val1 key2=val2 ...]
@@ -1720,7 +1733,7 @@ msk = Mask radius; mask radius in pixels
 
 \subsection{reconstruct3D}
 \label{reconstruct3D}
-\prgname{reconstruct3D} is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel, executed by simple\_distr\_e
+\prgname{reconstruct3D} is a distributed workflow for reconstructing volumes from MRC and SPIDER stacks, given input orientations and state assignments. The algorithm is based on direct Fourier inversion with a Kaiser-Bessel (KB) interpolation kernel, executed by simple\_distr\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_distr_exec prg=reconstruct3D key1=val1 key2=val2 ...]
@@ -1835,7 +1848,7 @@ oritype = Oritype segment in project; (mic|stk|ptcl2D|cls2D|cls3D|ptcl3D|out|pro
 
 \subsection{scale}
 \label{scale}
-\prgname{scale} is a program for re-scaling, clipping and padding MRC \& SPIDER stacks and volumes, executed by simple\_exec
+\prgname{scale} is a program for re-scaling, clipping and padding MRC and SPIDER stacks and volumes, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=scale key1=val1 key2=val2 ...]
@@ -1859,7 +1872,7 @@ vol1    = Input volume; input volume e.g. vol.mrc
 
 \subsection{scale\_project}
 \label{scale_project}
-\prgname{scale\_project} is a distributed workflow for re-scaling MRC \& SPIDER stacks part of project specification, executed by simple\_exec
+\prgname{scale\_project} is a distributed workflow for re-scaling MRC and SPIDER stacks part of project specification, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=scale_project key1=val1 key2=val2 ...]
@@ -1950,7 +1963,7 @@ Required input parameters in +textbf[bold] (ensure terminal support)
 
 \subsection{simulate\_particles}
 \label{simulate_particles}
-\prgname{simulate\_particles} is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing he
+\prgname{simulate\_particles} is a program for simulating single-particle cryo-EM images. It is not a very sophisticated simulator, but it is nevertheless useful for testing purposes. It does not do any multi-slice simulation and it cannot be used for simulating molecules containing heavy atoms. It does not even accept a PDB file as an input. Input is a cryo-EM map, which we usually generate from a PDB file using EMANs program pdb2mrc. The volume is projected using Fourier interpolation, 20\%of the total noise is added to the images (pink noise), they are then Fourier transformed and multiplied with astigmatic CTF and B-factor. Next, the they are inverse FTed before the remaining 80\%of the noise (white noise) is added, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=simulate_particles key1=val1 key2=val2 ...]
@@ -2018,7 +2031,7 @@ clip = Clipped box size; in pixels
 
 \subsection{stackops}
 \label{stackops}
-\prgname{stackops} is a program that provides standard single-particle image processing routines for MRC or SPIDER stacks. To extract a particular state, give oritab and set state. To select the fraction of best particles, give oritab and set frac. State and frac options can
+\prgname{stackops} is a program that provides standard single-particle image processing routines for MRC or SPIDER stacks. To extract a particular state, give oritab and set state. To select the fraction of best particles, give oritab and set frac. State and frac options can be combined. To apply noise, give the desired signal-to-noise ratio via snr. To calculate the autocorrelation function, set acf=yes. To extract a contiguous subset of images from the stack, set fromp and top. To extract a number of particle images at random, set nran to the desired number. With avg=yes the global average of the stack is calculated. If nframesgrp is set to some integer number >1, averages with chunk sizes of nframesgrp are produced, which may be useful for analysis of dose-fractionated image series. neg inverts the contrast of the images, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=stackops key1=val1 key2=val2 ...]
@@ -2063,7 +2076,7 @@ Required input parameters in +textbf[bold] (ensure terminal support)
 
 \subsection{symaxis\_search}
 \label{symaxis_search}
-\prgname{symaxis\_search} is a program for searching for the principal symmetry axis of a volume reconstructed in C1. The rotational transformation is applied to the oritype field in the project and the project file is updated. If you are unsure about the point-group, use the symme
+\prgname{symaxis\_search} is a program for searching for the principal symmetry axis of a volume reconstructed in C1. The rotational transformation is applied to the oritype field in the project and the project file is updated. If you are unsure about the point-group, use the symmetry\_test program instead, executed by simple\_exec
 \begin{Verbatim}[commandchars=+\[\],fontsize=\small,breaklines=true]
 +underline[USAGE]
 +textit[bash-3.2$ simple_exec prg=symaxis_search key1=val1 key2=val2 ...]
