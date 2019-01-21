@@ -32,7 +32,7 @@ contains
 
     !> for reconstructing volumes from image stacks and their estimated orientations
     subroutine exec_reconstruct3D( self, cline )
-        use simple_rec_master, only: exec_rec_master
+        use simple_rec_master, only: exec_rec_master, exec_rec_soft
         class(reconstruct3D_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
@@ -46,7 +46,11 @@ contains
             case DEFAULT
                 THROW_HARD('unknown eo flag; exec_reconstruct3D')
         end select
-        call exec_rec_master
+        if( params%l_rec_soft )then
+            call exec_rec_soft(cline, 1) ! which_iter = 1
+        else
+            call exec_rec_master
+        endif
         ! end gracefully
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D

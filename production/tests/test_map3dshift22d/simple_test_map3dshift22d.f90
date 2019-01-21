@@ -63,7 +63,7 @@ call build%vol%write('shifted.mrc')
 call build%spproj_field%map3dshift22d(-shvec)
 call build%spproj_field%write('shifted.txt')
 call build%build_rec_tbox(params)    ! reconstruction objects built
-call exec_rec_master('shifted_vol')
+call exec_rec_master
 
 
 

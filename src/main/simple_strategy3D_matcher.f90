@@ -697,12 +697,12 @@ contains
                         select case(trim(params_glob%refine))
                             case('clustersym')
                                 ! always C1 reconstruction
-                                call grid_ptcl( rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
+                                call grid_ptcl(rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
                             case('hard_multi', 'hard_single')
                                 ! npeaks > 1 but only one is selected for reconstruction by probabilistic logic
-                                call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
+                                call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
                             case DEFAULT
-                                call grid_ptcl( rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
+                                call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                         end select
                     end do
                 end do

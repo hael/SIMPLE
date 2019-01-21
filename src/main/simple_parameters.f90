@@ -99,6 +99,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
     character(len=LONGSTRLEN) :: dir=''               !< directory
     character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
+    character(len=LONGSTRLEN) :: dir_refine=''        !< grab oridistributions_part*.bin from here
     character(len=LONGSTRLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
     character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
     character(len=LONGSTRLEN) :: dir_target=''        !< put output here
@@ -403,6 +404,7 @@ type :: parameters
     logical :: l_phaseplate     = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_eo             = .false.
+    logical :: l_rec_soft       = .false.
     logical :: sp_required      = .false.
   contains
     procedure          :: new
@@ -483,6 +485,7 @@ contains
         call check_carg('dir_box',        self%dir_box)
         call check_carg('dir_movies',     self%dir_movies)
         call check_carg('dir_ptcls',      self%dir_ptcls)
+        call check_carg('dir_refine',     self%dir_refine)
         call check_carg('dir_reject',     self%dir_reject)
         call check_carg('dir_select',     self%dir_select)
         call check_carg('dir_target',     self%dir_target)
@@ -892,6 +895,8 @@ contains
             ! open the log file
             call fopen(logfhandle, status='replace', file=LOGFNAME, action='write')
         endif
+        ! soft reconstruction
+        self%l_rec_soft = cline%defined('dir_refine')
         !>>> END, EXECUTION RELATED
 
         !>>> START, SANITY CHECKING AND PARAMETER EXTRACTION FROM ORITAB(S)/VOL(S)/STACK(S)

@@ -6,43 +6,32 @@ use simple_parameters, only: params_glob
 use simple_qsys_funs,  only: qsys_job_finished
 implicit none
 
-public :: exec_rec_master
+public :: exec_rec_master, exec_rec_soft
 private
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine exec_rec_master(  fbody_in )
-        character(len=*), optional, intent(in) :: fbody_in
+    subroutine exec_rec_master
         select case(params_glob%eo)
-            case( 'yes', 'aniso' )
-                call exec_eorec_distr( fbody_in )
             case( 'no' )
-                call exec_rec( fbody_in )
+                call exec_rec
             case DEFAULT
-                THROW_HARD('unknonw eo flag; exec_rec_master')
+                call exec_eorec_distr
         end select
     end subroutine exec_rec_master
 
-    subroutine exec_rec( fbody_in )
-        character(len=*), optional, intent(in) :: fbody_in
+    subroutine exec_rec
         character(len=:), allocatable :: fbody
         character(len=STDLEN)         :: rho_name
-        integer :: s
-        integer(timer_int_kind) :: t1
-        t1=tic()
+        integer                       :: s
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( params_glob%l_distr_exec )then ! embarrasingly parallel rec
-                if( present(fbody_in) )then
-                    allocate(fbody, source=trim(adjustl(fbody_in))//&
-                    &'_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen))
-                else
-                    allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
-                    &'_part'//int2str_pad(params_glob%part,params_glob%numlen))
-                endif
+                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
+                &'_part'//int2str_pad(params_glob%part,params_glob%numlen))
                 params_glob%vols(s) = fbody//params_glob%ext
                 rho_name      = 'rho_'//fbody//params_glob%ext
                 call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, part=params_glob%part)
@@ -50,46 +39,40 @@ contains
                 call build_glob%recvol%write(params_glob%vols(s), del_if_exists=.true.)
                 call build_glob%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
-                if( present(fbody_in) )then
-                    allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
-                else
-                    allocate(fbody, source='recvol_state')
-                endif
+                allocate(fbody, source='recvol_state')
                 params_glob%vols(s) = fbody//int2str_pad(s,2)//params_glob%ext
                 call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s)
                 call build_glob%recvol%clip(build_glob%vol)
                 call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
             endif
-            deallocate(fbody)
         end do
-        DebugPrint ' exec_rec took ', toc(t1), ' secs'
         write(logfhandle,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
         call qsys_job_finished(  'simple_rec_master :: exec_rec')
     end subroutine exec_rec
 
-    subroutine exec_eorec_distr( fbody_in )
-        character(len=*), optional, intent(in)    :: fbody_in
+    subroutine exec_eorec_distr
         character(len=:), allocatable :: fbody
         integer :: s
-        integer(timer_int_kind) :: t1
-        t1=tic()
         if( .not. params_glob%l_distr_exec ) THROW_HARD('eo .ne. no not supported here, use simple_distr_exec!')
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
             DebugPrint  'processing state: ', s
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
-            if( present(fbody_in) )then
-                allocate(fbody, source=trim(adjustl(fbody_in))//'_state')
-            else
-                allocate(fbody, source='recvol_state')
-            endif
+            allocate(fbody, source='recvol_state')
             call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, fbody=fbody)
-            deallocate(fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')
-        DebugPrint ' exec_eorec_distr took ', toc(t1), ' secs'
         write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
     end subroutine exec_eorec_distr
+
+    subroutine exec_rec_soft( cline, which_iter )
+        use simple_strategy3D_matcher, only: read_o_peaks, calc_3Drec
+        use simple_cmdline,            only: cmdline
+        class(cmdline), intent(inout) :: cline
+        integer,        intent(in)    :: which_iter
+        call read_o_peaks
+        call calc_3Drec( cline, which_iter )
+    end subroutine exec_rec_soft
 
 end module simple_rec_master

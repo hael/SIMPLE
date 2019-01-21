@@ -867,15 +867,18 @@ contains
     subroutine exec_reconstruct3D_distr( self, cline )
         class(reconstruct3D_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(parameters)                   :: params
-        type(builder)                      :: build
-        type(qsys_env)                     :: qenv
-        type(cmdline)                      :: cline_volassemble
-        character(len=STDLEN)              :: volassemble_output, str_state, fsc_file, optlp_file
-        character(len=STDLEN), allocatable :: state_assemble_finished(:)
-        type(chash)                        :: job_descr
-        integer                            :: state
-        logical                            :: fall_over
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=:),          allocatable :: target_name
+        character(len=STDLEN),     allocatable :: state_assemble_finished(:)
+        character(len=LONGSTRLEN) :: refine_path
+        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(cmdline)    :: cline_volassemble
+        type(chash)      :: job_descr
+        integer          :: state, ipart
+        logical          :: fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
@@ -891,6 +894,19 @@ contains
         end select
         if( fall_over )then
             THROW_HARD('No images found!')
+        endif
+        ! soft reconstruction from o_peaks in dir_refine?
+        if( params%l_rec_soft )then
+            call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
+            call simple_list_files(refine_path//'oridistributions_part*.bin', list)
+            if( size(list) /= params%nparts )then
+                THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+            endif
+            ! copy the orientation peak distributions
+            do ipart=1,params%nparts
+                target_name = PATH_HERE//basename(trim(list(ipart)))
+                call simple_copy_file(trim(list(ipart)), target_name)
+            end do
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -940,7 +956,7 @@ contains
             endif
         end do
         call qsys_watcher(state_assemble_finished)
-        ! updates project file only if was called from another workflow
+        ! updates project file only if called from another workflow
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
                 if( params%eo .ne. 'no' )then
