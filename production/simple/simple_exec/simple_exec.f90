@@ -46,7 +46,6 @@ type(symaxis_search_commander) :: xsymsrch
 type(symmetry_test_commander)  :: xsymtst
 type(postprocess_commander)    :: xpostprocess
 
-
 ! IMAGE PROCESSING PROGRAMS
 type(mask_commander)        :: xmask
 type(fsc_commander)         :: xfsc

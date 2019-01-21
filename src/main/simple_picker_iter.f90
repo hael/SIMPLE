@@ -5,7 +5,7 @@ use simple_picker
 use simple_parameters, only: params_glob
 implicit none
 
-public :: picker_iter
+public :: picker_iter, prep_pickrefs
 private
 
 type :: picker_iter
@@ -14,6 +14,10 @@ type :: picker_iter
 end type picker_iter
 
 contains
+
+    subroutine prep_pickrefs
+
+    end subroutine prep_pickrefs
 
     subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         use simple_cmdline, only: cmdline

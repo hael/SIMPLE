@@ -1888,10 +1888,11 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &0, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &2, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        ! <empty>
+        call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
+        call pick%set_input('img_ios', 2, 'vol1', 'file', 'Volume for picking', 'Volume for picking', 'e.g. vol.mrc file', .false., '')
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_input('parm_ios', 2, pcontrast)
@@ -1993,10 +1994,11 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &1, 8, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &2, 8, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess%set_input('img_ios', 2, 'refs', 'file', 'references for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         ! parameter input/output
         call preprocess%set_input('parm_ios', 1,  'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess%set_input('parm_ios', 2,  'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -2057,6 +2059,7 @@ contains
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 3, 'refs', 'file', 'references for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)

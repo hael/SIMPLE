@@ -667,7 +667,7 @@ contains
             ! updates segment
             ctfparms = os%get_ctfvars(cnt)
             call self%os_mic%set(imic, 'intg', rel_micname)
-            call self%os_mic%set(imic, 'imgkind', 'intg')
+            call self%os_mic%set(imic, 'imgkind', 'mic')
             call self%os_mic%set(imic, 'xdim',    real(ldim(1)))
             call self%os_mic%set(imic, 'ydim',    real(ldim(2)))
             call self%os_mic%set(imic, 'smpd',    ctfvars%smpd)
@@ -2200,7 +2200,6 @@ contains
     subroutine map2ptcls_state( self )
         class(sp_project), intent(inout) :: self
         integer, allocatable :: particles(:)
-        type(ori) :: o
         integer   :: ncls, icls, iptcl, pind, noris_ptcl3D, noris_ptcl2D
         real      :: rstate
         noris_ptcl2D = self%os_ptcl2D%get_noris()
@@ -2215,6 +2214,16 @@ contains
             self%os_ptcl3D = self%os_ptcl2D
             call self%os_ptcl3D%delete_2Dclustering
         endif
+        ! undo previous selection & excludes non classified particles
+        do iptcl=1,noris_ptcl2D
+            if( .not.self%os_ptcl2D%isthere(iptcl, 'class') )then
+                call self%os_ptcl2D%set(iptcl, 'state', 0.)
+                call self%os_ptcl3D%set(iptcl, 'state', 0.)
+            else
+                 call self%os_ptcl2D%set(iptcl, 'state', 1.)
+                 call self%os_ptcl3D%set(iptcl, 'state', 1.)
+            endif
+        end do
         ! do the mapping
         ncls = self%os_cls2D%get_noris()
         do icls=1,ncls
@@ -2222,8 +2231,7 @@ contains
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
                 ! get 3d ori info
-                o      = self%os_cls2D%get_ori(icls)
-                rstate = o%get('state')
+                rstate = self%os_cls2D%get(icls,'state')
                 do iptcl=1,size(particles)
                     ! get particle index
                     pind = particles(iptcl)
@@ -2243,10 +2251,13 @@ contains
         else if( self%os_cls3D%get_noris() > 0 )then
             THROW_WARN('Inconsistent number of classes in cls2D & cls3D segments')
         endif
-        ! state = 0 all entries that don't have a state label
+        ! state = 0 all entries that don't have a state/class label
         do iptcl=1,noris_ptcl2D
-            if( .not. self%os_ptcl2D%isthere(iptcl, 'state') ) call self%os_ptcl2D%set(iptcl, 'state', 0.)
-            if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
+            if( .not.self%os_ptcl2D%isthere(iptcl, 'state') .or.&
+                &.not.self%os_ptcl3D%isthere(iptcl, 'state') )then
+                 call self%os_ptcl2D%set(iptcl, 'state', 0.)
+                 call self%os_ptcl3D%set(iptcl, 'state', 0.)
+            endif
         end do
     end subroutine map2ptcls_state
 

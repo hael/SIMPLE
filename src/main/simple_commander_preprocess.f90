@@ -97,11 +97,7 @@ contains
         if( params%tomo .eq. 'yes' )then
             THROW_HARD('tomography mode (tomo=yes) not yet supported!')
         endif
-        if( cline%defined('refs') )then
-            l_pick = .true.
-        else
-            l_pick = .false.
-        endif
+        l_pick = cline%defined('refs')
         ! read in movies
         call spproj%read( params%projfile )
         if( spproj%get_nmovies()==0 .and. spproj%get_nintgs()==0 ) THROW_HARD('No movie/micrograph to process!')
@@ -525,24 +521,31 @@ contains
             THROW_HARD('No integrated micrograph to process!')
         endif
         ! make picking references
-        n_os_out = spproj%os_out%get_noris()
-        if( n_os_out == 0 )then
-            THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
-        endif
-        ! interrogate project for vol / cavgs
-        do i=1,n_os_out
-            if( spproj%os_out%isthere(i,'imgkind') )then
-                call spproj%os_out%getter(i,'imgkind',imgkind)
-                select case(imgkind)
-                    case( 'vol' )
-                        call spproj%os_out%getter(i, 'vol',      volname)
-                    case( 'vol_cavg' )
-                        call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
-                    case( 'cavg' )
-                        call spproj%os_out%getter(i, 'cavg',     cavgname)
-                end select
+        ! user input overrides volume/cavgs in project file
+        if( cline%defined('vol1') )then
+            volname  = trim(params%vols(1))
+        else if( cline%defined('refs') )then
+            cavgname = trim(params%refs)
+        else
+            n_os_out = spproj%os_out%get_noris()
+            if( n_os_out == 0 )then
+                THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
             endif
-        enddo
+            ! interrogate project for vol / cavgs
+            do i=1,n_os_out
+                if( spproj%os_out%isthere(i,'imgkind') )then
+                    call spproj%os_out%getter(i,'imgkind',imgkind)
+                    select case(imgkind)
+                        case( 'vol' )
+                            call spproj%os_out%getter(i, 'vol',      volname)
+                        case( 'vol_cavg' )
+                            call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
+                        case( 'cavg' )
+                            call spproj%os_out%getter(i, 'cavg',     cavgname)
+                    end select
+                endif
+            enddo
+        endif
         if( allocated(volname) )then
             ! have 3D reference
         else if( allocated(volcavgname) )then
@@ -569,18 +572,23 @@ contains
             ! find logical dimension & read class averages
             call find_ldim_nptcls(cavgname, ldim, ncavgs)
             ldim(3) = 1
-            ! check consistency with cls2D field
-            ncls2D = spproj%os_cls2D%get_noris()
-            if( ncavgs /= ncls2D )then
-                print *, '# cavgs in file:          ', ncls2D
-                print *, '# entries in cls2D field: ', ncavgs
-                THROW_HARD('inconsistent # cavgs in file vs. project field')
-            endif
-            ! manage selection
-            states = spproj%os_cls2D%get_all('state')
-            nsel   = count(states > 0.5)
-            if( nsel > NREFS / 4 )then
-                THROW_HARD('too many class averages selected as references for picking, select max 25')
+            if( cline%defined('refs') )then
+                nsel = ncavgs
+                allocate(states(nsel), source=1.)
+            else
+                ! check consistency with cls2D field
+                ncls2D = spproj%os_cls2D%get_noris()
+                if( ncavgs /= ncls2D )then
+                    print *, '# cavgs in file:          ', ncls2D
+                    print *, '# entries in cls2D field: ', ncavgs
+                    THROW_HARD('inconsistent # cavgs in file vs. project field')
+                endif
+                ! manage selection
+                states = spproj%os_cls2D%get_all('state')
+                nsel   = count(states > 0.5)
+                if( nsel > NREFS / 4 )then
+                    THROW_HARD('too many class averages selected as references for picking, select max 25')
+                endif
             endif
             ! read selected cavgs
             allocate( projs(nsel) )

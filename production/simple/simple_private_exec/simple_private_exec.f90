@@ -281,13 +281,17 @@ select case(prg)
     case( 'pick' )
         ! for template-based particle picking
         keys_required(1) = 'projfile'
-        keys_required(2) = 'refs'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
+        keys_required(5) = 'refs'
+        keys_required(6) = 'vol1'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
         call xpick%execute(cline)
     case ('pick_chiara')
         ! for image segmentation-based particle picking
