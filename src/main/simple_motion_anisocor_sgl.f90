@@ -452,9 +452,10 @@ contains
     end subroutine motion_anisocor_sgl_fdfcost_8
 
     !> Main search routine
-    function motion_anisocor_sgl_minimize( self, ref, frame ) result(cxy)
+    function motion_anisocor_sgl_minimize( self, ref, frame, corr, regu ) result(cxy)
         class(motion_anisocor_sgl), intent(inout) :: self
-        class(image), target,   intent(in)    :: ref, frame
+        class(image), target,       intent(in)    :: ref, frame
+        real(dp),                   intent(out)   :: corr, regu
         real(dp) :: cxy(POLY_DIM+1) ! corr + model
         class(*), pointer :: fun_self => null()
         integer           :: i, j

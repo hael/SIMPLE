@@ -25,13 +25,19 @@ type, extends(motion_anisocor)       :: motion_anisocor_dbl
     real(kind=c_double), allocatable :: T_coords_xm_cr(:,:)   !< cross-product of square of T_coords_xm, memoized for speedup
     real(kind=c_double), allocatable :: T_coords_out  (:,:,:) !< transformed coordinates for output image
     real(dp)                         :: sc_alpha_x, sc_alpha_y!< scaling factors, used for gradients
+    real(dp)                         :: sc_beta_x, sc_beta_y
+    real(dp)                         :: sc_gamma_x, sc_gamma_y
+    real(dp)                         :: gamma
 contains
+    procedure                        :: eval_fdf_foo     ! for debug purpopses
     procedure, private               :: eval_fdf
+    procedure, private               :: eval_f_noregu    ! for debug purposes
     procedure, private               :: calc_mat_tld
     procedure, private               :: interp_bilin
     procedure, private               :: interp_bilin_fdf
     procedure, private               :: interp_bilin_out
     procedure, private               :: calc_T_coords
+    procedure, private               :: calc_grad_coords    ! specifically for gradient of regularization term
     procedure, private               :: calc_T_coords_only
     procedure, private               :: calc_T_coords_out
     procedure                        :: calc_T_out => motion_anisocor_dbl_calc_T_out
@@ -173,6 +179,56 @@ contains
         end do
     end subroutine calc_T_coords
 
+    subroutine calc_grad_coords( self, a, grad )                 ! specifically for gradient of regularization term
+        class(motion_anisocor_dbl), intent(inout) :: self
+        real(dp),                   intent(in)    :: a(POLY_DIM)
+        real(dp),                   intent(out)   :: grad(POLY_DIM)
+        integer  :: i, j
+        real(dp) :: Nx, Ny
+        real(dp) :: x, y, xm, ym, xms, yms, xym, z1, z2
+        real(dp) :: T_coords(2)
+        grad = 0.
+        Nx = real(self%ldim(1), dp)
+        Ny = real(self%ldim(2), dp)
+        do j = 1, self%ldim(2)
+            do i = 1, self%ldim(1)
+                x   = real(i, dp)
+                y   = real(j, dp)
+                ! map x,y to [-1:1]
+                xm  = (2._dp * x - Nx - 1._dp) / (Nx - 1._dp)
+                ym  = (2._dp * y - Ny - 1._dp) / (Ny - 1._dp)
+                xms = xm * xm
+                yms = ym * ym
+                xym = xm * ym
+                self%T_coords_xm   (i,j,1) = xm
+                self%T_coords_xm   (i,j,2) = ym
+                self%T_coords_xm_sq(i,j,1) = xms
+                self%T_coords_xm_sq(i,j,2) = yms
+                self%T_coords_xm_cr(i,j)   = xym
+                ! Polynomial:
+                ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
+                ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
+                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
+                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
+                ! remap to [1:N]
+                T_coords(1) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
+                T_coords(2) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
+                grad(1) = grad(1) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp
+                grad(2) = grad(2) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xm
+                grad(3) = grad(3) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * ym
+                grad(4) = grad(4) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xms
+                grad(5) = grad(5) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * yms
+                grad(6) = grad(6) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xym
+                grad(7) = grad(7) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp 
+                grad(8) = grad(8) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xm
+                grad(9) = grad(9) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * ym
+                grad(10) = grad(10) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xms
+                grad(11) = grad(11) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * yms
+                grad(12) = grad(12) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xym                          
+            end do
+        end do
+    end subroutine calc_grad_coords                          ! specifically for gradient of regularization term
+ 
     subroutine calc_T_coords_only( self, a )
         class(motion_anisocor_dbl), intent(inout) :: self
         real(dp),                   intent(in)    :: a(POLY_DIM)
@@ -287,20 +343,94 @@ contains
         end do
     end subroutine calc_mat_tld
 
+    subroutine eval_fdf_foo( self, ref, frame, a, f, grad )  ! for debug purpopse
+        class(motion_anisocor_dbl), intent(inout) :: self
+        class(image), target,       intent(in)    :: ref, frame
+        real(dp),                   intent(in)    :: a(POLY_DIM)
+        real(dp),                   intent(out)   :: f, grad(POLY_DIM)
+        class(*), pointer :: fun_self => null()
+        integer           :: i, j
+        real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
+        integer           :: ldim_here1(3), ldim_here2(3)
+        logical           :: do_alloc
+        ldim_here1 = ref  %get_ldim()
+        ldim_here2 = frame%get_ldim()
+        if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
+            THROW_HARD('eval_fdf_foo: dimensions of particle and reference do not match; simple_motion_anisocor_dbl')
+        end if
+        self%ldim(1) = ldim_here1(1)
+        self%ldim(2) = ldim_here1(2)
+        self%reference => ref
+        call ref%get_rmat_ptr( rmat_ref_ptr )
+        do_alloc = .false.
+        if (.not. allocated(self%rmat_ref)) then
+            do_alloc = .true.
+        else
+            if ((size(self%rmat_ref, 1) .ne. self%ldim(1)).or.(size(self%rmat_ref, 2) .ne. self%ldim(2))) then
+                do_alloc = .true.
+            end if
+        end if
+        if (do_alloc) then
+            if (allocated(self%rmat_ref      )) deallocate(self%rmat_ref      )
+            if (allocated(self%rmat          )) deallocate(self%rmat          )
+            if (allocated(self%rmat_T        )) deallocate(self%rmat_T        )
+            if (allocated(self%rmat_T_grad   )) deallocate(self%rmat_T_grad   )
+            if (allocated(self%T_coords      )) deallocate(self%T_coords      )
+            if (allocated(self%T_coords_xm   )) deallocate(self%T_coords_xm   )
+            if (allocated(self%T_coords_xm_sq)) deallocate(self%T_coords_xm_sq)
+            if (allocated(self%T_coords_xm_cr)) deallocate(self%T_coords_xm_cr)
+            allocate( self%rmat_ref(self%ldim(1), self%ldim(2)) )
+            allocate( self%rmat(self%ldim(1), self%ldim(2)) )
+            allocate( self%rmat_T         (    self%ldim(1),     self%ldim(2)       ) )
+            allocate( self%rmat_T_grad    (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords       ( 2, self%ldim(1),     self%ldim(2)       ) )
+            allocate( self%T_coords_xm    (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_xm_sq (    self%ldim(1),     self%ldim(2),    2 ) )
+            allocate( self%T_coords_xm_cr (    self%ldim(1),     self%ldim(2)       ) )
+            self%sc_alpha_x = 2._dp / (real(self%ldim(1), dp) - 1._dp)
+            self%sc_alpha_y = 2._dp / (real(self%ldim(2), dp) - 1._dp)
+        end if
+        call ref%get_rmat_ptr( rmat_ref_ptr )
+        self%rmat_ref(1:self%ldim(1), 1:self%ldim(2)) = rmat_ref_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
+        self%frame  => frame
+        call frame%get_rmat_ptr( rmat_ptr )
+        self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
+        call self%eval_fdf(a, f, grad)
+        
+    end subroutine eval_fdf_foo    ! for debug purpopse
+
+    
+    
     subroutine eval_fdf( self, a, f, grad )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         class(motion_anisocor_dbl), intent(inout) :: self
         real(dp),                   intent(in)    :: a(POLY_DIM)
         real(dp),                   intent(out)   :: f, grad(POLY_DIM)
-        real(dp) :: N, D_I, D_R, grad_tmp1, grad_tmp2
+        real(dp) :: N, D_I, D_R, grad_tmp1, grad_tmp2, regu_term
         integer  :: i, j, r
         real(dp) :: poly_dfs(POLY_DIM)
         real(dp), allocatable :: atmp(:,:)
+        real(dp) :: regu_grad(12)
+!!$        integer :: ithr
+!!$        ithr = omp_get_thread_num() + 1
+!!$        if( ithr == 1 )then
+!!$            write(logfhandle,*) 'eval_fdf, a=', a
+!!$        end if
         call self%calc_T_coords(a)
         call self%calc_mat_tld()
         N   = sum( self%rmat_ref(:,:) * self%rmat_T  (:,:) )
         D_R = sum( self%rmat_ref(:,:) * self%rmat_ref(:,:) )
         D_I = sum( self%rmat_T  (:,:) * self%rmat_T  (:,:) )
         f   = N / sqrt(D_I * D_R)
+        regu_term = 0.
+        do j = 1, self%ldim(2)
+            do i = 1, self%ldim(1)
+                regu_term = regu_term + (real(i, dp) - self%T_coords(1,i,j))**2 + (real(j, dp) - self%T_coords(2,i,j))**2
+            end do
+        end do
+        f = f - self%gamma * regu_term / real(self%ldim(1)*self%ldim(2),dp)
+                
         ! Computing gradient
         ! Polynomial:
         ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
@@ -370,7 +500,74 @@ contains
         grad(1: 6) = grad(1: 6) / self%sc_alpha_x
         grad(7:12) = grad(7:12) / self%sc_alpha_y
         grad = grad / sqrt(D_I*D_R)
+        call self%calc_grad_coords(a, regu_grad)
+        grad = grad - self%gamma * regu_grad / real(self%ldim(1)*self%ldim(2),dp)
     end subroutine eval_fdf
+    
+    subroutine eval_f_noregu( self, a, f, regu )      ! for debug purposes
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        class(motion_anisocor_dbl), intent(inout) :: self
+        real(dp),                   intent(in)    :: a(POLY_DIM)
+        real(dp),                   intent(out)   :: f, regu
+        real(dp) :: N, D_I, D_R, grad_tmp1, grad_tmp2
+        integer  :: i, j, r
+        real(dp) :: poly_dfs(POLY_DIM)
+        real(dp), allocatable :: atmp(:,:)
+        real(dp) :: regu_term
+        integer :: ithr
+!!$        integer :: ithr
+!!$        ithr = omp_get_thread_num() + 1
+!!$        if( ithr == 1 )then
+!!$            write(logfhandle,*) 'eval_fdf, a=', a
+!!$        end if
+        call self%calc_T_coords(a)
+        call self%calc_mat_tld()
+        N   = sum( self%rmat_ref(:,:) * self%rmat_T  (:,:) )
+        D_R = sum( self%rmat_ref(:,:) * self%rmat_ref(:,:) )
+        D_I = sum( self%rmat_T  (:,:) * self%rmat_T  (:,:) )
+        f   = N / sqrt(D_I * D_R)
+        regu_term = 0.
+        
+        ithr = omp_get_thread_num() + 1
+        if ((.false.).and.(ithr == 1)) then
+            open(123, file='acoords')
+            write (123,*) 'a=', a
+            write (123,*) 'Nx=', self%ldim(1)
+            write (123,*) 'Ny=', self%ldim(2)
+            write (123,*) 'T_coords_1=[...'
+            do i = 1, self%ldim(1)
+                do j = 1, self%ldim(2)
+                    write (123,'(A)', advance='no') trim(dbl2str(self%T_coords(1,i,j)))
+                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '                    
+                end do
+                if (i < self%ldim(1)) write (123,'(A)') '; ...'
+            end do
+            write (213,*) '];'
+            write (123,*) 'T_coords_2=[...'
+            do i = 1, self%ldim(1)
+                do j = 1, self%ldim(2)
+                    write (123,'(A)', advance='no') trim(dbl2str(self%T_coords(2,i,j)))
+                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '                    
+                end do
+                if (i < self%ldim(1)) write (123,'(A)') '; ...'
+            end do
+            write (213,*) '];'
+            close(123)
+            stop 1
+        end if
+        do j = 1, self%ldim(2)
+            do i = 1, self%ldim(1)
+                regu_term = regu_term + (real(i, dp) - self%T_coords(1,i,j))**2 + (real(j, dp) - self%T_coords(2,i,j))**2
+            end do
+        end do
+        write (*,*) 'regu_term_pre:', regu_term
+        regu_term = regu_term / real(self%ldim(1)*self%ldim(2),dp)
+        write (*,*) 'regu_term_post:', regu_term
+        regu = regu_term * self%gamma
+        write (*,*) 'regu:', regu
+    end subroutine eval_f_noregu     ! for debug purposes
+
 
     !> Initialise  ftexp_shsrch
     subroutine motion_anisocor_dbl_new( self, motion_correct_ftol, motion_correct_gtol )
@@ -380,7 +577,8 @@ contains
         integer           :: i
         real              :: lims(POLY_DIM,2)
         call self%kill()
-        self%maxHWshift = 0.4
+        self%gamma      = 0.01
+        self%maxHWshift = 0.2
         if( present(motion_correct_ftol) )then
             self%motion_correctftol = motion_correct_ftol
         else
@@ -457,9 +655,10 @@ contains
     end subroutine motion_anisocor_dbl_fdfcost_8
 
     !> Main search routine
-    function motion_anisocor_dbl_minimize( self, ref, frame ) result(cxy)
+    function motion_anisocor_dbl_minimize( self, ref, frame, corr, regu ) result(cxy)
         class(motion_anisocor_dbl), intent(inout) :: self
         class(image), target,       intent(in)    :: ref, frame
+        real(dp),                   intent(out)   :: corr, regu
         real(dp)          :: cxy(POLY_DIM+1) ! corr + model
         real              :: cxy1
         class(*), pointer :: fun_self => null()
@@ -467,6 +666,8 @@ contains
         real, pointer     :: rmat_ref_ptr(:,:,:), rmat_ptr(:,:,:)
         integer           :: ldim_here1(3), ldim_here2(3)
         logical           :: do_alloc
+        integer           :: irestart
+        write (*,*) 'gamma=', self%gamma ; call flush(6)
         ldim_here1 = ref  %get_ldim()
         ldim_here2 = frame%get_ldim()
         if( any(ldim_here1(1:2) .ne. ldim_here2(1:2)) )then
@@ -512,9 +713,28 @@ contains
         self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.001 ! randomized (yet small) starting point
         self%ospec%x_8 = real(self%ospec%x, dp)
         self%ospec%maxits = 400
-        call self%nlopt%minimize(self%ospec, self, cxy1)
-        cxy(1)  = real(cxy1)
-        cxy(2:) = self%ospec%x_8
+        irestart = 0
+        self%ospec%converged = .false.
+        do while ((irestart < 5).and.(.not. self%ospec%converged))
+            irestart = irestart + 1
+            call self%nlopt%minimize(self%ospec, self, cxy1)
+        end do
+        if (irestart > 1) then            
+            if (.not. self%ospec%converged) then
+                write (*,*) 'QQQQQQQQQQQQQQQQQQQQQQQQQQ not converged!'
+            else
+                write (*,*) 'converged with irestart=', irestart
+            end if
+        end if
+        if (self%ospec%converged) then
+            cxy(1)  = real(cxy1)
+            cxy(2:) = self%ospec%x_8
+            call self%eval_f_noregu(self%ospec%x_8, corr, regu)
+        else
+            cxy(2:) = 0.
+            call self%eval_f_noregu(cxy(2:), cxy(1), regu)
+            corr = cxy(1)
+        end if
     end function motion_anisocor_dbl_minimize
 
     subroutine motion_anisocor_dbl_kill( self )

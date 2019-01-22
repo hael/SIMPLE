@@ -49,10 +49,11 @@ interface
         class(motion_anisocor), intent(inout) :: self
     end subroutine motion_anisocor_kill
 
-    function motion_anisocor_minimize( self, ref, frame ) result(cxy)
+    function motion_anisocor_minimize( self, ref, frame, corr, regu ) result(cxy)
         import motion_anisocor, POLY_DIM, image
         class(motion_anisocor), intent(inout) :: self
         class(image), target,   intent(in)    :: ref, frame
+        real(kind=8),           intent(out)   :: corr, regu
         real(kind=8) :: cxy(POLY_DIM+1) 
     end function motion_anisocor_minimize
     

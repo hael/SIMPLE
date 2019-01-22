@@ -301,6 +301,14 @@ contains
         call removesp(str)
     end function real2str
 
+    !> \brief  converts a real number to a string
+    pure function dbl2str(rval) result(str)
+        real(dp), intent(in)  :: rval
+        character(len=32) :: str
+        write(str,*) rval
+        call removesp(str)
+    end function dbl2str
+
     !>  \brief  turn integer variable into character variable
     !! - now supports negative values
     pure function int2str(intg) result(string)

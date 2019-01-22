@@ -78,11 +78,17 @@ contains
         self%l = spec%limits(:,1)
         self%u = spec%limits(:,2)
         call lbfgsbmin
+        if (self%task(1:4) .ne. 'CONV') then
+            spec%converged = .false.
+        else
+            spec%converged = .true.
+        end if
         if( PRINT_NEVALS )then
             ! get thread index
             ithr = omp_get_thread_num() + 1
-            if( ithr == 1 )then
+            if((.true.).or.( ithr == 1 ))then
                 write(logfhandle,*) 'task          : ', self%task
+                write(logfhandle,*) 'converged     : ', spec%converged
                 write(logfhandle,*) 'nevals        : ', spec%nevals
                 write(logfhandle,*) 'ngevals       : ', spec%ngevals
                 write(logfhandle,*) 'self%isave(34): ', self%isave(34)

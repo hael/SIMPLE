@@ -455,6 +455,7 @@ contains
         real    :: scale, smpd4scale
         integer :: iframe, nimproved, i, ldim4scale(3), ithr
         logical :: didsave, err_stat, doscale
+        real(dp):: acorr, aregu
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -498,7 +499,7 @@ contains
         write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
-        PRINT_NEVALS = .true.
+        PRINT_NEVALS = .true.        
         do i=1,MITSREF_ANISO
             nimproved = 0
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy,ithr) proc_bind(close) reduction(+:nimproved)
@@ -507,10 +508,10 @@ contains
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
                 cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
-                    frame=movie_frames_shifted(iframe))
+                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu)                
                 ithr = omp_get_thread_num() + 1
-                if( ithr == 1 )then
-                    write (*,*) 'frame=', iframe, 'aniso: cxy=', cxy
+                if ((.true.).or.( ithr == 1 ))then
+                    write (*,*) 'frame=', iframe, 'aniso: ', acorr, 'regu: ', aregu, ' params: ', cxy(2:POLY_DIM+1)
                     call flush(6)
                 endif
                 ! update parameter arrays
