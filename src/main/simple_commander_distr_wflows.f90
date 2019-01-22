@@ -87,19 +87,16 @@ contains
         class(cmdline),                    intent(inout) :: cline
         type(parameters)              :: params
         type(qsys_env)                :: qenv
+        type(cmdline)                 :: cline_make_pickrefs
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
+        character(len=:), allocatable :: imgkind
+        integer                       :: i, n_os_out
         logical                       :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        ! picking
-        if( cline%defined('refs') )then
-            l_pick = .true.
-        else
-            l_pick = .false.
-        endif
         ! read in movies
         call spproj%read(params%projfile)
         ! DISTRIBUTED EXECUTION
@@ -113,6 +110,33 @@ contains
         call cline%set('numlen', real(params%numlen))
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
+        ! prepares picking references
+        l_pick = .false.
+        if( cline%defined('refs') .or. cline%defined('vol1') )then
+            l_pick = .true.
+        else
+            n_os_out = spproj%os_out%get_noris()
+            if( n_os_out > 0 )then
+                ! interrogate project for vol / cavgs
+                do i=1,n_os_out
+                    if( spproj%os_out%isthere(i,'imgkind') )then
+                        call spproj%os_out%getter(i,'imgkind',imgkind)
+                        select case(imgkind)
+                        case('vol','vol_cavg','cavg')
+                            l_pick = .true.
+                        end select
+                    endif
+                enddo
+            endif
+        endif
+        if( l_pick )then
+            cline_make_pickrefs = cline
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call cline%set('refs', trim(PICKREFS)//params%ext)
+            call cline%delete('vol1')
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
@@ -295,6 +319,7 @@ contains
         class(cmdline),              intent(inout) :: cline
         type(parameters)              :: params
         type(sp_project)              :: spproj
+        type(cmdline)                 :: cline_make_pickrefs
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
@@ -311,6 +336,13 @@ contains
         call cline%set('numlen', real(params%numlen))
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
+        ! prepares picking references
+        cline_make_pickrefs = cline
+        call cline_make_pickrefs%set('prg','make_pickrefs')
+        call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+        call cline%set('refs', trim(PICKREFS)//params%ext)
+        call cline%delete('vol1')
+        write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean

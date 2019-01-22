@@ -19,6 +19,7 @@ public :: pick_commander_chiara
 public :: extract_commander
 public :: reextract_commander
 public :: pick_extract_commander
+public :: make_pickrefs_commander
 private
 #include "simple_local_flags.inc"
 
@@ -62,6 +63,10 @@ type, extends(commander_base) :: pick_extract_commander
   contains
     procedure :: execute      => exec_pick_extract
 end type pick_extract_commander
+type, extends(commander_base) :: make_pickrefs_commander
+  contains
+    procedure :: execute      => exec_make_pickrefs
+end type make_pickrefs_commander
 
 contains
 
@@ -470,35 +475,19 @@ contains
     subroutine exec_pick( self, cline )
         use simple_binoris_io,     only: binwrite_oritab
         use simple_ori,            only: ori
-        use simple_oris,           only: oris
         use simple_picker_iter,    only: picker_iter
         use simple_image,          only: image
-        use simple_projector_hlev, only: reproject
-        use simple_sym,            only: sym
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
         type(sp_project)              :: spproj
         type(picker_iter)             :: piter
         type(ori)                     :: o
-        type(oris)                    :: os
-        type(sym)                     :: pgrpsyms
-        type(image)                   :: ref3D, ref2D
-        type(image),      allocatable :: projs(:)
         character(len=:), allocatable :: output_dir, intg_name, imgkind
-        character(len=:), allocatable :: volname, volcavgname, cavgname
-        real,             allocatable :: states(:)
         character(len=LONGSTRLEN)     :: boxfile
-        integer, parameter :: NREFS=100, NPROJS=20
-        real    :: ang, rot
-        integer :: nrots, iref, irot, ldim(3), ifoo, ncavgs
-        integer :: icavg, ncls2D, fromto(2), imic, ntot, nptcls_out
-        integer :: cnt, state, n_os_out, i, nsel
+        integer :: fromto(2), imic, ntot, nptcls_out, cnt, state
         call cline%set('oritype', 'mic')
         call params%new(cline)
-        if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
-        ! point-group object
-        call pgrpsyms%new(trim(params%pgrp))
         ! output directory
         output_dir = PATH_HERE
         ! parameters & loop range
@@ -520,111 +509,7 @@ contains
         if( spproj%get_nintgs() == 0 )then
             THROW_HARD('No integrated micrograph to process!')
         endif
-        ! make picking references
-        ! user input overrides volume/cavgs in project file
-        if( cline%defined('vol1') )then
-            volname  = trim(params%vols(1))
-        else if( cline%defined('refs') )then
-            cavgname = trim(params%refs)
-        else
-            n_os_out = spproj%os_out%get_noris()
-            if( n_os_out == 0 )then
-                THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
-            endif
-            ! interrogate project for vol / cavgs
-            do i=1,n_os_out
-                if( spproj%os_out%isthere(i,'imgkind') )then
-                    call spproj%os_out%getter(i,'imgkind',imgkind)
-                    select case(imgkind)
-                        case( 'vol' )
-                            call spproj%os_out%getter(i, 'vol',      volname)
-                        case( 'vol_cavg' )
-                            call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
-                        case( 'cavg' )
-                            call spproj%os_out%getter(i, 'cavg',     cavgname)
-                    end select
-                endif
-            enddo
-        endif
-        if( allocated(volname) )then
-            ! have 3D reference
-        else if( allocated(volcavgname) )then
-            ! have 3D reference
-            volname = volcavgname
-        else if( allocated(cavgname) )then
-            ! have 2D references
-        else
-            THROW_HARD('Could not identify vol / cavgs in project for creating picking references!')
-        endif
-        if( allocated(volname) )then
-            ! find logical dimension & read reference volume
-            call find_ldim_nptcls(volname, ldim, ifoo)
-            call ref3D%new(ldim, params%smpd)
-            call ref3D%read(volname)
-            ! make projection directions
-            call os%new(NPROJS)
-            call pgrpsyms%build_refspiral(os)
-            ! generate reprojections
-            projs = reproject(ref3D, os)
-            nrots = NREFS / NPROJS
-            nsel  = NPROJS
-        else
-            ! find logical dimension & read class averages
-            call find_ldim_nptcls(cavgname, ldim, ncavgs)
-            ldim(3) = 1
-            if( cline%defined('refs') )then
-                nsel = ncavgs
-                allocate(states(nsel), source=1.)
-            else
-                ! check consistency with cls2D field
-                ncls2D = spproj%os_cls2D%get_noris()
-                if( ncavgs /= ncls2D )then
-                    print *, '# cavgs in file:          ', ncls2D
-                    print *, '# entries in cls2D field: ', ncavgs
-                    THROW_HARD('inconsistent # cavgs in file vs. project field')
-                endif
-                ! manage selection
-                states = spproj%os_cls2D%get_all('state')
-                nsel   = count(states > 0.5)
-                if( nsel > NREFS / 4 )then
-                    THROW_HARD('too many class averages selected as references for picking, select max 25')
-                endif
-            endif
-            ! read selected cavgs
-            allocate( projs(nsel) )
-            cnt = 0
-            do icavg=1,ncavgs
-                if( states(icavg) > 0.5 )then
-                    cnt = cnt + 1
-                    call projs(cnt)%new(ldim, params%smpd)
-                    call projs(cnt)%read(cavgname, icavg)
-                endif
-            end do
-            nrots  = NREFS / nsel
-        endif
-        ! expand in in-plane rotation and write to file
-        params%refs = 'pickrefs_part'//int2str(params%part)//params%ext
-        call ref2D%new([ldim(1),ldim(2),1], params%smpd)
-        if( nrots > 1 )then
-            ang = 360./real(nrots)
-            rot = 0.
-            cnt = 0
-            do iref=1,nsel
-                do irot=1,nrots
-                    cnt = cnt + 1
-                    call projs(iref)%rtsq(rot, 0., 0., ref2D)
-                    if( params%pcontrast .eq. 'black' ) call ref2D%neg
-                    call ref2D%write(trim(params%refs), cnt)
-                    rot = rot + ang
-                end do
-            end do
-        else
-            ! should never happen
-            do iref=1,nsel
-                call projs(iref)%write(trim(params%refs), iref)
-            end do
-        endif
-        ! main loop
+        ! perform picking
         cnt = 0
         do imic=fromto(1),fromto(2)
             cnt   = cnt + 1
@@ -1296,5 +1181,188 @@ contains
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
+
+    subroutine exec_make_pickrefs( self, cline )
+        use simple_oris,                only: oris
+        use simple_sp_project,          only: sp_project
+        use simple_sym,                 only: sym
+        use simple_image,               only: image
+        use simple_projector_hlev,      only: reproject
+        class(make_pickrefs_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(oris)                    :: os
+        type(sym)                     :: pgrpsyms
+        type(image)                   :: ref3D, ref2D
+        type(image),      allocatable :: projs(:)
+        character(len=:), allocatable :: imgkind
+        character(len=:), allocatable :: volname, volcavgname, cavgname
+        real,             allocatable :: states(:)
+        integer, parameter :: NREFS=100, NPROJS=20
+        real    :: ang, rot, smpd_here
+        integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
+        integer :: ncls2D, cnt, n_os_out, i, nsel
+        ! set oritype
+        call cline%set('oritype', 'mic')
+        ! parse parameters
+        call params%new(cline)
+        if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')
+        if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
+        ! point-group object
+        call pgrpsyms%new(trim(params%pgrp))
+        ! user input overrides volume/cavgs in project file
+        if( cline%defined('vol1') )then
+            volname  = trim(params%vols(1))
+        else if( cline%defined('refs') )then
+            cavgname = trim(params%refs)
+        else
+            ! read project file
+            call spproj%read(params%projfile)
+            n_os_out = spproj%os_out%get_noris()
+            if( n_os_out == 0 )then
+                THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
+            endif
+            ! interrogate project for vol / cavgs
+            do i=1,n_os_out
+                if( spproj%os_out%isthere(i,'imgkind') )then
+                    call spproj%os_out%getter(i,'imgkind',imgkind)
+                    select case(imgkind)
+                        case( 'vol' )
+                            call spproj%os_out%getter(i, 'vol',      volname)
+                        case( 'vol_cavg' )
+                            call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
+                        case( 'cavg' )
+                            call spproj%os_out%getter(i, 'stk',     cavgname)
+                    end select
+                endif
+            enddo
+        endif
+        if( allocated(volname) )then
+            ! have 3D reference
+        else if( allocated(volcavgname) )then
+            ! have 3D reference
+            volname = volcavgname
+        else if( allocated(cavgname) )then
+            ! have 2D references
+        else
+            THROW_HARD('Could not identify vol / cavgs in project for creating picking references!')
+        endif
+        if( allocated(volname) )then
+            ! find logical dimension & read reference volume
+            call find_ldim_nptcls(volname, ldim_here, ifoo, smpd=smpd_here)
+            call ref3D%new(ldim_here, smpd_here)
+            call ref3D%read(volname)
+            call scale_ref(ref3D, params%smpd)
+            ! make projection directions
+            call os%new(NPROJS)
+            call pgrpsyms%build_refspiral(os)
+            ! generate reprojections
+            projs = reproject(ref3D, os)
+            nrots = NREFS / NPROJS
+            nsel  = NPROJS
+        else
+            ! find logical dimension & read class averages
+            print *,trim(cavgname)
+            call find_ldim_nptcls(cavgname, ldim_here, ncavgs, smpd=smpd_here)
+            ldim_here(3) = 1
+            if( cline%defined('refs') )then
+                nsel = ncavgs
+                allocate(states(nsel), source=1.)
+            else
+                ! check consistency with cls2D field
+                ncls2D = spproj%os_cls2D%get_noris()
+                if( ncavgs /= ncls2D )then
+                    print *, '# cavgs in file:          ', ncls2D
+                    print *, '# entries in cls2D field: ', ncavgs
+                    THROW_HARD('inconsistent # cavgs in file vs. project field')
+                endif
+                ! manage selection
+                states = spproj%os_cls2D%get_all('state')
+                nsel   = count(states > 0.5)
+                if( nsel > NREFS / 4 )then
+                    THROW_HARD('too many class averages selected as references for picking, select max 25')
+                endif
+            endif
+            ! read selected cavgs
+            allocate( projs(nsel) )
+            cnt = 0
+            do icavg=1,ncavgs
+                if( states(icavg) > 0.5 )then
+                    cnt = cnt + 1
+                    call projs(cnt)%new(ldim_here, smpd_here)
+                    call projs(cnt)%read(cavgname, icavg)
+                    call scale_ref(projs(cnt), params%smpd)
+                endif
+            end do
+            nrots  = NREFS / nsel
+        endif
+        ! expand in in-plane rotation and write to file
+        if( nrots > 1 )then
+            print *,ldim
+            call ref2D%new([ldim(1),ldim(2),1], params%smpd)
+            ang = 360./real(nrots)
+            rot = 0.
+            cnt = 0
+            do iref=1,nsel
+                do irot=1,nrots
+                    cnt = cnt + 1
+                    call projs(iref)%rtsq(rot, 0., 0., ref2D)
+                    if(params%pcontrast .eq. 'black') call ref2D%neg
+                    call ref2D%write(trim(PICKREFS)//params%ext, cnt)
+                    rot = rot + ang
+                end do
+            end do
+        else
+            ! should never happen
+            do iref=1,nsel
+                if(params%pcontrast .eq. 'black') call projs(iref)%neg
+                call projs(iref)%write(trim(PICKREFS)//params%ext, iref)
+            end do
+        endif
+        ! end gracefully
+        call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
+        call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
+        print *,smpd_here,params%smpd
+        stop
+
+        contains
+
+            subroutine scale_ref(refimg, smpd_target)
+                class(image), intent(inout) :: refimg
+                real,         intent(in)    :: smpd_target
+                type(image) :: targetimg
+                integer     :: ldim_ref(3), ldim_target(3)
+                real        :: smpd_ref, scale
+                smpd_ref = refimg%get_smpd()
+                scale    = smpd_target / smpd_ref
+                if( is_equal(scale,1.) )then
+                    ldim = ldim_here
+                    return
+                endif
+                ldim_ref       = refimg%get_ldim()
+                ldim_target(1) = round2even(real(ldim_ref(1))/scale)
+                ldim_target(2) = ldim_target(1)
+                ldim_target(3) = 1
+                if( refimg%is_3d() )ldim_target(3) = ldim_target(1)
+                call refimg%norm
+                if( scale > 1. )then
+                    ! downscaling
+                    call refimg%fft
+                    call refimg%clip_inplace(ldim_target)
+                    call refimg%ifft
+                else
+                    call targetimg%new(ldim_target, smpd_target)
+                    call refimg%fft
+                    call refimg%pad(targetimg, backgr=0.)
+                    call targetimg%ifft
+                    refimg = targetimg
+                    call targetimg%kill
+                endif
+                ! updates dimensions
+                ldim = ldim_target
+            end subroutine
+
+    end subroutine exec_make_pickrefs
 
 end module simple_commander_preprocess

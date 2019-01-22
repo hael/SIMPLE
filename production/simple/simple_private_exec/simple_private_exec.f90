@@ -27,6 +27,7 @@ type(ctf_estimate_commander)          :: xctf_estimate
 type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
 type(pick_extract_commander)          :: xpick_extract
 type(pick_commander)                  :: xpick
+type(make_pickrefs_commander)         :: xmake_pickrefs
 type(pick_commander_chiara)           :: xpickchiara
 
 ! CLUSTER2D PROGRAMS
@@ -147,8 +148,7 @@ select case(prg)
         keys_optional(26)  = 'nsig'
         keys_optional(27)  = 'ndev'
         keys_optional(28)  = 'pcontrast'
-        keys_optional(29)  = 'ctfreslim'
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:29))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:28))
         ! set defaults
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
@@ -157,7 +157,10 @@ select case(prg)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
         if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',   'black')
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
         call xpreprocess%execute(cline)
     case( 'motion_correct' )
         ! for movie alignment
@@ -253,7 +256,6 @@ select case(prg)
         keys_optional(23) = 'phaseplate'
         call cline%parse_oldschool(keys_required(:5), keys_optional(:23))
         ! set defaults
-        call cline%set('dopick', 'no')
         call cline%set('prg', 'preprocess')
         if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
@@ -276,23 +278,35 @@ select case(prg)
         keys_optional(6) = 'pcontrast'
         keys_optional(7) = 'outside'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:7))
-        if( .not. cline%defined('pcontrast') )call cline%set('pcontrast', 'black')
         call xpick_extract%execute(cline)
     case( 'pick' )
         ! for template-based particle picking
         keys_required(1) = 'projfile'
+        keys_required(2) = 'refs'
         ! set optional keys
         keys_optional(1) = 'nthr'
         keys_optional(2) = 'lp'
         keys_optional(3) = 'thres'
         keys_optional(4) = 'ndev'
-        keys_required(5) = 'refs'
-        keys_required(6) = 'vol1'
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
+        call xpick%execute(cline)
+    case( 'make_pickrefs' )
+        ! for preparing templates for particle picking
+        keys_optional(1) = 'nthr'
+        keys_optional(2) = 'projfile'
+        keys_optional(3) = 'refs'
+        keys_optional(4) = 'vol1'
+        keys_optional(5) = 'pcontrast'
+        keys_optional(6) = 'pgrp'
+        call cline%parse_oldschool(keys_optional=keys_optional(:6))
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
-        call xpick%execute(cline)
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') .and. .not.cline%defined('projfile'))then
+            THROW_HARD('One of REFS, VOL1 & PROJFILE must be informed!')
+        endif
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')
+        call xmake_pickrefs%execute(cline)
     case ('pick_chiara')
         ! for image segmentation-based particle picking
         keys_required(1) = 'fname' ! micrograph

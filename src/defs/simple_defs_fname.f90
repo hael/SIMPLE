@@ -46,7 +46,8 @@ character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 ! LOCAL RESOLUTION
 character(len=*), parameter :: LOCRESMAP2D_FILE     = 'locresmap2D_finds.bin'
 character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
-! EXTRACT
+! PREPROCESSING
+character(len=*), parameter :: PICKREFS             = 'pickrefs'
 character(len=*), parameter :: EXTRACT_STK_FBODY    = 'ptcls_from_'
 character(len=*), parameter :: EXTRACT_PARAMS_FBODY = 'extract_params_'
 ! CLUSTER3D

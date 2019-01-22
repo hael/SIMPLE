@@ -41,14 +41,15 @@ contains
         integer,                   parameter   :: LONGTIME  = 600  ! time lag after which a movie is processed
         class(cmdline),            allocatable :: completed_jobs_clines(:)
         type(qsys_env)                         :: qenv
+        type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
         character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
-        character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
+        character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker, imgkind
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
         integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i, n_os_out
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
@@ -58,9 +59,27 @@ contains
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
-        l_pick = cline%defined('refs')
         ! read in movies
         call spproj%read( params%projfile )
+        ! picking
+        l_pick = .false.
+        if( cline%defined('refs') .or. cline%defined('vol1') )then
+            l_pick = .true.
+        else
+            n_os_out = spproj%os_out%get_noris()
+            if( n_os_out > 0 )then
+                ! interrogate project for vol / cavgs
+                do i=1,n_os_out
+                    if( spproj%os_out%isthere(i,'imgkind') )then
+                        call spproj%os_out%getter(i,'imgkind',imgkind)
+                        select case(imgkind)
+                        case('vol','vol_cavg','cavg')
+                            l_pick = .true.
+                        end select
+                    endif
+                enddo
+            endif
+        endif
         ! check for previously processed movies
         call spproj%get_movies_table(prev_movies)
         ! output directories
@@ -77,6 +96,16 @@ contains
         endif
         ! setup the environment for distributed execution
         call qenv%new(1,stream=.true.)
+        ! prepares picking references
+        if( l_pick )then
+            cline_make_pickrefs = cline
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call cline_make_pickrefs%set('stream','no')
+            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call cline%set('refs', trim(PICKREFS)//params%ext)
+            call cline%delete('vol1')
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        endif
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
         call spproj%get_movies_table(prev_movies)
@@ -1262,7 +1291,7 @@ contains
         integer,          parameter   :: WAIT_WATCHER        = 10    ! seconds prior to new stack detection
         !integer,          parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         type(parameters)                    :: params
-        type(cmdline)                       :: cline_pick_extract
+        type(cmdline)                       :: cline_pick_extract, cline_make_pickrefs
         type(sp_project)                    :: orig_proj, stream_proj
         type(qsys_env)                      :: qenv
         class(cmdline),         allocatable :: completed_jobs_clines(:)
@@ -1295,9 +1324,16 @@ contains
         call simple_mkdir(trim(output_dir_picker),errmsg="commander_stream_wflows :: exec_pick_extract_stream_distr;  ")
         call simple_mkdir(trim(output_dir_extract),errmsg="commander_stream_wflows :: exec_pick_extract_stream_distr;  ")
         ! init command-lines
-        cline_pick_extract = cline
+        cline_pick_extract  = cline
+        cline_make_pickrefs = cline
         call cline_pick_extract%set('prg', 'pick_extract')
         call cline_pick_extract%delete('projname')
+        ! prepares picking references
+        call cline_make_pickrefs%set('prg','make_pickrefs')
+        call cline_make_pickrefs%set('stream','no')
+        call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+        call cline_pick_extract%set('refs', trim(PICKREFS)//params%ext)
+        call cline_pick_extract%delete('vol1')
         ! wait for the first stacks
         last_injection  = simple_gettime()
         origproj_time   = last_injection

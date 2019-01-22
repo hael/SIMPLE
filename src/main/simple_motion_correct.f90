@@ -296,7 +296,6 @@ contains
                 ! (see below)
             end do
             !$omp end parallel do
-            write (*,*) 'iso, it=', i, 'corrs=', corrs
             frac_improved = real(nimproved) / real(nframes) * 100.
             write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
             call shift_wsum_calc_corrs( opt_shifts, i )
