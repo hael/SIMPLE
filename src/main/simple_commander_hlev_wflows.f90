@@ -120,7 +120,7 @@ contains
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
-        if( params%box < MINBOX )then
+        if( params%box < MINBOX .or. params%autoscale.eq.'no')then
             do_scaling   = .false.
             smpd         = params%smpd
             scale_factor = 1.
@@ -222,7 +222,7 @@ contains
         call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
         call xrank_cavgs%execute(cline_rank_cavgs)
         ! cleanup
-        call simple_rmdir(STKPARTSDIR)
+        if( do_scaling ) call simple_rmdir(STKPARTSDIR)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
         contains
@@ -968,7 +968,7 @@ contains
         real,             allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
         integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
         real     :: trs, extr_init, lp_cls3D
-        integer  :: iter, startit, rename_stat, ncls, iptcl
+        integer  :: iter, startit, rename_stat, ncls
         logical  :: fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')

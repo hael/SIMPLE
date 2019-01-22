@@ -367,8 +367,8 @@ contains
         complex   :: zero, fcomp
         real      :: loc(2), mat(2,2), dist(2), pw, add_phshift
         integer   :: lims(3,2), lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq, nyq_sq
-        integer   :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max
+        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
+        integer   :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
@@ -413,7 +413,8 @@ contains
         cmat_even  = cgrid_imgs(1)%get_cmat()
         cmat_odd   = cgrid_imgs(1)%get_cmat()
         nyq        = cgrid_imgs(1)%get_lfny(1)
-        nyq_sq     = nyq**2
+        interp_shlim    = nyq+1
+        interp_shlim_sq = interp_shlim**2
         cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
@@ -508,7 +509,7 @@ contains
                         ! bi-linear interpolation
                         do h=lims(1,1),lims(1,2)
                             do k=lims(2,1),lims(2,2)
-                                if( h*h+k*k > nyq_sq )cycle
+                                if( h*h+k*k > interp_shlim_sq )cycle
                                 loc = matmul(real([h,k]),mat)
                                 ! interpolation
                                 win_corner = floor(loc) ! bottom left corner
@@ -536,7 +537,7 @@ contains
                         do h=lims(1,1),lims(1,2)
                             do k=lims(2,1),lims(2,2)
                                 sh = nint(hyp(real(h),real(k)))
-                                if( sh > nyq + 1 )cycle
+                                if( sh > interp_shlim )cycle
                                 loc = matmul(real([h,k]),mat)
                                 win_corner = nint(loc) - iwinsz
                                 ! weights kernel
