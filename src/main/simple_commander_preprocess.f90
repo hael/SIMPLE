@@ -1323,9 +1323,6 @@ contains
         ! end gracefully
         call simple_touch('MAKE_PICKREFS_FINISHED', errmsg='In: commander_preprocess::exec_make_pickrefs')
         call simple_end('**** SIMPLE_MAKE_PICKREFS NORMAL STOP ****')
-        print *,smpd_here,params%smpd
-        stop
-
         contains
 
             subroutine scale_ref(refimg, smpd_target)
