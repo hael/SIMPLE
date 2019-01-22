@@ -9,7 +9,7 @@ program try_cc_score
   integer           :: nl, i
   real, allocatable :: cc90(:), indices(:), ctf_estimatecc(:), ctfscore(:)
   nl = nlines('/home/lenovoc30/Desktop/ANTERGOS/forctf/test/1_ctf_estimate/info.txt')
-  print *, "nl = ", nl
+  write(logfhandle,*) "nl = ", nl
   call os%new(nl)
   call os%read('info.txt')
   allocate(cc90(nl), ctf_estimatecc(nl), ctfscore(nl), indices(nl), source = 0.)

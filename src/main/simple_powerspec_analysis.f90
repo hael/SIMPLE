@@ -70,7 +70,7 @@ contains
             call img1%set_rmat(rmat)
             call img2%set_rmat(rmat_t)
             r = img1%real_corr(img2)
-            !print *, 'cc ', label, 'correaltion ', r
+            !write(logfhandle,*)'cc ', label, 'correaltion ', r
             if(abs(r-1.) < THRESH) yes_no = .true.
             call img1%kill
             call img2%kill
@@ -147,8 +147,8 @@ contains
         do i = int(minval(rmat,rmat > 0.5)), int(maxval(rmat))
               yes_no = is_symmetric(img_cc, i, discard)
               if(.not. discard) then
-                  print *, 'cc n ', i, 'is symm ', yes_no
-                  if(yes_no) print *, 'DETECTED ICE'
+                  write(logfhandle,*)'cc n ', i, 'is symm ', yes_no
+                  if(yes_no) write(logfhandle,*)'DETECTED ICE'
               endif
         enddo
     end subroutine ice_presence
@@ -235,10 +235,14 @@ contains
               res = find_res(box, smpd)
           endif
           call img%read(fname2process, n_image)
-          if(.not. discard) ax = calc_fourier_index(res, box, smpd)
-          if(.not. discard) call img%ellipse([ldim(1)/2,ldim(2)/2],[ax,ax], 'yes')
+          if(.not. discard) then
+               ax = calc_fourier_index(res, box, smpd)
+               rmat = img%get_rmat()
+               rmat(ldim(1)/2+nint(ax)-1:ldim(1)/2+nint(ax),ldim(2)/4+nint(ax)-4:ldim(2)/4+nint(ax)+4,1) = maxval(rmat)
+               call img%set_rmat(rmat)
+               if(.not. discard) write(unit = 17, fmt = "(a,i0.0,a)") 'Visible rings until res ', int(res), 'A'
+           endif
           call img%write(fname,n_image)
-          if(.not. discard) write(unit = 17, fmt = "(a,i0.0,a)") 'Visible rings until res ', int(res), 'A'
       enddo
       close(17, status = "keep")
       call img%kill

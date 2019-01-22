@@ -54,13 +54,13 @@ rmat = img_ctf%get_rmat()
 call cc%scale_pixels([10.,20.])
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
-print *, "mean window:", (sum(w_mat)/size(w_mat))
-print *, "mean tot:", sum(cc_mat)/size(cc_mat)
-print *, "Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
+write(logfhandle,*)"mean window:", (sum(w_mat)/size(w_mat))
+write(logfhandle,*)"mean tot:", sum(cc_mat)/size(cc_mat)
+write(logfhandle,*)"Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
 if(((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))>1.) then
-  print *, "keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
+  write(logfhandle,*)"keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
 else
-  print *, "trash"
+  write(logfhandle,*)"trash"
 endif
 !SECOND IMAGE
 img_ctf = 0.
@@ -77,13 +77,13 @@ rmat = img_ctf%get_rmat()
 call cc%scale_pixels([10.,20.])
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
-print *, "mean window:", (sum(w_mat)/size(w_mat))
-print *, "mean tot:", sum(cc_mat)/size(cc_mat)
-print *, "Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
+write(logfhandle,*)"mean window:", (sum(w_mat)/size(w_mat))
+write(logfhandle,*)"mean tot:", sum(cc_mat)/size(cc_mat)
+write(logfhandle,*)"Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
 if(((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))>1.) then
-  print *, "keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
+  write(logfhandle,*)"keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
 else
-  print *, "trash"
+  write(logfhandle,*)"trash"
 endif
 !THIRD IMAGE
 img_ctf = 0.
@@ -100,12 +100,12 @@ rmat = img_ctf%get_rmat()
 call cc%scale_pixels([10.,20.])
 cc_mat       = cc%get_rmat()
 w_mat(:,:,1) = cc_mat( box/2-window/2:box/2+window/2, box/2-window/2:box/2+window/2, 1 )
-print *, "mean window:", (sum(w_mat)/size(w_mat))
-print *, "mean tot:", sum(cc_mat)/size(cc_mat)
-print *, "Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
+write(logfhandle,*)"mean window:", (sum(w_mat)/size(w_mat))
+write(logfhandle,*)"mean tot:", sum(cc_mat)/size(cc_mat)
+write(logfhandle,*)"Difference: ", ((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))!/sum(cc_mat)
 if(((sum(w_mat)/size(w_mat))-(sum(cc_mat)/size(cc_mat)))>1.) then
-  print *, "keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
+  write(logfhandle,*)"keep"                                                 !To make it indipendent from 0.1 maybe I should normalize
 else
-  print *, "trash"
+  write(logfhandle,*)"trash"
 endif
 end program cc_rot

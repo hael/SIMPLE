@@ -85,7 +85,7 @@ enddo
 call plot(indices,fore_avg)
 ! call plot(indices,fore_avg_bin, color1 = 'black')
 ! call plot(indices,back_avg, color1 = 'red')
-print *,  fore_avg
+write(logfhandle,*) fore_avg
 end program simple_test_chiara_stats
 !In here you have to implement the statistics.
 
@@ -137,6 +137,6 @@ end program simple_test_chiara_stats
 !         call img%read('centered_particles.mrc', i)
 !         call img%write('Aggregation.mrc', cnt_aggregation)
 !       else
-!         print *, 'Error!'
+!         write(logfhandle,*)'Error!'
 !       endif
 !     enddo

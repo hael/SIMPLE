@@ -102,13 +102,13 @@ enddo
 max_pos = maxloc(H)
 Aa = a(max_pos(1))
 Bb = b(max_pos(2))
-print *, "max position: ", max_pos
-print *, "Optimal parameters:"
-print *, "a = ", Aa
-print *, "b= ", Bb
-print *, "Max reached ", H(max_pos(1), max_pos(2))
-print *, "Number of voting points ", N
-print *, "Number of votes ",        sum(H)
+write(logfhandle,*)"max position: ", max_pos
+write(logfhandle,*)"Optimal parameters:"
+write(logfhandle,*)"a = ", Aa
+write(logfhandle,*)"b= ", Bb
+write(logfhandle,*)"Max reached ", H(max_pos(1), max_pos(2))
+write(logfhandle,*)"Number of voting points ", N
+write(logfhandle,*)"Number of votes ",        sum(H)
 !call img_e%build_ellipse([real(floor(real(box/2))), real(floor(real(box/2)))],[Aa,Bb], 0.)
 call img_e%write('Final.mrc')
 end program Ht_project

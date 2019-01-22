@@ -63,7 +63,7 @@ program simple_test_chiara_pick_edge
   else
     lp = params%lp
   endif
-  print *, 'lp = ', lp
+  write(logfhandle,*)'lp = ', lp
   call mic_shrunken%bp(0.,lp)
   call mic_shrunken%ifft()
   call mic_shrunken%write('bp_filtered.mrc')
@@ -92,12 +92,12 @@ program simple_test_chiara_pick_edge
     call mic_reduced%set_rmat(grad) !now its is the gradient
     call mic_reduced%stats( ave, sdev, maxv, minv )
     thresh(1) = ave+.7*sdev
-    print *, 'gradient threshold = ', ave+.7*sdev
+    write(logfhandle,*)'gradient threshold = ', ave+.7*sdev
     call sobel(mic_small,thresh)
   else if (params%detector .eq. 'bin') then
     call mic_small%stats( ave, sdev, maxv, minv )
     call mic_small%bin(ave+.7*sdev)
-    print *, 'mic threshold = ', ave+.7*sdev
+    write(logfhandle,*)'mic threshold = ', ave+.7*sdev
   else if (params%detector .eq. 'otsu') then
     call otsu_img(mic_small)
   else
@@ -114,7 +114,7 @@ program simple_test_chiara_pick_edge
 
   !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>CONNECTED COMPONENTS METHODS>>>>>>>>>>>>>>>>>>>>>>
   ! 8) Connected components (cc) identification
-  print *, 'HERE GOOD '
+  write(logfhandle,*)'HERE GOOD '
   call imgcc%new(mic_small%get_ldim(), smpd_shrunken)
   call mic_small%find_connected_comps(imgcc)
 

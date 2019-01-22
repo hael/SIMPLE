@@ -126,7 +126,8 @@ contains
       real, allocatable          :: grad(:,:,:), vector(:)
       integer                    :: ldim(3)
       ldim = img_in%get_ldim()
-      call img_in%scale_pixels([1.,real(ldim(1))*2+1.]) !to be coherent with the other case
+      call img_in%scale_pixels([1.,real(ldim(1))*2.+1.]) !to be coherent with the other case
+      ! call img_in%scale_pixels([1.,255.])
       if(present(thresh)) then
          call canny_edge(img_in,thresh)
          return
@@ -138,39 +139,39 @@ contains
       else
         call img_in%calc_gradient(grad)
       endif
-      allocate(vector(size(grad)), source = pack(grad, .true.))
-      m = median(vector) !Use the gradient, the source talks about the image itself
+      allocate(vector(size(grad)), source = 0.)!= pack(grad, .true.))
+      vector(:) = pack(grad, .true.)
+      m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-      tthresh(1) = max(1.,                  (1-sigma)*m) !lower
-      tthresh(2) = min(real(ldim(1))*2.+1., (1+sigma)*m) !upper
+      tthresh(1) = max(1.,                  (1.-sigma)*m) !lower
+      tthresh(2) = min(real(ldim(1))*2.+1., (1.+sigma)*m) !upper
       write(logfhandle,*) 'Selected thresholds: ', tthresh
       if (present(lp)) then
           call canny_edge(img_in,tthresh,lp)
       else
           call canny_edge(img_in,tthresh)
       endif
-      deallocate(vector)
+      deallocate(vector,grad)
   end subroutine canny
 
     ! NON_MAX_SUPPRESSION
     ! using the estimates of the Gx and Gy image gradients and the edge direction angle
     ! determines whether the magnitude of the gradient assumes a local  maximum in the gradient direction
     subroutine non_max_supp(mat_in,dir_mat)
-        real, intent(inout) :: mat_in(:,:,:)
-        real,  intent(in)   :: dir_mat(:,:,:)
-        real, allocatable   :: rmat(:,:,:), temp_mat(:,:,:)
-        integer             :: ldim(3), i, j
+        real,  intent(inout) :: mat_in(:,:,:)
+        real,  intent(in)    :: dir_mat(:,:,:)
+        real, allocatable    :: temp_mat(:,:,:)
+        integer              :: ldim(3), i, j
         ldim = shape(mat_in)
-        if(ldim(3) /= 1) THROW_HARD("The matrix has to be 2D!")
         !if the rounded edge direction angle is   0 degrees, checks the north and south directions
         !if the rounded edge direction angle is  45 degrees, checks the northwest and southeast directions
         !if the rounded edge direction angle is  90 degrees, checks the east and west directions
         !if the rounded edge direction angle is 135 degrees, checks the northeast and southwest directions
-        allocate(temp_mat(ldim(1),ldim(2),1), source = mat_in)
+        allocate(temp_mat(ldim(1),ldim(2),ldim(3)), source = mat_in)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
-                if( (pi/4. + pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/2.) &         !case(90), north-south
-                    &     .or.(-pi/2. <= dir_mat(i,j,1) .and. (dir_mat(i,j,1) < -pi/4.-pi/8.) )) then
+                if( (pi/4. + pi/8. < dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/2.) &  !case(90), north-south
+                    & .or.(-pi/2. <= dir_mat(i,j,1) .and. (dir_mat(i,j,1) < -pi/4.-pi/8.) )) then
                     if(j+1 > ldim(2)) then
                         if(mat_in(i,j,1) < mat_in(i,j-1,1)) temp_mat(i,j,1) = 0.
                     else if(j-1 < 1) then
@@ -178,7 +179,7 @@ contains
                     else
                         if(mat_in(i,j,1) < mat_in(i,j+1,1) .or. mat_in(i,j,1) < mat_in(i,j-1,1)) temp_mat(i,j,1) = 0.
                     end if
-                else if( -pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/8.) then       !case(0), west-east
+                else if( -pi/8. <= dir_mat(i,j,1) .and. dir_mat(i,j,1) <= pi/8.) then !case(0), west-east
                     if(i+1 > ldim(1)) then
                         if(mat_in(i,j,1) < mat_in(i-1,j,1)) temp_mat(i,j,1) = 0.
                     else if(i-1 < 1) then
@@ -209,7 +210,7 @@ contains
                 end if
             enddo
         enddo
-        mat_in = temp_mat
+        mat_in(:ldim(1),:ldim(2),:ldim(3)) = temp_mat(:ldim(1),:ldim(2),:ldim(3))
         deallocate(temp_mat)
     end subroutine non_max_supp
 
@@ -218,10 +219,10 @@ contains
     subroutine double_thresh(mat_in, thresh)
         real, intent(inout) :: mat_in(:,:,:)
         real, intent(in)    :: thresh(2)
-        real, allocatable :: tmp(:,:,:)
-        integer           :: ldim(3), i, j
+        real, allocatable   :: tmp(:,:,:)
+        integer             :: ldim(3), i, j
         ldim = shape(mat_in)
-        allocate(tmp(ldim(1),ldim(2),1), source = 0.)
+        allocate(tmp(ldim(1),ldim(2),ldim(3)), source = 0.)
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 if(mat_in(i,j,1) > thresh(2))                                    tmp(i,j,1) = 1.  !strong edges
@@ -229,7 +230,7 @@ contains
                 if(thresh(1) <= mat_in(i,j,1) .and. mat_in(i,j,1) <= thresh(2))  tmp(i,j,1) = 0.5 !weak edges
             enddo
         enddo
-        mat_in = tmp
+        mat_in(:ldim(1),:ldim(2),:ldim(3)) = tmp(:ldim(1),:ldim(2),:ldim(3))
         deallocate(tmp)
     end subroutine double_thresh
 
@@ -246,7 +247,7 @@ contains
         real    :: smpd, llp(1)
         ldim = img_in%get_ldim()
         smpd = img_in%get_smpd()
-        allocate(grad(ldim(1), ldim(2), ldim(3)), Dc(ldim(1), ldim(2), ldim(3)),Dr(ldim(1), ldim(2), ldim(3)), &
+        allocate(grad(ldim(1),ldim(2),ldim(3)), Dc(ldim(1),ldim(2),ldim(3)), Dr(ldim(1),ldim(2),ldim(3)), &
         & source = 0.)
         if(ldim(3) /= 1) THROW_HARD("The image has to be 2D!")
         call Gr%new(ldim,smpd)
@@ -257,12 +258,13 @@ contains
         call img_in%bp(0.,llp(1))   !threshold selected in order to facilitate particle picking
         call img_in%ifft()
         !STEP 2: FINDING GRADIENTS
-        allocate(dir_mat(ldim(1),ldim(2),1), source = 0.)
+        allocate(dir_mat(ldim(1),ldim(2),ldim(3)), source = 0.)
         if(IMPROVED) then
             call img_in%calc_gradient_improved(grad, Dc, Dr)
         else
             call img_in%calc_gradient(grad, Dc, Dr)
         endif
+        !!!!!!!!!!!!!!!!!!
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 if(.not. is_zero(Dc(i,j,1))) then                     !Do not divide by 0
@@ -295,7 +297,7 @@ contains
                 endif
             enddo
         enddo
-        img_in = Gr
+        call img_in%copy(Gr)
         deallocate(grad)
     end subroutine canny_edge
   !
@@ -309,7 +311,7 @@ contains
       class(image),   intent(inout) :: img_in
       type(image),    intent(out)   :: img_out
       real, optional, intent(out)   :: thresh  !selected threshold for binarisation
-      real, allocatable    :: rmat(:,:,:)
+      real,    allocatable :: rmat(:,:,:)
       logical, allocatable :: mask(:,:,:)
       real, parameter :: TOLL = 0.05           !tollerance for threshold selection
       real            :: T_n, T
@@ -350,5 +352,4 @@ contains
         call img%set_rmat(rmat)
         deallocate(rmat,x_out)
     end subroutine otsu_img
-
 end module simple_segmentation

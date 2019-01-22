@@ -5070,8 +5070,8 @@ contains
     !                     2) the estimation of the gradient is still precise
     subroutine calc_gradient_improved(self, grad, Dc, Dr)
         class(image),   intent(inout) :: self
-        real,           intent(out)   :: grad(:,:,:)  !gradient matrix
-        real, optional, intent(out)   :: Dc(:,:,:), Dr(:,:,:) ! derivates column and row matrices
+        real,           intent(out)   :: grad(self%ldim(1), self%ldim(2), self%ldim(3))  !gradient matrix
+        real, optional, intent(out)   :: Dc(self%ldim(1), self%ldim(2), self%ldim(3)), Dr(self%ldim(1), self%ldim(2), self%ldim(3)) ! derivates column and row matrices
         type(image)        :: img_p                         !padded image
         real, allocatable  :: wc(:,:), wr(:,:)          !row and column Sobel masks
         integer, parameter :: L1 = 5 , L2 = 3               !dimension of the masks
@@ -5082,13 +5082,11 @@ contains
         ldim = self%ldim
         allocate(wc((-(L1-1)/2):((L1-1)/2),(-(L2-1)/2):((L2-1)/2)),&
         &        wr(-(L2-1)/2:(L2-1)/2,-(L1-1)/2:(L1-1)/2), source = 0.)
-        print *, -(L1-1)/2,-(L2-1)/2
         wc = (1./32.)*reshape([-1,-2,0,2,1,-2,-4,0,4,2,-1,-2,0,2,1], [L1,L2])
         wr = (1./32.)*reshape([-1,-2,-1,-2,-4,-2,0,0,0,2,4,2,1,2,1], [L2,L1])
-        print *, 'WR = '
-        call vis_mat(wr)
-        print *, 'WC = '
-        call vis_mat(wc)
+        Ddc  = 0. !initialisation
+        Ddr  = 0.
+        grad = 0.
         call img_p%new([ldim(1)+L1-1,ldim(2)+L1-1,1],1.) !pad with the biggest among L1 and L2
         call self%pad(img_p) ! padding
         !$omp parallel do collapse(2) default(shared) private(i,j,m,n)&

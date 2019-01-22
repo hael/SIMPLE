@@ -114,7 +114,7 @@ contains
       ! character (len = *), parameter :: fmt_1 = "(a)" !I/O
       integer, allocatable :: xyz_saved(:,:), xyz_norep_noagg(:,:)
       real,    allocatable :: rmat(:,:,:)                     !matrix corresponding to the cc image
-      integer, allocatable :: rmat_masked(:,:,:)              !to identify each cc
+      integer, allocatable :: imat_masked(:,:,:)              !to identify each cc
       logical              :: outside, discard, errout, erroutB
       ! Initialisations
       ldim = self%get_ldim()
@@ -124,18 +124,18 @@ contains
       !call imgwin_bin%new([box,box,1],1.)
       outside = .false.
       allocate(xyz_saved(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
-      allocate(rmat_masked(ldim(1),ldim(2),1))
+      allocate(imat_masked(ldim(1),ldim(2),1))
       ! Copy of the micrograph, to highlight on it the picked particles
       call self_back%copy(self)
       ! Particle identification, extraction and centering
       !open(unit = 17, file = "Statistics.txt")
       cnt_likely = 0
       do n_cc = 1, int(maxval(rmat))   !fix cc
-          rmat_masked = 0              !reset
+          imat_masked = 0              !reset
           if(any(abs(int(rmat)-n_cc)< TINY)) then
-              where((abs(int(rmat)-n_cc)) < TINY) rmat_masked = 1
+              where((abs(int(rmat)-n_cc)) < TINY) imat_masked = 1
               cnt_likely = cnt_likely + 1
-              pos = center_cc(rmat_masked)
+              pos = center_cc(imat_masked)
               xyz_saved(cnt_likely,:) = int(pos(:))
           endif
       enddo
@@ -178,7 +178,6 @@ contains
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
         s = shape(masked_mat)
         call get_pixel_pos(masked_mat, pos)
-        if(size(pos, dim = 2) < 1) print *, 'SHIT'
         allocate(dist(4,size(pos, dim = 2)), source = 0.)
         allocate(mask(4,size(pos, dim = 2)), source = .false.)
         mask(4,:) = .true.
@@ -200,20 +199,20 @@ contains
     end function center_cc
 
   ! This subroutine stores in pos the indeces corresponding to
-  ! the pixels with value > 0 in the binary matrix rmat_masked.
-  subroutine get_pixel_pos(rmat_masked, pos)
-      integer,              intent(in)  :: rmat_masked(:,:,:)
+  ! the pixels with value > 0 in the binary matrix imat_masked.
+  subroutine get_pixel_pos(imat_masked, pos)
+      integer,              intent(in)  :: imat_masked(:,:,:)
       integer, allocatable, intent(out) :: pos(:,:)
       integer :: s(3), i, j, k, cnt
-      ! if( any(rmat_masked > 1.0001) .or. any(rmat_masked < 0. ))&
+      ! if( any(imat_masked > 1.0001) .or. any(imat_masked < 0. ))&
       ! &THROW_HARD('Input not binary; get_pixel_pos')
-      s = shape(rmat_masked)
-      allocate(pos(3, count(rmat_masked > 0.5)), source = 0)
+      s = shape(imat_masked)
+      allocate(pos(3, count(imat_masked > 0.5)), source = 0)
       cnt = 0
       do i = 1, s(1)
             do j = 1, s(2)
                 do k = 1, s(3)
-                    if(rmat_masked(i,j,k) > 0.5) then !rmat_masked is binary
+                    if(imat_masked(i,j,k) > 0.5) then !imat_masked is binary
                         cnt = cnt + 1
                         pos(:,cnt) = [i,j,k]
                     endif
@@ -286,21 +285,21 @@ contains
     function part_longest_dim(img) result(diameter)
         type(image), intent(inout) :: img
         real, allocatable    :: rmat(:,:,:), dist(:)
-        integer, allocatable :: rmat_masked(:,:,:), pos(:,:)
+        integer, allocatable :: imat_masked(:,:,:), pos(:,:)
         real :: diameter
         integer :: ldim(3), i, j,k, cnt
         ldim = img%get_ldim()
         rmat = img%get_rmat()
         call img%prepare_connected_comps() !consider just one particle, not multiple
-        allocate(rmat_masked(ldim(1),ldim(2),ldim(3)), source = 0)
-        rmat_masked = int(img%get_rmat())
-        call get_pixel_pos(rmat_masked,pos)
+        allocate(imat_masked(ldim(1),ldim(2),ldim(3)), source = 0)
+        imat_masked = int(img%get_rmat())
+        call get_pixel_pos(imat_masked,pos)
         cnt = 0
-        allocate(dist(count(rmat_masked > 0.5))) !one for each white px
+        allocate(dist(count(imat_masked > 0.5))) !one for each white px
         do i = 1, ldim(1)
             do j = 1, ldim(2)
                 do k = 1, ldim(3)
-                    if(rmat_masked(i,j,k) > 0.5) then  !just ones
+                    if(imat_masked(i,j,k) > 0.5) then  !just ones
                         cnt = cnt + 1
                         dist(cnt) = pixels_dist([i,j,k],pos, 'max')
                     endif

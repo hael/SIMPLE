@@ -97,14 +97,14 @@ contains
             &     points(2,1)*points(3,2)-points(3,1)*points(2,2)))
         else
             center(:) = points(1,:)
-            print *, 'erroneous'
+            write(logfhandle,*)'erroneous'
         endif
 
         x = real(center(1))
         y = real(center(2))
         radius = sqrt((x-real(points(1,1)))**2+(y-real(points(1,2)))**2)
 
-        print *, 'CENTER = ', center, 'RADIUS = ', radius
+        write(logfhandle,*)'CENTER = ', center, 'RADIUS = ', radius
     end subroutine identify_center_radius
 
     !This function  takes in input the box sz and the smpd
@@ -167,9 +167,9 @@ program simple_test_chiara_thonrings
         yes_no = is_symmetric(img_cc, i, discard, label_mirror)
         if(.not. discard) then !discard the cc that are not in the I or II quadrant
             if(yes_no) then    !if it is symmetric
-                print *, 'CC number ', i, 'is symm with ', label_mirror
+                write(logfhandle,*)'CC number ', i, 'is symm with ', label_mirror
                 call extract_3points(img_cc,i,points)
-                print *, 'points = '
+                write(logfhandle,*)'points = '
                 call vis_mat(points)
                 call identify_center_radius(points,center,radius)
                 where(rmat-real(i) < TINY)
@@ -179,21 +179,21 @@ program simple_test_chiara_thonrings
                  endwhere
                 call img_try%set_rmat(rmat_aux)
                 call img_try%window_slim(center-box/8/2, box/8, img_win, outside)
-                print *, 'cc ', i, 'outside ', outside
+                write(logfhandle,*)'cc ', i, 'outside ', outside
                 if(.not. outside) then
                     cnt = cnt + 1
                     call img_win%write('img_win.mrc', cnt)
                     img_templ = build_ice_template(box/8, smpd, radius)
                     call img_templ%write('img_templ.mrc', cnt)
                     r = img_win%real_corr(img_templ)
-                    print *, 'correlation = ', r
+                    write(logfhandle,*)'correlation = ', r
                     rmat = img_cc%get_rmat()
                     m(:) =  minloc(abs(rmat- real(i)))
-                    if(r > 0.4) print *, 'DETECTED ICE! At px ', m
+                    if(r > 0.4) write(logfhandle,*)'DETECTED ICE! At px ', m
                     h   = -box/2 + m(1) - 1
                     k   = -box/2 + m(2) - 1
                     sh  = nint(hyp(real(h),real(k)))
-                    print *, 'shell = ', sh, ' Resolution = ', calc_fourier_index(real(sh),box,smpd)
+                    write(logfhandle,*)'shell = ', sh, ' Resolution = ', calc_fourier_index(real(sh),box,smpd)
                 endif
             endif
         endif

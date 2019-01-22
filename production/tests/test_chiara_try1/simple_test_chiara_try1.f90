@@ -53,8 +53,8 @@ program simple_test_chiara_try1
   do imic = 1,min(params%top,nmics)
       micname  = spproj%os_mic%get_static(imic,'intg')          !all the path to the name of the file
       tmpl     = get_fbody(basename(micname),trim(params%ext))  !just the name of the file with no .mrc
-      print *, 'micname = ', trim(micname)
-      print *, 'tmpl = ', trim(tmpl)   !TO FIX
+      write(logfhandle,*)'micname = ', trim(micname)
+      write(logfhandle,*)'tmpl = ', trim(tmpl)   !TO FIX
       ctfparms = spproj%os_mic%get_ctfvars(imic)
       call progress(imic,nmics)
 
@@ -83,7 +83,7 @@ program simple_test_chiara_try1
 
       ! 4) Low pass filtering
       lp = (params%part_radius)/6 !lp ~ 1/6 rad of the particle
-      print *, 'lp = ', lp
+      write(logfhandle,*)'lp = ', lp
       call mic_shrunken%bp(0.,lp)
       call mic_shrunken%ifft()
       call mic_shrunken%write(tmpl//'bp_filtered.mrc')
@@ -112,12 +112,12 @@ program simple_test_chiara_try1
         call mic_reduced%set_rmat(grad) !now its is the gradient
         call mic_reduced%stats( ave, sdev, maxv, minv )
         thresh(1) = ave+.7*sdev
-        print *, 'gradient threshold = ', ave+.7*sdev
+        write(logfhandle,*)'gradient threshold = ', ave+.7*sdev
         call sobel(mic_small,thresh)
       else if (params%detector .eq. 'bin') then
         call mic_small%stats( ave, sdev, maxv, minv )
         call mic_small%bin(ave+.7*sdev)
-        print *, 'mic threshold = ', ave+.7*sdev
+        write(logfhandle,*)'mic threshold = ', ave+.7*sdev
       else if (params%detector .eq. 'otsu') then
         call otsu_img(mic_small)
       else

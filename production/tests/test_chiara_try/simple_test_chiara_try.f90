@@ -47,35 +47,23 @@ program simple_test_chiara_try
   use simple_cmdline,    only: cmdline
   use simple_tvfilter
   type(image)       :: img, img_cc, img_bin
-  real, allocatable :: rmat(:,:,:), rmat_t(:,:,:), lap(:,:,:)
-  integer :: i,j, ldim(3), nptcls, box, nthr, n_vol
+  real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
+  integer :: i,j, ldim(3), nptcls, box,n_vol
   type(ctf)       :: tfun
   type(ctfparams) :: ctfparms
-  real :: smpd, seleted_t(1)
-  integer :: h, k, sh, cnt
+  real :: smpd
+  integer :: h, k, sh, cnt, px(3)
   real :: ave, sdev, maxv, minv, SumSQR
   real :: thresh(1)
   real, allocatable :: x(:)
   integer, allocatable :: sz(:,:)
-  real,    allocatable :: xhist(:) !discretization of the values
-  integer, allocatable :: yhist(:) !number of occurences
   integer, allocatable :: pos(:,:), imat(:,:,:)
-  real :: dist, diameter, ratio
-  real, allocatable :: ratios(:), x_cc(:)
-  logical, allocatable :: border(:,:,:)
+  real :: dist, ratio
   type(tvfilter) :: tvf
-  real :: lambda
-  real :: grad(128,128,1)
- !  call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 40., 2, 10) !lp = 35
+ call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2
 !call process_ps_stack('pspecs_saga_polii.mrc',     'saga_analysis_TVdenoising.mrc', 1.14, 50., 1, 10)
 !call process_ps_stack('pspecs_sphire_tstdat.mrc', 'sphire_analysis_TVdenoising.mrc', 1.41, 20.,1, 10)
 
-  call img%new([128,128,1],1.)
-  call img%ellipse([30,30], [11.,10.], 'no' )
-  call img%ellipse([50,50], [11.,20.], 'no' )
-  call img%write('ToyImg.mrc')
-  call img%grow_bin()
-  call img%write('GrowBin.mrc')
  end program simple_test_chiara_try
 ! !call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
 
