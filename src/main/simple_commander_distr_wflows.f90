@@ -930,7 +930,7 @@ contains
         ! soft reconstruction from o_peaks in dir_refine?
         if( params%l_rec_soft )then
             call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
-            call simple_list_files(refine_path//'oridistributions_part*.bin', list)
+            call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
             if( size(list) /= params%nparts )then
                 THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
             endif

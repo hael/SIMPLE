@@ -1057,7 +1057,7 @@ contains
         call syslib_c2fortran_string(outfilename_c)
         if(allocated(absolute_name)) deallocate(absolute_name)
         if( lengthout > 1)then
-           allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
+            allocate(absolute_name, source=trim(outfilename_c(1:lengthout)))
         else
             allocate(absolute_name, source=trim(infile))
         end if

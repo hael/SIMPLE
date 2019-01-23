@@ -481,14 +481,6 @@ contains
         call check_carg('cure',           self%cure)
         call check_carg('detector',       self%detector)           !!!!!!!!!!!!!ADDED BY CHIARA
         call check_carg('dfunit',         self%dfunit)
-        call check_carg('dir',            self%dir)
-        call check_carg('dir_box',        self%dir_box)
-        call check_carg('dir_movies',     self%dir_movies)
-        call check_carg('dir_ptcls',      self%dir_ptcls)
-        call check_carg('dir_refine',     self%dir_refine)
-        call check_carg('dir_reject',     self%dir_reject)
-        call check_carg('dir_select',     self%dir_select)
-        call check_carg('dir_target',     self%dir_target)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
         call check_carg('doalign',        self%doalign)
@@ -558,7 +550,6 @@ contains
         call check_carg('shellw',         self%shellw)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
-        call check_carg('star_datadir',   self%star_datadir)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('subtr_backgr',   self%subtr_backgr)
@@ -613,6 +604,16 @@ contains
         call check_file('vollist',        self%vollist,      'T')
         call check_file('voltab',         self%voltab,       'T')
         call check_file('voltab2',        self%voltab2,      'T')
+        ! Dir args
+        call check_dir('dir',            self%dir)
+        call check_dir('dir_box',        self%dir_box)
+        call check_dir('dir_movies',     self%dir_movies)
+        call check_dir('dir_ptcls',      self%dir_ptcls)
+        call check_dir('dir_refine',     self%dir_refine)
+        call check_dir('dir_reject',     self%dir_reject)
+        call check_dir('dir_select',     self%dir_select)
+        call check_dir('dir_target',     self%dir_target)
+        call check_dir('star_datadir',   self%star_datadir)
         ! Integer args
         call check_iarg('astep',          self%astep)
         call check_iarg('avgsz',          self%avgsz)
@@ -1517,6 +1518,25 @@ contains
                 DebugPrint trim(file), '=', trim(var)
             endif
         end subroutine check_file
+
+        subroutine check_dir( dir, var )
+            character(len=*), intent(in)    :: dir
+            character(len=*), intent(inout) :: var
+            character(len=:), allocatable   :: abspath_dir
+            if( cline%defined(dir) )then
+                var = trim(cline%get_carg(dir))
+                if( file_exists(var) )then
+                    ! updates name to include absolute path
+                    abspath_dir = simple_abspath(var,errmsg='parameters :: check_dir', check_exists=.false.)
+                    if( len_trim(abspath_dir) > LONGSTRLEN )then
+                        THROW_HARD('argument too long: '//trim(abspath_dir)//' new :: checkdir')
+                    endif
+                    var = trim(abspath_dir)
+                    call cline%set(dir,trim(var))
+                    deallocate(abspath_dir)
+                endif
+            endif
+        end subroutine check_dir
 
         subroutine check_file_formats
             integer :: i, j

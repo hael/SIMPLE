@@ -46,6 +46,7 @@ integer,            allocatable :: pinds(:)
 logical,            allocatable :: ptcl_mask(:)
 type(sym)                       :: c1_symop
 integer                         :: nptcls2update
+integer                         :: npeaks
 integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)            :: rt_tot
@@ -74,7 +75,7 @@ contains
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
         real    :: weight_thres, bfactor, wsum
         integer :: iptcl, i, fnr, i_batch, ithr, updatecnt, state, n_nozero, nweights, cnt
-        integer :: ibatch, npeaks, iextr_lim, lpind_anneal, lpind_start, sz
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, sz
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -723,7 +724,17 @@ contains
     end subroutine calc_3Drec
 
     subroutine read_o_peaks
-        integer :: iptcl, n_nozero
+        integer :: iptcl, n_nozero, i
+        ! set npeaks
+        npeaks = NPEAKS2REFINE
+        ! prepare particle mask
+        nptcls2update = params_glob%top - params_glob%fromp + 1
+        allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
+        pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
+        ptcl_mask = .true.
+        ! allocate s3D singleton
+        call prep_strategy3D( ptcl_mask, npeaks )
+        ! read peaks
         if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
             THROW_HARD(trim(params_glob%o_peaks_file)//' file does not exist')
         endif

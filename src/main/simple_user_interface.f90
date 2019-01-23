@@ -2425,12 +2425,13 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 0, 0, 2, 2, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 2, 2, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        ! <empty>
+        call reconstruct3D%set_input('parm_ios', 1, 'dir_refine', 'file', 'Directory with oridistributions_part*.bin',&
+        &'Directory to grab oridistributions_part*.bin from', 'e.g. 1_refine3D', .false., '')
         ! alternative inputs
         ! <empty>
         ! search controls
