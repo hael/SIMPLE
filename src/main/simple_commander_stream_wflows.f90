@@ -1062,7 +1062,7 @@ contains
                 if( debug_here )print *,'end transfer_buffer_to_pool'; call flush(6)
             end subroutine transfer_buffer_to_pool
 
-            subroutine read_mics()
+            subroutine read_mics
                 character(len=:), allocatable :: mic_name, mic_name_from_proj
                 type(oris)                    :: mics_sel
                 integer                       :: nptcls, nmics, imic
@@ -1342,7 +1342,7 @@ contains
         n_spprojs_prev  = 0
         do iter = 1,999999
             tnow = simple_gettime()
-            if(tnow-last_injection > params%time_inactive)then
+            if(tnow-last_injection > params%time_inactive .and. stacksz==0)then
                 write(logfhandle,*)'>>> TIME LIMIT WITHOUT NEW MICROGRAPHS REACHED'
                 exit
             endif

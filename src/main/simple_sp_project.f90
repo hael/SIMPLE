@@ -745,6 +745,20 @@ contains
         enddo
     end subroutine get_mics_table
 
+    subroutine get_stks_table( self, stkstab )
+        class(sp_project),                      intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(out)   :: stkstab(:)
+        integer :: i,n,cnt
+        if(allocated(stkstab))deallocate(stkstab)
+        n = self%get_nstks()
+        if( n==0 )return
+        allocate(stkstab(n))
+        cnt = 0
+        do i=1,n
+            stkstab(i) = self%os_stk%get_static(i,'stk')
+        enddo
+    end subroutine get_stks_table
+
     function get_micparams( self, imic ) result( ctfvars )
         class(sp_project), intent(inout) :: self
         integer,           intent(in)    :: imic

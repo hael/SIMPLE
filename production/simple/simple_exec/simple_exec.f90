@@ -39,7 +39,6 @@ type(import_starproject_commander)  :: ximport_starproject
 type(report_selection_commander)    :: xreport_selection
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(extract_commander)        :: xextract
 type(reextract_commander)      :: xreextract
 type(cluster_cavgs_commander)  :: xcluster_cavgs
 type(symaxis_search_commander) :: xsymsrch
@@ -147,15 +146,6 @@ select case(prg)
 
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 
-    case( 'extract' )
-        if( .not. cline%defined('mkdir')     ) call cline%set('mkdir',       'yes')
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( cline%defined('ctf') )then
-            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
-                THROW_HARD('Only CTF=NO/FLIP are allowed')
-            endif
-        endif
-        call xextract%execute(cline)
     case( 'reextract' )
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xreextract%execute(cline)

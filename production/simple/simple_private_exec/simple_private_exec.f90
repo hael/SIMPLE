@@ -21,6 +21,7 @@ implicit none
 
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)            :: xpreprocess
+type(extract_commander)               :: xextract
 type(motion_correct_commander)        :: xmotion_correct
 type(gen_pspecs_and_thumbs_commander) :: xgen_pspecs_and_thumbs
 type(ctf_estimate_commander)          :: xctf_estimate
@@ -162,6 +163,28 @@ select case(prg)
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
         call xpreprocess%execute(cline)
+    case( 'extract' )
+        ! executes extract
+        keys_required(1)   = 'projfile'
+        ! set optional keys
+        keys_optional(1)   = 'dir_box'
+        keys_optional(2)   = 'pcontrast'
+        keys_optional(3)   = 'outside'
+        keys_optional(4)   = 'ctf'
+        keys_optional(5)   = 'outfile'
+        keys_optional(6)   = 'stream'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
+        ! set defaults
+        call cline%set('nthr',1.)
+        if( .not. cline%defined('outside')         ) call cline%set('outside',   'no')
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('stream')          ) call cline%set('stream', 'no')
+        if( cline%defined('stream') )then
+            if( cline%get_carg('stream').eq.'no' .and. .not.cline%defined('outfile') )then
+                THROW_HARD('OUTFILE must be defined with STREAM=NO')
+            endif
+        endif
+        call xextract%execute(cline)
     case( 'motion_correct' )
         ! for movie alignment
         keys_required(1)  = 'projfile'
@@ -223,48 +246,6 @@ select case(prg)
         keys_required(3)  = 'projfile'
         call cline%parse_oldschool(keys_required(:3))
         call xmap_cavgs_selection%execute(cline)
-    case( 'motion_correct_ctf_estimate' )
-        ! pipelined motion_correct + ctf_estimate
-        keys_required(1)  = 'filetab'
-        keys_required(2)  = 'smpd'
-        keys_required(3)  = 'kv'
-        keys_required(4)  = 'cs'
-        keys_required(5)  = 'fraca'
-        ! set optional keys
-        keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'fbody'
-        keys_optional(3)  = 'dose_rate'
-        keys_optional(4)  = 'exp_time'
-        keys_optional(5)  = 'lpstart'
-        keys_optional(6)  = 'lpstop'
-        keys_optional(7)  = 'trs'
-        keys_optional(8)  = 'pspecsz'
-        keys_optional(9)  = 'numlen'
-        keys_optional(10) = 'startit'
-        keys_optional(11) = 'scale'
-        keys_optional(12) = 'nframesgrp'
-        keys_optional(13) = 'fromf'
-        keys_optional(14) = 'tof'
-        keys_optional(15) = 'nsig'
-        keys_optional(16) = 'outfile'
-        keys_optional(17) = 'hp'
-        keys_optional(18) = 'lp'
-        keys_optional(19) = 'dfmin'
-        keys_optional(20) = 'dfmax'
-        keys_optional(21) = 'dfstep'
-        keys_optional(22) = 'astigtol'
-        keys_optional(23) = 'phaseplate'
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:23))
-        ! set defaults
-        call cline%set('prg', 'preprocess')
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
-        if( .not. cline%defined('pscpecsz')        ) call cline%set('pscpecsz',       512.)
-        if( .not. cline%defined('hp_ctfestimate')  ) call cline%set('hp_ctfestimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
-        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
-        call xpreprocess%execute(cline)
     case( 'pick_extract' )
         ! for template-based particle picking
         keys_required(1) = 'projfile'

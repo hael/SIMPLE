@@ -11,6 +11,7 @@ use simple_builder,        only: builder
 implicit none
 
 public :: preprocess_distr_commander
+public :: extract_distr_commander
 public :: motion_correct_distr_commander
 public :: gen_pspecs_and_thumbs_distr_commander
 public :: motion_correct_tomo_distr_commander
@@ -30,6 +31,10 @@ type, extends(commander_base) :: preprocess_distr_commander
   contains
     procedure :: execute      => exec_preprocess_distr
 end type preprocess_distr_commander
+type, extends(commander_base) :: extract_distr_commander
+  contains
+    procedure :: execute      => exec_extract_distr
+end type extract_distr_commander
 type, extends(commander_base) :: motion_correct_distr_commander
   contains
     procedure :: execute      => exec_motion_correct_distr
@@ -150,6 +155,173 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DISTR_PREPROCESS NORMAL STOP ****')
     end subroutine exec_preprocess_distr
+
+    !> for extracting particle images from integrated DDD movies
+    subroutine exec_extract_distr( self, cline )
+        use simple_oris,  only: oris
+        use simple_ori,   only: ori
+        class(extract_distr_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline !< command line input
+        type(parameters)                        :: params
+        type(sp_project)                        :: spproj
+        type(sp_project),           allocatable :: spproj_parts(:)
+        type(qsys_env)                          :: qenv
+        type(chash)                             :: job_descr
+        type(ori)                               :: o_mic
+        type(oris)                              :: os_stk
+        character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
+        character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
+        integer                   :: nframes, imic, i, nmics_tot, numlen, nmics
+        integer                   :: cnt, lfoo(3), state, istk, nstks, ipart
+        call cline%set('oritype', 'mic')
+        call params%new(cline)
+        call cline%set('mkdir', 'no')
+        call cline%set('nthr',  1.)
+        ! read in integrated movies
+        call spproj%read(params%projfile)
+        if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
+        if( spproj%get_nstks() /= 0 ) THROW_HARD('This project file already contains stacks!')
+        nmics_tot = spproj%os_mic%get_noris()
+        if( nmics_tot < params%nparts )then
+            params%nparts = nmics_tot
+        endif
+        ! input directory
+        if( cline%defined('dir_box') )then
+            if( params%mkdir.eq.'yes' .and. params%dir_box(1:1).ne.'/')then
+                params%dir_box = trim(filepath(PATH_PARENT,params%dir_box))
+            endif
+            params%dir_box = simple_abspath(params%dir_box)
+            if( file_exists(params%dir_box) )then
+                call simple_list_files(trim(params%dir_box)//'/*.box', boxfiles)
+                if(.not.allocated(boxfiles))then
+                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 1'
+                    THROW_HARD('No box file found; exec_extract, 1')
+                endif
+                if(size(boxfiles)==0)then
+                    write(logfhandle,*)'No box file found in ', trim(params%dir_box), '; simple_commander_preprocess::exec_extract 2'
+                    THROW_HARD('No box file found; exec_extract 2')
+                endif
+            else
+                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
+                THROW_HARD('box directory does not exist; exec_extract')
+            endif
+            call cline%set('dir_box', params%dir_box)
+        endif
+        ! sanity checks
+        nmics  = 0
+        do imic = 1, nmics_tot
+            o_mic = spproj%os_mic%get_ori(imic)
+            state = 1
+            if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
+            if( state == 0 ) cycle
+            if( .not. o_mic%isthere('imgkind') )cycle
+            if( .not. o_mic%isthere('intg')    )cycle
+            call o_mic%getter('imgkind', imgkind)
+            if( trim(imgkind).ne.'mic') cycle
+            call o_mic%getter('intg', mic_name)
+            if( .not.file_exists(mic_name) )cycle
+            ! box input
+            if( cline%defined('dir_box') )then
+                boxfile_name = boxfile_from_mic(mic_name)
+                if(trim(boxfile_name).eq.NIL)cycle
+            else
+                call o_mic%getter('boxfile', boxfile_name)
+                if( .not.file_exists(boxfile_name) )cycle
+            endif
+            ! get number of frames from stack
+            call find_ldim_nptcls(mic_name, lfoo, nframes )
+            if( nframes > 1 ) THROW_HARD('multi-frame extraction not supported; exec_extract')
+            ! update counter
+            nmics = nmics + 1
+        enddo
+        if( nmics == 0 ) THROW_HARD('No particles to extract! exec_extract')
+        ! DISTRIBUTED EXTRACTION
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+        ! ASSEMBLY
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
+        numlen = len(int2str(params%nparts))
+        do ipart = 1,params%nparts
+            parts_fname(ipart) = trim(ALGN_FBODY)//int2str_pad(ipart,numlen)//trim(METADATA_EXT)
+        enddo
+        ! copy updated micrographs
+        cnt = 0
+        do ipart = 1,params%nparts
+            call spproj_parts(ipart)%read_segment('mic',parts_fname(ipart))
+            do imic = 1,spproj_parts(ipart)%os_mic%get_noris()
+                cnt = cnt + 1
+                call spproj%os_mic%set_ori(cnt,spproj_parts(ipart)%os_mic%get_ori(imic))
+            enddo
+            call spproj_parts(ipart)%kill
+        enddo
+        if( cnt /= nmics_tot ) THROW_HARD('Inconstistent number of micrographs in individual projects')
+        ! fetch stacks table
+        nstks = 0
+        do ipart = 1,params%nparts
+            call spproj_parts(ipart)%read_segment('stk',parts_fname(ipart))
+            nstks = nstks + spproj_parts(ipart)%os_stk%get_noris()
+        enddo
+        if( nstks /= nmics ) THROW_HARD('Inconstistent number of stacks in individual projects')
+        if( nstks > 0 )then
+            call os_stk%new(nstks)
+            allocate(stktab(nstks))
+            cnt = 0
+            do ipart = 1,params%nparts
+                do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
+                    cnt = cnt + 1
+                    call os_stk%set_ori(cnt,spproj_parts(ipart)%os_stk%get_ori(istk))
+                    stktab(cnt) = os_stk%get_static(cnt,'stk')
+                enddo
+                call spproj_parts(ipart)%kill
+            enddo
+            call write_filetable('stktab.txt',stktab)
+            ! import stacks into project
+            call spproj%add_stktab('stktab.txt',os_stk)
+            ! transfer particles locations to ptcl2D
+            cnt = 0
+            do ipart = 1,params%nparts
+                call spproj_parts(ipart)%read_segment('ptcl2D',parts_fname(ipart))
+                do i = 1,spproj_parts(ipart)%os_ptcl2D%get_noris()
+                    cnt = cnt + 1
+                    call spproj%os_ptcl2D%set(cnt,'xpos',spproj_parts(ipart)%os_ptcl2D%get(i,'xpos'))
+                    call spproj%os_ptcl2D%set(cnt,'ypos',spproj_parts(ipart)%os_ptcl2D%get(i,'ypos'))
+                enddo
+                call spproj_parts(ipart)%kill
+            enddo
+            call os_stk%kill
+            call del_file('stktab.txt')
+        endif
+        ! final write
+        call spproj%write
+        ! clean
+        call qsys_cleanup
+        ! end gracefully
+        call simple_end('**** SIMPLE_EXTRACT_DISTR NORMAL STOP ****')
+
+        contains
+
+            character(len=LONGSTRLEN) function boxfile_from_mic(mic)
+                character(len=*), intent(in) :: mic
+                character(len=LONGSTRLEN)    :: box_from_mic
+                integer :: ibox
+                box_from_mic     = fname_new_ext(basename(mic),'box')
+                boxfile_from_mic = NIL
+                do ibox=1,size(boxfiles)
+                    if(trim(basename(boxfiles(ibox))).eq.trim(box_from_mic))then
+                        boxfile_from_mic = trim(boxfiles(ibox))
+                        return
+                    endif
+                enddo
+            end function boxfile_from_mic
+
+    end subroutine exec_extract_distr
 
     subroutine exec_motion_correct_distr( self, cline )
         class(motion_correct_distr_commander), intent(inout) :: self

@@ -194,7 +194,7 @@ contains
                 ! update project
                 call spproj%os_mic%set_ori(imovie, o_mov)
                 ! extract particles
-                if( params%stream .eq. 'yes' )then
+                if( trim(params%stream) .eq. 'yes' )then
                     ! needs to write and re-read project at the end as extract overwrites it
                     call spproj%write_segment_inside(params%oritype)
                     cline_extract = cline
@@ -207,7 +207,10 @@ contains
             endif
         end do
         if( params%stream .eq. 'yes' )then
-            if( .not.l_pick )call spproj%write_segment_inside(params%oritype)
+            if( .not.l_pick )then
+                ! because extract performs the writing otherwise
+                call spproj%write_segment_inside(params%oritype)
+            endif
         else
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
@@ -656,59 +659,64 @@ contains
         class(cmdline),           intent(inout) :: cline !< command line input
         type(builder)                           :: build
         type(parameters)                        :: params
-        type(sp_project)                        :: spproj
+        type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
         type(image)                             :: micrograph
         type(ori)                               :: o_mic
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
-        character(len=:),           allocatable :: output_dir, mic_name, imgkind, boxfile_name
-        character(len=LONGSTRLEN),  allocatable :: boxfiles(:)
+        character(len=:),           allocatable :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN) :: stack, dir_box, boxfname
-        integer                   :: nframes, imic, iptcl, i, ldim(3), nptcls, nmics, box, box_first
-        integer                   :: cnt, niter, ntot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob
+        character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname
+        integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
+        integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob
         real                      :: particle_position(2)
-        logical                   :: spproj_modified
         call cline%set('oritype', 'mic')
+        call cline%set('mkdir',   'no')
         call params%new(cline)
-        ! output directory
+        ! init
         output_dir = PATH_HERE
-        if( params%stream.eq.'yes' )output_dir = DIR_EXTRACT
-        ! read in integrated movies
-        call spproj%read(params_glob%projfile)
-        if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
-        ntot = spproj%os_mic%get_noris()
-        ! input directory
+        fromto(:)  = [params%fromp, params%top]
+        nmics_here = fromto(2)-fromto(1)+1
+        if( params%stream.eq.'yes' )then
+            output_dir = DIR_EXTRACT
+            fromto(:)  = [1,1]
+            nmics_here = 1
+            ! read in integrated movies, output project = input project
+            call spproj%read(params%projfile)
+            nmics_tot = spproj_in%os_mic%get_noris()
+            if( spproj%get_nintgs() /= 1 ) THROW_HARD('Incompatible # of integrated micrograph to process!')
+        else
+            ! read in integrated movies
+            call spproj_in%read_segment(params%oritype, params%projfile)
+            nmics_tot = spproj_in%os_mic%get_noris()
+            if( spproj_in%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
+            ! init output project
+            call spproj%read_non_data_segments(params%projfile)
+            call spproj%projinfo%set(1,'projname', get_fbody(params%outfile,METADATA_EXT,separator=.false.))
+            call spproj%projinfo%set(1,'projfile', params%outfile)
+            params%projfile = trim(params%outfile) ! for builder later
+            call spproj%os_mic%new(nmics_here)
+            cnt = 0
+            do imic = fromto(1),fromto(2)
+                cnt = cnt + 1
+                call spproj%os_mic%set_ori(cnt, spproj_in%os_mic%get_ori(imic))
+            enddo
+            call spproj_in%kill
+        endif
+        ! input boxes
         if( cline%defined('dir_box') )then
-            dir_box = trim(params%dir_box)
-            if( params%mkdir.eq.'yes' .AND. dir_box(1:1).ne.'/') dir_box=trim(filepath(PATH_PARENT,dir_box))
-            if( file_exists(dir_box) )then
-                call simple_list_files(trim(dir_box)//'/*.box', boxfiles)
-                if(.not.allocated(boxfiles))then
-                    write(logfhandle,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 1'
-                    THROW_HARD('No box file found; exec_extract, 1')
-                endif
-                if(size(boxfiles)==0)then
-                    write(logfhandle,*)'No box file found in ', trim(dir_box), '; simple_commander_preprocess::exec_extract 2'
-                    THROW_HARD('No box file found; exec_extract 2')
-                endif
-                do i=1,size(boxfiles)
-                    call make_relativepath(CWD_GLOB,boxfiles(i),boxfname)
-                    boxfiles(i) = trim(boxfname)
-                enddo
-            else
-                write(logfhandle,*)'Directory does not exist: ', trim(dir_box), 'simple_commander_preprocess::exec_extract'
+            if( .not.file_exists(params%dir_box) )then
+                write(logfhandle,*)'Directory does not exist: ', trim(params%dir_box), 'simple_commander_preprocess::exec_extract'
                 THROW_HARD('box directory does not exist; exec_extract')
             endif
         endif
         ! sanity checks
-        allocate(mics_mask(ntot), source=.false.)
-        spproj_modified = .false.
+        allocate(mics_mask(1:nmics_here), source=.false.)
         nmics  = 0
         nptcls = 0
-        do imic = 1, ntot
+        do imic = 1,nmics_here
             o_mic = spproj%os_mic%get_ori(imic)
             state = 1
             if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
@@ -721,12 +729,12 @@ contains
             if( .not.file_exists(mic_name) )cycle
             ! box input
             if( cline%defined('dir_box') )then
-                boxfile_name = boxfile_from_mic(mic_name)
-                if(trim(boxfile_name).eq.NIL)cycle
+                box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
+                call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name)
+                if( .not.file_exists(boxfile_name) )cycle
                 call spproj%os_mic%set(imic, 'boxfile', trim(boxfile_name))
-                spproj_modified = .true.
             else
-                call o_mic%getter('boxfile', boxfile_name)
+                boxfile_name = trim(o_mic%get_static('boxfile'))
                 if( .not.file_exists(boxfile_name) )cycle
             endif
             ! get number of frames from stack
@@ -749,125 +757,124 @@ contains
                 params%box = nint(boxdata(1,3))
             endif
         enddo
-        ! write project if neeeded
-        if( spproj_modified ) call spproj%write_segment_inside(params_glob%oritype)
+        call spproj%write
         call spproj%kill
-        ! sanity checking
-        if( nmics == 0 )     THROW_HARD('No particles to extract! exec_extract')
-        if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
-        ! init
-        call build%build_general_tbox(params, cline, do3d=.false.)
-        call micrograph%new([ldim(1),ldim(2),1], params%smpd)
-        niter     = 0
-        noutside  = 0
-        box_first = 0
-        ! main loop
-        iptcl_glob = 0 ! extracted particle index among ALL stacks
-        do imic = 1, ntot
-            if( .not.mics_mask(imic) )cycle
-            ! fetch micrograph
-            o_mic = build%spproj_field%get_ori(imic)
-            call o_mic%getter('imgkind', imgkind)
-            call o_mic%getter('intg', mic_name)
-            call o_mic%getter('boxfile', boxfile_name)
-            ! box file
-            nptcls = 0
-            if( nlines(boxfile_name) > 0 )then
-                call boxfile%new(boxfile_name, 1)
-                nptcls = boxfile%get_ndatalines()
-            endif
-            if( nptcls == 0 ) cycle
-            ! ...
-            niter = niter + 1
-            call progress(imic,ntot)
-            ! box checks
-            if(allocated(oris_mask))deallocate(oris_mask)
-            allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In simple_extract oris_mask")
-            ! read box data & update mask
-            if(allocated(boxdata))deallocate(boxdata)
-            allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk('In: simple_extract; boxdata etc., 2',alloc_stat)
-            do iptcl=1,nptcls
-                call boxfile%readNextDataLine(boxdata(iptcl,:))
-                box = nint(boxdata(iptcl,3))
-                if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
-                    THROW_HARD('only square windows allowed; exec_extract')
+        ! actual extraction
+        if( nmics == 0 )then
+            ! nothing to do!
+        else
+            if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
+            call build%build_general_tbox(params, cline, do3d=.false.)
+            call micrograph%new([ldim(1),ldim(2),1], params%smpd)
+            noutside  = 0
+            box_first = 0
+            ! main loop
+            iptcl_glob = 0 ! extracted particle index among ALL stacks
+            do imic = 1,nmics_here
+                if( .not.mics_mask(imic) )cycle
+                ! fetch micrograph
+                o_mic = build%spproj_field%get_ori(imic)
+                call o_mic%getter('imgkind', imgkind)
+                call o_mic%getter('intg', mic_name)
+                boxfile_name = trim(o_mic%get_static('boxfile'))
+                ! box file
+                nptcls = 0
+                if( nlines(boxfile_name) > 0 )then
+                    call boxfile%new(boxfile_name, 1)
+                    nptcls = boxfile%get_ndatalines()
                 endif
-                ! modify coordinates if change in box (shift by half the difference)
-                if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
-                if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
-                    write(logfhandle,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
-                    THROW_HARD('inconsistent box sizes in box files; exec_extract')
+                if( nptcls == 0 ) cycle
+                call progress(imic,nmics_tot)
+                ! box checks
+                if(allocated(oris_mask))deallocate(oris_mask)
+                allocate(oris_mask(nptcls), source=.false., stat=alloc_stat)
+                if(alloc_stat.ne.0)call allocchk("In exec_extract oris_mask")
+                ! read box data & update mask
+                if(allocated(boxdata))deallocate(boxdata)
+                allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+                if(alloc_stat.ne.0)call allocchk('In: exec_extract; boxdata etc., 2',alloc_stat)
+                do iptcl=1,nptcls
+                    call boxfile%readNextDataLine(boxdata(iptcl,:))
+                    box = nint(boxdata(iptcl,3))
+                    if( nint(boxdata(iptcl,3)) /= nint(boxdata(iptcl,4)) )then
+                        THROW_HARD('only square windows allowed; exec_extract')
+                    endif
+                    ! modify coordinates if change in box (shift by half the difference)
+                    if( box /= params%box ) boxdata(iptcl,1:2) = boxdata(iptcl,1:2) - real(params%box-box)/2.
+                    if( .not.cline%defined('box') .and. nint(boxdata(iptcl,3)) /= params%box )then
+                        write(logfhandle,*) 'box_current: ', nint(boxdata(iptcl,3)), 'box in params: ', params%box
+                        THROW_HARD('inconsistent box sizes in box files; exec_extract')
+                    endif
+                    ! update particle mask & movie index
+                    if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
+                end do
+                nptcls_eff = count(oris_mask)
+                ! extract ctf info
+                ctfparms      = o_mic%get_ctfvars()
+                ctfparms%smpd = params%smpd
+                if( o_mic%isthere('dfx') )then
+                    if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
+                        THROW_HARD('input lacks at least cs, kv or fraca; exec_extract')
+                    endif
+                    ! clean micrograph stats before transfer to particles
+                    call o_mic%delete_entry('xdim')
+                    call o_mic%delete_entry('ydim')
+                    call o_mic%delete_entry('nframes')
+                    call o_mic%delete_entry('nptcls')
+                    call o_mic%delete_entry('ctf_estimatecc')
+                    call o_mic%delete_entry('ctfscore')
+                    call o_mic%delete_entry('dferr')
                 endif
-                ! update particle mask & movie index
-                if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
-            end do
-            nptcls_eff = count(oris_mask)
-            ! extract ctf info
-            ctfparms      = o_mic%get_ctfvars()
-            ctfparms%smpd = params%smpd
-            if( o_mic%isthere('dfx') )then
-                if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
-                    THROW_HARD('input lacks at least cs, kv or fraca; exec_extract')
+                ! output stack
+                stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
+                ! extract windows from integrated movie
+                call micrograph%read(mic_name, 1)
+                ! phase-flip micrograph
+                if( cline%defined('ctf') )then
+                    if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
+                        ! phase flip micrograph
+                        tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
+                        call micrograph%zero_edgeavg
+                        call micrograph%fft
+                        call tfun%apply_serial(micrograph, 'flip', ctfparms)
+                        ! update stack ctf flag, mic flag unchanged
+                        ctfparms%ctfflag = CTFFLAG_FLIP
+                    endif
                 endif
-                ! clean micrograph stats before transfer to particles
-                call o_mic%delete_entry('xdim')
-                call o_mic%delete_entry('ydim')
-                call o_mic%delete_entry('nframes')
-                call o_mic%delete_entry('nptcls')
-                call o_mic%delete_entry('ctf_estimatecc')
-                call o_mic%delete_entry('ctfscore')
-                call o_mic%delete_entry('dferr')
-            endif
-            ! output stack
-            stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
-            ! extract windows from integrated movie
-            call micrograph%read(mic_name, 1)
-            ! phase-flip micrograph
-            if( cline%defined('ctf') )then
-                if( trim(params%ctf).eq.'flip' .and. o_mic%isthere('dfx') )then
-                    ! phase flip micrograph
-                    tfun = ctf(ctfparms%smpd, ctfparms%kv, ctfparms%cs, ctfparms%fraca)
-                    call micrograph%zero_edgeavg
-                    call micrograph%fft
-                    call tfun%apply_serial(micrograph, 'flip', ctfparms)
-                    ! update stack ctf flag, mic flag unchanged
-                    ctfparms%ctfflag = CTFFLAG_FLIP
-                endif
-            endif
-            ! filter out frequencies lower than the box can express to avoid aliasing
-            call micrograph%bp(real(params%box) * params%smpd, 0.)
-            call micrograph%ifft ! need to be here in case it was flipped
-            ! write new stack
-            cnt = 0
-            do iptcl=1,nptcls ! loop over boxes
-                if( oris_mask(iptcl) )then
-                    cnt = cnt + 1
-                    ! extract the window
+                ! filter out frequencies lower than the box can express to avoid aliasing
+                call micrograph%bp(real(params%box) * params%smpd, 0.)
+                call micrograph%ifft ! need to be here in case it was flipped
+                ! write new stack
+                cnt = 0
+                do iptcl=1,nptcls ! loop over boxes
+                    if( oris_mask(iptcl) )then
+                        cnt = cnt + 1
+                        ! extract the window
+                        particle_position = boxdata(iptcl,1:2)
+                        call micrograph%window(nint(particle_position), params%box, build%img, noutside)
+                        if( params%pcontrast .eq. 'black' ) call build%img%neg()
+                        call build%img%noise_norm(build%lmsk)
+                        call build%img%write(trim(adjustl(stack)), cnt)
+                    endif
+                end do
+                ! IMPORT INTO PROJECT
+                call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
+                ! add box coordinates to ptcl2D field only
+                do iptcl=1,nptcls
+                    if( .not.oris_mask(iptcl) )cycle
+                    iptcl_glob = iptcl_glob + 1
                     particle_position = boxdata(iptcl,1:2)
-                    call micrograph%window(nint(particle_position), params%box, build%img, noutside)
-                    if( params%pcontrast .eq. 'black' ) call build%img%neg()
-                    call build%img%noise_norm(build%lmsk)
-                    call build%img%write(trim(adjustl(stack)), cnt)
-                endif
-            end do
-            ! IMPORT INTO PROJECT
-            call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
-            ! add box coordinates to ptcl2D field only
-            do iptcl=1,nptcls
-                if( .not.oris_mask(iptcl) )cycle
-                iptcl_glob = iptcl_glob + 1
-                particle_position = boxdata(iptcl,1:2)
-                call build%spproj%os_ptcl2D%set(iptcl_glob,'xpos',boxdata(iptcl,1))
-                call build%spproj%os_ptcl2D%set(iptcl_glob,'ypos',boxdata(iptcl,2))
-            end do
-            ! clean
-            call boxfile%kill()
-        enddo
-        call progress(1,1)
-        ! we do a full write here as multiple fields are updated
-        call build%spproj%write
+                    call build%spproj%os_ptcl2D%set(iptcl_glob,'xpos',boxdata(iptcl,1))
+                    call build%spproj%os_ptcl2D%set(iptcl_glob,'ypos',boxdata(iptcl,2))
+                end do
+                ! clean
+                call boxfile%kill()
+            enddo
+            ! write
+            call build%spproj%write
+        endif
+        ! end gracefully
+        call qsys_job_finished(  'simple_commander_preprocess :: exec_extract' )
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
         contains
@@ -885,20 +892,6 @@ contains
                 inside = .true.        ! box is inside
                 if( any(fromc < 1) .or. toc(1) > ldim(1) .or. toc(2) > ldim(2) ) inside = .false.
             end function box_inside
-
-            character(len=LONGSTRLEN) function boxfile_from_mic(mic)
-                character(len=*), intent(in) :: mic
-                character(len=LONGSTRLEN)    :: box_from_mic
-                integer :: ibox
-                box_from_mic     = fname_new_ext(basename(mic),'box')
-                boxfile_from_mic = NIL
-                do ibox=1,size(boxfiles)
-                    if(trim(basename(boxfiles(ibox))).eq.trim(box_from_mic))then
-                        boxfile_from_mic = trim(boxfiles(ibox))
-                        return
-                    endif
-                enddo
-            end function boxfile_from_mic
 
     end subroutine exec_extract
 

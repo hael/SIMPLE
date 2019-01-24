@@ -521,6 +521,7 @@ contains
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
         write(logfhandle,'(A)') ctf_estimate%name
+        write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') gen_pspecs_and_thumbs%name
         write(logfhandle,'(A)') initial_3Dmodel%name
         write(logfhandle,'(A)') make_cavgs%name
@@ -543,7 +544,6 @@ contains
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') export_starproject%name
-        write(logfhandle,'(A)') extract%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
         write(logfhandle,'(A)') info_image%name
@@ -1139,8 +1139,8 @@ contains
         &'extract', &                                                           ! name
         &'Extract particle images from integrated movies',&                     ! descr_short
         &'is a program for extracting particle images from integrated movies',& ! descr long
-        &'simple_exec',&                                                        ! executable
-        &1, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &'simple_distr_exec',&                                                  ! executable
+        &1, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call extract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
@@ -1158,7 +1158,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call extract%set_input('comp_ctrls', 1, nparts)
     end subroutine new_extract
 
     subroutine new_filter
