@@ -176,7 +176,6 @@ interface vabs
     module procedure vabs_sp, vabs_dp
 end interface vabs
 
-!!!!!!!!ADDED BY CHIARA!!!!!!!!!!
 interface vis_mat
     module procedure vis_2Dreal_mat
     module procedure vis_2Dinteger_mat
@@ -184,7 +183,6 @@ interface vis_mat
     module procedure vis_3Dinteger_mat
 end interface vis_mat
 
-!!!!!!ADDED BY CHIARA!!!!!
 interface mode
     module procedure mode_1
     module procedure mode_2
@@ -2154,7 +2152,6 @@ contains
         end do
     end subroutine create_hist_vector
 
-    !!!!!!!!!!!!!!!!!!!ADDED BY CHIARAAAA!!!!!!!!!!!!!!
     !This function is meant to be a support for performing histogram stretching.
     !It takes in input the histogram vectors xhist and yhist (see function create_hist_vector
     !in the simple_image file)
@@ -2174,15 +2171,17 @@ contains
         ilim(:) =       maxloc(yhist)
         npxls_at_mode = maxval(yhist)
         do i = 1, ilim(1)-1
-            if(yhist(i) > real(npxls_at_mode/100) - OFFSET) goto 128  !bottom 1%
+            if(yhist(i) > npxls_at_mode/100 - OFFSET) then !bottom 1%
+                stretch_lim(1) = xhist(i-1)
+                exit
+            endif
         enddo
-        128 continue
-        stretch_lim(1) = xhist(i-1)
         do i = ilim(1)+1, size(yhist, dim = 1)
-            if(yhist(i) < real(npxls_at_mode/100) + OFFSET) goto 132  !top 1%
+            if(yhist(i) < npxls_at_mode/100 + OFFSET) then
+                stretch_lim(2) = xhist(i)
+                exit
+            endif
         enddo
-        132 continue
-        stretch_lim(2) = xhist(i)
     end subroutine find_stretch_minmax
 
     ! rescales the vector to a new input range

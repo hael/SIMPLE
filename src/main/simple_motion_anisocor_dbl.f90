@@ -22,7 +22,7 @@ type, extends(motion_anisocor)       :: motion_anisocor_dbl
     real(kind=c_double), allocatable :: T_coords      (:,:,:) !< transformed coordinates
     real(kind=c_double), allocatable :: T_coords_xm   (:,:,:) !< transformed coordinates, for use in derivative of obj. function
     real(kind=c_double), allocatable :: T_coords_xm_sq(:,:,:) !< square of T_coords_xm, memoized for speedup
-    real(kind=c_double), allocatable :: T_coords_xm_cr(:,:)   !< cross-product of square of T_coords_xm, memoized for speedup
+    real(kind=c_double), allocatable :: T_coords_xm_cr(:,:)   !< cross-product of square of T_coords_xm, memorized for speedup
     real(kind=c_double), allocatable :: T_coords_out  (:,:,:) !< transformed coordinates for output image
     real(dp)                         :: sc_alpha_x, sc_alpha_y!< scaling factors, used for gradients
     real(dp)                         :: sc_beta_x, sc_beta_y
@@ -51,10 +51,15 @@ contains
     function interp_bilin( self, x ) result(val)
         class(motion_anisocor_dbl), intent(inout) :: self
         real(dp),                   intent(in)    :: x(2)
-        real                                  :: val
+        real                                      :: val
         logical  :: x1_valid, x2_valid, y1_valid, y2_valid
         integer  :: x1_h, x2_h, y1_h, y2_h
         real(dp) :: y1, y2, y3, y4, t, u
+        if ((x(1) .ne. x(1)).or.(x(2) .ne. x(2))) THEN
+            !write (*,*) 'INTERP_BILIN: NAN DISCOVERED; x=', x
+            val  = 0._dp
+            return
+        end if
         ! if outside of image
         if ((x(1) < 1._dp) .or. (x(1) >= real(self%ldim(1),dp)) .or. &
             (x(2) < 1._dp) .or. (x(2) >= real(self%ldim(2),dp))) then
@@ -85,6 +90,12 @@ contains
         integer  :: x1_h, x2_h, y1_h, y2_h
         real(dp) :: y1, y2, y3, y4, t, u
         ! if outside of image
+        if ((x(1) .ne. x(1)).or.(x(2) .ne. x(2))) THEN
+            !write (*,*) 'INTERP_BILIN_FDF: NAN DISCOVERED; x=', x
+            val  = 0._dp
+            grad = 0._dp
+            return
+        end if
         if ((x(1) < 1._dp) .or. (x(1) >= real(self%ldim(1),dp)) .or. &
             (x(2) < 1._dp) .or. (x(2) >= real(self%ldim(2),dp))) then
             val  = 0._dp
@@ -123,6 +134,11 @@ contains
         logical  :: x1_valid, x2_valid, y1_valid, y2_valid
         integer  :: x1_h, x2_h, y1_h, y2_h
         real(dp) :: y1, y2, y3, y4, t, u
+        if ((x(1) .ne. x(1)).or.(x(2) .ne. x(2))) THEN
+            !write (*,*) 'INTERP_BILIN_OUT: NAN DISCOVERED; x=', x
+            val  = 0._dp
+            return
+        end if
         ! if outside of image
         if ((x(1) < 1._dp) .or. (x(1) >= self%ldim_out(1)) .or. (x(2) < 1._dp) .or. (x(2) >= self%ldim_out(2))) then
             val  = 0._dp
@@ -213,22 +229,24 @@ contains
                 ! remap to [1:N]
                 T_coords(1) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 T_coords(2) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
-                grad(1) = grad(1) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp
-                grad(2) = grad(2) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xm
-                grad(3) = grad(3) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * ym
-                grad(4) = grad(4) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xms
-                grad(5) = grad(5) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * yms
-                grad(6) = grad(6) - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xym
-                grad(7) = grad(7) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp 
-                grad(8) = grad(8) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xm
-                grad(9) = grad(9) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * ym
+                ! Chiara. You are back in [1:N], but u use xm etc that are still in [-1,1]. CHECK
+                ! Derivative of the reg vterm wrt a(1)-a(12)
+                grad(1)  = grad(1)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp
+                grad(2)  = grad(2)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xm
+                grad(3)  = grad(3)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * ym
+                grad(4)  = grad(4)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xms
+                grad(5)  = grad(5)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * yms
+                grad(6)  = grad(6)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xym
+                grad(7)  = grad(7)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp
+                grad(8)  = grad(8)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xm
+                grad(9)  = grad(9)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * ym
                 grad(10) = grad(10) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xms
                 grad(11) = grad(11) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * yms
-                grad(12) = grad(12) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xym                          
+                grad(12) = grad(12) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xym
             end do
         end do
     end subroutine calc_grad_coords                          ! specifically for gradient of regularization term
- 
+
     subroutine calc_T_coords_only( self, a )
         class(motion_anisocor_dbl), intent(inout) :: self
         real(dp),                   intent(in)    :: a(POLY_DIM)
@@ -396,11 +414,9 @@ contains
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         call self%eval_fdf(a, f, grad)
-        
+
     end subroutine eval_fdf_foo    ! for debug purpopse
 
-    
-    
     subroutine eval_fdf( self, a, f, grad )
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -430,7 +446,7 @@ contains
             end do
         end do
         f = f - self%gamma * regu_term / real(self%ldim(1)*self%ldim(2),dp)
-                
+
         ! Computing gradient
         ! Polynomial:
         ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
@@ -503,7 +519,7 @@ contains
         call self%calc_grad_coords(a, regu_grad)
         grad = grad - self%gamma * regu_grad / real(self%ldim(1)*self%ldim(2),dp)
     end subroutine eval_fdf
-    
+
     subroutine eval_f_noregu( self, a, f, regu )      ! for debug purposes
         !$ use omp_lib
         !$ use omp_lib_kinds
@@ -526,9 +542,9 @@ contains
         N   = sum( self%rmat_ref(:,:) * self%rmat_T  (:,:) )
         D_R = sum( self%rmat_ref(:,:) * self%rmat_ref(:,:) )
         D_I = sum( self%rmat_T  (:,:) * self%rmat_T  (:,:) )
-        f   = N / sqrt(D_I * D_R)
+        f   = N / sqrt(D_I * D_R)  !obj f
         regu_term = 0.
-        
+
         ithr = omp_get_thread_num() + 1
         if ((.false.).and.(ithr == 1)) then
             open(123, file='acoords')
@@ -539,7 +555,7 @@ contains
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     write (123,'(A)', advance='no') trim(dbl2str(self%T_coords(1,i,j)))
-                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '                    
+                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '
                 end do
                 if (i < self%ldim(1)) write (123,'(A)') '; ...'
             end do
@@ -548,7 +564,7 @@ contains
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     write (123,'(A)', advance='no') trim(dbl2str(self%T_coords(2,i,j)))
-                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '                    
+                    if (j < self%ldim(2)) write (123,'(A)', advance='no') ', '
                 end do
                 if (i < self%ldim(1)) write (123,'(A)') '; ...'
             end do
@@ -710,7 +726,9 @@ contains
         self%frame  => frame
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
-        self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.001 ! randomized (yet small) starting point
+        !Chiara, what about changing the starting point? TRY
+        self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.01 ! randomized (yet small) starting point, CHIARA
+        ! self%ospec%x   = randn(POLY_DIM) * self%maxHWshift * 0.001 ! randomized (yet small) starting point, ORIGINAL
         self%ospec%x_8 = real(self%ospec%x, dp)
         self%ospec%maxits = 400
         irestart = 0
@@ -719,7 +737,7 @@ contains
             irestart = irestart + 1
             call self%nlopt%minimize(self%ospec, self, cxy1)
         end do
-        if (irestart > 1) then            
+        if (irestart > 1) then
             if (.not. self%ospec%converged) then
                 write (*,*) 'QQQQQQQQQQQQQQQQQQQQQQQQQQ not converged!'
             else

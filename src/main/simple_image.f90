@@ -208,7 +208,6 @@ contains
     procedure          :: collage
     procedure          :: find_connected_comps
     procedure          :: size_connected_comps
-    ! procedure          :: is_cc_closed
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc
     procedure          :: dilatation
@@ -3289,46 +3288,15 @@ contains
     ! the label of the cc.  (cc = connected component)
     function size_connected_comps(self) result(sz)
         class(image), intent(in) :: self
-        integer, allocatable :: sz(:,:)
+        integer, allocatable :: sz(:)
         integer :: n_cc,imax
         if(allocated(sz)) deallocate(sz)
         imax = nint(maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))))
-        allocate(sz(2,imax), source = 0)
+        allocate(sz(imax), source = 0)
         do n_cc = imax,1,-1
-            sz(1, n_cc) = n_cc
-            sz(2, n_cc) = count(abs(self%rmat-real(n_cc)) < TINY)
+            sz(n_cc) = count(abs(self%rmat-real(n_cc)) < TINY)
         enddo
     end function size_connected_comps
-
-    ! ! This function takes in input a connected component (cc) image and the label
-    ! ! and the label of one of its cc. It returns true if the cc is closed, false
-    ! ! otherwise.
-    ! function is_cc_closed(self,label) result(yes_no)
-    !     class(image), intent(inout) :: self
-    !     integer, intent(in) :: label
-    !     logical :: yes_no
-    !     integer :: i, j, n
-    !     real, allocatable :: neigh_8(:)
-    !     yes_no = .true.
-    !     if(any(abs(self%rmat-real(label)) < TINY)) then   !if the label is present
-    !         do i = 1, self%ldim(1)
-    !           do j = 1, self%ldim(2)
-    !                   if(abs(self%get([i,j,1])-real(label)) < TINY) then        !just pixels in the selected cc
-    !                       call self%calc_neigh_8([i,j,1],neigh_8)
-    !                       n = count(abs(neigh_8(:size(neigh_8)-1)-real(label)) < TINY) !do not consider the pixel itself
-    !                       if(n < 2) then
-    !                           yes_no = .false.
-    !                           return
-    !                       endif
-    !                   endif
-    !           enddo
-    !         enddo
-    !     else
-    !         write(logfhandle,*) 'label ', label, 'cc selected not present; is_cc_closed'
-    !         yes_no = .false.
-    !         return
-    !     endif
-    ! end function is_cc_closed
 
     ! This function takes in input a connected component image and modifies
     ! it in order to prepare the centering process.
@@ -3337,20 +3305,19 @@ contains
         class(image),      intent(inout) :: self     !image which contains connected components
         logical, optional, intent(out)   :: discard
         integer, optional, intent(in)    :: min_sz
-        integer, allocatable :: sz(:,:), biggest_cc(:), biggest_val(:)
-        if(present(discard) .and. .not. present(min_sz)) THROW_HARD('Need min_sz;  prepare_connected_comps')
-        if(present(min_sz) .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
+        integer, allocatable :: sz(:), biggest_cc(:), biggest_val(:)
+        if(present(discard) .and. .not. present(min_sz))  THROW_HARD('Need min_sz;  prepare_connected_comps')
+        if(present(min_sz)  .and. .not. present(discard)) THROW_HARD('Need discard; prepare_connected_comps')
         sz = self%size_connected_comps()
-        biggest_cc  = maxloc(sz(2,:))
-        biggest_val = real(sz(1, biggest_cc))
         if(present(discard)) then
-            if( sz(2,biggest_cc(1)) < min_sz ) then
+            if( maxval(sz) < min_sz ) then
                 discard = .true.  !if the biggest cc is smaller than min_sz, discard image
             else
                 discard = .false.
             endif
         endif
-        where( abs(self%rmat - real(biggest_val(1))) > TINY)  !keep just the biggest cc
+        biggest_val = maxloc(sz)
+        where( abs(self%rmat-real(biggest_val(1))) > TINY )  !keep just the biggest cc
             self%rmat = 0.
         elsewhere
             self%rmat = 1.   !self is now binary
@@ -3365,20 +3332,17 @@ contains
     subroutine elim_cc(self, range)
         class(image), intent(inout) :: self
         integer,      intent(in)    :: range(2)
-        integer, allocatable :: sz(:,:)
+        integer, allocatable :: sz(:)
         integer              :: n_cc
-        real                 :: label
         sz = self%size_connected_comps()
-        do n_cc = 1, size(sz, dim = 2)  !for each cc
-            if(sz(2,n_cc) < range(1) .or. sz(2,n_cc) > range(2)) then  !if the cc has size < min_sz or > max_sz
-                label = real(sz(1,n_cc))  !label of the cc
-                where(abs(self%rmat - label) < TINY)  !rmat == label
+        do n_cc = 1, size(sz)  !for each cc
+            if(sz(n_cc) < range(1) .or. sz(n_cc) > range(2)) then  !if the cc has size < min_sz or > max_sz
+                where(abs(self%rmat - real(n_cc)) < TINY)  !rmat == label
                     self%rmat = 0.        !set to 0
                 endwhere
             endif
         enddo
     end subroutine elim_cc
-
 
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation dilatation.

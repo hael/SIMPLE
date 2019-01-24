@@ -128,9 +128,14 @@ contains
             ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale)
             ldim_scaled(3) = 1
             do_scale        = .true.
+            !Chiara
+            print *, 'SCALED!!, motion_correct_init ', params_glob%scale, do_scale
+            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         else
             ldim_scaled = ldim
             do_scale     = .false.
+            print *, '>>>>>>>>>>>>>> NOT SCALED!!, motion_correct_init ', params_glob%scale, do_scale
+            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         endif
         ! set sampling distance
         smpd        = ctfvars%smpd
@@ -480,17 +485,24 @@ contains
         integer :: iframe, nimproved, i, ldim4scale(3)
         logical :: didsave, err_stat, doscale
         real(dp):: acorr, aregu
+        !Chiara
+        type(image) :: pspec_img, movie_sum_global_pspec
+        !!!!
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
             doscale = .true.
             scale   = smpd_scaled / smpd4scale
+            !Chiara
+            print *, 'SCALED!! motion_correct_aniso ', params_glob%scale, do_scale
             ldim4scale(1) = round2even(scale * real(ldim_scaled(1)))
             ldim4scale(2) = round2even(scale * real(ldim_scaled(2)))
             ldim4scale(3) = 1
         else
             ldim4scale = ldim_scaled
             smpd4scale = smpd_scaled
+            print *, '>>>>>>>>>>>>>>>>NOT SCALED!! motion_correct_aniso ', params_glob%scale, do_scale
+            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         endif
         if( allocated(shifts) ) deallocate(shifts)
         ! construct
@@ -556,6 +568,17 @@ contains
                 didsave                = .true.
             endif
             corrfrac = corr_prev / corr
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !!!!!!!!!!!!!!!!!!!!!!!!Chiara, to give an output for each of the 9 iterations (max)
+            print *, '>>>>>>>>>>>>>>BEFORE DOING >>>>>>>>>>>>>>>>>>>>>>'
+            call gen_aniso_sum()
+            call movie_sum_global%write('AnisoResIteration'//int2str(i)//'.mrc')
+            call motion_correct_aniso_calc_sums(movie_sum_global,movie_sum_global_pspec)
+            print*, 'generating power-spectra'
+            pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
+            call pspec_img%write('AnisoResIterationPOWERSPECTRUM'//int2str(i)//'.mrc')
+            print *, ">>>>>>>>>>>>>>>>>>>I AM DONE>>>>>>>>>>>>>>>>>>>>>>>>>"
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             if( nimproved == 0 .and. i > 2 )  exit
             if( i > 5 .and. corrfrac > 0.9999 ) exit
         end do

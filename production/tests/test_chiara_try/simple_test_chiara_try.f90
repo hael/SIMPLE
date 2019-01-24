@@ -46,7 +46,7 @@ program simple_test_chiara_try
   use simple_parameters, only: parameters
   use simple_cmdline,    only: cmdline
   use simple_tvfilter
-  type(image)       :: img, img_cc, img_bin
+  type(image)       :: img1, img2, pspec_img1, pspec_img2
   real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
   integer :: i,j, ldim(3), nptcls, box,n_vol
   type(ctf)       :: tfun
@@ -58,11 +58,29 @@ program simple_test_chiara_try
   real, allocatable :: x(:)
   integer, allocatable :: sz(:,:)
   integer, allocatable :: pos(:,:), imat(:,:,:)
-  real :: dist, ratio
+  real :: dist, ratio, corr_real, corr_ft
   type(tvfilter) :: tvf
- call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2
+  real,    allocatable :: xhist(:) !discretization of the values
+  integer, allocatable :: yhist(:)
+  real :: m(1)
+  integer :: npxls_at_mode
+  real    :: stretch_lim(2)
+ !call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2
 !call process_ps_stack('pspecs_saga_polii.mrc',     'saga_analysis_TVdenoising.mrc', 1.14, 50., 1, 10)
 !call process_ps_stack('pspecs_sphire_tstdat.mrc', 'sphire_analysis_TVdenoising.mrc', 1.41, 20.,1, 10)
+
+call img1%new([1854,1918,1], 1.)
+call img1%read('AnisoResIteration1.mrc')
+call img2%new([1854,1918,1], 1.)
+call img2%read('AnisoResIteration2.mrc')
+corr_real = img1%real_corr(img2)
+print *, 'REAL SPACE CORRELATION ', corr_real
+pspec_img1 = img1%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
+call pspec_img1%write('PowerSpectrum1.mrc')
+pspec_img2 = img2%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
+call pspec_img2%write('PowerSpectrum2.mrc')
+corr_ft =  pspec_img1%real_corr(pspec_img2)
+print *, 'FT SPACE CORRELATION ', corr_ft
 
  end program simple_test_chiara_try
 ! !call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)

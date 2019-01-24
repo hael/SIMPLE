@@ -6,8 +6,14 @@ implicit none
 ! public :: extract_particles, center_cc, discard_borders !maybe to remove center_cc from public
 !
 ! private
+interface pixels_dist
+    module procedure pixels_dist_1
+    module procedure pixels_dist_2
+end interface
+
 #include "simple_local_flags.inc"
 contains
+
 
     ! This function takes in input an image and gives in output another image
     ! with smaller size in which are discarded about 4% of the borders. It
@@ -228,7 +234,7 @@ contains
     !              the selected pixel and all the others
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
-    function pixels_dist( px, vec, which) result( dist )
+    function pixels_dist_1( px, vec, which) result( dist )
         integer, intent(in)           :: px(3)
         integer, intent(in)           :: vec(:,:)
         character(len=*),  intent(in) :: which
@@ -241,21 +247,21 @@ contains
         enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.))
         case('min')
-            dist =  minval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.), mask)
+            dist =  minval(sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.), mask)
         case('sum')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+            dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.))
         case DEFAULT
             write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
-            THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
+            THROW_HARD('Unsupported pixels_dist kind; pixels_dist_1')
         end select
-    end function pixels_dist
+    end function pixels_dist_1
 
-    function points_dist( px, vec, which) result( dist )
-        real,    intent(in)           :: px(3)
-        real, intent(in)           :: vec(:,:)
-        character(len=*),  intent(in) :: which
+    function pixels_dist_2( px, vec, which) result( dist )
+        real, intent(in)             :: px(3)
+        real, intent(in)             :: vec(:,:)
+        character(len=*), intent(in) :: which
         logical :: mask(size(vec, dim = 2))
         real    :: dist
         integer :: i
@@ -272,10 +278,10 @@ contains
         case('sum')
             dist =  sum(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
         case DEFAULT
-            write(logfhandle,*) 'Points_dist kind: ', trim(which)
-            THROW_HARD('Unsupported pixels_dist kind; pixels_dist')
+            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
+            THROW_HARD('Unsupported pixels_dist kind; pixels_dist_2')
         end select
-    end function points_dist
+    end function pixels_dist_2
 
     ! This function calculates the longest dimension of the biggest connected
     ! component in the image img. Img is supposed to be either a binary
