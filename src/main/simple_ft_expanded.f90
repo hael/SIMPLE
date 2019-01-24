@@ -71,8 +71,9 @@ contains
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
+        real    :: lp_nyq
         integer :: h,k,l,i,hcnt,kcnt,lcnt
-        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
+        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3),flims_nyq(3,2)
         logical :: didft
         ! kill pre-existing object
         call self%kill
@@ -81,13 +82,17 @@ contains
         if( self%ldim(3) > 1 ) THROW_HARD('only 4 2D images; new_1')
         self%smpd = img%get_smpd()
         self%hp   = hp
-        self%lp   = lp
+        lp_nyq    = 2.*self%smpd
+        self%lp   = max(lp, lp_nyq)
         self%lims = img%loop_lims(1,lp)
+        flims_nyq = img%loop_lims(1,lp_nyq)
         ! shift the limits 2 make transfer 2 GPU painless
         self%flims = 1
         do i=1,3
             self%flims(i,2) = self%lims(i,2) - self%lims(i,1) + 1
+            flims_nyq(i,2)  = flims_nyq(i,2) - flims_nyq(i,1) + 1
         end do
+        flims_nyq(:,1) = 1
         ! set the squared filter limits
         hplim = img%get_find(hp)
         hplim = hplim*hplim
@@ -145,9 +150,9 @@ contains
         if( didft ) call img%ifft()
         ! allocate class variables
         if( .not. allocated(ft_exp_tmpmat_re_2d) )then
-            allocate( ft_exp_tmpmat_re_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
-                      ft_exp_tmpmat_im_2d( 1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
-                      ft_exp_tmp_cmat12(   1:self%ldim(1), 1:self%ldim(2), nthr_glob ),&
+            allocate( ft_exp_tmpmat_re_2d( 1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
+                      ft_exp_tmpmat_im_2d( 1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
+                      ft_exp_tmp_cmat12(   1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
                       stat=alloc_stat )
             if(alloc_stat/=0)call allocchk("In: new_1; simple_ft_expanded, 3")
         end if
@@ -157,30 +162,6 @@ contains
         endif
         self%existence = .true.
     end subroutine new
-
-    ! subroutine new_2( self, ldim, smpd, hp, lp )
-    !     class(ft_expanded), intent(inout) :: self
-    !     integer,            intent(in)    :: ldim(3)
-    !     real,               intent(in)    :: smpd
-    !     real,               intent(in)    :: hp
-    !     real,               intent(in)    :: lp
-    !     type(image) :: img
-    !     call img%new(ldim,smpd)
-    !     img = cmplx(0.,0.)
-    !     call self%new_1(img, hp, lp)
-    !     call img%kill
-    ! end subroutine new_2
-
-    ! subroutine new_3( self, self_in )
-    !     class(ft_expanded), intent(inout) :: self
-    !     class(ft_expanded), intent(in)    :: self_in
-    !     if( self_in%existence )then
-    !         call self%new_2(self_in%ldim, self_in%smpd, self_in%hp, self_in%lp)
-    !         self%cmat = cmplx(0.,0.)
-    !     else
-    !         THROW_HARD('self_in does not exists; new_3')
-    !     endif
-    ! end subroutine new_3
 
     ! GETTERS
 

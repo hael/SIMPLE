@@ -38,7 +38,7 @@ end type cluster3D_refine_commander
 
 contains
 
-    ! !> for distributed
+    ! !> for distributed CLEANUP2D with two-stage autoscaling
     subroutine exec_cleanup2D( self, cline )
         use simple_commander_distr_wflows, only: cluster2D_distr_commander,scale_project_distr_commander
         use simple_procimgfile,            only: random_selection_from_imgfile, random_cls_from_imgfile
@@ -327,7 +327,7 @@ contains
                 &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
             call spproj%kill
             scale_stage1 = cline_scale1%get_rarg('scale')
-            scaling      = trim(projfile_sc) /= trim(orig_projfile)
+            scaling      = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
                 call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
                 call xscale_distr%execute( cline_scale1 )
@@ -396,7 +396,7 @@ contains
                 &cline_cluster2D_stage2, cline_scale2, dir=trim(STKPARTSDIR))
             call spproj%kill
             scale_stage2 = cline_scale2%get_rarg('scale')
-            scaling      = trim(projfile_sc) /= orig_projfile
+            scaling      = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
                 call xscale_distr%execute( cline_scale2 )
                 ! rename scaled projfile and stash original project file
