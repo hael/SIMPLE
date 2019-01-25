@@ -133,8 +133,7 @@ real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpenes
                                                        !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
-real,    parameter :: BSC3D                = 20.       !< for shell-weighted 3D reconstruction (shellw), used in B-factor calculation
-real,    parameter :: BSC2D                = 15.       !< for shell-weighted 2D reconstruction (shellw), used in B-factor calculation
+real,    parameter :: BSC                  = 1.        !< for shell-weighting, used in B-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -152,6 +151,7 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 
 ! weighting scheme
+logical, parameter :: SOFT_PTCL_WEIGHTS    = .false.   !< soft (as opposed to hard) particles weights based on specscore
 logical, parameter :: WEIGHT_SCHEME_GLOBAL = .false.   !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 

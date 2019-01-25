@@ -113,7 +113,11 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SETUP WEIGHTS
-        call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        if( SOFT_PTCL_WEIGHTS )then
+            call build_glob%spproj_field%calc_soft_weights
+        else
+            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        endif
 
         ! READ FOURIER RING CORRELATIONS
         if( params_glob%nstates.eq.1 )then

@@ -15,6 +15,7 @@ interface moment
     module procedure moment_1
     module procedure moment_2
     module procedure moment_3
+    module procedure moment_4
 end interface
 
 interface pearsn
@@ -27,6 +28,7 @@ interface normalize
     module procedure normalize_1
     module procedure normalize_2
     module procedure normalize_3
+    module procedure normalize_4
 end interface
 
 interface normalize_sigm
@@ -181,11 +183,56 @@ contains
         endif
     end subroutine moment_3
 
+    !>    given a 1D real array of data, this routine returns its mean: _ave_,
+    !!          standard deviation: _sdev_, and variance: _var_
+    !! \param data input data
+    !! \param ave,sdev,var  Geometric average,   standard deviation  and variance
+    subroutine moment_4( data, ave, sdev, var, err, mask )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
+        real,    intent(out) :: ave, sdev, var
+        logical, intent(out) :: err !< error status
+        real,    intent(in)  :: data(:)
+        logical, intent(in)  :: mask(:)
+        integer :: n, i, sz
+        real    :: ep, nr, dev
+        err = .false.
+        sz  = size(data)
+        if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
+        n   = count(mask)
+        nr  = real(n)
+        if( n <= 1 ) THROW_HARD('n must be at least 2; moment_4')
+        ! calc average
+        ave = sum(data, mask=mask)/nr
+        ! calc sum of devs and sum of devs squared
+        ep  = 0.
+        var = 0.
+        !$omp parallel do default(shared) private(i,dev) schedule(static)&
+        !$omp reduction(+:ep,var) proc_bind(close)
+        do i=1,sz
+            if( mask(i) )then
+                dev = data(i) - ave
+                ep  = ep + dev
+                var = var + dev*dev
+            endif
+        end do
+        !$omp end parallel do
+        var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        sdev = 0.
+        if( var > 0. ) sdev = sqrt(var)
+        if( abs(var) < TINY )then
+            err  = .true.
+            ave  = 0.
+            sdev = 0.
+            var  = 0.
+        endif
+    end subroutine moment_4
+
     !>    is for statistical normalization of an array
     subroutine normalize_1( arr, err )
         real, intent(inout)  :: arr(:)           !< input data
-        real                 :: ave, sdev, var   !< temp stats
         logical, intent(out) :: err              !< error status
+        real :: ave, sdev, var
         call moment_1( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
@@ -193,9 +240,9 @@ contains
 
     !>    is for statistical normalization of a 2D matrix
     subroutine normalize_2( arr, err )
-        real, intent(inout)  :: arr(:,:)         !< input data
-        real                 :: ave, sdev, var   !< temp stats
+        real,    intent(inout)  :: arr(:,:)      !< input data
         logical, intent(out) :: err              !< error status
+        real :: ave, sdev, var
         call moment_2( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
@@ -204,12 +251,23 @@ contains
     !>    is for statistical normalization of a 3D matrix
     subroutine normalize_3( arr, err )
         real, intent(inout)  :: arr(:,:,:)       !< input data
-        real                 :: ave, sdev, var   !< temp stats
         logical, intent(out) :: err              !< error status
+        real :: ave, sdev, var
         call moment_3( arr, ave, sdev, var, err )
         if( err ) return
         arr = (arr-ave)/sdev ! array op
     end subroutine normalize_3
+
+    !>    is for statistical normalization of an array
+    subroutine normalize_4( arr, err, mask )
+        real, intent(inout)  :: arr(:)           !< input data
+        logical, intent(out) :: err              !< error status
+        logical, intent(in)  :: mask(:)          !< logical mask
+        real :: ave, sdev, var
+        call moment_4( arr, ave, sdev, var, err, mask )
+        if( err ) return
+        where( mask ) arr = (arr-ave)/sdev ! array op
+    end subroutine normalize_4
 
     !>    is for sigmoid normalisation [0,1]
     subroutine normalize_sigm_1( arr )
@@ -609,12 +667,17 @@ contains
     end function mad_gau
 
     ! the Z-score calculates the number of standard deviations a data point is away from the mean
-    function z_scores( x ) result( zscores )
-        real, intent(in)  :: x(:) ! data points
+    function z_scores( x, mask ) result( zscores )
+        real,              intent(in) :: x(:) ! data points
+        logical, optional, intent(in) :: mask(:)
         real, allocatable :: zscores(:)
         logical :: err
         allocate(zscores(size(x)), source=x)
-        call normalize(zscores, err)
+        if( present(mask) )then
+            call normalize(zscores, err, mask)
+        else
+            call normalize(zscores, err)
+        endif
     end function z_scores
 
     ! the Z-score calculates the number of standard deviations a data point is away from the mean

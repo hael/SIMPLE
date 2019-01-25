@@ -161,8 +161,7 @@ contains
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
-        integer              :: nprojs, iptcl, icls, j
-        integer              :: noris, ncls
+        integer              :: nprojs, iptcl, icls, j, noris, ncls
         real,    allocatable :: clustszs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
@@ -199,7 +198,6 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF DF             :', (sdevd+sdevd2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM DF                           :', (mind+mind2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM DF                           :', (maxd+maxd2)/2.
-                goto 999
             endif
             if( params%classtats .eq. 'yes' )then
                 noris = build%spproj_field%get_noris()
@@ -298,10 +296,17 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF TRS :', (sdevd+sdevd2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM TRS               :', (mind+mind2)/2.
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM TRS               :', (maxd+maxd2)/2.
-                goto 999
+            endif
+            if( params%specstats .eq. 'yes' )then
+                call build%spproj_field%stats('specscore', avgd, sdevd, vard, err )
+                call build%spproj_field%minmax('specscore', mind, maxd)
+                write(logfhandle,'(a,1x,f8.2)') 'AVERAGE SPECSCORE              :', avgd
+                write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF SPECSCORE:', sdevd
+                write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SPECSCORE (WORST)      :', mind
+                write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
             endif
         endif
-        999 call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
     !> convert rotation matrix to orientation oris class

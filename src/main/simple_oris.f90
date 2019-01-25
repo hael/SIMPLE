@@ -152,6 +152,7 @@ type :: oris
     procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_weights
+    procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec
     procedure          :: calc_bfac_srch
@@ -2287,37 +2288,24 @@ contains
         call reverse(inds)
     end function order_cls
 
-    subroutine calc_bfac_rec( self, is_2d )
+    subroutine calc_bfac_rec( self )
         class(oris),       intent(inout) :: self
-        logical, optional, intent(in)    :: is_2d
-        real,    allocatable :: states(:),scores(:)
+        real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
-        real    :: avg, sdev, BSC_here, score
+        real    :: avg, sdev, score
         integer :: i
-        BSC_here = BSC3D
-        if(present(is_2d))then
-            if( is_2d )BSC_here = BSC2D
-        endif
         if( self%isthere('specscore') )then
             states = self%get_all('state')
-            mask   = states > 0.5
             scores = self%get_all('specscore')
+            mask   = states > 0.5 .and. scores > TINY
+            scores = scores * 100. ! Frealign definition
             avg    = sum(scores, mask=mask) / real(count(mask))
-            ! centering
-            where(mask) scores = scores - avg
-            sdev = sqrt( sum(scores*scores, mask=mask) / real(count(mask)) )
-            if( sdev < 1.e-6 )then
-                call self%delete_entry('bfac_rec')
-            else
-                do i=1,self%n
-                    if(.not.mask(i))cycle
-                    ! normalization & sign change for logistic function
-                    score = -scores(i) / sdev
-                    ! logistic function and scaling
-                    score = BSC_here * (1. / (1.+exp(-score)))
-                    call self%set(i, 'bfac_rec', score )
-                enddo
-            endif
+            where(mask)
+                scores = (scores - avg) * BSC
+            elsewhere
+                scores = 0.
+            endwhere
+            call self%set_all('bfac_rec', scores)
             deallocate(mask,states,scores)
         else
             call self%delete_entry('bfac_rec')
@@ -2430,6 +2418,23 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights
+
+    !>  \brief  calculates soft weights based on specscore
+    subroutine calc_soft_weights( self )
+        class(oris), intent(inout) :: self
+        real, allocatable :: specscores(:), states(:), weights(:)
+        real :: minw
+        specscores = self%get_all('specscore')
+        states     = self%get_all('state')
+        weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
+        minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
+        where( specscores > TINY .and. states > 0.5 )
+            weights = weights + abs(minw)
+        elsewhere
+            weights = 0.
+        endwhere
+        call self%set_all('w', weights)
+    end subroutine calc_soft_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights2D( self, frac, ncls )

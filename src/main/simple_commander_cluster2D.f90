@@ -79,7 +79,7 @@ contains
         ! setup weights in case the 2D was run without them (specscore will still be there)
         call build%spproj_field%set_all2single('w', 1.0)
         ! shell weighted classes
-        if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec(is_2d=.true.)
+        if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write

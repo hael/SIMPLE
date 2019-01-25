@@ -76,6 +76,7 @@ type :: parameters
     character(len=3)      :: shellw='no'          !< to use shell weighted reconstruction (yes|no){yes}
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
+    character(len=3)      :: specstats='no'
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: subtr_backgr='no'
@@ -550,6 +551,7 @@ contains
         call check_carg('shellw',         self%shellw)
         call check_carg('soften',         self%soften)
         call check_carg('speckind',       self%speckind)
+        call check_carg('specstats',      self%specstats)
         call check_carg('stats',          self%stats)
         call check_carg('stream',         self%stream)
         call check_carg('subtr_backgr',   self%subtr_backgr)

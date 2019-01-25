@@ -160,6 +160,11 @@ interface mode
     module procedure mode_2
 end interface mode
 
+interface otsu
+    module procedure otsu_1
+    module procedure otsu_2
+end interface otsu
+
 contains
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
@@ -2045,23 +2050,22 @@ contains
         enddo
     end subroutine vis_3Dinteger_mat
 
-    !This function simply calculates the mode of an array,
-    !I don't know if it has already been implemented in SIMPLE.
-    subroutine mode_1(arr, m, npxls_at_mode)   !INTEGER VECTORS
-        integer, intent(in)  :: arr(:)
-        integer, intent(out) :: m !mode
+    ! calculates the mode of an array
+    subroutine mode_1( arr, m, npxls_at_mode )
+        integer,           intent(in)  :: arr(:)
+        integer,           intent(out) :: m ! mode
         integer, optional, intent(out) :: npxls_at_mode
         integer, allocatable :: counts(:)
-        integer :: i
-        ! Initialise array to count occurrences of each value.
-        allocate(counts(minval(arr):maxval(arr)), source = 0)
-        counts = 0
-        ! Loop over inputted array, counting occurrence of each value.
+        integer :: i, loc(1)
+        ! initialise array to count occurrences of each value
+        allocate(counts(minval(arr):maxval(arr)), source=0)
+        ! loop over inputted array, counting occurrence of each value
         do i=1,size(arr)
             counts(arr(i)) = counts(arr(i)) + 1
         end do
         ! Find the mode
-        m = minloc(abs(counts - maxval(counts)),1)
+        loc = maxloc(counts)
+        m   = loc(1)
         if(present(npxls_at_mode)) npxls_at_mode = maxval(counts)
     end subroutine mode_1
 
@@ -2094,11 +2098,9 @@ contains
         if(present(npxls_at_mode)) npxls_at_mode = maxval(yhist)
     end subroutine mode_2
 
-    !!!!!!!!!!!!!!!ADDED BY CHIARAAAA!!!!!!!!!!!!
-    !This function takes in input a vector x and an integer n.
-    !It stores in xhist the discretisation of the values in x
-    !performed dividing it in n intervals and the correspondent
-    !number of occurrences in yhist.
+    ! takes in input a vector x and an integer n
+    ! stores in xhist the discretisation of the values in x
+    ! returns the number of occurences in yhist
     subroutine create_hist_vector(x,n,xhist,yhist)
         real,                 intent(in)  :: x(:)     !data
         integer,              intent(in)  :: n        !number of intervals
@@ -2153,91 +2155,95 @@ contains
         stretch_lim(2) = xhist(i)
     end subroutine find_stretch_minmax
 
-    ! This subroutine rescales the vector to a new input range.
-    subroutine scale_vector(x, new_range)
-          real, intent(inout) :: x(:)
-          real, intent(in)    :: new_range(2)
-          real :: old_range(2), sc
-          old_range(1) = minval(x)
-          old_range(2) = maxval(x)
-          sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
-          x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
+    ! rescales the vector to a new input range
+    subroutine scale_vector( x, new_range )
+        real, intent(inout) :: x(:)
+        real, intent(in)    :: new_range(2)
+        real :: old_range(2), sc
+        old_range(1) = minval(x)
+        old_range(2) = maxval(x)
+        sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
+        x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
     end subroutine scale_vector
 
 
-        !This subroutine performs otsu.
-        !It has been implemented according to what's written in
-        !Camelot slides.
-        subroutine otsu(x,x_out,thresh)
-          real,              intent(inout) :: x(:)
-          real, allocatable, intent(out)   :: x_out(:)
-          real, optional, intent(out)   :: thresh  !selected threshold for binarisation
-          integer            :: i, T
-          integer, parameter :: MIN_VAL = 0, MAX_VAL = 255
-          real,  allocatable :: p(:)
-          real :: q1, q2, m1, m2
-          real :: sigma1, sigma2
-          real :: sigma, sigma_next
-          real :: sum1, sum2
-          real :: threshold !threshold for binarisation
-          real,    allocatable :: xhist(:)
-          integer, allocatable :: yhist(:)
-          call scale_vector(x,real([MIN_VAL,MAX_VAL]))
-          allocate(x_out(size(x)), source = 0.)
-          allocate(p(MIN_VAL:MAX_VAL), source = 0.)
-          call create_hist_vector(x, MAX_VAL-MIN_VAL+1 ,xhist,yhist)
-          do i = MIN_VAL, MAX_VAL
-              p(i) = yhist(i+1)
-          enddo
-          deallocate(xhist,yhist)
-          p = p/size(x, dim = 1) !normalise, it's a probability
-          q1 = 0.
-          q2 = sum(p)
-          sum1 = 0.
-          sum2 = 0.
-          do i = MIN_VAL, MAX_VAL
-            sum2 = sum2 + i*p(i)
-          enddo
-          sigma = HUGE(sigma) !initialisation, to get into the loop
-          !FOLLOWING it
-          do T = MIN_VAL, MAX_VAL-1
-              q1 = q1 + p(T)
-              q2 = q2 - p(T)
-              sum1 = sum1 + T*p(T)
-              sum2 = sum2 - T*p(T)
-              m1 = sum1/q1
-              m2 = sum2/q2
+    ! Otsu's method
+    ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
+    ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
+    subroutine otsu_1( x, thresh )
+        real, intent(inout) :: x(:)
+        real, intent(out)   :: thresh ! threshold for binarisation
+        integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255
+        integer :: i, T
+        real    :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
+        real,    allocatable :: p(:), xhist(:)
+        integer, allocatable :: yhist(:)
+        call scale_vector(x,real([MIN_VAL,MAX_VAL]))
+        allocate(p(MIN_VAL:MAX_VAL), source=0.)
+        call create_hist_vector(x, MAX_VAL-MIN_VAL+1, xhist, yhist)
+        do i = MIN_VAL, MAX_VAL
+            p(i) = yhist(i+1)
+        enddo
+        deallocate(xhist,yhist)
+        p    = p / size(x, dim = 1) ! normalise, it's a probability
+        q1   = 0.
+        q2   = sum(p)
+        sum1 = 0.
+        sum2 = 0.
+        do i = MIN_VAL, MAX_VAL
+            sum2 = sum2 + i * p(i)
+        enddo
+        sigma = HUGE(sigma) ! initialisation, to get into the loop
+        do T = MIN_VAL, MAX_VAL - 1
+          q1   = q1 + p(T)
+          q2   = q2 - p(T)
+          sum1 = sum1 + T*p(T)
+          sum2 = sum2 - T*p(T)
+          m1   = sum1/q1
+          m2   = sum2/q2
+          sigma1 = 0.
+          if( T > MIN_VAL )then ! do not know if it is necessary
+              do i = MIN_VAL, T
+                  sigma1 = sigma1 + (i - m1)**2 * p(i)
+              enddo
+          else
               sigma1 = 0.
-              if(T > MIN_VAL) then  !do not know if it is necessary
-                  do i = MIN_VAL, T
-                      sigma1 = sigma1 + (i-m1)**2*p(i)
-                  enddo
-              else
-                  sigma1 = 0.
-              endif
-              sigma1 = sigma1/q1
+          endif
+          sigma1 = sigma1 / q1
+          sigma2 = 0.
+          if( T < MAX_VAL - 1 )then
+              do i = T + 1, MAX_VAL
+                  sigma2 = sigma2 + (i - m2)**2 * p(i)
+              enddo
+          else
               sigma2 = 0.
-              if(T < MAX_VAL-1) then
-                  do i = T+1, MAX_VAL
-                      sigma2 = sigma2 + (i-m2)**2*p(i)
-                  enddo
-              else
-                  sigma2 = 0.
-              endif
-              sigma2 = sigma2/q2
-              sigma_next = q1*sigma1 +q2*sigma2
-              if(sigma_next < sigma .and. T > MIN_VAL) then
-                  threshold = T !keep the minimum
-                  sigma = sigma_next
-              elseif(T == MIN_VAL) then
-                  sigma = sigma_next
-              endif
-          enddo
-          if(present(thresh)) thresh = threshold
-          where(x > threshold)
-              x_out = 1.
-          elsewhere
-              x_out = 0.
-          endwhere
-        end subroutine otsu
+          endif
+          sigma2 = sigma2 / q2
+          sigma_next = q1 * sigma1 + q2 * sigma2
+          if( sigma_next < sigma .and. T > MIN_VAL )then
+              thresh = T ! keep the minimum
+              sigma  = sigma_next
+          elseif( T == MIN_VAL )then
+              sigma = sigma_next
+          endif
+        enddo
+    end subroutine otsu_1
+
+    ! Otsu's method, see above
+    subroutine otsu_2(x, x_out, thresh)
+        real,              intent(inout) :: x(:)
+        real, allocatable, intent(out)   :: x_out(:)
+        real, optional,    intent(out)   :: thresh  !selected threshold for binarisation
+        real :: threshold ! threshold for binarisation
+        call otsu_1(x, threshold)
+        if( allocated(x_out) ) deallocate(x_out)
+        allocate(x_out(size(x)), source=0.)
+        where(x > threshold)
+            x_out = 1.
+        elsewhere
+            x_out = 0.
+        endwhere
+        if(present(thresh)) thresh = threshold
+    end subroutine otsu_2
+
 end module simple_math
