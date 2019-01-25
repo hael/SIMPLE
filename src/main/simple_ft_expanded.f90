@@ -84,7 +84,7 @@ contains
         self%hp   = hp
         lp_nyq    = 2.*self%smpd
         self%lp   = max(lp, lp_nyq)
-        self%lims = img%loop_lims(1,lp)
+        self%lims = img%loop_lims(1,self%lp)
         flims_nyq = img%loop_lims(1,lp_nyq)
         ! shift the limits 2 make transfer 2 GPU painless
         self%flims = 1
