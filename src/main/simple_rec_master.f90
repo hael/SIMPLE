@@ -67,11 +67,11 @@ contains
     end subroutine exec_eorec_distr
 
     subroutine exec_rec_soft( cline, which_iter )
-        use simple_strategy3D_matcher, only: read_o_peaks, calc_3Drec
+        use simple_strategy3D_matcher, only: setup_weights_read_o_peaks, calc_3Drec
         use simple_cmdline,            only: cmdline
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
-        call read_o_peaks
+        call setup_weights_read_o_peaks
         call calc_3Drec( cline, which_iter )
     end subroutine exec_rec_soft
 

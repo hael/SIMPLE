@@ -35,7 +35,7 @@ use simple_convergence,              only: convergence
 use simple_euclid_sigma,             only: euclid_sigma
 implicit none
 
-public :: refine3D_exec, preppftcc4align, pftcc, read_o_peaks, calc_3Drec
+public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks, calc_3Drec
 private
 #include "simple_local_flags.inc"
 
@@ -727,10 +727,18 @@ contains
         end select
     end subroutine calc_3Drec
 
-    subroutine read_o_peaks
+    subroutine setup_weights_read_o_peaks
         integer :: iptcl, n_nozero, i
         ! set npeaks
         npeaks = NPEAKS2REFINE
+        ! particle weights
+        if( SOFT_PTCL_WEIGHTS )then
+            call build_glob%spproj_field%calc_soft_weights
+        else
+            call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
+        endif
+        ! B-factor weighted reconstruction
+        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec
         ! prepare particle mask
         nptcls2update = params_glob%top - params_glob%fromp + 1
         allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
@@ -747,6 +755,6 @@ contains
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
         end do
         call close_o_peaks_io
-    end subroutine read_o_peaks
+    end subroutine setup_weights_read_o_peaks
 
 end module simple_strategy3D_matcher
