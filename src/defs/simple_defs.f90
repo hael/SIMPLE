@@ -133,7 +133,7 @@ real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpenes
                                                        !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
-real,    parameter :: BSC                  = 1.        !< for shell-weighting, used in B-factor calculation
+real,    parameter :: BSC                  = 2.        !< for shell-weighting, used in B-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
