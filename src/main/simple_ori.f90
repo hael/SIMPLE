@@ -26,6 +26,8 @@ type :: ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
     procedure          :: delete_2Dclustering
+    procedure          :: transfer_2Dparams
+    procedure          :: transfer_3Dparams
     procedure          :: set_euler
     procedure          :: e1set
     procedure          :: e2set
@@ -181,6 +183,34 @@ contains
         call self%htab%delete('corr')
         call self%htab%delete('frac')
     end subroutine delete_2Dclustering
+
+    subroutine transfer_2Dparams( self_out, self_in )
+        class(ori), intent(inout) :: self_out
+        class(ori), intent(in)    :: self_in
+        call self_out%htab%set('class',    self_in%htab%get('class'))
+        call self_out%htab%set('corr',     self_in%htab%get('corr'))
+        call self_out%htab%set('frac',     self_in%htab%get('frac'))
+        call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+        call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
+        call self_out%htab%set('bfac',     self_in%htab%get('bfac'))
+        call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        call self_out%set_euler(self_in%get_euler())
+        call self_out%set_shift(self_in%get_2Dshift())
+    end subroutine transfer_2Dparams
+
+    subroutine transfer_3Dparams( self_out, self_in )
+        class(ori), intent(inout) :: self_out
+        class(ori), intent(in)    :: self_in
+        call self_out%htab%set('proj',     self_in%htab%get('proj'))
+        call self_out%htab%set('corr',     self_in%htab%get('corr'))
+        call self_out%htab%set('frac',     self_in%htab%get('frac'))
+        call self_out%htab%set('specscore',self_in%htab%get('specscore'))
+        call self_out%htab%set('updatecnt',self_in%htab%get('updatecnt'))
+        call self_out%htab%set('bfac',     self_in%htab%get('bfac'))
+        call self_out%htab%set('eo',       self_in%htab%get('eo'))
+        call self_out%set_euler(self_in%get_euler())
+        call self_out%set_shift(self_in%get_2Dshift())
+    end subroutine transfer_3Dparams
 
     !>  \brief  is a setter
     subroutine set_euler( self, euls )
@@ -463,7 +493,7 @@ contains
 
     !>  \brief  is a getter
     function get_2Dshift( self ) result( vec )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in) :: self
         real :: vec(2)
         vec(1) = self%htab%get('x')
         vec(2) = self%htab%get('y')
@@ -471,7 +501,7 @@ contains
 
     !>  \brief  is a getter
     function get_3Dshift( self ) result( vec )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in) :: self
         real :: vec(3)
         vec(1) = self%htab%get('x')
         vec(2) = self%htab%get('y')
@@ -480,7 +510,7 @@ contains
 
     !>  \brief  is a getter
     function get_2Dshift_incr( self ) result( vec )
-        class(ori), intent(inout) :: self
+        class(ori), intent(in) :: self
         real :: vec(2)
         vec(1) = self%htab%get('xincr')
         vec(2) = self%htab%get('yincr')

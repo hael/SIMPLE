@@ -71,6 +71,8 @@ contains
     procedure          :: get_n_insegment
     procedure          :: get_nptcls
     procedure          :: get_box
+    procedure          :: has_boxcoords
+    procedure          :: get_boxcoords
     procedure          :: get_smpd
     procedure          :: get_nmovies
     procedure          :: get_nintgs
@@ -92,6 +94,7 @@ contains
     procedure          :: map2ptcls_state
     procedure          :: gen_ptcls_subset
     procedure          :: report_state2stk
+    procedure          :: set_boxcoords
     ! I/O
     ! printers
     procedure          :: print_info
@@ -542,10 +545,10 @@ contains
         else
             prev_ctfvars = self%get_micparams(1)
             if( ctfvars%ctfflag /= prev_ctfvars%ctfflag ) THROW_HARD('CTF infos do not match! add_movies')
-            if( ctfvars%smpd    /= prev_ctfvars%smpd    ) THROW_HARD('The sampling distances do not match! add_movies')
-            if( ctfvars%cs      /= prev_ctfvars%cs      ) THROW_HARD('The spherical aberrations do not match! add_movies')
-            if( ctfvars%kv      /= prev_ctfvars%kv      ) THROW_HARD('The voltages do not match! add_movies')
-            if( ctfvars%fraca   /= prev_ctfvars%fraca   ) THROW_HARD('The amplitude contrasts do not match! add_movies')
+            if( .not.is_equal(ctfvars%smpd, prev_ctfvars%smpd )) THROW_HARD('The sampling distances do not match! add_movies')
+            if( .not.is_equal(ctfvars%cs,   prev_ctfvars%cs   )) THROW_HARD('The spherical aberrations do not match! add_movies')
+            if( .not.is_equal(ctfvars%kv,   prev_ctfvars%kv   )) THROW_HARD('The voltages do not match! add_movies')
+            if( .not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('The amplitude contrasts do not match! add_movies')
             if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! add_movies')
             call os_ptr%reallocate(ntot)
         endif
@@ -626,10 +629,10 @@ contains
             endif
             ! previous micrographs parameters
             prev_ctfvars = self%os_mic%get_ctfvars(1)
-            if(ctfvars%smpd    /= prev_ctfvars%smpd ) THROW_HARD('Inconsistent sampling distance; add_intgs')
-            if(ctfvars%cs      /= prev_ctfvars%cs   ) THROW_HARD('Inconsistent spherical aberration; add_intgs')
-            if(ctfvars%kv      /= prev_ctfvars%kv   ) THROW_HARD('Inconsistent voltage; add_intgs')
-            if(ctfvars%fraca   /= prev_ctfvars%fraca) THROW_HARD('Inconsistent amplituce contrast; add_intgs')
+            if(.not.is_equal(ctfvars%smpd, prev_ctfvars%smpd )) THROW_HARD('Inconsistent sampling distance; add_intgs')
+            if(.not.is_equal(ctfvars%cs,   prev_ctfvars%cs   )) THROW_HARD('Inconsistent spherical aberration; add_intgs')
+            if(.not.is_equal(ctfvars%kv,   prev_ctfvars%kv   )) THROW_HARD('Inconsistent voltage; add_intgs')
+            if(.not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('Inconsistent amplituce contrast; add_intgs')
             if(ctfvars%ctfflag /= prev_ctfvars%ctfflag) THROW_HARD('Incompatible CTF flag; add_intgs')
             if(ctfvars%l_phaseplate .neqv. prev_ctfvars%l_phaseplate ) THROW_HARD('Incompatible phaseplate info; add_intgs')
         endif
@@ -660,7 +663,7 @@ contains
                 THROW_HARD('Not the interface for adding movies; add_intgs')
             endif
             if( nprev_intgs > 0 )then
-                if( intg_smpd /= prev_ctfvars%smpd )then
+                if( .not.is_equal(intg_smpd,prev_ctfvars%smpd) )then
                     THROW_HARD('Incompatible sampling distance: '//trim(micnames(cnt))//'; add_intgs')
                 endif
             endif
@@ -744,20 +747,6 @@ contains
             endif
         enddo
     end subroutine get_mics_table
-
-    subroutine get_stks_table( self, stkstab )
-        class(sp_project),                      intent(inout) :: self
-        character(len=LONGSTRLEN), allocatable, intent(out)   :: stkstab(:)
-        integer :: i,n,cnt
-        if(allocated(stkstab))deallocate(stkstab)
-        n = self%get_nstks()
-        if( n==0 )return
-        allocate(stkstab(n))
-        cnt = 0
-        do i=1,n
-            stkstab(i) = self%os_stk%get_static(i,'stk')
-        enddo
-    end subroutine get_stks_table
 
     function get_micparams( self, imic ) result( ctfvars )
         class(sp_project), intent(inout) :: self
@@ -1677,6 +1666,26 @@ contains
         get_box = nint( self%os_stk%get(1,'box') )
     end function get_box
 
+    logical function has_boxcoords(self, iptcl)
+        class(sp_project), target, intent(in) :: self
+        integer,                   intent(in) :: iptcl
+        has_boxcoords = .false.
+        if( self%os_ptcl2D%isthere(iptcl,'xpos') .and. self%os_ptcl2D%isthere(iptcl,'ypos'))then
+            has_boxcoords = .true.
+        endif
+    end function has_boxcoords
+
+    subroutine get_boxcoords( self, iptcl, coords )
+        class(sp_project), target, intent(in)  :: self
+        integer,                   intent(in)  :: iptcl
+        integer,                   intent(out) :: coords(2)
+        coords = 0
+        if( self%has_boxcoords(iptcl) )then
+            coords(1) = nint(self%os_ptcl2D%get(iptcl,'xpos'))
+            coords(2) = nint(self%os_ptcl2D%get(iptcl,'ypos'))
+        endif
+    end subroutine get_boxcoords
+
     real function get_smpd( self )
         class(sp_project), target, intent(inout) :: self
         integer :: n_os_stk
@@ -2403,6 +2412,13 @@ contains
             enddo
         endif
     end subroutine report_state2stk
+
+    subroutine set_boxcoords( self, iptcl, coords )
+        class(sp_project), target, intent(inout) :: self
+        integer,                   intent(in)    :: iptcl, coords(2)
+        call self%os_ptcl2D%set(iptcl,'xpos',real(coords(1)))
+        call self%os_ptcl2D%set(iptcl,'ypos',real(coords(2)))
+    end subroutine set_boxcoords
 
     ! printers
 

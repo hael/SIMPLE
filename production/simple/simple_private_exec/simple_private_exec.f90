@@ -22,6 +22,7 @@ implicit none
 ! PRE-PROCESSING PROGRAMS
 type(preprocess_commander)            :: xpreprocess
 type(extract_commander)               :: xextract
+type(reextract_commander)             :: xreextract
 type(motion_correct_commander)        :: xmotion_correct
 type(gen_pspecs_and_thumbs_commander) :: xgen_pspecs_and_thumbs
 type(ctf_estimate_commander)          :: xctf_estimate
@@ -173,7 +174,8 @@ select case(prg)
         keys_optional(4)   = 'ctf'
         keys_optional(5)   = 'outfile'
         keys_optional(6)   = 'stream'
-        call cline%parse_oldschool(keys_required(:1), keys_optional(:6))
+        keys_optional(7)   = 'box'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:7))
         ! set defaults
         call cline%set('nthr',1.)
         if( .not. cline%defined('outside')         ) call cline%set('outside',   'no')
@@ -185,6 +187,19 @@ select case(prg)
             endif
         endif
         call xextract%execute(cline)
+    case( 'reextract' )
+        ! executes re-extract
+        keys_required(1)   = 'projfile'
+        keys_required(2)   = 'outfile'
+        ! set optional keys
+        keys_optional(1)   = 'pcontrast'
+        keys_optional(2)   = 'ctf'
+        keys_optional(3)   = 'box'
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
+        ! set defaults
+        call cline%set('nthr',1.)
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        call xreextract%execute(cline)
     case( 'motion_correct' )
         ! for movie alignment
         keys_required(1)  = 'projfile'

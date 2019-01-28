@@ -412,10 +412,10 @@ contains
             endif
             prev_ctfvars = spproj%get_micparams(1)
             if( ctfvars%ctfflag /= prev_ctfvars%ctfflag ) THROW_HARD('CTF infos do not match! exec_import_movies')
-            if( ctfvars%smpd    /= prev_ctfvars%smpd    ) THROW_HARD('The sampling distances do not match! exec_import_movies')
-            if( ctfvars%cs      /= prev_ctfvars%cs      ) THROW_HARD('The spherical aberrations do not match! exec_import_movies')
-            if( ctfvars%kv      /= prev_ctfvars%kv      ) THROW_HARD('The voltages do not match! exec_import_movies')
-            if( ctfvars%fraca   /= prev_ctfvars%fraca   ) THROW_HARD('The amplitude contrasts do not match! exec_import_movies')
+            if( .not.is_equal(ctfvars%smpd, prev_ctfvars%smpd)  ) THROW_HARD('The sampling distances do not match! exec_import_movies')
+            if( .not.is_equal(ctfvars%cs,   prev_ctfvars%cs)   ) THROW_HARD('The spherical aberrations do not match! exec_import_movies')
+            if( .not.is_equal(ctfvars%kv,   prev_ctfvars%kv)   ) THROW_HARD('The voltages do not match! exec_import_movies')
+            if( .not.is_equal(ctfvars%fraca,prev_ctfvars%fraca)) THROW_HARD('The amplitude contrasts do not match! exec_import_movies')
             if( ctfvars%l_phaseplate.neqv.prev_ctfvars%l_phaseplate ) THROW_HARD('Phaseplate infos do not match! exec_import_movies')
         endif
         ! update project info

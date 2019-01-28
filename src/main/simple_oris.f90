@@ -75,6 +75,8 @@ type :: oris
     procedure          :: delete_entry_1
     procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
+    procedure          :: transfer_2Dparams
+    procedure          :: transfer_3Dparams
     procedure          :: set_euler
     procedure          :: set_shift
     procedure          :: set_shift_incr
@@ -1479,6 +1481,20 @@ contains
             call self%o(i)%rnd_ori(trs, eullims)
         end do
     end subroutine rnd_oris
+
+    subroutine transfer_2Dparams( self, i, o_in )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        type(ori),   intent(in)    :: o_in
+        call self%o(i)%transfer_2Dparams(o_in)
+    end subroutine transfer_2Dparams
+
+    subroutine transfer_3Dparams( self, i, o_in )
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: i
+        type(ori),   intent(in)    :: o_in
+        call self%o(i)%transfer_3Dparams(o_in)
+    end subroutine transfer_3Dparams
 
     !>  \brief  generate random projection direction space around a given one
     subroutine rnd_proj_space( self, nsample, o_prev, thres, eullims )

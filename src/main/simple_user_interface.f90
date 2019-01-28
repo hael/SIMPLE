@@ -532,6 +532,7 @@ contains
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') preprocess_stream%name
         write(logfhandle,'(A)') reconstruct3D%name
+        write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
         write(logfhandle,'(A)') refine3D_init%name
         write(logfhandle,'(A)') scale_project%name
@@ -567,7 +568,6 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
-        write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') report_selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
@@ -1145,7 +1145,8 @@ contains
         ! image input/output
         call extract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
         ! parameter input/output
-        call extract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call extract%set_input('parm_ios', 1, box)
+        extract%parm_ios(1)%required = .false.
         call extract%set_input('parm_ios', 2, pcontrast)
         call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
         call extract%set_input('parm_ios', 4, 'ctf', 'binary', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
@@ -2229,18 +2230,19 @@ contains
         ! PROGRAM SPECIFICATION
         call reextract%new(&
         &'reextract', &                                                         ! name
-        &'Re-xtract particle images from integrated movies',&                   ! descr_short
+        &'Re-extract particle images from integrated movies',&                  ! descr_short
         &'is a program for re-extracting particle images from integrated movies based on determined 2D/3D shifts',& ! descr long
-        &'simple_exec',&                                                        ! executable
-        &1, 4, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        &'simple_distr_exec',&                                                  ! executable
+        &0, 4, 0, 0, 0, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call reextract%set_input('img_ios', 1, 'dir_box', 'file', 'Box files directory', 'Directory to read the box files from', 'e.g. boxes/', .false., '')
+        ! <empty>
         ! parameter input/output
-        call reextract%set_input('parm_ios', 1, 'box', 'num', 'Box size', 'Square box size in pixels', 'in pixels', .false., 0.)
+        call reextract%set_input('parm_ios', 1, box)
+        reextract%parm_ios(1)%required = .false.
         call reextract%set_input('parm_ios', 2, oritype)
         call reextract%set_input('parm_ios', 3, pcontrast)
-        call reextract%set_input('parm_ios', 4, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call reextract%set_input('parm_ios', 4, 'ctf', 'binary', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2250,7 +2252,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call reextract%set_input('comp_ctrls', 1, nparts)
     end subroutine new_reextract
 
     subroutine new_reproject

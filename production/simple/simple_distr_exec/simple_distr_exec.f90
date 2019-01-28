@@ -15,6 +15,7 @@ implicit none
 type(preprocess_distr_commander)            :: xpreprocess
 type(preprocess_stream_commander)           :: xpreprocess_stream
 type(extract_distr_commander)               :: xextract_distr
+type(reextract_distr_commander)             :: xreextract_distr
 type(motion_correct_distr_commander)        :: xmotion_correct_distr
 type(gen_pspecs_and_thumbs_distr_commander) :: xgen_pspecs_and_thumbs
 type(motion_correct_tomo_distr_commander)   :: xmotion_correct_tomo_distr
@@ -103,6 +104,14 @@ select case(prg)
             endif
         endif
         call xextract_distr%execute(cline)
+    case( 'reextract' )
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( cline%defined('ctf') )then
+            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
+                THROW_HARD('Only CTF=NO/FLIP are allowed')
+            endif
+        endif
+        call xreextract_distr%execute(cline)
     case( 'motion_correct' )
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)

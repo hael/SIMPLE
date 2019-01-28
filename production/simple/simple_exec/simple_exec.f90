@@ -39,7 +39,6 @@ type(import_starproject_commander)  :: ximport_starproject
 type(report_selection_commander)    :: xreport_selection
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
-type(reextract_commander)      :: xreextract
 type(cluster_cavgs_commander)  :: xcluster_cavgs
 type(symaxis_search_commander) :: xsymsrch
 type(symmetry_test_commander)  :: xsymtst
@@ -146,9 +145,6 @@ select case(prg)
 
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 
-    case( 'reextract' )
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
-        call xreextract%execute(cline)
     case('cluster_cavgs')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xcluster_cavgs%execute(cline)
