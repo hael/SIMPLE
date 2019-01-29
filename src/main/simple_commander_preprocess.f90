@@ -863,7 +863,7 @@ contains
                 do iptcl=1,nptcls
                     if( .not.oris_mask(iptcl) )cycle
                     iptcl_glob = iptcl_glob + 1
-                    call build%spproj%set_boxcoords(iptcl, nint(boxdata(iptcl,1:2)))
+                    call build%spproj%set_boxcoords(iptcl_glob, nint(boxdata(iptcl,1:2)))
                 end do
                 ! clean
                 call boxfile%kill()
