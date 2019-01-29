@@ -133,7 +133,6 @@ real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpenes
                                                        !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
-real,    parameter :: BSC                  = 2.        !< for shell-weighting, used in B-factor calculation
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -154,6 +153,7 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 logical, parameter :: SOFT_PTCL_WEIGHTS    = .false.   !< soft (as opposed to hard) particles weights based on specscore
 logical, parameter :: WEIGHT_SCHEME_GLOBAL = .false.   !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
+real,    parameter :: BFAC_REC_MIN_BOUND   = -50.      !< B-factor left-hand bound for shell-weighting in averaging 2D/3D
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D

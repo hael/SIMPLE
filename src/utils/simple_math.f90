@@ -1095,6 +1095,21 @@ contains
         end do
     end function get_resarr
 
+    subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
+        integer, intent(in)  :: box
+        real,    intent(in)  :: bfac, smpd
+        real,    intent(out) :: kweights(box)
+        real    :: bfac_sc, res
+        integer :: k
+        bfac_sc = bfac / 4.
+        do k=1,box
+            res         = real(k) / (real(box) * smpd)
+            kweights(k) = max(0., exp(-bfac_sc * res * res))
+        end do
+        ! normalize
+        kweights = kweights / sum(kweights)
+    end subroutine calc_norm_bfac_weights
+
     ! LINEAR ALGEBRA STUFF
 
     !>   subroutine to find the inverse of a square matrix

@@ -83,7 +83,6 @@ type :: polarft_corrcalc
     integer                          :: ldim(3)    = 0        !< logical dimensions of original cartesian image
     integer,             allocatable :: pinds(:)              !< index array (to reduce memory when frac_update < 1)
     real(sp),            allocatable :: ptcl_bfac_weights(:,:)!< B-factor per particle array for weighting of the correlation
-    real(sp),            allocatable :: ptcl_bfac_norms(:)    !< normalisation constants for B-factor weighted ccres
     real(sp),            allocatable :: inv_resarrsq(:)       !< memoized -1./(4*res^2) for B-factors calculation
     real(sp),            allocatable :: sqsums_ptcls(:)       !< memoized square sums for the correlation calculations (taken from kfromto(1):kstop)
     real(sp),            allocatable :: angtab(:)             !< table of in-plane angles (in degrees)
@@ -267,10 +266,8 @@ contains
         select case(params_glob%cc_objfun)
             case (OBJFUN_CC, OBJFUN_EUCLID)
             case (OBJFUN_RES)
-                allocate(self%ptcl_bfac_weights(params_glob%kfromto(1):params_glob%kstop, 1:self%nptcls),&
-                    &self%ptcl_bfac_norms(1:self%nptcls))
+                allocate(self%ptcl_bfac_weights(params_glob%kfromto(1):params_glob%kstop, 1:self%nptcls))
                 self%ptcl_bfac_weights = 1.0
-                self%ptcl_bfac_norms   = real(params_glob%kstop - params_glob%kfromto(1) + 1) !< # resolution elements in the band-pass limited PFTs
             case DEFAULT
                 THROW_HARD('unsupported objective function: '//trim(params_glob%objfun)//'; new')
         end select
@@ -755,12 +752,14 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
+        real :: kweights(self%ldim(1))
         if( params_glob%cc_objfun == OBJFUN_CC )then
             ! nothing to do
         else if ( params_glob%cc_objfun == OBJFUN_RES ) then
-            self%ptcl_bfac_weights(:,self%pinds(iptcl)) = exp( bfac * self%inv_resarrsq(:) ) ! exp( -bfac/(4.*res^2) )
-            where( self%ptcl_bfac_weights(:,self%pinds(iptcl)) < TINY) self%ptcl_bfac_weights(:,self%pinds(iptcl)) = 0.
-            self%ptcl_bfac_norms(self%pinds(iptcl)) = sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
+            call calc_norm_bfac_weights(self%ldim(1), bfac, params_glob%smpd, kweights)
+            self%ptcl_bfac_weights(:,self%pinds(iptcl)) = kweights(params_glob%kfromto(1):params_glob%kstop)
+            ! renormalize to avoid keeping track of the norms
+            self%ptcl_bfac_weights(:,self%pinds(iptcl)) = self%ptcl_bfac_weights(:,self%pinds(iptcl)) / sum(self%ptcl_bfac_weights(:,self%pinds(iptcl)))
         else
             ! nothing to do
         end if
@@ -1403,7 +1402,6 @@ contains
             sumsqref  = sum(csq(pft_ref(:,k)))
             cc(:) = cc(:) + (kcorrs(:) * self%ptcl_bfac_weights(k,self%pinds(iptcl))) / sqrt(sumsqref * sumsqptcl)
         end do
-        cc(:) = cc(:) / self%ptcl_bfac_norms(self%pinds(iptcl))
     end subroutine gencorrs_resnorm_2
 
     subroutine gencorrs_resnorm_mir( self, iref, iptcl, cc, cc_mir )
@@ -1842,7 +1840,6 @@ contains
             corrk       = self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), k, irot)
             cc          = cc + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / sqrt(sqsumk_ref * sqsumk_ptcl)
         end do
-        cc = cc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_resnorm_for_rot_8
 
     subroutine gencorr_grad_for_rot_8( self, iref, iptcl, shvec, irot, f, grad )
@@ -1978,8 +1975,6 @@ contains
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), k, irot)
             grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
         end do
-        f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_for_rot_8
 
     function gencorr_cont_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, dcc ) result( cc )
@@ -2042,8 +2037,6 @@ contains
                     &( fdf_T1(k,j) - fdf_yk * fdf_T2(k,j) / sqsumk_ref) / denomk
             end do
         end do
-        cc  = cc  / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        dcc = dcc / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end function gencorr_cont_grad_resnorm_for_rot_8
 
     subroutine gencorr_cont_shift_grad_resnorm_for_rot_8( self, iref, iptcl, shvec, irot, f, grad)
@@ -2113,8 +2106,6 @@ contains
             fdf_yk      = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), k, irot)
             grad(5)     = grad(2) + (fdf_yk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denomk
         end do
-        f       = f       / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
-        grad(:) = grad(:) / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_cont_shift_grad_resnorm_for_rot_8
 
     subroutine gencorr_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -2241,7 +2232,6 @@ contains
             corrk       = self%calc_corrk_for_rot_8(pft_ref_tmp2, self%pinds(iptcl), k, irot)
             grad(2)     = grad(2) + (corrk * real(self%ptcl_bfac_weights(k,self%pinds(iptcl)), kind=dp)) / denom
         end do
-        grad = grad / real(self%ptcl_bfac_norms(self%pinds(iptcl)), kind=dp)
     end subroutine gencorr_resnorm_grad_only_for_rot_8
 
     function gencorr_euclid_for_rot( self, iref, iptcl, shvec, irot ) result( cc )
@@ -2569,7 +2559,6 @@ contains
                 end do
             end do
             if( allocated(self%ptcl_bfac_weights) ) deallocate(self%ptcl_bfac_weights)
-            if( allocated(self%ptcl_bfac_norms)   ) deallocate(self%ptcl_bfac_norms)
             if( allocated(self%inv_resarrsq)      ) deallocate(self%inv_resarrsq)
             if( allocated(self%ctfmats)           ) deallocate(self%ctfmats)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&

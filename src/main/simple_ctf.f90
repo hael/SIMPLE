@@ -440,31 +440,27 @@ contains
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         real, optional, intent(in)    :: bfac        !< ctf b-factor weighing
-        integer :: ldim(3),logi(3),h,k,phys(3)
+        real, allocatable :: kweights(:)
+        integer :: ldim(3),logi(3),h,k,phys(3),sh
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
-        real    :: rnyq_sq,bfacw_nyq,rh,rk,sh_sq,bfac_sc
+        real    :: rh,rk,sh_sq
         logical :: do_bfac
-        do_bfac = present(bfac)
         ! initialize
         call self%init(dfx, dfy, angast)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        rnyq_sq  = real(img%get_nyq()**2)
-        bfacw_nyq = 1.
-        bfac_sc   = TINY
+        ! b-factor weighting
+        do_bfac = present(bfac)
         if( do_bfac )then
-            if(bfac > TINY)then
-                bfac_sc   = bfac/4.
-                bfacw_nyq = exp(-bfac_sc)
-            else
-                do_bfac = .false.
-            endif
+            allocate(kweights(ldim(1)))
+            call calc_norm_bfac_weights(ldim(1), bfac, self%smpd, kweights)
         endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 rh    = real(h)
                 rk    = real(k)
                 sh_sq = real(h*h+k*k)
+                sh     = nint(sqrt(sh_sq))
                 ! calculate CTF and CTF**2.0 values
                 hinv      = rh * inv_ldim(1)
                 kinv      = rk * inv_ldim(2)
@@ -478,13 +474,7 @@ contains
                 ! multiply image with tval & weight
                 logi   = [h,k,0]
                 phys   = img%comp_addr_phys(logi)
-                if( do_bfac )then
-                    if( sh_sq > rnyq_sq )then
-                        tval = tval * bfacw_nyq
-                    else
-                        tval = tval * exp(-bfac_sc*sh_sq/rnyq_sq)
-                    endif
-                endif
+                if( do_bfac ) tval = tval * kweights(sh)
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                 ! shift image
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))

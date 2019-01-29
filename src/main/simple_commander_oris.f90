@@ -161,8 +161,8 @@ contains
         real                 :: mind, maxd, avgd, sdevd, sumd, vard, scale
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
-        integer              :: nprojs, iptcl, icls, j, noris, ncls
-        real,    allocatable :: clustszs(:)
+        integer              :: nprojs, iptcl, icls, i, j, noris, ncls
+        real,    allocatable :: clustszs(:), specscores(:), bfacs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
@@ -304,6 +304,13 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF SPECSCORE:', sdevd
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SPECSCORE (WORST)      :', mind
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
+                call build%spproj_field%calc_bfac_rec(BFAC_REC_MIN_BOUND)
+                specscores = build%spproj_field%get_all('specscore')
+                bfacs      = build%spproj_field%get_all('bfac_rec')
+                call hpsort(specscores, bfacs)
+                do i=1,size(specscores)
+                    print *, specscores(i), bfacs(i)
+                end do
             endif
         endif
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')

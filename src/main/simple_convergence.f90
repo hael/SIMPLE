@@ -24,7 +24,6 @@ type convergence
     real :: shwmean   = 0. !< shift increment, weighted mean
     real :: shwstdev  = 0. !< shift increment, weighted std deviation
     real :: bfac      = 0. !< average per-particle B-factor (search)
-    real :: bfac_rec  = 0. !< average per-particle B-factor (rec)
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -41,8 +40,8 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: tmp_arr(:)
         logical, allocatable :: mask(:)
-        real    :: avg_updatecnt
-        logical :: converged
+        real    :: avg_updatecnt, bfac_min, bfac_max
+        logical :: converged, bfac_rec_there
         ! generate mask
         allocate(mask(build_glob%spproj_field%get_noris()))
         tmp_arr = build_glob%spproj_field%get_all('updatecnt')
@@ -57,12 +56,18 @@ contains
         self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
-        write(logfhandle,'(A,1X,F7.4)') '>>> CLASS OVERLAP:            ', self%mi_class
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:   ', avg_updatecnt
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):  ', self%dist_inpl
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:', self%bfac
-        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:   ', self%frac
-        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:              ', self%corr
+        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
+        if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
+        write(logfhandle,'(A,1X,F7.4)') '>>> CLASS OVERLAP:                  ', self%mi_class
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:         ', avg_updatecnt
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):        ', self%dist_inpl
+        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:      ', self%bfac
+        if( bfac_rec_there )then
+        write(logfhandle,'(A,1X,F7.1)') '>>> MIN PER-PARTICLE B-FACTOR (REC):', bfac_min
+        write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):', bfac_max
+        endif
+        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:         ', self%frac
+        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:                    ', self%corr
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -104,7 +109,7 @@ contains
         real,               intent(in)    :: msk
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
-        real    :: min_state_mi_joint, avg_updatecnt
+        real    :: min_state_mi_joint, avg_updatecnt, bfac_min, bfac_max
         logical :: converged, bfac_rec_there
         integer :: iptcl, istate
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
@@ -121,9 +126,8 @@ contains
         self%shwmean   = build_glob%spproj_field%get_avg('shwmean',   mask=mask)
         self%shwstdev  = build_glob%spproj_field%get_avg('shwstdev',  mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
-        self%bfac_rec  = 0.
         bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
-        if( bfac_rec_there ) self%bfac_rec = build_glob%spproj_field%get_avg('bfac_rec')
+        if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
         write(logfhandle,'(A,1X,F7.4)') '>>> ORIENTATION OVERLAP:               ', self%mi_proj
         write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:            ', avg_updatecnt
         if( params_glob%nstates > 1 )then
@@ -134,7 +138,8 @@ contains
         write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PEAKS:                       ', self%npeaks
         write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (SEARCH):', self%bfac
         if( bfac_rec_there )then
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (REC):   ', self%bfac_rec
+        write(logfhandle,'(A,1X,F7.1)') '>>> MIN PER-PARTICLE B-FACTOR (REC):   ', bfac_min
+        write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):   ', bfac_max
         endif
         write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
         write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
@@ -262,8 +267,6 @@ contains
                 get = self%spread
             case('bfac')
                 get = self%bfac
-            case('bfac_rec')
-                get = self%bfac_rec
             case DEFAULT
                 get = 0.
         end select

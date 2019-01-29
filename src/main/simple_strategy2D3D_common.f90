@@ -233,7 +233,7 @@ contains
         if( params_glob%shellw .eq. 'yes' )then
             ! shell-weighted reconstruction
             bfac_rec = 0.
-            if( o%isthere('bfac_rec') ) bfac_rec = max(0., o%get('bfac_rec'))
+            if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
             ! state flag
             s = o%get_state()
             ! fwd ft

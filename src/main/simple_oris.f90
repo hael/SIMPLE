@@ -156,6 +156,7 @@ type :: oris
     procedure          :: calc_hard_weights
     procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
+    procedure          :: calc_bfac_rec_rnd
     procedure          :: calc_bfac_rec
     procedure          :: calc_bfac_srch
     procedure          :: find_best_classes
@@ -2304,29 +2305,48 @@ contains
         call reverse(inds)
     end function order_cls
 
-    subroutine calc_bfac_rec( self )
-        class(oris),       intent(inout) :: self
+    subroutine calc_bfac_rec( self, bfac_min_target )
+        class(oris), intent(inout) :: self
+        real,        intent(in)    :: bfac_min_target
         real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
-        real    :: avg, sdev, score
+        real    :: avg, score, bsc, score_min
         integer :: i
         if( self%isthere('specscore') )then
-            states = self%get_all('state')
             scores = self%get_all('specscore')
-            mask   = states > 0.5 .and. scores > TINY
-            scores = scores * 100. ! Frealign definition
-            avg    = sum(scores, mask=mask) / real(count(mask))
-            where(mask)
-                scores = (scores - avg) * BSC
-            elsewhere
-                scores = 0.
-            endwhere
-            call self%set_all('bfac_rec', scores)
-            deallocate(mask,states,scores)
+        else if( self%isthere('corr') )then
+            scores = self%get_all('corr')
         else
             call self%delete_entry('bfac_rec')
+            return
         endif
+        states    = self%get_all('state')
+        mask      = states > 0.5 .and. scores > TINY
+        scores    = scores * 100. ! FREALIGN definition
+        avg       = sum(scores, mask=mask) / real(count(mask))
+        scores    = (avg - scores)
+        score_min = minval(scores, mask=mask)
+        bsc       = bfac_min_target / score_min
+        if( bsc < 0. ) THROW_HARD('bfac_rec scaling factor (bsc) < 0')
+        where(mask)
+            scores = scores * bsc
+        elsewhere
+            scores = 0.
+        endwhere
+        call self%set_all('bfac_rec', scores)
+        deallocate(mask,states,scores)
     end subroutine calc_bfac_rec
+
+    subroutine calc_bfac_rec_rnd( self, bfac_arg )
+        class(oris), intent(inout) :: self
+        real,        intent(in) :: bfac_arg
+        real :: bfac
+        integer :: i
+        do i=1,self%n
+            bfac = ran3() * bfac_arg * 2. - bfac_arg
+            call self%o(i)%set('bfac_rec', bfac)
+        end do
+    end subroutine calc_bfac_rec_rnd
 
     subroutine calc_bfac_srch( self, bfac )
         class(oris), intent(inout) :: self
