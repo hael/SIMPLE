@@ -3,7 +3,7 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,         only: ft_expanded, ft_exp_reset_tmp_pointers
+use simple_ft_expanded,         only: ft_expanded
 use simple_motion_anisocor,     only: motion_anisocor, POLY_DIM
 use simple_motion_anisocor_sgl, only: motion_anisocor_sgl
 use simple_motion_anisocor_dbl, only: motion_anisocor_dbl
@@ -281,12 +281,8 @@ contains
             do iframe=1,nframes
                 ! subtract the movie frame being aligned to reduce bias
                 call movie_sum_global_ftexp_threads(iframe)%subtr(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
-                ! set pointers
-                call  ftexp_srch(iframe)%set_ptrs(movie_sum_global_ftexp_threads(iframe), movie_frames_ftexp(iframe))
                 ! optimise shifts
                 cxy = ftexp_srch(iframe)%minimize(corrs(iframe), opt_shifts(iframe,:))
-                ! reset pointers used for calculation bookkeeping in ft_expanded
-                call ft_exp_reset_tmp_pointers ! done for this thread only
                 ! count # improved
                 if( cxy(1) > corrs(iframe) ) nimproved = nimproved + 1
                 ! update parameter arrays
@@ -498,7 +494,7 @@ contains
         write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
-        PRINT_NEVALS = .true.        
+        PRINT_NEVALS = .true.
         do i=1,MITSREF_ANISO
             nimproved = 0
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy,ithr) proc_bind(close) reduction(+:nimproved)
@@ -507,7 +503,7 @@ contains
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
                 cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
-                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu)                
+                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu)
                 ithr = omp_get_thread_num() + 1
                 if ((.true.).or.( ithr == 1 ))then
                     write (*,*) 'frame=', iframe, 'aniso: ', acorr, 'regu: ', aregu, ' params: ', cxy(2:POLY_DIM+1)

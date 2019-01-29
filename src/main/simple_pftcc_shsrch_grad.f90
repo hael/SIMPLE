@@ -132,8 +132,7 @@ contains
             class is (pftcc_shsrch_grad)
                 call grad_shsrch_optimize_angle(self)
             class DEFAULT
-                write (*,*) 'error in grad_shsrch_optimize_angle_wrapper: unknown type'
-                stop
+                THROW_HARD('error in grad_shsrch_optimize_angle_wrapper: unknown type; simple_pftcc_shsrch_grad')
         end select
     end subroutine grad_shsrch_optimize_angle_wrapper
 

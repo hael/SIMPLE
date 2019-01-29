@@ -1,7 +1,8 @@
 program simple_test_cartcorr_sanity
 include 'simple_lib.f08'
-use simple_image,       only: image
-use simple_ft_expanded, only: ft_expanded
+use simple_image,        only: image
+use simple_ft_expanded,  only: ft_expanded
+use simple_ftexp_shsrch, only: ftexp_shsrch
 implicit none
 #include "simple_local_flags.inc"
 
@@ -9,6 +10,7 @@ integer, parameter   :: NITS=100
 real, parameter      :: TRS=5.0
 type(image)          :: img1, img2, tmp
 type(ft_expanded)    :: ftexp1, ftexp2
+type(ftexp_shsrch)   :: ftexp_shsrch1
 integer              :: i
 real, parameter      :: hp=100.0, lp=8.0
 real                 :: cxy(3), x, y, diff_old, diff_recast, diff_corr, old_corr
@@ -36,6 +38,7 @@ do i=1,nits
     DebugPrint  'neg(old):    ', -cxy(2:3)
     diff_old    = diff_old+sum(abs(-cxy(2:3)-[x,y]))
     call ftexp2%new(img2,hp,lp,.true.)
+    call ftexp_shsrch1%new(ftexp1,ftexp2,TRS)
     cxy         = find_shift_recast()
     DebugPrint  'neg(recast): ', -cxy(2:3)
     diff_recast = diff_recast+sum(abs(-cxy(2:3)-[x,y]))
@@ -72,7 +75,7 @@ contains
         do xsh=-sh,sh
             do ysh=-sh,sh
                 shvec = [real(xsh),real(ysh),0.]
-                corr = real(ftexp1%corr_shifted_8(ftexp2,dble(shvec)))
+                corr = real(ftexp_shsrch1%corr_shifted_8(dble(shvec)))! ftexp1%corr_shifted_8(ftexp2,dble(shvec)))
                 if( corr > cxy(1) )then
                     cxy(1) = corr
                     cxy(2) = real(xsh)

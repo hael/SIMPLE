@@ -1,7 +1,8 @@
 module simple_ft_expanded_tester
 include 'simple_lib.f08'
-use simple_ft_expanded, only: ft_expanded
-use simple_image,       only: image
+use simple_ft_expanded,  only: ft_expanded
+use simple_ftexp_shsrch, only: ftexp_shsrch
+use simple_image,        only: image
 implicit none
 
 public :: exec_ft_expanded_test
@@ -78,18 +79,20 @@ contains
         contains
 
             subroutine find_shift( dist, corr_best )
-                real, intent(out) :: dist, corr_best
-                type(ft_expanded) :: ftexp_trial
+                real, intent(out)  :: dist, corr_best
+                type(ft_expanded)  :: ftexp_trial
+                type(ftexp_shsrch) :: ftexp_shsrch_trial
                 real    :: shvec(3), corr
                 integer :: ysh_best, xsh_best, xsh, ysh
                 call ftexp_trial%new(img_shifted, HP, LP, .true.)
+                call ftexp_shsrch_trial%new(ftexp_img, ftexp_trial, TRS)
                 corr_best = -huge(corr)
                 do xsh=nint(-TRS),nint(TRS)
                     do ysh=nint(-TRS),nint(TRS)
                         shvec(1) = real(xsh)
                         shvec(2) = real(ysh)
                         shvec(3) = 0.
-                        corr = real(ftexp_img%corr_shifted_8(ftexp_trial, dble(shvec)))
+                        corr = real(ftexp_shsrch_trial%corr_shifted_8(dble(shvec)))
                         if( corr > corr_best )then
                             corr_best = corr
                             xsh_best  = xsh
@@ -100,6 +103,7 @@ contains
                 call ftexp_img%corr_normalize(ftexp_trial, corr_best)
                 dist = euclid(real([xsh_best,ysh_best]), real([-x,-y]))
                 call ftexp_trial%kill
+                call ftexp_shsrch_trial%kill
             end subroutine find_shift
 
     end subroutine test_shifted_correlator
@@ -113,6 +117,7 @@ contains
         integer              :: itst
         type(image)          :: img_ref, img_ptcl
         type(ft_expanded)    :: ftexp_ref, ftexp_ptcl
+        type(ftexp_shsrch)   :: ftexp_shsrch1
         real, allocatable    :: shvecs(:,:)
         real(4)    :: corr, actual, delta, shvec(3), tarray(2)
         call img_ref%new([4096,4096,1],SMPD)
@@ -123,6 +128,7 @@ contains
         call img_ptcl%ran
         call img_ptcl%fft()
         call ftexp_ptcl%new(img_ptcl, HP, LP, .true.)
+        call ftexp_shsrch1%new(ftexp_ref, ftexp_ptcl, TRS)
         allocate(shvecs(NTSTS,3))
         do itst=1,NTSTS
             shvecs(itst,1) = ran3()*2*TRS-TRS
@@ -144,7 +150,7 @@ contains
         write(logfhandle,'(A,F9.2)') 'Relative cpu-time:', delta
         write(logfhandle,'(a)') '>>> PROFILING FTEXP CORRELATOR'
         do itst=1,NTST
-            corr = real(ftexp_ref%corr_shifted_8(ftexp_ptcl, dble(shvecs(itst,:))))
+            corr = real(ftexp_shsrch1%corr_shifted_8(dble(shvecs(itst,:))))
         end do
         actual = etime( tarray )
         write(logfhandle,'(A,2X,F9.2)') 'Actual cpu-time:', actual

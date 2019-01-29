@@ -6,25 +6,22 @@ include 'simple_lib.f08'
 use simple_image,  only: image
 implicit none
 private
-public :: ft_expanded, ft_exp_reset_tmp_pointers
+public :: ft_expanded
 #include "simple_local_flags.inc"
 
-complex(dp), parameter   :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of cost function
-real(dp),    allocatable :: ft_exp_tmpmat_re_2d(:,:,:)
-real(dp),    allocatable :: ft_exp_tmpmat_im_2d(:,:,:)
-complex(dp), allocatable :: ft_exp_tmp_cmat12(:,:,:)
 
 type :: ft_expanded
     private
     integer              :: lims(3,2)          !< physical limits for the Fourier transform
     integer              :: flims(3,2)         !< shifted limits (2 make transfer 2 GPU painless)
     integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
+    integer              :: flims_nyq(3,2)     !< nyquist limits
     real                 :: shconst(3)         !< shift constant
     real                 :: hp                 !< high-pass limit
     real                 :: lp                 !< low-pass limit
     real                 :: smpd=0.            !< sampling distance of originating image
-    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix
+    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix (TODO: make this global to save memory)
     complex, allocatable :: cmat(:,:,:)        !< Fourier components
     logical              :: existence=.false.  !< existence
   contains
@@ -36,7 +33,12 @@ type :: ft_expanded
     ! generic            :: new => new_1, new_2, new_3
     ! getters
     procedure          :: get_flims
+    procedure          :: get_lims
+    procedure          :: get_ldim
+    procedure          :: get_flims_nyq
     procedure          :: get_cmat
+    procedure          :: get_cmat_ptr
+    procedure          :: get_transfmat_ptr
     ! setters
     procedure          :: set_cmat
     procedure          :: zero
@@ -47,20 +49,12 @@ type :: ft_expanded
     procedure          :: shift
     ! calculators
     procedure          :: corr
-    procedure          :: corr_shifted_8
-    procedure          :: corr_gshifted_8
-    procedure          :: corr_fdfshifted_8
-    procedure          :: corr_normalize
+    procedure, private :: corr_normalize_sp
+    procedure, private :: corr_normalize_dp
+    generic            :: corr_normalize => corr_normalize_sp, corr_normalize_dp
     ! destructor
     procedure          :: kill
 end type ft_expanded
-
-type ftexp_ptr
-    type(ft_expanded), pointer :: p => null()
-end type ftexp_ptr
-
-type(ftexp_ptr), allocatable :: ft_exp_tmp_cmat12_self1(:)
-type(ftexp_ptr), allocatable :: ft_exp_tmp_cmat12_self2(:)
 
 contains
 
@@ -73,26 +67,26 @@ contains
         logical,            intent(in)    :: fetch_comps
         real    :: lp_nyq
         integer :: h,k,l,i,hcnt,kcnt,lcnt
-        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3),flims_nyq(3,2)
+        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
         logical :: didft
         ! kill pre-existing object
         call self%kill
         ! set constants
-        self%ldim = img%get_ldim()
+        self%ldim      = img%get_ldim()
         if( self%ldim(3) > 1 ) THROW_HARD('only 4 2D images; new_1')
-        self%smpd = img%get_smpd()
-        self%hp   = hp
-        lp_nyq    = 2.*self%smpd
-        self%lp   = max(lp, lp_nyq)
-        self%lims = img%loop_lims(1,self%lp)
-        flims_nyq = img%loop_lims(1,lp_nyq)
+        self%smpd      = img%get_smpd()
+        self%hp        = hp
+        lp_nyq         = 2.*self%smpd
+        self%lp        = max(lp, lp_nyq)
+        self%lims      = img%loop_lims(1,self%lp)
+        self%flims_nyq = img%loop_lims(1,lp_nyq)
         ! shift the limits 2 make transfer 2 GPU painless
-        self%flims = 1
+        self%flims     = 1
         do i=1,3
-            self%flims(i,2) = self%lims(i,2) - self%lims(i,1) + 1
-            flims_nyq(i,2)  = flims_nyq(i,2) - flims_nyq(i,1) + 1
+            self%flims(i,2)     = self%lims(i,2)      - self%lims(i,1)      + 1
+            self%flims_nyq(i,2) = self%flims_nyq(i,2) - self%flims_nyq(i,1) + 1
         end do
-        flims_nyq(:,1) = 1
+        self%flims_nyq(:,1) = 1
         ! set the squared filter limits
         hplim = img%get_find(hp)
         hplim = hplim*hplim
@@ -149,33 +143,52 @@ contains
         end do
         if( didft ) call img%ifft()
         ! allocate class variables
-        if( .not. allocated(ft_exp_tmpmat_re_2d) )then
-            allocate( ft_exp_tmpmat_re_2d( 1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
-                      ft_exp_tmpmat_im_2d( 1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
-                      ft_exp_tmp_cmat12(   1:flims_nyq(1,2), 1:flims_nyq(2,2), nthr_glob ),&
-                      stat=alloc_stat )
-            if(alloc_stat/=0)call allocchk("In: new_1; simple_ft_expanded, 3")
-        end if
-        ! pointer arrays for bookkeeping
-        if( .not. allocated(ft_exp_tmp_cmat12_self1) )then
-            allocate(ft_exp_tmp_cmat12_self1(nthr_glob), ft_exp_tmp_cmat12_self2(nthr_glob))
-        endif
         self%existence = .true.
     end subroutine new
 
     ! GETTERS
 
-    pure function get_flims( self ) result( flims)
+    pure function get_flims( self ) result( flims )
         class(ft_expanded), intent(in) :: self
         integer :: flims(3,2)
         flims = self%flims
     end function get_flims
+
+    pure function get_lims( self ) result( lims )
+        class(ft_expanded), intent(in) :: self
+        integer :: lims(3,2)
+        lims = self%lims
+    end function get_lims
+
+    pure function get_ldim( self ) result( ldim )
+        class(ft_expanded), intent(in) :: self
+        integer :: ldim(3)
+        ldim = self%ldim
+    end function get_ldim
+
+    pure function get_flims_nyq( self ) result( flims_nyq )
+        class(ft_expanded), intent(in) :: self
+        integer :: flims_nyq(3,2)
+        flims_nyq = self%flims_nyq
+    end function get_flims_nyq
 
     pure subroutine get_cmat( self, cmat )
         class(ft_expanded), intent(in) :: self
         complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
         cmat = self%cmat
     end subroutine get_cmat
+
+    subroutine get_cmat_ptr( self, cmat_ptr )
+        class(ft_expanded), target,  intent(inout) :: self
+        complex,            pointer, intent(out)   :: cmat_ptr(:,:,:)
+        cmat_ptr => self%cmat
+    end subroutine get_cmat_ptr
+
+    pure subroutine get_transfmat_ptr( self, transfmat_ptr )
+        class(ft_expanded), target,  intent(inout) :: self
+        real,               pointer, intent(out)   :: transfmat_ptr(:,:,:,:)
+        transfmat_ptr => self%transfmat
+    end subroutine get_transfmat_ptr
 
     ! SETTERS
 
@@ -250,148 +263,23 @@ contains
         endif
     end function corr
 
-    function corr_shifted_8( self1, self2, shvec ) result( r )
-        class(ft_expanded), intent(inout) :: self1, self2
-        real(dp),           intent(in)    :: shvec(2)
-        real(dp) :: r
-        integer  :: ithr
-        call calc_tmpmat_re(self1, self2, shvec)
-        ithr = omp_get_thread_num() + 1
-        r = sum(ft_exp_tmpmat_re_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr)) / denom
-    end function corr_shifted_8
-
-    subroutine corr_gshifted_8( self1, self2, shvec, grad )
-        class(ft_expanded), target, intent(inout) :: self1, self2
-        real(dp),                   intent(in)    :: shvec(2)
-        real(dp),                   intent(out)   :: grad(2)
-        real(dp) :: grad1, grad2
-        integer  :: ithr
-        call calc_tmpmat_im(self1, self2, shvec)
-        ithr = omp_get_thread_num() + 1
-        grad(1) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
-                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,1))
-        grad(2) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
-                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,2))
-        grad = grad / denom
-    end subroutine corr_gshifted_8
-
-    subroutine corr_fdfshifted_8( self1, self2, shvec, f, grad )
-        class(ft_expanded), intent(inout) :: self1, self2
-        real(dp),           intent(in)    :: shvec(2)
-        real(dp),           intent(out)   :: grad(2), f
-        real(dp) :: grad1, grad2
-        integer  :: hind,kind,ithr
-        call calc_tmpmat_re_im(self1, self2, shvec)
-        ithr    = omp_get_thread_num() + 1
-        f       = sum(ft_exp_tmpmat_re_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr)) / denom
-        grad(1) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
-                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,1))
-        grad(2) = sum(ft_exp_tmpmat_im_2d(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),ithr) *&
-                   &self1%transfmat(self1%flims(1,1):self1%flims(1,2),self1%flims(2,1):self1%flims(2,2),1,2))
-        grad    = grad / denom
-    end subroutine corr_fdfshifted_8
-
-    subroutine corr_normalize( self1, self2, corr )
+    subroutine corr_normalize_sp( self1, self2, corr )
         class(ft_expanded), intent(inout) :: self1, self2
         real(sp),           intent(inout) :: corr
         real(dp) :: sumasq,sumbsq
         sumasq = sum(csq(self1%cmat))
         sumbsq = sum(csq(self2%cmat))
         corr   = real(real(corr,dp) * denom / sqrt(sumasq * sumbsq), sp)
-    end subroutine corr_normalize
+    end subroutine corr_normalize_sp
 
-    subroutine calc_tmpmat_re(self1, self2, shvec)
-        class(ft_expanded), target, intent(inout) :: self1, self2
-        real(dp),                   intent(in)    :: shvec(2)
-        real(dp) :: arg
-        integer  :: hind,kind,ithr
-        ithr = omp_get_thread_num() + 1
-        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
-                end do
-            end do
-        else
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg),kind=dp)
-                end do
-            end do
-            ithr = omp_get_thread_num() + 1
-            ft_exp_tmp_cmat12_self1(ithr)%p => self1
-            ft_exp_tmp_cmat12_self2(ithr)%p => self2
-        end if
-    end subroutine calc_tmpmat_re
-
-    subroutine calc_tmpmat_im(self1, self2, shvec)
-        class(ft_expanded), target, intent(inout) :: self1, self2
-        real(dp),                   intent(in)    :: shvec(2)
-        real(dp) :: arg
-        integer  :: hind,kind,ithr
-        ithr = omp_get_thread_num() + 1
-        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
-                end do
-            end do
-        else
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind,ithr)   = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg))
-                end do
-            end do
-            ithr = omp_get_thread_num() + 1
-            ft_exp_tmp_cmat12_self1(ithr)%p => self1
-            ft_exp_tmp_cmat12_self2(ithr)%p => self2
-        end if
-    end subroutine calc_tmpmat_im
-
-    subroutine calc_tmpmat_re_im(self1, self2, shvec)
-        class(ft_expanded), target, intent(inout) :: self1, self2
-        real(dp),                   intent(in)    :: shvec(2)
-        real(dp)    :: arg
-        complex(dp) :: tmp
-        integer     :: hind,kind,ithr
-        ithr = omp_get_thread_num() + 1
-        if (associated(ft_exp_tmp_cmat12_self1(ithr)%p, self1) .and. associated(ft_exp_tmp_cmat12_self2(ithr)%p, self2)) then
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
-                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
-                end do
-            end do
-        else
-            do hind=self1%flims(1,1),self1%flims(1,2)
-                do kind=self1%flims(2,1),self1%flims(2,2)
-                    arg  = dot_product(shvec(:), self1%transfmat(hind,kind,1,1:2))
-                    ft_exp_tmp_cmat12(hind,kind,ithr) = self1%cmat(hind,kind,1) * conjg(self2%cmat(hind,kind,1))
-                    tmp  = ft_exp_tmp_cmat12(hind,kind,ithr) * exp(-J * arg)
-                    ft_exp_tmpmat_re_2d(hind,kind,ithr) = real(tmp,kind=dp)
-                    ft_exp_tmpmat_im_2d(hind,kind,ithr) = aimag(tmp)
-                end do
-            end do
-            ithr = omp_get_thread_num() + 1
-            ft_exp_tmp_cmat12_self1(ithr)%p => self1
-            ft_exp_tmp_cmat12_self2(ithr)%p => self2
-        end if
-    end subroutine calc_tmpmat_re_im
-
-    subroutine ft_exp_reset_tmp_pointers
-        integer :: ithr
-        ithr = omp_get_thread_num() + 1
-        ft_exp_tmp_cmat12_self1(ithr)%p => null()
-        ft_exp_tmp_cmat12_self2(ithr)%p => null()
-    end subroutine ft_exp_reset_tmp_pointers
+    subroutine corr_normalize_dp( self1, self2, corr )
+        class(ft_expanded), intent(inout) :: self1, self2
+        real(dp),           intent(inout) :: corr
+        real(dp) :: sumasq,sumbsq
+        sumasq = sum(csq(self1%cmat))
+        sumbsq = sum(csq(self2%cmat))
+        corr   = corr * denom / sqrt(sumasq * sumbsq)
+    end subroutine corr_normalize_dp
 
     ! DESTRUCTOR
 
@@ -400,7 +288,6 @@ contains
         class(ft_expanded), intent(inout) :: self
         if( self%existence )then
             deallocate(self%cmat, self%transfmat)
-            call ft_exp_reset_tmp_pointers
             self%existence = .false.
         endif
     end subroutine kill
