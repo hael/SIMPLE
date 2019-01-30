@@ -182,7 +182,7 @@ contains
             allocate( self%ftexp_tmpmat_re_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
                       self%ftexp_tmpmat_im_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
                       self%ftexp_tmp_cmat12  ( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
-                      stat=alloc_stat )
+                      stat=alloc_stat ) ! note: we could allocate 1:flims(1,2), 1:flims(2,2) elements to save memory
             if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
         end if
     end subroutine set_dims_and_alloc
@@ -299,7 +299,9 @@ contains
         complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
-        self%ftexp_tmp_cmat12(:,:) = cmat1_ptr(:,:,1) * conjg(cmat2_ptr(:,:,1))
+        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &
+                  cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &
+            conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )
