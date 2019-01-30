@@ -304,10 +304,10 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF SPECSCORE:', sdevd
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SPECSCORE (WORST)      :', mind
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
-                call build%spproj_field%calc_bfac_rec
+                call build%spproj_field%calc_bfac_rec_specscore
                 specscores = build%spproj_field%get_all('specscore')
                 bfacs      = build%spproj_field%get_all('bfac_rec')
-                call hpsort(bfacs, specscores)
+                call hpsort(specscores, bfacs)
                 do i=1,size(specscores)
                     print *, specscores(i), bfacs(i)
                 end do

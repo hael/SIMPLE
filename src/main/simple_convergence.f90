@@ -20,6 +20,7 @@ type convergence
     real :: mi_class  = 0. !< class parameter distribution overlap
     real :: mi_proj   = 0. !< projection parameter distribution overlap
     real :: mi_state  = 0. !< state parameter distribution overlap
+    real :: specscore = 0. !< spectral score
     real :: spread    = 0. !< angular spread
     real :: shwmean   = 0. !< shift increment, weighted mean
     real :: shwstdev  = 0. !< shift increment, weighted std deviation
@@ -52,6 +53,7 @@ contains
         ! stats
         avg_updatecnt  = build_glob%spproj_field%get_avg('updatecnt', mask=mask)
         self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+        self%specscore = build_glob%spproj_field%get_avg('specscore', mask=mask)
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
         self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
         self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
@@ -67,7 +69,8 @@ contains
         write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):', bfac_max
         endif
         write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:         ', self%frac
-        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:                    ', self%corr
+        write(logfhandle,'(A,1X,F7.4)') '>>> AVG CORRELATION:                ', self%corr
+        write(logfhandle,'(A,1X,F7.4)') '>>> AVG SPECSCORE:                  ', self%specscore
         ! dynamic shift search range update
         if( self%frac >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
@@ -116,6 +119,7 @@ contains
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
         self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
+        self%specscore = build_glob%spproj_field%get_avg('specscore', mask=mask)
         self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
         self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
         self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
@@ -142,8 +146,9 @@ contains
         write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):   ', bfac_max
         endif
         write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
-        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION:                       ', self%corr
-        write(logfhandle,'(A,1X,F7.2)') '>>> ANGULAR SPREAD (DEG):              ', self%spread
+        write(logfhandle,'(A,1X,F7.4)') '>>> AVG CORRELATION:                   ', self%corr
+        write(logfhandle,'(A,1X,F7.4)') '>>> AVG SPECSCORE:                     ', self%specscore
+        write(logfhandle,'(A,1X,F7.2)') '>>> AVG ANGULAR SPREAD (DEG):          ', self%spread
         write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCREMENT:      ', self%shwmean
         write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCR STDEV:     ', self%shwstdev
         ! dynamic shift search range update

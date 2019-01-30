@@ -176,7 +176,7 @@ contains
 
         ! B-FACTOR
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
-            call build_glob%spproj_field%calc_bfac_rec
+            call build_glob%spproj_field%calc_bfac_rec_specscore
         else
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif

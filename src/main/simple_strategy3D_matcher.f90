@@ -140,7 +140,7 @@ contains
         endif
 
         ! B-factor weighted reconstruction
-        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec
+        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec_specscore
 
         ! EXTREMAL LOGICS
         do_extr           = .false.
@@ -738,7 +738,7 @@ contains
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
         ! B-factor weighted reconstruction
-        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec
+        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec_specscore
         ! prepare particle mask
         nptcls2update = params_glob%top - params_glob%fromp + 1
         allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
