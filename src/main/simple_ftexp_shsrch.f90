@@ -169,8 +169,8 @@ contains
         self%flims_nyq = ref_flims_nyq
         do_alloc = .true.
         if ( allocated( self%ftexp_tmpmat_re_2d ) ) then
-            if ( ( ubound( self%ftexp_tmpmat_re_2d, 1 ) == ref_flims(1,2) ) .and. &
-                 ( ubound( self%ftexp_tmpmat_re_2d, 2 ) == ref_flims(2,2) ) ) then
+            if ( ( ubound( self%ftexp_tmpmat_re_2d, 1 ) == ref_flims_nyq(1,2) ) .and. &
+                 ( ubound( self%ftexp_tmpmat_re_2d, 2 ) == ref_flims_nyq(2,2) ) ) then
                 do_alloc = .false.
             else
                 deallocate( self%ftexp_tmpmat_re_2d )
