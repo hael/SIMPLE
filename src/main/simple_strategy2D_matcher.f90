@@ -166,7 +166,7 @@ contains
         ! sees the same information in distributed execution
         if( which_iter > 3 )then
             if( SOFT_PTCL_WEIGHTS )then
-                call build_glob%spproj_field%calc_soft_weights
+                call build_glob%spproj_field%calc_soft_weights_specscore
             else
                 call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
             endif

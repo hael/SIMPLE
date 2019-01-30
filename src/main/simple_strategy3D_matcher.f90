@@ -114,7 +114,7 @@ contains
 
         ! SETUP WEIGHTS
         if( SOFT_PTCL_WEIGHTS )then
-            call build_glob%spproj_field%calc_soft_weights
+            call build_glob%spproj_field%calc_soft_weights_specscore
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
@@ -733,7 +733,7 @@ contains
         npeaks = NPEAKS2REFINE
         ! particle weights
         if( SOFT_PTCL_WEIGHTS )then
-            call build_glob%spproj_field%calc_soft_weights
+            call build_glob%spproj_field%calc_soft_weights_specscore
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
