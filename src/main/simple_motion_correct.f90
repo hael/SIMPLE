@@ -585,7 +585,7 @@ contains
                 call movie_frames_shifted_aniso(iframe)%get_rmat_sub(rmat)
                 rmat_sum = rmat_sum + rmat * frameweights(iframe)
             end do
-            !$omp end do nowait
+            !$omp end do
             ! SECOND LOOP TO UPDATE movie_sum_global_threads AND CALCULATE CORRS
             !$omp do schedule(static) reduction(+:nimproved)
             do iframe=1,nframes
@@ -604,7 +604,7 @@ contains
                 ! add the subtracted movie frame back to the weighted sum
                 call movie_sum_global_threads(iframe)%add(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
             end do
-            !$omp end do nowait
+            !$omp end do
             !$omp end parallel
             ! update frame weights
             frameweights = corrs2weights(corrs)
@@ -680,7 +680,7 @@ contains
                 corrmat(jframe,iframe) = corrmat(iframe,jframe)
             end do
         end do
-        !$omp end do nowait
+        !$omp end do
         !$omp do schedule(static)
         do iframe=1,nframes
             do jframe=1,nframes
@@ -689,7 +689,7 @@ contains
             end do
             corrs(iframe) = corrs(iframe)/real(nframes-1)
         end do
-        !$omp end do nowait
+        !$omp end do
         !$omp end parallel
         frameweights = corrs2weights(corrs)
     end subroutine corrmat2weights
@@ -729,7 +729,7 @@ contains
             call movie_frames_ftexp_sh(iframe)%get_cmat(cmat)
             cmat_sum = cmat_sum + cmat * frameweights(iframe)
         end do
-        !$omp end do nowait
+        !$omp end do
         ! SECOND LOOP TO UPDATE movie_sum_global_ftexp_threads AND CALCULATE CORRS
         !$omp do schedule(static)
         do iframe=1,nframes
@@ -742,7 +742,7 @@ contains
             ! add the subtracted movie frame back to the weighted sum
             call movie_sum_global_ftexp_threads(iframe)%add(movie_frames_ftexp_sh(iframe), w=frameweights(iframe))
         end do
-        !$omp end do nowait
+        !$omp end do
         !$omp end parallel
     end subroutine shift_wsum_calc_corrs
 
