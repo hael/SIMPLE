@@ -2500,16 +2500,20 @@ contains
         class(oris), intent(inout) :: self
         real, allocatable :: specscores(:), states(:), weights(:)
         real :: minw
-        specscores = self%get_all('specscore')
-        states     = self%get_all('state')
-        weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
-        minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
-        where( specscores > TINY .and. states > 0.5 )
-            weights = weights + abs(minw)
-        elsewhere
-            weights = 0.
-        endwhere
-        call self%set_all('w', weights)
+        if( self%isthere('specscore') )then
+            specscores = self%get_all('specscore')
+            states     = self%get_all('state')
+            weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
+            minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
+            where( specscores > TINY .and. states > 0.5 )
+                weights = weights + abs(minw)
+            elsewhere
+                weights = 0.
+            endwhere
+            call self%set_all('w', weights)
+        else
+            call self%set_all2single('w', 1.0)
+        endif
     end subroutine calc_soft_weights_specscore
 
     !>  \brief  calculates soft weights based on B-factor
