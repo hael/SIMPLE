@@ -284,7 +284,7 @@ contains
         type(ctf) :: tfun
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         complex   :: comp, oshift
-        real      :: vec(3), loc(3), dists(3), shconst_here(2), bfac_weights(self%ldim_img(1))
+        real      :: vec(3), loc(3), dists(3), shconst_here(2), bfac_weights(0:self%ldim_img(1))
         real      :: w(self%wdim,self%wdim,self%wdim)
         real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, bfac_sc, freq_sq
         logical   :: do_bfac_rec, do_divide
@@ -410,7 +410,7 @@ contains
         type(ctf) :: tfun
         complex   :: comp, oshift
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
-        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(self%ldim_img(1))
+        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(0:self%ldim_img(1))
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
         logical   :: do_bfac_rec

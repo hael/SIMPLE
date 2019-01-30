@@ -71,6 +71,7 @@ type(edge_detector_commander)        :: xdetector
 type(masscen_commander)              :: xmasscen
 type(cluster_smat_commander)         :: xcluster_smat
 type(intgpeaks_commander)            :: xintgpeaks
+type(print_bfac_weights_commander)   :: xprint_bfac_weights
 type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 type(stk_corr_commander)             :: xstk_corr
@@ -722,6 +723,13 @@ select case(prg)
         keys_optional(1) = 'kv'
         call cline%parse_oldschool(keys_required(:5),keys_optional(:1))
         call xprint_dose_weights%execute(cline)
+    case( 'print_bfac_weights' )
+        ! for printing the dose weights applied to individual frames
+        keys_required(1) = 'box'
+        keys_required(2) = 'smpd'
+        keys_required(3) = 'bfac'
+        call cline%parse_oldschool(keys_required(:3))
+        call xprint_bfac_weights%execute(cline)
     case( 'res' )
         ! for checking the low-pass resolution limit for a given Fourier index
         keys_required(1) = 'smpd'

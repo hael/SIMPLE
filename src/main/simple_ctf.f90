@@ -452,7 +452,7 @@ contains
         ! b-factor weighting
         do_bfac = present(bfac)
         if( do_bfac )then
-            allocate(kweights(ldim(1)))
+            allocate(kweights(0:ldim(1)))
             call calc_norm_bfac_weights(ldim(1), bfac, self%smpd, kweights)
         endif
         do h=lims(1,1),lims(1,2)

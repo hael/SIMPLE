@@ -752,7 +752,7 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl
         real,                    intent(in)    :: bfac
-        real :: kweights(self%ldim(1))
+        real :: kweights(0:self%ldim(1))
         if( params_glob%cc_objfun == OBJFUN_CC )then
             ! nothing to do
         else if ( params_glob%cc_objfun == OBJFUN_RES ) then
@@ -2459,7 +2459,7 @@ contains
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(params_glob%kfromto(1):params_glob%kstop)
         call self%genfrc(iref, self%pinds(iptcl), irot, frc)
-        specscore = max(0.,median_nocopy(frc))
+        specscore = max(0.,min(real(count(frc>0.143)) / real(size(frc)),1.))
     end function specscore
 
     real function fit_bfac( self, iref, iptcl, irot, shvec )

@@ -1098,7 +1098,7 @@ contains
     subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
         integer, intent(in)  :: box
         real,    intent(in)  :: bfac, smpd
-        real,    intent(out) :: kweights(box)
+        real,    intent(out) :: kweights(0:box)
         real    :: bfac_sc, res
         integer :: k
         bfac_sc = bfac / 4.
@@ -1107,7 +1107,8 @@ contains
             kweights(k) = max(0., exp(-bfac_sc * res * res))
         end do
         ! normalize
-        kweights = kweights / sum(kweights)
+        kweights(1:box) = kweights(1:box) / sum(kweights(1:box))
+        kweights(0)     = 1.
     end subroutine calc_norm_bfac_weights
 
     ! LINEAR ALGEBRA STUFF

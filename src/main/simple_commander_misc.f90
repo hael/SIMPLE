@@ -17,6 +17,7 @@ implicit none
 public :: cluster_smat_commander
 public :: intgpeaks_commander
 public :: masscen_commander
+public :: print_bfac_weights_commander
 public :: print_dose_weights_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
@@ -40,6 +41,10 @@ type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
 end type masscen_commander
+type, extends(commander_base) :: print_bfac_weights_commander
+  contains
+    procedure :: execute       => exec_print_bfac_weights
+end type print_bfac_weights_commander
 type, extends(commander_base) :: print_dose_weights_commander
   contains
     procedure :: execute       => exec_print_dose_weights
@@ -216,6 +221,22 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
+
+    !> for printing normalized B-factor weights
+    subroutine exec_print_bfac_weights( self, cline )
+        class(print_bfac_weights_commander), intent(inout) :: self
+        class(cmdline),                      intent(inout) :: cline
+        type(parameters)  :: params
+        real, allocatable :: kweights(:)
+        integer           :: find
+        call params%new(cline)
+        allocate(kweights(0:params%box))
+        call calc_norm_bfac_weights(params%box, params%bfac, params%smpd, kweights)
+        do find=0,params%box
+            print *, find, kweights(find)
+        end do
+        call simple_end('**** SIMPLE_PRINT_BFAC_WEIGHTS NORMAL STOP ****')
+    end subroutine exec_print_bfac_weights
 
     !> for printing the dose weights applied to individual frames
     subroutine exec_print_dose_weights( self, cline )

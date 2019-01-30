@@ -2305,34 +2305,60 @@ contains
         call reverse(inds)
     end function order_cls
 
-    subroutine calc_bfac_rec( self, bfac_min_target )
+
+    ! PREVIOUS ONE BASED ON SPECSCORE. GIVES IMPROVED RESULT WITH scores = scores - avg IN REPLACEMENT OF
+    ! scores = (avg - scores) BECAUSE OF THE STRONG DEFOCUS DEPENDENCY. SPECSCORE HAS BEEN RE-DEFINED
+    ! SO THIS NEEDS TO BE REVISITED
+    ! subroutine calc_bfac_rec( self, bfac_min_target )
+    !     class(oris), intent(inout) :: self
+    !     real,        intent(in)    :: bfac_min_target
+    !     real,    allocatable :: states(:), scores(:)
+    !     logical, allocatable :: mask(:)
+    !     real    :: avg, score, bsc, score_min
+    !     integer :: i
+    !     if( self%isthere('specscore') )then
+    !         scores = self%get_all('specscore')
+    !     else if( self%isthere('corr') )then
+    !         scores = self%get_all('corr')
+    !     else
+    !         call self%delete_entry('bfac_rec')
+    !         return
+    !     endif
+    !     states    = self%get_all('state')
+    !     mask      = states > 0.5 .and. scores > TINY
+    !     scores    = scores * 100. ! FREALIGN definition
+    !     avg       = sum(scores, mask=mask) / real(count(mask))
+    !     ! scores    = (avg - scores)
+    !     scores    = (scores - avg)
+    !     score_min = minval(scores, mask=mask)
+    !     bsc       = bfac_min_target / score_min
+    !     if( bsc < 0. ) THROW_HARD('bfac_rec scaling factor (bsc) < 0')
+    !     where(mask)
+    !         scores = scores * bsc
+    !     elsewhere
+    !         scores = 0.
+    !     endwhere
+    !     call self%set_all('bfac_rec', scores)
+    !     deallocate(mask,states,scores)
+    ! end subroutine calc_bfac_rec
+
+    subroutine calc_bfac_rec( self )
         class(oris), intent(inout) :: self
-        real,        intent(in)    :: bfac_min_target
         real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
-        real    :: avg, score, bsc, score_min
+        real    :: avg, sdev, var
+        logical :: err
         integer :: i
-        if( self%isthere('specscore') )then
-            scores = self%get_all('specscore')
-        else if( self%isthere('corr') )then
-            scores = self%get_all('corr')
+        if( self%isthere('bfac') )then
+            scores = self%get_all('bfac')
         else
             call self%delete_entry('bfac_rec')
             return
         endif
-        states    = self%get_all('state')
-        mask      = states > 0.5 .and. scores > TINY
-        scores    = scores * 100. ! FREALIGN definition
-        avg       = sum(scores, mask=mask) / real(count(mask))
-        scores    = (avg - scores)
-        score_min = minval(scores, mask=mask)
-        bsc       = bfac_min_target / score_min
-        if( bsc < 0. ) THROW_HARD('bfac_rec scaling factor (bsc) < 0')
-        where(mask)
-            scores = scores * bsc
-        elsewhere
-            scores = 0.
-        endwhere
+        states = self%get_all('state')
+        mask   = states > 0.5 .and. scores > TINY
+        call moment(scores, avg, sdev, var, err, mask)
+        scores = ((scores - avg) / sdev) * BFAC_SDEV
         call self%set_all('bfac_rec', scores)
         deallocate(mask,states,scores)
     end subroutine calc_bfac_rec
@@ -2455,21 +2481,43 @@ contains
         endif
     end subroutine calc_hard_weights
 
+    ! PREVIOUS ONE BASED ON SPECSCORE, NEEDS TO BE REVISITED SINCE WE RE-DEFINED SPECSCORE
     !>  \brief  calculates soft weights based on specscore
+    ! subroutine calc_soft_weights( self )
+    !     class(oris), intent(inout) :: self
+    !     real, allocatable :: specscores(:), states(:), weights(:)
+    !     real :: minw
+    !     specscores = self%get_all('specscore')
+    !     states     = self%get_all('state')
+    !     weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
+    !     minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
+    !     where( specscores > TINY .and. states > 0.5 )
+    !         weights = weights + abs(minw)
+    !     elsewhere
+    !         weights = 0.
+    !     endwhere
+    !     call self%set_all('w', weights)
+    ! end subroutine calc_soft_weights
+
+    !>  \brief  calculates soft weights based on B-factor
     subroutine calc_soft_weights( self )
         class(oris), intent(inout) :: self
-        real, allocatable :: specscores(:), states(:), weights(:)
+        real, allocatable :: bfacs(:), states(:), weights(:)
         real :: minw
-        specscores = self%get_all('specscore')
-        states     = self%get_all('state')
-        weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
-        minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
-        where( specscores > TINY .and. states > 0.5 )
-            weights = weights + abs(minw)
-        elsewhere
-            weights = 0.
-        endwhere
-        call self%set_all('w', weights)
+        if( self%isthere('bfac') )then
+            bfacs   = -self%get_all('bfac') ! negation beacuse we want small B-facs to get high weights
+            states  = self%get_all('state')
+            weights = z_scores(bfacs, mask=bfacs > TINY .and. states > 0.5)
+            minw    = minval(weights, mask=bfacs > TINY .and. states > 0.5)
+            where( states > 0.5 )
+                weights = weights + abs(minw)
+            elsewhere
+                weights = 0.
+            endwhere
+            call self%set_all('w', weights)
+        else
+            call self%set_all2single('w', 1.0)
+        endif
     end subroutine calc_soft_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
