@@ -246,9 +246,9 @@ contains
             call self%bound_res(self%frcs(sstate,iproj,:), res_frc05, res_frc0143)
             lplims(iproj) = res_frc0143
         end do
-        lp3= min3(lplims)
+        lp3 = min3(lplims)
         ! return median of top three clusters
-        lp = median(lp3 )
+        lp = median(lp3)
     end function estimate_lp_for_align
 
     ! I/O

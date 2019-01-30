@@ -236,7 +236,6 @@ contains
         real,                   intent(out)   :: ws(n), best_corr
         integer,                intent(out)   :: best_loc(1)
         real    :: dists(n), arg4softmax(n), wsum
-        integer :: i, loc(MINNPEAKS)
         s%npeaks_eff = 1
         if( n == 1 )then
             best_loc(1)  = 1

@@ -434,8 +434,7 @@ contains
         enddo
         ! updates & scales stacks
         call scale_stks( stk_list ) ! must come first as names updated
-        call write_filetable('stktab.txt', stk_list)
-        call pool_proj%add_stktab('stktab.txt', os_stk)
+        call pool_proj%add_stktab(stk_list, os_stk)
         nptcls_glob = pool_proj%get_nptcls()
         if( file_exists(MICS_SELECTION_FILE) )then
             call flag_selection
@@ -1227,13 +1226,9 @@ contains
                             mic_list(cnt) = trim(stream_proj%os_mic%get_static(1,'intg'))
                         endif
                     enddo
-                    call write_filetable('stktab.txt', stk_list)
-                    call orig_proj%add_stktab('stktab.txt', o_stks)
-                    call del_file('stktab.txt')
+                    call orig_proj%add_stktab(stk_list, o_stks)
                     if( has_mics )then
-                        call write_filetable('mictab.txt', mic_list)
-                        call orig_proj%add_movies('mictab.txt', ctfparms)
-                        call del_file('mictab.txt')
+                        call orig_proj%add_movies(mic_list, ctfparms)
                     endif
                     ! updates 2D, os_out not updated as not correct scale
                     do iproj=nprev+1,n_spprojs

@@ -286,9 +286,8 @@ contains
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
-            call write_filetable('stktab.txt',stktab)
             ! import stacks into project
-            call spproj%add_stktab('stktab.txt',os_stk)
+            call spproj%add_stktab(stktab,os_stk)
             ! transfer particles locations to ptcl2D
             cnt = 0
             do ipart = 1,params%nparts
@@ -301,7 +300,6 @@ contains
                 call spproj_parts(ipart)%kill
             enddo
             call os_stk%kill
-            call del_file('stktab.txt')
         endif
         ! final write
         call spproj%write
@@ -427,9 +425,8 @@ contains
                 enddo
                 call spproj_parts(ipart)%kill
             enddo
-            call write_filetable('stktab.txt',stktab)
             ! import stacks into project
-            call spproj%add_stktab('stktab.txt',os_stk)
+            call spproj%add_stktab(stktab,os_stk)
             ! transfer 2D parameters
             cnt = 0
             do ipart = 1,params%nparts
@@ -458,7 +455,6 @@ contains
             enddo
             ! clean-up
             call os_stk%kill
-            call del_file('stktab.txt')
         endif
         ! final write
         call spproj%write

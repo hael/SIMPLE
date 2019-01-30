@@ -358,7 +358,7 @@ contains
         type(oris)                             :: deftab
         type(ctfparams)                        :: ctfvars, prev_ctfvars
         character(len=:),          allocatable :: phaseplate
-        character(len=LONGSTRLEN), allocatable :: boxfnames(:)
+        character(len=LONGSTRLEN), allocatable :: boxfnames(:), movfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
         logical :: inputted_boxtab, inputted_deftab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
@@ -374,6 +374,7 @@ contains
         nprev_intgs  = spproj%get_nintgs()
         nprev_movies = spproj%get_nmovies()
         first_import = nprev_movies==0 .and. nprev_intgs==0
+        nmovf        = nlines(params%filetab)
         ! CTF
         if( cline%defined('phaseplate') )then
             phaseplate = cline%get_carg('phaseplate')
@@ -429,19 +430,28 @@ contains
             call deftab%kill
         else
             ! movies/micrographs
-            call spproj%add_movies(params%filetab, ctfvars)
+            call read_filetable(params%filetab, movfnames)
+            if( params%mkdir.eq.'yes' )then
+                ! taking care of paths
+                do i=1,nmovf
+                    if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
+                enddo
+            endif
+            call spproj%add_movies(movfnames, ctfvars)
         endif
         ! add boxtab
         if( inputted_boxtab )then
             call read_filetable(params%boxtab, boxfnames)
             nboxf = size(boxfnames)
-            nmovf = nlines(params%filetab)
             if( nboxf /= nmovf )then
                 write(logfhandle,*) '# boxfiles: ', nboxf
                 write(logfhandle,*) '# movies  : ', nmovf
                 THROW_HARD('# boxfiles .ne. # movies; exec_import_movies')
             endif
             do i=1,nmovf
+                if( params%mkdir.eq.'yes' )then
+                    if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+                endif
                 call make_relativepath(CWD_GLOB, boxfnames(i), boxfname)
                 if( first_import )then
                     call spproj%os_mic%set(i, 'boxfile', boxfname)
@@ -480,6 +490,9 @@ contains
             THROW_HARD('# boxfiles .ne. # os_mic entries; exec_import_boxes')
         endif
         do i=1,nos_mic
+            if( params%mkdir.eq.'yes' )then
+                if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
+            endif
             call make_relativepath(CWD_GLOB,boxfnames(i),boxfname)
             call spproj%os_mic%set(i, 'boxfile', boxfname)
         end do
@@ -495,8 +508,9 @@ contains
         use simple_binoris_io ! use all in there
         class(import_particles_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
-        character(len=:), allocatable :: phaseplate, ctfstr
-        real,             allocatable :: line(:)
+        character(len=:),      allocatable :: phaseplate, ctfstr
+        character(LONGSTRLEN), allocatable :: stkfnames(:)
+        real,                  allocatable :: line(:)
         type(parameters) :: params
         type(sp_project) :: spproj
         type(oris)       :: os
@@ -546,7 +560,7 @@ contains
             ndatlines = paramfile%get_ndatalines()
             nrecs     = paramfile%get_nrecs_per_line()
             if( nrecs < 1 .or. nrecs > 4 .or. nrecs == 2 )then
-                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_extract_ptcls')
+                THROW_HARD('unsupported nr of rec:s in plaintexttab; exec_import_particles')
             endif
             call os%new(ndatlines)
             allocate( line(nrecs) )
@@ -559,7 +573,7 @@ contains
                     case( 'microns' )
                         ! nothing to do
                     case DEFAULT
-                        THROW_HARD('unsupported dfunit; exec_extract_ptcls')
+                        THROW_HARD('unsupported dfunit; exec_import_particles')
                 end select
                 select case(params%angastunit)
                     case( 'radians' )
@@ -567,7 +581,7 @@ contains
                     case( 'degrees' )
                         ! nothing to do
                     case DEFAULT
-                        THROW_HARD('unsupported angastunit; exec_extract_ptcls')
+                        THROW_HARD('unsupported angastunit; exec_import_particles')
                 end select
                 select case(params%phshiftunit)
                     case( 'radians' )
@@ -575,7 +589,7 @@ contains
                     case( 'degrees' )
                         if( nrecs == 4 ) line(4) = deg2rad(line(4))
                     case DEFAULT
-                        THROW_HARD('unsupported phshiftunit; exec_extract_ptcls')
+                        THROW_HARD('unsupported phshiftunit; exec_import_particles')
                 end select
                 call os%set(i, 'dfx', line(1))
                 if( nrecs > 1 )then
@@ -598,7 +612,7 @@ contains
                     ctfvars%ctfflag = CTFFLAG_FLIP
                 case DEFAULT
                     write(logfhandle,*)
-                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_extract_ptcls')
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_import_particles')
             end select
             if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
                 ! if importing single stack of extracted particles, these are hard requirements
@@ -627,7 +641,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'kv') )then
                             write(logfhandle,*) 'os entry: ', i, ' lacks acceleration volatage (kv)'
-                            THROW_HARD('provide kv on command line or update input document; exec_extract_ptcls')
+                            THROW_HARD('provide kv on command line or update input document; exec_import_particles')
                         endif
                     end do
                 endif
@@ -638,7 +652,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'cs') )then
                             write(logfhandle,*) 'os entry: ', i, ' lacks spherical aberration constant (cs)'
-                            THROW_HARD('provide cs on command line or update input document; exec_extract_ptcls')
+                            THROW_HARD('provide cs on command line or update input document; exec_import_particles')
                         endif
                     end do
                 endif
@@ -649,7 +663,7 @@ contains
                     do i=1,ndatlines
                         if( .not. os%isthere(i, 'fraca') )then
                             write(logfhandle,*) 'os entry: ', i, ' lacks fraction of amplitude contrast (fraca)'
-                            THROW_HARD('provide fraca on command line or update input document; exec_extract_ptcls')
+                            THROW_HARD('provide fraca on command line or update input document; exec_import_particles')
                         endif
                     end do
                 endif
@@ -703,7 +717,18 @@ contains
             call spproj%add_single_stk(params%stk, ctfvars, os)
         endif
         ! add list of stacks (stktab) if present
-        if( cline%defined('stktab') ) call spproj%add_stktab(params%stktab, os)
+        if( cline%defined('stktab') )then
+            call read_filetable(params%stktab, stkfnames)
+            if( size(stkfnames) /= os%get_noris() )then
+                THROW_HARD('Incompatible number of stacks & meta-data; exec_import_particles')
+            endif
+            if( params%mkdir.eq.'yes' )then
+                do i=1,size(stkfnames)
+                    if(stkfnames(i)(1:1).ne.'/') stkfnames(i) = PATH_PARENT//trim(stkfnames(i))
+                enddo
+            endif
+            call spproj%add_stktab(stkfnames, os)
+        endif
 
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import

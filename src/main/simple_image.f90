@@ -1269,7 +1269,7 @@ contains
         complex(kind=c_float_complex), pointer, intent(out) :: cmat_ptr(:,:,:)
         cmat_ptr => self%cmat
     end subroutine get_cmat_ptr
-    
+
     !>  \brief   get_cmat get the image object's complex matrix
     pure subroutine get_cmat_sub( self, cmat )
         class(image), intent(in)  :: self

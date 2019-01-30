@@ -516,27 +516,21 @@ contains
     end subroutine add_single_movie
 
     !> Add/append movies or micrographs without ctf parameters
-    subroutine add_movies( self, filetab, ctfvars )
+    subroutine add_movies( self, movies_array, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: filetab
+        character(LONGSTRLEN),     intent(in)    :: movies_array(:)
         type(ctfparams),           intent(in)    :: ctfvars
-        class(oris),               pointer     :: os_ptr
-        type(ctfparams)                        :: prev_ctfvars
-        character(len=LONGSTRLEN), allocatable :: movienames(:)
-        character(len=:),          allocatable :: name
-        character(len=LONGSTRLEN) :: rel_moviename
-        integer                   :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
-        logical                   :: is_movie
-        ! file exists?
-        if( .not. file_exists(filetab) )then
-            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_movies')
-        endif
+        class(oris),      pointer     :: os_ptr
+        type(ctfparams)               :: prev_ctfvars
+        character(len=:), allocatable :: name
+        character(len=LONGSTRLEN)     :: rel_moviename
+        integer                       :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        logical                       :: is_movie
         is_movie = .true.
         ! oris object pointer
         os_ptr => self%os_mic
         ! read movie names
-        call read_filetable(filetab, movienames)
-        nmics = size(movienames)
+        nmics = size(movies_array)
         ! update oris
         nprev_mics = os_ptr%get_noris()
         ntot       = nmics + nprev_mics
@@ -555,10 +549,10 @@ contains
         cnt = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,movienames(cnt),rel_moviename)
+            call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
             call find_ldim_nptcls(trim(rel_moviename), ldim, nframes)
             if( nframes <= 0 )then
-                THROW_WARN('# frames in movie: '//trim(movienames(imic))//' <= zero, omitting')
+                THROW_WARN('# frames in movie: '//trim(movies_array(imic))//' <= zero, omitting')
                 cycle
             else if( nframes > 1 )then
                 call os_ptr%set(imic, 'movie', trim(rel_moviename))
@@ -814,11 +808,6 @@ contains
                 THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_stk')
         end select
         call self%os_stk%set_ctfvars(n_os_stk, ctfvars)
-        ! preprocessing / streaming adds pairs: one micrograph and one stack
-        ! so this keeps track of the index in this setting
-        if( self%os_mic%get_noris() == n_os_stk )then
-            call self%os_stk%set(n_os_stk, 'micind',  real(n_os_stk))
-        endif
         ! update particle oris objects
         do i = 1, nptcls
             call o%new
@@ -907,23 +896,16 @@ contains
         end select
     end subroutine add_single_stk
 
-    subroutine add_stktab( self, stktab, os )
-        class(sp_project),   intent(inout) :: self
-        character(len=*),    intent(in)    :: stktab
-        class(oris),         intent(inout) :: os ! parameters associated with stktab
-        character(len=LONGSTRLEN), allocatable :: stknames(:)
-        integer,                   allocatable :: nptcls_arr(:)
-        type(ori)                 :: o_ptcl, o_stk
-        character(len=LONGSTRLEN) :: stk_relpath
+    subroutine add_stktab( self, stkfnames, os )
+        class(sp_project),     intent(inout) :: self
+        character(LONGSTRLEN), intent(inout) :: stkfnames(:)
+        class(oris),           intent(inout) :: os ! parameters associated with stktab
+        integer,  allocatable :: nptcls_arr(:)
+        type(ori)             :: o_ptcl, o_stk
+        character(LONGSTRLEN) :: stk_relpath
         integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk, istate
         integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind
-        ! file exists?
-        if( .not. file_exists(stktab) )then
-            THROW_HARD('stack list (stktab): '//trim(stktab)//' not in cwd; add_stktab')
-        endif
-        ! read micrograph stack names
-        call read_filetable(stktab, stknames)
-        nstks = size(stknames)
+        nstks = size(stkfnames)
         ! check that inputs are of conforming sizes
         n_os = os%get_noris()
         if( n_os /= nstks )then
@@ -935,25 +917,25 @@ contains
         allocate(nptcls_arr(nstks),source=0)
         do istk=1,nstks
             ! full path and existence check
-            call make_relativepath(CWD_GLOB,stknames(istk),stk_relpath)
-            stknames(istk) = trim(stk_relpath)
+            call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            stkfnames(istk) = trim(stk_relpath)
             o_stk = os%get_ori(istk)
             ! logical dimension management
-            call find_ldim_nptcls(trim(stknames(istk)), ldim, nptcls)
+            call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
             ldim(3) = 1
             if( istk == 1 )then
                 ldim_here = ldim
             else
                 if( .not. all(ldim_here == ldim) )then
                     write(logfhandle,*) 'micrograph stack #  : ', istk
-                    write(logfhandle,*) 'stk name            : ', trim(stknames(istk))
+                    write(logfhandle,*) 'stk name            : ', trim(stkfnames(istk))
                     write(logfhandle,*) 'ldim in object      : ', ldim_here
                     write(logfhandle,*) 'ldim read from stack: ', ldim
                     THROW_HARD('inconsistent logical dimensions; add_stktab')
                 endif
             endif
             if( ldim(1) /= ldim(2) )then
-                write(logfhandle,*) 'stk name: ', trim(stknames(istk))
+                write(logfhandle,*) 'stk name: ', trim(stkfnames(istk))
                 write(logfhandle,*) 'xdim:     ', ldim(1)
                 write(logfhandle,*) 'ydim:     ', ldim(2)
                 THROW_HARD('nonsquare particle images not supported; add_stktab')
@@ -996,7 +978,7 @@ contains
             stk_ind = n_os_stk + istk
             ! updates stk segment
             call self%os_stk%set_ori(stk_ind, o_stk)
-            call self%os_stk%set(stk_ind, 'stk',     trim(stknames(istk)))
+            call self%os_stk%set(stk_ind, 'stk',     trim(stkfnames(istk)))
             call self%os_stk%set(stk_ind, 'box',     real(ldim(1)))
             call self%os_stk%set(stk_ind, 'nptcls',  real(nptcls_arr(istk)))
             call self%os_stk%set(stk_ind, 'fromp',   real(fromp))
@@ -1021,11 +1003,6 @@ contains
             ! update
             fromp = top + 1 ! global index
         enddo
-        ! preprocessing / streaming adds pairs: one micrograph and one stack
-        ! so this keeps track of the index in this setting
-        if( nstks == 1 .and. self%os_mic%get_noris() == n_os_stk+1 )then
-            call self%os_stk%set(n_os_stk+1, 'micind', real(n_os_stk+1))
-        endif
     end subroutine add_stktab
 
     !>  Only commits to disk when a change to the project is made
