@@ -47,6 +47,7 @@ contains
                 THROW_HARD('unknown eo flag; exec_reconstruct3D')
         end select
         if( params%l_rec_soft )then
+            call build%build_strategy3D_tbox(params)
             call exec_rec_soft(cline, 1) ! which_iter = 1
         else
             call exec_rec_master

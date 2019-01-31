@@ -662,7 +662,6 @@ contains
                 ! no reconstruction
             case DEFAULT
                 c1_symop = sym('c1')
-                if( L_BENCH ) t_rec = tic()
                 ! make the gridding prepper
                 if( params_glob%eo .ne. 'no' )then
                     kbwin = build_glob%eorecvols(1)%get_kbwin()
@@ -723,7 +722,6 @@ contains
                     call rec_imgs(ibatch)%kill
                 end do
                 deallocate(rec_imgs, build_glob%imgbatch)
-                if( L_BENCH ) rt_rec = toc(t_rec)
         end select
     end subroutine calc_3Drec
 
@@ -745,7 +743,7 @@ contains
         pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
         ptcl_mask = .true.
         ! allocate s3D singleton
-        call prep_strategy3D( ptcl_mask, npeaks )
+        call prep_strategy3D(ptcl_mask, npeaks)
         ! read peaks
         if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
             THROW_HARD(trim(params_glob%o_peaks_file)//' file does not exist')
