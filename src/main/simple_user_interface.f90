@@ -774,7 +774,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
         & suitable for the first pass of cleanup after picking',&               ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &0, 0, 0, 5, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 0, 0, 6, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -789,6 +789,8 @@ contains
         call cleanup2D%set_input('srch_ctrls', 3, maxits)
         call cleanup2D%set_input('srch_ctrls', 4, update_frac)
         call cleanup2D%set_input('srch_ctrls', 5, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call cleanup2D%set_input('srch_ctrls', 6, 'autoscale', 'binary', 'Automatic down-scaling', 'Automatic down-scaling of images &
+        &for accelerated execution(yes|no){yes}','(yes|no){yes}', .false., 'yes')
         ! filter controls
         call cleanup2D%set_input('filt_ctrls', 1, hp)
         call cleanup2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
