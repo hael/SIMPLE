@@ -136,6 +136,28 @@ contains
             write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
         endif
 
+        ! SETUP WEIGHTS
+        ! this needs to be done prior to search such that each part
+        ! sees the same information in distributed execution
+        ! has to be done prior to classaverager initialization
+        if( which_iter > 3 )then
+            if( params_glob%softpw2D.eq.'yes' )then
+                call build_glob%spproj_field%calc_soft_weights_specscore
+            else
+                call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
+            endif
+        else
+            call build_glob%spproj_field%set_all2single('w', 1.0)
+        endif
+
+        ! B-FACTOR CAVGS
+        ! has to be done prior to classaverager initialization
+        if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
+            call build_glob%spproj_field%calc_bfac_rec_specscore
+        else
+            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
+        endif
+
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
@@ -159,26 +181,6 @@ contains
             call cavger_read(params_glob%refs_odd, 'odd')
         else
             call cavger_read(params_glob%refs, 'odd')
-        endif
-
-        ! SETUP WEIGHTS
-        ! this needs to be done prior to search such that each part
-        ! sees the same information in distributed execution
-        if( which_iter > 3 )then
-            if( params_glob%softpw2D.eq.'yes' )then
-                call build_glob%spproj_field%calc_soft_weights_specscore
-            else
-                call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
-            endif
-        else
-            call build_glob%spproj_field%set_all2single('w', 1.0)
-        endif
-
-        ! B-FACTOR CAVGS
-        if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
-            call build_glob%spproj_field%calc_bfac_rec_specscore
-        else
-            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
 
         ! READ FOURIER RING CORRELATIONS

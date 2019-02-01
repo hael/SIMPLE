@@ -1107,12 +1107,13 @@ contains
             res         = real(k) / (real(box) * smpd)
             kweights(k) = max(0., exp(-bfac_sc * res * res))
         end do
-        ! normalize
-        kweights(1:nyq)  = kweights(1:nyq) / sum(kweights(1:nyq))
+        ! normalize including zero
+        kweights(0)      = 1.
+        kweights(0:nyq)  = kweights(0:nyq) / sum(kweights(0:nyq))
+        ! normalize based on zero: ensures continuity & weights(:)=1 for bfac=0.
+        kweights(0:nyq)  = kweights(0:nyq) / kweights(0)
         ! beyond nyquist
         kweights(nyq+1:) = kweights(nyq)
-        ! central spot
-        kweights(0)      = 1.
     end subroutine calc_norm_bfac_weights
 
     ! LINEAR ALGEBRA STUFF
