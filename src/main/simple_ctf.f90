@@ -468,13 +468,16 @@ contains
                 ang       = atan2(rh,rk)
                 tval      = 1.0
                 if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
-                ! rho
-                rho(h,k) = tval * tval
+                if( do_bfac )then
+                    rho(h,k) = kweights(sh) * tval * tval   ! CTF**2
+                    tval     = kweights(sh) * tval          ! CTF
+                else
+                    rho(h,k) = tval * tval                  ! CTF**2
+                endif
                 if( imode == 1 ) tval = abs(tval)
                 ! multiply image with tval & weight
                 logi   = [h,k,0]
                 phys   = img%comp_addr_phys(logi)
-                if( do_bfac ) tval = tval * kweights(sh)
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), tval)
                 ! shift image
                 call img%mul_cmat_at(phys(1),phys(2),phys(3), img%oshift(logi,[x,y,0.]))

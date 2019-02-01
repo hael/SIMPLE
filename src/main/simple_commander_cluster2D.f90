@@ -76,10 +76,18 @@ contains
         if( params%mul > 1. )then
             call build%spproj_field%mul_shifts(params%mul)
         endif
-        ! setup weights in case the 2D was run without them (specscore will still be there)
-        call build%spproj_field%set_all2single('w', 1.0)
+        ! setup weights
+        if( params%softpw2D.eq.'yes' )then
+            call build%spproj_field%calc_soft_weights_specscore
+        else
+            call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
+        endif
         ! shell weighted classes
-        if( params%shellw.eq.'yes' ) call build%spproj_field%calc_bfac_rec_specscore
+        if( params%shellw.eq.'yes' )then
+            call build%spproj_field%calc_bfac_rec_specscore
+        else
+            call build%spproj_field%set_all2single('bfac_rec', 0.)
+        endif
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write

@@ -125,7 +125,7 @@ contains
         !     enddo
         ! endif
 
-        ! B-FACTOR
+        ! B-FACTOR SEARCH
         bfactor = 0.
         if( params_glob%cc_objfun == OBJFUN_RES )then
             if( cline%defined('bfac') )then
@@ -165,7 +165,7 @@ contains
         ! this needs to be done prior to search such that each part
         ! sees the same information in distributed execution
         if( which_iter > 3 )then
-            if( SOFT_PTCL_WEIGHTS )then
+            if( params_glob%softpw2D.eq.'yes' )then
                 call build_glob%spproj_field%calc_soft_weights_specscore
             else
                 call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
@@ -174,7 +174,7 @@ contains
             call build_glob%spproj_field%set_all2single('w', 1.0)
         endif
 
-        ! B-FACTOR
+        ! B-FACTOR CAVGS
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
             call build_glob%spproj_field%calc_bfac_rec_specscore
         else

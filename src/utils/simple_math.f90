@@ -1100,15 +1100,19 @@ contains
         real,    intent(in)  :: bfac, smpd
         real,    intent(out) :: kweights(0:box)
         real    :: bfac_sc, res
-        integer :: k
+        integer :: k, nyq
+        nyq     = fdim(box)
         bfac_sc = bfac / 4.
-        do k=1,box
+        do k=1,nyq
             res         = real(k) / (real(box) * smpd)
             kweights(k) = max(0., exp(-bfac_sc * res * res))
         end do
         ! normalize
-        kweights(1:box) = kweights(1:box) / sum(kweights(1:box))
-        kweights(0)     = 1.
+        kweights(1:nyq)  = kweights(1:nyq) / sum(kweights(1:nyq))
+        ! beyond nyquist
+        kweights(nyq+1:) = kweights(nyq)
+        ! central spot
+        kweights(0)      = 1.
     end subroutine calc_norm_bfac_weights
 
     ! LINEAR ALGEBRA STUFF

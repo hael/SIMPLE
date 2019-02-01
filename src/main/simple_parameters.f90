@@ -75,7 +75,7 @@ type :: parameters
     character(len=3)      :: shellnorm='no'
     character(len=3)      :: shellw='no'          !< to use shell weighted reconstruction (yes|no){yes}
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: soften='no'          !< soften envelope with cosine edge(yes|no){no}
+    character(len=3)      :: softpw2D='no'         !< soft particle weights in 2D(yes|no){no}
     character(len=3)      :: specstats='no'
     character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
@@ -549,7 +549,7 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
-        call check_carg('soften',         self%soften)
+        call check_carg('softpw2D',       self%softpw2D)
         call check_carg('speckind',       self%speckind)
         call check_carg('specstats',      self%specstats)
         call check_carg('stats',          self%stats)
