@@ -84,7 +84,7 @@ contains
         endif
         ! shell weighted classes
         if( params%shellw.eq.'yes' )then
-            call build%spproj_field%calc_bfac_rec_specscore
+            call build%spproj_field%calc_bfac_rec_specscore(params%bfac_sdev)
         else
             call build%spproj_field%set_all2single('bfac_rec', 0.)
         endif

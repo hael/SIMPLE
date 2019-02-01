@@ -2430,7 +2430,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 2, 2, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 2, 3, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2445,6 +2445,7 @@ contains
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
         call reconstruct3D%set_input('filt_ctrls', 2, shellw)
+        call reconstruct3D%set_input('filt_ctrls', 3, 'bfac_sdev', 'num', 'B-factor sigma','B-factor standard deviation for per-particle B-factor estimation in Angstroms^2', 'B-factor sigma in Angstroms^2(>0.0){50}', .false., 50.)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)

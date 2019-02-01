@@ -67,11 +67,12 @@ contains
     end subroutine exec_eorec_distr
 
     subroutine exec_rec_soft( cline, which_iter )
-        use simple_strategy3D_matcher, only: setup_weights_read_o_peaks, calc_3Drec
-        use simple_cmdline,            only: cmdline
+        use simple_strategy3D_matcher
+        use simple_cmdline, only: cmdline
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
         call setup_weights_read_o_peaks
+        call calc_global_ori_weights
         call calc_3Drec( cline, which_iter )
         call qsys_job_finished( 'simple_rec_master :: exec_rec_soft')
     end subroutine exec_rec_soft

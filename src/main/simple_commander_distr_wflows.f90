@@ -1331,6 +1331,10 @@ contains
                 call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
             enddo
             call build%spproj%write_segment_inside('out',params%projfile)
+            if( params%l_rec_soft )then
+                ! ptcl3D segment may have been updated and needs to be written
+                call build%spproj%write_segment_inside('ptcl3D',params%projfile)
+            endif
         endif
         ! termination
         call qsys_cleanup

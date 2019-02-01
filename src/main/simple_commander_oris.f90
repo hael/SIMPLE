@@ -306,7 +306,7 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
                 specscores = build%spproj_field%get_all('specscore')
                 ! CHECKING BFAC_REC ESTIMATION
-                ! call build%spproj_field%calc_bfac_rec_specscore
+                ! call build%spproj_field%calc_bfac_rec_specscore(params%bfac_sdev)
                 ! bfacs      = build%spproj_field%get_all('bfac_rec')
                 ! call hpsort(specscores, bfacs)
                 ! do i=1,size(specscores)

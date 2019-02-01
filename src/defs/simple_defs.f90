@@ -151,11 +151,9 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 
 ! weighting scheme
 logical, parameter :: SOFT_PTCL_WEIGHTS3D  = .true.    !< soft (as opposed to hard) particles weights based on B-factor
-logical, parameter :: WEIGHT_SCHEME_GLOBAL = .false.   !< per-particle or global orientation weighting scheme
+logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
-real,    parameter :: BFAC_SDEV            = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
-! real,    parameter :: BFAC_LBOUND        = -50.      !< lower B-factor bound for shell-weighting in 2D/3D based on specscore
-
+real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D

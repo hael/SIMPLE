@@ -302,6 +302,7 @@ type :: parameters
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
+    real    :: bfac_sdev=BFAC_SDEV_DEFAULT !< B-factor standard deviation for per-particle B-factor estimation
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
@@ -705,6 +706,7 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
+        call check_rarg('bfac_sdev',      self%bfac_sdev)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)

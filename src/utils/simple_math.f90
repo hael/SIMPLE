@@ -1095,6 +1095,23 @@ contains
         end do
     end function get_resarr
 
+    ! OLD
+    ! subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
+    !     integer, intent(in)  :: box
+    !     real,    intent(in)  :: bfac, smpd
+    !     real,    intent(out) :: kweights(0:box)
+    !     real    :: bfac_sc, res
+    !     integer :: k
+    !     bfac_sc = bfac / 4.
+    !     do k=1,box
+    !         res         = real(k) / (real(box) * smpd)
+    !         kweights(k) = max(0., exp(-bfac_sc * res * res))
+    !     end do
+    !     ! normalize
+    !     kweights(1:box) = kweights(1:box) / sum(kweights(1:box))
+    !     kweights(0)     = 1.
+    ! end subroutine calc_norm_bfac_weights
+
     subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
         integer, intent(in)  :: box
         real,    intent(in)  :: bfac, smpd
@@ -1103,17 +1120,13 @@ contains
         integer :: k, nyq
         nyq     = fdim(box)
         bfac_sc = bfac / 4.
-        do k=1,nyq
+        kweights(0) = 1.
+        do k=1,box
             res         = real(k) / (real(box) * smpd)
             kweights(k) = max(0., exp(-bfac_sc * res * res))
         end do
-        ! normalize including zero
-        kweights(0)      = 1.
-        kweights(0:nyq)  = kweights(0:nyq) / sum(kweights(0:nyq))
-        ! normalize based on zero: ensures continuity & weights(:)=1 for bfac=0.
-        kweights(0:nyq)  = kweights(0:nyq) / kweights(0)
-        ! beyond nyquist
-        kweights(nyq+1:) = kweights(nyq)
+        ! normalize
+        kweights(0:box) = kweights(0:box) / sum(kweights(0:nyq))
     end subroutine calc_norm_bfac_weights
 
     ! LINEAR ALGEBRA STUFF

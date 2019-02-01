@@ -154,8 +154,9 @@ type :: oris
     procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_weights
-    procedure          :: calc_soft_weights
+    procedure          :: calc_soft_weights_spread
     procedure          :: calc_soft_weights_specscore
+    procedure          :: calc_soft_weights_bfac
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec_rnd
     procedure          :: calc_bfac_rec
@@ -2307,36 +2308,9 @@ contains
         call reverse(inds)
     end function order_cls
 
-    ! subroutine calc_bfac_rec_specscore( self )
-    !     class(oris), intent(inout) :: self
-    !     real,    allocatable :: states(:), scores(:)
-    !     logical, allocatable :: mask(:)
-    !     real    :: avg, score, bsc, score_min
-    !     if( self%isthere('specscore') )then
-    !         scores = self%get_all('specscore')
-    !     else
-    !         call self%delete_entry('bfac_rec')
-    !         return
-    !     endif
-    !     states    = self%get_all('state')
-    !     mask      = states > 0.5 .and. scores > TINY
-    !     scores    = scores * 100. ! FREALIGN definition
-    !     avg       = sum(scores, mask=mask) / real(count(mask))
-    !     scores    = (avg - scores)
-    !     score_min = minval(scores, mask=mask)
-    !     bsc       = BFAC_LBOUND / score_min
-    !     if( bsc < 0. ) THROW_HARD('bfac_rec scaling factor (bsc) < 0')
-    !     where(mask)
-    !         scores = scores * bsc
-    !     elsewhere
-    !         scores = 0.
-    !     endwhere
-    !     call self%set_all('bfac_rec', scores)
-    !     deallocate(mask,states,scores)
-    ! end subroutine calc_bfac_rec_specscore
-
-    subroutine calc_bfac_rec_specscore( self )
+    subroutine calc_bfac_rec_specscore( self, bfac_sdev )
         class(oris), intent(inout) :: self
+        real,        intent(in)    :: bfac_sdev
         real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
         real    :: avg, sdev, var
@@ -2351,13 +2325,14 @@ contains
         states = self%get_all('state')
         mask   = states > 0.5 .and. scores > TINY
         call moment(scores, avg, sdev, var, err, mask)
-        scores = ((scores - avg) / sdev) * BFAC_SDEV
+        scores = ((scores - avg) / sdev) * bfac_sdev
         call self%set_all('bfac_rec', scores)
         deallocate(mask,states,scores)
     end subroutine calc_bfac_rec_specscore
 
-    subroutine calc_bfac_rec( self )
+    subroutine calc_bfac_rec( self, bfac_sdev )
         class(oris), intent(inout) :: self
+        real,        intent(in)    :: bfac_sdev
         real,    allocatable :: states(:), scores(:)
         logical, allocatable :: mask(:)
         real    :: avg, sdev, var
@@ -2372,7 +2347,7 @@ contains
         states = self%get_all('state')
         mask   = states > 0.5 .and. scores > TINY
         call moment(scores, avg, sdev, var, err, mask)
-        scores = ((scores - avg) / sdev) * BFAC_SDEV
+        scores = ((scores - avg) / sdev) * bfac_sdev
         call self%set_all('bfac_rec', scores)
         deallocate(mask,states,scores)
     end subroutine calc_bfac_rec
@@ -2495,6 +2470,23 @@ contains
         endif
     end subroutine calc_hard_weights
 
+    !>  \brief  calculates soft weights based on angular spread
+    subroutine calc_soft_weights_spread( self )
+        class(oris), intent(inout) :: self
+        real, allocatable :: spreads(:), states(:), weights(:)
+        if( self%isthere('spread') )then
+            spreads = self%get_all('spread')
+            states  = self%get_all('state')
+            where( spreads < 1.0 ) spreads = 1.0 ! bounded weigths
+            allocate(weights(self%n), source = 1.0 / spreads)
+            where( states < 0.5 ) weights = 0.
+            call self%set_all('w', weights)
+            deallocate(spreads, states, weights)
+        else
+            call self%set_all2single('w', 1.0)
+        endif
+    end subroutine calc_soft_weights_spread
+
     !>  \brief  calculates soft weights based on specscore
     subroutine calc_soft_weights_specscore( self )
         class(oris), intent(inout) :: self
@@ -2511,13 +2503,14 @@ contains
                 weights = 0.
             endwhere
             call self%set_all('w', weights)
+            deallocate(specscores, states, weights)
         else
             call self%set_all2single('w', 1.0)
         endif
     end subroutine calc_soft_weights_specscore
 
     !>  \brief  calculates soft weights based on B-factor
-    subroutine calc_soft_weights( self )
+    subroutine calc_soft_weights_bfac( self )
         class(oris), intent(inout) :: self
         real, allocatable :: bfacs(:), states(:), weights(:)
         real :: minw
@@ -2532,10 +2525,11 @@ contains
                 weights = 0.
             endwhere
             call self%set_all('w', weights)
+            deallocate(bfacs, states, weights)
         else
             call self%set_all2single('w', 1.0)
         endif
-    end subroutine calc_soft_weights
+    end subroutine calc_soft_weights_bfac
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights2D( self, frac, ncls )
