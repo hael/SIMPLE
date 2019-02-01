@@ -114,7 +114,9 @@ contains
 
         ! SETUP WEIGHTS
         if( SOFT_PTCL_WEIGHTS3D )then
-            call build_glob%spproj_field%calc_soft_weights_specscore
+            ! call build_glob%spproj_field%calc_soft_weights_specscore
+            call build_glob%spproj_field%calc_soft_weights_spread
+            ! call build_glob%spproj_field%calc_soft_weights_bfac
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
