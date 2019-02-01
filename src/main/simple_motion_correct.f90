@@ -16,6 +16,7 @@ implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
 public :: motion_correct_aniso, motion_correct_aniso_calc_sums, motion_correct_aniso_kill, motion_correct_kill_common
+public :: motion_correct_with_aniso
 private
 #include "simple_local_flags.inc"
 
@@ -40,6 +41,7 @@ real,              allocatable :: opt_shifts_saved(:,:)             !< optimal s
 ! data structures for anisotropic correction
 class(motion_anisocor), allocatable :: motion_aniso(:)
 type(image),            allocatable :: movie_frames_shifted_aniso(:) !< shifted movie frames
+type(image),            allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
 type(image),            allocatable :: movie_sum_global_threads(:)   !< array of global movie sums for parallel refinement (image)
 real(dp),               allocatable :: opt_shifts_aniso(:,:)         !< optimal anisotropic shifts identified
 real,                   allocatable :: opt_shifts_aniso_sp(:,:)      !< optimal anisotropic shifts identified, single precision
@@ -70,6 +72,7 @@ real    :: dose_rate      = 0.       !< dose rate
 real    :: nsig_here      = 6.0      !< nr of sigmas (for outlier removal)
 logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
+logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
 
 ! module global constants
 integer, parameter :: MITSREF       = 30     !< max # iterations of refinement optimisation
@@ -130,6 +133,10 @@ contains
                  &movie_frames_ftexp(nframes), movie_frames_ftexp_sh(nframes),&
                  &movie_sum_global_ftexp_threads(nframes), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 1; simple_motion_correct')
+        if ( motion_correct_with_aniso ) then
+            allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
+            if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
+        end if
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
             call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
@@ -142,7 +149,7 @@ contains
         &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
         &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), opt_shifts_saved(nframes,2),&
         &frameweights(nframes), frameweights_saved(nframes), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
         ! init
         cmat               = cmplx(0.,0.)
         cmat_sum           = cmplx(0.,0.)
@@ -385,7 +392,9 @@ contains
         ! save the isotropically corrected movie stack to disk for anisotropic movie alignment
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%ifft
-            call movie_frames_shifted(iframe)%write('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
+            if (motion_correct_with_aniso) then
+                movie_frames_shifted_saved(iframe) = movie_frames_shifted(iframe)
+            end if
         end do
         call movie_sum_ctf%ifft()
         ! re-calculate the weighted sum
@@ -479,6 +488,8 @@ contains
         shifts                 = 0.
         ! prepare the images for anisotropic correction by scaling & band-pass filtering & create motion_aniso objs
         do iframe=1,nframes
+            call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
+            call movie_frames_shifted(iframe)%copy(movie_frames_shifted_saved(iframe))
             call movie_frames_shifted(iframe)%fft
             if( doscale ) call movie_frames_shifted(iframe)%clip_inplace(ldim4scale)
             call movie_frames_shifted(iframe)%bp(hp, lp)
@@ -513,7 +524,7 @@ contains
                 opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
                 ! apply deformation
                 call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
-                    frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe))
+                    frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe)) !revisit this
                 ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
                 ! (see below)
             end do
@@ -556,15 +567,13 @@ contains
         write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! put back the unfiltered isotropically corrected frames for final anisotropic sum generation
         do iframe=1,nframes
-            call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
-            call movie_frames_shifted(iframe)%read('movie_iso_part'//int2str_pad(params_glob%part,params_glob%numlen)//params_glob%ext, iframe)
-            call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
+            call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted_saved(iframe))
         end do
         ! apply nonlinear transformations
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
             call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
-                frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe))
+                frame_in=movie_frames_shifted_saved(iframe), frame_out=movie_frames_shifted_aniso(iframe))
         end do
         !$omp end parallel do
         ! we do not destruct search objects here (needed for sum production)
@@ -640,8 +649,9 @@ contains
                 call motion_aniso(iframe)%kill
                 call movie_frames_shifted_aniso(iframe)%kill
                 call movie_sum_global_threads(iframe)%kill
+                call movie_frames_shifted_saved(iframe)%kill
             end do
-            deallocate(motion_aniso, movie_frames_shifted_aniso, movie_sum_global_threads)
+            deallocate(motion_aniso, movie_frames_shifted_aniso, movie_sum_global_threads, movie_frames_shifted_saved)
         endif
         if( allocated(opt_shifts_aniso)       ) deallocate(opt_shifts_aniso)
         if( allocated(opt_shifts_aniso_sp)    ) deallocate(opt_shifts_aniso_sp)

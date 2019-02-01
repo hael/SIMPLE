@@ -88,6 +88,7 @@ contains
         else
             self%moviename = trim(moviename)
         endif
+        motion_correct_with_aniso = DO_ANISO
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
