@@ -32,9 +32,9 @@ contains
         ! extract peak info
         call extract_peaks( self%s, corrs )
         if( WEIGHT_SCHEME_GLOBAL )then
-            call corrs2softmax_weights_glob(self%s, self%s%npeaks, corrs, ws, best_loc, wcorr)      ! stochastic weights
+            call corrs2softmax_weights_glob(self%s, corrs, ws, best_loc, wcorr)      ! stochastic weights
         else
-            call corrs2softmax_weights(self%s, self%s%npeaks, corrs, ws, included, best_loc, wcorr) ! stochastic weights
+            call corrs2softmax_weights(self%s, corrs, ws, included, best_loc, wcorr) ! stochastic weights
         endif
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
