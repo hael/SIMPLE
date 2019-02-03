@@ -698,4 +698,44 @@ contains
         x   = (x - med) / dev
     end subroutine robust_normalization
 
+    ! RANK STUFF
+
+    subroutine rank_sum_weights( n, weights )
+        integer, intent(in)  :: n
+        real,    intent(out) :: weights(n)
+        real    :: denom, rn, rn_plus_1
+        integer :: irank
+        rn        = real(n)
+        rn_plus_1 = rn + 1.0
+        denom     = rn * rn_plus_1
+        do irank=1,n
+            weights(irank) = (2.0 * (rn_plus_1 - real(irank))) / denom
+        end do
+    end subroutine rank_sum_weights
+
+    subroutine rank_inverse_weights( n, weights )
+        integer, intent(in)  :: n
+        real,    intent(out) :: weights(n)
+        integer :: irank
+        do irank=1,n
+            weights(irank) = 1.0 / real(irank)
+        end do
+        weights = weights / sum(weights)
+    end subroutine rank_inverse_weights
+
+    ! ROC weights, should be the best ones
+    subroutine rank_centroid_weights( n, weights )
+        integer, intent(in)  :: n
+        real,    intent(out) :: weights(n)
+        real :: inv_ranks(n), rn
+        integer :: irank
+        rn = real(n)
+        do irank=1,n
+            inv_ranks(irank) = 1.0 / real(irank)
+        end do
+        do irank=1,n
+            weights(irank) = (1.0 / rn) * sum(inv_ranks(irank:))
+        end do
+    end subroutine rank_centroid_weights
+
 end module simple_stat
