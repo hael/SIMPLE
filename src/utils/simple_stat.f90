@@ -727,7 +727,7 @@ contains
     subroutine rank_centroid_weights( n, weights )
         integer, intent(in)  :: n
         real,    intent(out) :: weights(n)
-        real :: inv_ranks(n), rn
+        real    :: inv_ranks(n), rn
         integer :: irank
         rn = real(n)
         do irank=1,n
