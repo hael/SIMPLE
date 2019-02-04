@@ -11,13 +11,14 @@ private
 
 ! type for one peak orientation
 type o_peak_ori
-    real    :: eul(3)   = 0.
-    real    :: shift(2) = 0.
-    real    :: corr     = 0.
-    real    :: ow       = 0.
-    integer :: iptcl    = 0
-    integer :: proj     = 0
-    integer :: state    = 0
+    real    :: eul(3)    = 0.
+    real    :: shift(2)  = 0.
+    real    :: corr      = 0.
+    real    :: specscore = 0.
+    real    :: ow        = 0.
+    integer :: iptcl     = 0
+    integer :: proj      = 0
+    integer :: state     = 0
 end type o_peak_ori
 
 integer :: recsz = 0, funit = 0
@@ -95,13 +96,14 @@ contains
             do ipeak=1,npeaks
                 ow = o_peak%get(ipeak,'ow')
                 if( ow > TINY )then
-                    o_peak_record(ipeak)%eul   = o_peak%get_euler(ipeak)
-                    o_peak_record(ipeak)%shift = o_peak%get_2Dshift(ipeak)
-                    o_peak_record(ipeak)%corr  = o_peak%get(ipeak, 'corr')
-                    o_peak_record(ipeak)%ow    = ow
-                    o_peak_record(ipeak)%iptcl = iptcl
-                    o_peak_record(ipeak)%proj  = nint(o_peak%get(ipeak, 'proj'))
-                    o_peak_record(ipeak)%state = o_peak%get_state(ipeak)
+                    o_peak_record(ipeak)%eul       = o_peak%get_euler(ipeak)
+                    o_peak_record(ipeak)%shift     = o_peak%get_2Dshift(ipeak)
+                    o_peak_record(ipeak)%corr      = o_peak%get(ipeak, 'corr')
+                    o_peak_record(ipeak)%specscore = o_peak%get(ipeak, 'specscore')
+                    o_peak_record(ipeak)%ow        = ow
+                    o_peak_record(ipeak)%iptcl     = iptcl
+                    o_peak_record(ipeak)%proj      = nint(o_peak%get(ipeak, 'proj'))
+                    o_peak_record(ipeak)%state     = o_peak%get_state(ipeak)
                 endif
             end do
             ! write record
@@ -140,13 +142,14 @@ contains
             do ipeak=1,NPEAKS2REFINE
                 if( o_peak_record(ipeak)%ow > TINY )then
                     n_nozero = n_nozero + 1
-                    call o_peak%set_euler(n_nozero,    o_peak_record(ipeak)%eul)
-                    call o_peak%set_shift(n_nozero,    o_peak_record(ipeak)%shift)
-                    call o_peak%set(n_nozero, 'corr',  o_peak_record(ipeak)%corr)
-                    call o_peak%set(n_nozero, 'ow',    o_peak_record(ipeak)%ow)
-                    call o_peak%set(n_nozero, 'iptcl', real(o_peak_record(ipeak)%iptcl))
-                    call o_peak%set(n_nozero, 'proj',  real(o_peak_record(ipeak)%proj))
-                    call o_peak%set(n_nozero, 'state', real(o_peak_record(ipeak)%state))
+                    call o_peak%set_euler(n_nozero,         o_peak_record(ipeak)%eul)
+                    call o_peak%set_shift(n_nozero,         o_peak_record(ipeak)%shift)
+                    call o_peak%set(n_nozero, 'corr',       o_peak_record(ipeak)%corr)
+                    call o_peak%set(n_nozero, 'specscore',  o_peak_record(ipeak)%specscore)
+                    call o_peak%set(n_nozero, 'ow',         o_peak_record(ipeak)%ow)
+                    call o_peak%set(n_nozero, 'iptcl',      real(o_peak_record(ipeak)%iptcl))
+                    call o_peak%set(n_nozero, 'proj',       real(o_peak_record(ipeak)%proj))
+                    call o_peak%set(n_nozero, 'state',      real(o_peak_record(ipeak)%state))
                 endif
             end do
         endif

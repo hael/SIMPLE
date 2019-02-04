@@ -8,6 +8,8 @@ implicit none
 public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
+public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights
+public :: rank_exponent_weights
 private
 #include "simple_local_flags.inc"
 
@@ -723,7 +725,7 @@ contains
         weights = weights / sum(weights)
     end subroutine rank_inverse_weights
 
-    ! ROC weights, should be the best ones
+    ! ROC weights
     subroutine rank_centroid_weights( n, weights )
         integer, intent(in)  :: n
         real,    intent(out) :: weights(n)
@@ -737,5 +739,18 @@ contains
             weights(irank) = (1.0 / rn) * sum(inv_ranks(irank:))
         end do
     end subroutine rank_centroid_weights
+
+    subroutine rank_exponent_weights( n, p, weights )
+        integer, intent(in)  :: n
+        real,    intent(in)  :: p
+        real,    intent(out) :: weights(n)
+        real    :: rn
+        integer :: irank
+        rn = real(n)
+        do irank=1,n
+            weights(irank) = (rn - real(irank) + 1.0)**p
+        end do
+        weights = weights / sum(weights)
+    end subroutine rank_exponent_weights
 
 end module simple_stat

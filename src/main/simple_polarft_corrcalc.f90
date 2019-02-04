@@ -198,7 +198,9 @@ type :: polarft_corrcalc
     procedure          :: gencorr_sigma_contrib
     procedure, private :: genfrc
     procedure, private :: calc_frc
-    procedure          :: specscore
+    procedure, private :: specscore_1
+    procedure, private :: specscore_2
+    generic            :: specscore => specscore_1, specscore_2
     procedure          :: fit_bfac
     procedure          :: calc_roinv_corrmat
     ! DESTRUCTOR
@@ -2454,13 +2456,22 @@ contains
         sigma_contrib = sigma_contrib / real(self%nrots)
     end subroutine gencorr_sigma_contrib
 
-    real function specscore( self, iref, iptcl, irot )
+    real function specscore_1( self, iref, iptcl, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref, iptcl, irot
         real :: frc(params_glob%kfromto(1):params_glob%kstop)
         call self%genfrc(iref, self%pinds(iptcl), irot, frc)
-        specscore = max(0.,min(real(count(frc>0.143)) / real(size(frc)),1.))
-    end function specscore
+        specscore_1 = max(0.,min(real(count(frc>0.143)) / real(size(frc)),1.))
+    end function specscore_1
+
+    real function specscore_2( self, iref, iptcl, irot, shvec )
+        class(polarft_corrcalc), intent(inout) :: self
+        integer,                 intent(in)    :: iref, iptcl, irot
+        real,                    intent(in)    :: shvec(2)
+        real :: frc(params_glob%kfromto(1):params_glob%kstop)
+        call self%calc_frc(iref, iptcl, irot, shvec, frc )
+        specscore_2 = max(0.,min(real(count(frc>0.143)) / real(size(frc)),1.))
+    end function specscore_2
 
     real function fit_bfac( self, iref, iptcl, irot, shvec )
         ! Fitting to Y = A * exp( -B/(4s2) )
