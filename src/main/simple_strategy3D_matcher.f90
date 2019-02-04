@@ -686,7 +686,7 @@ contains
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks
-        use simple_strategy3D_utils, only: update_softmax_weights_glob
+        use simple_strategy3D_utils, only: update_softmax_weights
         integer :: iptcl, n_nozero, i
         ! set npeaks
         npeaks = NPEAKS2REFINE
@@ -712,7 +712,7 @@ contains
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            if( WEIGHT_SCHEME_GLOBAL ) call update_softmax_weights_glob(iptcl, npeaks)
+            call update_softmax_weights(iptcl, npeaks)
         end do
         call close_o_peaks_io
     end subroutine setup_weights_read_o_peaks
@@ -725,42 +725,40 @@ contains
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
                 ! nothing to do
             case DEFAULT
-                if( WEIGHT_SCHEME_GLOBAL )then
-                    ! extract weights
-                    nweights = npeaks * nptcls2update
-                    allocate(weights_glob(nweights), source=0.)
-                    cnt = 0
-                    do iptcl=params_glob%fromp,params_glob%top
-                        if( ptcl_mask(iptcl) )then
-                            weights = s3D%o_peaks(iptcl)%get_all('ow')
-                            do i=1,size(weights)
-                                cnt = cnt + 1
-                                weights_glob(cnt) = weights(i)
-                            end do
+                ! extract weights
+                nweights = npeaks * nptcls2update
+                allocate(weights_glob(nweights), source=0.)
+                cnt = 0
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        weights = s3D%o_peaks(iptcl)%get_all('ow')
+                        do i=1,size(weights)
+                            cnt = cnt + 1
+                            weights_glob(cnt) = weights(i)
+                        end do
+                    endif
+                end do
+                ! find threshold
+                call hpsort(weights_glob(:cnt))
+                weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
+                ! zero and normalize weights
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        weights = s3D%o_peaks(iptcl)%get_all('ow')
+                        where( weights < weight_thres ) weights = 0.
+                        wsum = sum(weights)
+                        if( wsum > TINY )then
+                            weights = weights / wsum
+                            call s3D%o_peaks(iptcl)%set_all('ow', weights)
+                            call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
+                            call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
+                        else
+                            call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
+                            call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)
                         endif
-                    end do
-                    ! find threshold
-                    call hpsort(weights_glob(:cnt))
-                    weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
-                    ! zero and normalize weights
-                    do iptcl=params_glob%fromp,params_glob%top
-                        if( ptcl_mask(iptcl) )then
-                            weights = s3D%o_peaks(iptcl)%get_all('ow')
-                            where( weights < weight_thres ) weights = 0.
-                            wsum = sum(weights)
-                            if( wsum > TINY )then
-                                weights = weights / wsum
-                                call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                                call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
-                            else
-                                call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
-                                call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)
-                            endif
-                        endif
-                    end do
-                    deallocate(weights_glob)
-                endif
+                    endif
+                end do
+                deallocate(weights_glob)
         end select
     end subroutine calc_global_ori_weights
 

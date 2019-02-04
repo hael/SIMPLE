@@ -127,12 +127,11 @@ real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                       !! smaller number means sharper distribution
+real, parameter    :: TAU_DEFAULT          = 0.05      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
+                                                       !! smaller number means sharper distribution, numbers BTW 0.03 and 0.5 make sense
 real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
                                                        !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
-real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -151,7 +150,6 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 
 ! weighting scheme
 logical, parameter :: SOFT_PTCL_WEIGHTS3D  = .true.    !< soft (as opposed to hard) particles weights based on B-factor
-logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
 
