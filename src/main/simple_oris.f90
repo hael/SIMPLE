@@ -145,7 +145,9 @@ type :: oris
     generic            :: rot_transp => rot_transp_1, rot_transp_2
     procedure, private :: median_1
     generic            :: median => median_1
-    procedure          :: stats
+    procedure, private :: stats_1
+    procedure, private :: stats_2
+    generic            :: stats => stats_1, stats_2
     procedure          :: minmax
     procedure          :: spiral_1
     procedure          :: spiral_2
@@ -2127,19 +2129,47 @@ contains
     end function median_1
 
     !>  \brief  is for calculating variable statistics
-    subroutine stats( self, which, ave, sdev, var, err )
+    subroutine stats_1( self, which, ave, sdev, var, err )
         class(oris),      intent(inout) :: self
         character(len=*), intent(in)    :: which
         real,             intent(out)   :: ave, sdev, var
         logical,          intent(out)   :: err
-        real, allocatable :: vals(:), all_vals(:)
-        real, allocatable :: states(:)
-        states   = self%get_all('state')
-        all_vals = self%get_all(which)
-        vals     = pack(all_vals, mask=(states > 0.5))
-        call moment(vals, ave, sdev, var, err)
-        deallocate(vals, all_vals, states)
-    end subroutine stats
+        real, allocatable :: vals(:), states(:)
+        states = self%get_all('state')
+        vals   = self%get_all(which)
+        call moment(vals, ave, sdev, var, err, states > 0.5)
+        deallocate(vals, states)
+    end subroutine stats_1
+
+    !>  \brief  is for calculating variable statistics
+    subroutine stats_2( self, which, statvars, mask )
+        class(oris),        intent(inout) :: self
+        character(len=*),   intent(in)    :: which
+        type(stats_struct), intent(out)   :: statvars
+        logical, optional,  intent(in)    :: mask(self%n)
+        real, allocatable :: vals(:), states(:)
+        logical :: err, mmask(self%n)
+        real    :: var, val, x
+        integer :: i
+        if( present(mask) )then
+            mmask = mask
+        else
+            mmask = .true.
+        endif
+        states = self%get_all('state')
+        vals   = self%get_all(which)
+        call moment(vals, statvars%avg, statvars%sdev, var, err, states > 0.5 .and. mmask)
+        statvars%minv = huge(x)
+        statvars%maxv = -huge(x)
+        do i=1,self%n
+            if( states(i) > 0.5 .and. mmask(i) )then
+                val = self%o(i)%get(which)
+                if( val < statvars%minv ) statvars%minv = val
+                if( val > statvars%maxv ) statvars%maxv = val
+            endif
+        end do
+        deallocate(states, vals)
+    end subroutine stats_2
 
     !>  \brief  is for calculating the minimum/maximum values of a variable
     subroutine minmax( self, which, minv, maxv )
@@ -2480,6 +2510,7 @@ contains
             where( spreads < 1.0 ) spreads = 1.0 ! bounded weigths
             allocate(weights(self%n), source = 1.0 / spreads)
             where( states < 0.5 ) weights = 0.
+            weights = weights / maxval(weights)  ! minmax normalisation
             call self%set_all('w', weights)
             deallocate(spreads, states, weights)
         else

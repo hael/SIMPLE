@@ -12,19 +12,21 @@ private
 
 type convergence
     private
-    real :: corr      = 0. !< average correlation
-    real :: dist      = 0. !< average angular distance
-    real :: dist_inpl = 0. !< average in-plane angular distance
-    real :: npeaks    = 0. !< average # peaks
-    real :: frac      = 0. !< average fraction of search space scanned
-    real :: mi_class  = 0. !< class parameter distribution overlap
-    real :: mi_proj   = 0. !< projection parameter distribution overlap
-    real :: mi_state  = 0. !< state parameter distribution overlap
-    real :: specscore = 0. !< spectral score
-    real :: spread    = 0. !< angular spread
-    real :: shwmean   = 0. !< shift increment, weighted mean
-    real :: shwstdev  = 0. !< shift increment, weighted std deviation
-    real :: bfac      = 0. !< average per-particle B-factor (search)
+    type(stats_struct) :: corr      !< correlation stats
+    type(stats_struct) :: dist      !< angular distance stats
+    type(stats_struct) :: dist_inpl !< in-plane angular distance stats
+    type(stats_struct) :: npeaks    !< # peaks stats
+    type(stats_struct) :: frac      !< fraction of search space scanned stats
+    type(stats_struct) :: specscore !< spectral score stats
+    type(stats_struct) :: spread    !< angular spread stats
+    type(stats_struct) :: shwmean   !< shift increment, weighted mean stats
+    type(stats_struct) :: shwstdev  !< shift increment, weighted std deviation stats
+    type(stats_struct) :: bfac      !< per-particle B-factor (search) stats
+    type(stats_struct) :: pw        !< particle weight stats
+    type(stats_struct) :: ow        !< max orientation weight stats
+    real :: mi_class = 0.           !< class parameter distribution overlap
+    real :: mi_proj  = 0.           !< projection parameter distribution overlap
+    real :: mi_state = 0.           !< state parameter distribution overlap
   contains
     procedure :: check_conv2D
     procedure :: check_conv3D
@@ -39,40 +41,44 @@ contains
         class(cmdline),     intent(inout) :: cline
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: tmp_arr(:)
+        real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt, bfac_min, bfac_max
         logical :: converged, bfac_rec_there
-        ! generate mask
-        allocate(mask(build_glob%spproj_field%get_noris()))
-        tmp_arr = build_glob%spproj_field%get_all('updatecnt')
-        mask    = tmp_arr > 0.5
-        tmp_arr = build_glob%spproj_field%get_all('state')
-        mask    = mask .and. tmp_arr > 0.5
-        deallocate(tmp_arr)
-        ! stats
-        avg_updatecnt  = build_glob%spproj_field%get_avg('updatecnt', mask=mask)
-        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
-        self%specscore = build_glob%spproj_field%get_avg('specscore', mask=mask)
-        self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
-        self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
-        self%bfac      = build_glob%spproj_field%get_avg('bfac',      mask=mask)
+        601 format(A,1X,F8.3)
+        602 format(A,1X,F8.3,1X,F8.3)
+        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / size(updatecnts)
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
+        call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
+        call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
+        call build_glob%spproj_field%stats('frac',      self%frac,      mask=mask)
+        call build_glob%spproj_field%stats('bfac',      self%bfac,      mask=mask)
+        call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
         bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
         if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
-        write(logfhandle,'(A,1X,F7.4)') '>>> CLASS OVERLAP:                  ', self%mi_class
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:         ', avg_updatecnt
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST (DEG):        ', self%dist_inpl
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR:      ', self%bfac
+        write(logfhandle,601) '>>> CLASS OVERLAP:                                  ', self%mi_class
+        write(logfhandle,601) '>>> # PARTICLE UPDATES             AVG:             ', avg_updatecnt
+        write(logfhandle,604) '>>> IN-PLANE DIST (DEG)            AVG/SDEV/MIN/MAX:',&
+        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> PER-PARTICLE B-FACTOR (SEARCH) AVG/SDEV/MIN/MAX:',&
+        &self%bfac%avg, self%bfac%sdev, self%bfac%minv, self%bfac%maxv
         if( bfac_rec_there )then
-        write(logfhandle,'(A,1X,F7.1)') '>>> MIN PER-PARTICLE B-FACTOR (REC):', bfac_min
-        write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):', bfac_max
+        write(logfhandle,602) '>>> PER-PARTICLE B-FACTOR (REC)             MIN/MAX:', bfac_min, bfac_max
         endif
-        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:         ', self%frac
-        write(logfhandle,'(A,1X,F7.4)') '>>> AVG CORRELATION:                ', self%corr
-        write(logfhandle,'(A,1X,F7.4)') '>>> AVG SPECSCORE:                  ', self%specscore
+        write(logfhandle,604) '>>> PARTICLE WEIGHT                AVG/SDEV/MIN/MAX:',&
+        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED         AVG/SDEV/MIN/MAX:',&
+        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
+        write(logfhandle,604) '>>> CORRELATION                    AVG/SDEV/MIN/MAX:',&
+        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,604) '>>> SPECSCORE                      AVG/SDEV/MIN/MAX:',&
+        &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
         ! dynamic shift search range update
-        if( self%frac >= FRAC_SH_LIM )then
+        if( self%frac%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
                 params_glob%trs = MSK_FRAC*msk
@@ -86,9 +92,9 @@ contains
         if( ncls > 1 )then
             converged = .false.
             if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac > FRAC_LIM_FRAC )converged = .true.
+                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac%avg > FRAC_LIM_FRAC )converged = .true.
             else
-                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac > FRAC_LIM )converged = .true.
+                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac%avg > FRAC_LIM )converged = .true.
             endif
             if( converged )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
@@ -96,7 +102,7 @@ contains
                 write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
             endif
         else
-            if( self%dist_inpl < 0.5 )then
+            if( self%dist_inpl%avg < 0.5 )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -115,44 +121,62 @@ contains
         real    :: min_state_mi_joint, avg_updatecnt, bfac_min, bfac_max
         logical :: converged, bfac_rec_there
         integer :: iptcl, istate
+        601 format(A,1X,F8.3)
+        602 format(A,1X,F8.3,1X,F8.3)
+        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
-        self%corr      = build_glob%spproj_field%get_avg('corr',      mask=mask)
-        self%specscore = build_glob%spproj_field%get_avg('specscore', mask=mask)
-        self%dist      = build_glob%spproj_field%get_avg('dist',      mask=mask)
-        self%dist_inpl = build_glob%spproj_field%get_avg('dist_inpl', mask=mask)
-        self%npeaks    = build_glob%spproj_field%get_avg('npeaks',    mask=mask)
-        self%frac      = build_glob%spproj_field%get_avg('frac',      mask=mask)
+        call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
+        call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
+        call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
+        call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
+        call build_glob%spproj_field%stats('npeaks',    self%npeaks,    mask=mask)
+        call build_glob%spproj_field%stats('frac',      self%frac,      mask=mask)
+        call build_glob%spproj_field%stats('bfac',      self%bfac,      mask=mask)
+        call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
+        call build_glob%spproj_field%stats('ow',        self%ow,        mask=mask)
+        call build_glob%spproj_field%stats('spread',    self%spread,    mask=mask)
+        call build_glob%spproj_field%stats('shwmean',   self%shwmean,   mask=mask)
+        call build_glob%spproj_field%stats('shwstdev',  self%shwstdev,  mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        self%spread    = build_glob%spproj_field%get_avg('spread',    mask=mask)
-        self%shwmean   = build_glob%spproj_field%get_avg('shwmean',   mask=mask)
-        self%shwstdev  = build_glob%spproj_field%get_avg('shwstdev',  mask=mask)
-        self%bfac      = build_glob%spproj_field%get_avg('bfac')     ! always updated for all ptcls with states > 0
         bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
         if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
-        write(logfhandle,'(A,1X,F7.4)') '>>> ORIENTATION OVERLAP:               ', self%mi_proj
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PARTICLE UPDATES:            ', avg_updatecnt
+        write(logfhandle,601) '>>> ORIENTATION OVERLAP:                            ', self%mi_proj
         if( params_glob%nstates > 1 )then
-        write(logfhandle,'(A,1X,F7.4)') '>>> STATE OVERLAP:                     ', self%mi_state
+        write(logfhandle,601) '>>> STATE OVERLAP:                                  ', self%mi_state
         endif
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG DIST BTW BEST ORIS (DEG):      ', self%dist
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG IN-PLANE DIST      (DEG):      ', self%dist_inpl
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG # PEAKS:                       ', self%npeaks
-        write(logfhandle,'(A,1X,F7.1)') '>>> AVG PER-PARTICLE B-FACTOR (SEARCH):', self%bfac
+        write(logfhandle,601) '>>> # PARTICLE UPDATES             AVG:             ', avg_updatecnt
+        write(logfhandle,604) '>>> DIST BTW BEST ORIS (DEG)       AVG/SDEV/MIN/MAX:',&
+        &self%dist%avg, self%dist%sdev, self%dist%minv, self%dist%maxv
+        write(logfhandle,604) '>>> IN-PLANE DIST (DEG)            AVG/SDEV/MIN/MAX:',&
+        &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
+        write(logfhandle,604) '>>> ANGULAR SPREAD (DEG)           AVG/SDEV/MIN/MAX:',&
+        &self%spread%avg, self%spread%sdev, self%spread%minv, self%spread%maxv
+        write(logfhandle,604) '>>> # PEAKS                        AVG/SDEV/MIN/MAX:',&
+        &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
+        write(logfhandle,604) '>>> PER-PARTICLE B-FACTOR (SEARCH) AVG/SDEV/MIN/MAX:',&
+        &self%bfac%avg, self%bfac%sdev, self%bfac%minv, self%bfac%maxv
         if( bfac_rec_there )then
-        write(logfhandle,'(A,1X,F7.1)') '>>> MIN PER-PARTICLE B-FACTOR (REC):   ', bfac_min
-        write(logfhandle,'(A,1X,F7.1)') '>>> MAX PER-PARTICLE B-FACTOR (REC):   ', bfac_max
+        write(logfhandle,602) '>>> PER-PARTICLE B-FACTOR (REC)             MIN/MAX:', bfac_min, bfac_max
         endif
-        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:            ', self%frac
-        write(logfhandle,'(A,1X,F7.4)') '>>> AVG CORRELATION:                   ', self%corr
-        write(logfhandle,'(A,1X,F7.4)') '>>> AVG SPECSCORE:                     ', self%specscore
-        write(logfhandle,'(A,1X,F7.2)') '>>> AVG ANGULAR SPREAD (DEG):          ', self%spread
-        write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCREMENT:      ', self%shwmean
-        write(logfhandle,'(A,1X,F7.2)') '>>> AVG WEIGHTED SHIFT INCR STDEV:     ', self%shwstdev
+        write(logfhandle,604) '>>> PARTICLE WEIGHT                AVG/SDEV/MIN/MAX:',&
+        &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
+        write(logfhandle,604) '>>> ORIENTATION WEIGHT MAX         AVG/SDEV/MIN/MAX:',&
+        &self%ow%avg, self%ow%sdev, self%ow%minv, self%ow%maxv
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED         AVG/SDEV/MIN/MAX:',&
+        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
+        write(logfhandle,604) '>>> CORRELATION                    AVG/SDEV/MIN/MAX:',&
+        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
+        write(logfhandle,604) '>>> SPECSCORE                      AVG/SDEV/MIN/MAX:',&
+        &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
+        write(logfhandle,604) '>>> WEIGHTED AVG  SHIFT INCR PEAKS AVG/SDEV/MIN/MAX:',&
+        &self%shwmean%avg, self%shwmean%sdev, self%shwmean%minv, self%shwmean%maxv
+        write(logfhandle,604) '>>> WEIGHTED SDEV SHIFT INCR PEAKS AVG/SDEV/MIN/MAX:',&
+        &self%shwstdev%avg, self%shwstdev%sdev, self%shwstdev%minv, self%shwstdev%maxv
         ! dynamic shift search range update
-        if( self%frac >= FRAC_SH_LIM )then
+        if( self%frac%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
                 & params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
@@ -165,8 +189,8 @@ contains
         endif
         ! determine convergence
         if( params_glob%nstates == 1 )then
-            if( self%frac    > FRAC_LIM       .and.&
-                self%mi_proj > MI_CLASS_LIM_3D )then
+            if( self%frac%avg > FRAC_LIM .and.&
+                self%mi_proj  > MI_CLASS_LIM_3D )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -197,7 +221,7 @@ contains
             end do
             if( min_state_mi_joint > MI_STATE_JOINT_LIM .and.&
                 self%mi_state      > MI_STATE_LIM .and.&
-                self%frac          > FRAC_LIM      )then
+                self%frac%avg      > FRAC_LIM      )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -216,10 +240,15 @@ contains
         real, allocatable :: statepops(:)
         logical           :: converged
         integer           :: iptcl, istate
-        self%frac      = build_glob%spproj_field%get_avg('frac')
+        real              :: bfac_min, bfac_max
+        601 format(A,1X,F8.3)
+        602 format(A,1X,F8.3,1X,F8.3)
+        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        call build_glob%spproj_field%stats('frac', self%frac)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        write(logfhandle,'(A,1X,F7.4)') '>>> STATE OVERLAP:                ', self%mi_state
-        write(logfhandle,'(A,1X,F7.1)') '>>> % SEARCH SPACE SCANNED:       ', self%frac
+        write(logfhandle,601) '>>> STATE OVERLAP:                                  ', self%mi_state
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED         AVG/SDEV/MIN/MAX:',&
+        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         allocate( statepops(params_glob%nstates) )
@@ -230,17 +259,18 @@ contains
             statepops(istate) = statepops(istate) + 1.0
         end do
         if( build_glob%spproj_field%isthere('bfac') )then
-            self%bfac = build_glob%spproj_field%get_avg('bfac')
-            write(logfhandle,'(A,1X,F6.1)') '>>> AVERAGE PER-PARTICLE B-FACTOR:', self%bfac
+        call build_glob%spproj_field%stats('bfac', self%bfac)
+        write(logfhandle,602) '>>> PER-PARTICLE B-FACTOR (REC)             MIN/MAX:', bfac_min, bfac_max
         endif
-        self%corr = build_glob%spproj_field%get_avg('corr')
-        write(logfhandle,'(A,1X,F7.4)') '>>> CORRELATION                  :', self%corr
+        call build_glob%spproj_field%stats('corr', self%corr)
+        write(logfhandle,604) '>>> CORRELATION                    AVG/SDEV/MIN/MAX:',&
+        &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         ! print the overlaps and pops for the different states
         do istate=1,params_glob%nstates
             write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
-            self%frac     > HET_FRAC_LIM     )then
+            self%frac%avg > HET_FRAC_LIM     )then
             write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
             converged = .true.
         else
@@ -255,13 +285,13 @@ contains
         character(len=*),   intent(in) :: which
         select case(which)
             case('corr')
-                get = self%corr
+                get = self%corr%avg
             case('dist')
-                get = self%dist
+                get = self%dist%avg
             case('dist_inpl')
-                get = self%dist_inpl
+                get = self%dist_inpl%avg
             case('frac')
-                get = self%frac
+                get = self%frac%avg
             case('mi_class')
                 get = self%mi_class
             case('mi_proj')
@@ -269,9 +299,9 @@ contains
             case('mi_state')
                 get = self%mi_state
             case('spread')
-                get = self%spread
+                get = self%spread%avg
             case('bfac')
-                get = self%bfac
+                get = self%bfac%avg
             case DEFAULT
                 get = 0.
         end select

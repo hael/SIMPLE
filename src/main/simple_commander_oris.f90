@@ -162,7 +162,7 @@ contains
         real                 :: mind2, maxd2, avgd2, sdevd2, vard2
         real                 :: popmin, popmax, popmed, popave, popsdev, popvar, frac_populated, szmax
         integer              :: nprojs, iptcl, icls, i, j, noris, ncls
-        real,    allocatable :: clustszs(:), specscores(:), bfacs(:), weights(:)
+        real,    allocatable :: clustszs(:)
         integer, allocatable :: clustering(:), pops(:), tmp(:)
         logical, allocatable :: ptcl_mask(:)
         integer, parameter   :: hlen=50
@@ -304,21 +304,6 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'STANDARD DEVIATION OF SPECSCORE:', sdevd
                 write(logfhandle,'(a,1x,f8.2)') 'MINIMUM SPECSCORE (WORST)      :', mind
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
-                specscores = build%spproj_field%get_all('specscore')
-                ! CHECKING BFAC_REC ESTIMATION
-                ! call build%spproj_field%calc_bfac_rec_specscore(params%bfac_sdev)
-                ! bfacs      = build%spproj_field%get_all('bfac_rec')
-                ! call hpsort(specscores, bfacs)
-                ! do i=1,size(specscores)
-                !     print *, specscores(i), bfacs(i)
-                ! end do
-                ! CHECKING SOFT PARTICLE WEIGHT ESTIMATION
-                call build%spproj_field%calc_soft_weights_specscore
-                weights = build%spproj_field%get_all('w')
-                call hpsort(specscores, weights)
-                do i=1,size(specscores)
-                    print *, specscores(i),weights(i)
-                end do
             endif
         endif
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
