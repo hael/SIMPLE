@@ -27,10 +27,6 @@ type :: ft_expanded
   contains
     ! constructors
     procedure          :: new
-    ! procedure, private :: new_1
-    ! procedure, private :: new_2
-    ! procedure, private :: new_3
-    ! generic            :: new => new_1, new_2, new_3
     ! getters
     procedure          :: get_flims
     procedure          :: get_lims
@@ -251,10 +247,19 @@ contains
         class(ft_expanded), intent(in) :: self1, self2
         real :: r,sumasq,sumbsq
         ! corr is real part of the complex mult btw 1 and 2*
-        r = sum(real(self1%cmat*conjg(self2%cmat)))
+        r =        sum(real(self1%cmat(                   1,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
+        r = r +    sum(real(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
+        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
         ! normalisation terms
-        sumasq = sum(csq(self1%cmat))
-        sumbsq = sum(csq(self2%cmat))
+        sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
+        sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
         ! finalise the correlation coefficient
         if( sumasq > 0. .and. sumbsq > 0. )then
             r = r / sqrt(sumasq * sumbsq)
@@ -267,8 +272,12 @@ contains
         class(ft_expanded), intent(inout) :: self1, self2
         real(sp),           intent(inout) :: corr
         real(dp) :: sumasq,sumbsq
-        sumasq = sum(csq(self1%cmat))
-        sumbsq = sum(csq(self2%cmat))
+        sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
+        sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
         corr   = real(real(corr,dp) * denom / sqrt(sumasq * sumbsq), sp)
     end subroutine corr_normalize_sp
 
@@ -276,8 +285,12 @@ contains
         class(ft_expanded), intent(inout) :: self1, self2
         real(dp),           intent(inout) :: corr
         real(dp) :: sumasq,sumbsq
-        sumasq = sum(csq(self1%cmat))
-        sumbsq = sum(csq(self2%cmat))
+        sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
+        sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
         corr   = corr * denom / sqrt(sumasq * sumbsq)
     end subroutine corr_normalize_dp
 

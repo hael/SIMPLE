@@ -182,7 +182,7 @@ contains
             allocate( self%ftexp_tmpmat_re_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
                       self%ftexp_tmpmat_im_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
                       self%ftexp_tmp_cmat12  ( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
-                      stat=alloc_stat ) ! note: we could allocate 1:flims(1,2), 1:flims(2,2) elements to save memory
+                      stat=alloc_stat )
             if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
         end if
     end subroutine set_dims_and_alloc
@@ -195,7 +195,6 @@ contains
         real(kind=8) :: cost
         select type(self)
             class is (ftexp_shsrch)
-                !cost = -self%reference%corr_shifted_8(self%particle, -vec)
                 cost = -self%corr_shifted_cost_8( -vec )
             class DEFAULT
                 THROW_HARD('unknown type; ftexp_shsrch_cost_8')
@@ -208,7 +207,10 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp) :: r
         call self%calc_tmpmat_re( shvec )
-        r = sum(self%ftexp_tmpmat_re_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))) / denom
+        r =          sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
+        r = r +      sum(self%ftexp_tmpmat_re_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1))
+        r = r + 2. * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        r = r / denom
     end function corr_shifted_cost_8
 
     !< cost function for minimizer, gradient only
@@ -219,10 +221,18 @@ contains
         real, pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr( transfmat_here )
         call self%calc_tmpmat_im( shvec )
-        grad(1) = sum(self%ftexp_tmpmat_im_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) *&
-                   &transfmat_here(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1,1))
-        grad(2) = sum(self%ftexp_tmpmat_im_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) *&
-                   &transfmat_here(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1,2))
+        grad(1) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
+            &transfmat_here(                  1,1:self%flims(2,2)-1,1,1))
+        grad(1) = grad(1) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
+            &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,1))
+        grad(1) = grad(1) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+            &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,1))
+        grad(2) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
+            &transfmat_here(                  1,1:self%flims(2,2)-1,1,2))
+        grad(2) = grad(2) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
+            &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,2))
+        grad(2) = grad(2) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+            &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,2))
         grad = grad / denom
     end subroutine corr_gshifted_cost_8
 
@@ -234,12 +244,23 @@ contains
         real, pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr( transfmat_here )
         call self%calc_tmpmat_re_im( shvec )
-        f       = sum(self%ftexp_tmpmat_re_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))) / denom
-        grad(1) = sum(self%ftexp_tmpmat_im_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) *&
-                   &transfmat_here(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1,1))
-        grad(2) = sum(self%ftexp_tmpmat_im_2d(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) *&
-                   &transfmat_here(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1,2))
-        grad    = grad / denom
+        f =          sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
+        f = f +      sum(self%ftexp_tmpmat_re_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1))
+        f = f + 2. * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        f = f / denom
+        grad(1) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
+            &transfmat_here(                  1,1:self%flims(2,2)-1,1,1))
+        grad(1) = grad(1) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
+            &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,1))
+        grad(1) = grad(1) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+            &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,1))
+        grad(2) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
+            &transfmat_here(                  1,1:self%flims(2,2)-1,1,2))
+        grad(2) = grad(2) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
+            &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,2))
+        grad(2) = grad(2) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+            &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,2))
+        grad = grad / denom
     end subroutine corr_fdfshifted_cost_8
 
     !< calculate tmp matrix for cost function
@@ -250,7 +271,7 @@ contains
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2)
+        do kind=self%flims(2,1),self%flims(2,2) !-1
             do hind=self%flims(1,1),self%flims(1,2)
                 arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
                 self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
@@ -266,7 +287,7 @@ contains
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2)
+        do kind=self%flims(2,1),self%flims(2,2) !-1
             do hind=self%flims(1,1),self%flims(1,2)
                 arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
                 self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
@@ -283,7 +304,7 @@ contains
         integer     :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2)
+        do kind=self%flims(2,1),self%flims(2,2) !-1
             do hind=self%flims(1,1),self%flims(1,2)
                 arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
                 tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
@@ -299,15 +320,17 @@ contains
         complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
-        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &
-                  cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &
-            conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))
+        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &  !-1
+                  cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &  !-1
+            conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))     !-1
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         real(dp) :: r
+        call self%set_dims_and_alloc()
+        call self%calc_tmp_cmat12()
         r = self%corr_shifted_cost_8( shvec )
         call self%particle%corr_normalize( self%reference, r )
     end function ftexp_shsrch_corr_shifted_8
@@ -321,7 +344,6 @@ contains
         grad = 0.d0
         select type(self)
             class is (ftexp_shsrch)
-                !call self%reference%corr_gshifted_8(self%particle, -vec, grad)
                 call self%corr_gshifted_cost_8( -vec, grad )
             class DEFAULT
                 THROW_HARD('unknown type; ftexp_shsrch_gcost_8')
@@ -338,7 +360,6 @@ contains
         grad = 0.d0
         select type(self)
             class is (ftexp_shsrch)
-                !call self%reference%corr_fdfshifted_8(self%particle, -vec, f, grad)
                 call self%corr_fdfshifted_cost_8( -vec, f, grad )
                 f = f * (-1.0_dp)
             class DEFAULT
