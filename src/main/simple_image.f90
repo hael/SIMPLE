@@ -284,6 +284,7 @@ contains
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
     ! MODIFIERS
+    procedure          :: thresh_cavg
     procedure          :: insert
     procedure          :: insert_lowres
     procedure          :: insert_lowres_serial
@@ -5552,6 +5553,18 @@ end subroutine NLmean
     end function gen_argtransf_comp
 
     ! MODIFIERS
+
+    subroutine thresh_cavg( self )
+        class(image), intent(inout) :: self
+        real    :: maxv, threshold
+        if( self%ldim(3) > 1 )       THROW_HARD('only 4 2D images; thresh_cavg')
+        if( self%is_ft() )           THROW_HARD('only 4 real images; thresh_cavg')
+        maxv      = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1))
+        threshold = -0.3 * maxv
+        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold )
+            self%rmat(1:self%ldim(1),1:self%ldim(2),1) = threshold
+        end where
+    end subroutine thresh_cavg
 
     !> \brief insert  inserts a box*box particle image into a micrograph
     !! \param self_in input image

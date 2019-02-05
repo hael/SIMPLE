@@ -155,6 +155,7 @@ contains
         if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
             call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
         else
+            params_glob%shellw = 'no'
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
 

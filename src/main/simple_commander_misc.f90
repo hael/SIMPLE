@@ -247,14 +247,15 @@ contains
         real, allocatable :: filter(:)
         type(image)       :: dummy_img
         real              :: time_per_frame, current_time, acc_dose
-        integer           :: iframe, find
+        integer           :: iframe, find, filtsz
         call params%new(cline)
         call dummy_img%new([params%box,params%box,1], params%smpd)
         time_per_frame = params%exp_time/real(params%nframes)
+        filtsz = dummy_img%get_filtsz()
         do iframe=1,params%nframes
             current_time = real(iframe)*time_per_frame
             acc_dose     = params%dose_rate*current_time
-            filter       = acc_dose2filter(dummy_img, acc_dose, params%kv)
+            filter       = acc_dose2filter(dummy_img, acc_dose, params%kv, filtsz)
             write(logfhandle,'(a)') '>>> PRINTING DOSE WEIGHTS'
             do find=1,size(filter)
                 write(logfhandle,'(A,1X,F8.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', dummy_img%get_lp(find), 'WEIGHT: ', filter(find)

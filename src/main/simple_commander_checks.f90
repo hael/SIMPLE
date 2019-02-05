@@ -74,9 +74,9 @@ contains
         if( cline%defined('fname') )then
             call find_ldim_nptcls(params%fname, ldim, maxim, doprint=.true.)
         endif
-        params%box = ldim(1)
-        call img%new([ldim(1),ldim(2),1],params%smpd)
         if( params%vis .eq. 'yes' .or. params%stats .ne. 'no' )then
+            params%box = ldim(1)
+            call img%new([ldim(1),ldim(2),1],params%smpd)
             do i=1,maxim
                 call img%read(params%fname, i)
                 if( params%stats .ne. 'no' )then

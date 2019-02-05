@@ -1,6 +1,6 @@
 ! box sizes optimised for FFTW perfomance
 module simple_magic_boxes
-use simple_math,  only: find
+use simple_math,  only: find, round2even
 use simple_error, only: simple_exception
 use simple_defs
 implicit none
@@ -23,6 +23,10 @@ contains
         integer :: best_box, dist, ind
         call find(boxsizes, NSZS, trial_box, ind, dist)
         best_box = boxsizes(ind)
+        if( best_box == boxsizes(NSZS) .and. trial_box-best_box>16 )then
+            ! when trial_box >> 1024
+            best_box = round2even(real(trial_box))
+        endif
     end function find_magic_box
 
     integer function find_boxmatch( box, msk )

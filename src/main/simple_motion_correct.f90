@@ -94,7 +94,7 @@ contains
         logical,     allocatable :: outliers(:,:)
         type(image)        :: tmpmovsum, gainref
         real               :: moldiam, dimo4, time_per_frame, current_time
-        integer            :: iframe, ncured, deadhot(2), i, j, winsz, ldim_scaled_tmp(3), shp(3), sz
+        integer            :: iframe, ncured, deadhot(2), i, j, winsz, ldim_scaled_tmp(3), shp(3)
         integer, parameter :: HWINSZ = 6
         logical            :: l_gain
         ! get number of frames & dim from stack
@@ -246,7 +246,7 @@ contains
         deallocate(rmat, rmat_sum, rmat_pad, win, outliers, movie_frames)
     end subroutine motion_correct_init
 
-    !> isotropid motion_correction of DDD movie
+    !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( movie_stack_fname, ctfvars, shifts, gainref_fname, nsig )
         use simple_ftexp_shsrch, only: ftexp_shsrch
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
@@ -452,7 +452,7 @@ contains
 
     ! PUBLIC METHODS, ANISOTROPIC MOTION CORRECTION
 
-    !> anisotropid motion_correction of DDD movie
+    !> anisotropic motion_correction of DDD movie
     subroutine motion_correct_aniso( shifts )
         real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identifie
         real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
@@ -784,18 +784,14 @@ contains
         real,              intent(in) :: shifts(nframes,2)
         integer, optional, intent(in) :: fromto(2)
         real, allocatable :: filtarr(:,:)
-        integer :: iframe, ffromto(2), sz
+        integer :: iframe, ffromto(2)
         ffromto(1) = 1
         ffromto(2) = nframes
         if( present(fromto) ) ffromto = fromto
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         call movie_sum_global%set_ft(.true.)
         if( do_dose_weight )then
-            sz = movie_frames_scaled(1)%get_filtsz()
-            allocate(filtarr(nframes,sz))
-            do iframe=1,nframes
-                filtarr(iframe,:) = acc_dose2filter(movie_frames_scaled(1), acc_doses(iframe), kV)
-            end do
+            call gen_dose_weight_filter(filtarr)
         endif
         cmat_sum = cmplx(0.,0.)
         !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
@@ -816,18 +812,16 @@ contains
         integer, intent(inout) :: frame_counter
         real,    intent(in)    :: time_per_frame
         real, allocatable :: filtarr(:,:)
-        integer           :: iframe, sz
+        integer           :: iframe
         real              :: current_time, acc_dose
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         call movie_sum_global%set_ft(.true.)
-        sz = movie_frames_scaled(1)%get_filtsz()
-        allocate(filtarr(nframes,sz))
         do iframe=1,nframes
             frame_counter     = frame_counter + 1
             current_time      = real(frame_counter)*time_per_frame ! unit: seconds
             acc_dose          = dose_rate*current_time             ! unit e/A2
-            filtarr(iframe,:) = acc_dose2filter(movie_frames_scaled(iframe), acc_dose, kV)
         end do
+        call gen_dose_weight_filter( filtarr )
         !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
         do iframe=1,nframes
             if( frameweights(iframe) > 0. )then
@@ -868,13 +862,25 @@ contains
         endif
     end subroutine destruct_ftexp_objects
 
+    subroutine gen_dose_weight_filter( filtarr )
+        real, allocatable, intent(inout) :: filtarr(:,:)
+        integer :: sz, filtsz, iframe
+        if( allocated(filtarr) )deallocate(filtarr)
+        sz = movie_frames_scaled(1)%get_filtsz()
+        filtsz = 2*sz ! the filter goes beyond nyquist
+        allocate(filtarr(nframes,filtsz))
+        do iframe=1,nframes
+            filtarr(iframe,:) = acc_dose2filter(movie_frames_scaled(1), acc_doses(iframe), kV, filtsz)
+        end do
+    end subroutine gen_dose_weight_filter
+
     ! PRIVATE UTILITY METHODS, ANISO
 
     subroutine gen_aniso_sum( fromto, scalar_weight )
         integer, optional, intent(in) :: fromto(2)
         real,    optional, intent(in) :: scalar_weight
         real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:), filtarr(:,:)
-        integer :: sz, iframe, ffromto(2)
+        integer :: iframe, ffromto(2)
         logical :: l_w_scalar
         ffromto(1) = 1
         ffromto(2) = nframes
@@ -882,11 +888,7 @@ contains
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         if( do_dose_weight )then
-            sz = movie_frames_shifted_aniso(1)%get_filtsz()
-            allocate(filtarr(nframes,sz))
-            do iframe=1,nframes
-                filtarr(iframe,:) = acc_dose2filter(movie_frames_shifted_aniso(1), acc_doses(iframe), kV)
-            end do
+            call gen_dose_weight_filter(filtarr)
         endif
         allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
         !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)

@@ -79,16 +79,16 @@ contains
     !!         output is filter coefficients
     !! \f$  \mathrm{dose}_\mathrm{acc} = \int^{N}_{1} \mathrm{dose\_weight}(a,F,V),\ n_\mathrm{e}/\si{\angstrom\squared}  \f$
     !! \param acc_dose accumulative dose (in \f$n_\mathrm{e}^- per \si{\angstrom\squared}\f$)
-    function acc_dose2filter( img, acc_dose, kV ) result( filter )
+    function acc_dose2filter( img, acc_dose, kV, filtsz ) result( filter )
         use simple_image,   only: image
         type(image), intent(in) :: img           !< input image
         real,        intent(in) :: acc_dose, kV  !< acceleration voltage
+        integer,     intent(in) :: filtsz
         real, allocatable       :: filter(:)
-        integer :: find, sz
-        sz = img%get_filtsz()
-        allocate(filter(sz),stat=alloc_stat)
+        integer :: find
+        allocate(filter(filtsz),stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("simple_estimate_ssnr::acc_dose2filter ",alloc_stat)
-        do find=1,sz
+        do find=1,filtsz
             filter(find) = dose_weight(acc_dose, img%get_spat_freq(find), kV)
         end do
     end function acc_dose2filter

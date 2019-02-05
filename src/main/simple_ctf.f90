@@ -453,7 +453,7 @@ contains
         do_bfac = present(bfac)
         if( do_bfac )then
             allocate(kweights(0:ldim(1)))
-            call calc_norm_bfac_weights(ldim(1), bfac, self%smpd, kweights)
+            call calc_norm_bfac_weights(ldim(1), bfac, self%smpd, kweights, is2d=.true.)
         endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)

@@ -1293,7 +1293,6 @@ contains
             nsel  = NPROJS
         else
             ! find logical dimension & read class averages
-            print *,trim(cavgname)
             call find_ldim_nptcls(cavgname, ldim_here, ncavgs, smpd=smpd_here)
             ldim_here(3) = 1
             if( cline%defined('refs') )then
@@ -1329,7 +1328,6 @@ contains
         endif
         ! expand in in-plane rotation and write to file
         if( nrots > 1 )then
-            print *,ldim
             call ref2D%new([ldim(1),ldim(2),1], params%smpd)
             ang = 360./real(nrots)
             rot = 0.

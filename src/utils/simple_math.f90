@@ -1112,12 +1112,16 @@ contains
     !     kweights(0)     = 1.
     ! end subroutine calc_norm_bfac_weights
 
-    subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
+    subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights, is2d )
         integer, intent(in)  :: box
         real,    intent(in)  :: bfac, smpd
         real,    intent(out) :: kweights(0:box)
+        logical, optional, intent(in) :: is2d
         real    :: bfac_sc, res
         integer :: k, nyq
+        logical :: l_is2d
+        l_is2d  = .false.
+        if( present(is2d) ) l_is2d = is2d
         nyq     = fdim(box)
         bfac_sc = bfac / 4.
         kweights(0) = 1.
@@ -1126,7 +1130,13 @@ contains
             kweights(k) = max(0., exp(-bfac_sc * res * res))
         end do
         ! normalize
-        kweights(0:box) = kweights(0:box) / sum(kweights(0:nyq))
+        if( l_is2d )then
+            kweights(0:nyq)  = kweights(0:nyq) / sum(kweights(0:nyq))
+            kweights(0:nyq)  = kweights(0:nyq) / kweights(0)
+            kweights(nyq+1:) = kweights(nyq)
+        else
+            kweights(0:box) = kweights(0:box) / sum(kweights(0:nyq))
+        endif
     end subroutine calc_norm_bfac_weights
 
     ! LINEAR ALGEBRA STUFF

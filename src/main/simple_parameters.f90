@@ -77,7 +77,6 @@ type :: parameters
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)      :: softpw2D='no'         !< soft particle weights in 2D(yes|no){no}
     character(len=3)      :: specstats='no'
-    character(len=3)      :: stats='no'           !< provide statistics(yes|no){yes}
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: subtr_backgr='no'
     character(len=3)      :: symrnd='no'          !< randomize over symmetry operations(yes|no){no}
@@ -184,6 +183,7 @@ type :: parameters
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
     character(len=STDLEN) :: speckind='sqrt'      !< power spectrum kind(real|power|sqrt|log|phase){sqrt}
     character(len=STDLEN) :: split_mode='even'
+    character(len=STDLEN) :: stats='no'           !< provide statistics(yes|no|print){no}
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
