@@ -41,6 +41,7 @@ contains
     procedure, private :: slice2bytepos
     procedure          :: rSlices
     procedure          :: wSlices
+    procedure          :: update_MRC_stats
     procedure          :: getDims
     procedure          :: getDim
     procedure          :: getIform
@@ -354,7 +355,7 @@ contains
 
     !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
     !!          The array of reals should have +2 elements in the first dimension.
-    subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd, minmax )
+    subroutine wSlices( self, first_slice, last_slice, rarr, ldim, is_ft, smpd )
         use, intrinsic :: iso_c_binding
         class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
         integer,                intent(in)    :: first_slice  !< First slice (the first slice in the file is numbered 1)
@@ -363,10 +364,9 @@ contains
         integer,                intent(in)    :: ldim(3)      !< Logical size of the array. This will be written to disk: rarr(1:ldim(1),:,:)
         logical,                intent(in)    :: is_ft        !< to indicate FT status of image
         real,                   intent(in)    :: smpd         !< sampling distance
-        real,         optional, intent(in)    :: minmax(2)    !< min/max values to set
         integer                     :: io_stat,itmp,dims(3)!,dims_stored(3)
         integer(kind=8)             :: first_byte,hedbyteinds(2),imbyteinds(2),first_hedbyte,byteperpix
-        logical                     :: arr_is_ready, l_minmax
+        logical                     :: arr_is_ready
         real                        :: min_val,max_val
         class(ImgHead), pointer     :: ptr=>null()
         class(ImgHead), allocatable :: imghed
@@ -397,8 +397,6 @@ contains
             THROW_HARD('array not properly allocated')
         endif
         byteperpix = int(self%overall_head%bytesPerPix(),kind=8)
-        ! minimum & maximum values to set
-        l_minmax = present(minmax)
         ! Work out the position of the first byte
         select case(self%head_format)
         case('M','F')
@@ -417,19 +415,12 @@ contains
             THROW_HARD('format not supported')
         end select
         ! find minmax
-        if( l_minmax )then
-            min_val = minmax(1)
-            max_val = minmax(2)
-        else
             max_val = maxval(rarr)
             min_val = minval(rarr)
-        endif
         select case(self%head_format)
         case('M','F')
-            if( .not.l_minmax )then
-                max_val = max(max_val, self%overall_head%getMaxPixVal())
-                min_val = min(min_val, self%overall_head%getMinPixVal())
-            endif
+            max_val = max(max_val, self%overall_head%getMaxPixVal())
+            min_val = min(min_val, self%overall_head%getMinPixVal())
             call self%overall_head%setMinPixVal(min_val)
             call self%overall_head%setMaxPixVal(max_val)
         case('S')
@@ -489,6 +480,27 @@ contains
         ! Remember that we wrote to the file
         self%was_written_to = .true.
     end subroutine wSlices
+
+    !>  \brief  read/write a set of contiguous slices of the image file from disk into memory.
+    !!          The array of reals should have +2 elements in the first dimension.
+    subroutine update_MRC_stats( self, stats )
+        use, intrinsic :: iso_c_binding
+        class(imgfile), target, intent(inout) :: self         !< instance  Imagefile object
+        real,                   intent(in)    :: stats(4)
+        select case(self%head_format)
+        case('M','F')
+            call self%setMinmax(stats(1), stats(2))
+            call self%setMean(stats(3))
+            call self%setRMSD(stats(4))
+        case('S')
+            ! this routine is for MRC only
+            return
+        case DEFAULT
+            THROW_HARD('undefined file type')
+        end select
+        ! Remember that we wrote to the file
+        self%was_written_to = .true.
+    end subroutine update_MRC_stats
 
     !>  \brief  Return the dimension of the image stack
     function getDims( self )

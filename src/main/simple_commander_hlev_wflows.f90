@@ -694,6 +694,7 @@ contains
         call cline_refine3D_refine%set('box',      real(orig_box))
         call cline_refine3D_refine%set('maxits',   real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine',   'single')
+        call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
         if( do_eo )then
             call cline_refine3D_refine%delete('lp')
             call cline_refine3D_refine%set('eo',         'yes')

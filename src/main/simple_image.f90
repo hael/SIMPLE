@@ -53,6 +53,7 @@ contains
     procedure          :: open
     procedure          :: read
     procedure          :: write
+    procedure          :: update_header_stats
     procedure          :: write_jpg
     ! GETTERS/SETTERS
     procedure          :: get_array_shape
@@ -1034,29 +1035,21 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    subroutine write( self, fname, i, del_if_exists, stats)
+    subroutine write( self, fname, i, del_if_exists)
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
-        real,             optional, intent(in)    :: stats(4) ! stats to update: min, max, mean, rms
-        real             :: dev, minmax(2), mean
+        real             :: dev, mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
         integer          :: first_slice, last_slice, iform, ii
-        logical          :: isvol, die, l_stats
+        logical          :: isvol, die
         isvol = .false.
         if( self%existence )then
-            die     = .false.
-            minmax  = 0.
-            l_stats = present(stats)
-            if( l_stats ) minmax = stats(1:2)
+            die   = .false.
+            isvol = self%is_3d()
             if( present(del_if_exists) ) die = del_if_exists
-            if( self%is_2d() )then
-                isvol = .false.
-            else if( self%is_3d() )then
-                isvol = .true.
-            endif
             ii = 1 ! default location
             if( present(i) )then
                 ! we are writing to a stack & in SIMPLE volumes are not allowed
@@ -1082,12 +1075,7 @@ contains
                 else
                     call ioimg%setMode(2)
                 endif
-                if( l_stats )then
-                    mean = stats(3)
-                    dev  = stats(4)
-                else
-                    call self%rmsd(dev, mean=mean)
-                endif
+                call self%rmsd(dev, mean=mean)
                 call ioimg%setRMSD(dev)
                 call ioimg%setMean(mean)
             case('S')
@@ -1136,17 +1124,44 @@ contains
                 first_slice = ii
                 last_slice = ii
             endif
-            ! write slice(s) to disk
-            if( l_stats )then
-                call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd,minmax=stats(1:2))
-            else
-                call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
-            endif
+            ! write slice(s) to disk & close
+            call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
             call ioimg%close
         else
             THROW_HARD('nonexisting image cannot be written to disk; write')
         endif
     end subroutine write
+
+    !>  \brief  for updating header stast in a real space MRC image file only
+    subroutine update_header_stats( self, fname, stats)
+        class(image),     intent(inout) :: self
+        character(len=*), intent(in)    :: fname
+        real,             intent(in)    :: stats(4) ! stats to update: min, max, mean, rms
+        type(imgfile)    :: ioimg
+        character(len=1) :: form
+        if( self%existence )then
+            if( self%ft )return
+            form = fname2format(fname)
+            select case(form)
+            case('M','F')
+                ! pixel size of object overrides pixel size in header
+                call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=.false., formatchar=form, readhead=.true.)
+                call ioimg%setMode(2) ! 32-bit reals (DEFAULT MODE)
+                !  updates header
+                call ioimg%update_MRC_stats(stats)
+                ! writes header & close unit
+                call ioimg%close
+            case('S')
+                ! spider stacks have one header each so we do nothing
+                return
+            case DEFAULT
+                write(logfhandle,*) 'format descriptor: ', form
+                THROW_HARD('unsupported file format; update_stats_header')
+            end select
+        else
+            THROW_HARD('nonexisting image cannot be updated; update_header_stats')
+        endif
+    end subroutine update_header_stats
 
     subroutine write_jpg( self, fname, quality, colorspec, norm )
         use simple_jpg, only: jpg_img

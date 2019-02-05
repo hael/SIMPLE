@@ -673,7 +673,7 @@ contains
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
         integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob, cnt_stats
         real                      :: particle_position(2), meanv,sddevv,minv,maxv,stk_stats(4)
-        logical                   :: l_err, l_lastinstack
+        logical                   :: l_err
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
         call params%new(cline)
@@ -767,7 +767,7 @@ contains
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
             ! set normalization radius
-            params%msk = 0.8 * real(params%box/2)
+            params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
             ! init
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
@@ -873,16 +873,12 @@ contains
                             stk_stats(4) = stk_stats(4) + sddevv**2.
                         endif
                         ! write
-                        l_lastinstack = count(oris_mask(iptcl:)) == 1
-                        if( l_lastinstack )then
-                            stk_stats(3) = stk_stats(3) / real(cnt_stats)
-                            stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
-                            call build%img%write(trim(adjustl(stack)), cnt, stats=stk_stats)
-                        else
-                            call build%img%write(trim(adjustl(stack)), cnt)
-                        endif
+                        call build%img%write(trim(adjustl(stack)), cnt)
                     endif
                 end do
+                stk_stats(3) = stk_stats(3) / real(cnt_stats)
+                stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
+                call build%img%update_header_stats(trim(adjustl(stack)), stk_stats)
                 ! IMPORT INTO PROJECT
                 call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
                 ! add box coordinates to ptcl2D field only
@@ -936,14 +932,14 @@ contains
         logical,          allocatable :: pmsk(:,:,:), mic_mask(:), ptcl_mask(:)
         integer,          allocatable :: mic2stk_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
-        integer  :: nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind
+        integer  :: nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind,cnt_stats
         integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top
-        real    :: prev_shift(2), shift2d(2), shift3d(2)
-        logical :: l_3d
+        real    :: prev_shift(2), shift2d(2), shift3d(2), minv,maxv,meanv,sddevv,stk_stats(4)
+        logical :: l_3d, l_err
         call cline%set('mkdir','no')
         call params%new(cline)
         ! set normalization radius
-        params%msk = 0.8 * real(params%box/2)
+        params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
         ! whether to use shifts from 2D or 3D
         l_3d = .true.
         if(cline%defined('oritype')) l_3d = trim(params%oritype)=='ptcl3D'
@@ -1040,7 +1036,9 @@ contains
                 call micrograph%ifft ! need to be here in case it was flipped
                 stack = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
                 ! particles extraction loop
-                nptcls = 0
+                nptcls    = 0
+                cnt_stats = 0
+                stk_stats = 0.
                 do iptcl=fromp,top
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle
@@ -1079,6 +1077,15 @@ contains
                         if( params%pcontrast .eq. 'black' ) call img%neg()
                         call img%noise_norm(pmsk)
                         call img%write(trim(adjustl(stack)), nptcls)
+                        ! keep track of stats
+                        call img%stats(meanv, sddevv, maxv, minv, errout=l_err)
+                        if( .not.l_err )then
+                            cnt_stats = cnt_stats + 1
+                            stk_stats(1) = min(stk_stats(1),minv)
+                            stk_stats(2) = max(stk_stats(2),maxv)
+                            stk_stats(3) = stk_stats(3) + meanv
+                            stk_stats(4) = stk_stats(4) + sddevv**2.
+                        endif
                     else
                         ! excluded
                         call spproj_in%os_ptcl2D%set(iptcl,'state',0.)
@@ -1092,7 +1099,10 @@ contains
                     mic_mask(imic) = .false.
                     mic2stk_inds(imic) = 0
                 else
-                    ! updates size, stack & removes box file
+                    ! updates header, size, stack & removes box file
+                    stk_stats(3) = stk_stats(3) / real(cnt_stats)
+                    stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
+                    call img%update_header_stats(trim(adjustl(stack)), stk_stats)
                     call make_relativepath(CWD_GLOB, stack, rel_stack)
                     call spproj_in%os_stk%set(stk_ind,'stk',rel_stack)
                     call spproj_in%os_stk%set(stk_ind,'box', real(params%box))

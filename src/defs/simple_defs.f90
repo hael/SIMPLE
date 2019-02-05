@@ -104,11 +104,13 @@ integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 real,    parameter :: SMPD4VIZ              = 1.25    !< default sampling distance for powerspectrum visualisation
 real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.     !< default low-pass limit for power spectrum background subtraction
 
-! constants for picker
+! constants for picker & extraction
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
 real,    parameter :: GAUPICK_SIGMA_SHRINK = 13.0      !< picker shrink factor, Gaussian convolution
+real,    parameter :: RADFRAC_NORM_EXTRACT = 0.8       !< radius fraction for extraction background normalization
 integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
+
 
 ! constants for masking/interpolation
 real, parameter :: COSMSKHALFWIDTH         = 6.0       !< spherical soft masking
