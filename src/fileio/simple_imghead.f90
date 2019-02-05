@@ -73,6 +73,9 @@ contains
     procedure          :: setMaxim
     procedure          :: setMode
     procedure          :: setRMSD
+    procedure          :: getRMSD
+    procedure          :: setMean
+    procedure          :: getMean
     procedure          :: getIform
     procedure          :: getMode
     procedure          :: setIform
@@ -1077,6 +1080,36 @@ contains
         end select
     end subroutine setRMSD
 
+    !>  \brief  Return the average pixel value
+    real function getRMSD(self)
+        class(ImgHead), intent(in) :: self
+        getRMSD = 0.
+        select type(self)
+            type is (MrcImgHead)
+                getRMSD = self%rms
+        end select
+    end function getRMSD
+
+    !>  \brief  Set the root-mean-square deviation
+    subroutine setMean( self, mean )
+        class(ImgHead), intent(inout) :: self
+        real,           intent(in)    :: mean
+        select type( self )
+            type is( MrcImgHead )
+                self%dmean = mean
+        end select
+    end subroutine setMean
+
+    !>  \brief  Return the average pixel value
+    real function getMean(self)
+        class(ImgHead), intent(in) :: self
+        getMean = 0.
+        select type(self)
+            type is (MrcImgHead)
+                getMean = self%dmean
+        end select
+    end function getMean
+
     !>  \brief is for gettign a part of the info in a MRC image header
     subroutine get_mrcfile_info( fname, ldim, form, smpd, doprint )
         character(len=*), intent(in)  :: fname
@@ -1102,7 +1135,11 @@ contains
                     if( doprint )then
                         call hed%print_imghead
                         write(logfhandle,'(a,3(i0,1x))') 'Number of columns, rows, sections: ', ldim(1), ldim(2), ldim(3)
-                        write(logfhandle,'(a,1x,f15.8)')  'Pixel size: ', smpd
+                        write(logfhandle,'(a,1x,f10.6)')  'Pixel size   : ', smpd
+                        write(logfhandle,'(a,1x,f10.6)')  'Minimum value: ', hed%getMinPixVal()
+                        write(logfhandle,'(a,1x,f10.6)')  'Maximum value: ', hed%getMaxPixVal()
+                        write(logfhandle,'(a,1x,f10.6)')  'Average value: ', hed%getMean()
+                        write(logfhandle,'(a,1x,f10.6)')  'RMS          : ', hed%getRMSD()
                     endif
                 case('F')
                     allocate(MrcImgHead :: hed)
@@ -1111,7 +1148,11 @@ contains
                     call fileiochk(" get_mrcfile_info fopen error "//trim(fname),ios)
                     call hed%read(filnum)
                     call fclose(filnum, errmsg=" get_mrcfile_info fclose error "//trim(fname))
-                    if( doprint ) call hed%print_imghead
+                    if( doprint )then
+                        call hed%print_imghead
+                        write(logfhandle,'(a,1x,f10.6)')  'Minimum value: ', hed%getMinPixVal()
+                        write(logfhandle,'(a,1x,f10.6)')  'Maximum value: ', hed%getMaxPixVal()
+                    endif
                 case DEFAULT
                     write(logfhandle,*) 'file: ', trim(fname)
                     THROW_HARD('the inputted file is not an MRC file')

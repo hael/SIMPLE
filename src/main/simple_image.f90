@@ -1034,21 +1034,23 @@ contains
     end subroutine read
 
     !>  \brief  for writing any kind of images to stack or volumes to volume files
-    subroutine write( self, fname, i, del_if_exists, formatchar )
+    subroutine write( self, fname, i, del_if_exists, stats)
         class(image),               intent(inout) :: self
         character(len=*),           intent(in)    :: fname
         integer,          optional, intent(in)    :: i
         logical,          optional, intent(in)    :: del_if_exists
-        character(len=1), optional, intent(in)    :: formatchar
-        real             :: dev
+        real,             optional, intent(in)    :: stats(4) ! stats to update: min, max, mean, rms
+        real             :: dev, minmax(2), mean
         type(imgfile)    :: ioimg
         character(len=1) :: form
         integer          :: first_slice, last_slice, iform, ii
-        logical          :: isvol, die
+        logical          :: isvol, die, l_stats
         isvol = .false.
         if( self%existence )then
-            dev = self%rmsd()
-            die = .false.
+            die     = .false.
+            minmax  = 0.
+            l_stats = present(stats)
+            if( l_stats ) minmax = stats(1:2)
             if( present(del_if_exists) ) die = del_if_exists
             if( self%is_2d() )then
                 isvol = .false.
@@ -1064,17 +1066,12 @@ contains
                 endif
                 ii = i ! replace default location
             endif
-            ! find format
-            if( present(formatchar) )then
-                form = formatchar
-            else
-                form = fname2format(fname)
-            endif
+            form = fname2format(fname)
             select case(form)
             case('M','F')
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
-                    formatchar=formatchar, readhead=.false.)
+                    formatchar=form, readhead=.false.)
                 ! data type: 0 image: signed 8-bit bytes rante -128 to 127
                 !            1 image: 16-bit halfwords
                 !            2 image: 32-bit reals (DEFAULT MODE)
@@ -1085,11 +1082,18 @@ contains
                 else
                     call ioimg%setMode(2)
                 endif
+                if( l_stats )then
+                    mean = stats(3)
+                    dev  = stats(4)
+                else
+                    call self%rmsd(dev, mean=mean)
+                endif
                 call ioimg%setRMSD(dev)
+                call ioimg%setMean(mean)
             case('S')
                 ! pixel size of object overrides pixel size in header
                 call ioimg%open(fname, self%ldim, self%smpd, del_if_exists=die,&
-                    formatchar=formatchar, readhead=.false.)
+                    formatchar=form, readhead=.false.)
                 ! iform file type specifier:
                 !   1 = 2D image
                 !   3 = 3D volume
@@ -1133,7 +1137,11 @@ contains
                 last_slice = ii
             endif
             ! write slice(s) to disk
-            call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+            if( l_stats )then
+                call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd,minmax=stats(1:2))
+            else
+                call ioimg%wSlices(first_slice,last_slice,self%rmat,self%ldim,self%ft,self%smpd)
+            endif
             call ioimg%close
         else
             THROW_HARD('nonexisting image cannot be written to disk; write')
@@ -4657,22 +4665,26 @@ end subroutine NLmean
 
     !>  \brief rmsd for calculating the RMSD of a map
     !! \return  dev root mean squared deviation
-    function rmsd( self ) result( dev )
-        class(image), intent(inout) :: self
-        real :: devmat(self%ldim(1),self%ldim(2),self%ldim(3)), dev, avg
+    subroutine rmsd( self, dev, mean )
+        class(image),   intent(inout) :: self
+        real,           intent(out)   :: dev
+        real, optional, intent(out)   :: mean
+        real :: avg
         if( self%ft )then
             dev = 0.
+            if( present(mean) ) mean = 0.
         else
-            avg    = self%mean()
-            devmat = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg
-            dev    = sum(devmat**2.0)/real(product(self%ldim))
+            avg = self%mean()
+            if(present(mean)) mean = avg
+            dev = sum((self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - avg)**2.0)&
+                  &/ real(product(self%ldim))
             if( dev > 0. )then
                 dev = sqrt(dev)
             else
                 dev = 0.
             endif
         endif
-    end function rmsd
+    end subroutine rmsd
 
     !> \brief noisesdev is for estimating the noise variance of an image
     !!          by online estimation of the variance of the background pixels
@@ -4720,7 +4732,7 @@ end subroutine NLmean
     !>  \brief  is for calculating the mean of an image
     function mean( self ) result( avg )
         class(image), intent(inout) :: self
-        real :: avg
+        real    :: avg
         logical :: didft
         didft = .false.
         if( self%ft )then
@@ -5554,14 +5566,15 @@ end subroutine NLmean
 
     ! MODIFIERS
 
-    subroutine thresh_cavg( self )
+    subroutine thresh_cavg( self, l_msk )
         class(image), intent(inout) :: self
+        logical,      intent(in)    :: l_msk(:,:,:)
         real    :: maxv, threshold
         if( self%ldim(3) > 1 )       THROW_HARD('only 4 2D images; thresh_cavg')
         if( self%is_ft() )           THROW_HARD('only 4 real images; thresh_cavg')
-        maxv      = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1))
+        maxv      = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),:), mask=l_msk)
         threshold = -0.3 * maxv
-        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold )
+        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold .and. l_msk(1:self%ldim(1),1:self%ldim(2),1))
             self%rmat(1:self%ldim(1),1:self%ldim(2),1) = threshold
         end where
     end subroutine thresh_cavg

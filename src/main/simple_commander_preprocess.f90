@@ -200,6 +200,7 @@ contains
                     cline_extract = cline
                     call cline_extract%set('dir', trim(output_dir_extract))
                     call cline_extract%set('pcontrast', params%pcontrast)
+                    call cline_extract%delete('msk')
                     if( cline%defined('box_extract') )call cline_extract%set('box', real(params%box_extract))
                     call xextract%execute(cline_extract)
                     call spproj%kill
@@ -670,8 +671,9 @@ contains
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
-        integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob
-        real                      :: particle_position(2)
+        integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob, cnt_stats
+        real                      :: particle_position(2), meanv,sddevv,minv,maxv,stk_stats(4)
+        logical                   :: l_err, l_lastinstack
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
         call params%new(cline)
@@ -764,6 +766,9 @@ contains
             ! nothing to do!
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
+            ! set normalization radius
+            params%msk = 0.8 * real(params%box/2)
+            ! init
             call build%build_general_tbox(params, cline, do3d=.false.)
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
             noutside  = 0
@@ -845,7 +850,11 @@ contains
                 call micrograph%bp(real(params%box) * params%smpd, 0.)
                 call micrograph%ifft ! need to be here in case it was flipped
                 ! write new stack
-                cnt = 0
+                stk_stats(1)   = huge(stk_stats(1))
+                stk_stats(2)   = -stk_stats(1)
+                stk_stats(3:4) = 0.
+                cnt_stats = 0
+                cnt       = 0
                 do iptcl=1,nptcls ! loop over boxes
                     if( oris_mask(iptcl) )then
                         cnt = cnt + 1
@@ -854,7 +863,24 @@ contains
                         call micrograph%window(nint(particle_position), params%box, build%img, noutside)
                         if( params%pcontrast .eq. 'black' ) call build%img%neg()
                         call build%img%noise_norm(build%lmsk)
-                        call build%img%write(trim(adjustl(stack)), cnt)
+                        ! keep track of stats
+                        call build%img%stats(meanv, sddevv, maxv, minv, errout=l_err)
+                        if( .not.l_err )then
+                            cnt_stats = cnt_stats + 1
+                            stk_stats(1) = min(stk_stats(1),minv)
+                            stk_stats(2) = max(stk_stats(2),maxv)
+                            stk_stats(3) = stk_stats(3) + meanv
+                            stk_stats(4) = stk_stats(4) + sddevv**2.
+                        endif
+                        ! write
+                        l_lastinstack = count(oris_mask(iptcl:)) == 1
+                        if( l_lastinstack )then
+                            stk_stats(3) = stk_stats(3) / real(cnt_stats)
+                            stk_stats(4) = sqrt(stk_stats(4) / real(cnt_stats))
+                            call build%img%write(trim(adjustl(stack)), cnt, stats=stk_stats)
+                        else
+                            call build%img%write(trim(adjustl(stack)), cnt)
+                        endif
                     endif
                 end do
                 ! IMPORT INTO PROJECT
@@ -916,6 +942,8 @@ contains
         logical :: l_3d
         call cline%set('mkdir','no')
         call params%new(cline)
+        ! set normalization radius
+        params%msk = 0.8 * real(params%box/2)
         ! whether to use shifts from 2D or 3D
         l_3d = .true.
         if(cline%defined('oritype')) l_3d = trim(params%oritype)=='ptcl3D'
