@@ -266,12 +266,12 @@ contains
                         cxy       = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
                             ! irot > 0 guarantees improvement found, update solution
-                            s3D%proj_space_euls( self%ithr,ref,j,3)    = 360. - pftcc_glob%get_rot(irot)
-                            s3D%proj_space_corrs(self%ithr,ref,j)      = cxy(1)
-                            s3D%proj_space_shift(self%ithr,ref,j,:)    = cxy(2:3)
-                            s3D%proj_space_specscores(self%ithr,ref,j) = pftcc_glob%specscore(ref, self%iptcl, irot, cxy(2:3))
+                            s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
+                            s3D%proj_space_corrs(self%ithr,ref,j)   = cxy(1)
+                            s3D%proj_space_shift(self%ithr,ref,j,:) = cxy(2:3)
+                            s3D%proj_space_specs(self%ithr,ref,j)   = pftcc_glob%specscore(ref, self%iptcl, irot, cxy(2:3))
                         else
-                            s3D%proj_space_specscores(self%ithr,ref,j) = pftcc_glob%specscore(ref, self%iptcl, irot_prev)
+                            s3D%proj_space_specs(self%ithr,ref,j)   = pftcc_glob%specscore(ref, self%iptcl, irot_prev)
                         endif
                     end do
                 else

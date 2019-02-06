@@ -152,6 +152,8 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 
 ! weighting scheme
 logical, parameter :: SOFT_PTCL_WEIGHTS3D  = .true.    !< soft (as opposed to hard) particles weights based on B-factor
+logical, parameter :: USE_CORRS4ORIWEIGHTS = .true.    !< use standard correlation coefficient for obtaining orientation weights
+logical, parameter :: USE_SPECS4ORIWEIGHTS = .false.   !< use spectral score for obtaining orientation weights
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
 

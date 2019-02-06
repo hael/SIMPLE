@@ -21,7 +21,7 @@ type strategy3D_alloc
     real,           allocatable :: proj_space_euls(:,:,:,:)               !< euler angles
     real,           allocatable :: proj_space_shift(:,:,:,:)              !< shift vectors
     real,           allocatable :: proj_space_corrs(:,:,:)                !< reference vs. particle correlations
-    real,           allocatable :: proj_space_specscores(:,:,:)           !< reference vs. particle specscores
+    real,           allocatable :: proj_space_specs(:,:,:)                !< reference vs. particle specscores
     logical,        allocatable :: proj_space_corrs_srchd(:,:)            !< has correlation already been searched
     logical,        allocatable :: proj_space_corrs_calcd(:,:)            !< has correlation already been calculated
     integer,        allocatable :: proj_space_inplinds(:,:,:)             !< in-plane indices
@@ -58,7 +58,7 @@ contains
         allocate(master_proj_space_euls(nrefs,params_glob%ninplpeaks,3), s3D%proj_space_euls(nthr_glob,nrefs,params_glob%ninplpeaks,3),&
             &s3D%proj_space_shift(nthr_glob,nrefs,params_glob%ninplpeaks,2),s3D%proj_space_state(nrefs),&
             &s3D%proj_space_corrs(nthr_glob,nrefs,params_glob%ninplpeaks),&
-            &s3D%proj_space_specscores(nthr_glob,nrefs,params_glob%ninplpeaks),&
+            &s3D%proj_space_specs(nthr_glob,nrefs,params_glob%ninplpeaks),&
             &s3D%proj_space_refinds_sorted(nthr_glob,nrefs*params_glob%ninplpeaks),&
             &s3D%proj_space_refinds_sorted_highest(nthr_glob,nrefs),&
             &s3D%proj_space_inplinds_sorted(nthr_glob,nrefs*params_glob%ninplpeaks),&
@@ -93,7 +93,7 @@ contains
         enddo
         s3D%proj_space_shift                  = 0.
         s3D%proj_space_corrs                  = -HUGE(areal)
-        s3D%proj_space_specscores             = 0.
+        s3D%proj_space_specs                  = 0.
         s3D%proj_space_refinds_sorted         = 0
         s3D%proj_space_inplinds_sorted        = 0
         s3D%proj_space_refinds_sorted_highest = 0
@@ -151,7 +151,7 @@ contains
         real(sp)               :: areal
         s3D%proj_space_euls(ithr,:,:,:)                 = master_proj_space_euls
         s3D%proj_space_corrs(ithr,:,:)                  = -HUGE(areal)
-        s3D%proj_space_specscores(ithr,:,:)             = 0.
+        s3D%proj_space_specs(ithr,:,:)                  = 0.
         s3D%proj_space_corrs_srchd(ithr,:)              = .false.
         s3D%proj_space_corrs_calcd(ithr,:)              = .false.
         s3D%proj_space_shift(ithr,:,:,:)                = 0.
@@ -172,7 +172,7 @@ contains
         if( allocated(s3D%proj_space_euls)                  ) deallocate(s3D%proj_space_euls)
         if( allocated(s3D%proj_space_shift)                 ) deallocate(s3D%proj_space_shift)
         if( allocated(s3D%proj_space_corrs)                 ) deallocate(s3D%proj_space_corrs)
-        if( allocated(s3D%proj_space_specscores)            ) deallocate(s3D%proj_space_specscores)
+        if( allocated(s3D%proj_space_specs)                 ) deallocate(s3D%proj_space_specs)
         if( allocated(s3D%proj_space_corrs_srchd)           ) deallocate(s3D%proj_space_corrs_srchd)
         if( allocated(s3D%proj_space_corrs_calcd)           ) deallocate(s3D%proj_space_corrs_calcd)
         if( allocated(s3D%proj_space_inplinds)              ) deallocate(s3D%proj_space_inplinds)

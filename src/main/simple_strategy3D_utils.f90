@@ -7,7 +7,7 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peaks, prob_select_peak, corrs2softmax_weights
+public :: extract_peaks, prob_select_peak, calc_softmax_weights
 public :: states_reweight, estimate_ang_spread, estimate_shift_increment
 public :: set_state_overlap, sort_corrs, update_softmax_weights
 private
@@ -15,9 +15,9 @@ private
 
 contains
 
-    subroutine extract_peaks( s, corrs, multistates )
+    subroutine extract_peaks( s, corrs, specs, multistates )
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(out)   :: corrs(s%npeaks)
+        real,                   intent(out)   :: corrs(s%npeaks), specs(s%npeaks)
         logical, optional,      intent(in)    :: multistates
         integer :: ipeak, cnt, ref, inpl, state
         real    :: shvec(2), shvec_incr(2)
@@ -30,17 +30,13 @@ contains
         cnt = 0
         do ipeak = 1, s%npeaks
             ref = s3D%proj_space_refinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
-            if( ref < 1 .or. ref > s%nrefs )then
-                THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peaks')
-            endif
+            if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peaks')
             if( l_multistates )then
                 state = s3D%proj_space_state(ref)
-                if( .not. s3D%state_exists(state) )then
-                    THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
-                endif
+                if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
             endif
             inpl = s3D%proj_space_inplinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
-            cnt = cnt + 1
+            cnt  = cnt + 1
             ! add shift
             shvec      = s%prev_shvec
             shvec_incr = 0.
@@ -51,6 +47,7 @@ contains
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
+            specs(cnt) = s3D%proj_space_specs(s%ithr,ref,inpl)
             if (.not. pftcc_glob%is_euclid(s%iptcl)) then
                 if( corrs(cnt) < 0. ) corrs(cnt) = 0.
             end if
@@ -59,10 +56,10 @@ contains
             else
                 call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
             endif
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',       real(s3D%proj_space_proj(ref)))
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'inpl',       real(inpl))
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',       corrs(cnt))
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'specscore',  s3D%proj_space_specscores(s%ithr,ref,inpl))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',      real(s3D%proj_space_proj(ref)))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'inpl',      real(inpl))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',      corrs(cnt))
+            call s3D%o_peaks(s%iptcl)%set(cnt, 'specscore', specs(cnt))
             call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
             call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
             call s3D%o_peaks(s%iptcl)%set_shift_incr(cnt, shvec_incr)
@@ -151,13 +148,13 @@ contains
     ! for dealing with the weights in a global sense:
     ! (1) Calculate normalised softmax weights per particle
     ! (2) Select the fraction (16%) of highest weights globally for inclusion in the 3D rec
-    subroutine corrs2softmax_weights( s, corrs, ws, best_loc, best_corr )
+    subroutine calc_softmax_weights( s, corrs, specs, ws, best_loc, best_corr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: corrs(s%npeaks)
+        real,                   intent(in)    :: corrs(s%npeaks), specs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real    :: dists(s%npeaks), arg4softmax(s%npeaks), wsum
+        real :: dists(s%npeaks), arg4softmax(s%npeaks), wsum, cxs(s%npeaks)
         s%npeaks_eff = 1
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
@@ -167,19 +164,50 @@ contains
             best_loc  = maxloc(corrs)
             best_corr = corrs(best_loc(1))
             ! calculate weights
-            call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
+            if( USE_CORRS4ORIWEIGHTS .and. USE_SPECS4ORIWEIGHTS )then
+                cxs = corrs * specs
+                where( cxs > TINY )
+                    cxs = sqrt(cxs)
+                elsewhere
+                    cxs = 0.
+                endwhere
+                call calc_ori_weights( s%iptcl, s%npeaks, cxs, ws )
+            else if( USE_CORRS4ORIWEIGHTS .and. .not. USE_SPECS4ORIWEIGHTS )then
+                call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
+            else if( .not. USE_CORRS4ORIWEIGHTS .and. USE_SPECS4ORIWEIGHTS )then
+                call calc_ori_weights( s%iptcl, s%npeaks, specs, ws )
+            else
+                THROW_HARD('nonsenical use of global logical flags USE_CORRS4ORIWEIGHTS and USE_SPECS4ORIWEIGHTS; calc_softmax_weights')
+            endif
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
-    end subroutine corrs2softmax_weights
+    end subroutine calc_softmax_weights
 
-    subroutine update_softmax_weights( iptcl, npeaks )
+    subroutine update_softmax_weights( iptcl, npeaks)
         integer, intent(in) :: iptcl, npeaks
-        real, allocatable   :: corrs(:)
+        real, allocatable   :: corrs(:), specs(:)
         real :: ws(npeaks)
-        corrs = s3D%o_peaks(iptcl)%get_all('corr')
-        call calc_ori_weights( iptcl, npeaks, corrs, ws )
+        if( USE_CORRS4ORIWEIGHTS ) corrs = s3D%o_peaks(iptcl)%get_all('corr')
+        if( USE_SPECS4ORIWEIGHTS ) specs = s3D%o_peaks(iptcl)%get_all('specscore')
+        if( USE_CORRS4ORIWEIGHTS .and. USE_SPECS4ORIWEIGHTS )then
+            corrs = corrs * specs
+            where( corrs > TINY )
+                corrs = sqrt(corrs)
+            elsewhere
+                corrs = 0.
+            endwhere
+            call calc_ori_weights( iptcl, npeaks, corrs, ws )
+        else if( USE_CORRS4ORIWEIGHTS .and. .not. USE_SPECS4ORIWEIGHTS )then
+            call calc_ori_weights( iptcl, npeaks, corrs, ws )
+        else if( .not. USE_CORRS4ORIWEIGHTS .and. USE_SPECS4ORIWEIGHTS )then
+            call calc_ori_weights( iptcl, npeaks, specs, ws )
+        else
+            THROW_HARD('nonsenical use of global logical flags USE_CORRS4ORIWEIGHTS and USE_SPECS4ORIWEIGHTS; update_softmax_weights')
+        endif
         call s3D%o_peaks(iptcl)%set_all('ow', ws)
+        if( allocated(corrs) ) deallocate(corrs)
+        if( allocated(specs) ) deallocate(specs)
     end subroutine update_softmax_weights
 
     subroutine calc_ori_weights( iptcl, npeaks, corrs, ws )
