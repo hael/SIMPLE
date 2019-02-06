@@ -1036,9 +1036,11 @@ contains
                 call micrograph%ifft ! need to be here in case it was flipped
                 stack = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
                 ! particles extraction loop
-                nptcls    = 0
-                cnt_stats = 0
-                stk_stats = 0.
+                nptcls         = 0
+                cnt_stats      = 0
+                stk_stats(1)   = huge(stk_stats(1))
+                stk_stats(2)   = -stk_stats(1)
+                stk_stats(3:4) = 0.
                 do iptcl=fromp,top
                     if( spproj_in%os_ptcl2D%get_state(iptcl) == 0 ) cycle
                     if( spproj_in%os_ptcl3D%get_state(iptcl) == 0 ) cycle

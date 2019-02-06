@@ -834,13 +834,56 @@ contains
                     pproc_fname = add2fbody(trim(fname),trim(params_glob%ext),'_pproc')
                     do icls=1,ncls
                         call cavgs_pproc(icls)%ifft()
-
                        call cavgs_pproc(icls)%write(pproc_fname, icls)
                    end do
                endif
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
+        call update_stats
+
+    contains
+
+        subroutine update_stats
+            integer :: icls, cnt
+            real    :: stats(4),minv,maxv,meanv,stdevv
+            logical :: l_err
+            stats(1)   = huge(stats(1))
+            stats(2)   = -stats(1)
+            stats(3:4) = 0.
+            cnt        = 1
+            do icls = 1,ncls
+                select case(which)
+                    case('even')
+                        call cavgs_even(icls)%stats(meanv, stdevv, maxv, minv, errout=l_err)
+                    case('odd')
+                        call cavgs_odd(icls)%stats(meanv, stdevv, maxv, minv, errout=l_err)
+                    case('merged')
+                        call cavgs_merged(icls)%stats(meanv, stdevv, maxv, minv, errout=l_err)
+                end select
+                if( .not.l_err )then
+                    cnt = cnt + 1
+                    stats(1) = min(stats(1),minv)
+                    stats(2) = max(stats(2),maxv)
+                    stats(3) = stats(3) + meanv
+                    stats(4) = stats(4) + stdevv**2.
+                endif
+            enddo
+            if( cnt > 1 )then
+                ! updates header, size, stack & removes box file
+                stats(3) = stats(3) / real(cnt)
+                stats(4) = sqrt(stats(4) / real(cnt))
+                select case(which)
+                    case('even')
+                        call cavgs_even(1)%update_header_stats(fname,stats)
+                    case('odd')
+                        call cavgs_odd(1)%update_header_stats(fname,stats)
+                    case('merged')
+                        call cavgs_merged(1)%update_header_stats(fname,stats)
+                end select
+            endif
+        end subroutine update_stats
+
     end subroutine cavger_write
 
     !>  \brief  reads class averages from disk
