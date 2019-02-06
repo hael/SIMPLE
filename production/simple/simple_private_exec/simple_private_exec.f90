@@ -83,6 +83,7 @@ type(txt2project_commander)          :: xtxt2project
 type(project2txt_commander)          :: xproject2txt
 type(print_project_vals_commander)   :: xprint_project_vals
 type(multivariate_zscore_commander)  :: xmultizscore
+type(o_peaksstats_commander)         :: xo_peaksstats
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_extract_commander)      :: xtseries_extract
@@ -793,6 +794,15 @@ select case(prg)
         keys_optional(1) = 'oritype'
         call cline%parse_oldschool(keys_required(:2), keys_optional(:1))
         call xmultizscore%execute(cline)
+    case( 'o_peaksstats')
+        keys_required(1) = 'dir_refine'
+        keys_required(2) = 'nparts'
+        keys_required(3) = 'part'
+        keys_required(4) = 'fromp'
+        keys_required(5) = 'top'
+        keys_required(6) = 'projfile'
+        call cline%parse_oldschool(keys_required(:5))
+        call xo_peaksstats%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 

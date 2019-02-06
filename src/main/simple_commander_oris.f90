@@ -14,6 +14,7 @@ implicit none
 public :: make_oris_commander
 public :: orisops_commander
 public :: oristats_commander
+public :: o_peaksstats_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
 public :: multivariate_zscore_commander
@@ -32,6 +33,10 @@ type, extends(commander_base) :: oristats_commander
   contains
     procedure :: execute      => exec_oristats
 end type oristats_commander
+type, extends(commander_base) :: o_peaksstats_commander
+  contains
+    procedure :: execute      => exec_o_peaksstats
+end type o_peaksstats_commander
 type, extends(commander_base) :: rotmats2oris_commander
   contains
     procedure :: execute      => exec_rotmats2oris
@@ -308,6 +313,83 @@ contains
         endif
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
+
+    subroutine exec_o_peaksstats( self, cline )
+        use simple_o_peaks_io
+        class(o_peaksstats_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline
+        type(parameters)        :: params
+        type(builder)           :: build
+        type(oris)              :: o_peak
+        real,       allocatable :: weights(:), specscores(:), corrs(:), corrs_x_specscores(:)
+        type(stats_struct),        allocatable :: wstats(:), cstats(:), sstats(:), cxsstats(:)
+        character(len=:),          allocatable :: target_name, refine_path
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        integer :: ipart, iptcl, n_nozero
+        real    :: var, wsdev_avg, wsdev_sdev, wsdev_min, wsdev_max
+        real    :: ssdev_avg, ssdev_sdev, ssdev_min, ssdev_max
+        real    :: csdev_avg, csdev_sdev, csdev_min, csdev_max
+        real    :: cxssdev_avg, cxssdev_sdev, cxssdev_min, cxssdev_max
+        logical :: err
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        ! fetch orientation peak distributions for params%part
+        refine_path = simple_abspath(params%dir_refine)
+        call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
+        if( size(list) /= params%nparts )then
+            THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+        endif
+        target_name = PATH_HERE//basename(trim(list(params%part)))
+        call simple_copy_file(trim(list(params%part)), target_name)
+        ! allocate stats structs
+        allocate(wstats(params%fromp:params%top), cstats(params%fromp:params%top),&
+        &sstats(params%fromp:params%top), cxsstats(params%fromp:params%top))
+        ! read o_peaks & gather stats)
+        call o_peak%new(NPEAKS2REFINE)
+        call open_o_peaks_io(trim(params%o_peaks_file))
+        do iptcl=params%fromp,params%top
+            call read_o_peak(o_peak, [params%fromp,params%top], iptcl, n_nozero)
+            if( all([o_peak%isthere('ow'),o_peak%isthere('specscore'),o_peak%isthere('corr')]))then
+                weights    = o_peak%get_all('ow')
+                specscores = o_peak%get_all('specscore')
+                corrs      = o_peak%get_all('corr')
+                allocate(corrs_x_specscores(size(corrs)), source=corrs * specscores)
+                where( corrs_x_specscores > TINY )
+                    corrs_x_specscores = sqrt(corrs_x_specscores)
+                elsewhere
+                    corrs_x_specscores = 0.
+                endwhere
+                if( count(weights > TINY) > 1 )&
+                call moment(weights, wstats(iptcl)%avg, wstats(iptcl)%sdev, var, err, mask=weights > TINY)
+                if( count(specscores > TINY) > 1 )&
+                call moment(specscores, sstats(iptcl)%avg, sstats(iptcl)%sdev, var, err, mask=specscores > TINY)
+                if( count(corrs > TINY) > 1 )&
+                call moment(corrs, cstats(iptcl)%avg, cstats(iptcl)%sdev, var, err, mask=corrs > TINY)
+                if( count(corrs_x_specscores > TINY) > 1 )&
+                call moment(corrs_x_specscores, cxsstats(iptcl)%avg, cxsstats(iptcl)%sdev, var, err, mask=corrs_x_specscores > TINY)
+                deallocate(weights, specscores, corrs, corrs_x_specscores)
+            endif
+        end do
+        call close_o_peaks_io
+        ! we are only interested in the standard deviations here to understand
+        ! how well the different orientations in the peak set are discriminated
+        call moment(wstats(:)%sdev, wsdev_avg, wsdev_sdev, var, err, mask=wstats(:)%sdev > TINY)
+        wsdev_min = minval(wstats(:)%sdev, mask=wstats(:)%sdev > TINY)
+        wsdev_max = maxval(wstats(:)%sdev, mask=wstats(:)%sdev > TINY)
+        call moment(sstats(:)%sdev, ssdev_avg, ssdev_sdev, var, err, mask=sstats(:)%sdev > TINY)
+        ssdev_min = minval(sstats(:)%sdev, mask=sstats(:)%sdev > TINY)
+        ssdev_max = maxval(sstats(:)%sdev, mask=sstats(:)%sdev > TINY)
+        call moment(cstats(:)%sdev, csdev_avg, csdev_sdev, var, err, mask=cstats(:)%sdev > TINY)
+        csdev_min = minval(cstats(:)%sdev, mask=cstats(:)%sdev > TINY)
+        csdev_max = maxval(cstats(:)%sdev, mask=cstats(:)%sdev > TINY)
+        call moment(cxsstats(:)%sdev, cxssdev_avg, cxssdev_sdev, var, err, mask=cxsstats(:)%sdev > TINY)
+        cxssdev_min = minval(cxsstats(:)%sdev, mask=cxsstats(:)%sdev > TINY)
+        cxssdev_max = maxval(cxsstats(:)%sdev, mask=cxsstats(:)%sdev > TINY)
+        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        write(logfhandle,604) '>>> WEIGHT      SDEV  AVG/SDEV/MIN/MAX:', wsdev_avg, wsdev_sdev, wsdev_min, wsdev_max
+        write(logfhandle,604) '>>> SPECSCORE   SDEV  AVG/SDEV/MIN/MAX:', ssdev_avg, ssdev_sdev, ssdev_min, ssdev_max
+        write(logfhandle,604) '>>> CORR        SDEV  AVG/SDEV/MIN/MAX:', csdev_avg, csdev_sdev, csdev_min, csdev_max
+        write(logfhandle,604) '>>> CORR x SPEC SDEV  AVG/SDEV/MIN/MAX:', cxssdev_avg, cxssdev_sdev, cxssdev_min, cxssdev_max
+    end subroutine exec_o_peaksstats
 
     !> convert rotation matrix to orientation oris class
     subroutine exec_rotmats2oris( self, cline )

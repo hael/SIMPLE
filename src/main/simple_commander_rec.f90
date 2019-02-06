@@ -70,7 +70,7 @@ contains
         real, allocatable             :: res05s(:), res0143s(:)
         real                          :: res
         integer                       :: part, s, n, ss, state, find4eoavg, fnr
-        logical, parameter            :: L_BENCH = .true.
+        logical, parameter            :: L_BENCH = .false.
         integer(timer_int_kind)       :: t_init, t_assemble, t_sum_eos, t_sampl_dens_correct_eos
         integer(timer_int_kind)       :: t_gen_projection_frcs, t_gen_anisotropic_optlp
         integer(timer_int_kind)       :: t_sampl_dens_correct_sum, t_eoavg, t_tot
