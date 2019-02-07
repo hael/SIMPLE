@@ -92,6 +92,15 @@ enum, bind(c)
 end enum
 integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG
 
+! rank ordering criteria weighting methods enumeration
+enum, bind(c)
+    enumerator :: ENUM_RANKWCRIT = 0
+    enumerator :: RANK_SUM_CRIT  = 1
+    enumerator :: RANK_INV_CRIT  = 2
+    enumerator :: RANK_CEN_CRIT  = 3
+    enumerator :: RANK_EXP_CRIT  = 4
+end enum
+
 ! export (to STAR) type enumeration
 enum, bind(c)
     enumerator :: ENUM_STARTYPE = 0
