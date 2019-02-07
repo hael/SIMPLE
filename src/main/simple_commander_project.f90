@@ -21,6 +21,7 @@ public :: import_movies_commander
 public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
+public :: export_cavgs_commander
 public :: subset_project_commander
 private
 #include "simple_local_flags.inc"
@@ -73,6 +74,10 @@ type, extends(commander_base) :: import_cavgs_commander
   contains
     procedure :: execute      => exec_import_cavgs
 end type import_cavgs_commander
+type, extends(commander_base) :: export_cavgs_commander
+  contains
+    procedure :: execute      => exec_export_cavgs
+end type export_cavgs_commander
 type, extends(commander_base) :: subset_project_commander
   contains
     procedure :: execute      => exec_subset_project
@@ -752,6 +757,49 @@ contains
         call spproj%write ! full write since this is guaranteed to be the first import
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
+
+    !> for exporting class-averages from a project
+    subroutine exec_export_cavgs( self, cline )
+        use simple_image, only: image
+        class(export_cavgs_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        type(image)                   :: img
+        character(len=:), allocatable :: cavgs_fname, projfile_path
+        logical,          allocatable :: lstates(:)
+        integer :: ldim(3), icls, ncls, ncavgs, cnt
+        real    :: smpd, smpd_phys
+        call params%new(cline)
+        ! read files and sanity checks
+        if( .not.file_exists(trim(params%projfile)) ) THROW_HARD('Project file does not exist!')
+        call spproj%read_segment(params%oritype,params%projfile)
+        if( spproj%os_cls2D%get_noris() == 0 ) THROW_HARD('Absent cls2D field!')
+        call spproj%read_segment('out',params%projfile)
+        lstates = (spproj%os_cls2D%get_all('state') > 0.5)
+        if( count(lstates) == 0 ) THROW_HARD('All class averages are deselected')
+        call spproj%get_cavgs_stk(cavgs_fname, ncls, smpd)
+        if( spproj%os_cls2D%get_noris() /= ncls ) THROW_HARD('Inconsistent # of entries cls2D/out!')
+        ! takes care of path
+        projfile_path = get_fpath(simple_abspath(params%projfile))
+        cavgs_fname   = trim(projfile_path)//'/'//trim(cavgs_fname)
+        call find_ldim_nptcls(cavgs_fname, ldim, ncavgs, smpd=smpd_phys)
+        if(ncavgs /= ncls)    THROW_HARD('Inconsistent # of cls2D cavgs & physical cavgs!')
+        if(smpd /= smpd_phys) THROW_HARD('Inconsistent sampling distancs in project & physical cavgs!')
+        ! copy selected cavgs
+        cnt     = 0
+        ldim(3) = 1
+        call img%new(ldim, smpd)
+        do icls = 1,ncls
+            if( lstates(icls) )then
+                call img%read(cavgs_fname,icls)
+                cnt = cnt + 1
+                call img%write(params%outstk,cnt)
+            endif
+        enddo
+        ! the end
+        call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
+    end subroutine exec_export_cavgs
 
     !> for generating a subset of a project
     subroutine exec_subset_project( self, cline )

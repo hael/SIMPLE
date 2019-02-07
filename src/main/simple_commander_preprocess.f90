@@ -671,7 +671,7 @@ contains
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
         character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
-        integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, nptcls_eff, state, iptcl_glob, cnt_stats
+        integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, state, iptcl_glob, cnt_stats
         real                      :: particle_position(2), meanv,sddevv,minv,maxv,stk_stats(4)
         logical                   :: l_err
         call cline%set('oritype', 'mic')
@@ -732,8 +732,8 @@ contains
             ! box input
             if( cline%defined('dir_box') )then
                 box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
+                if( .not.file_exists(box_fname) )cycle
                 call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name)
-                if( .not.file_exists(boxfile_name) )cycle
                 call spproj%os_mic%set(imic, 'boxfile', trim(boxfile_name))
             else
                 boxfile_name = trim(o_mic%get_static('boxfile'))
@@ -763,7 +763,7 @@ contains
         call spproj%kill
         ! actual extraction
         if( nmics == 0 )then
-            ! nothing to do!
+            ! done
         else
             if( params%box == 0 )THROW_HARD('box cannot be zero; exec_extract')
             ! set normalization radius
@@ -813,8 +813,12 @@ contains
                     ! update particle mask & movie index
                     if( box_inside(ldim, nint(boxdata(iptcl,1:2)), params%box) )oris_mask(iptcl) = .true.
                 end do
-                nptcls_eff = count(oris_mask)
-                ! extract ctf info
+                if( count(oris_mask) == 0 )then
+                    ! no particles to extract
+                    mics_mask(imic) = .false.
+                    cycle
+                endif
+                ! fetch ctf info
                 ctfparms      = o_mic%get_ctfvars()
                 ctfparms%smpd = params%smpd
                 if( o_mic%isthere('dfx') )then

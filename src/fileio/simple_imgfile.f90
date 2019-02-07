@@ -415,8 +415,8 @@ contains
             THROW_HARD('format not supported')
         end select
         ! find minmax
-            max_val = maxval(rarr)
-            min_val = minval(rarr)
+        max_val = maxval(rarr)
+        min_val = minval(rarr)
         select case(self%head_format)
         case('M','F')
             max_val = max(max_val, self%overall_head%getMaxPixVal())

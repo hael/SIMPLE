@@ -38,6 +38,7 @@ type(cluster2D_commander)            :: xcluster2D
 type(cavgassemble_commander)         :: xcavgassemble
 type(check_2Dconv_commander)         :: xcheck_2Dconv
 type(rank_cavgs_commander)           :: xrank_cavgs
+type(export_cavgs_commander)         :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
 type(nspace_commander)               :: xnspace
@@ -394,6 +395,15 @@ select case(prg)
         ! set defaults
         call cline%set('oritype', 'cls2D')
         call xrank_cavgs%execute(cline)
+    case( 'export_cavgs' )
+        ! for ranking class averages
+        keys_required(1) = 'projfile'
+        ! set optional keys
+        keys_optional(1) = 'outstk'
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:1))
+        ! set defaults
+        call cline%set('oritype', 'cls2D')
+        call xexport_cavgs%execute(cline)
 
     ! REFINE3D PROGRAMS
 
