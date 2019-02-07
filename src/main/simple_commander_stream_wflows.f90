@@ -63,23 +63,7 @@ contains
         call spproj%read( params%projfile )
         ! picking
         l_pick = .false.
-        if( cline%defined('refs') .or. cline%defined('vol1') )then
-            l_pick = .true.
-        else
-            n_os_out = spproj%os_out%get_noris()
-            if( n_os_out > 0 )then
-                ! interrogate project for vol / cavgs
-                do i=1,n_os_out
-                    if( spproj%os_out%isthere(i,'imgkind') )then
-                        call spproj%os_out%getter(i,'imgkind',imgkind)
-                        select case(imgkind)
-                        case('vol','vol_cavg','cavg')
-                            l_pick = .true.
-                        end select
-                    endif
-                enddo
-            endif
-        endif
+        if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
         ! check for previously processed movies
         call spproj%get_movies_table(prev_movies)
         ! output directories

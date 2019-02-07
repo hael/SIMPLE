@@ -292,16 +292,15 @@ select case(prg)
     case( 'make_pickrefs' )
         ! for preparing templates for particle picking
         keys_optional(1) = 'nthr'
-        keys_optional(2) = 'projfile'
-        keys_optional(3) = 'refs'
-        keys_optional(4) = 'vol1'
-        keys_optional(5) = 'pcontrast'
-        keys_optional(6) = 'pgrp'
-        call cline%parse_oldschool(keys_optional=keys_optional(:6))
+        keys_optional(2) = 'refs'
+        keys_optional(3) = 'vol1'
+        keys_optional(4) = 'pcontrast'
+        keys_optional(5) = 'pgrp'
+        call cline%parse_oldschool(keys_optional=keys_optional(:5))
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') .and. .not.cline%defined('projfile'))then
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
             THROW_HARD('One of REFS, VOL1 & PROJFILE must be informed!')
         endif
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')

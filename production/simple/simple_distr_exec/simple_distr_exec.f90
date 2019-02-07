@@ -135,9 +135,18 @@ select case(prg)
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
+            THROW_HARD('one of REFS and VOL1 must be provided!')
+        endif
         call xpick_distr%execute(cline)
     case( 'pick_extract_stream' )
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
+            THROW_HARD('one of REFS and VOL1 must be provided!')
+        endif
         call xpick_extract_stream_distr%execute(cline)
 
     ! CLUSTER2D WORKFLOWS

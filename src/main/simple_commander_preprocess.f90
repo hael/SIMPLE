@@ -1258,25 +1258,22 @@ contains
 
     subroutine exec_make_pickrefs( self, cline )
         use simple_oris,                only: oris
-        use simple_sp_project,          only: sp_project
         use simple_sym,                 only: sym
         use simple_image,               only: image
         use simple_projector_hlev,      only: reproject
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters)              :: params
-        type(sp_project)              :: spproj
         type(oris)                    :: os
         type(sym)                     :: pgrpsyms
         type(image)                   :: ref3D, ref2D
         type(image),      allocatable :: projs(:)
         character(len=:), allocatable :: imgkind
-        character(len=:), allocatable :: volname, volcavgname, cavgname
-        real,             allocatable :: states(:)
+        character(len=:), allocatable :: volname, cavgname
         integer, parameter :: NREFS=100, NPROJS=20
         real    :: ang, rot, smpd_here
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
-        integer :: ncls2D, cnt, n_os_out, i, nsel
+        integer :: ncls2D, cnt, n_os_out, i, norefs
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters
@@ -1285,46 +1282,10 @@ contains
         if( .not. cline%defined('pgrp') ) params%pgrp = 'd1' ! only northern hemisphere
         ! point-group object
         call pgrpsyms%new(trim(params%pgrp))
-        ! user input overrides volume/cavgs in project file
         if( cline%defined('vol1') )then
-            volname  = trim(params%vols(1))
-        else if( cline%defined('refs') )then
-            cavgname = trim(params%refs)
-        else
-            ! read project file
-            call spproj%read(params%projfile)
-            n_os_out = spproj%os_out%get_noris()
-            if( n_os_out == 0 )then
-                THROW_HARD('Nothing in os_out. Need vol / cavgs for creating picking references!')
-            endif
-            ! interrogate project for vol / cavgs
-            do i=1,n_os_out
-                if( spproj%os_out%isthere(i,'imgkind') )then
-                    call spproj%os_out%getter(i,'imgkind',imgkind)
-                    select case(imgkind)
-                        case( 'vol' )
-                            call spproj%os_out%getter(i, 'vol',      volname)
-                        case( 'vol_cavg' )
-                            call spproj%os_out%getter(i, 'vol_cavg', volcavgname)
-                        case( 'cavg' )
-                            call spproj%os_out%getter(i, 'stk',     cavgname)
-                    end select
-                endif
-            enddo
-        endif
-        if( allocated(volname) )then
-            ! have 3D reference
-        else if( allocated(volcavgname) )then
-            ! have 3D reference
-            volname = volcavgname
-        else if( allocated(cavgname) )then
-            ! have 2D references
-        else
-            THROW_HARD('Could not identify vol / cavgs in project for creating picking references!')
-        endif
-        if( allocated(volname) )then
             ! find logical dimension & read reference volume
-            call find_ldim_nptcls(volname, ldim_here, ifoo, smpd=smpd_here)
+            call find_ldim_nptcls(params%vols(1), ldim_here, ifoo, smpd=smpd_here)
+            if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the volume (should be in MRC format)')
             call ref3D%new(ldim_here, smpd_here)
             call ref3D%read(volname)
             call scale_ref(ref3D, params%smpd)
@@ -1332,43 +1293,24 @@ contains
             call os%new(NPROJS)
             call pgrpsyms%build_refspiral(os)
             ! generate reprojections
-            projs = reproject(ref3D, os)
-            nrots = NREFS / NPROJS
-            nsel  = NPROJS
-        else
-            ! find logical dimension & read class averages
-            call find_ldim_nptcls(cavgname, ldim_here, ncavgs, smpd=smpd_here)
-            ldim_here(3) = 1
-            if( cline%defined('refs') )then
-                nsel = ncavgs
-                allocate(states(nsel), source=1.)
-            else
-                ! check consistency with cls2D field
-                ncls2D = spproj%os_cls2D%get_noris()
-                if( ncavgs /= ncls2D )then
-                    print *, '# cavgs in file:          ', ncls2D
-                    print *, '# entries in cls2D field: ', ncavgs
-                    THROW_HARD('inconsistent # cavgs in file vs. project field')
-                endif
-                ! manage selection
-                states = spproj%os_cls2D%get_all('state')
-                nsel   = count(states > 0.5)
-                if( nsel > NREFS / 4 )then
-                    THROW_HARD('too many class averages selected as references for picking, select max 25')
-                endif
-            endif
+            projs  = reproject(ref3D, os)
+            nrots  = nint( real(NREFS)/real(NPROJS) )
+            norefs = NPROJS
+        else if( cline%defined('refs') )then
             ! read selected cavgs
-            allocate( projs(nsel) )
-            cnt = 0
+            call find_ldim_nptcls(params%refs, ldim_here, ncavgs, smpd=smpd_here)
+            if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the cavgs (should be in MRC format)')
+            ldim_here(3) = 1
+            allocate( projs(ncavgs) )
             do icavg=1,ncavgs
-                if( states(icavg) > 0.5 )then
-                    cnt = cnt + 1
-                    call projs(cnt)%new(ldim_here, smpd_here)
-                    call projs(cnt)%read(cavgname, icavg)
-                    call scale_ref(projs(cnt), params%smpd)
-                endif
+                call projs(icavg)%new(ldim_here, smpd_here)
+                call projs(icavg)%read(params%refs, icavg)
+                call scale_ref(projs(icavg), params%smpd)
             end do
-            nrots  = NREFS / nsel
+            nrots  = nint( real(NREFS)/real(ncavgs) )
+            norefs = ncavgs
+        else
+            THROW_HARD('Missing volume / cavgs for creating picking references!')
         endif
         ! expand in in-plane rotation and write to file
         if( nrots > 1 )then
@@ -1376,7 +1318,7 @@ contains
             ang = 360./real(nrots)
             rot = 0.
             cnt = 0
-            do iref=1,nsel
+            do iref=1,norefs
                 do irot=1,nrots
                     cnt = cnt + 1
                     call projs(iref)%rtsq(rot, 0., 0., ref2D)
@@ -1387,7 +1329,7 @@ contains
             end do
         else
             ! should never happen
-            do iref=1,nsel
+            do iref=1,norefs
                 if(params%pcontrast .eq. 'black') call projs(iref)%neg
                 call projs(iref)%write(trim(PICKREFS)//params%ext, iref)
             end do
