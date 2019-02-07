@@ -94,6 +94,7 @@ type :: oris
     procedure, private :: set_all2single_2
     generic            :: set_all2single => set_all2single_1, set_all2single_2
     procedure          :: set_projs
+    procedure          :: remap_projs
     procedure          :: e3swapsgn
     procedure          :: swape1e3
     procedure          :: zero
@@ -1410,13 +1411,25 @@ contains
     subroutine set_projs( self, e_space )
         class(oris), intent(inout) :: self
         class(oris), intent(inout) :: e_space
-        integer    :: i
+        integer :: i
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i=1,self%n
             call self%set(i, 'proj', real(e_space%find_closest_proj(self%o(i))))
         end do
         !$omp end parallel do
     end subroutine set_projs
+
+    subroutine remap_projs( self, e_space, mapped_projs )
+        class(oris), intent(inout) :: self
+        class(oris), intent(inout) :: e_space
+        integer,     intent(out)   :: mapped_projs(self%n)
+        integer :: i
+        !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
+        do i=1,self%n
+            mapped_projs(i) = e_space%find_closest_proj(self%o(i))
+        end do
+        !$omp end parallel do
+    end subroutine remap_projs
 
     subroutine e3swapsgn( self )
         class(oris), intent(inout) :: self

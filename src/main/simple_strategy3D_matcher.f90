@@ -214,29 +214,23 @@ contains
             case('snhc')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) then
-                        allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         if( ran3() < GREEDY_FREQ )then
-                            allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                         else
-                            allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr)
                         endif
-                        if(alloc_stat.ne.0)&
-                           &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch single",alloc_stat)
                     endif
                 end do
             case('hard_single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_hard_single :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_single",alloc_stat)
+                        allocate(strategy3D_hard_single :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('greedy_single')
@@ -246,9 +240,7 @@ contains
             case('cont_single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        allocate(strategy3D_cont_single :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('multi')
@@ -256,36 +248,28 @@ contains
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
                         if( updatecnt == 1 )then
-                            allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
                         else
-                            allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr)
                         endif
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch multi",alloc_stat)
                     endif
                 end do
             case('hard_multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch hard_multi",alloc_stat)
+                        allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch snhc",alloc_stat)
+                        allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cluster       :: strategy3Dsrch(iptcl)%ptr, stat=alloc_stat)
-                        if(alloc_stat.ne.0)&
-                            &call allocchk("In simple_strategy3D_matcher::refine3D_exec strategy3Dsrch cluster",alloc_stat)
+                        allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
                     endif
                 end do
             case('eval')
@@ -353,6 +337,7 @@ contains
         call calc_global_ori_weights
 
         ! O_PEAKS I/O & CONVERGENCE STATS
+        ! here we read all peaks to allow deriving statistics based on the complete set
         select case(trim(params_glob%refine))
             case('eval','cluster','clustersym')
                 ! nothing to do
@@ -375,6 +360,8 @@ contains
                         endif
                         ! replace the peak on disc
                         call write_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl)
+                    else
+                        call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
                     endif
                 end do
                 call close_o_peaks_io
@@ -761,5 +748,43 @@ contains
                 deallocate(weights_glob)
         end select
     end subroutine calc_global_ori_weights
+
+    subroutine calc_proj_weights
+        real, allocatable :: weights(:), projs(:)
+        integer :: mapped_projs(params_glob%nspace), w_per_proj(NSPACE_REDUCED), i, ind, iptcl
+        real    :: proj_weights(params_glob%nspace), pw
+        select case(params_glob%refine)
+            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
+                proj_weights = 1.0
+            case DEFAULT
+                if( build_glob%spproj_field%get_avg('updatecnt') < 1.0 )then
+                    proj_weights = 1.0
+                else
+                    ! map projection directions of eulspace to eulspace_red (reduced set)
+                    call build_glob%eulspace%remap_projs(build_glob%eulspace_red, mapped_projs)
+                    ! calculate the weight strenght per projection direction
+                    w_per_proj = 0.
+                    do iptcl=params_glob%fromp,params_glob%top
+                        pw = 1.0
+                        if( build_glob%spproj_field%isthere(iptcl, 'w') ) pw = build_glob%spproj_field%get(iptcl, 'w')
+                        if( s3D%o_peaks(iptcl)%isthere('ow') )then
+                            weights = s3D%o_peaks(iptcl)%get_all('ow')
+                            projs   = s3D%o_peaks(iptcl)%get_all('proj')
+                            do i=1,size(projs)
+                                if( weights(i) > TINY )then
+                                    ind = mapped_projs(nint(projs(i)))
+                                    w_per_proj(ind) = w_per_proj(ind) + weights(i) * pw
+                                endif
+                            end do
+                        endif
+                    end do
+                    print *, '********************** w_per_proj'
+                    print *, w_per_proj
+                    print *, 'avg: ', sum(w_per_proj, mask=w_per_proj > TINY) / real(count(w_per_proj > TINY))
+                    print *, 'max: ', maxval(w_per_proj)
+                    print *, 'min: ', minval(w_per_proj, mask=w_per_proj > TINY)
+                endif
+        end select
+    end subroutine calc_proj_weights
 
 end module simple_strategy3D_matcher
