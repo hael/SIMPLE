@@ -80,10 +80,12 @@ contains
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
-            err  = .true.
-            ave  = 0.
-            sdev = 0.
+            if( var < 0. )then
+                err  = .true.
+                ave  = 0.
+            endif
             var  = 0.
+            sdev = 0.
         endif
     end subroutine moment_1
 
@@ -124,14 +126,16 @@ contains
             end do
         end do
         !$omp end parallel do
-        var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        var  = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
-            err  = .true.
-            ave  = 0.
-            sdev = 0.
+            if( var < 0. )then
+                err  = .true.
+                ave  = 0.
+            endif
             var  = 0.
+            sdev = 0.
         endif
     end subroutine moment_2
 
@@ -178,10 +182,12 @@ contains
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
-            err  = .true.
-            ave  = 0.
-            sdev = 0.
+            if( var < 0. )then
+                err  = .true.
+                ave  = 0.
+            endif
             var  = 0.
+            sdev = 0.
         endif
     end subroutine moment_3
 
@@ -197,7 +203,7 @@ contains
         real,    intent(in)  :: data(:)
         logical, intent(in)  :: mask(:)
         integer :: n, i, sz
-        real    :: ep, nr, dev
+        real    :: ep, nr, dev, abs_var
         err = .false.
         sz  = size(data)
         if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
@@ -223,10 +229,12 @@ contains
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
-            err  = .true.
-            ave  = 0.
-            sdev = 0.
+            if( var < 0. )then
+                err  = .true.
+                ave  = 0.
+            endif
             var  = 0.
+            sdev = 0.
         endif
     end subroutine moment_4
 

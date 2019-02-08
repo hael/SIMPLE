@@ -871,7 +871,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_distr_exec',&                                                                    ! executable
-        &0, 1, 0, 8, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 1, 0, 9, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -897,7 +897,8 @@ contains
         cluster2D_stream%srch_ctrls(6)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 7, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
-        call cluster2D_stream%set_input('srch_ctrls',8, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call cluster2D_stream%set_input('srch_ctrls', 8, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
+        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'binary', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -910,6 +911,7 @@ contains
         '(yes|no){no}', .false., 'no')
         ! mask controls
         call cluster2D_stream%set_input('mask_ctrls', 1, msk)
+        cluster2D_stream%mask_ctrls(1)%required = .false.
         call cluster2D_stream%set_input('mask_ctrls', 2, inner)
         ! computer controls
         call cluster2D_stream%set_input('comp_ctrls', 1, nparts)

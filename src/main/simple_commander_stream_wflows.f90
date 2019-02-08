@@ -252,11 +252,12 @@ contains
         integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         integer,               parameter   :: MINBOXSZ            = 72   ! minimum boxsize for scaling
-        real                               :: SMPD_TARGET         = 5.    ! target sampling distance
         ! dev settings
         ! integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         ! integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 60    ! 10mins, Frequency at which the original project file should be updated
+        real,                 parameter    :: GREEDY_TARGET_LP   = 15.
+        real                               :: SMPD_TARGET         = 4.    ! target sampling distance
         character(len=STDLEN), parameter   :: MICS_SELECTION_FILE = 'stream2D_selection.txt'
         character(len=STDLEN), parameter   :: PROJFILE_BUFFER     = 'buffer.simple'
         character(len=STDLEN), parameter   :: PROJFILE_POOL       = 'pool.simple'
@@ -276,11 +277,11 @@ contains
         character(len=:),      allocatable :: spproj_list_fname, orig_projfile, stk
         character(len=STDLEN)              :: str_iter, refs_glob, refs_glob_ranked
         character(len=LONGSTRLEN)          :: buffer_dir
-        real    :: orig_smpd, msk, scale_factor, orig_msk, smpd
-        integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers
+        real    :: orig_smpd, msk, scale_factor, orig_msk, smpd, large_msk, lp_greedy
+        integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers, large_ring2
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
         integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter
-        logical :: do_autoscale, l_maxed, buffer_exists, do_wait
+        logical :: do_autoscale, l_maxed, buffer_exists, do_wait, l_greedy
         ! seed the random number generator
         call seed_rnd
         ! set oritype
@@ -308,10 +309,16 @@ contains
         spproj_list_fname = filepath(trim(params%dir_target), trim(STREAM_SPPROJFILES))
         ncls_glob         = 0
         n_transfers       = 0
+        l_greedy          = trim(params%refine).eq.'greedy'
+        lp_greedy         = GREEDY_TARGET_LP
+        if( cline%defined('lp') ) lp_greedy = params%lp
         ! for microscopes that don't work too good, automatically turned off after 2 hours
         if(.not.cline%defined('time_inactive'))params%time_inactive = 2*3600
         ! init command-lines
-        call cline%delete('lp') ! gold-standard refinement
+        call cline%delete('lp')
+        call cline%delete('refine')
+        call cline%delete('eo')
+        call cline%set('wfun', 'bilinear')
         cline_cluster2D         = cline
         cline_cluster2D_buffer  = cline
         cline_make_cavgs        = cline
@@ -322,13 +329,21 @@ contains
         call cline_cluster2D_buffer%set('projfile',  trim(PROJFILE_BUFFER))
         call cline_cluster2D_buffer%set('projname',  trim(get_fbody(trim(PROJFILE_BUFFER),trim('simple'))))
         call cline_cluster2D_buffer%set('objfun',    'cc')
-        call cline_cluster2D_buffer%set('wfun',      'bilinear')
         call cline_cluster2D_buffer%set('center',    'no')
         call cline_cluster2D_buffer%set('match_filt','no')
         call cline_cluster2D_buffer%set('autoscale', 'no')
         call cline_cluster2D_buffer%set('stream',    'yes') ! more stringent convergence
         call cline_cluster2D_buffer%set('refine',    'snhc')
         call cline_cluster2D_buffer%delete('update_frac')
+        if( l_greedy )then
+            call cline_cluster2D_buffer%set('eo',     'no')
+            call cline_cluster2D_buffer%set('maxits', 10.)
+            call cline_cluster2D_buffer%set('refine', 'greedy')
+            call cline_cluster2D_buffer%set('lp',     GREEDY_TARGET_LP)
+        else
+            call cline_cluster2D_buffer%set('eo','yes')
+            call cline_cluster2D_buffer%set('maxits',    12.) ! guaranties 3 iterations with withdrawal
+        endif
         ! pool classification
         ! down-scaling for fast execution, stochastic optimisation, optional match filter, bi-linear interpolation,
         ! no incremental learning, objective function is standard cross-correlation (cc)
@@ -336,7 +351,6 @@ contains
         call cline_cluster2D%set('autoscale', 'no')
         call cline_cluster2D%set('extr_iter', 100.)
         call cline_cluster2D%set('trs',       MINSHIFT)
-        call cline_cluster2D%set('wfun',      'bilinear')
         call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D%set('objfun',    'cc')
@@ -347,12 +361,24 @@ contains
             endif
         endif
         if( .not.cline%defined('match_filt') ) call cline_cluster2D%set('match_filt','no')
+        if( l_greedy )then
+            call cline_cluster2D%set('eo',     'no')
+            call cline_cluster2D%set('center', 'no')
+            call cline_cluster2D%set('refine', 'greedy')
+            call cline_cluster2D%set('lp',     lp_greedy)
+        else
+            call cline_cluster2D%set('eo','yes')
+        endif
         call cline_cluster2D%delete('update_frac')
-        ! scaling
-        call cline_make_cavgs%set('prg',    'make_cavgs')
-        call cline_make_cavgs%set('wfun',   'bilinear')
+        ! final averaging
+        call cline_make_cavgs%set('prg', 'make_cavgs')
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%delete('remap_cls')
+        if( l_greedy )then
+            call cline_make_cavgs%set('eo','no')
+        else
+            call cline_make_cavgs%set('eo','yes')
+        endif
         ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
@@ -403,6 +429,8 @@ contains
             msk  = orig_msk
             scale_factor = 1.
         endif
+        large_msk   = real(box/2)-COSMSKHALFWIDTH
+        large_ring2 = round2even(0.8*large_msk)
         ! FIRST IMPORT
         allocate(stk_list(n_spprojs))
         call os_stk%new(n_spprojs)
@@ -499,6 +527,10 @@ contains
             call cline_make_cavgs%set('nparts', real(nparts))
             call cline_make_cavgs%set('ncls',   real(ncls_glob))
             call cline_make_cavgs%set('refs',   refs_glob)
+            if( .not.cline%defined('msk') )then
+                large_msk = real(orig_box/2)-COSMSKHALFWIDTH
+                call cline_make_cavgs%set('msk',large_msk)
+            endif
             call xmake_cavgs%execute(cline_make_cavgs)
             call orig_proj%read(orig_projfile)
         endif
@@ -569,10 +601,8 @@ contains
                     do icls=1,ncls_here
                         if( cls_mask(icls) ) cycle
                         cnt = cnt+1
-                        !if( debug_here )then
-                            call img%read(refs_buffer,icls)
-                            call img%write('rejected_'//int2str(pool_iter)//'.mrc',cnt)
-                        !endif
+                        call img%read(refs_buffer,icls)
+                        call img%write('rejected_'//int2str(pool_iter)//'.mrc',cnt)
                         img = 0.
                         call img%write(refs_buffer,icls)
                     enddo
@@ -767,13 +797,18 @@ contains
                 call buffer_proj%kill
                 ! cluster2d execution
                 params_glob%projfile = trim('./'//trim(PROJFILE_BUFFER))
-                call cline_cluster2D_buffer%set('startit',   1.)
-                call cline_cluster2D_buffer%set('maxits',    12.) ! guaranties 3 iterations with withdrawal
-                call cline_cluster2D_buffer%set('extr_iter', real(MAX_EXTRLIM2D-2))
-                call cline_cluster2D_buffer%set('ncls',      real(params%ncls_start))
-                call cline_cluster2D_buffer%set('nparts',    real(nparts))
-                call cline_cluster2D_buffer%set('box',       real(box))
-                call cline_cluster2D_buffer%set('msk',       real(box/2)-3.)
+                call cline_cluster2D_buffer%set('startit', 1.)
+                call cline_cluster2D_buffer%set('box',     real(box))
+                call cline_cluster2D_buffer%set('ncls',    real(params%ncls_start))
+                call cline_cluster2D_buffer%set('nparts',  real(nparts))
+                call cline_cluster2D_buffer%set('msk',     large_msk)
+                call cline_cluster2D_buffer%set('ring2',   real(large_ring2))
+                if( l_greedy )then
+                    ! done
+                else
+                    ! stochastic setting
+                    call cline_cluster2D_buffer%set('extr_iter', real(MAX_EXTRLIM2D-2))
+                endif
                 call cline_cluster2D_buffer%delete('trs')
                 call cline_cluster2D_buffer%delete('endit')
                 call cline_cluster2D_buffer%delete('converged')
@@ -828,9 +863,13 @@ contains
                 call cline_cluster2D%set('maxits',  real(pool_iter))
                 call cline_cluster2D%set('ncls',    real(ncls_glob))
                 call cline_cluster2D%set('box',     real(box))
-                call cline_cluster2D%set('msk',     real(msk))
                 call cline_cluster2D%set('refs',    trim(refs_glob))
                 call cline_cluster2D%set('frcs',    trim(FRCS_FILE))
+                call cline_cluster2D%set('msk',     msk)
+                if( l_greedy .and. .not.cline%defined('msk') )then
+                    call cline_cluster2D%set('msk',   large_msk)
+                    call cline_cluster2D%set('ring2', real(large_ring2))
+                endif
                 call cline_cluster2D%delete('endit')
                 call cline_cluster2D%delete('converged')
                 params_glob%nptcls = nptcls
@@ -852,8 +891,12 @@ contains
                 if(pool_iter>1)then
                     prev_refs = trim(CAVGS_ITER_FBODY)//trim(int2str_pad(pool_iter-1,3))//trim(params%ext)
                     call del_file(prev_refs)
-                    call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
-                    call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
+                    if( l_greedy )then
+                        ! no even/odd stored
+                    else
+                        call del_file(add2fbody(trim(prev_refs),params%ext,'_even'))
+                        call del_file(add2fbody(trim(prev_refs),params%ext,'_odd'))
+                    endif
                 endif
                 ! cleanup
                 call spproj2D%kill
@@ -922,12 +965,16 @@ contains
                         ! first time
                         refs_glob = 'start_cavgs'//params%ext
                         call simple_copy_file(refs_buffer,refs_glob)
-                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                        call simple_copy_file(stkin,stkout)
-                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                        call simple_copy_file(stkin,stkout)
+                        if( l_greedy )then
+                            ! no even/odd stored
+                        else
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                            call simple_copy_file(stkin,stkout)
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                            call simple_copy_file(stkin,stkout)
+                        endif
                         call simple_copy_file(trim(buffer_dir)//'/'//trim(FRCS_FILE),FRCS_FILE)
                     else
                         ! class averages &
@@ -937,20 +984,24 @@ contains
                             call img%read(refs_buffer, icls)
                             call img%write(refs_glob, ind)
                         enddo
-                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                        do icls=1,params%ncls_start
-                            ind = ncls_glob+icls
-                            call img%read(stkin, icls)
-                            call img%write(stkout, ind)
-                        enddo
-                        stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                        do icls=1,params%ncls_start
-                            ind = ncls_glob+icls
-                            call img%read(stkin, icls)
-                            call img%write(stkout, ind)
-                        enddo
+                        if( l_greedy )then
+                            ! no even/odd stored
+                        else
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                            do icls=1,params%ncls_start
+                                ind = ncls_glob+icls
+                                call img%read(stkin, icls)
+                                call img%write(stkout, ind)
+                            enddo
+                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                            do icls=1,params%ncls_start
+                                ind = ncls_glob+icls
+                                call img%read(stkin, icls)
+                                call img%write(stkout, ind)
+                            enddo
+                        endif
                         ! FRCs
                         state = 1
                         call frcs_prev%new(ncls_glob, box, smpd, state)
@@ -1001,14 +1052,18 @@ contains
                             ! classes
                             call img%read(refs_buffer, ind)
                             call img%write(refs_glob, icls)
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                            call img%read(stkin, ind)
-                            call img%write(stkout, icls)
-                            stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
-                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                            call img%read(stkin, ind)
-                            call img%write(stkout, icls)
+                            if( l_greedy )then
+                                ! no even/odd stored
+                            else
+                                stkin  = add2fbody(trim(refs_buffer),params%ext,'_even')
+                                stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                                call img%read(stkin, ind)
+                                call img%write(stkout, icls)
+                                stkin  = add2fbody(trim(refs_buffer),params%ext,'_odd')
+                                stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                                call img%read(stkin, ind)
+                                call img%write(stkout, icls)
+                            endif
                             o = buffer_proj%os_cls2D%get_ori(ind)
                             call o%set('class',real(icls))
                             call pool_proj%os_cls2D%set_ori(icls,o)
@@ -1022,14 +1077,18 @@ contains
                                 call pool_proj%os_ptcl2D%set(iptcl,'class',real(icls))
                             enddo
                         enddo
-                        call img%read(refs_glob, ncls_glob)
-                        call img%write(refs_glob, ncls_glob)
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_even')
-                        call img%read(stkout, ncls_glob)
-                        call img%write(stkout, ncls_glob)
-                        stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
-                        call img%read(stkout, ncls_glob)
-                        call img%write(stkout, ncls_glob)
+                        if( l_greedy )then
+                            ! no even/odd stored
+                        else
+                            call img%read(refs_glob, ncls_glob)
+                            call img%write(refs_glob, ncls_glob)
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_even')
+                            call img%read(stkout, ncls_glob)
+                            call img%write(stkout, ncls_glob)
+                            stkout = add2fbody(trim(refs_glob),params%ext,'_odd')
+                            call img%read(stkout, ncls_glob)
+                            call img%write(stkout, ncls_glob)
+                        endif
                         call frcs_glob%write(FRCS_FILE)
                         call frcs_glob%kill
                         call frcs_buffer%kill

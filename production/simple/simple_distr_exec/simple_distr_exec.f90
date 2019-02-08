@@ -98,6 +98,7 @@ select case(prg)
         call xpreprocess_stream%execute(cline)
     case( 'extract' )
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        call cline%set('nthr',1.)
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
                 THROW_HARD('Only CTF=NO/FLIP are allowed')
@@ -105,6 +106,7 @@ select case(prg)
         endif
         call xextract_distr%execute(cline)
     case( 'reextract' )
+        call cline%set('nthr',1.)
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         if( cline%defined('ctf') )then
             if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
@@ -173,12 +175,18 @@ select case(prg)
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
-        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
         if( .not. cline%defined('center')    ) call cline%set('center',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
         if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
+        if( cline%defined('refine') )then
+            if( trim(cline%get_carg('refine')).ne.'greedy' )then
+                if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
+            endif
+        else
+            if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
+        endif
         call xcluster2D_stream_distr%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
