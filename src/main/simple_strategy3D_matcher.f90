@@ -676,7 +676,7 @@ contains
         npeaks = NPEAKS2REFINE
         ! particle weights
         if( SOFT_PTCL_WEIGHTS3D )then
-            call build_glob%spproj_field%calc_soft_weights_specscore
+            call build_glob%spproj_field%calc_soft_weights_spread
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
