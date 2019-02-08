@@ -331,7 +331,7 @@ contains
         real    :: csdev_avg, csdev_sdev, csdev_min, csdev_max
         real    :: cxssdev_avg, cxssdev_sdev, cxssdev_min, cxssdev_max
         logical :: err
-        call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
+        call build%init_params_and_build_general_tbox(cline,params,do3d=.true.)
         ! fetch orientation peak distributions for params%part
         refine_path = simple_abspath(params%dir_refine)
         call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
@@ -389,6 +389,50 @@ contains
         write(logfhandle,604) '>>> SPECSCORE   SDEV  AVG/SDEV/MIN/MAX:', ssdev_avg, ssdev_sdev, ssdev_min, ssdev_max
         write(logfhandle,604) '>>> CORR        SDEV  AVG/SDEV/MIN/MAX:', csdev_avg, csdev_sdev, csdev_min, csdev_max
         write(logfhandle,604) '>>> CORR x SPEC SDEV  AVG/SDEV/MIN/MAX:', cxssdev_avg, cxssdev_sdev, cxssdev_min, cxssdev_max
+        call calc_proj_weights
+
+        contains
+
+            subroutine calc_proj_weights
+                real, allocatable :: weights(:), projs(:)
+                integer :: mapped_projs(params%nspace), i, ind, iptcl
+                real    :: proj_weights(params%nspace), w_per_proj(NSPACE_REDUCED)
+                ! map projection directions of eulspace to eulspace_red (reduced set)
+                call build%eulspace%remap_projs(build%eulspace_red, mapped_projs)
+                ! calculate the weight strenght per projection direction
+                w_per_proj = 0.
+                call open_o_peaks_io(trim(params%o_peaks_file))
+                do iptcl=params%fromp,params%top
+                    call read_o_peak(o_peak, [params%fromp,params%top], iptcl, n_nozero)
+                    if( o_peak%isthere('ow') )then
+                        weights = o_peak%get_all('ow')
+                        projs   = o_peak%get_all('proj')
+                        do i=1,size(projs)
+                            if( weights(i) > TINY )then
+                                ind = mapped_projs(nint(projs(i)))
+                                w_per_proj(ind) = w_per_proj(ind) + weights(i)
+                            endif
+                        end do
+                    endif
+                end do
+                call close_o_peaks_io
+                ! print *, '********************** w_per_proj'
+                ! print *, w_per_proj
+                ! print *, 'avg: ', sum(w_per_proj, mask=w_per_proj > TINY) / real(count(w_per_proj > TINY))
+                ! print *, 'max: ', maxval(w_per_proj)
+                ! print *, 'min: ', minval(w_per_proj, mask=w_per_proj > TINY)
+                do i=1,params%nspace
+                    proj_weights(i) = 1. / max(1., w_per_proj(mapped_projs(i)))
+                end do
+                proj_weights = proj_weights / maxval(proj_weights) ! minmax normalisation
+                ! do i=1,params%nspace
+                !     print *, 'projw/w_per_proj: ', proj_weights(i), w_per_proj(mapped_projs(i))
+                ! end do
+                print *, 'projw avg: ', sum(proj_weights, mask=proj_weights > TINY) / real(count(proj_weights > TINY))
+                print *, 'projw max: ', maxval(proj_weights)
+                print *, 'projw min: ', minval(proj_weights, mask=proj_weights > TINY)
+            end subroutine calc_proj_weights
+
     end subroutine exec_o_peaksstats
 
     !> convert rotation matrix to orientation oris class

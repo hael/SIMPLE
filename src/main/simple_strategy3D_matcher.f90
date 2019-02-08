@@ -36,7 +36,7 @@ use simple_euclid_sigma,             only: euclid_sigma
 implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks
-public :: calc_global_ori_weights, calc_3Drec
+public :: calc_global_ori_weights, calc_3Drec, calc_proj_weights
 private
 #include "simple_local_flags.inc"
 
@@ -45,6 +45,7 @@ type(polarft_corrcalc),  target :: pftcc
 type(polarizer),    allocatable :: match_imgs(:)
 integer,            allocatable :: pinds(:)
 logical,            allocatable :: ptcl_mask(:)
+real,               allocatable :: proj_weights(:)
 type(sym)                       :: c1_symop
 integer                         :: nptcls2update
 integer                         :: npeaks
@@ -751,14 +752,16 @@ contains
 
     subroutine calc_proj_weights
         real, allocatable :: weights(:), projs(:)
-        integer :: mapped_projs(params_glob%nspace), w_per_proj(NSPACE_REDUCED), i, ind, iptcl
-        real    :: proj_weights(params_glob%nspace), pw
+        integer :: mapped_projs(params_glob%nspace), i, ind, iptcl
+        real    :: pw, w_per_proj(NSPACE_REDUCED)
+        if( allocated(proj_weights) ) deallocate(proj_weights)
+        allocate( proj_weights(params_glob%nspace), source=1.0 )
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
-                proj_weights = 1.0
+                ! nothing to do
             case DEFAULT
                 if( build_glob%spproj_field%get_avg('updatecnt') < 1.0 )then
-                    proj_weights = 1.0
+                    ! nothing to do
                 else
                     ! map projection directions of eulspace to eulspace_red (reduced set)
                     call build_glob%eulspace%remap_projs(build_glob%eulspace_red, mapped_projs)
@@ -778,11 +781,10 @@ contains
                             end do
                         endif
                     end do
-                    print *, '********************** w_per_proj'
-                    print *, w_per_proj
-                    print *, 'avg: ', sum(w_per_proj, mask=w_per_proj > TINY) / real(count(w_per_proj > TINY))
-                    print *, 'max: ', maxval(w_per_proj)
-                    print *, 'min: ', minval(w_per_proj, mask=w_per_proj > TINY)
+                    do i=1,params_glob%nspace
+                        proj_weights(i) = 1. / max(1., w_per_proj(mapped_projs(i)))
+                    end do
+                    proj_weights = proj_weights / maxval(proj_weights) ! minmax normalisation
                 endif
         end select
     end subroutine calc_proj_weights

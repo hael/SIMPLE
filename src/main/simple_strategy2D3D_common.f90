@@ -228,12 +228,18 @@ contains
         type(ctfparams), intent(in)    :: ctfvars
         real      :: pw, bfac_rec
         integer   :: s, eo
+        ! eo flag
         eo = 0
         if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( params_glob%shellw .eq. 'yes' )then
-            ! shell-weighted reconstruction
+        ! particle-weight
+        pw = 1.0
+        if( o%isthere('w') ) pw = o%get('w')
+        if( pw > TINY )then
             bfac_rec = 0.
-            if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
+            if( params_glob%shellw .eq. 'yes' )then
+                ! shell-weighted reconstruction
+                if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
+            endif
             ! state flag
             s = o%get_state()
             ! fwd ft
@@ -241,28 +247,10 @@ contains
             ! gridding
             if( params_glob%eo .ne. 'no' )then
                 call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, &
-                    img, eo, pwght=1., bfac=bfac_rec)
+                    img, eo, pwght=pw, bfac=bfac_rec)
             else
                 call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, &
-                    img, pwght=1., bfac=bfac_rec)
-            endif
-        else
-            ! particle-weighted reconstruction
-            pw = 1.0
-            if( o%isthere('w') ) pw = o%get('w')
-            if( pw > TINY )then
-                ! state flag
-                s = o%get_state()
-                ! fwd ft
-                call img%fft()
-                ! gridding
-                if( params_glob%eo .ne. 'no' )then
-                    call build_glob%eorecvols(s)%grid_fplane(se, o, &
-                        ctfvars, img, eo, pwght=pw)
-                else
-                    call build_glob%recvols(s)%insert_fplane(se, o, &
-                        ctfvars, img, pwght=pw)
-                endif
+                    img, pwght=pw, bfac=bfac_rec)
             endif
         endif
     end subroutine grid_ptcl_1
@@ -280,22 +268,28 @@ contains
         real, allocatable :: states(:)
         real    :: pw, bfac_rec
         integer :: s, eo
+        ! eo flag
         eo = 0
         if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
-        if( params_glob%shellw.eq.'yes' )then
-            ! shell-weighted reconstruction
+        ! particle-weight
+        pw = 1.0
+        if( o%isthere('w') ) pw = o%get('w')
+        if( pw > TINY )then
             bfac_rec = 0.
-            if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
+            if( params_glob%shellw.eq.'yes' )then
+                ! shell-weighted reconstruction
+                if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
+            endif
             ! fwd ft
             call img%fft()
             ! gridding
             if( params_glob%nstates == 1 )then
                 if( params_glob%eo .ne. 'no' )then
                     call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, &
-                        img, eo, pwght=1., bfac=bfac_rec)
+                        img, eo, pwght=pw, bfac=bfac_rec)
                 else
                     call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, &
-                        img, pwght=1., bfac=bfac_rec)
+                        img, pwght=pw, bfac=bfac_rec)
                 endif
             else
                 states = os%get_all('state')
@@ -303,44 +297,13 @@ contains
                     if( count(nint(states) == s) > 0 )then
                         if( params_glob%eo .ne. 'no' )then
                             call build_glob%eorecvols(s)%grid_fplane(se, os, &
-                                ctfvars, img, eo, pwght=1., bfac=bfac_rec, state=s)
+                                ctfvars, img, eo, pwght=pw, bfac=bfac_rec, state=s)
                         else
                             call build_glob%recvols(s)%insert_fplane(se, os, &
-                                ctfvars, img, pwght=1., bfac=bfac_rec, state=s)
+                                ctfvars, img, pwght=pw, bfac=bfac_rec, state=s)
                         endif
                     endif
                 end do
-            endif
-        else
-            ! particle-weighted reconstruction
-            pw = 1.0
-            if( o%isthere('w') ) pw = o%get('w')
-            if( pw > TINY )then
-                ! fwd ft
-                call img%fft()
-                ! gridding
-                if( params_glob%nstates == 1 )then
-                    if( params_glob%eo .ne. 'no' )then
-                        call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, &
-                            img, eo, pwght=pw)
-                    else
-                        call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, &
-                            img, pwght=pw)
-                    endif
-                else
-                    states = os%get_all('state')
-                    do s=1,params_glob%nstates
-                        if( count(nint(states) == s) > 0 )then
-                            if( params_glob%eo .ne. 'no' )then
-                                call build_glob%eorecvols(s)%grid_fplane(se, os, &
-                                    ctfvars, img, eo, pwght=pw, state=s)
-                            else
-                                call build_glob%recvols(s)%insert_fplane(se, os, &
-                                    ctfvars, img, pwght=pw, state=s)
-                            endif
-                        endif
-                    end do
-                endif
             endif
         endif
     end subroutine grid_ptcl_2
