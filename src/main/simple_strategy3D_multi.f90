@@ -122,15 +122,15 @@ contains
         use simple_ori,  only: ori
         class(strategy3D_multi), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), specs(self%s%npeaks), ws(self%s%npeaks)
+        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         real      :: shwmean, shwstdev
         integer   :: best_loc(1), neff_states, state
         logical   :: included(self%s%npeaks)
         ! extract peak info
-        call extract_peaks(self%s, corrs, specs, multistates=.true.)
+        call extract_peaks(self%s, corrs, multistates=.true.)
         ! stochastic weights
-        call calc_softmax_weights(self%s, corrs, specs, ws, best_loc, wcorr)
+        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr)
         ! state reweighting
         call states_reweight(self%s, ws, state, best_loc)
         ! angular standard deviation

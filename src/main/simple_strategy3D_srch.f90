@@ -220,7 +220,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         type(ori) :: o
         real      :: cxy(3)
-        integer   :: i, j, ref, irot, irot_prev, cnt
+        integer   :: i, j, ref, irot, cnt
         logical   :: found_better
         if( DOCONTINUOUS )then
             ! BFGS over all df:s
@@ -262,16 +262,12 @@ contains
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
                         j         = s3D%proj_space_inplinds_sorted(self%ithr, i)
                         irot      = s3D%proj_space_inplinds(self%ithr, ref, j)
-                        irot_prev = irot
                         cxy       = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
                             ! irot > 0 guarantees improvement found, update solution
                             s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
                             s3D%proj_space_corrs(self%ithr,ref,j)   = cxy(1)
                             s3D%proj_space_shift(self%ithr,ref,j,:) = cxy(2:3)
-                            s3D%proj_space_specs(self%ithr,ref,j)   = pftcc_glob%specscore(ref, self%iptcl, irot, cxy(2:3))
-                        else
-                            s3D%proj_space_specs(self%ithr,ref,j)   = pftcc_glob%specscore(ref, self%iptcl, irot_prev)
                         endif
                     end do
                 else

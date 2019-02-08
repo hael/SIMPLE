@@ -25,15 +25,15 @@ contains
         use simple_oris, only: oris
         class(strategy3D_greedy_single), intent(inout) :: self
         type(ori) :: osym
-        real      :: corrs(self%s%npeaks), specs(self%s%npeaks), ws(self%s%npeaks)
+        real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         real      :: shwmean, shwstdev
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
         ! extract peak info
-        call extract_peaks(self%s, corrs, specs)
+        call extract_peaks(self%s, corrs)
         ! stochastic weights
-        call calc_softmax_weights(self%s, corrs, specs, ws, best_loc, wcorr)
+        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr)
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)
