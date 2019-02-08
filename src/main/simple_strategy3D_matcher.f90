@@ -40,20 +40,20 @@ public :: calc_global_ori_weights, calc_3Drec, calc_proj_weights
 private
 #include "simple_local_flags.inc"
 
-logical, parameter              :: L_BENCH = .false., DEBUG_HERE = .false.
-type(polarft_corrcalc),  target :: pftcc
-type(polarizer),    allocatable :: match_imgs(:)
-integer,            allocatable :: pinds(:)
-logical,            allocatable :: ptcl_mask(:)
-real,               allocatable :: proj_weights(:)
-type(sym)                       :: c1_symop
-integer                         :: nptcls2update
-integer                         :: npeaks
-integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
-real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
-real(timer_int_kind)            :: rt_tot
-character(len=STDLEN)           :: benchfname
-type(euclid_sigma)              :: eucl_sigma
+logical,         parameter     :: L_BENCH = .false., DEBUG_HERE = .false.
+type(polarft_corrcalc), target :: pftcc
+type(polarizer), allocatable   :: match_imgs(:)
+integer,         allocatable   :: pinds(:)
+logical,         allocatable   :: ptcl_mask(:)
+real,            allocatable   :: proj_weights(:)
+type(sym)               :: c1_symop
+integer                 :: nptcls2update
+integer                 :: npeaks
+integer(timer_int_kind) :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
+real(timer_int_kind)    :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
+real(timer_int_kind)    :: rt_tot
+character(len=STDLEN)   :: benchfname
+type(euclid_sigma)      :: eucl_sigma
 
 contains
 
@@ -140,7 +140,7 @@ contains
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
 
-        ! B-factor weighted reconstruction
+        ! B-FACTOR WEIGHTED RECONSTRUCTION
         if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
 
         ! EXTREMAL LOGICS
@@ -202,7 +202,6 @@ contains
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
-
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
         call prep_strategy3D( ptcl_mask, npeaks )  ! allocate s3D singleton
@@ -368,7 +367,7 @@ contains
                 call close_o_peaks_io
         end select
 
-        ! clean
+        ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
         call pftcc%kill
         call build_glob%vol%kill
@@ -440,7 +439,6 @@ contains
         endif
     end subroutine refine3D_exec
 
-    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline )
         use simple_polarizer,             only: polarizer
         use simple_cmdline,               only: cmdline
@@ -533,7 +531,6 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
-    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine calc_ptcl_stats
         use simple_strategy2D3D_common, only: prepimg4align
         type(polarft_corrcalc) :: pftcc_here
@@ -596,7 +593,6 @@ contains
         deallocate(ptcl_mask_not)
     end subroutine calc_ptcl_stats
 
-    !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, which_iter )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
