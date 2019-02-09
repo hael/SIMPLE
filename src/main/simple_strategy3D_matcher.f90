@@ -703,9 +703,9 @@ contains
     end subroutine setup_weights_read_o_peaks
 
     subroutine calc_global_ori_weights
-        real, allocatable :: weights_glob(:), weights(:)
+        real, allocatable :: weights_glob(:), weights(:), rank_weights(:)
         real    :: weight_thres, wsum
-        integer :: nweights, cnt, iptcl, i
+        integer :: nweights, cnt, iptcl, i, nw
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
                 ! nothing to do
@@ -726,17 +726,32 @@ contains
                 ! find threshold
                 call hpsort(weights_glob(:cnt))
                 weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
-                ! zero and normalize weights
+                ! zero and normalize weights, apply rank-based weighting scheme if so specified
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         weights = s3D%o_peaks(iptcl)%get_all('ow')
+                        nw = size(weights)
                         where( weights < weight_thres ) weights = 0.
                         wsum = sum(weights)
                         if( wsum > TINY )then
                             weights = weights / wsum
-                            call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                            call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                            call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
+                            if( params_glob%l_rankw )then
+                                allocate(rank_weights(nw), source=0.)
+                                if( params_glob%rankw_crit == RANK_EXP_CRIT )then
+                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit, rank_weights, params_glob%rankw_exp)
+                                else
+                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit, rank_weights)
+                                endif
+                                call s3D%o_peaks(iptcl)%set_all('ow', rank_weights)
+                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(rank_weights > TINY)))
+                                call build_glob%spproj_field%set(iptcl, 'ow',     maxval(rank_weights))
+                                deallocate(weights, rank_weights)
+                            else
+                                call s3D%o_peaks(iptcl)%set_all('ow', weights)
+                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
+                                call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
+                                deallocate(weights)
+                            endif
                         else
                             call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
                             call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)

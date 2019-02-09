@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
+    character(len=3)      :: rankw='no'           !< orientation weights based on ranks(sum|inv|cen|exp){no}
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -190,8 +191,9 @@ type :: parameters
     character(len=STDLEN) :: wfun='kb'
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
-    integer(kind(ENUM_ORISEG)) :: spproj_iseg=PTCL3D_SEG !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN)) :: cc_objfun=OBJFUN_CC    !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+    integer(kind(ENUM_ORISEG))         :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
+    integer(kind(ENUM_OBJFUN))         :: cc_objfun   = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+    integer(kind=kind(ENUM_RANKWCRIT)) :: rankw_crit  = RANK_SUM_CRIT !< criterium for rank-based orientation weights
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -369,6 +371,7 @@ type :: parameters
     real    :: part_radius         !< particle   radius(in pixels)  !!!!!!!!!ADDED BY CHIARA
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
+    real    :: rankw_exp=2.        !< exponent for exponential rank-based orientation weights
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
@@ -407,6 +410,7 @@ type :: parameters
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
+    logical :: l_rankw          = .false.
     logical :: l_shellw         = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
@@ -541,6 +545,7 @@ contains
         call check_carg('projw',          self%projw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
+        call check_carg('rankw',          self%rankw)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
@@ -766,6 +771,7 @@ contains
         call check_rarg('part_radius',    self%part_radius)             !!!ADDED BY CHIARA
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
+        call check_rarg('rankw_exp',      self%rankw_exp)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)
@@ -1172,6 +1178,22 @@ contains
         self%l_shellw = self%shellw .ne. 'no'
         ! set projw flag
         self%l_projw  = self%projw  .ne. 'no'
+        ! set rank weighting scheme
+        self%l_rankw  = self%rankw  .ne. 'no'
+        if( self%l_rankw )then
+            select case(trim(self%rankw))
+                case('sum')
+                    self%rankw_crit = RANK_SUM_CRIT
+                case('inv')
+                    self%rankw_crit = RANK_INV_CRIT
+                case('cen')
+                    self%rankw_crit = RANK_CEN_CRIT
+                case('exp')
+                    self%rankw_crit = RANK_EXP_CRIT
+                case DEFAULT
+                    THROW_HARD('unsupported rank ordering criteria weighting method')
+            end select
+        endif
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value
