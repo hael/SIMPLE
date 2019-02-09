@@ -63,6 +63,7 @@ type :: parameters
     character(len=3)      :: platonic='no'        !< platonic symmetry or not(yes|no){no}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
+    character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
@@ -392,20 +393,22 @@ type :: parameters
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)        = .false.
     logical :: l_autoscale      = .false.
+    logical :: l_bfac_filt      = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
     logical :: l_doshift        = .false.
+    logical :: l_eo             = .false.
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
     logical :: l_innermsk       = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
-    logical :: l_bfac_filt      = .false.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
+    logical :: l_projw          = .false.
+    logical :: l_shellw         = .false.
     logical :: l_remap_cls      = .false.
-    logical :: l_eo             = .false.
     logical :: l_rec_soft       = .false.
     logical :: sp_required      = .false.
   contains
@@ -535,6 +538,7 @@ contains
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
+        call check_carg('projw',          self%projw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('readwrite',      self%readwrite)
@@ -1163,7 +1167,11 @@ contains
             self%l_innermsk = .false.
         endif
         ! set eo flag
-        self%l_eo = self%eo .ne. 'no'
+        self%l_eo     = self%eo     .ne. 'no'
+        ! set shellw flag
+        self%l_shellw = self%shellw .ne. 'no'
+        ! set projw flag
+        self%l_projw  = self%projw  .ne. 'no'
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value

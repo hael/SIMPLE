@@ -152,10 +152,9 @@ contains
 
         ! B-FACTOR CAVGS
         ! has to be done prior to classaverager initialization
-        if( params_glob%shellw.eq.'yes' .and. which_iter >= 5 )then
+        if( params_glob%l_shellw .and. which_iter >= 5 )then
             call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
         else
-            params_glob%shellw = 'no'
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
         endif
 

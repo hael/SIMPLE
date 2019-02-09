@@ -53,7 +53,6 @@ logical                        :: phaseplate    = .false.       !< Volta phasepl
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
 logical                        :: l_fastinterp  = .false.       !< interpolation type, convolution by default
-logical                        :: l_bfac_rec    = .false.       !< whether to perform b-factor weigted reconstruction
 logical                        :: exists        = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ   = 50
@@ -115,8 +114,6 @@ contains
         filtsz     = build_glob%img%get_filtsz()
         ! interpolation
         l_fastinterp = trim(params_glob%wfun).eq.'bilinear'
-        ! shell weighted averaging
-        l_bfac_rec   = trim(params_glob%shellw).eq.'yes'
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -162,7 +159,7 @@ contains
             precs(cnt)%pind = iptcl
             precs(cnt)%eo   = nint(spproj%os_ptcl2D%get(iptcl,'eo'))
             precs(cnt)%pw   = spproj%os_ptcl2D%get(iptcl,'w')
-            if( l_bfac_rec )then
+            if( params_glob%l_shellw )then
                 precs(cnt)%bfac = spproj%os_ptcl2D%get(iptcl,'bfac_rec')
             else
                 precs(cnt)%bfac = 0.
@@ -474,7 +471,7 @@ contains
                     else
                         add_phshift = 0.
                     endif
-                    if( l_bfac_rec )then
+                    if( params_glob%l_shellw )then
                         if( ctfflag /= CTFFLAG_NO )then
                             if( ctfflag == CTFFLAG_FLIP )then
                                 call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&

@@ -193,6 +193,7 @@ type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projname
+type(simple_input_param) :: projw
 type(simple_input_param) :: pspecsz
 type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
@@ -676,6 +677,7 @@ contains
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
+        call set_param(projw,          'projw',        'binary', 'Correct for uneven orientation distribution', 'Whether to correct for uneven orientation distribution through weighting(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(user_email,     'user_email',   'str',    'Your e-mail address', 'Your e-mail address', 'e.g. myname@uni.edu', .false., '')
         call set_param(time_per_image, 'time_per_image', 'num', 'Time per image', 'Estimated time per image in seconds for forecasting total execution time{100}', 'in seconds{100}', .false., 100.)
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
@@ -684,8 +686,8 @@ contains
         call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
-        call set_param(star_datadir,   'star_datadir', 'file',  'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
-        call set_param(starfile,       'starfile',     'file',  'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
+        call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
+        call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,       'startype',     'str',     'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
@@ -2432,7 +2434,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 2, 3, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 2, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2448,6 +2450,7 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
         call reconstruct3D%set_input('filt_ctrls', 2, shellw)
         call reconstruct3D%set_input('filt_ctrls', 3, 'bfac_sdev', 'num', 'B-factor sigma','B-factor standard deviation for per-particle B-factor estimation in Angstroms^2', 'B-factor sigma in Angstroms^2(>0.0){50}', .false., 50.)
+        call reconstruct3D%set_input('filt_ctrls', 4, projw)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2503,6 +2506,7 @@ contains
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, eo)
         call refine3D%set_input('filt_ctrls', 7, shellw)
+        call refine3D%set_input('filt_ctrls', 8, projw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

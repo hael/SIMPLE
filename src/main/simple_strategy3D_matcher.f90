@@ -45,7 +45,6 @@ type(polarft_corrcalc), target :: pftcc
 type(polarizer), allocatable   :: match_imgs(:)
 integer,         allocatable   :: pinds(:)
 logical,         allocatable   :: ptcl_mask(:)
-real,            allocatable   :: proj_weights(:)
 type(sym)               :: c1_symop
 integer                 :: nptcls2update
 integer                 :: npeaks
@@ -141,7 +140,7 @@ contains
         endif
 
         ! B-FACTOR WEIGHTED RECONSTRUCTION
-        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
+        if( params_glob%l_shellw ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
 
         ! EXTREMAL LOGICS
         do_extr           = .false.
@@ -195,10 +194,9 @@ contains
         call preppftcc4align(cline)
         if( L_BENCH ) rt_prep_pftcc = toc(t_prep_pftcc)
 
-        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
-
         ! STOCHASTIC IMAGE ALIGNMENT
         if( L_BENCH ) t_prep_primesrch3D = tic()
+        write(logfhandle,'(A,1X,I3)') '>>> REFINE3D SEARCH, ITERATION:', which_iter
         ! clean big objects before starting to allocate new big memory chunks
         ! cannot kill build_glob%vol since used in continuous search
         call build_glob%vol2%kill
@@ -326,18 +324,15 @@ contains
                 !$omp end parallel do
         end select
 
-        if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
-        end if
+        ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
+        if ( params_glob%l_needs_sigma )call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
 
         ! UPDATE PARTICLE STATS
         call calc_ptcl_stats
 
-        ! CALCULATE GLOBAL OREINTATION WEIGHTS
-        call calc_global_ori_weights
-
         ! O_PEAKS I/O & CONVERGENCE STATS
         ! here we read all peaks to allow deriving statistics based on the complete set
+        ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
             case('eval','cluster','clustersym')
                 ! nothing to do
@@ -366,6 +361,12 @@ contains
                 end do
                 call close_o_peaks_io
         end select
+
+        ! CALCULATE GLOBAL OREINTATION WEIGHTS
+        call calc_global_ori_weights
+
+        ! CALCULATE PROJECTION DIRECTION WEIGHTS
+        if( params_glob%l_projw ) call calc_proj_weights
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
@@ -681,7 +682,7 @@ contains
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
         ! B-factor weighted reconstruction
-        if( params_glob%shellw.eq.'yes' ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
+        if( params_glob%l_shellw ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
         ! prepare particle mask
         nptcls2update = params_glob%top - params_glob%fromp + 1
         allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
@@ -747,11 +748,9 @@ contains
     end subroutine calc_global_ori_weights
 
     subroutine calc_proj_weights
-        real, allocatable :: weights(:), projs(:)
+        real, allocatable :: weights(:), projs(:), projws(:)
         integer :: mapped_projs(params_glob%nspace), i, ind, iptcl
-        real    :: pw, w_per_proj(NSPACE_REDUCED)
-        if( allocated(proj_weights) ) deallocate(proj_weights)
-        allocate( proj_weights(params_glob%nspace), source=1.0 )
+        real    :: pw, w_per_proj(NSPACE_REDUCED), proj_weights(params_glob%nspace)
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
                 ! nothing to do
@@ -775,12 +774,26 @@ contains
                                     w_per_proj(ind) = w_per_proj(ind) + weights(i) * pw
                                 endif
                             end do
+                            deallocate(weights, projs)
                         endif
                     end do
+                    ! calculate projection direction weights
+                    where( w_per_proj < TINY ) w_per_proj = 1.0 ! to prevent division with zero
                     do i=1,params_glob%nspace
                         proj_weights(i) = 1. / max(1., w_per_proj(mapped_projs(i)))
                     end do
                     proj_weights = proj_weights / maxval(proj_weights) ! minmax normalisation
+                    ! update o_peaks with projection direction weights (projw)
+                    do iptcl=params_glob%fromp,params_glob%top
+                        weights = s3D%o_peaks(iptcl)%get_all('ow')
+                        projs   = s3D%o_peaks(iptcl)%get_all('proj')
+                        allocate(projws(size(projs)), source=0.)
+                        do i=1,size(projs)
+                            if( weights(i) > TINY ) projws(i) = proj_weights(nint(projs(i)))
+                        end do
+                        call s3D%o_peaks(iptcl)%set_all('projw', projws)
+                        deallocate(weights, projs, projws)
+                    end do
                 endif
         end select
     end subroutine calc_proj_weights

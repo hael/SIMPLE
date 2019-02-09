@@ -83,7 +83,7 @@ contains
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         endif
         ! shell weighted classes
-        if( params%shellw.eq.'yes' )then
+        if( params%l_shellw )then
             if( .not.build%spproj_field%isthere('bfac_rec') )then
                 call build%spproj_field%calc_bfac_rec_specscore(params%bfac_sdev)
             endif

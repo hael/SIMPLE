@@ -2520,7 +2520,8 @@ contains
         if( self%isthere('spread') )then
             spreads = self%get_all('spread')
             states  = self%get_all('state')
-            where( spreads < 1.0 ) spreads = 1.0 ! bounded weigths
+            where( spreads < 1.0 )  spreads = 1.0 ! bounded weigths
+            where( spreads < TINY ) spreads = 1.0 ! to prevent division with zero
             allocate(weights(self%n), source = 1.0 / spreads)
             where( states < 0.5 ) weights = 0.
             weights = weights / maxval(weights)  ! minmax normalisation

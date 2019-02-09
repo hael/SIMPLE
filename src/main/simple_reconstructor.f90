@@ -278,7 +278,7 @@ contains
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real,       optional, intent(in)    :: bfac   !<
+        real,       optional, intent(in)    :: bfac    !< B-factor
         real, allocatable :: rotmats(:,:,:), divide_by(:)
         type(ori) :: o_sym
         type(ctf) :: tfun
@@ -397,14 +397,14 @@ contains
         use simple_ori,        only: ori
         use simple_oris,       only: oris
         use simple_sym,        only: sym
-        class(reconstructor), intent(inout) :: self  !< instance
-        class(sym),           intent(inout) :: se    !< symmetry elements
-        class(oris),          intent(inout) :: os    !< orientations
+        class(reconstructor), intent(inout) :: self    !< instance
+        class(sym),           intent(inout) :: se      !< symmetry elements
+        class(oris),          intent(inout) :: os      !< orientations
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
-        class(image),         intent(inout) :: fpl   !< Fourier plane
-        real,                 intent(in)    :: pwght !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: bfac  !<
-        integer, optional,    intent(in)    :: state !< state to reconstruct
+        class(image),         intent(inout) :: fpl     !< Fourier plane
+        real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
+        real,    optional,    intent(in)    :: bfac    !< B-factor
+        integer, optional,    intent(in)    :: state   !< state to reconstruct
         real, allocatable                   :: divide_by(:)
         type(ori) :: o_sym, o
         type(ctf) :: tfun
@@ -412,7 +412,7 @@ contains
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(0:self%ldim_img(1))
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, projw
         logical   :: do_bfac_rec
         logical   :: do_divide
         integer   :: div_lbound, div_ubound
@@ -446,7 +446,9 @@ contains
         noris = os%get_noris()
         do iori=1,noris
             o            = os%get_ori(iori)
-            ows(iori)    = pwght * o%get('ow')
+            projw        = 1.0
+            if( params_glob%l_projw .and. o%isthere('projw') ) projw = o%get('projw')
+            ows(iori)    = pwght * o%get('ow') * projw
             states(iori) = nint(o%get('state'))
             if( ows(iori) < TINY ) cycle
             rotmats(iori,1,:,:) = o%get_mat()
@@ -783,7 +785,7 @@ contains
                 real      :: pw, bfac
                 state = o%get_state(i)
                 if( state == 0 ) return
-                if( params_glob%shellw.eq.'yes' )then
+                if( params_glob%l_shellw )then
                     orientation = o%get_ori(i)
                     bfac = 0.
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')

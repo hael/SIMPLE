@@ -483,7 +483,7 @@ contains
                 real      :: pw, bfac
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
-                if( params_glob%shellw.eq.'yes' )then
+                if( params_glob%l_shellw )then
                     orientation = o%get_ori(i)
                     bfac = 0.
                     if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')

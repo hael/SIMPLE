@@ -230,13 +230,13 @@ contains
         integer   :: s, eo
         ! eo flag
         eo = 0
-        if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
+        if( params_glob%l_eo ) eo = nint(o%get('eo'))
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
             bfac_rec = 0.
-            if( params_glob%shellw .eq. 'yes' )then
+            if( params_glob%l_shellw )then
                 ! shell-weighted reconstruction
                 if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
             endif
@@ -245,7 +245,7 @@ contains
             ! fwd ft
             call img%fft()
             ! gridding
-            if( params_glob%eo .ne. 'no' )then
+            if( params_glob%l_eo )then
                 call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, &
                     img, eo, pwght=pw, bfac=bfac_rec)
             else
@@ -270,13 +270,13 @@ contains
         integer :: s, eo
         ! eo flag
         eo = 0
-        if( params_glob%eo .ne. 'no' ) eo = nint(o%get('eo'))
+        if( params_glob%l_eo ) eo = nint(o%get('eo'))
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
             bfac_rec = 0.
-            if( params_glob%shellw.eq.'yes' )then
+            if( params_glob%l_shellw )then
                 ! shell-weighted reconstruction
                 if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
             endif
@@ -284,7 +284,7 @@ contains
             call img%fft()
             ! gridding
             if( params_glob%nstates == 1 )then
-                if( params_glob%eo .ne. 'no' )then
+                if( params_glob%l_eo )then
                     call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, &
                         img, eo, pwght=pw, bfac=bfac_rec)
                 else
@@ -295,7 +295,7 @@ contains
                 states = os%get_all('state')
                 do s=1,params_glob%nstates
                     if( count(nint(states) == s) > 0 )then
-                        if( params_glob%eo .ne. 'no' )then
+                        if( params_glob%l_eo )then
                             call build_glob%eorecvols(s)%grid_fplane(se, os, &
                                 ctfvars, img, eo, pwght=pw, bfac=bfac_rec, state=s)
                         else
@@ -581,7 +581,7 @@ contains
     !>  \brief  destructs all volumes for reconstruction
     subroutine killrecvols
         integer :: istate
-        if( params_glob%eo .ne. 'no' )then
+        if( params_glob%l_eo )then
             do istate = 1, params_glob%nstates
                 call build_glob%eorecvols(istate)%kill
             end do
@@ -674,7 +674,7 @@ contains
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( params_glob%eo.ne.'no' )then
+        if( params_glob%l_eo )then
             ! anisotropic matched filter
             if( params_glob%nstates.eq.1 )then
                 l_match_filt = params_glob%l_match_filt .or. params_glob%l_bfac_filt ! matched filter for both schemes
