@@ -200,7 +200,6 @@ type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: rankw
-type(simple_input_param) :: rankw_exp
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: shellw
@@ -692,8 +691,7 @@ contains
         call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,       'startype',     'str',     'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
-        call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks(sum|inv|cen|exp){no}', 'Orientation weights based on ranks, independent of objective function magnitude(sum|inv|cen|exp){no}',  '(sum|inv|cen|exp){no}',  .false., 'no')
-        call set_param(rankw_exp,      'rankw_exp',    'num',    'Exponent for exponential rank orientation weights', 'Exponent for exponential rank orientation weights(2-10)',  '(2-10)',  .false., 2.0)
+        call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks(sum|cen|exp){no}', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp){no}',  '(sum|cen|exp){no}',  .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1325,7 +1323,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 0, 0, 7, 8, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 7, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1357,7 +1355,6 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 6, 'locres', 'binary', 'Use class averages filtered according to local resolution estimation',&
         &'Use class averages filtered according to local resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call initial_3Dmodel%set_input('filt_ctrls', 7, rankw)
-        call initial_3Dmodel%set_input('filt_ctrls', 8, rankw_exp)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -2440,7 +2437,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 2, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 2, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2458,7 +2455,6 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 3, 'bfac_sdev', 'num', 'B-factor sigma','B-factor standard deviation for per-particle B-factor estimation in Angstroms^2', 'B-factor sigma in Angstroms^2(>0.0){50}', .false., 50.)
         call reconstruct3D%set_input('filt_ctrls', 4, projw)
         call reconstruct3D%set_input('filt_ctrls', 5, rankw)
-        call reconstruct3D%set_input('filt_ctrls', 6, rankw_exp)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2474,7 +2470,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15, 10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 15, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2516,7 +2512,6 @@ contains
         call refine3D%set_input('filt_ctrls', 7, shellw)
         call refine3D%set_input('filt_ctrls', 8, projw)
         call refine3D%set_input('filt_ctrls', 9, rankw)
-        call refine3D%set_input('filt_ctrls', 10, rankw_exp)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

@@ -746,8 +746,6 @@ contains
         select case(crit)
             case(RANK_SUM_CRIT)
                 call rank_sum_weights(n_nonzero, weights_nonzero)
-            case(RANK_INV_CRIT)
-                call rank_inverse_weights(n_nonzero, weights_nonzero)
             case(RANK_CEN_CRIT)
                 call rank_centroid_weights(n_nonzero, weights_nonzero)
             case(RANK_EXP_CRIT)

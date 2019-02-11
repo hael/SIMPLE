@@ -371,7 +371,6 @@ type :: parameters
     real    :: part_radius         !< particle   radius(in pixels)  !!!!!!!!!ADDED BY CHIARA
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
-    real    :: rankw_exp=2.        !< exponent for exponential rank-based orientation weights
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
@@ -771,7 +770,6 @@ contains
         call check_rarg('part_radius',    self%part_radius)             !!!ADDED BY CHIARA
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
-        call check_rarg('rankw_exp',      self%rankw_exp)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
         call check_rarg('sherr',          self%sherr)
@@ -1184,8 +1182,6 @@ contains
             select case(trim(self%rankw))
                 case('sum')
                     self%rankw_crit = RANK_SUM_CRIT
-                case('inv')
-                    self%rankw_crit = RANK_INV_CRIT
                 case('cen')
                     self%rankw_crit = RANK_CEN_CRIT
                 case('exp')

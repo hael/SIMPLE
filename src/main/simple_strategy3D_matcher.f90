@@ -738,7 +738,7 @@ contains
                             if( params_glob%l_rankw )then
                                 allocate(rank_weights(nw), source=0.)
                                 if( params_glob%rankw_crit == RANK_EXP_CRIT )then
-                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit, rank_weights, params_glob%rankw_exp)
+                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit, rank_weights, RANKW_EXP)
                                 else
                                     call conv2rank_weights(nw, weights, params_glob%rankw_crit, rank_weights)
                                 endif

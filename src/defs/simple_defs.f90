@@ -96,9 +96,8 @@ integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG
 enum, bind(c)
     enumerator :: ENUM_RANKWCRIT = 0
     enumerator :: RANK_SUM_CRIT  = 1
-    enumerator :: RANK_INV_CRIT  = 2
-    enumerator :: RANK_CEN_CRIT  = 3
-    enumerator :: RANK_EXP_CRIT  = 4
+    enumerator :: RANK_CEN_CRIT  = 2
+    enumerator :: RANK_EXP_CRIT  = 3
 end enum
 
 ! export (to STAR) type enumeration
@@ -163,6 +162,7 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 logical, parameter :: SOFT_PTCL_WEIGHTS3D  = .true.    !< soft (as opposed to hard) particles weights based on B-factor
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
+real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D

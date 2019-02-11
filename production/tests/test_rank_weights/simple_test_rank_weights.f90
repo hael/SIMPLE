@@ -25,8 +25,6 @@ end do
 call plot(ranks, weights)
 call conv2rank_weights(200, weights, RANK_SUM_CRIT, rank_weights)
 call plot(ranks, rank_weights)
-call conv2rank_weights(200, weights, RANK_INV_CRIT, rank_weights)
-call plot(ranks, rank_weights)
 call conv2rank_weights(200, weights, RANK_CEN_CRIT, rank_weights)
 call plot(ranks, rank_weights)
 call conv2rank_weights(200, weights, RANK_EXP_CRIT, rank_weights, p=2.0)
