@@ -1269,7 +1269,6 @@ contains
         type(image)                   :: ref3D, ref2D
         type(image),      allocatable :: projs(:)
         character(len=:), allocatable :: imgkind
-        character(len=:), allocatable :: volname, cavgname
         integer, parameter :: NREFS=100, NPROJS=20
         real    :: ang, rot, smpd_here
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
@@ -1287,7 +1286,7 @@ contains
             call find_ldim_nptcls(params%vols(1), ldim_here, ifoo, smpd=smpd_here)
             if( smpd_here < 0.01 ) THROW_HARD('Invalid sampling distance for the volume (should be in MRC format)')
             call ref3D%new(ldim_here, smpd_here)
-            call ref3D%read(volname)
+            call ref3D%read(params%vols(1))
             call scale_ref(ref3D, params%smpd)
             ! make projection directions
             call os%new(NPROJS)
