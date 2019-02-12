@@ -100,8 +100,6 @@ contains
         type(cmdline)                 :: cline_make_pickrefs
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
-        character(len=:), allocatable :: imgkind
-        integer                       :: i, n_os_out
         logical                       :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
@@ -464,7 +462,6 @@ contains
             end function boxfile_from_mic
 
     end subroutine exec_reextract_distr
-
 
     subroutine exec_motion_correct_distr( self, cline )
         class(motion_correct_distr_commander), intent(inout) :: self
@@ -851,7 +848,9 @@ contains
             vol = 'startvol_state01'//params%ext
         endif
         ! splitting
-        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
         ! prepare command lines from prototype master
         cline_volassemble = cline
         call cline_volassemble%set( 'outvol',  vol)
@@ -918,7 +917,9 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! splitting
-        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
         ! prepare command lines from prototype master
         cline_reconstruct3D_distr = cline
         cline_check_3Dconv        = cline
@@ -930,7 +931,8 @@ contains
         if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
         call cline_postprocess%set('mirr',    'no')
         call cline_postprocess%set('mkdir',   'no')
-        call cline_postprocess%set('imgkind','vol')
+        call cline_postprocess%set('imgkind', 'vol')
+        if( trim(params%oritype).eq.'cls3D' ) call cline_postprocess%set('imgkind', 'vol_cavg')
         call cline_volassemble%set('nthr', 0.)  ! to ensure use of all resources in assembly
         ! for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
@@ -949,7 +951,11 @@ contains
             ! i.e. projfile is fetched from a X_refine3D dir
             do state=1,params%nstates
                 vol = 'vol' // int2str(state)
-                call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
+                if( trim(params%oritype).eq.'cls3D' )then
+                    call build%spproj%get_vol('vol_cavg', state, vol_fname, smpd, box)
+                else
+                    call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
+                endif
                 call cline%set(trim(vol), vol_fname)
                 params%vols(state) = vol_fname
                 if( state == 1 )then
@@ -1156,7 +1162,11 @@ contains
                             call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
                         endif
                         ! add state volume to os_out
-                        call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol')
+                        if( trim(params%oritype).eq.'cls3D' )then
+                            call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol_cavg')
+                        else
+                            call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol')
+                        endif
                         ! updates cmdlines & job description
                         vol = 'vol'//trim(int2str(state))
                         call job_descr%set( trim(vol), trim(vol_iter) )
@@ -1261,7 +1271,9 @@ contains
         call qenv%new(params%nparts)
         call cline%gen_job_descr(job_descr)
         ! splitting
-        call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
         ! eo partitioning
         if( params%eo .ne. 'no' )then
             if( build%spproj_field%get_nevenodd() == 0 )then
@@ -1312,7 +1324,11 @@ contains
                     call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
                     call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
                 endif
-                call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
+                if( trim(params%oritype).eq.'cls3D' )then
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol_cavg')
+                else
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
+                endif
             enddo
             call build%spproj%write_segment_inside('out',params%projfile)
             if( params%l_rec_soft )then

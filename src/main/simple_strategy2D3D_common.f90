@@ -729,8 +729,12 @@ contains
             if( params_glob%boxmatch < params_glob%box )&
                 call mskvol%clip_inplace(&
                 [params_glob%boxmatch,params_glob%boxmatch,params_glob%boxmatch])
-            call build_glob%vol%zero_env_background(mskvol)
-            call build_glob%vol%mul(mskvol)
+            if( cline%defined('lp_backgr') )then
+                call build_glob%vol%lp_background(mskvol, params_glob%lp_backgr)
+            else
+                call build_glob%vol%zero_env_background(mskvol)
+                call build_glob%vol%mul(mskvol)
+            endif
             call mskvol%kill
         else
             ! circular masking

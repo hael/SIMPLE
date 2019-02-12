@@ -131,6 +131,7 @@ contains
         call chdict%push('kv',            'acceleration voltage(in kV){300.}')
         call chdict%push('label',         'discrete label(class|state){class}')
         call chdict%push('lp',            'low-pass limit(in A)')
+        call chdict%push('lp_backgr',     'low-pass limit 4 solvent blurring(in A)')
         call chdict%push('lp_ctf_estimate', 'low-pass limit 4 ctf_estimate(in A)')
         call chdict%push('lp_pick',       'low-pass limit 4 picker(in A)')
         call chdict%push('lplim_crit',    'corr criterion low-pass limit assignment(0.143-0.5){0.3}')

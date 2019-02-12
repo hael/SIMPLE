@@ -380,10 +380,21 @@ contains
         integer,                   intent(out)   :: stkind
         integer,                   intent(out)   :: ind_in_stk
         class(oris), pointer                     :: ptcl_field
-        integer :: nptcls, fromp, top
+        real    :: smpd
+        integer :: nptcls, fromp, top, box
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
+            case('cls3D')
+                call self%get_imginfo_from_osout(smpd, box, nptcls)
+                if( iptcl < 1 .or. iptcl > nptcls )then
+                    write(logfhandle,*) 'iptcl : ', iptcl
+                    write(logfhandle,*) 'ncls: ',   nptcls
+                    THROW_HARD('iptcl index out of range 1; map_ptcl_ind2stk_ind')
+                endif
+                stkind     = 1
+                ind_in_stk = iptcl
+                return
             case('ptcl2D')
                 ptcl_field => self%os_ptcl2D
             case('ptcl3D')
@@ -396,7 +407,7 @@ contains
         if( iptcl < 1 .or. iptcl > nptcls )then
             write(logfhandle,*) 'iptcl : ', iptcl
             write(logfhandle,*) 'nptcls: ', nptcls
-            THROW_HARD('iptcl index out of range; map_ptcl_ind2stk_ind')
+            THROW_HARD('iptcl index out of range 2; map_ptcl_ind2stk_ind')
         endif
         ! second sanity check, stack index present in ptcl_field
         if( .not. ptcl_field%isthere(iptcl, 'stkind') )then
@@ -1115,12 +1126,17 @@ contains
         integer,                       intent(in)    :: iptcl
         character(len=:), allocatable, intent(out)   :: stkname
         integer,                       intent(out)   :: ind_in_stk
-        integer :: stkind
+        real    :: smpd
+        integer :: stkind, ncls
         ! do the index mapping
         call self%map_ptcl_ind2stk_ind(oritype, iptcl, stkind, ind_in_stk )
         ! output name
         if( allocated(stkname) ) deallocate(stkname)
-        stkname = trim(self%os_stk%get_static(stkind, 'stk'))
+        if( trim(oritype) .eq. 'cls3D' ) then
+            call self%get_cavgs_stk(stkname, ncls, smpd)
+        else
+            stkname = trim(self%os_stk%get_static(stkind, 'stk'))
+        endif
     end subroutine get_stkname_and_ind
 
     subroutine add_scale_tag( self, dir )
@@ -1756,10 +1772,8 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         character(len=:), allocatable :: phaseplate
-        if( trim(oritype) .eq. 'cls3D' )then
-            has_phaseplate = .false.
-            return
-        endif
+        has_phaseplate = .false.
+        if( trim(oritype) .eq. 'cls3D' ) return
         ! get info
         if( self%os_stk%isthere(1, 'phaseplate') )then
             phaseplate = trim(self%os_stk%get_static(1, 'phaseplate'))
@@ -1778,11 +1792,12 @@ contains
         class(sp_project), target, intent(inout) :: self
         character(len=*),          intent(in)    :: oritype
         integer,                   intent(in)    :: iptcl
-        class(oris), pointer          :: ptcl_field
-        character(len=:), allocatable :: ctfflag, phaseplate
-        type(ctfparams)      :: ctfvars
-        integer              :: stkind, ind_in_stk
-        logical              :: dfy_was_there, l_noctf
+        class(oris), pointer  :: ptcl_field
+        character(len=STDLEN) :: ctfflag, phaseplate
+        type(ctfparams)       :: ctfvars
+        real                  :: smpd
+        integer               :: stkind, ind_in_stk, box, ncls
+        logical               :: dfy_was_there, l_noctf
         nullify(ptcl_field)
         ! set field pointer
         select case(trim(oritype))
@@ -1790,6 +1805,19 @@ contains
                 ptcl_field => self%os_ptcl2D
             case('ptcl3D')
                 ptcl_field => self%os_ptcl3D
+            case('cls3D')
+                call self%get_imginfo_from_osout(smpd, box, ncls)
+                ctfvars%ctfflag = CTFFLAG_NO
+                ctfvars%smpd    = smpd
+                ctfvars%kv      = 0.
+                ctfvars%cs      = 0.
+                ctfvars%fraca   = 0.
+                ctfvars%dfx     = 0.
+                ctfvars%dfy     = 0.
+                ctfvars%angast  = 0.
+                ctfvars%phshift = 0.
+                ctfvars%l_phaseplate = .false.
+                return
             case DEFAULT
                 THROW_HARD('oritype: '//trim(oritype)//' not supported by get_ctfparams')
         end select
@@ -1883,10 +1911,9 @@ contains
         endif
         ctfvars%l_phaseplate = trim(phaseplate).eq.'yes'
         ! additional phase shift
+        ctfvars%phshift = 0.
         if( ptcl_field%isthere(iptcl, 'phshift') )then
             ctfvars%phshift = ptcl_field%get(iptcl, 'phshift')
-        else
-            ctfvars%phshift = 0.
         endif
     end function get_ctfparams
 
@@ -2109,7 +2136,7 @@ contains
             call bos_doc%read_segment(isegment, os_strings)
             call bos_doc%close
         end do
-        ! find maxium string lenght
+        ! find maxium string length
         strlen_max = 0
         !$omp parallel do schedule(static) default(shared) proc_bind(close)&
         !$omp private(i,strlen) reduction(max:strlen_max)

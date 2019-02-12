@@ -164,6 +164,7 @@ type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
 type(simple_input_param) :: kv
 type(simple_input_param) :: lp
+type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: maxits
 type(simple_input_param) :: mirr
@@ -615,6 +616,7 @@ contains
         call set_param(maxits,        'maxits',        'num',    'Max iterations', 'Maximum number of iterations', 'Max # iterations', .false., 100.)
         call set_param(hp,            'hp',            'num',    'High-pass limit', 'High-pass resolution limit', 'high-pass limit in Angstroms', .false., 100.)
         call set_param(lp,            'lp',            'num',    'Low-pass limit', 'Low-pass resolution limit', 'low-pass limit in Angstroms', .false., 20.)
+        call set_param(lp_backgr,     'lp_backgr',     'num',    'Background low-pass resolution', 'Low-pass resolution for solvent blurring', 'low-pass limit in Angstroms', .false., 20.)
         call set_param(msk,           'msk',           'num',    'Mask radius', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise', 'mask radius in pixels', .true., 0.)
         call set_param(inner,         'inner',         'num',    'Inner mask radius', 'Inner mask radius for omitting unordered cores of particles with high radial symmetry, typically icosahedral viruses',&
         &'inner mask radius in pixels', .false., 0.)
@@ -1691,7 +1693,7 @@ contains
         &'is a program for masking of 2D images and volumes. If you want to mask your images with a spherical mask with a soft &
         & falloff, set msk to the radius in pixels',&                    ! descr_long
         &'simple_exec',&                                                 ! executable
-        &0, 3, 2, 1, 1,10, 1, .false.)                                   ! # entries in each group, requires sp_project
+        &0, 3, 2, 1, 2,10, 1, .false.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1709,6 +1711,7 @@ contains
         ! filter controls
         call mask%set_input('filt_ctrls', 1, 'amsklp', 'num', 'Low-pass limit for envelope mask generation',&
         & 'Low-pass limit for envelope mask generation in Angstroms', 'low-pass limit in Angstroms', .false., 15.)
+        call mask%set_input('filt_ctrls', 2, lp_backgr)
         ! mask controls
         call mask%set_input('mask_ctrls', 1, msk)
         mask%mask_ctrls(1)%required = .false.
@@ -2470,7 +2473,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 15,10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2508,10 +2511,11 @@ contains
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
-        call refine3D%set_input('filt_ctrls', 6, eo)
-        call refine3D%set_input('filt_ctrls', 7, shellw)
-        call refine3D%set_input('filt_ctrls', 8, projw)
-        call refine3D%set_input('filt_ctrls', 9, rankw)
+        call refine3D%set_input('filt_ctrls', 6, lp_backgr)
+        call refine3D%set_input('filt_ctrls', 7, eo)
+        call refine3D%set_input('filt_ctrls', 8, shellw)
+        call refine3D%set_input('filt_ctrls', 9, projw)
+        call refine3D%set_input('filt_ctrls',10, rankw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

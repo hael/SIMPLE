@@ -285,6 +285,7 @@ contains
     generic            :: oshift => oshift_1, oshift_2
     procedure, private :: gen_argtransf_comp
     ! MODIFIERS
+    procedure          :: lp_background
     procedure          :: thresh_cavg
     procedure          :: insert
     procedure          :: insert_lowres
@@ -5581,15 +5582,42 @@ end subroutine NLmean
 
     ! MODIFIERS
 
+    subroutine lp_background( self, mskvol, lp )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: mskvol
+        real,         intent(in)    :: lp
+        type(image) :: weights, self_filt
+        if( self%is_ft() ) THROW_HARD('only 4 real images; lp_background')
+        if( self%ldim(3) == 1 ) THROW_HARD('only 4 volumes; lp_background')
+        if( any((self%ldim-mskvol%ldim)/=0) ) THROW_HARD('inconsistent image/msk dimensions; lp_background')
+        call self%zero_background
+        call self_filt%new(self%ldim,self%smpd)
+        call self_filt%copy(self)
+        call weights%new(self%ldim,1.)
+        call weights%copy(mskvol)
+        ! self
+        call self%mul(weights)
+        ! self low-pass
+        call self_filt%bp(0., lp)
+        weights%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) =&
+            &1. - weights%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        call self_filt%mul(weights)
+        ! addition
+        call self%add(self_filt)
+        ! clean
+        call weights%kill
+        call self_filt%kill
+    end subroutine lp_background
+
     subroutine thresh_cavg( self, l_msk )
         class(image), intent(inout) :: self
-        logical,      intent(in)    :: l_msk(:,:,:)
+        logical,      intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real    :: maxv, threshold
         if( self%ldim(3) > 1 )       THROW_HARD('only 4 2D images; thresh_cavg')
         if( self%is_ft() )           THROW_HARD('only 4 real images; thresh_cavg')
         maxv      = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),:), mask=l_msk)
         threshold = -0.3 * maxv
-        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold .and. l_msk(1:self%ldim(1),1:self%ldim(2),1))
+        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold)
             self%rmat(1:self%ldim(1),1:self%ldim(2),1) = threshold
         end where
     end subroutine thresh_cavg

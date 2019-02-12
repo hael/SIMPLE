@@ -121,7 +121,11 @@ contains
             state = 1
         endif
         ! check volume, gets correct smpd & box
-        call spproj%get_vol('vol', state, vol_fname, smpd, box)
+        if( cline%defined('imgkind') )then
+            call spproj%get_vol(params%imgkind, state, vol_fname, smpd, box)
+        else
+            call spproj%get_vol('vol', state, vol_fname, smpd, box)
+        endif
         if( .not.file_exists(vol_fname) )then
             THROW_HARD('volume: '//trim(vol_fname)//' does not exist; exec_postprocess')
         endif

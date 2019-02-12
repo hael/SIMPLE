@@ -69,7 +69,12 @@ contains
                 ldim = build%vol%get_ldim()
                 call mskvol%new(ldim, params%smpd)
                 call mskvol%read(params%mskfile)
-                call build%vol%mul(mskvol)
+                if( cline%defined('lp_backgr') )then
+                    call build%vol%lp_background(mskvol,params%lp_backgr)
+                else
+                    call build%vol%zero_background
+                    call build%vol%mul(mskvol)
+                endif
                 call mskvol%kill
                 if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
             else if( cline%defined('msk') )then

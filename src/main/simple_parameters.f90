@@ -246,7 +246,6 @@ type :: parameters
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
     integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
-    integer :: nmembers=0
     integer :: nnn=200             !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
     integer :: noris=0
@@ -350,6 +349,7 @@ type :: parameters
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
     real    :: lam=0.5
     real    :: lp=20.              !< low-pass limit(in A)
+    real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
     real    :: lp_pick=20.         !< low-pass limit 4 picker(in A)
     real    :: lplim_crit=0.3      !< corr criterion low-pass limit assignment(0.143-0.5){0.3}
@@ -664,7 +664,6 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ninplpeaks',     self%ninplpeaks)
-        call check_iarg('nmembers',       self%nmembers)
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('npeaks',         self%npeaks)
@@ -753,6 +752,7 @@ contains
         call check_rarg('kv',             self%kv)
         call check_rarg('lam',            self%lam)
         call check_rarg('lp',             self%lp)
+        call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)
         call check_rarg('lp_pick',        self%lp_pick)
         call check_rarg('lplim_crit',     self%lplim_crit)
@@ -990,7 +990,7 @@ contains
             ! or the private_exec programs don't get what they need
             ! get nptcls/box/smpd from project file
             if( self%stream.eq.'no' )then
-                if( self%spproj_iseg==OUT_SEG )then
+                if( self%spproj_iseg==OUT_SEG .or. self%spproj_iseg==CLS3D_SEG)then
                     call spproj%read_segment('out', self%projfile)
                     call spproj%get_imginfo_from_osout(smpd, box, nptcls)
                     call spproj%kill
