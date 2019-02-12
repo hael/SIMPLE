@@ -443,7 +443,7 @@ contains
         ! clean-up
         call qsys_cleanup
         ! end gracefully
-        call simple_end('**** SIMPLE_EXTRACT_DISTR NORMAL STOP ****')
+        call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
 
         contains
 

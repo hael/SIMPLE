@@ -193,9 +193,9 @@ contains
             str_dyn = os%ori2str(i)
             nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
             if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+                write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
             else
-                write(unit=self%funit,pos=ibytes) str_dyn
+                write(unit=self%funit,pos=ibytes) trim(str_dyn)
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do
@@ -248,9 +248,9 @@ contains
             str_dyn = os_strings(i)%str
             nspaces = self%header(isegment)%n_bytes_per_record - len_trim(str_dyn)
             if( nspaces > 0 )then
-                write(unit=self%funit,pos=ibytes) str_dyn//spaces(nspaces)
+                write(unit=self%funit,pos=ibytes) trim(str_dyn)//spaces(nspaces)
             else
-                write(unit=self%funit,pos=ibytes) str_dyn
+                write(unit=self%funit,pos=ibytes) trim(str_dyn)
             endif
             ibytes = ibytes + self%header(isegment)%n_bytes_per_record
         end do

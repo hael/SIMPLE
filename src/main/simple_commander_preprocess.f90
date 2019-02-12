@@ -995,7 +995,6 @@ contains
                 if( ldim_foo(1).ne.nint(o_mic%get('xdim')) )THROW_HARD('Inconsistent x dimensions; exec_reextract')
                 if( ldim_foo(2).ne.nint(o_mic%get('ydim')) )THROW_HARD('Inconsistent y dimensions; exec_reextract')
                 if( any(ldim == 0) ) ldim = ldim_foo
-                if( .not.o_mic%isthere('nptcls') ) THROW_HARD('micrographs not imported correctly 1; exec_reextract')
                 stk_ind = mic2stk_inds(imic)
                 o_stk   = spproj_in%os_stk%get_ori(stk_ind)
                 fromp   = nint(o_stk%get('fromp'))

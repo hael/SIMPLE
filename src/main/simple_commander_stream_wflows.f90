@@ -45,11 +45,11 @@ contains
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
         character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
-        character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker, imgkind
+        character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
-        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i, n_os_out
+        integer                                :: box_coords(2), nmovies, imovie, stacksz, prev_stacksz, iter, icline
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
@@ -143,12 +143,10 @@ contains
                         ! transfer ptcl2D box coordinates
                         do i=1,stream_spproj%os_ptcl2D%get_noris()
                             cnt = spproj%os_ptcl2D%get_noris()-stream_spproj%os_ptcl2D%get_noris()+i
-                            ! box coordinates
-                            if(stream_spproj%os_ptcl2D%isthere(i,'xpos'))then
-                                call spproj%os_ptcl2D%set(cnt,'xpos',stream_spproj%os_ptcl2D%get(i,'xpos'))
-                            endif
-                            if(stream_spproj%os_ptcl2D%isthere(i,'ypos'))then
-                                call spproj%os_ptcl2D%set(cnt,'ypos',stream_spproj%os_ptcl2D%get(i,'ypos'))
+                            ! picking coordinates
+                            if( stream_spproj%has_boxcoords(i) )then
+                                call stream_spproj%get_boxcoords(i, box_coords)
+                                call spproj%set_boxcoords(cnt, box_coords)
                             endif
                         enddo
                     endif
@@ -278,9 +276,9 @@ contains
         character(len=STDLEN)              :: str_iter, refs_glob, refs_glob_ranked
         character(len=LONGSTRLEN)          :: buffer_dir
         real    :: orig_smpd, msk, scale_factor, orig_msk, smpd, large_msk, lp_greedy
-        integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers, large_ring2
-        integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts
-        integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter
+        integer :: iter, orig_box, box, nptcls_glob, iproj, ncls_glob, n_transfers, large_ring2, iptcl
+        integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts, box_coords(2)
+        integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter, i
         logical :: do_autoscale, l_maxed, buffer_exists, do_wait, l_greedy
         ! seed the random number generator
         call seed_rnd
@@ -458,6 +456,22 @@ contains
                 call pool_proj%os_stk%set(iproj,'state',1.)
             enddo
         endif
+        ! transfer picking coordinates
+        iptcl = 0
+        do iproj=1,n_spprojs
+            call stream_proj%read_segment('ptcl2D',spproj_list(iproj))
+            do i = 1,stream_proj%os_ptcl2D%get_noris()
+                iptcl = iptcl+1
+                if( iptcl > nptcls_glob ) THROW_HARD('picking coordinates indexing error 1')
+                if( stream_proj%has_boxcoords(i) )then
+                    call stream_proj%get_boxcoords(i,box_coords)
+                    call pool_proj%set_boxcoords(iptcl, box_coords)
+                endif
+            enddo
+            call stream_proj%kill
+        enddo
+        if( iptcl /= nptcls_glob ) THROW_HARD('picking coordinates indexing error 2')
+        ! first write
         call pool_proj%write
         ! generates buffer project
         buffer_ptcls_range = 0
@@ -681,7 +695,7 @@ contains
             end subroutine reject_from_pool
 
             subroutine append_new_mics
-                integer :: n_spprojs_prev, n_new_spprojs, cnt, iptcl, n_new_ptcls
+                integer :: i, n_spprojs_prev, n_new_spprojs, cnt, iptcl, n_new_ptcls
                 if( debug_here ) print *,'in append_new_mics'; call flush(6)
                 if( .not.is_file_open(spproj_list_fname) )then
                     do_wait        = .false.
@@ -706,17 +720,28 @@ contains
                         if( n_new_ptcls > 0 )then
                             call scale_stks( stk_list )
                             ! update project with new images
-                            nptcls_glob = pool_proj%get_nptcls() + n_new_ptcls
-                            cnt = 0
+                            cnt   = 0
+                            iptcl = nptcls_glob
                             do iproj=n_spprojs_prev+1,n_spprojs
                                 cnt = cnt + 1
                                 call stream_proj%read(spproj_list(iproj))
                                 ctfvars      = stream_proj%get_ctfparams('ptcl2D', 1)
                                 ctfvars%smpd = smpd
                                 call pool_proj%add_stk(stk_list(cnt), ctfvars)
+                                ! transfer picking coordinates
+                                do i = 1,stream_proj%os_ptcl2D%get_noris()
+                                    iptcl = iptcl+1
+                                    if( stream_proj%has_boxcoords(i) )then
+                                        call stream_proj%get_boxcoords(i,box_coords)
+                                        call pool_proj%set_boxcoords(iptcl, box_coords)
+                                    endif
+                                enddo
                             enddo
+                            ! global number of particles update
+                            nptcls_glob = pool_proj%get_nptcls()
+                            ! deactivate new particles by default
                             do iptcl=nptcls_glob-n_new_ptcls+1,nptcls_glob
-                                call pool_proj%os_ptcl2D%set(iptcl,'state',0.) ! deactivate by default
+                                call pool_proj%os_ptcl2D%set(iptcl,'state',0.)
                             enddo
                             write(logfhandle,'(A,I8,A,A)')'>>> # OF PARTICLES: ', nptcls_glob, ' ; ',cast_time_char(simple_gettime())
                             last_injection = simple_gettime()
@@ -951,7 +976,15 @@ contains
                     endif
                     ind    = buffer_ptcls_range(1)+iptcl-1
                     stkind = pool_proj%os_ptcl2D%get(ind,'stkind')
-                    call o%set('stkind',stkind) ! preserves stack index
+                    ! preserves stack index
+                    call o%set('stkind',stkind)
+                    ! keep picking coordinates
+                    if( pool_proj%has_boxcoords(ind) )then
+                        call pool_proj%get_boxcoords(ind, box_coords)
+                        call o%set('xpos',real(box_coords(1)))
+                        call o%set('ypos',real(box_coords(2)))
+                    endif
+                    ! updates orientation
                     call pool_proj%os_ptcl2D%set_ori(ind,o)
                 enddo
                 do iptcl=ind+1,pool_proj%os_ptcl2D%get_noris()
@@ -1252,7 +1285,7 @@ contains
                 if( n2append > 0 )then
                     allocate(stk_list(n2append),mic_list(n2append))
                     call o_stks%new(n2append)
-                    cnt = 0
+                    cnt   = 0
                     do iproj=nprev+1,n_spprojs
                         cnt = cnt + 1
                         ! stk
@@ -1282,13 +1315,14 @@ contains
                     orig_proj%os_cls2D  = pool_proj%os_cls2D
                     orig_proj%os_ptcl2D = pool_proj%os_ptcl2D
                     if( do_autoscale )call orig_proj%os_ptcl2D%mul_shifts( 1./scale_factor )
+                    ! write
                     call orig_proj%write
                 endif
                 ! cleanup
                 call o%kill
                 call o_stks%kill
-                if(allocated(mic_list))deallocate(mic_list)
-                if(allocated(stk_list))deallocate(stk_list)
+                if(allocated(mic_list))     deallocate(mic_list)
+                if(allocated(stk_list))     deallocate(stk_list)
                 if( debug_here )print *,'end update_orig_proj'; call flush(6)
             end subroutine update_orig_proj
 

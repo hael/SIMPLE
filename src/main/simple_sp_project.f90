@@ -2108,8 +2108,7 @@ contains
         type(str4arr),    allocatable :: os_strings(:)
         class(oris),          pointer :: os => null()
         type(binoris) :: bos_doc
-        integer       :: i, numlen, n_records, partsz, isegment
-        integer       :: strlen, strlen_max
+        integer       :: i, numlen, n_records, partsz, isegment, strlen_max
         numlen = len(int2str(ndocs))
         if( present(numlen_in) ) numlen = numlen_in
         parts  = split_nobjs_even(nptcls, ndocs)
@@ -2117,6 +2116,8 @@ contains
         isegment = oritype2segment(oritype)
         ! allocate merged string representation
         allocate(os_strings(nptcls))
+        ! maxium string length
+        strlen_max = 0
         ! read into string representation
         do i=1,ndocs
             ! read part
@@ -2134,17 +2135,9 @@ contains
                 stop
             endif
             call bos_doc%read_segment(isegment, os_strings)
+            strlen_max = max(strlen_max, bos_doc%get_n_bytes_per_record(isegment))
             call bos_doc%close
         end do
-        ! find maxium string length
-        strlen_max = 0
-        !$omp parallel do schedule(static) default(shared) proc_bind(close)&
-        !$omp private(i,strlen) reduction(max:strlen_max)
-        do i=1,nptcls
-            strlen = len_trim(os_strings(i)%str)
-            if( strlen > strlen_max ) strlen_max = strlen
-        end do
-        !$omp end parallel do
         ! write
         call self%projinfo%getter(1, 'projfile', projfile)
         call self%bos%open(projfile)
