@@ -167,23 +167,31 @@ contains
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine calc_softmax_weights
 
-    subroutine update_softmax_weights( iptcl, npeaks)
+    subroutine update_softmax_weights( iptcl, npeaks, is_euclid )
         integer, intent(in) :: iptcl, npeaks
+        logical, intent(in) :: is_euclid
         real, allocatable   :: corrs(:)
         real :: ws(npeaks)
         corrs = s3D%o_peaks(iptcl)%get_all('corr')
-        call calc_ori_weights( iptcl, npeaks, corrs, ws )
+        call calc_ori_weights( iptcl, npeaks, corrs, ws, is_euclid )
         call s3D%o_peaks(iptcl)%set_all('ow', ws)
         if( allocated(corrs) ) deallocate(corrs)
     end subroutine update_softmax_weights
 
-    subroutine calc_ori_weights( iptcl, npeaks, corrs, ws )
-        integer, intent(in)  :: iptcl, npeaks
-        real,    intent(in)  :: corrs(npeaks)
-        real,    intent(out) :: ws(npeaks)
-        real :: dists(npeaks), arg4softmax(npeaks)
-        real :: wsum
-        if( .not. pftcc_glob%is_euclid(iptcl) )then
+    subroutine calc_ori_weights( iptcl, npeaks, corrs, ws, is_euclid )
+        integer,           intent(in)  :: iptcl, npeaks
+        real,              intent(in)  :: corrs(npeaks)
+        real,              intent(out) :: ws(npeaks)
+        logical, optional, intent(in)  :: is_euclid
+        real    :: dists(npeaks), arg4softmax(npeaks)
+        real    :: wsum
+        logical :: iis_euclid
+        if( present(is_euclid) )then
+            iis_euclid = is_euclid
+        else
+            iis_euclid = pftcc_glob%is_euclid(iptcl)
+        endif
+        if( .not. iis_euclid )then
             ! convert correlations to distances
             dists = 1.0 - corrs
             ! scale distances with TAU
@@ -197,7 +205,7 @@ contains
         arg4softmax = arg4softmax - maxval(arg4softmax)
         ! calculate softmax weights
         ws = exp(arg4softmax)
-        if( .not. pftcc_glob%is_euclid(iptcl) ) where( corrs <= TINY ) ws = 0.
+        if( .not. iis_euclid ) where( corrs <= TINY ) ws = 0.
         ! critical for performance to normalize here as well
         wsum = sum(ws)
         if( wsum > TINY )then

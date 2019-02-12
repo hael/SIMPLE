@@ -697,7 +697,7 @@ contains
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            call update_softmax_weights(iptcl, npeaks)
+            call update_softmax_weights(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID)
         end do
         call close_o_peaks_io
     end subroutine setup_weights_read_o_peaks

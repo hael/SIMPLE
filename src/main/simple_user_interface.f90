@@ -205,6 +205,7 @@ type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
+type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
@@ -694,6 +695,7 @@ contains
         call set_param(startype,       'startype',     'str',     'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
         call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks(sum|cen|exp){no}', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp){no}',  '(sum|cen|exp){no}',  .false., 'no')
+        call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -2440,7 +2442,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 3, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2453,6 +2455,7 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
         call reconstruct3D%set_input('srch_ctrls', 3, objfun)
+        call reconstruct3D%set_input('srch_ctrls', 4, sigma2_fudge)
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
         call reconstruct3D%set_input('filt_ctrls', 2, shellw)
@@ -2502,7 +2505,7 @@ contains
         call refine3D%set_input('srch_ctrls', 12, neigh)
         call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 14, nrestarts)
-        call refine3D%set_input('srch_ctrls', 15, 'sigma2_fudge', 'num', 'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
+        call refine3D%set_input('srch_ctrls', 15, sigma2_fudge)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
