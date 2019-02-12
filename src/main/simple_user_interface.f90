@@ -662,7 +662,7 @@ contains
         call set_param(box,            'box',          'num',    'Square image size','Square image size(in pixels)', '# pixels of box', .true., 0.)
         call set_param(nptcls,         'nptcls',       'num',    'Number of particles', 'Number of particle images', '# particles', .true., 0.)
         call set_param(outstk,         'outstk',       'file',   'Output stack name', 'Output images stack name', 'e.g. outstk.mrc', .false., '')
-        call set_param(pcontrast,      'pcontrast',    'binary', 'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
+        call set_param(pcontrast,      'pcontrast',    'multi',  'Input particle contrast', 'Input particle contrast(black|white){black}', '(black|white){black}', .false., 'black')
         call set_param(clip,           'clip',         'num',    'Clipped box size', 'Target box size for clipping in pixels', 'in pixels', .false., 0.)
         call set_param(neg,            'neg',          'binary', 'Invert contrast','Invert contrast(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(sherr,          'sherr',        'num',    'Shift error half-width', 'Uniform rotational origin shift error half-width(in pixels)', 'shift error in pixels', .false., 0.)
@@ -843,7 +843,7 @@ contains
         call cluster2D%set_input('srch_ctrls', 9, 'bfac', 'num', 'Correlation B-factor','B-factor for the objective function in Angstroms^2', 'B-factor in Angstroms^2(>0.0){200}', .false., 200.)
         call cluster2D%set_input('srch_ctrls',10, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
         call cluster2D%set_input('srch_ctrls',11, nrestarts)
-        call cluster2D%set_input('srch_ctrls',12, 'refine', 'binary', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
+        call cluster2D%set_input('srch_ctrls',12, 'refine', 'multi', 'Refinement mode', 'Refinement mode(snhc|greedy){snhc}', '(snhc|greedy){snhc}', .false., 'snhc')
         ! filter controls
         call cluster2D%set_input('filt_ctrls', 1, hp)
         call cluster2D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -904,7 +904,7 @@ contains
         call cluster2D_stream%set_input('srch_ctrls', 7, 'lpthresh', 'num', 'Resolution rejection threshold',&
         &'Classes with lower resolution are iteratively rejected', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
         call cluster2D_stream%set_input('srch_ctrls', 8, 'objfun','num', 'Objective function', 'Objective function(cc|ccres){cc}', '(cc|ccres){cc}', .false., 'cc')
-        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'binary', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -947,7 +947,7 @@ contains
         call cluster3D%set_input('srch_ctrls', 4, frac)
         call cluster3D%set_input('srch_ctrls', 5, pgrp)
         call cluster3D%set_input('srch_ctrls', 6, objfun)
-        call cluster3D%set_input('srch_ctrls', 7, 'refine', 'binary', 'Refinement mode', 'Refinement mode(cluster|clustersym)&
+        call cluster3D%set_input('srch_ctrls', 7, 'refine', 'multi', 'Refinement mode', 'Refinement mode(cluster|clustersym)&
         &){cluster}', '(cluster|clustersym){cluster}', .false., 'cluster')
         call cluster3D%set_input('srch_ctrls', 8, neigh)
         ! filter controls
@@ -1159,7 +1159,7 @@ contains
         extract%parm_ios(1)%required = .false.
         call extract%set_input('parm_ios', 2, pcontrast)
         call extract%set_input('parm_ios', 3, 'outside', 'binary', 'Extract outside boundaries', 'Extract boxes outside the micrograph boundaries(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call extract%set_input('parm_ios', 4, 'ctf', 'binary', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
+        call extract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -1471,9 +1471,9 @@ contains
         call import_particles%set_input('parm_ios', 8, deftab)
         call import_particles%set_input('parm_ios', 9, 'plaintexttab', 'file', 'Plain text file of input parameters',&
         'Plain text file of tabulated per-particle input parameters: dfx, dfy, angast, phshift', 'e.g. params.txt', .false., '')
-        call import_particles%set_input('parm_ios', 10, 'dfunit', 'binary', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
-        call import_particles%set_input('parm_ios', 11, 'angastunit', 'binary', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
-        call import_particles%set_input('parm_ios', 12, 'phshiftunit', 'binary', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
+        call import_particles%set_input('parm_ios', 10, 'dfunit', 'multi', 'Underfocus unit', 'Underfocus unit(A|microns){microns}', '(A|microns){microns}', .false., 'microns')
+        call import_particles%set_input('parm_ios', 11, 'angastunit', 'multi', 'Angle of astigmatism unit', 'Angle of astigmatism unit(radians|degrees){degrees}', '(radians|degrees){degrees}', .false., 'degrees')
+        call import_particles%set_input('parm_ios', 12, 'phshiftunit', 'multi', 'Phase-shift unit', 'Phase-shift unit(radians|degrees){radians}', '(radians|degrees){radians}', .false., 'degrees')
         ! alternative inputs
         call import_particles%set_input('alt_ios', 1, 'stktab', 'file', 'List of per-micrograph particle stacks',&
         &'List of per-micrograph particle image stacks to import', 'per-micrograph stack list; e.g. stktab.txt', .false., '')
@@ -1718,7 +1718,7 @@ contains
         call mask%set_input('mask_ctrls', 2, inner)
         call mask%set_input('mask_ctrls', 3, outer)
         call mask%set_input('mask_ctrls', 4, mskfile)
-        call mask%set_input('mask_ctrls', 5, 'msktype', 'binary', 'Mask type',&
+        call mask%set_input('mask_ctrls', 5, 'msktype', 'multi', 'Mask type',&
         &'Type of mask to use(soft|hard){soft}', '(soft|hard){soft}', .false., 'soft')
         call mask%set_input('mask_ctrls', 6, mw)
         call mask%set_input('mask_ctrls', 7, 'width', 'num', 'Inner mask falloff',&
@@ -2254,7 +2254,7 @@ contains
         reextract%parm_ios(1)%required = .false.
         call reextract%set_input('parm_ios', 2, oritype)
         call reextract%set_input('parm_ios', 3, pcontrast)
-        call reextract%set_input('parm_ios', 4, 'ctf', 'binary', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
+        call reextract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2440,7 +2440,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 2, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 3, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2452,6 +2452,7 @@ contains
         ! search controls
         call reconstruct3D%set_input('srch_ctrls', 1, pgrp)
         call reconstruct3D%set_input('srch_ctrls', 2, frac)
+        call reconstruct3D%set_input('srch_ctrls', 3, objfun)
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
         call reconstruct3D%set_input('filt_ctrls', 2, shellw)
@@ -3586,7 +3587,7 @@ contains
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
-                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
                             if( exception )then
                                 write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
                                 write(logfhandle,*)trim(arr(i)%descr_placeholder)
@@ -3664,7 +3665,7 @@ contains
                             call split( options_str, '(', before )
                             call split( options_str, ')', before )
                             call parsestr(before, '|', args, nargs)
-                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 3)
+                            exception = (param_is_binary .and. nargs /= 2) .or. (param_is_multi .and. nargs < 2)
                             if( exception )then
                                 write(logfhandle,*)'Poorly formatted options string for entry ', trim(arr(i)%key)
                                 write(logfhandle,*)trim(arr(i)%descr_placeholder)
