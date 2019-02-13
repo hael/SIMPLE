@@ -13,8 +13,9 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical,          parameter :: DO_ANISO = .false.
-character(len=*), parameter :: speckind = 'sqrt'
+logical,          parameter :: DO_ANISO   = .false.
+logical,          parameter :: DO_PATCHED = .false.
+character(len=*), parameter :: speckind   = 'sqrt'
 
 type :: motion_correct_iter
     private
@@ -27,6 +28,8 @@ type :: motion_correct_iter
     character(len=STDLEN) :: moviename_forctf, moviename_thumb, moviename_pspec
     character(len=STDLEN) :: moviename_aniso_intg, moviename_aniso_intg_frames
     character(len=STDLEN) :: moviename_aniso_forctf, moviename_aniso_thumb, moviename_aniso_pspec
+    character(len=STDLEN) :: moviename_patched_intg, moviename_patched_intg_frames
+    character(len=STDLEN) :: moviename_patched_forctf, moviename_patched_thumb, moviename_patched_pspec
   contains
     procedure :: iterate
     procedure :: get_moviename
@@ -79,6 +82,15 @@ contains
             self%moviename_aniso_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
             &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_aniso_'//INTGMOV_SUFFIX//params_glob%ext
         endif
+        ! patched ones
+        self%moviename_patched_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//INTGMOV_SUFFIX//trim(params_glob%ext)
+        self%moviename_patched_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//FORCTF_SUFFIX//trim(params_glob%ext)
+        self%moviename_patched_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//POWSPEC_SUFFIX//trim(params_glob%ext)
+        self%moviename_patched_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//THUMBNAIL_SUFFIX//trim(JPG_EXT)
+        if( cline%defined('tof') )then
+            self%moviename_patched_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
+            &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_patched_'//INTGMOV_SUFFIX//params_glob%ext
+        endif
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
@@ -88,7 +100,7 @@ contains
         else
             self%moviename = trim(moviename)
         endif
-        motion_correct_with_aniso = DO_ANISO
+        motion_correct_with_aniso = (DO_ANISO .or. DO_PATCHED)
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
@@ -198,6 +210,49 @@ contains
                 call orientation%set('aniso_intg_frames', trim(rel_fname))
             endif
         endif
+        if(DO_PATCHED) then
+            call motion_correct_patched()
+            if( cline%defined('tof') )then
+                call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
+                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+            else
+                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
+            endif
+            call motion_correct_patched_kill
+            ! generate power-spectra
+            self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
+            self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+            call self%pspec_half_n_half%scale_pspec4viz
+            ! write output
+            if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_patched_intg_frames)
+            call self%moviesum_corrected%write(self%moviename_patched_intg)
+            call self%moviesum_ctf%write(self%moviename_patched_forctf)
+            call self%pspec_ctf%write(self%moviename_patched_pspec)
+            ! generate thumbnail
+            call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
+            call self%moviesum_corrected%fft()
+            call self%moviesum_corrected%clip(self%thumbnail)
+            call self%thumbnail%ifft()
+            ! jpeg output
+            call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
+            call self%img_jpg%write_jpg(self%moviename_patched_thumb, norm=.true., quality=90)
+            ! report to ori object
+            fname = simple_abspath(self%moviename_patched_intg, errmsg='simple_motion_correct_iter::iterate 6')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('patched_intg',   trim(rel_fname))
+            fname = simple_abspath(self%moviename_patched_forctf, errmsg='simple_motion_correct_iter::iterate 7')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('patched_forctf', trim(rel_fname))
+            fname = simple_abspath(self%moviename_patched_thumb, errmsg='simple_motion_correct_iter::iterate 8')
+            call make_relativepath(CWD_GLOB,fname,rel_fname)
+            call orientation%set('patched_thumb',  trim(rel_fname))
+            call orientation%set('imgkind', 'mic')
+            if( cline%defined('tof') )then
+                fname = simple_abspath(self%moviename_patched_intg_frames, errmsg='simple_motion_correct_iter::iterate 9')
+                call make_relativepath(CWD_GLOB,fname,rel_fname)
+                call orientation%set('patched_intg_frames', trim(rel_fname))
+            endif
+        endif
         call motion_correct_kill_common
         ! deallocate
         if( allocated(shifts) )       deallocate(shifts)
@@ -225,6 +280,14 @@ contains
                 allocate(moviename, source=trim(self%moviename_aniso_forctf))
             case('aniso_thumb')
                 allocate(moviename, source=trim(self%moviename_aniso_thumb))
+            case('patched_intg')
+                allocate(moviename, source=trim(self%moviename_patched_intg))
+            case('patched_intg_frames')
+                allocate(moviename, source=trim(self%moviename_patched_intg_frames))
+            case('patched_forctf')
+                allocate(moviename, source=trim(self%moviename_patched_forctf))
+            case('patched_thumb')
+                allocate(moviename, source=trim(self%moviename_patched_thumb))
             case DEFAULT
                 THROW_HARD('unsupported which flag; get_self%moviename')
         end select

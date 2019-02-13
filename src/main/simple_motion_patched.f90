@@ -109,6 +109,7 @@ contains
         integer :: iframe, i, j
         integer :: idx
         real :: patch_cntr_x, patch_cntr_y   ! patch centers, x-/y-coordinate
+        integer :: k1,k2,k3,k4,k5
         do iframe = 1, self%nframes
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
@@ -122,6 +123,28 @@ contains
                 end do
             end do
         end do
+        sig = 1.
+        ! dump the shifts for debugging purposes
+        if (.false.) then
+            open(unit=123,file='for_fitting.txt')
+            write (123,'(A)',advance='no') 'y=['
+            do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
+                write (123,'(A)',advance='no') trim(real2str(y(k1)))
+                if (k1 < self%nframes*NX_PATCHED*NY_PATCHED) write (123,'(A)',advance='no') ', '
+            end do
+            write (123,*) '];'
+            
+            do k2 = 1,3
+                
+                write (123,'(A)',advance='no') 'x' // trim(int2str(k2)) // '=['
+                do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
+                    write (123,'(A)',advance='no') trim(real2str(x(k2,k1)))
+                    if (k1 < self%nframes*NX_PATCHED*NY_PATCHED) write (123,'(A)',advance='no') ', '
+                end do
+                write (123,*) '];'
+            end do
+            close(123)
+        end if
         ! fit polynomial for shifts in x-direction
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         ! store polynomial coefficients
@@ -162,17 +185,19 @@ contains
                     t = real(iframe)
                     x = real(i)
                     y = real(j)
-                    x_trafo = apply_patch_poly(self%poly_coeffs(:,1),x,y,t)
-                    y_trafo = apply_patch_poly(self%poly_coeffs(:,2),x,y,t)
-                    rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo)
+                    x_trafo = x + apply_patch_poly(self%poly_coeffs(:,1),x,y,t)
+                    y_trafo = y + apply_patch_poly(self%poly_coeffs(:,2),x,y,t)
+                    rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo, iframe, rmat_ins )
                 end do
             end do
         end do
         !$omp end parallel do
     contains
 
-        function interp_bilin( xval, yval ) result(val)
+        function interp_bilin( xval, yval, iiframe, rmat_ins2 ) result(val)
             real,  intent(in)    :: xval, yval
+            integer, intent(in)  :: iiframe
+            type(rmat_ptr_type), intent(in) :: rmat_ins2(self%nframes)
             real     :: val
             logical  :: x1_valid, x2_valid, y1_valid, y2_valid
             integer  :: x1_h,  x2_h,  y1_h,  y2_h
@@ -215,17 +240,17 @@ contains
 !!$            y2 = rmat_in(x2_hh, y1_hh, 1)
 !!$            y3 = rmat_in(x2_hh, y2_hh, 1)
 !!$            y4 = rmat_in(x1_hh, y2_hh, 1)
-            y1 = rmat_ins(iframe)%rmat_ptr(x1_hh, y1_hh, 1)
-            y2 = rmat_ins(iframe)%rmat_ptr(x2_hh, y1_hh, 1)
-            y3 = rmat_ins(iframe)%rmat_ptr(x2_hh, y2_hh, 1)
-            y4 = rmat_ins(iframe)%rmat_ptr(x1_hh, y2_hh, 1)
+            y1 = rmat_ins2(iiframe)%rmat_ptr(x1_hh, y1_hh, 1)
+            y2 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y1_hh, 1)
+            y3 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y2_hh, 1)
+            y4 = rmat_ins2(iiframe)%rmat_ptr(x1_hh, y2_hh, 1)
 
             t    = xval - x1_h
             u    = yval - y1_h
-            val  =  (1._dp - t) * (1._dp - u) * y1 + &
-               t  * (1._dp - u) * y2 + &
+            val  =  (1. - t) * (1. - u) * y1 + &
+               t  * (1. - u) * y2 + &
                t  *          u  * y3 + &
-                (1._dp - t) *          u  * y4
+                (1. - t) *          u  * y4
         end function interp_bilin
 
     end subroutine apply_polytransfo
@@ -330,11 +355,11 @@ contains
         class(motion_patched), intent(inout) :: self
         integer :: ldim_nooverlap(2)
         integer :: i, j
-        self%ldim_patch(1) = int(self%ldim(1) / NX_PATCHED) + 2 * X_OVERLAP
-        self%ldim_patch(2) = int(self%ldim(2) / NY_PATCHED) + 2 * Y_OVERLAP
+        self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED)) + 2 * X_OVERLAP
+        self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED)) + 2 * Y_OVERLAP
         self%ldim_patch(3) = 1
-        ldim_nooverlap(1) = int(self%ldim(1) / NX_PATCHED)
-        ldim_nooverlap(2) = int(self%ldim(2) / NY_PATCHED)
+        ldim_nooverlap(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED))
+        ldim_nooverlap(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED))
         do j = 1, NY_PATCHED
             do i = 1, NX_PATCHED
                 self%lims_patches(i,j,1,1) = (i-1) * ldim_nooverlap(1) - X_OVERLAP + 1
@@ -408,7 +433,6 @@ contains
         do iframe = 1, self%nframes
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
-                    !if ((i /= 1).or.(j /= 5)) cycle
                     call self%shsearch_patches(iframe,i,j)%new(self%ref_patches(iframe,i,j),self%frame_patches(iframe,i,j),&
                         self%trs, self%motion_correct_ftol, self%motion_correct_gtol)
                     self%shifts_patches(:,iframe,i,j) = self%shsearch_patches(iframe,i,j)%minimize()
@@ -422,7 +446,6 @@ contains
         class(motion_patched), intent(inout) :: self
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
         real, optional,        intent(in)    :: trs
-        integer :: alloc_stat
         call self%kill()
         if (present(motion_correct_ftol)) then
             self%motion_correct_ftol = motion_correct_ftol
@@ -477,7 +500,6 @@ contains
 
     subroutine motion_patched_kill( self )
         class(motion_patched), intent(inout) :: self
-        integer :: i, j, iframe
         call self%deallocate_fields()
         self%existence = .false.
     end subroutine motion_patched_kill

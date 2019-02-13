@@ -104,7 +104,12 @@ contains
             self%ospec%limits(1,:) = self%ospec%limits(1,:) + prev_shift(1)
             self%ospec%limits(2,:) = self%ospec%limits(2,:) + prev_shift(2)
         endif
-        if( present(prev_shift) ) self%ospec%x = prev_shift
+        if( present(prev_shift) ) then
+            self%ospec%x = prev_shift
+        else
+            self%ospec%x   = 0.
+            self%ospec%x_8 = 0._dp
+        end if
         call self%set_dims_and_alloc()
         call self%calc_tmp_cmat12()
         ! set initial solution to previous shift
