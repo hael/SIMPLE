@@ -752,7 +752,10 @@ contains
                     call boxfile%new(boxfile_name, 1)
                     nptcls = boxfile%get_ndatalines()
                 endif
-                if( nptcls == 0 )cycle
+                if( nptcls == 0 )then
+                    call spproj%os_mic%set(imic, 'nptcls', 0.)
+                    cycle
+                endif
                 allocate( boxdata(nptcls,boxfile%get_nrecs_per_line()), stat=alloc_stat)
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill

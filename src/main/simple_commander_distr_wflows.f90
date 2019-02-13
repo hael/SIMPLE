@@ -150,8 +150,7 @@ contains
         class(extract_distr_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         type(parameters)                        :: params
-        type(sp_project)                        :: spproj
-        type(sp_project),           allocatable :: spproj_parts(:)
+        type(sp_project)                        :: spproj, spproj_part
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
         type(ori)                               :: o_mic
@@ -233,53 +232,53 @@ contains
         call spproj%os_stk%kill
         call spproj%os_ptcl2D%kill
         call spproj%os_ptcl3D%kill
-        allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
+        allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
         do ipart = 1,params%nparts
             parts_fname(ipart) = trim(ALGN_FBODY)//int2str_pad(ipart,numlen)//trim(METADATA_EXT)
         enddo
         ! copy updated micrographs
-        cnt = 0
+        cnt   = 0
+        nstks = 0
         do ipart = 1,params%nparts
-            call spproj_parts(ipart)%read_segment('mic',parts_fname(ipart))
-            do imic = 1,spproj_parts(ipart)%os_mic%get_noris()
+            call spproj_part%read_segment('mic',parts_fname(ipart))
+            do imic = 1,spproj_part%os_mic%get_noris()
                 cnt = cnt + 1
-                call spproj%os_mic%set_ori(cnt,spproj_parts(ipart)%os_mic%get_ori(imic))
+                o_mic = spproj_part%os_mic%get_ori(imic)
+                call spproj%os_mic%set_ori(cnt,o_mic)
+                if( o_mic%isthere('nptcls') )then
+                    if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
+                endif
             enddo
-            call spproj_parts(ipart)%kill
+            call spproj_part%kill
         enddo
         if( cnt /= nmics_tot ) THROW_HARD('Inconstistent number of micrographs in individual projects')
         ! fetch stacks table
-        nstks = 0
-        do ipart = 1,params%nparts
-            call spproj_parts(ipart)%read_segment('stk',parts_fname(ipart))
-            nstks = nstks + spproj_parts(ipart)%os_stk%get_noris()
-        enddo
-        if( nstks /= nmics ) THROW_HARD('Inconstistent number of stacks in individual projects')
         if( nstks > 0 )then
             call os_stk%new(nstks)
             allocate(stktab(nstks))
             cnt = 0
             do ipart = 1,params%nparts
-                do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
+                call spproj_part%read_segment('stk',parts_fname(ipart))
+                do istk = 1,spproj_part%os_stk%get_noris()
                     cnt = cnt + 1
-                    call os_stk%set_ori(cnt,spproj_parts(ipart)%os_stk%get_ori(istk))
+                    call os_stk%set_ori(cnt,spproj_part%os_stk%get_ori(istk))
                     stktab(cnt) = os_stk%get_static(cnt,'stk')
                 enddo
-                call spproj_parts(ipart)%kill
+                call spproj_part%kill
             enddo
             ! import stacks into project
             call spproj%add_stktab(stktab,os_stk)
             ! transfer particles locations to ptcl2D
             cnt = 0
             do ipart = 1,params%nparts
-                call spproj_parts(ipart)%read_segment('ptcl2D',parts_fname(ipart))
-                do i = 1,spproj_parts(ipart)%os_ptcl2D%get_noris()
+                call spproj_part%read_segment('ptcl2D',parts_fname(ipart))
+                do i = 1,spproj_part%os_ptcl2D%get_noris()
                     cnt = cnt + 1
-                    call spproj_parts(ipart)%get_boxcoords(i, boxcoords)
+                    call spproj_part%get_boxcoords(i, boxcoords)
                     call spproj%set_boxcoords(cnt, boxcoords)
                 enddo
-                call spproj_parts(ipart)%kill
+                call spproj_part%kill
             enddo
             call os_stk%kill
         endif
