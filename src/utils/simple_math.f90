@@ -2751,7 +2751,8 @@ contains
         if (n1 == n2) then
             assert_eq2=n1
         else
-            stop 'program terminated by assert_eq2; an assert_eq failed with this tag: ' // string
+            write(logfhandle,*)'program terminated by assert_eq2: ',trim(string)
+            stop 'program terminated by simple_math :: assert_eq2'
         end if
     end function assert_eq2
 
@@ -2763,7 +2764,8 @@ contains
         if (n1 == n2 .and. n2 == n3) then
             assert_eq3=n1
         else
-            stop 'program terminated by assert_eq3; an assert_eq failed with this tag: ' // string
+            write(logfhandle,*)'program terminated by assert_eq3: ',trim(string)
+            stop 'program terminated by simple_math :: assert_eq3'
         end if
     end function assert_eq3
 
@@ -2775,7 +2777,8 @@ contains
         if (n1 == n2 .and. n2 == n3 .and. n3 == n4) then
             assert_eq4=n1
         else
-            stop 'program terminated by assert_eq4; an assert_eq failed with this tag: ' // string
+           write(logfhandle,*)'program terminated by assert_eq4: ',trim(string)
+           stop 'program terminated by assert_eq4'
         end if
     end function assert_eq4
 
@@ -2787,7 +2790,8 @@ contains
         if (all(nn(2:) == nn(1))) then
             assert_eqn=nn(1)
         else
-            stop 'program terminated by assert_eqn; an assert_eq failed with this tag: ' // string
+            write(logfhandle,*)'program terminated by assert_eqn:', trim(string)
+            stop 'program terminated by assert_eqn'
         end if
     end function assert_eqn
 
