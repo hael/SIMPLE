@@ -146,6 +146,26 @@ interface myacos
     module procedure myacos_dp
 end interface myacos
 
+interface pythag
+    module procedure pythag_sp, pythag_dp
+end interface pythag
+
+interface svbksb
+    module procedure svbksb_sp, svbksb_dp
+end interface svbksb
+
+interface svdcmp
+    module procedure svdcmp_sp, svdcmp_dp
+end interface svdcmp
+
+interface outerprod
+    module procedure outerprod_r, outerprod_d
+end interface outerprod
+
+interface assert_eq
+    module procedure assert_eq2,assert_eq3,assert_eq4,assert_eqn
+end interface assert_eq
+
 !!!!!!!!ADDED BY CHIARA!!!!!!!!!!
 interface vis_mat
     module procedure vis_2Dreal_mat
@@ -2289,5 +2309,595 @@ contains
         endwhere
         if(present(thresh)) thresh = threshold
     end subroutine otsu_2
+
+    ! imported from numerical recipes
+    function pythag_sp(a,b)
+        implicit none
+        real(sp), intent(in) :: a,b
+        real(sp) :: pythag_sp
+        ! Computes (a^2+b^2)^(1/2) without destructive underflow or overflow.
+        real(sp) :: absa,absb
+        absa=abs(a)
+        absb=abs(b)
+        if (absa > absb) then
+            pythag_sp=absa*sqrt(1.0_sp+(absb/absa)**2)
+        else
+            if (absb == 0.0) then
+                pythag_sp=0.0
+            else
+                pythag_sp=absb*sqrt(1.0_sp+(absa/absb)**2)
+            end if
+        end if
+    end function pythag_sp
+
+    ! imported from numerical recipes
+    function pythag_dp(a,b)
+        implicit none
+        real(dp), intent(in) :: a,b
+        real(dp) :: pythag_dp
+        real(dp) :: absa,absb
+        absa=abs(a)
+        absb=abs(b)
+        if (absa > absb) then
+            pythag_dp=absa*sqrt(1.0_dp+(absb/absa)**2)
+        else
+            if (absb == 0.0) then
+                pythag_dp=0.0
+            else
+                pythag_dp=absb*sqrt(1.0_dp+(absa/absb)**2)
+            end if
+        end if
+    end function pythag_dp
+
+    ! imported from numerical recipes
+    subroutine svbksb_sp(u,w,v,b,x)
+        implicit none
+        real(sp), dimension(:,:), intent(in)  :: u,v
+        real(sp), dimension(:),   intent(in)  :: w,b
+        real(sp), dimension(:),   intent(out) :: x
+        ! Solves A X=B for a vector X, where A is specified by the arrays u,v,w as returned
+        ! by svdcmp. Here u is MxN, v is NxN, and w is of length N. b is the M-dimensional
+        ! input right-hand side. x is the N-dimensional output solution vector. No input quantities
+        ! are destroyed, so the routine may be called sequentially with different b's.
+        integer                      :: mdum,ndum
+        real(sp), dimension(size(x)) :: tmp
+        mdum=assert_eq(size(u,1),size(b),'svbksb_sp: mdum')
+        ndum=assert_eq((/size(u,2),size(v,1),size(v,2),size(w),size(x)/),'svbksb_sp: ndum')
+        where (w /= 0.0)
+            tmp=matmul(b,u)/w     ! Calculate diag(1/w_j)U^T B,
+        elsewhere
+            tmp=0.0               ! but replace 1/w_j by zero if w_j=0.
+        end where
+        x=matmul(v,tmp)           ! Matrix multiply by V to get answer.
+    end subroutine svbksb_sp
+
+    ! imported from numerical recipes
+    subroutine svbksb_dp(u,w,v,b,x)
+        implicit none
+        real(dp), dimension(:,:), intent(in ) :: u,v
+        real(dp), dimension(:),   intent(in)  :: w,b
+        real(dp), dimension(:),   intent(out) :: x
+        integer                      :: mdum,ndum
+        real(dp), dimension(size(x)) :: tmp
+        mdum=assert_eq(size(u,1),size(b),'svbksb_dp: mdum')
+        ndum=assert_eq((/size(u,2),size(v,1),size(v,2),size(w),size(x)/),'svbksb_dp: ndum')
+        where (w /= 0.0)
+            tmp=matmul(b,u)/w
+        elsewhere
+            tmp=0.0
+        end where
+        x=matmul(v,tmp)
+    end subroutine svbksb_dp
+
+    ! imported from numerical recipes
+    subroutine svdcmp_sp(a,w,v)
+        implicit none
+        real(sp), dimension(:,:), intent(inout) :: a
+        real(sp), dimension(:),   intent(out)   :: w
+        real(sp), dimension(:,:), intent(out)   :: v
+        ! Given an MxN matrix a, this routine computes its singular value decomposition, A=
+        ! U W V^T. The matrix U replaces a on output. The diagonal matrix of singular values
+        ! W is output as the N-dimensional vector w. The NxN matrix V (not the transpose V^T)
+        ! is output as v.
+        integer                        :: i,its,j,k,l,m,n,nm
+        real(sp)                       :: anorm,c,f,g,h,s,scale,x,y,z
+        real(sp), dimension(size(a,1)) :: tempm
+        real(sp), dimension(size(a,2)) :: rv1,tempn
+        m=size(a,1)
+        n=assert_eq(size(a,2),size(v,1),size(v,2),size(w),'svdcmp_sp')
+        g=0.0
+        scale=0.0
+        do i=1,n              ! Householder reduction to bidiagonal form.
+            l=i+1
+            rv1(i)=scale*g
+            g=0.0
+            scale=0.0
+            if (i <= m) then
+                scale=sum(abs(a(i:m,i)))
+                if (scale /= 0.0) then
+                    a(i:m,i)=a(i:m,i)/scale
+                    s=dot_product(a(i:m,i),a(i:m,i))
+                    f=a(i,i)
+                    g=-sign(sqrt(s),f)
+                    h=f*g-s
+                    a(i,i)=f-g
+                    tempn(l:n)=matmul(a(i:m,i),a(i:m,l:n))/h
+                    a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
+                    a(i:m,i)=scale*a(i:m,i)
+                end if
+            end if
+            w(i)=scale*g
+            g=0.0
+            scale=0.0
+            if ((i <= m) .and. (i /= n)) then
+                scale=sum(abs(a(i,l:n)))
+                if (scale /= 0.0) then
+                    a(i,l:n)=a(i,l:n)/scale
+                    s=dot_product(a(i,l:n),a(i,l:n))
+                    f=a(i,l)
+                    g=-sign(sqrt(s),f)
+                    h=f*g-s
+                    a(i,l)=f-g
+                    rv1(l:n)=a(i,l:n)/h
+                    tempm(l:m)=matmul(a(l:m,l:n),a(i,l:n))
+                    a(l:m,l:n)=a(l:m,l:n)+outerprod(tempm(l:m),rv1(l:n))
+                    a(i,l:n)=scale*a(i,l:n)
+                end if
+            end if
+        end do
+        anorm=maxval(abs(w)+abs(rv1))
+        do i=n,1,-1            ! Accumulation of right-hand transformations.
+            if (i < n) then
+                if (g /= 0.0) then
+                    v(l:n,i)=(a(i,l:n)/a(i,l))/g     ! Double division to avoid possible underflow
+                    tempn(l:n)=matmul(a(i,l:n),v(l:n,l:n))
+                    v(l:n,l:n)=v(l:n,l:n)+outerprod(v(l:n,i),tempn(l:n))
+                end if
+                v(i,l:n)=0.0
+                v(l:n,i)=0.0
+            end if
+            v(i,i)=1.0
+            g=rv1(i)
+            l=i
+        end do
+        do i=min(m,n),1,-1        ! Accumulation of left-hand transformations.
+            l=i+1
+            g=w(i)
+            a(i,l:n)=0.0
+            if (g /= 0.0) then
+                g=1.0_sp/g
+                tempn(l:n)=(matmul(a(l:m,i),a(l:m,l:n))/a(i,i))*g
+                a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
+                a(i:m,i)=a(i:m,i)*g
+            else
+                a(i:m,i)=0.0
+            end if
+            a(i,i)=a(i,i)+1.0_sp
+        end do
+        do k=n,1,-1                 ! Diagonalization of the bidiagonal form: Loop over
+            do its=1,30             ! singular values, and over allowed iterations.
+                do l=k,1,-1         ! Test for splitting.
+                    nm=l-1
+                    if ((abs(rv1(l))+anorm) == anorm) exit
+                    ! Note that rv1(1) is always zero, so can never fall through bottom of loop.
+                    if ((abs(w(nm))+anorm) == anorm) then
+                        c=0.0       ! Cancellation of rv1(l), if l>1.
+                        s=1.0
+                        do i=l,k
+                            f=s*rv1(i)
+                            rv1(i)=c*rv1(i)
+                            if ((abs(f)+anorm) == anorm) exit
+                            g=w(i)
+                            h=pythag(f,g)
+                            w(i)=h
+                            h=1.0_sp/h
+                            c= (g*h)
+                            s=-(f*h)
+                            tempm(1:m)=a(1:m,nm)
+                            a(1:m,nm)=a(1:m,nm)*c+a(1:m,i)*s
+                            a(1:m,i)=-tempm(1:m)*s+a(1:m,i)*c
+                        end do
+                        exit
+                    end if
+                end do
+                z=w(k)
+                if (l == k) then        ! Convergence.
+                    if (z < 0.0) then   ! Singular value is made nonnegative.
+                        w(k)=-z
+                        v(1:n,k)=-v(1:n,k)
+                    end if
+                    exit
+                end if
+                if (its == 30) stop 'svdcmp_sp: no convergence in svdcmp'
+                x=w(l)                   ! Shift from bottom 2-by-2 minor.
+                nm=k-1
+                y=w(nm)
+                g=rv1(nm)
+                h=rv1(k)
+                f=((y-z)*(y+z)+(g-h)*(g+h))/(2.0_sp*h*y)
+                g=pythag(f,1.0_sp)
+                f=((x-z)*(x+z)+h*((y/(f+sign(g,f)))-h))/x
+                c=1.0                    ! Next QR transformation:
+                s=1.0
+                do j=l,nm
+                    i=j+1
+                    g=rv1(i)
+                    y=w(i)
+                    h=s*g
+                    g=c*g
+                    z=pythag(f,h)
+                    rv1(j)=z
+                    c=f/z
+                    s=h/z
+                    f= (x*c)+(g*s)
+                    g=-(x*s)+(g*c)
+                    h=y*s
+                    y=y*c
+                    tempn(1:n)=v(1:n,j)
+                    v(1:n,j)=v(1:n,j)*c+v(1:n,i)*s
+                    v(1:n,i)=-tempn(1:n)*s+v(1:n,i)*c
+                    z=pythag(f,h)
+                    w(j)=z            ! Rotation can be arbitrary if z=0.
+                    if (z /= 0.0) then
+                        z=1.0_sp/z
+                        c=f*z
+                        s=h*z
+                    end if
+                    f= (c*g)+(s*y)
+                    x=-(s*g)+(c*y)
+                    tempm(1:m)=a(1:m,j)
+                    a(1:m,j)=a(1:m,j)*c+a(1:m,i)*s
+                    a(1:m,i)=-tempm(1:m)*s+a(1:m,i)*c
+                end do
+                rv1(l)=0.0
+                rv1(k)=f
+                w(k)=x
+            end do
+        end do
+    end subroutine svdcmp_sp
+
+    subroutine svdcmp_dp(a,w,v)
+        implicit none
+        real(dp), dimension(:,:), intent(inout) :: a
+        real(dp), dimension(:),   intent(out)   :: w
+        real(dp), dimension(:,:), intent(out)   :: v
+        integer                        :: i,its,j,k,l,m,n,nm
+        real(dp)                       :: anorm,c,f,g,h,s,scale,x,y,z
+        real(dp), dimension(size(a,1)) :: tempm
+        real(dp), dimension(size(a,2)) :: rv1,tempn
+        m=size(a,1)
+        n=assert_eq(size(a,2),size(v,1),size(v,2),size(w),'svdcmp_dp')
+        g=0.0
+        scale=0.0
+        do i=1,n
+            l=i+1
+            rv1(i)=scale*g
+            g=0.0
+            scale=0.0
+            if (i <= m) then
+                scale=sum(abs(a(i:m,i)))
+                if (scale /= 0.0) then
+                    a(i:m,i)=a(i:m,i)/scale
+                    s=dot_product(a(i:m,i),a(i:m,i))
+                    f=a(i,i)
+                    g=-sign(sqrt(s),f)
+                    h=f*g-s
+                    a(i,i)=f-g
+                    tempn(l:n)=matmul(a(i:m,i),a(i:m,l:n))/h
+                    a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
+                    a(i:m,i)=scale*a(i:m,i)
+                end if
+            end if
+            w(i)=scale*g
+            g=0.0
+            scale=0.0
+            if ((i <= m) .and. (i /= n)) then
+                scale=sum(abs(a(i,l:n)))
+                if (scale /= 0.0) then
+                    a(i,l:n)=a(i,l:n)/scale
+                    s=dot_product(a(i,l:n),a(i,l:n))
+                    f=a(i,l)
+                    g=-sign(sqrt(s),f)
+                    h=f*g-s
+                    a(i,l)=f-g
+                    rv1(l:n)=a(i,l:n)/h
+                    tempm(l:m)=matmul(a(l:m,l:n),a(i,l:n))
+                    a(l:m,l:n)=a(l:m,l:n)+outerprod(tempm(l:m),rv1(l:n))
+                    a(i,l:n)=scale*a(i,l:n)
+                end if
+            end if
+        end do
+        anorm=maxval(abs(w)+abs(rv1))
+        do i=n,1,-1
+            if (i < n) then
+                if (g /= 0.0) then
+                    v(l:n,i)=(a(i,l:n)/a(i,l))/g
+                    tempn(l:n)=matmul(a(i,l:n),v(l:n,l:n))
+                    v(l:n,l:n)=v(l:n,l:n)+outerprod(v(l:n,i),tempn(l:n))
+                end if
+                v(i,l:n)=0.0
+                v(l:n,i)=0.0
+            end if
+            v(i,i)=1.0
+            g=rv1(i)
+            l=i
+        end do
+        do i=min(m,n),1,-1
+            l=i+1
+            g=w(i)
+            a(i,l:n)=0.0
+            if (g /= 0.0) then
+                g=1.0_dp/g
+                tempn(l:n)=(matmul(a(l:m,i),a(l:m,l:n))/a(i,i))*g
+                a(i:m,l:n)=a(i:m,l:n)+outerprod(a(i:m,i),tempn(l:n))
+                a(i:m,i)=a(i:m,i)*g
+            else
+                a(i:m,i)=0.0
+            end if
+            a(i,i)=a(i,i)+1.0_dp
+        end do
+        do k=n,1,-1
+            do its=1,30
+                do l=k,1,-1
+                    nm=l-1
+                    if ((abs(rv1(l))+anorm) == anorm) exit
+                    if ((abs(w(nm))+anorm) == anorm) then
+                        c=0.0
+                        s=1.0
+                        do i=l,k
+                            f=s*rv1(i)
+                            rv1(i)=c*rv1(i)
+                            if ((abs(f)+anorm) == anorm) exit
+                            g=w(i)
+                            h=pythag(f,g)
+                            w(i)=h
+                            h=1.0_dp/h
+                            c= (g*h)
+                            s=-(f*h)
+                            tempm(1:m)=a(1:m,nm)
+                            a(1:m,nm)=a(1:m,nm)*c+a(1:m,i)*s
+                            a(1:m,i)=-tempm(1:m)*s+a(1:m,i)*c
+                        end do
+                        exit
+                    end if
+                end do
+                z=w(k)
+                if (l == k) then
+                    if (z < 0.0) then
+                        w(k)=-z
+                        v(1:n,k)=-v(1:n,k)
+                    end if
+                    exit
+                end if
+                if (its == 30) stop 'svdcmp_dp: no convergence in svdcmp'
+                x=w(l)
+                nm=k-1
+                y=w(nm)
+                g=rv1(nm)
+                h=rv1(k)
+                f=((y-z)*(y+z)+(g-h)*(g+h))/(2.0_dp*h*y)
+                g=pythag(f,1.0_dp)
+                f=((x-z)*(x+z)+h*((y/(f+sign(g,f)))-h))/x
+                c=1.0
+                s=1.0
+                do j=l,nm
+                    i=j+1
+                    g=rv1(i)
+                    y=w(i)
+                    h=s*g
+                    g=c*g
+                    z=pythag(f,h)
+                    rv1(j)=z
+                    c=f/z
+                    s=h/z
+                    f= (x*c)+(g*s)
+                    g=-(x*s)+(g*c)
+                    h=y*s
+                    y=y*c
+                    tempn(1:n)=v(1:n,j)
+                    v(1:n,j)=v(1:n,j)*c+v(1:n,i)*s
+                    v(1:n,i)=-tempn(1:n)*s+v(1:n,i)*c
+                    z=pythag(f,h)
+                    w(j)=z
+                    if (z /= 0.0) then
+                        z=1.0_dp/z
+                        c=f*z
+                        s=h*z
+                    end if
+                    f= (c*g)+(s*y)
+                    x=-(s*g)+(c*y)
+                    tempm(1:m)=a(1:m,j)
+                    a(1:m,j)=a(1:m,j)*c+a(1:m,i)*s
+                    a(1:m,i)=-tempm(1:m)*s+a(1:m,i)*c
+                end do
+                rv1(l)=0.0
+                rv1(k)=f
+                w(k)=x
+            end do
+        end do
+    end subroutine svdcmp_dp
+
+    ! imported from numerical recipes
+    function outerprod_r(a,b)
+        implicit none
+        real(sp), dimension(:), intent(in) :: a,b
+        real(sp), dimension(size(a),size(b)) :: outerprod_r
+        outerprod_r = spread(a,dim=2,ncopies=size(b)) * &
+            spread(b,dim=1,ncopies=size(a))
+    end function outerprod_r
+
+    ! imported from numerical recipes
+    function outerprod_d(a,b)
+        implicit none
+        real(dp), dimension(:), intent(in) :: a,b
+        real(dp), dimension(size(a),size(b)) :: outerprod_d
+        outerprod_d = spread(a,dim=2,ncopies=size(b)) * &
+            spread(b,dim=1,ncopies=size(a))
+    end function outerprod_d
+
+    ! Return the length (ordinary L2 norm) of a vector.
+    function vabs(v)
+        implicit none
+        real(sp), dimension(:), intent(in) :: v
+        real(sp) :: vabs
+        vabs=sqrt(dot_product(v,v))
+    end function vabs
+
+    function assert_eq2(n1,n2,string)
+        implicit none
+        character(len=*), intent(in) :: string
+        integer,          intent(in) :: n1,n2
+        integer :: assert_eq2
+        if (n1 == n2) then
+            assert_eq2=n1
+        else
+            stop 'program terminated by assert_eq2; an assert_eq failed with this tag: ' // string
+        end if
+    end function assert_eq2
+
+    function assert_eq3(n1,n2,n3,string)
+        implicit none
+        character(len=*), intent(in) :: string
+        integer,          intent(in) :: n1,n2,n3
+        integer :: assert_eq3
+        if (n1 == n2 .and. n2 == n3) then
+            assert_eq3=n1
+        else
+            stop 'program terminated by assert_eq3; an assert_eq failed with this tag: ' // string
+        end if
+    end function assert_eq3
+
+    function assert_eq4(n1,n2,n3,n4,string)
+        implicit none
+        character(len=*), intent(in) :: string
+        integer,          intent(in) :: n1,n2,n3,n4
+        integer :: assert_eq4
+        if (n1 == n2 .and. n2 == n3 .and. n3 == n4) then
+            assert_eq4=n1
+        else
+            stop 'program terminated by assert_eq4; an assert_eq failed with this tag: ' // string
+        end if
+    end function assert_eq4
+
+    function assert_eqn(nn,string)
+        implicit none
+        character(len=*),      intent(in) :: string
+        integer, dimension(:), intent(in) :: nn
+        integer :: assert_eqn
+        if (all(nn(2:) == nn(1))) then
+            assert_eqn=nn(1)
+        else
+            stop 'program terminated by assert_eqn; an assert_eq failed with this tag: ' // string
+        end if
+    end function assert_eqn
+
+    ! imported from numerical recipes
+    ! SVD-based least-squares fit for linear univariate model
+    subroutine svdfit(x,y,sig,a,v,w,chisq,funcs)
+        implicit none
+        real(sp), dimension(:),   intent(in)  :: x,y,sig
+        real(sp), dimension(:),   intent(out) :: a,w
+        real(sp), dimension(:,:), intent(out) :: v
+        real(sp),                 intent(out) :: chisq
+        interface
+            function funcs(x,n)
+                implicit none
+                real,    intent(in) :: x
+                integer, intent(in) :: n
+                real, dimension(n) :: funcs
+            end function funcs
+        end interface
+        real(sp), parameter :: TOL=1.0e-5_sp
+        ! Given a set of N data points x,y with individual standard deviations sig, all arrays of length
+        ! N, use chi^2 minimization to determine the M coefficients a of a function that depends linearly
+        ! on a, y=sum_{i=1}^M a_i * afunc_i(x). Here we solve the fitting equations using singular value
+        ! decomposition of the NxM matrix, as in § 2.6. On output, the MxM array v and the
+        ! vector w of length M define part of the singular value decomposition, and can be used to
+        ! obtain the covariance matrix. The program returns values for the M fit parameters a, and
+        ! chi^2, chisq. The user supplies a subroutine funcs(x,afunc) that returns the M basis
+        ! functions evaluated at x=X in the array afunc.
+        integer                              :: i,ma,n
+        real(sp), dimension(size(x))         :: b,sigi
+        real(sp), dimension(size(x),size(a)) :: u,usav
+        n=assert_eq(size(x),size(y),size(sig),'svdfit: n')
+        ma=assert_eq(size(a),size(v,1),size(v,2),size(w),'svdfit: ma')
+        sigi=1.0_sp/sig                       ! Accumulate coefficients of the fitting matrix in u.
+        b=y*sigi
+        do i=1,n
+            usav(i,:)=funcs(x(i),ma)
+        end do
+        u=usav*spread(sigi,dim=2,ncopies=ma)
+        usav=u
+        call svdcmp(u,w,v)                   ! Singular value decomposition.
+        where (w < TOL*maxval(w)) w=0.0      ! Edit the singular values, given TOL from the parameter statement.
+        call svbksb(u,w,v,b,a)
+        chisq=vabs(matmul(usav,a)-b)**2      ! Evaluate chi-square.
+    end subroutine svdfit
+
+    ! imported from numerical recipes
+    ! modification of svdfit to support multivariate linear model
+    subroutine svd_multifit(x,y,sig,a,v,w,chisq,funcs)
+        implicit none
+        real(sp), dimension(:,:), intent(in)  :: x
+        real(sp), dimension(:),   intent(in)  :: y,sig
+        real(sp), dimension(:),   intent(out) :: a,w
+        real(sp), dimension(:,:), intent(out) :: v
+        real(sp),                 intent(out) :: chisq
+        interface
+            function funcs(x,n)
+                implicit none
+                real,     intent(in) :: x(:)
+                integer,  intent(in) :: n
+                real, dimension(n) :: funcs
+            end function funcs
+        end interface
+        real(sp), parameter :: TOL=1.0e-5_sp
+        ! Given a set of N data points x,y with individual standard deviations sig, all arrays of length
+        ! N, use chi^2 minimization to determine the M coefficients a of a function that depends linearly
+        ! on a, y=sum_{i=1}^M a_i * afunc_i(x). Here we solve the fitting equations using singular value
+        ! decomposition of the NxM matrix, as in § 2.6. On output, the MxM array v and the
+        ! vector w of length M define part of the singular value decomposition, and can be used to
+        ! obtain the covariance matrix. The program returns values for the M fit parameters a, and
+        ! chi^2, chisq. The user supplies a subroutine funcs(x,afunc) that returns the M basis
+        ! functions evaluated at x=X in the array afunc.
+        integer                              :: i,ma,n
+        real(sp), dimension(size(sig))       :: b,sigi
+        real(sp), dimension(size(x,dim=2),size(a)) :: u,usav
+        n=assert_eq(size(x,dim=2),size(y),size(sig),'svd_multifit: n')
+        ma=assert_eq(size(a),size(v,1),size(v,2),size(w),'svd_multifit: ma')
+        sigi=1.0_sp/sig                       ! Accumulate coefficients of the fitting matrix in u.
+        b=y*sigi
+        do i=1,n
+            usav(i,:)=funcs(x(:,i),ma)
+        end do
+        u=usav*spread(sigi,dim=2,ncopies=ma)
+        usav=u
+        call svdcmp(u,w,v)                   ! Singular value decomposition.
+        where (w < TOL*maxval(w)) w=0.0      ! Edit the singular values, given TOL from the parameter statement.
+        call svbksb(u,w,v,b,a)
+        chisq=vabs(matmul(usav,a)-b)**2      ! Evaluate chi-square.
+    end subroutine svd_multifit
+
+    subroutine svdvar(v,w,cvm)
+        implicit none
+        real(sp), dimension(:,:), intent(in)  :: v
+        real(sp), dimension(:),   intent(in)  :: w
+        real(sp), dimension(:,:), intent(out) :: cvm
+        ! To evaluate the covariance matrix cvm of the fit for M parameters obtained by svdfit,
+        ! call this routine with matrices v,w as returned from svdfit. The dimensions are M for
+        ! w and MxM for v and cvm.
+        integer                      :: ma
+        real(sp), dimension(size(w)) :: wti
+        ma=assert_eq((/size(v,1),size(v,2),size(w),size(cvm,1),size(cvm,2)/),'svdvar')
+        where (w /= 0.0)
+            wti=1.0_sp/(w*w)
+        elsewhere
+            wti=0.0
+        end where
+        cvm=v*spread(wti,dim=1,ncopies=ma)
+        cvm=matmul(cvm,transpose(v))          ! Covariance matrix is given by (15.4.20).
+    end subroutine svdvar
+
+
 
 end module simple_math
