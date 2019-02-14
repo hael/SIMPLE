@@ -78,11 +78,14 @@ contains
         type(args)                    :: allowed_args
         type(simple_program), pointer :: ptr2prg => null()
         character(len=LONGSTRLEN)     :: arg
+        character(len=STDLEN)         :: exec_cmd
+        character(len=:), allocatable :: exec
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
         self%argcnt  = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
+        call get_command_argument(0,exec_cmd)
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
@@ -90,6 +93,10 @@ contains
         if( str_has_substr(arg(pos+1:), 'simple_') ) THROW_HARD('giving program names with simple_* prefix is depreciated')
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(arg(pos+1:), ptr2prg)
+        exec = ptr2prg%get_executable()
+        if( exec .ne. trim(exec_cmd) )then
+            THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(exec_cmd)//' but '//exec)
+        endif
         ! list programs if so instructed
         if( str_has_substr(self%entire_line, 'prg=list') )then
             if( ptr2prg%is_distr() )then
