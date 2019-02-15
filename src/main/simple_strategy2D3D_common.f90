@@ -401,14 +401,18 @@ contains
             call img_in%shellnorm_and_apply_bfac_serial(bfac)
         else
             if( ifrc > 0 )then
-                call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-                    if( l_match_filt )then
-                        ! matched filter
-                        call img_in%shellnorm_and_apply_filter_serial(filter)
-                    else
-                        call img_in%apply_filter_serial(filter)
+                if( params_glob%l_ptcl_filt )then
+                    ! nothing to do
+                else
+                    call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                    if( any(frc > 0.143) )then
+                        call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
+                        if( l_match_filt )then
+                            ! matched filter
+                            call img_in%shellnorm_and_apply_filter_serial(filter)
+                        else
+                            call img_in%apply_filter_serial(filter)
+                        endif
                     endif
                 endif
             endif
@@ -446,16 +450,19 @@ contains
     end subroutine prepimg4align
 
     !>  \brief  prepares one cluster centre image for alignment
-    subroutine prep2Dref( img_in, img_out, icls, center, xyz_in, xyz_out )
-        use simple_estimate_ssnr, only: fsc2optlp_sub
-        use simple_polarizer,     only: polarizer
-        class(image),      intent(inout) :: img_in
-        class(polarizer),  intent(inout) :: img_out
+    subroutine prep2Dref( pftcc, img_in, img_out, icls, center, xyz_in, xyz_out )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp
+        use simple_polarizer,        only: polarizer
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(image),            intent(inout) :: img_in
+        class(polarizer),        intent(inout) :: img_out
         integer,           intent(in)    :: icls
         logical, optional, intent(in)    :: center
         real,    optional, intent(in)    :: xyz_in(3)
         real,    optional, intent(out)   :: xyz_out(3)
         real    :: frc(build_glob%projfrcs%get_filtsz()), filter(build_glob%projfrcs%get_filtsz())
+        real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: xyz(3), sharg
         logical :: do_center
         do_center = (params_glob%center .eq. 'yes')
@@ -485,13 +492,19 @@ contains
             ! anisotropic filter
             call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
             if( any(frc > 0.143) )then
-                call img_in%fft() ! needs to be here in case the shift was never applied (above)
                 call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-                if( params_glob%l_match_filt .or. params_glob%l_bfac_filt )then
-                    ! matched filter for both schemes
-                    call img_in%shellnorm_and_apply_filter_serial(filter)
+                if( params_glob%l_ptcl_filt )then
+                    call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
+                        &build_glob%img_match%get_filtsz(), filter, subfilter)
+                    call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
                 else
-                    call img_in%apply_filter_serial(filter)
+                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                    if( params_glob%l_match_filt .or. params_glob%l_bfac_filt )then
+                        ! matched filter for both schemes
+                        call img_in%shellnorm_and_apply_filter_serial(filter)
+                    else
+                        call img_in%apply_filter_serial(filter)
+                    endif
                 endif
             endif
         endif

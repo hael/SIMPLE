@@ -235,8 +235,9 @@ contains
             endif
         end do
         ! memoize CTF matrices
-        if( build_glob%spproj%get_ctfflag('ptcl2D').ne.'no' ) &
-            &call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        if( build_glob%spproj%get_ctfflag('ptcl2D').ne.'no' )then
+            call pftcc%create_polar_absctfmats(build_glob%spproj, 'ptcl2D')
+        endif
         ! memoize FFTs for improved performance
         call pftcc%memoize_ffts
         ! SEARCH
@@ -323,8 +324,8 @@ contains
 
     !>  \brief  prepares the polarft corrcalc object for search
     subroutine preppftcc4align( which_iter )
-        use simple_polarizer, only: polarizer
-        use simple_strategy2D3D_common,   only: prep2dref,build_pftcc_particles
+        use simple_polarizer,           only: polarizer
+        use simple_strategy2D3D_common, only: prep2dref,build_pftcc_particles
         integer,       intent(in)    :: which_iter
         type(polarizer), allocatable :: match_imgs(:)
         real      :: xyz(3)
@@ -362,14 +363,14 @@ contains
                 ! here we are determining the shifts and map them back to classes
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
-                call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
+                call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
                 if( params_glob%l_eo )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref(cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true.)  ! 2 polar coords
                         ! here we are passing in the shifts and do NOT map them back to classes
-                        call prep2Dref( cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                        call prep2Dref(pftcc, cavgs_odd(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                         call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.false.) ! 2 polar coords
                     else
                         ! put the merged class average in both even and odd positions
@@ -377,7 +378,7 @@ contains
                         call pftcc%cp_even2odd_ref(icls)
                     endif
                 else
-                    call prep2Dref(cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
+                    call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)
                     call match_imgs(icls)%polarize(pftcc, icls, isptcl=.false., iseven=.true. ) ! 2 polar coords
                     call pftcc%cp_even2odd_ref(icls)
                 endif

@@ -4,6 +4,8 @@ use simple_defs
 use simple_error, only: allocchk, simple_exception
 implicit none
 
+private :: ludcmp, lubksb
+
 interface is_a_number
     module procedure is_a_number_1
     module procedure is_a_number_2
@@ -2902,6 +2904,188 @@ contains
         cvm=matmul(cvm,transpose(v))          ! Covariance matrix is given by (15.4.20).
     end subroutine svdvar
 
+    ! Savitzky-Golay filter
+    ! From numerical recipes ch14.8
+    ! y: input vector (size n) is returned filtered.
+    ! "To summarize: Within limits, Savitzky-Golay filtering does manage to provide smoothing
+    ! without loss of resolution. It does this by assuming that relatively distant data points have
+    ! some significant redundancy that can be used to reduce the level of noise. The specific nature
+    ! of the assumed redundancy is that the underlying function should be locally well-fitted by a
+    ! polynomial. When this is true, as it is for smooth line profiles not too much narrower than
+    ! the filter width, then the performance of Savitzky-Golay filters can be spectacular. When it
+    ! is not true, then these filters have no compelling advantage over other classes of smoothing
+    ! filter coefficients."
+    subroutine SavitzkyGolay_filter( n, y )
+        integer, intent(in)    :: n
+        real,    intent(inout) :: y(n)
+        integer, parameter :: nl = 3  ! number of points to the left
+        integer, parameter :: nr = 3  ! number of points to the right
+        integer, parameter :: NP = 7 ! NP = nl+nr+1
+        integer, parameter :: m  = 4  ! smoothing polynomial order
+        real    :: ysave(n), c(NP)
+        integer :: i,j, index(NP)
+        ysave = y
+        ! seek shift index for given case nl, nr, m (see savgol).
+        index(1)=0
+        j=3
+        do i=2, nl+1
+            index(i)=i-j
+            j=j+2
+        end do
+        j=2
+        do i=nl+2, nl+nr+1
+            index(i)=i-j
+            j=j+2
+        end do
+        ! calculate Savitzky-Golay filter coefficients
+        call savgol(nl+nr+1,0)
+        ! Apply filter to input data
+        do i=1, n-nr
+            y(i)=0.
+            do j=1, nl+nr+1
+                !skip left points that do not exist
+                if (i+index(j).gt.0) y(i) = y(i)+c(j)*ysave(i+index(j))
+            end do
+        enddo
 
+        contains
+
+            subroutine savgol(np_here,ld)
+                integer, intent(in)  :: np_here, ld
+                integer, parameter   :: MMAX = 6
+                integer :: d,icode,imj,ipj,j,k,kk,mm,indx(MMAX+1)
+                real    :: fac,sum,a(MMAX+1,MMAX+1),b(MMAX+1)
+                if(np_here.lt.nl+nr+1.or.nl.lt.0.or.nr.lt.0.or.ld.gt.m.or.m.gt.MMAX  &
+                .or.nl+nr.lt.m) stop ' Bad args in savgol'
+                do ipj=0,2*m        !Set up the normal equations of the desired leastsquares fit.
+                    sum=0.
+                    if(ipj.eq.0) sum=1.
+                    do k=1,nr
+                        sum=sum+float(k)**ipj
+                    end do
+                    do k=1,nl
+                        sum=sum+float(-k)**ipj
+                    end do
+                    mm=min(ipj,2*m-ipj)
+                    do imj=-mm,mm,2
+                        a(1+(ipj+imj)/2,1+(ipj-imj)/2)=sum
+                    end do
+                end do
+                call ludcmp(a,m+1,MMAX+1,indx,d,icode)    !Solve them: LU decomposition.
+                do j=1,m+1
+                    b(j)=0.
+                end do
+                b(ld+1)=1.      !Right-hand side vector is unit vector, depending on which derivative we want.
+                call lubksb(a,m+1,MMAX+1,indx,b)   !Backsubstitute, giving one row of the inverse matrix.
+                do kk=1,np_here                    !Zero the output array (it may be bigger than the number
+                    c(kk)=0.                         !of coefficients).
+                end do
+                do k=-nl,nr                        !Each Savitzky-Golay coefficient is the dot product
+                    sum=b(1)                         !of powers of an integer with the inverse matrix row.
+                    fac=1.
+                    do mm=1,m
+                        fac=fac*k
+                        sum=sum+b(mm+1)*fac
+                    end do
+                    kk=mod(np_here-k,np_here)+1                !Store in wrap-around order.
+                    c(kk)=sum
+                end do
+            end subroutine savgol
+
+    end subroutine SavitzkyGolay_filter
+
+    subroutine LUDCMP(A,N,NP,INDX,D,CODE)
+        ! From Numerical Recipes
+        integer, intent(in)    :: N,NP
+        real,    intent(inout) :: A(NP,NP)
+        integer, intent(inout) :: INDX(N), D, CODE
+        integer, PARAMETER :: NMAX=100
+        real,    PARAMETER :: TINY=1E-12
+        real    :: AMAX,DUM, SUM, VV(NMAX)
+        INTEGER :: I, IMAX, J, K
+        D=1; CODE=0
+        DO I=1,N
+        AMAX=0.
+        DO J=1,N
+            IF (ABS(A(I,J)).GT.AMAX) AMAX=ABS(A(I,J))
+        END DO ! j loop
+        IF(AMAX.LT.TINY) THEN
+            CODE = 1
+            RETURN
+        END IF
+        VV(I) = 1. / AMAX
+        END DO ! i loop
+        DO J=1,N
+            DO I=1,J-1
+                SUM = A(I,J)
+                DO K=1,I-1
+                    SUM = SUM - A(I,K)*A(K,J)
+                END DO ! k loop
+                A(I,J) = SUM
+            END DO ! i loop
+            AMAX = 0.
+            DO I=J,N
+                SUM = A(I,J)
+                DO K=1,J-1
+                    SUM = SUM - A(I,K)*A(K,J)
+                END DO ! k loop
+                A(I,J) = SUM
+                DUM = VV(I)*ABS(SUM)
+                IF(DUM.GE.AMAX) THEN
+                    IMAX = I
+                    AMAX = DUM
+                END IF
+            END DO ! i loop
+            IF(J.NE.IMAX) THEN
+                DO K=1,N
+                    DUM = A(IMAX,K)
+                    A(IMAX,K) = A(J,K)
+                    A(J,K) = DUM
+                END DO ! k loop
+                D = -D
+                VV(IMAX) = VV(J)
+            END IF
+            INDX(J) = IMAX
+            IF(ABS(A(J,J)) < TINY) A(J,J) = TINY
+            IF(J.NE.N) THEN
+                DUM = 1. / A(J,J)
+                DO I=J+1,N
+                A(I,J) = A(I,J)*DUM
+                END DO ! i loop
+            END IF
+        END DO ! j loop
+    end subroutine LUDCMP
+
+    subroutine LUBKSB(A,N,NP,INDX,B)
+        ! From Numerical Recipes
+        integer, intent(in) :: N,NP
+        real,    intent(inout) :: A(NP,NP),B(N)
+        integer, intent(inout) :: INDX(N)
+        real    :: SUM
+        integer :: I, II, J, LL
+        II = 0
+        DO I=1,N
+            LL = INDX(I)
+            SUM = B(LL)
+            B(LL) = B(I)
+            IF(II.NE.0) THEN
+                DO J=II,I-1
+                    SUM = SUM - A(I,J)*B(J)
+                END DO ! j loop
+                ELSE IF(SUM.NE.0.) THEN
+                    II = I
+                END IF
+            B(I) = SUM
+        END DO ! i loop
+        DO I=N,1,-1
+            SUM = B(I)
+            IF(I < N) THEN
+                DO J=I+1,N
+                   SUM = SUM - A(I,J)*B(J)
+                END DO ! j loop
+            END IF
+            B(I) = SUM / A(I,I)
+        END DO ! i loop
+    end subroutine LUBKSB
 
 end module simple_math

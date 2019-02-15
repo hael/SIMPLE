@@ -315,6 +315,12 @@ contains
                     call cline_cluster2D_stage1%set('objfun', 'cc')
                 endif
             endif
+            if( cline%defined('ptcl_filt') )then
+                if( cline%get_carg('ptcl_filt').eq.'yes' )then
+                    call cline_cluster2D_stage1%set('objfun',     'cc')
+                    call cline_cluster2D_stage1%set('match_filt', 'no')
+                endif
+            endif
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -382,8 +388,13 @@ contains
                 endif
             endif
             if( trim(params%bfac_filt).eq.'yes' )then
-                ! overrides objective function
                 call cline_cluster2D_stage2%set('objfun', 'cc')
+            endif
+            if( cline%defined('ptcl_filt') )then
+                if( cline%get_carg('ptcl_filt').eq.'yes' )then
+                    call cline_cluster2D_stage2%set('objfun',     'cc')
+                    call cline_cluster2D_stage2%set('match_filt', 'no')
+                endif
             endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))

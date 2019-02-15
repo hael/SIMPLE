@@ -64,6 +64,7 @@ type :: parameters
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
+    character(len=3)      :: ptcl_filt='no'       !< use particle filter(yes|no){no}
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: rankw='no'           !< orientation weights based on ranks(sum|inv|cen|exp){no}
     character(len=3)      :: readwrite='no'
@@ -406,6 +407,7 @@ type :: parameters
     logical :: l_innermsk       = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
+    logical :: l_ptcl_filt      = .false.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
@@ -542,6 +544,7 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
         call check_carg('projw',          self%projw)
+        call check_carg('ptcl_filt',      self%ptcl_filt)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('rankw',          self%rankw)
@@ -1346,6 +1349,7 @@ contains
             write(logfhandle,*) 'objfun flag: ', trim(self%objfun)
             THROW_HARD('unsupported objective function; new')
         end select
+        ! FILTERS
         ! matched filter and sigma needs flags
         self%l_needs_sigma = .false.
         if( self%cc_objfun == OBJFUN_EUCLID )then
@@ -1366,6 +1370,14 @@ contains
             if( self%cc_objfun /= OBJFUN_CC )then
                 THROW_HARD('bfac_filt=yes incompatible with objfun='//trim(self%objfun))
             endif
+        endif
+        ! particle filter
+        if( self%ptcl_filt.eq.'yes' )then
+            if( self%cc_objfun /= OBJFUN_CC ) THROW_HARD('ptcl_filt=yes incompatible with objfun='//trim(self%objfun))
+            if( self%l_bfac_filt )  THROW_HARD('ptcl_filt=yes incompatible with bfac_filt=yes')
+            self%l_ptcl_filt  = .true.
+            self%l_match_filt = .false.
+            self%l_bfac_filt  = .false.
         endif
         ! local resolution for filtering or  not
         self%l_locres = .false.
