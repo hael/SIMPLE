@@ -468,7 +468,7 @@ contains
         real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identifie
         real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
         real    :: scale, smpd4scale
-        integer :: iframe, nimproved, i, ldim4scale(3), ithr
+        integer :: iframe, nimproved, i, ldim4scale(3)
         logical :: didsave, err_stat, doscale
         real(dp):: acorr, aregu
         smpd4scale = params_glob%lpstop / 3.
@@ -519,18 +519,13 @@ contains
         PRINT_NEVALS = .true.
         do i=1,MITSREF_ANISO
             nimproved = 0
-            !$omp parallel do schedule(static) default(shared) private(iframe,cxy,ithr) proc_bind(close) reduction(+:nimproved)
+            !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
                 ! subtract the movie frame being correlated to reduce bias
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
                 cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
                     frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu)
-                ithr = omp_get_thread_num() + 1
-                if ((.true.).or.( ithr == 1 ))then
-                    write (*,*) 'frame=', iframe, 'aniso: ', acorr, 'regu: ', aregu, ' params: ', cxy(2:POLY_DIM+1)
-                    call flush(6)
-                endif
                 ! update parameter arrays
                 opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
                 ! apply deformation
@@ -682,7 +677,8 @@ contains
         real(dp):: acorr, aregu
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
-        smpd4scale = params_glob%lpstop / 3.
+!!$        smpd4scale = params_glob%lpstop / 3.     ! Don't downscale images for patch-based correction
+        smpd4scale = params_glob%smpd
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
             doscale = .true.
@@ -692,6 +688,7 @@ contains
             ldim4scale(3) = 1
         else
             ldim4scale = ldim_scaled
+            scale = 1.
             smpd4scale = smpd_scaled
         endif
         allocate(movie_frames_shifted_patched(nframes), movie_sum_global_threads(nframes))
@@ -699,10 +696,6 @@ contains
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
             call movie_frames_shifted(iframe)%copy(movie_frames_shifted_saved(iframe))
-            call movie_frames_shifted(iframe)%fft
-            if( doscale ) call movie_frames_shifted(iframe)%clip_inplace(ldim4scale)
-            call movie_frames_shifted(iframe)%bp(hp, lp)
-            call movie_frames_shifted(iframe)%ifft
             call movie_sum_global_threads(iframe)%new(ldim4scale, smpd4scale, wthreads=.false.)
             call movie_frames_shifted_patched(iframe)%copy(movie_frames_shifted(iframe))
         end do
@@ -733,10 +726,6 @@ contains
             didsave                = .true.
         endif
         corrfrac = corr_prev / corr
-        ! put back the unfiltered isotropically corrected frames for final patch-based sum generation
-        do iframe=1,nframes
-            call movie_frames_shifted_patched(iframe)%copy(movie_frames_shifted_saved(iframe))
-        end do
 
     contains
 
@@ -1076,9 +1065,32 @@ contains
         if( present(fromto) ) ffromto = fromto
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
-        if( do_dose_weight )then
-            call gen_dose_weight_filter(filtarr)
-        endif
+        if (.false.) then        
+        call movie_sum_global%set_ft(.true.)
+!!$        if( do_dose_weight )then
+!!$            call gen_dose_weight_filter(filtarr)
+!!$        endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
+        cmat_sum = cmplx(0.,0.)
+        !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+        do iframe=ffromto(1),ffromto(2)
+!!$            if( do_dose_weight )then
+!!$                call movie_frames_shifted_patched(iframe)%fft
+!!$                call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))
+!!$                !call movie_frames_shifted_patched(iframe)%ifft                !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
+!!$            endif
+            if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
+            call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
+            if( l_w_scalar )then
+                cmat_sum = cmat_sum + cmat * scalar_weight
+            else
+                cmat_sum = cmat_sum + cmat * frameweights(iframe)
+            endif
+            call movie_frames_shifted_patched(iframe)%ifft()
+        end do
+        !$omp end parallel do
+        call movie_sum_global%set_cmat(cmat_sum)
+        call movie_sum_global%ifft()
+    end if
         allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
         !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=ffromto(1),ffromto(2)

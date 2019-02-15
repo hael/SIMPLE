@@ -168,6 +168,14 @@ interface assert_eq
     module procedure assert_eq2,assert_eq3,assert_eq4,assert_eqn
 end interface assert_eq
 
+interface svd_multifit
+    module procedure svd_multifit_sp, svd_multifit_dp
+end interface svd_multifit
+
+interface vabs
+    module procedure vabs_sp, vabs_dp
+end interface vabs
+
 !!!!!!!!ADDED BY CHIARA!!!!!!!!!!
 interface vis_mat
     module procedure vis_2Dreal_mat
@@ -2738,12 +2746,20 @@ contains
     end function outerprod_d
 
     ! Return the length (ordinary L2 norm) of a vector.
-    function vabs(v)
+    function vabs_sp(v)
         implicit none
         real(sp), dimension(:), intent(in) :: v
-        real(sp) :: vabs
-        vabs=sqrt(dot_product(v,v))
-    end function vabs
+        real(sp) :: vabs_sp
+        vabs_sp=sqrt(dot_product(v,v))
+    end function vabs_sp
+
+    ! Return the length (ordinary L2 norm) of a vector.
+    function vabs_dp(v)
+        implicit none
+        real(dp), dimension(:), intent(in) :: v
+        real(dp) :: vabs_dp
+        vabs_dp=sqrt(dot_product(v,v))
+    end function vabs_dp
 
     function assert_eq2(n1,n2,string)
         implicit none
@@ -2841,8 +2857,8 @@ contains
     end subroutine svdfit
 
     ! imported from numerical recipes
-    ! modification of svdfit to support multivariate linear model
-    subroutine svd_multifit(x,y,sig,a,v,w,chisq,funcs)
+    ! modification of svdfit to support multivariate linear model, single precision
+    subroutine svd_multifit_sp(x,y,sig,a,v,w,chisq,funcs)
         implicit none
         real(sp), dimension(:,:), intent(in)  :: x
         real(sp), dimension(:),   intent(in)  :: y,sig
@@ -2869,8 +2885,8 @@ contains
         integer                              :: i,ma,n
         real(sp), dimension(size(sig))       :: b,sigi
         real(sp), dimension(size(x,dim=2),size(a)) :: u,usav
-        n=assert_eq(size(x,dim=2),size(y),size(sig),'svd_multifit: n')
-        ma=assert_eq(size(a),size(v,1),size(v,2),size(w),'svd_multifit: ma')
+        n=assert_eq(size(x,dim=2),size(y),size(sig),'svd_multifit_sp: n')
+        ma=assert_eq(size(a),size(v,1),size(v,2),size(w),'svd_multifit_sp: ma')
         sigi=1.0_sp/sig                       ! Accumulate coefficients of the fitting matrix in u.
         b=y*sigi
         do i=1,n
@@ -2882,7 +2898,51 @@ contains
         where (w < TOL*maxval(w)) w=0.0      ! Edit the singular values, given TOL from the parameter statement.
         call svbksb(u,w,v,b,a)
         chisq=vabs(matmul(usav,a)-b)**2      ! Evaluate chi-square.
-    end subroutine svd_multifit
+    end subroutine svd_multifit_sp
+
+    ! imported from numerical recipes
+    ! modification of svdfit to support multivariate linear model, double precision
+    subroutine svd_multifit_dp(x,y,sig,a,v,w,chisq,funcs)
+        implicit none
+        real(dp), dimension(:,:), intent(in)  :: x
+        real(dp), dimension(:),   intent(in)  :: y,sig
+        real(dp), dimension(:),   intent(out) :: a,w
+        real(dp), dimension(:,:), intent(out) :: v
+        real(dp),                 intent(out) :: chisq
+        interface
+            function funcs(x,n)
+                implicit none
+                real(kind=8), intent(in)   :: x(:)
+                integer,      intent(in )  :: n
+                real(kind=8), dimension(n) :: funcs
+            end function funcs
+        end interface
+        real(dp), parameter :: TOL=1.0e-14_dp
+        ! Given a set of N data points x,y with individual standard deviations sig, all arrays of length
+        ! N, use chi^2 minimization to determine the M coefficients a of a function that depends linearly
+        ! on a, y=sum_{i=1}^M a_i * afunc_i(x). Here we solve the fitting equations using singular value
+        ! decomposition of the NxM matrix, as in § 2.6. On output, the MxM array v and the
+        ! vector w of length M define part of the singular value decomposition, and can be used to
+        ! obtain the covariance matrix. The program returns values for the M fit parameters a, and
+        ! chi^2, chisq. The user supplies a subroutine funcs(x,afunc) that returns the M basis
+        ! functions evaluated at x=X in the array afunc.
+        integer                              :: i,ma,n
+        real(dp), dimension(size(sig))       :: b,sigi
+        real(dp), dimension(size(x,dim=2),size(a)) :: u,usav
+        n=assert_eq(size(x,dim=2),size(y),size(sig),'svd_multifit_dp: n')
+        ma=assert_eq(size(a),size(v,1),size(v,2),size(w),'svd_multifit_dp: ma')
+        sigi=1.0_dp/sig                       ! Accumulate coefficients of the fitting matrix in u.
+        b=y*sigi
+        do i=1,n
+            usav(i,:)=funcs(x(:,i),ma)
+        end do
+        u=usav*spread(sigi,dim=2,ncopies=ma)
+        usav=u
+        call svdcmp(u,w,v)                   ! Singular value decomposition.
+        where (w < TOL*maxval(w)) w=0.0_dp   ! Edit the singular values, given TOL from the parameter statement.
+        call svbksb(u,w,v,b,a)
+        chisq=vabs(matmul(usav,a)-b)**2      ! Evaluate chi-square.
+    end subroutine svd_multifit_dp
 
     subroutine svdvar(v,w,cvm)
         implicit none

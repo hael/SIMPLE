@@ -204,7 +204,6 @@ contains
         integer :: hplim, lplim
         integer :: phys(3)
         if (do_call_new()) then
-            write (*,*) 'extract_img: calling new'
             call self%new(img, hp, lp, .true.)
             return
         end if
