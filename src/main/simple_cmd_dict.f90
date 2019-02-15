@@ -99,6 +99,7 @@ contains
         call chdict%push('ext',           'file extension{.mrc}')
         call chdict%push('fbody',         'file body')
         call chdict%push('filetab',       'list of files(.txt)')
+        call chdict%push('filter',        'filter type{no}')
         call chdict%push('find',          'Fourier index')
         call chdict%push('fname',         'file name')
         call chdict%push('for3D',         'for 3D analysis(yes|no){yes}')

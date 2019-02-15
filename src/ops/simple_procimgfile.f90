@@ -18,7 +18,7 @@ public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
 public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile
-public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile
+public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
 private
 #include "simple_local_flags.inc"
 
@@ -782,6 +782,30 @@ contains
         end do
         call img%kill
     end subroutine phase_rand_imgfile
+
+    !>  \brief  is for apply the tv filter to an image file
+    subroutine tvfilter_imgfile( fname2process, fname, smpd, lambda )
+        use simple_tvfilter
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: smpd, lambda
+        type(tvfilter) :: tv
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'tvfilter_imgfile' )
+        call img%new(ldim,smpd)
+        call tv%new()
+        write(logfhandle,'(a)') '>>> APPLYING TV FILTER TO IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2process, i)
+            call tv%apply_filter(img,lambda)
+            call img%write(fname, i)
+        end do
+        call img%kill
+        call tv%kill
+    end subroutine tvfilter_imgfile
 
     !>  \brief  is for applying CTF
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )

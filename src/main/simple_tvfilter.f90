@@ -11,7 +11,7 @@ type :: tvfilter
     logical               :: existence
     type(image),  pointer :: image_ptr
     integer               :: img_dims(2)
-    type(image)           :: r_img, b_img    
+    type(image)           :: r_img, b_img
     integer               :: ldim(2)
 contains
     procedure :: new               => new_tvfilter
@@ -22,11 +22,16 @@ contains
 end type tvfilter
 
 contains
-    
+
+    subroutine new_tvfilter( self )
+        class(tvfilter), intent(inout) :: self
+        self%existence   = .true.
+    end subroutine new_tvfilter
+
     subroutine apply_filter( self, img, lambda, idx )
         class(tvfilter),   intent(inout) :: self
         class(image),      intent(inout) :: img
-        real,              intent(in)    :: lambda
+        real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer, optional, intent(in)    :: idx
         integer :: idx_here
         integer :: img_ldim(3), rb_ldim(3)
@@ -39,9 +44,9 @@ contains
             idx_here = 1
         else
             idx_here = idx
-        end if        
+        end if
         img_ldim = img%get_ldim()
-        self%img_dims(1:2) = img_ldim(1:2) 
+        self%img_dims(1:2) = img_ldim(1:2)
         if (idx_here > img_ldim(3)) then
             THROW_HARD('tvfilter::apply_filter : idx greater than stack size')
         end if
@@ -74,11 +79,6 @@ contains
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
 
-    subroutine new_tvfilter( self )
-        class(tvfilter), intent(inout) :: self
-        self%existence   = .true.
-    end subroutine new_tvfilter
-
     subroutine fill_b(self)
         class(tvfilter), intent(inout) :: self
         integer :: nonzero_x(3), nonzero_y(3)         ! indices of non-zero entries in x- and y-component
@@ -92,7 +92,7 @@ contains
         nonzero_x   (2) = 2
         nonzero_pt_x(2) = 1.
         nonzero_x   (3) = self%img_dims(1)
-        nonzero_pt_x(3) = -1.        
+        nonzero_pt_x(3) = -1.
         nonzero_y   (1) = 1
         nonzero_pt_x(1) = 0.
         nonzero_y   (2) = 2
@@ -116,7 +116,7 @@ contains
 
     contains
 
-        pure function b3_help(x) result(y)
+        pure elemental function b3_help(x) result(y)
             real, intent(in) :: x
             real :: y
             if (x < 0.) then
@@ -138,23 +138,23 @@ contains
             y = 0.
         end function b3_help
 
-        pure function b3(x) result(y)
+        pure elemental function b3(x) result(y)
             real, intent(in) :: x
             real :: y
             y = b3_help(x + 1.5)
         end function b3
 
     end subroutine fill_b
-    
+
     subroutine fill_r(self)
         class(tvfilter), intent(inout) :: self
         integer :: nonzero_x(5), nonzero_y(5)   ! indices of non-zero entries in x- and y-component
         real    :: nonzero_val_x_a0(5), nonzero_val_x_a2(5) ! values of non-zero entries
-        real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries        
+        real    :: nonzero_val_y_a0(5), nonzero_val_y_a2(5) ! values of non-zero entries
         integer :: i, j, x, y
         real, pointer :: r(:,:,:)
         call self%r_img%get_rmat_ptr(r)
-        nonzero_x(1) = 1        
+        nonzero_x(1) = 1
         nonzero_x(2) = 2
         nonzero_x(3) = 3
         nonzero_x(4) = self%img_dims(1)-1
@@ -173,7 +173,7 @@ contains
             y = nonzero_y(i)
             nonzero_val_y_a0(i) = a0xy(y, self%img_dims(2))
             nonzero_val_y_a2(i) = a2xy(y, self%img_dims(2))
-        end do        
+        end do
         r = 0.
         do j = 1, size(nonzero_x)
             y = nonzero_y(j)
@@ -182,7 +182,7 @@ contains
                 r(x,y,1) = nonzero_val_x_a0(i) * nonzero_val_y_a2(j) + nonzero_val_x_a2(i) * nonzero_val_y_a0(j)
             end do
         end do
-        
+
     contains
 
         pure function a0xy(i, this_ldim) result(y)
@@ -236,7 +236,7 @@ contains
             end if
             y = 0.
         end function a2xy
-        
+
     end subroutine fill_r
 
     subroutine kill_tvfilter( self )

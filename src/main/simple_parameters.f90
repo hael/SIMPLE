@@ -166,6 +166,7 @@ type :: parameters
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
+    character(len=STDLEN) :: filter='no'          !< filter type{no}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
@@ -505,6 +506,7 @@ contains
         call check_carg('exp_doc',        self%exp_doc)
         call check_carg('startype',       self%startype)
         call check_carg('fbody',          self%fbody)
+        call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
