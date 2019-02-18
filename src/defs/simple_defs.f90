@@ -119,7 +119,6 @@ real,    parameter :: GAUPICK_SIGMA_SHRINK = 13.0      !< picker shrink factor, 
 real,    parameter :: RADFRAC_NORM_EXTRACT = 0.8       !< radius fraction for extraction background normalization
 integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
 
-
 ! constants for masking/interpolation
 real, parameter :: COSMSKHALFWIDTH         = 6.0       !< spherical soft masking
 real, parameter :: KBWINSZ                 = 1.5       !< interpolation window size for 2D
@@ -138,10 +137,11 @@ real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                       !! smaller number means sharper distribution, numbers BTW 0.01 and 0.5 make sense
+                                                       !! smaller number means sharper distribution
 real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
                                                        !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
+real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -160,6 +160,7 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 
 ! weighting scheme
 logical, parameter :: SOFT_PTCL_WEIGHTS3D  = .true.    !< soft (as opposed to hard) particles weights based on B-factor
+logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
 real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights

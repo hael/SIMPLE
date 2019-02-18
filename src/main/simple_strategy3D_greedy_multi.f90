@@ -111,10 +111,13 @@ contains
         logical   :: included(self%s%npeaks)
         ! extract peak info
         call extract_peaks(self%s, corrs, multistates=.true.)
-        ! stochastic weights
-        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr)
-        ! state reweighting
-        call states_reweight(self%s, ws, state, best_loc)
+        if( WEIGHT_SCHEME_GLOBAL )then
+            call corrs2softmax_weights_glob(self%s, corrs, ws, best_loc, wcorr)      ! stochastic weights
+            call states_reweight_glob(self%s, ws, state, best_loc)                   ! state reweighting
+        else
+            call corrs2softmax_weights(self%s, corrs, ws, included, best_loc, wcorr) ! stochastic weights
+            call states_reweight(self%s, ws, included, state, best_loc, wcorr)       ! state reweighting
+        endif
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)

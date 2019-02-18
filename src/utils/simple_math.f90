@@ -1125,23 +1125,6 @@ contains
         end do
     end function get_resarr
 
-    ! OLD
-    ! subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights )
-    !     integer, intent(in)  :: box
-    !     real,    intent(in)  :: bfac, smpd
-    !     real,    intent(out) :: kweights(0:box)
-    !     real    :: bfac_sc, res
-    !     integer :: k
-    !     bfac_sc = bfac / 4.
-    !     do k=1,box
-    !         res         = real(k) / (real(box) * smpd)
-    !         kweights(k) = max(0., exp(-bfac_sc * res * res))
-    !     end do
-    !     ! normalize
-    !     kweights(1:box) = kweights(1:box) / sum(kweights(1:box))
-    !     kweights(0)     = 1.
-    ! end subroutine calc_norm_bfac_weights
-
     subroutine calc_norm_bfac_weights( box, bfac, smpd, kweights, is2d )
         integer, intent(in)  :: box
         real,    intent(in)  :: bfac, smpd
@@ -1150,11 +1133,12 @@ contains
         real    :: bfac_sc, res
         integer :: k, nyq
         logical :: l_is2d
+        kweights(0) = 1.
+        if( abs(bfac) < SMALL ) return
         l_is2d  = .false.
         if( present(is2d) ) l_is2d = is2d
         nyq     = fdim(box)
         bfac_sc = bfac / 4.
-        kweights(0) = 1.
         do k=1,box
             res         = real(k) / (real(box) * smpd)
             kweights(k) = max(0., exp(-bfac_sc * res * res))

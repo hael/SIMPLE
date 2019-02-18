@@ -30,9 +30,12 @@ contains
         integer   :: best_loc(1)
         logical   :: included(self%s%npeaks)
         ! extract peak info
-        call extract_peaks( self%s, corrs)
-        ! stochastic weights
-        call calc_softmax_weights(self%s, corrs, ws, best_loc, wcorr)
+        call extract_peaks( self%s, corrs )
+        if( WEIGHT_SCHEME_GLOBAL )then
+            call corrs2softmax_weights_glob(self%s, corrs, ws, best_loc, wcorr)      ! stochastic weights
+        else
+            call corrs2softmax_weights(self%s, corrs, ws, included, best_loc, wcorr) ! stochastic weights
+        endif
         ! angular standard deviation
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)

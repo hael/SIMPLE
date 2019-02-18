@@ -40,19 +40,19 @@ public :: calc_global_ori_weights, calc_3Drec, calc_proj_weights
 private
 #include "simple_local_flags.inc"
 
-logical,         parameter     :: L_BENCH = .false., DEBUG_HERE = .false.
-type(polarft_corrcalc), target :: pftcc
-type(polarizer), allocatable   :: match_imgs(:)
-integer,         allocatable   :: pinds(:)
-logical,         allocatable   :: ptcl_mask(:)
-type(sym)               :: c1_symop
-integer                 :: nptcls2update
-integer                 :: npeaks
-integer(timer_int_kind) :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
-real(timer_int_kind)    :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
-real(timer_int_kind)    :: rt_tot
-character(len=STDLEN)   :: benchfname
-type(euclid_sigma)      :: eucl_sigma
+logical, parameter              :: L_BENCH = .false., DEBUG_HERE = .false.
+type(polarft_corrcalc),  target :: pftcc
+type(polarizer),    allocatable :: match_imgs(:)
+integer,            allocatable :: pinds(:)
+logical,            allocatable :: ptcl_mask(:)
+type(sym)                       :: c1_symop
+integer                         :: nptcls2update
+integer                         :: npeaks
+integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, t_prep_primesrch3D
+real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
+real(timer_int_kind)            :: rt_tot
+character(len=STDLEN)           :: benchfname
+type(euclid_sigma)              :: eucl_sigma
 
 contains
 
@@ -211,9 +211,7 @@ contains
         select case(trim(params_glob%refine))
             case('snhc')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) then
-                        allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_snhc_single :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('single')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -227,9 +225,7 @@ contains
                 end do
             case('hard_single')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_hard_single :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_hard_single   :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('greedy_single')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -237,9 +233,7 @@ contains
                 end do
             case('cont_single')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cont_single :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('multi')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -254,21 +248,15 @@ contains
                 end do
             case('hard_multi')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) )then
-                        allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
-                    endif
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('eval')
                 ! nothing to do
@@ -325,7 +313,9 @@ contains
         end select
 
         ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if ( params_glob%l_needs_sigma )call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+        if ( params_glob%l_needs_sigma ) then
+            call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+        end if
 
         ! UPDATE PARTICLE STATS
         call calc_ptcl_stats
@@ -362,8 +352,8 @@ contains
                 call close_o_peaks_io
         end select
 
-        ! CALCULATE GLOBAL OREINTATION WEIGHTS
-        call calc_global_ori_weights
+        ! CALCULATE GLOBAL ORIENTATION WEIGHTS
+        if( WEIGHT_SCHEME_GLOBAL ) call calc_global_ori_weights
 
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
         if( params_glob%l_projw ) call calc_proj_weights
@@ -440,6 +430,7 @@ contains
         endif
     end subroutine refine3D_exec
 
+    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline )
         use simple_polarizer,             only: polarizer
         use simple_cmdline,               only: cmdline
@@ -532,6 +523,7 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
+    !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine calc_ptcl_stats
         use simple_strategy2D3D_common, only: prepimg4align
         type(polarft_corrcalc) :: pftcc_here
@@ -594,6 +586,7 @@ contains
         deallocate(ptcl_mask_not)
     end subroutine calc_ptcl_stats
 
+    !> volumetric 3d reconstruction
     subroutine calc_3Drec( cline, which_iter )
         class(cmdline), intent(inout) :: cline
         integer,        intent(in)    :: which_iter
@@ -671,7 +664,7 @@ contains
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks
-        use simple_strategy3D_utils, only: update_softmax_weights
+        use simple_strategy3D_utils, only: update_softmax_weights_glob
         integer :: iptcl, n_nozero, i
         ! set npeaks
         npeaks = NPEAKS2REFINE
@@ -697,7 +690,7 @@ contains
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            call update_softmax_weights(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID)
+            if( WEIGHT_SCHEME_GLOBAL ) call update_softmax_weights_glob(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID )
         end do
         call close_o_peaks_io
     end subroutine setup_weights_read_o_peaks

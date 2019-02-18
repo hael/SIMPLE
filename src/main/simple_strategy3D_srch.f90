@@ -149,7 +149,7 @@ contains
         self%nnn_static   = params_glob%nnn
         self%nnn          = params_glob%nnn
         self%nnnrefs      = self%nnn*self%nstates
-        self%dowinpl      = (npeaks /= 1)
+        self%dowinpl      = npeaks /= 1
         self%bfac         = spec%bfac
         ! create in-plane search object
         lims(:,1)         = -params_glob%trs
@@ -260,9 +260,9 @@ contains
                         ref  = s3D%proj_space_refinds_sorted(self%ithr, i)
                         if( .not. s3D%proj_space_corrs_srchd(self%ithr,ref) ) cycle ! must have seen the reference before
                         call self%grad_shsrch_obj%set_indices(ref, self%iptcl)
-                        j         = s3D%proj_space_inplinds_sorted(self%ithr, i)
-                        irot      = s3D%proj_space_inplinds(self%ithr, ref, j)
-                        cxy       = self%grad_shsrch_obj%minimize(irot=irot)
+                        j    = s3D%proj_space_inplinds_sorted(self%ithr, i)
+                        irot = s3D%proj_space_inplinds(self%ithr, ref, j)
+                        cxy  = self%grad_shsrch_obj%minimize(irot=irot)
                         if( irot > 0 )then
                             ! irot > 0 guarantees improvement found, update solution
                             s3D%proj_space_euls( self%ithr,ref,j,3) = 360. - pftcc_glob%get_rot(irot)
