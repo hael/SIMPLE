@@ -459,9 +459,9 @@ contains
                 endif
                 call make_relativepath(CWD_GLOB, boxfnames(i), boxfname)
                 if( first_import )then
-                    call spproj%os_mic%set(i, 'boxfile', boxfname)
+                    call spproj%os_mic%set_boxfile(i, boxfname)
                 else
-                    call spproj%os_mic%set(nprev_intgs+i, 'boxfile', boxfname)
+                    call spproj%os_mic%set_boxfile(nprev_intgs+i, boxfname)
                 endif
             end do
         endif
@@ -499,7 +499,7 @@ contains
                 if(boxfnames(i)(1:1).ne.'/') boxfnames(i) = PATH_PARENT//trim(boxfnames(i))
             endif
             call make_relativepath(CWD_GLOB,boxfnames(i),boxfname)
-            call spproj%os_mic%set(i, 'boxfile', boxfname)
+            call spproj%os_mic%set_boxfile(i, boxfname)
         end do
         ! write project file
         call spproj%write_segment_inside('mic') ! all that's needed here

@@ -45,6 +45,7 @@ type :: ori
     procedure          :: rnd_inpl
     procedure          :: rnd_shift
     procedure          :: str2ori
+    procedure          :: set_boxfile
     ! GETTERS
     procedure          :: exists
     procedure          :: get_euler
@@ -400,6 +401,25 @@ contains
         if( any(isthere) )&
           &call self%set_euler([self%htab%get('e1'),self%htab%get('e2'),self%htab%get('e3')])
     end subroutine str2ori
+
+    !>  \brief  reads all orientation info (by line) into the hash-tables
+    subroutine set_boxfile( self, boxfname, nptcls )
+        use simple_nrtxtfile, only: nrtxtfile
+        class(ori),        intent(inout) :: self
+        character(len=*),  intent(in)    :: boxfname
+        integer, optional, intent(in)    :: nptcls
+        type(nrtxtfile) :: boxfile
+        integer         :: nptcls_here
+        if( present(nptcls) )then
+            nptcls_here = nptcls
+        else
+            call boxfile%new(boxfname, 1)
+            nptcls_here = boxfile%get_ndatalines()
+            call boxfile%kill
+        endif
+        call self%set('boxfile', trim(boxfname))
+        call self%set('nptcls',  real(nptcls_here))
+    end subroutine set_boxfile
 
     ! GETTERS
 

@@ -246,9 +246,7 @@ contains
                 cnt = cnt + 1
                 o_mic = spproj_part%os_mic%get_ori(imic)
                 call spproj%os_mic%set_ori(cnt,o_mic)
-                if( o_mic%isthere('nptcls') )then
-                    if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
-                endif
+                if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
             enddo
             call spproj_part%kill
         enddo

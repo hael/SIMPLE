@@ -120,6 +120,7 @@ type :: oris
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
+    procedure          :: set_boxfile
     ! I/O
     procedure          :: read
     procedure          :: read_ctfparams_state_eo
@@ -1864,6 +1865,14 @@ contains
         type(ctfparams), intent(in)    :: ctfvars
         call self%o(i)%set_ctfvars(ctfvars)
     end subroutine set_ctfvars
+
+    subroutine set_boxfile( self, i, boxfname, nptcls )
+        class(oris),       intent(inout) :: self
+        integer,           intent(in)    :: i
+        character(len=*),  intent(in)    :: boxfname
+        integer, optional, intent(in)    :: nptcls
+        call self%o(i)%set_boxfile(boxfname, nptcls)
+    end subroutine set_boxfile
 
     ! I/O
 

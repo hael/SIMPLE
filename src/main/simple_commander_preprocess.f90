@@ -526,8 +526,7 @@ contains
                 if( imgkind.ne.'mic' )cycle
                 call o%getter('intg', intg_name)
                 call piter%iterate(cline, intg_name, boxfile, nptcls_out, output_dir)
-                call spproj%os_mic%set(imic, 'boxfile', trim(boxfile))
-                call spproj%os_mic%set(imic, 'nptcls', real(nptcls_out))
+                call spproj%os_mic%set_boxfile(imic, boxfile, nptcls=nptcls_out)
             endif
             write(logfhandle,'(f4.0,1x,a)') 100.*(real(cnt)/real(ntot)), 'percent of the micrographs processed'
         end do
@@ -734,7 +733,7 @@ contains
                 box_fname = trim(params%dir_box)//'/'//fname_new_ext(basename(mic_name),'box')
                 if( .not.file_exists(box_fname) )cycle
                 call make_relativepath(CWD_GLOB,trim(box_fname),boxfile_name)
-                call spproj%os_mic%set(imic, 'boxfile', trim(boxfile_name))
+                call spproj%os_mic%set_boxfile(imic, boxfile_name)
             else
                 boxfile_name = trim(o_mic%get_static('boxfile'))
                 if( .not.file_exists(boxfile_name) )cycle
@@ -828,14 +827,6 @@ contains
                     if( .not.o_mic%isthere('cs') .or. .not.o_mic%isthere('kv') .or. .not.o_mic%isthere('fraca') )then
                         THROW_HARD('input lacks at least cs, kv or fraca; exec_extract')
                     endif
-                    ! clean micrograph stats before transfer to particles
-                    call o_mic%delete_entry('xdim')
-                    call o_mic%delete_entry('ydim')
-                    call o_mic%delete_entry('nframes')
-                    call o_mic%delete_entry('nptcls')
-                    call o_mic%delete_entry('ctf_estimatecc')
-                    call o_mic%delete_entry('ctfscore')
-                    call o_mic%delete_entry('dferr')
                 endif
                 ! output stack
                 stack = trim(output_dir)//trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
@@ -1239,8 +1230,7 @@ contains
             ! picker
             params_glob%lp = max(params%fny, params%lp_pick)
             call piter%iterate(cline, micname, boxfile, nptcls_out, output_dir_picker)
-            call o_mic%set('boxfile', trim(boxfile)   )
-            call o_mic%set('nptcls',  real(nptcls_out))
+            call o_mic%set_boxfile(boxfile, nptcls=nptcls_out)
             ! update project
             call spproj%os_mic%set_ori(imic, o_mic)
             call spproj%write_segment_inside(params%oritype)
