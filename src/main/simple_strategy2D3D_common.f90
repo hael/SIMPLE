@@ -188,13 +188,10 @@ contains
         ! Nyqvist index
         k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
         ! High-pass index
-        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, &
-            params_glob%boxmatch, params_glob%smpd))
+        params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
         if( cline%defined('lp') )then
-            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
-                params_glob%boxmatch, params_glob%smpd)
-            call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
-            params_glob%kstop = params_glob%kfromto(2)
+            lplim = params_glob%lp
+            params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
         else
             if( file_exists(params_glob%frcs) .and. which_iter > LPLIM1ITERBOUND )then
                 lplim = build_glob%projfrcs%estimate_lp_for_align()
@@ -209,12 +206,12 @@ contains
             endif
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
             ! to avoid pathological cases, fall-back on lpstart
-            lpstart_find = calc_fourier_index(params_glob%lpstart, &
-                params_glob%boxmatch, params_glob%smpd)
+            lpstart_find = calc_fourier_index(params_glob%lpstart, params_glob%boxmatch, params_glob%smpd)
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
-            params_glob%kstop = params_glob%kfromto(2)
-            call build_glob%spproj_field%set_all2single('lp',lplim)
         endif
+        params_glob%kstop = params_glob%kfromto(2)
+        if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) params_glob%kfromto(2) = k_nyq
+        call build_glob%spproj_field%set_all2single('lp',lplim)
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
 
@@ -373,10 +370,10 @@ contains
         logical,          intent(in)    :: is3D
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
-        real            :: frc(build_glob%projfrcs%get_filtsz()), bfac
+        real            :: frc(build_glob%projfrcs%get_filtsz())
         real            :: filter(build_glob%projfrcs%get_filtsz()), x, y
         integer         :: ifrc
-        logical         :: l_match_filt, l_bfac_filt
+        logical         :: l_match_filt
         ! shift
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
@@ -389,7 +386,6 @@ contains
         ! filters
         ifrc = 0
         l_match_filt = .false.
-        l_bfac_filt  = .false.
         if( is3D )then
             if( params_glob%l_eo )then
                 if( trim(params_glob%clsfrcs).eq.'yes' )then
@@ -397,7 +393,6 @@ contains
                 else
                     ifrc = build_glob%eulspace_red%find_closest_proj(build_glob%spproj_field%get_ori(iptcl))
                 endif
-                l_bfac_filt  = params_glob%l_bfac_filt  .and. (params_glob%nstates==1)
                 l_match_filt = params_glob%l_match_filt .and. (params_glob%nstates==1) .and. (ifrc/=0)
             else
                 ifrc = 0
@@ -406,31 +401,20 @@ contains
             if( build_glob%spproj_field%isthere(iptcl,'class') )then
                 ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
             endif
-            l_bfac_filt  = params_glob%l_bfac_filt  .and. params_glob%l_eo .and. (ifrc/=0)
             l_match_filt = params_glob%l_match_filt .and. params_glob%l_eo .and. (ifrc/=0)
         endif
-        if( l_bfac_filt )then
-            ! b-factor filter
-            bfac = -1.
-            if( build_glob%spproj_field%isthere(iptcl,'bfac') )then
-                bfac = build_glob%spproj_field%get(iptcl,'bfac')
-            endif
-            if( bfac < TINY ) bfac=1500. ! default
-            call img_in%shellnorm_and_apply_bfac_serial(bfac)
-        else
-            if( ifrc > 0 )then
-                if( params_glob%l_ptcl_filt )then
-                    ! nothing to do
-                else
-                    call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                    if( any(frc > 0.143) )then
-                        call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-                        if( l_match_filt )then
-                            ! matched filter
-                            call img_in%shellnorm_and_apply_filter_serial(filter)
-                        else
-                            call img_in%apply_filter_serial(filter)
-                        endif
+        if( ifrc > 0 )then
+            if( params_glob%l_ptcl_filt )then
+                ! nothing to do
+            else
+                call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                if( any(frc > 0.143) )then
+                    call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
+                    if( l_match_filt )then
+                        ! matched filter
+                        call img_in%shellnorm_and_apply_filter_serial(filter)
+                    else
+                        call img_in%apply_filter_serial(filter)
                     endif
                 endif
             endif
@@ -516,7 +500,7 @@ contains
                 call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                if( params_glob%l_match_filt .or. params_glob%l_bfac_filt )then
+                if( params_glob%l_match_filt )then
                     ! matched filter for both schemes
                     call img_in%shellnorm_and_apply_filter_serial(filter)
                 else
@@ -684,17 +668,20 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( cline, s, volfname, do_center, xyz )
-        use simple_estimate_ssnr, only: fsc2optlp
-        class(cmdline),   intent(inout) :: cline
-        integer,          intent(in)    :: s
-        character(len=*), intent(in)    :: volfname
-        logical,          intent(in)    :: do_center
-        real,             intent(in)    :: xyz(3)
-        type(image)                     :: mskvol
-        real,             allocatable   :: filter(:)
-        character(len=:), allocatable   :: fname_vol_filter
-        logical                         :: l_match_filt
+    subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz )
+        use simple_polarft_corrcalc, only: polarft_corrcalc
+        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp
+        class(polarft_corrcalc), intent(inout) :: pftcc
+        class(cmdline),          intent(inout) :: cline
+        integer,                 intent(in)    :: s
+        character(len=*),        intent(in)    :: volfname
+        logical,                 intent(in)    :: do_center
+        real,                    intent(in)    :: xyz(3)
+        type(image)                   :: mskvol
+        character(len=:), allocatable :: fname_vol_filter
+        real    :: subfilter(build_glob%img_match%get_filtsz())
+        real    :: filter(build_glob%projfrcs%get_filtsz()), frc(build_glob%projfrcs%get_filtsz())
+        integer :: iref, iproj, iprojred, filtsz, subfiltsz
         ! ensure correct build_glob%vol dim
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
         call build_glob%vol%read(volfname)
@@ -703,42 +690,68 @@ contains
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        if( params_glob%l_eo )then
-            ! anisotropic matched filter
-            if( params_glob%nstates.eq.1 )then
-                l_match_filt = params_glob%l_match_filt .or. params_glob%l_bfac_filt ! matched filter for both schemes
-                allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
-                call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-                if( file_exists(fname_vol_filter) )then
-                    call build_glob%vol2%read(fname_vol_filter)
-                    if( l_match_filt )then
-                        call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
-                    else
-                        call build_glob%vol%apply_filter(build_glob%vol2)
-                    endif
+        filtsz    = build_glob%projfrcs%get_filtsz()
+        subfiltsz = build_glob%img_match%get_filtsz()
+        if( params_glob%l_ptcl_filt .and. params_glob%l_eo )then
+            ! stores filters in pftcc
+            if( file_exists(params_glob%frcs) )then
+                iproj = 0
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    iproj    = iproj+1
+                    iprojred = build_glob%eulspace_red%find_closest_proj(build_glob%eulspace%get_ori(iproj))
+                    call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc, state=s)
+                    call fsc2optlp_sub(filtsz, frc, filter)
+                    call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                    call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                enddo
+            else
+                if( any(build_glob%fsc(s,:) > 0.143) )then
+                    call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                    call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
                 else
-                    ! matched filter based on Rosenthal & Henderson, 2003
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        filter = fsc2optlp(build_glob%fsc(s,:))
-                        if( l_match_filt )then
-                            call build_glob%vol%shellnorm_and_apply_filter(filter)
+                    subfilter = 1.
+                endif
+                do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                    call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                enddo
+            endif
+        else
+            if( params_glob%l_eo )then
+                ! anisotropic matched filter
+                if( params_glob%nstates.eq.1 )then
+                    allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
+                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                    if( file_exists(fname_vol_filter) )then
+                        call build_glob%vol2%read(fname_vol_filter)
+                        if( params_glob%l_match_filt )then
+                            call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
                         else
-                            call build_glob%vol%apply_filter(filter)
+                            call build_glob%vol%apply_filter(build_glob%vol2)
+                        endif
+                    else
+                        ! matched filter based on Rosenthal & Henderson, 2003
+                        if( any(build_glob%fsc(s,:) > 0.143) )then
+                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                            if( params_glob%l_match_filt )then
+                                call build_glob%vol%shellnorm_and_apply_filter(filter)
+                            else
+                                call build_glob%vol%apply_filter(filter)
+                            endif
                         endif
                     endif
-                endif
-            else
-                allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-                call build_glob%vol%fft()
-                if( file_exists(fname_vol_filter) )then
-                    ! anisotropic filter
-                    call build_glob%vol2%read(fname_vol_filter)
-                    call build_glob%vol%apply_filter(build_glob%vol2)
                 else
-                    ! matched filter based on Rosenthal & Henderson, 2003
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        filter = fsc2optlp(build_glob%fsc(s,:))
-                        call build_glob%vol%apply_filter(filter)
+                    allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
+                    call build_glob%vol%fft()
+                    if( file_exists(fname_vol_filter) )then
+                        ! anisotropic filter
+                        call build_glob%vol2%read(fname_vol_filter)
+                        call build_glob%vol%apply_filter(build_glob%vol2)
+                    else
+                        ! matched filter based on Rosenthal & Henderson, 2003
+                        if( any(build_glob%fsc(s,:) > 0.143) )then
+                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                            call build_glob%vol%apply_filter(filter)
+                        endif
                     endif
                 endif
             endif

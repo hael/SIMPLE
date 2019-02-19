@@ -21,7 +21,6 @@ type :: parameters
     character(len=3)      :: autoscale='no'       !< automatic down-scaling(yes|no){yes}
     character(len=3)      :: avg='no'             !< calculate average (yes|no){no}
     character(len=3)      :: bin='no'             !< binarise image(yes|no){no}
-    character(len=3)      :: bfac_filt='no'       !< particles b-factor filter on(yes|no){no}
     character(len=3)      :: center='yes'         !< center image(s)/class average(s)/volume(s)(yes|no){no}
     character(len=3)      :: classtats='no'       !< calculate class population statistics(yes|no){no}
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
@@ -398,7 +397,6 @@ type :: parameters
     ! logical variables in ascending alphabetical order
     logical :: cyclic(7)        = .false.
     logical :: l_autoscale      = .false.
-    logical :: l_bfac_filt      = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
@@ -481,7 +479,6 @@ contains
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
-        call check_carg('bfac_filt',      self%bfac_filt)
         call check_carg('boxtype',        self%boxtype)
         call check_carg('center',         self%center)
         call check_carg('classtats',      self%classtats)
@@ -1382,20 +1379,11 @@ contains
                 self%l_match_filt = .true.
             end select
         endif
-        ! bfactor filter
-        if( self%bfac_filt.eq.'yes' )then
-            self%l_bfac_filt = .true.
-            if( self%cc_objfun /= OBJFUN_CC )then
-                THROW_HARD('bfac_filt=yes incompatible with objfun='//trim(self%objfun))
-            endif
-        endif
         ! particle filter
         if( self%ptcl_filt.eq.'yes' )then
             if( self%cc_objfun /= OBJFUN_CC ) THROW_HARD('ptcl_filt=yes incompatible with objfun='//trim(self%objfun))
-            if( self%l_bfac_filt )  THROW_HARD('ptcl_filt=yes incompatible with bfac_filt=yes')
             self%l_ptcl_filt  = .true.
             self%l_match_filt = .false.
-            self%l_bfac_filt  = .false.
         endif
         ! local resolution for filtering or  not
         self%l_locres = .false.

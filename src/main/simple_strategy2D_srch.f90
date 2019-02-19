@@ -29,7 +29,6 @@ type strategy2D_srch
     integer                 :: nrefs_eval    =  0   !< nr of references evaluated
     integer                 :: prev_class    =  0   !< previous class index
     integer                 :: best_class    =  0   !< best class index found by search
-    integer                 :: prev_rot      =  0   !< previous in-plane rotation index
     integer                 :: best_rot      =  0   !< best in-plane rotation found by search
     integer                 :: fromp         =  1   !< from particle index
     integer                 :: top           =  1   !< to particle index
@@ -82,21 +81,22 @@ contains
 
     subroutine prep4srch( self )
         class(strategy2D_srch), intent(inout) :: self
-        real :: corrs(pftcc_glob%get_nrots())
+        real    :: corrs(pftcc_glob%get_nrots())
+        integer :: prev_roind
         self%nrefs_eval = 0
         ! find previous discrete alignment parameters
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
-        self%prev_rot   = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
+        prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
         ! set best to previous best by default
         self%best_class = self%prev_class
-        self%best_rot   = self%prev_rot
+        self%best_rot   = prev_roind
         ! calculate previous best corr (treshold for better) & b-factor
-        if( params_glob%l_ptcl_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl,self%prev_class,self%prev_rot)
+        if( params_glob%l_ptcl_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl, self%prev_class, prev_roind)
         if( self%prev_class > 0 )then
             if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
-            self%prev_corr  = max(0., corrs(self%prev_rot))
+            self%prev_corr  = max(0., corrs(prev_roind))
             self%best_corr  = self%prev_corr
         else
             self%prev_class = irnd_uni(self%nrefs)
@@ -105,7 +105,7 @@ contains
             if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
         endif
         ! calculate spectral score
-        self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, self%prev_rot)
+        self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, prev_roind)
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'
     end subroutine prep4srch
 

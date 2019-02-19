@@ -469,7 +469,7 @@ contains
             if( params_glob%eo .ne. 'no' )then
                 if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES
-                    call preprefvol(cline, s, params_glob%vols_odd(s), do_center, xyz)
+                    call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
@@ -481,7 +481,7 @@ contains
                     ! expand for fast interpolation
                     call build_glob%vol_odd%expand_cmat(params_glob%alpha)
                     ! PREPARE EVEN REFERENCES
-                    call preprefvol( cline, s, params_glob%vols_even(s), do_center, xyz)
+                    call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
@@ -489,7 +489,7 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
+                    call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
@@ -501,7 +501,7 @@ contains
                 endif
             else
                 ! low-pass set or multiple states
-                call preprefvol( cline, s, params_glob%vols(s), do_center, xyz)
+                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
                     call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &

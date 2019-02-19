@@ -380,9 +380,6 @@ contains
             else
                 call cline_cluster2D_stage2%set('objfun', 'ccres')
             endif
-            if( trim(params%bfac_filt).eq.'yes' )then
-                call cline_cluster2D_stage2%set('objfun', 'cc')
-            endif
             if( cline%defined('ptcl_filt') )then
                 if( cline%get_carg('ptcl_filt').eq.'yes' )then
                     call cline_cluster2D_stage2%set('objfun',     'cc')

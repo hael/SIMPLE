@@ -918,7 +918,7 @@ contains
         ! particle is assumed phase-flipped, reference untouched
         if( .not.self%ptcl_filt) return
         if( iref == 0 )then
-            ! we do nothing but memoize
+            ! just memoize
             call self%memoize_ptcl_fft(iptcl)
             return
         endif
@@ -931,15 +931,15 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        pft_ptcl(:,:) = self%pfts_ptcls(:,:,i)
+        pft_ptcl = self%pfts_ptcls(:,:,i)
         ! CTF
         if( self%with_ctf )then
             ! particle is phase-flipped
             ! reference: x|CTF|
-            pft_ref(:,:) = pft_ref(:,:) * self%ctfmats(:,:,iref)
+            pft_ref = pft_ref * self%ctfmats(:,:,i)
         endif
         ! power spectrum reference
-        pw_ref  = sum(csq(pft_ref(:,:)), dim=1) / real(self%pftsz)
+        pw_ref  = sum(csq(pft_ref), dim=1) / real(self%pftsz)
         ! power spectrum difference
         rot = merge(irot-self%pftsz, irot, irot >= self%pftsz+1)
         do k = params_glob%kfromto(1), params_glob%kfromto(2)

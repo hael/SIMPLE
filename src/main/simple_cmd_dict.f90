@@ -28,7 +28,6 @@ contains
         call chdict%push('autoscale',     'automatic down-scaling(yes|no)')
         call chdict%push('avg',           'calculate average(yes|no)')
         call chdict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')
-        call chdict%push('bfac_filt',     'bfactor filter for particles(yes|no){no}')
         call chdict%push('bfacerr',       'bfactor error in simulated images(in A**2){0}')
         call chdict%push('balance',       'max pop for balancing restraint{0}')
         call chdict%push('bin',           'binarise image(yes|no){no}')

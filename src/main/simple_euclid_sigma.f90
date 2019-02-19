@@ -27,9 +27,11 @@ contains
     procedure          :: new
     ! I/O
     procedure          :: read
-    procedure          :: create_empty
+    procedure, private :: create_empty
     procedure          :: calc_and_write_sigmas
+    procedure          :: calc_and_write_sigmas2D
     procedure, private :: open_and_check_header
+    procedure, private :: write
     ! getters / setters
     procedure          :: sigma2_exists
     procedure          :: set_do_divide
@@ -101,6 +103,7 @@ contains
         end if
     end subroutine read
 
+    !>  For soft assignment
     subroutine calc_and_write_sigmas( self, os, o_peaks, ptcl_mask )
         class(euclid_sigma),              intent(inout) :: self
         class(oris),                      intent(inout) :: os
@@ -115,7 +118,6 @@ contains
         integer :: funit, io_stat
         integer :: addr
         logical :: success
-        integer :: phys_i !< physical particle index
         if (.not. file_exists(trim(self%fname))) then
             call self%create_empty()
         else
@@ -155,6 +157,43 @@ contains
         end do
         call fclose(funit, errmsg='euclid_sigma; write; fhandle cose')
     end subroutine calc_and_write_sigmas
+
+    !>  For 2D (hard assignment)
+    subroutine calc_and_write_sigmas2D( self, os, ptcl_mask )
+        class(euclid_sigma),              intent(inout) :: self
+        class(oris),                      intent(inout) :: os
+        logical,             allocatable, intent(in)    :: ptcl_mask(:)
+        real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real    :: shvec(2), weight
+        integer :: i,iptcl, iref, irot, funit
+        logical :: success
+        if (.not. file_exists(trim(self%fname))) then
+            call self%create_empty()
+        else
+            success = self%open_and_check_header(funit)
+            call fclose(funit, errmsg='euclid_sigma; write ')
+            if (.not. success) THROW_HARD('sigmas file has wrong dimensions')
+        endif
+        self%sigma2_noise = 0.
+        !$omp parallel do default(shared) schedule(static) private(iref,iptcl,weight,shvec,irot,i,sigma_contrib)&
+        !$omp proc_bind(close)
+        do iptcl = params_glob%fromp,params_glob%top
+            if (.not. ptcl_mask(iptcl)  ) cycle
+            if ( os%get_state(iptcl)==0 ) cycle
+            weight = os%get(iptcl, 'w')
+            if (weight < TINY) cycle
+            i      = self%pinds(iptcl)
+            iref   = nint(os%get(iptcl, 'class'))
+            shvec  = os%get_2Dshift(iptcl)
+            irot   = pftcc_glob%get_roind(360. - os%e3get(iptcl))
+            call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
+            sigma_contrib = 0.5 * weight * sigma_contrib
+            self%sigma2_noise(:,i)    = sigma_contrib
+            self%sigma2_exists_msk(i) = (.not. any(sigma_contrib == 0.))
+        end do
+        !$omp end parallel do
+        call self%write(funit, os, ptcl_mask)
+    end subroutine calc_and_write_sigmas2D
 
     function open_and_check_header( self, funit ) result ( success )
         class(euclid_sigma), intent(inout) :: self
@@ -199,6 +238,23 @@ contains
         deallocate(sigmas_empty)
     end subroutine create_empty
 
+    subroutine write( self, funit, os, ptcl_mask )
+        class(euclid_sigma),  intent(inout) :: self
+        integer,              intent(inout) :: funit
+        class(oris),          intent(in)    :: os
+        logical, allocatable, intent(in)    :: ptcl_mask(:)
+        integer :: io_stat, addr, iptcl
+        call fopen(funit,trim(self%fname),access='STREAM',iostat=io_stat)
+        call fileiochk('euclid_sigma; write; open for write '//trim(self%fname), io_stat)
+        do iptcl = params_glob%fromp,params_glob%top
+            if (.not. ptcl_mask(iptcl) ) cycle
+            if( os%get_state(iptcl)==0 ) cycle
+            addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
+            write(funit,pos=addr) self%sigma2_noise(:,self%pinds(iptcl))
+        end do
+        call fclose(funit, errmsg='euclid_sigma; write; fhandle close')
+    end subroutine
+
     ! getters / setters
 
     function sigma2_exists( self, iptcl ) result( l_flag )
@@ -221,14 +277,10 @@ contains
         self%do_divide = do_divide
     end subroutine set_do_divide
 
-    function get_do_divide( self ) result( res )
+    logical function get_do_divide( self )
         class(euclid_sigma), intent(in) :: self
-        logical                         :: res
-        if( self%exists )then
-            res = self%do_divide
-        else
-            res = .false.
-        endif
+        get_do_divide = .false.
+        if( self%exists ) get_do_divide = self%do_divide
     end function get_do_divide
 
     subroutine set_divide_by( self, iptcl )
