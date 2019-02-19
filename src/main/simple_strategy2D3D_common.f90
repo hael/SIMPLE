@@ -225,6 +225,9 @@ contains
         type(ctfparams), intent(in)    :: ctfvars
         real      :: pw, bfac_rec
         integer   :: s, eo
+        ! state flag
+        s = o%get_state()
+        if( s == 0 ) return
         ! eo flag
         eo = 0
         if( params_glob%l_eo ) eo = nint(o%get('eo'))
@@ -237,8 +240,6 @@ contains
                 ! shell-weighted reconstruction
                 if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
             endif
-            ! state flag
-            s = o%get_state()
             ! fwd ft
             call img%fft()
             ! gridding

@@ -1133,8 +1133,8 @@ contains
         real    :: bfac_sc, res
         integer :: k, nyq
         logical :: l_is2d
-        kweights(0) = 1.
-        if( abs(bfac) < SMALL ) return
+        kweights = 1.
+        if( abs(bfac) < 0.1 ) return
         l_is2d  = .false.
         if( present(is2d) ) l_is2d = is2d
         nyq     = fdim(box)

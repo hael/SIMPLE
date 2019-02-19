@@ -156,6 +156,7 @@ contains
             call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
         else
             call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
+            params_glob%l_shellw = .false. ! this is reset every iteration
         endif
 
         ! PREP REFERENCES

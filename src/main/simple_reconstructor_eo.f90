@@ -480,33 +480,29 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk, eo
-                real      :: pw, bfac
+                real      :: pw, bfac_rec
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
-                if( params_glob%l_shellw )then
-                    orientation = o%get_ori(i)
-                    bfac = 0.
-                    if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
-                    eo = nint(orientation%get('eo'))
+                orientation = o%get_ori(i)
+                ! eo-flag
+                eo = nint(orientation%get('eo'))
+                ! particle-weight
+                pw = 1.
+                if( orientation%isthere('w') ) pw = orientation%get('w')
+                if( pw > TINY )then
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call img%noise_norm_pad_fft(lmsk, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, 1., bfac=bfac)
-                    deallocate(stkname)
-                else
-                    pw = 1.
-                    if( params_glob%frac < 0.99 ) pw = o%get(i, 'w')
-                    if( pw > 0. )then
-                        orientation = o%get_ori(i)
-                        eo          = nint(orientation%get('eo'))
-                        call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
-                        call img%read(stkname, ind_in_stk)
-                        call img%noise_norm_pad_fft(lmsk, img_pad)
-                        ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
+                    bfac_rec = 0.
+                    if( params_glob%l_shellw )then
+                        ! shell-weighted reconstruction
+                        if( orientation%isthere('bfac_rec') ) bfac_rec = orientation%get('bfac_rec')
+                        call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw, bfac=bfac_rec)
+                    else
                         call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
-                        deallocate(stkname)
-                     endif
+                    endif
+                    deallocate(stkname)
                 endif
             end subroutine rec_dens
 

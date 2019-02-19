@@ -782,31 +782,27 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
-                real      :: pw, bfac
+                real      :: pw, bfac_rec
                 state = o%get_state(i)
                 if( state == 0 ) return
-                if( params_glob%l_shellw )then
-                    orientation = o%get_ori(i)
-                    bfac = 0.
-                    if( orientation%isthere('bfac_rec') )bfac = orientation%get('bfac_rec')
+                orientation = o%get_ori(i)
+                ! particle-weight
+                pw = 1.
+                if( orientation%isthere('w') ) pw = orientation%get('w')
+                if( pw > TINY )then
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
                     call img%noise_norm_pad_fft(lmsk, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=1., bfac=o%get(i,'bfac'))
-                    deallocate(stkname)
-                else
-                    pw = 1.
-                    if( params_glob%frac < 0.99 ) pw = o%get(i, 'w')
-                    if( pw > 0. )then
-                        orientation = o%get_ori(i)
-                        call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
-                        call img%read(stkname, ind_in_stk)
-                        call img%noise_norm_pad_fft(lmsk, img_pad)
-                        ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
+                    bfac_rec = 0.
+                    if( params_glob%l_shellw )then
+                        ! shell-weighted reconstruction
+                        if( orientation%isthere('bfac_rec') ) bfac_rec = orientation%get('bfac_rec')
+                        call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw, bfac=bfac_rec)
+                    else
                         call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
-                        deallocate(stkname)
                     endif
+                    deallocate(stkname)
                 endif
             end subroutine rec_dens
 
