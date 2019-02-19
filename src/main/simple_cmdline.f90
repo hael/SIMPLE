@@ -93,6 +93,7 @@ contains
         if( str_has_substr(arg(pos+1:), 'simple_') ) THROW_HARD('giving program names with simple_* prefix is depreciated')
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(arg(pos+1:), ptr2prg)
+        if( .not. associated(ptr2prg) ) THROW_HARD(trim(arg(pos+1:))//' is not part of SIMPLE')
         exec = ptr2prg%get_executable()
         if( exec .ne. trim(exec_cmd) )then
             THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(exec_cmd)//' but '//exec)

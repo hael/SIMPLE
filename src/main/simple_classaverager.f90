@@ -57,7 +57,6 @@ logical                        :: exists        = .false.       !< to flag insta
 
 integer, parameter      :: BATCHTHRSZ   = 50
 logical, parameter      :: L_BENCH      = .false.
-real,    parameter      :: LOCRES_THRES = 0.5
 integer(timer_int_kind) :: t_batch_loop, t_gridding, t_tot
 real(timer_int_kind)    :: rt_batch_loop, rt_gridding, rt_tot
 character(len=STDLEN)   :: benchfname
@@ -674,13 +673,11 @@ contains
     end subroutine cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
-    subroutine cavger_calc_and_write_frcs_and_eoavg( fname, do_locres )
-        use simple_estimate_ssnr, only: local_res2D, local_res2D_lp, fsc2ssnr
+    subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
+        use simple_estimate_ssnr, only: fsc2ssnr
         character(len=*), intent(in) :: fname
-        logical,          intent(in) :: do_locres
         type(image), allocatable     :: even_imgs(:), odd_imgs(:), shnorm_imgs(:)
         real,        allocatable     :: frc(:)
-        integer,     allocatable     :: locres_finds(:,:,:)
         integer :: icls, find, find_plate
         ! serial code for allocation/copy
         allocate(even_imgs(ncls), odd_imgs(ncls), shnorm_imgs(ncls), frc(filtsz))
@@ -725,77 +722,6 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%projfrcs%write(fname)
-        ! local resolution filtering of 2D references
-        if( do_locres )then
-            ! need to copy again to get the ones with lowres merged inserted
-            do icls=1,ncls
-                call even_imgs(icls)%copy(cavgs_even(icls))
-                call odd_imgs(icls)%copy(cavgs_odd(icls))
-                call even_imgs(icls)%fft()
-                call odd_imgs(icls)%fft()
-            end do
-            ! estimate local resolution
-            call local_res2D(even_imgs, odd_imgs, LOCRES_THRES, locres_finds)
-            ! reverse FFT for filtering & copy images for shellnorm if needed
-            do icls=1,ncls
-                call even_imgs(icls)%ifft
-                call odd_imgs(icls)%ifft
-                if( params_glob%l_match_filt ) call shnorm_imgs(icls)%copy(even_imgs(icls))
-            end do
-            ! filter the even ones
-            if( params_glob%l_match_filt )then
-                call local_res2D_lp(locres_finds, even_imgs, shnorm_imgs)
-            else
-                call local_res2D_lp(locres_finds, even_imgs)
-            endif
-            ! write 2 disk
-            do icls=1,ncls
-                if( params_glob%l_match_filt )then
-                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//'_even'//params_glob%ext, icls)
-                    call even_imgs(icls)%write(CAVGS_2DLOCRES//'_even'//params_glob%ext, icls)
-                else
-                    call even_imgs(icls)%write(REFS_2DLOCRES//'_even'//params_glob%ext, icls)
-                endif
-            end do
-            ! filter the odd ones
-            if( params_glob%l_match_filt )then
-                do icls=1,ncls
-                    call shnorm_imgs(icls)%copy(odd_imgs(icls))
-                end do
-                call local_res2D_lp(locres_finds, odd_imgs, shnorm_imgs)
-            else
-                call local_res2D_lp(locres_finds, odd_imgs)
-            endif
-            ! write 2 disk
-            do icls=1,ncls
-                if( params_glob%l_match_filt )then
-                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//'_odd'//params_glob%ext, icls)
-                    call odd_imgs(icls)%write(CAVGS_2DLOCRES//'_odd'//params_glob%ext, icls)
-                else
-                    call odd_imgs(icls)%write(REFS_2DLOCRES//'_odd'//params_glob%ext, icls)
-                endif
-            end do
-            ! filter the merged ones
-            do icls=1,ncls
-                call even_imgs(icls)%copy(cavgs_merged(icls))
-                if( params_glob%l_match_filt ) call shnorm_imgs(icls)%copy(cavgs_merged(icls))
-            end do
-            if( params_glob%l_match_filt )then
-                call local_res2D_lp(locres_finds, even_imgs, shnorm_imgs)
-            else
-                call local_res2D_lp(locres_finds, even_imgs)
-            endif
-            ! write 2 disk
-            do icls=1,ncls
-                if( params_glob%l_match_filt )then
-                    call shnorm_imgs(icls)%write(REFS_2DLOCRES//params_glob%ext, icls)
-                    call even_imgs(icls)%write(CAVGS_2DLOCRES//params_glob%ext, icls)
-                else
-                    call even_imgs(icls)%write(REFS_2DLOCRES//params_glob%ext, icls)
-                endif
-            end do
-            deallocate(locres_finds)
-        endif
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill

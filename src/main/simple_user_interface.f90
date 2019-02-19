@@ -196,6 +196,7 @@ type(simple_input_param) :: projfile
 type(simple_input_param) :: projname
 type(simple_input_param) :: projw
 type(simple_input_param) :: pspecsz
+type(simple_input_param) :: ptclw
 type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
@@ -692,10 +693,11 @@ contains
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
         call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
-        call set_param(startype,       'startype',     'str',     'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
+        call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
-        call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks(sum|cen|exp){no}', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp){no}',  '(sum|cen|exp){no}',  .false., 'no')
+        call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp){no}',  '(sum|cen|exp){no}',  .false., 'no')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
+        call set_param(ptclw,          'ptclw',        'multi',  'Soft particle weights', 'Soft particle weights(spec|bfac|spread|yes|no){no}',  '(spec|bfac|spread|yes|no){no}',  .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -862,8 +864,7 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, shellw)
-        call cluster2D%set_input('filt_ctrls', 8, 'locres', 'binary', 'Iterative local resolution estimation and filtering in last phase',&
-        &'Iterative local resolution estimation and filtering in last phase(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call cluster2D%set_input('filt_ctrls', 8, ptclw)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1358,9 +1359,8 @@ contains
         initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){yes}'
         initial_3Dmodel%filt_ctrls(4)%cval_default      = 'yes'
         call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
-        call initial_3Dmodel%set_input('filt_ctrls', 6, 'locres', 'binary', 'Use class averages filtered according to local resolution estimation',&
-        &'Use class averages filtered according to local resolution estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call initial_3Dmodel%set_input('filt_ctrls', 7, rankw)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, rankw)
+        call initial_3Dmodel%set_input('filt_ctrls', 7, ptclw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -2444,7 +2444,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 4, 5, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2464,6 +2464,7 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 3, 'bfac_sdev', 'num', 'B-factor sigma','B-factor standard deviation for per-particle B-factor estimation in Angstroms^2', 'B-factor sigma in Angstroms^2(>0.0){50}', .false., 50.)
         call reconstruct3D%set_input('filt_ctrls', 4, projw)
         call reconstruct3D%set_input('filt_ctrls', 5, rankw)
+        call reconstruct3D%set_input('filt_ctrls', 6, ptclw)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2479,7 +2480,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15,10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 15,11, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2522,6 +2523,7 @@ contains
         call refine3D%set_input('filt_ctrls', 8, shellw)
         call refine3D%set_input('filt_ctrls', 9, projw)
         call refine3D%set_input('filt_ctrls',10, rankw)
+        call refine3D%set_input('filt_ctrls',11, ptclw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

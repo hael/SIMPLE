@@ -141,8 +141,8 @@ contains
         ! sees the same information in distributed execution
         ! has to be done prior to classaverager initialization
         if( which_iter > 3 )then
-            if( params_glob%softpw2D.eq.'yes' )then
-                call build_glob%spproj_field%calc_soft_weights_specscore
+            if( params_glob%l_ptclw )then
+                call build_glob%spproj_field%calc_soft_weights(PTCLW_SPEC)
             else
                 call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
             endif
@@ -163,13 +163,7 @@ contains
         if( build_glob%spproj_field%get_nevenodd() == 0 )then
             THROW_HARD('no eo partitioning available; cluster2D_exec')
         endif
-        if( which_iter > 1 .and. params_glob%l_locres )then
-            params_glob%refs      = REFS_2DLOCRES//params_glob%ext
-            params_glob%refs_even = REFS_2DLOCRES//'_even'//params_glob%ext
-            params_glob%refs_odd  = REFS_2DLOCRES//'_odd'//params_glob%ext
-        else
-            if( .not. cline%defined('refs') ) THROW_HARD('need refs to be part of command line for cluster2D execution')
-        endif
+        if( .not. cline%defined('refs') )         THROW_HARD('need refs to be part of command line for cluster2D execution')
         if( .not. file_exists(params_glob%refs) ) THROW_HARD('input references (refs) does not exist in cwd')
         call cavger_read(params_glob%refs, 'merged')
         if( file_exists(params_glob%refs_even) )then
@@ -208,9 +202,7 @@ contains
             do iptcl=params_glob%fromp,params_glob%top
                 if( ptcl_mask(iptcl) )then
                     updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                    if( params_glob%l_locres )then
-                        allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
-                    else if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
+                    if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
                         allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                     else
                         allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)

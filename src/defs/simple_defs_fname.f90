@@ -29,8 +29,6 @@ character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
-character(len=*), parameter :: REFS_2DLOCRES        = 'refs_2Dlocres'
-character(len=*), parameter :: CAVGS_2DLOCRES       = 'cavgs_2Dlocres'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
@@ -44,7 +42,6 @@ character(len=*), parameter :: FRCS_FBODY           = 'frcs_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
 ! LOCAL RESOLUTION
-character(len=*), parameter :: LOCRESMAP2D_FILE     = 'locresmap2D_finds.bin'
 character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 ! PREPROCESSING
 character(len=*), parameter :: PICKREFS             = 'pickrefs'

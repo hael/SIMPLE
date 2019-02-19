@@ -77,8 +77,8 @@ contains
             call build%spproj_field%mul_shifts(params%mul)
         endif
         ! setup weights
-        if( params%softpw2D.eq.'yes' )then
-            call build%spproj_field%calc_soft_weights_specscore
+        if( params%l_ptclw )then
+            call build%spproj_field%calc_soft_weights(PTCLW_SPEC)
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         endif
@@ -155,7 +155,7 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
         endif
-        call cavger_calc_and_write_frcs_and_eoavg(params%frcs, params%l_locres)
+        call cavger_calc_and_write_frcs_and_eoavg(params%frcs)
         ! classdoc gen needs to be after calc of FRCs
         call cavger_gen2Dclassdoc(build%spproj)
         ! write references

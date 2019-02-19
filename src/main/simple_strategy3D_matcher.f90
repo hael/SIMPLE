@@ -113,8 +113,8 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SETUP WEIGHTS
-        if( SOFT_PTCL_WEIGHTS3D )then
-            call build_glob%spproj_field%calc_soft_weights_spread
+        if( params_glob%l_ptclw )then
+            call build_glob%spproj_field%calc_soft_weights(params_glob%ptclw_method)
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
@@ -669,8 +669,8 @@ contains
         ! set npeaks
         npeaks = NPEAKS2REFINE
         ! particle weights
-        if( SOFT_PTCL_WEIGHTS3D )then
-            call build_glob%spproj_field%calc_soft_weights_spread
+        if( params_glob%l_ptclw )then
+            call build_glob%spproj_field%calc_soft_weights(params_glob%ptclw_method)
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif

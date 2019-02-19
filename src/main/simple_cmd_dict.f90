@@ -234,7 +234,7 @@ contains
         call chdict%push('single',        'simulate a single image(yes|no){no}')
         call chdict%push('smpd',          'sampling distance, same as EMANs apix(in A)')
         call chdict%push('snr',           'signal-to-noise ratio')
-        call chdict%push('softpw2D',      'soft particle weights for 2D reconstruction(yes|no){no}')
+        call chdict%push('ptclw',         'soft particle weights(spec|bfac|spread|yes|no){no}')
         call chdict%push('speckind',      'power spectrum kind(real|power|sqrt|log|phase){sqrt}')
         call chdict%push('startit',       'start iterating from here')
         call chdict%push('starfile',      'STAR-formatted project file')

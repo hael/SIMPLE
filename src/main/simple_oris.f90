@@ -158,9 +158,10 @@ type :: oris
     procedure          :: order_corr
     procedure          :: order_cls
     procedure          :: calc_hard_weights
-    procedure          :: calc_soft_weights_spread
-    procedure          :: calc_soft_weights_specscore
-    procedure          :: calc_soft_weights_bfac
+    procedure          :: calc_soft_weights
+    procedure, private :: calc_soft_weights_spread
+    procedure, private :: calc_soft_weights_specscore
+    procedure, private :: calc_soft_weights_bfac
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec_rnd
     procedure          :: calc_bfac_rec
@@ -2521,6 +2522,21 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights
+
+    subroutine calc_soft_weights( self, ptclw_method )
+        class(oris),                    intent(inout) :: self
+        integer(kind=kind(ENUM_PTCLW)), intent(in)    :: ptclw_method
+        select case(ptclw_method)
+            case(PTCLW_SPREAD)
+                call self%calc_soft_weights_spread
+            case(PTCLW_BFAC)
+                call self%calc_soft_weights_bfac
+            case(PTCLW_SPEC)
+                call self%calc_soft_weights_specscore
+            case DEFAULT
+                THROW_HARD('unsupported particle weighting method; calc_soft_weights')
+        end select
+    end subroutine calc_soft_weights
 
     !>  \brief  calculates soft weights based on angular spread
     subroutine calc_soft_weights_spread( self )

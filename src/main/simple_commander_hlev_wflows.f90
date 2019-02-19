@@ -97,7 +97,6 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
-        call cline_cluster2D1%delete('locres')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
@@ -116,7 +115,6 @@ contains
                 call cline_cluster2D2%set('bfac',   1000.)
             endif
         endif
-        call cline_cluster2D2%delete('locres')
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
@@ -327,7 +325,6 @@ contains
             else
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
             endif
-            if( params%l_locres ) call cline_cluster2D_stage1%delete('locres') ! no local resolution estimation in stage 1
             ! Scaling
             call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
                 &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
@@ -381,11 +378,7 @@ contains
             if( cline%defined('objfun') )then
                 ! nothing to do
             else
-                if( params%l_locres )then
-                    call cline_cluster2D_stage2%set('objfun', 'cc')
-                else
-                    call cline_cluster2D_stage2%set('objfun', 'ccres')
-                endif
+                call cline_cluster2D_stage2%set('objfun', 'ccres')
             endif
             if( trim(params%bfac_filt).eq.'yes' )then
                 call cline_cluster2D_stage2%set('objfun', 'cc')
@@ -458,9 +451,6 @@ contains
         params%projfile = trim(orig_projfile)
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        if( params%l_locres )then
-            call spproj%add_cavgs2os_out(CAVGS_2DLOCRES//params%ext, spproj%get_smpd(), imgkind='cavg_locres')
-        endif
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
         call spproj%write_segment_inside('out')
         call spproj%kill()
@@ -507,7 +497,7 @@ contains
         type(cmdline) :: cline_reproject
         type(cmdline) :: cline_scale
         ! other variables
-        character(len=:), allocatable :: stk, orig_stk, frcs_fname, cavgs_locres_name
+        character(len=:), allocatable :: stk, orig_stk, frcs_fname
         character(len=:), allocatable :: WORK_PROJFILE
         real,             allocatable :: res(:), tmp_rarr(:)
         integer,          allocatable :: states(:), tmp_iarr(:)
@@ -522,7 +512,7 @@ contains
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd, smpd
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt, ncls
-        logical               :: srch4symaxis, do_autoscale, do_eo, do_locres
+        logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
         ! auto-scaling prep
@@ -531,11 +521,8 @@ contains
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
         ! make master parameters
-        do_locres = trim(cline%get_carg('locres')) .eq. 'yes'
-        do_eo     = (trim(cline%get_carg('eo')) .eq. 'yes') .or. do_locres
+        do_eo     = trim(cline%get_carg('eo')) .eq. 'yes'
         call cline%set('eo','no')
-        ! delete locres flag from cline for safety (future refine3D implementation)
-        call cline%delete('locres')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -560,6 +547,7 @@ contains
         ! retrieve cavgs stack & FRCS info
         call spproj%get_cavgs_stk(stk, ncavgs, ctfvars%smpd)
         orig_smpd = ctfvars%smpd
+        orig_stk  = stk
         if( .not.spproj%os_cls2D%isthere('state') )then
             ! start from import
             allocate(states(ncavgs), source=1)
@@ -577,16 +565,6 @@ contains
             if( .not.file_exists(frcs_fname) )then
                 THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
             endif
-        endif
-        ! locres
-        if( do_locres )then
-            call spproj%get_cavgs_stk(cavgs_locres_name, ncls, smpd, 'cavg_locres')
-            if( .not.file_exists(cavgs_locres_name) )then
-                THROW_HARD('the project file does not contain the required information for locres alignment, use locres=no instead')
-            endif
-            orig_stk = cavgs_locres_name
-        else
-            orig_stk = stk
         endif
         ! init
         params%smpd = ctfvars%smpd

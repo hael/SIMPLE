@@ -65,6 +65,7 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: ptcl_filt='no'       !< use particle filter(yes|no){no}
+    character(len=3)      :: ptclw='no'           !< use soft particle weights(spread|bfac|spec|no){no}
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: rankw='no'           !< orientation weights based on ranks(sum|inv|cen|exp){no}
     character(len=3)      :: readwrite='no'
@@ -78,7 +79,6 @@ type :: parameters
     character(len=3)      :: shellnorm='no'
     character(len=3)      :: shellw='no'          !< to use shell weighted reconstruction (yes|no){yes}
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
-    character(len=3)      :: softpw2D='no'         !< soft particle weights in 2D(yes|no){no}
     character(len=3)      :: specstats='no'
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
     character(len=3)      :: subtr_backgr='no'
@@ -193,9 +193,10 @@ type :: parameters
     character(len=STDLEN) :: wfun='kb'
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
-    integer(kind(ENUM_ORISEG))         :: spproj_iseg = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))         :: cc_objfun   = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
-    integer(kind=kind(ENUM_RANKWCRIT)) :: rankw_crit  = RANK_SUM_CRIT !< criterium for rank-based orientation weights
+    integer(kind(ENUM_ORISEG))         :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
+    integer(kind(ENUM_OBJFUN))         :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+    integer(kind=kind(ENUM_RANKWCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based orientation weights
+    integer(kind=kind(ENUM_PTCLW))     :: ptclw_method = PTCLW_SPREAD  !< particle weighting method
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -409,6 +410,7 @@ type :: parameters
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
     logical :: l_ptcl_filt      = .false.
+    logical :: l_ptclw          = .false.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
@@ -547,6 +549,7 @@ contains
         call check_carg('projstats',      self%projstats)
         call check_carg('projw',          self%projw)
         call check_carg('ptcl_filt',      self%ptcl_filt)
+        call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('rankw',          self%rankw)
@@ -563,7 +566,6 @@ contains
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
         call check_carg('shellw',         self%shellw)
-        call check_carg('softpw2D',       self%softpw2D)
         call check_carg('speckind',       self%speckind)
         call check_carg('specstats',      self%specstats)
         call check_carg('stats',          self%stats)
@@ -1181,6 +1183,20 @@ contains
         self%l_shellw = self%shellw .ne. 'no'
         ! set projw flag
         self%l_projw  = self%projw  .ne. 'no'
+        ! set particle weighting scheme
+        self%l_ptclw  = self%ptclw  .ne. 'no'
+        if( self%l_ptclw )then
+            select case(trim(self%ptclw))
+                case('spread')
+                    self%ptclw_method = PTCLW_SPREAD
+                case('bfac')
+                    self%ptclw_method = PTCLW_BFAC
+                case('spec','yes')
+                    self%ptclw_method = PTCLW_SPEC
+                case DEFAULT
+                    THROW_HARD('unsupported particle weighting method')
+            end select
+        endif
         ! set rank weighting scheme
         self%l_rankw  = self%rankw  .ne. 'no'
         if( self%l_rankw )then

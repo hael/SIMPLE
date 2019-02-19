@@ -506,23 +506,21 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        if( .not.params_glob%l_locres )then
-            ! anisotropic filter
-            call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-            if( any(frc > 0.143) )then
-                call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-                if( params_glob%l_ptcl_filt )then
-                    call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
-                        &build_glob%img_match%get_filtsz(), filter, subfilter)
-                    call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+        ! anisotropic filter
+        call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+        if( any(frc > 0.143) )then
+            call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
+            if( params_glob%l_ptcl_filt )then
+                call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
+                    &build_glob%img_match%get_filtsz(), filter, subfilter)
+                call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
+            else
+                call img_in%fft() ! needs to be here in case the shift was never applied (above)
+                if( params_glob%l_match_filt .or. params_glob%l_bfac_filt )then
+                    ! matched filter for both schemes
+                    call img_in%shellnorm_and_apply_filter_serial(filter)
                 else
-                    call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                    if( params_glob%l_match_filt .or. params_glob%l_bfac_filt )then
-                        ! matched filter for both schemes
-                        call img_in%shellnorm_and_apply_filter_serial(filter)
-                    else
-                        call img_in%apply_filter_serial(filter)
-                    endif
+                    call img_in%apply_filter_serial(filter)
                 endif
             endif
         endif
