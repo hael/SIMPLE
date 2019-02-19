@@ -16,13 +16,14 @@ public :: motion_patched
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: NX_PATCHED     = 3   ! number of patches in x-direction
-integer, parameter :: NY_PATCHED     = 3   !       "      "       y-direction
+integer, parameter :: NX_PATCHED     = 5   ! number of patches in x-direction
+integer, parameter :: NY_PATCHED     = 5   !       "      "       y-direction
 integer, parameter :: X_OVERLAP      = 0   ! number of overlapping pixels per patch in x-direction
 integer, parameter :: Y_OVERLAP      = 0   !       "      "        "         "         y-direction
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 7.
 integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
+logical, parameter :: DUMP_STUFF     = .false.
 
 type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
@@ -164,8 +165,10 @@ contains
         ! fit polynomial for shifts in y-direction
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         self%poly_coeffs(:,2) = a
-        call self%write_polynomial(self%poly_coeffs(:,1),'X:')
-        call self%write_polynomial(self%poly_coeffs(:,2),'Y:')
+        if (DUMP_STUFF) then
+            call self%write_polynomial(self%poly_coeffs(:,1),'X:')
+            call self%write_polynomial(self%poly_coeffs(:,2),'Y:')
+        end if
     end subroutine fit_polynomial
 
     ! write the polynomials to disk for debugging purposes
@@ -502,14 +505,13 @@ contains
         self%lp = lp
         self%nframes = size(frames,dim=1)
         self%ldim   = references(1)%get_ldim()
-
-        write (*,*) 'ldim(1:2)=', self%ldim(1:2)
-        write (*,*) 'nframes=', self%nframes
-        do i = 1, self%nframes
-            call frames(i)%write('frame_'//trim(int2str(i))//'.mrc')
-        end do
-        
-        !return
+        if (DUMP_STUFF) then
+            write (*,*) 'ldim(1:2)=', self%ldim(1:2)
+            write (*,*) 'nframes=', self%nframes
+            do i = 1, self%nframes
+                call frames(i)%write('frame_'//trim(int2str(i))//'.mrc')
+            end do
+        end if
         do i = 1,self%nframes
             ldim_frames = frames(i)%get_ldim()
             if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
@@ -527,17 +529,18 @@ contains
         call self%fit_polynomial()
         ! apply transformation
         call self%apply_polytransfo(frames, frames_output)
-        ! write shifts to file
-        !call self%write_shifts()
-
-        write (*,*) 'ldim(1:2)=', self%ldim(1:2)
-        write (*,*) 'nframes=', self%nframes
-        do i = 1, self%nframes
-            call frames(i)%write('frame_again_'//trim(int2str(i))//'.mrc')
-        end do        
-        do i = 1, self%nframes
-            call frames(i)%write('frame_out_'//trim(int2str(i))//'.mrc')
-        end do
+        if (DUMP_STUFF) then
+            ! write shifts to file
+            call self%write_shifts()            
+            write (*,*) 'ldim(1:2)=', self%ldim(1:2)
+            write (*,*) 'nframes=', self%nframes
+            do i = 1, self%nframes
+                call frames(i)%write('frame_again_'//trim(int2str(i))//'.mrc')
+            end do
+            do i = 1, self%nframes
+                call frames(i)%write('frame_out_'//trim(int2str(i))//'.mrc')
+            end do
+        end if
     end subroutine motion_patched_correct
 
     subroutine motion_patched_kill( self )
