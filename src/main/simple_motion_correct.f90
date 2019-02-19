@@ -38,12 +38,12 @@ interface motion_correct_patched_calc_sums
 end interface
 
 ! data structures for isotropic correction
-type(image),       allocatable :: movie_frames_scaled(:)            !< scaled movie frames
-type(ft_expanded), allocatable :: movie_frames_ftexp(:)             !< movie frames
-type(ft_expanded), allocatable :: movie_frames_ftexp_sh(:)          !< shifted movie frames
-type(ft_expanded), allocatable :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
-real,              allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
-real,              allocatable :: opt_shifts_saved(:,:)             !< optimal shifts for local opt saved
+type(image), target, allocatable :: movie_frames_scaled(:)            !< scaled movie frames
+type(ft_expanded),   allocatable :: movie_frames_ftexp(:)             !< movie frames
+type(ft_expanded),   allocatable :: movie_frames_ftexp_sh(:)          !< shifted movie frames
+type(ft_expanded),   allocatable :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
+real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
+real,                allocatable :: opt_shifts_saved(:,:)             !< optimal shifts for local opt saved
 
 ! data structures for patch-based motion correction
 type(motion_patched) :: motion_patch
@@ -1005,15 +1005,22 @@ contains
         endif
     end subroutine destruct_ftexp_objects
 
-    subroutine gen_dose_weight_filter( filtarr )
-        real, allocatable, intent(inout) :: filtarr(:,:)
+    subroutine gen_dose_weight_filter( filtarr, movie_frames )
+        real, allocatable,                          intent(inout) :: filtarr(:,:)
+        type(image), allocatable, target, optional, intent(in)    :: movie_frames(:)
+        type(image), pointer :: movie_frames_here(:)
         integer :: sz, filtsz, iframe
         if( allocated(filtarr) )deallocate(filtarr)
-        sz = movie_frames_scaled(1)%get_filtsz()
+        if( present(movie_frames) ) then
+            movie_frames_here => movie_frames
+        else
+            movie_frames_here => movie_frames_scaled
+        end if
+        sz = movie_frames_here(1)%get_filtsz()
         filtsz = 2*sz ! the filter goes beyond nyquist
         allocate(filtarr(nframes,filtsz))
         do iframe=1,nframes
-            filtarr(iframe,:) = acc_dose2filter(movie_frames_scaled(1), acc_doses(iframe), kV, filtsz)
+            filtarr(iframe,:) = acc_dose2filter(movie_frames_here(1), acc_doses(iframe), kV, filtsz)
         end do
     end subroutine gen_dose_weight_filter
 
@@ -1060,38 +1067,45 @@ contains
         real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:), filtarr(:,:)
         integer :: iframe, ffromto(2)
         logical :: l_w_scalar
+        logical :: ft_flag
         ffromto(1) = 1
         ffromto(2) = nframes
         if( present(fromto) ) ffromto = fromto
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
-        if (.false.) then        
-        call movie_sum_global%set_ft(.true.)
-!!$        if( do_dose_weight )then
-!!$            call gen_dose_weight_filter(filtarr)
-!!$        endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
-        cmat_sum = cmplx(0.,0.)
-        !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
-        do iframe=ffromto(1),ffromto(2)
+        if (.false.) then
+            call movie_sum_global%set_ft(.true.)
+            if( do_dose_weight )then
+                call gen_dose_weight_filter(filtarr)
+            endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
+            cmat_sum = cmplx(0.,0.)
+            !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+            do iframe=ffromto(1),ffromto(2)
 !!$            if( do_dose_weight )then
 !!$                call movie_frames_shifted_patched(iframe)%fft
 !!$                call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))
 !!$                !call movie_frames_shifted_patched(iframe)%ifft                !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
 !!$            endif
-            if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
-            call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
-            if( l_w_scalar )then
-                cmat_sum = cmat_sum + cmat * scalar_weight
-            else
-                cmat_sum = cmat_sum + cmat * frameweights(iframe)
-            endif
-            call movie_frames_shifted_patched(iframe)%ifft()
-        end do
-        !$omp end parallel do
-        call movie_sum_global%set_cmat(cmat_sum)
-        call movie_sum_global%ifft()
-    end if
+                if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
+                call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
+                if( l_w_scalar )then
+                    cmat_sum = cmat_sum + cmat * scalar_weight
+                else
+                    cmat_sum = cmat_sum + cmat * frameweights(iframe)
+                endif
+                call movie_frames_shifted_patched(iframe)%ifft()
+            end do
+            !$omp end parallel do
+            call movie_sum_global%set_cmat(cmat_sum)
+            call movie_sum_global%ifft()
+        end if
         allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
+        if ( do_dose_weight ) then
+            ft_flag = movie_sum_global%is_ft()
+            call movie_sum_global%set_ft(.true.)
+            call gen_dose_weight_filter(filtarr, movie_frames_shifted_patched)
+            call movie_sum_global%set_ft(ft_flag)
+        end if
         !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=ffromto(1),ffromto(2)
             if( do_dose_weight )then
