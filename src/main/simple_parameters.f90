@@ -64,7 +64,6 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: ptcl_filt='no'       !< use particle filter(yes|no){no}
-    character(len=3)      :: ptclw='no'           !< use soft particle weights(spread|bfac|spec|no){no}
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: rankw='no'           !< orientation weights based on ranks(sum|inv|cen|exp){no}
     character(len=3)      :: readwrite='no'
@@ -181,6 +180,7 @@ type :: parameters
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
+    character(len=STDLEN) :: ptclw='no'           !< use soft particle weights(spread|bfac|spec|no){no}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
