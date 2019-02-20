@@ -361,7 +361,7 @@ contains
         integer :: lims(3,2),h,k,phys(3),ldim(3), bb_fac
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         logical :: is_in_time
-        integer :: nyq, sh
+        integer :: nyq
         real    :: w, snr, r
         bb_fac = -50 !default value
         if(present(b_fac)) bb_fac = b_fac

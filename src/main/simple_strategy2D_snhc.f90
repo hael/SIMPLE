@@ -37,7 +37,7 @@ contains
         logical :: found_better
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            cc_glob      = -1.
+            cc_glob      = -huge(cc_glob)
             found_better = .false.
             nrefs        = count(s2D%cls_chunk==self%s%chunk_id)
             nrefs_bound  = min(nrefs, nint(real(nrefs)*(1.-self%spec%stoch_bound)))

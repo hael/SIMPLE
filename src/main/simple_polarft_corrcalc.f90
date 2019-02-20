@@ -2550,7 +2550,8 @@ contains
         real(sp),                intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        integer  :: ithr, ik
+        integer  :: i, ithr, ik
+        i       =  self%pinds(iptcl)
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
         shmat   => self%heap_vars(ithr)%shmat
@@ -2558,20 +2559,20 @@ contains
         argmat  =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
         shmat   =  cmplx(cos(argmat),sin(argmat))
         if( self%with_ctf )then
-            if( self%iseven(self%pinds(iptcl)) )then
-                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            if( self%iseven(i) )then
+                pft_ref = (self%pfts_refs_even(:,:,iref) * self%ctfmats(:,:,i)) * shmat
             else
-                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+                pft_ref = (self%pfts_refs_odd (:,:,iref) * self%ctfmats(:,:,i)) * shmat
             endif
         else
-            if( self%iseven(self%pinds(iptcl)) )then
+            if( self%iseven(i) )then
                 pft_ref = self%pfts_refs_even(:,:,iref) * shmat
             else
                 pft_ref = self%pfts_refs_odd (:,:,iref) * shmat
             endif
         endif
         do ik = params_glob%kfromto(1), params_glob%kfromto(2)
-            sigma_contrib(ik) = self%calc_euclidk_for_rot(pft_ref, self%pinds(iptcl), ik, irot)
+            sigma_contrib(ik) = self%calc_euclidk_for_rot(pft_ref, i, ik, irot)
         end do
         sigma_contrib = sigma_contrib / real(self%nrots)
     end subroutine gencorr_sigma_contrib

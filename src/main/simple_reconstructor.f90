@@ -279,25 +279,20 @@ contains
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real,       optional, intent(in)    :: bfac    !< B-factor
-        real, allocatable :: rotmats(:,:,:), divide_by(:)
+        real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
-        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         complex   :: comp, oshift
+        real      :: sigma2(0:ceiling(real(self%nyq)*self%alpha**2.))
         real      :: vec(3), loc(3), dists(3), shconst_here(2), bfac_weights(0:self%ldim_img(1))
-        real      :: w(self%wdim,self%wdim,self%wdim)
-        real      :: arg, tval, tvalsq, rsh_sq, rnyq_sq, bfac_sc, freq_sq
-        logical   :: do_bfac_rec, do_divide
-        integer   :: div_lbound, div_ubound
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rsh_sq, freq_sq
+        integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
+        logical   :: do_bfac_rec, do_sigma2div
         if( pwght < TINY )return
-        do_divide = .false.
-        if (associated(eucl_sigma_glob)) then
-            do_divide = eucl_sigma_glob%get_do_divide()
-            if (do_divide) then
-                divide_by = eucl_sigma_glob%get_divide_by()
-                div_lbound = lbound(divide_by,1)
-                div_ubound = ubound(divide_by,1)
-            end if
+        do_sigma2div = associated(eucl_sigma_glob)
+        if (do_sigma2div) then
+            do_sigma2div = eucl_sigma_glob%get_do_divide()
+            if (do_sigma2div) call eucl_sigma_glob%get_sigma2(self%nyq, sigma2)
         end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
@@ -371,7 +366,7 @@ contains
                     ! (weighted) kernel & CTF values
                     w = pwght
                     if( do_bfac_rec ) w = w * bfac_weights(sh)
-                    if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) w = w / divide_by(sh)
+                    if( do_sigma2div) w = w / sigma2(sh)
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
@@ -405,25 +400,19 @@ contains
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: bfac    !< B-factor
         integer, optional,    intent(in)    :: state   !< state to reconstruct
-        real, allocatable                   :: divide_by(:)
+        real      :: sigma2(0:ceiling(real(self%nyq)*self%alpha**2.))
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
-        integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(0:self%ldim_img(1))
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, projw
-        logical   :: do_bfac_rec
-        logical   :: do_divide
-        integer   :: div_lbound, div_ubound
-        do_divide = .false.
-        if (associated(eucl_sigma_glob)) then
-            do_divide = eucl_sigma_glob%get_do_divide()
-            if (do_divide) then
-                divide_by = eucl_sigma_glob%get_divide_by()
-                div_lbound = lbound(divide_by,1)
-                div_ubound = ubound(divide_by,1)
-            end if
+        integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
+        logical   :: do_bfac_rec, do_sigma2div
+        do_sigma2div = associated(eucl_sigma_glob)
+        if (do_sigma2div) then
+            do_sigma2div = eucl_sigma_glob%get_do_divide()
+            if (do_sigma2div) call eucl_sigma_glob%get_sigma2(self%nyq, sigma2)
         end if
         ! take care of optional state flag
         sstate = 1
@@ -512,8 +501,8 @@ contains
                             endif
                         endif
                         w = ows(iori)
-                        if( do_bfac_rec ) w = w * bfac_weights(sh)
-                        if ((do_divide).and.(sh .ge. div_lbound).and.(sh .le. div_ubound)) w = w / divide_by(sh)
+                        if( do_bfac_rec )  w = w * bfac_weights(sh)
+                        if( do_sigma2div ) w = w / sigma2(sh)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))

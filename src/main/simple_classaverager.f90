@@ -1,10 +1,11 @@
 module simple_classaverager
 include 'simple_lib.f08'
 !$ use omp_lib
-use simple_builder,    only: build_glob
-use simple_parameters, only: params_glob
-use simple_ctf,        only: ctf
-use simple_image,      only: image
+use simple_builder,      only: build_glob
+use simple_parameters,   only: params_glob
+use simple_ctf,          only: ctf
+use simple_image,        only: image
+use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
@@ -360,7 +361,7 @@ contains
         type(image)                   :: cls_imgsum_even, cls_imgsum_odd
         type(image), allocatable      :: batch_imgs(:), cgrid_imgs(:)
         complex,     allocatable      :: cmat_even(:,:,:), cmat_odd(:,:,:)
-        real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
+        real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:), sigma2(:)
         integer,     allocatable      :: ptcls_inds(:), batches(:,:), iprecs(:)
         integer,     allocatable      :: ioris(:), cyc1(:), cyc2(:)
         complex   :: zero, fcomp
@@ -417,8 +418,10 @@ contains
         cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                  rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                 &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
+                 &rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
+                 &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
+                 &sigma2(1:ceiling(params_glob%alpha**2.*real(nyq))), stat=alloc_stat)
+                 ! sigma2 is allocated to paddingfactor^2*(nyquist index) so no need to care about limits
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -520,7 +523,8 @@ contains
                         ! bi-linear interpolation
                         do h=lims(1,1),lims(1,2)
                             do k=lims(2,1),lims(2,2)
-                                if( h*h+k*k > interp_shlim_sq )cycle
+                                sh = nint(hyp(real(h),real(k)))
+                                if( sh > interp_shlim )cycle
                                 loc = matmul(real([h,k]),mat)
                                 ! interpolation
                                 win_corner = floor(loc) ! bottom left corner

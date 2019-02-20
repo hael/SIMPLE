@@ -11,17 +11,18 @@ private
 
 type euclid_sigma
     private
-    integer               :: file_header(4)
-    integer               :: nptcls      = 0
-    logical               :: exists      = .false.
-    integer               :: headsz      = 0
-    integer               :: sigmassz    = 0
-    character(len=STDLEN) :: fname
-    logical               :: do_divide   = .false.
     real,    allocatable  :: divide_by(:)
     real,    allocatable  :: sigma2_noise(:,:)
     logical, allocatable  :: sigma2_exists_msk(:)
     integer, allocatable  :: pinds(:)
+    integer               :: file_header(4) = 0
+    integer               :: kfromto(2)     = 0
+    integer               :: headsz         = 0
+    integer               :: sigmassz       = 0
+    character(len=STDLEN) :: fname
+    logical               :: do_divide = .false.
+    logical               :: exists    = .false.
+
 contains
     ! constructor
     procedure          :: new
@@ -36,8 +37,8 @@ contains
     procedure          :: sigma2_exists
     procedure          :: set_do_divide
     procedure          :: get_do_divide
-    procedure          :: set_divide_by
-    procedure          :: get_divide_by
+    procedure          :: set_sigma2
+    procedure          :: get_sigma2
     ! destructor
     procedure          :: kill
 end type euclid_sigma
@@ -51,19 +52,19 @@ contains
         character(len=*),            intent(in)    :: fname
         real(sp)                                   :: r
         call self%kill
-        allocate( self%sigma2_noise(params_glob%kfromto(1):params_glob%kfromto(2),1:pftcc_glob%get_nptcls()),&
+        self%kfromto = self%kfromto
+        allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),1:pftcc_glob%get_nptcls()),&
             self%sigma2_exists_msk(1:pftcc_glob%get_nptcls()),&
             self%pinds(params_glob%fromp:params_glob%top),&
-            self%divide_by(params_glob%kfromto(1):params_glob%kfromto(2)) )
+            self%divide_by(self%kfromto(1):self%kfromto(2)) )
         call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
         call pftcc_glob%assign_pinds(self%pinds)
         self%fname = trim(fname)
         self%file_header(1)    = params_glob%fromp
         self%file_header(2)    = params_glob%top
-        self%file_header(3)    = params_glob%kfromto(1)
-        self%file_header(4)    = params_glob%kfromto(2)
+        self%file_header(3:4)  = self%kfromto
         self%headsz            = sizeof(self%file_header)
-        self%sigmassz          = sizeof(r)*(params_glob%kfromto(2)-params_glob%kfromto(1)+1)
+        self%sigmassz          = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
         self%do_divide         = .false.
         self%exists            = .true.
         self%sigma2_noise      = 0.
@@ -78,7 +79,7 @@ contains
         logical, optional,      intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer                               :: funit
         integer                               :: iptcl
-        real(sp)                              :: sigma2_noise_n(params_glob%kfromto(1):params_glob%kfromto(2))
+        real(sp)                              :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
         integer                               :: addr
         logical                               :: success
         call pftcc_glob%assign_pinds(self%pinds)
@@ -109,14 +110,10 @@ contains
         class(oris),                      intent(inout) :: os
         type(oris),          allocatable, intent(inout) :: o_peaks(:)
         logical,             allocatable, intent(in)    :: ptcl_mask(:)
-        integer :: iptcl, ipeak, iref, npeaks
-        real :: sigmas_tmp(params_glob%kfromto(1):params_glob%kfromto(2))
-        real :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
-        real :: shvec(2)
-        integer :: irot
-        real    :: weight
-        integer :: funit, io_stat
-        integer :: addr
+        integer :: iptcl, ipeak, iref, npeaks, irot, funit
+        real    :: sigmas_tmp(self%kfromto(1):self%kfromto(2))
+        real    :: sigma_contrib(self%kfromto(1):self%kfromto(2))
+        real    :: shvec(2), weight
         logical :: success
         if (.not. file_exists(trim(self%fname))) then
             call self%create_empty()
@@ -128,7 +125,8 @@ contains
             end if
         end if
         self%sigma2_noise = 0.
-!omp parallel do default(shared) schedule(static) private(iref,iptcl,ipeak,weight,shvec,irot,npeaks,sigmas_tmp,sigma_contrib) proc_bind(close)
+        !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+        !$omp private(iref,iptcl,ipeak,weight,shvec,irot,npeaks,sigmas_tmp,sigma_contrib)
         do iptcl = params_glob%fromp,params_glob%top
             if (.not. ptcl_mask(iptcl)) cycle
             if ( os%get_state(iptcl)==0 ) cycle
@@ -146,16 +144,8 @@ contains
             self%sigma2_noise(:,self%pinds(iptcl))    = sigmas_tmp
             self%sigma2_exists_msk(self%pinds(iptcl)) = (.not. any(sigmas_tmp == 0.))
         end do
-!omp end parallel do
-        call fopen(funit,trim(self%fname),access='STREAM',iostat=io_stat)
-        call fileiochk('euclid_sigma; write; open for write '//trim(self%fname), io_stat)
-        do iptcl = params_glob%fromp,params_glob%top
-            if (.not. ptcl_mask(iptcl)) cycle
-            if( os%get_state(iptcl)==0 ) cycle
-            addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
-            write (funit,pos=addr) self%sigma2_noise(:,self%pinds(iptcl))
-        end do
-        call fclose(funit, errmsg='euclid_sigma; write; fhandle cose')
+        !$omp end parallel do
+        call self%write(funit, os, ptcl_mask)
     end subroutine calc_and_write_sigmas
 
     !>  For 2D (hard assignment)
@@ -163,7 +153,7 @@ contains
         class(euclid_sigma),              intent(inout) :: self
         class(oris),                      intent(inout) :: os
         logical,             allocatable, intent(in)    :: ptcl_mask(:)
-        real    :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
+        real    :: sigma_contrib(self%kfromto(1):self%kfromto(2))
         real    :: shvec(2), weight
         integer :: i,iptcl, iref, irot, funit
         logical :: success
@@ -200,7 +190,7 @@ contains
         integer,             intent(out)   :: funit
         logical                            :: success
         integer                            :: io_stat
-        integer                            :: fromp_here, top_here, kfromto_here(2)
+        integer                            :: fromp_here, top_here
         if (.not. file_exists(trim(self%fname))) then
             success = .false.
             return
@@ -210,13 +200,13 @@ contains
         read(unit=funit,pos=1) self%file_header
         fromp_here      = self%file_header(1)
         top_here        = self%file_header(2)
-        kfromto_here(:) = self%file_header(3:4)
+        self%kfromto    = self%file_header(3:4)
         if ((fromp_here.ne.params_glob%fromp) .or. (top_here.ne.params_glob%top) .or. &
-            (kfromto_here(1).ne.params_glob%kfromto(1)) .or. (kfromto_here(2).ne.params_glob%kfromto(2))) then
+            (self%kfromto(1).ne.self%kfromto(1)) .or. (self%kfromto(2).ne.self%kfromto(2))) then
             THROW_WARN('dimensions in sigmas file do not match')
             write (*,*) 'params_glob%fromp: ',   params_glob%fromp,   ' ; in sigmas file: ', fromp_here
             write (*,*) 'params_glob%top: ',     params_glob%top,     ' ; in sigmas file: ', top_here
-            write (*,*) 'params_glob%kfromto: ', params_glob%kfromto, ' ; in sigmas file: ', kfromto_here
+            write (*,*) 'self%kfromto: ', self%kfromto, ' ; in sigmas file: ', self%kfromto
             write (*,*) 'resorting to cross-correlations.'
             call fclose(funit)
             success = .false.
@@ -229,7 +219,7 @@ contains
         class(euclid_sigma), intent(in) :: self
         real(sp), allocatable           :: sigmas_empty(:,:)
         integer                         :: funit, io_stat
-        allocate(sigmas_empty(params_glob%kfromto(1):params_glob%kfromto(2), params_glob%fromp:params_glob%top))
+        allocate(sigmas_empty(self%kfromto(1):self%kfromto(2), params_glob%fromp:params_glob%top))
         sigmas_empty = 0.
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
@@ -283,7 +273,7 @@ contains
         if( self%exists ) get_do_divide = self%do_divide
     end function get_do_divide
 
-    subroutine set_divide_by( self, iptcl )
+    subroutine set_sigma2( self, iptcl )
         class(euclid_sigma), intent(inout) :: self
         integer,             intent(in)    :: iptcl
         if (self%pinds(iptcl) .eq. 0) then
@@ -292,13 +282,33 @@ contains
         else
             self%divide_by(:) = self%sigma2_noise(:,self%pinds(iptcl))
         end if
-    end subroutine set_divide_by
+    end subroutine set_sigma2
 
-    function get_divide_by( self ) result( res )
-        class(euclid_sigma), intent(in) :: self
-        real, allocatable               :: res(:)
-        res = self%divide_by
-    end function get_divide_by
+    subroutine get_sigma2( self, nyq, sigma2 )
+        class(euclid_sigma), intent(in)  :: self
+        integer,             intent(in)  :: nyq
+        real,                intent(out) :: sigma2(:)
+        real    :: scale, loc, ld
+        integer :: k, lk, kstart
+        sigma2 = 1.
+        if( .not.self%exists )return
+        if( nyq == self%kfromto(2) )then
+            sigma2(self%kfromto(1):self%kfromto(2)) = self%divide_by(:)
+        else if( nyq > self%kfromto(2) )then
+            ! requires interpolation, assumed that kfromto(2) is nyquist index
+            scale       = real(self%kfromto(2)) / real(nyq)
+            kstart      = ceiling(real(self%kfromto(1))*scale)
+            sigma2(nyq) = self%divide_by(self%kfromto(2))
+            do k = kstart,nyq-1
+                loc = real(k)*scale
+                lk  = floor(loc)
+                ld  = loc-real(lk)
+                sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
+            enddo
+        else
+            THROW_HARD('Incompatible requested size; get_sigma2')
+        endif
+    end subroutine get_sigma2
 
     ! destructor
 
@@ -309,12 +319,12 @@ contains
             if ( allocated(self%sigma2_exists_msk) ) deallocate(self%sigma2_exists_msk)
             if ( allocated(self%pinds) )             deallocate(self%pinds)
             if ( allocated(self%divide_by) )         deallocate(self%divide_by)
-            self%file_header = 0
-            self%headsz      = 0
-            self%sigmassz    = 0
-            self%nptcls      = 0
-            self%do_divide   = .false.
-            self%exists      = .false.
+            self%file_header  = 0
+            self%headsz       = 0
+            self%sigmassz     = 0
+            self%kfromto      = 0
+            self%do_divide    = .false.
+            self%exists       = .false.
             eucl_sigma_glob  => null()
         endif
     end subroutine kill

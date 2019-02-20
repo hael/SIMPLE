@@ -308,7 +308,7 @@ contains
             cline_cluster2D_stage1 = cline
             if( cline%defined('objfun') )then
                 if( cline%get_carg('objfun').eq.'euclid' )then
-                    ! nothing to do
+                    call cline_cluster2D_stage1%set('objfun', 'cc')
                 else
                     call cline_cluster2D_stage1%set('objfun', 'cc')
                 endif

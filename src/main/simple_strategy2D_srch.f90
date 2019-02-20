@@ -96,12 +96,21 @@ contains
         if( self%prev_class > 0 )then
             if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
-            self%prev_corr  = max(0., corrs(prev_roind))
+            if( pftcc_glob%is_euclid(self%iptcl) )then
+                self%prev_corr  = corrs(prev_roind)
+            else
+                self%prev_corr  = max(0., corrs(prev_roind))
+            endif
             self%best_corr  = self%prev_corr
         else
             self%prev_class = irnd_uni(self%nrefs)
-            self%prev_corr  = 0.
-            self%best_corr  = 0.
+            if( pftcc_glob%is_euclid(self%iptcl) )then
+                self%prev_corr  = -huge(self%prev_corr)
+                self%best_corr  = -huge(self%best_corr)
+            else
+                self%prev_corr  = 0.
+                self%best_corr  = 0.
+            endif
             if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
         endif
         ! calculate spectral score

@@ -60,7 +60,7 @@ contains
             subfilt = filt
         else
             x    = 1.
-            step = real(filtsz-1) / real(subfiltsz-1.)
+            step = real(filtsz-1) / real(subfiltsz-1)
             do i = 2,subfiltsz-1
                 x          = x+step
                 floorx     = floor(x)
