@@ -52,7 +52,7 @@ contains
         character(len=*),            intent(in)    :: fname
         real(sp)                                   :: r
         call self%kill
-        self%kfromto = self%kfromto
+        self%kfromto = params_glob%kfromto
         allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),1:pftcc_glob%get_nptcls()),&
             self%sigma2_exists_msk(1:pftcc_glob%get_nptcls()),&
             self%pinds(params_glob%fromp:params_glob%top),&
@@ -297,7 +297,7 @@ contains
         else if( nyq > self%kfromto(2) )then
             ! requires interpolation, assumed that kfromto(2) is nyquist index
             scale       = real(self%kfromto(2)) / real(nyq)
-            kstart      = ceiling(real(self%kfromto(1))*scale)
+            kstart      = ceiling(real(self%kfromto(1))/scale)
             sigma2(nyq) = self%divide_by(self%kfromto(2))
             do k = kstart,nyq-1
                 loc = real(k)*scale

@@ -2634,9 +2634,9 @@ contains
         ! PROGRAM SPECIFICATION
         call scale_project%new(&
         &'scale_project', &                                                                ! name
-        &'Re-scaling of MRC and SPIDER stacks',&                                             ! descr_short
+        &'Re-scaling of MRC and SPIDER stacks',&                                           ! descr_short
         &'is a distributed workflow for re-scaling MRC and SPIDER stacks part of project specification',& ! descr_long
-        &'simple_exec',&                                                                   ! executable
+        &'simple_distr_exec',&                                                             ! executable
         &0, 1, 0, 0, 0, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
