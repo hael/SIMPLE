@@ -311,6 +311,22 @@ contains
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
+    !CHIARAAAA
+    ! subroutine exec_nanopart_analyisis( self, cline )
+    !     use simple_sp_project,          only: sp_project
+    !     use simple_nanopart_new_mod, only: nanoparticle
+    !     class(nanoparticle), intent(inout) :: self
+    !     class(cmdline),      intent(inout) :: cline !< command line input
+    !     type(sp_project)              :: spproj
+    !     character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
+    !     integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
+    !     call params%new(cline)
+    !     !call spproj%read(params%projfile)
+    !     ! end gracefully
+    !     call qsys_job_finished(  'simple_commander_preprocess :: exec_nanopart_analyisis' )
+    !     call simple_end('**** SIMPLE_NANOPARTICLE_ANALYSIS NORMAL STOP ****')
+    ! end subroutine exec_nanopart_analyisis
+
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
         use simple_binoris_io,       only: binwrite_oritab

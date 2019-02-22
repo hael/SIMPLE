@@ -1,7 +1,7 @@
 ! Test file to numerically assess the validity of the gradient of the regularization term in the anisotropic motion correction
 ! Use simple_test_gradient_regu prg=dummy smpd=1.
 module mtest_gradient_regu
-include 'simple_lib.f08'    
+include 'simple_lib.f08'
 use simple_cmdline,             only: cmdline
 use simple_image,               only: image
 use simple_parameters,          only: parameters
@@ -24,7 +24,7 @@ contains
     procedure :: alloc_imgs
     procedure :: one_imgs
     procedure :: alloc_motion_aniso
-    procedure :: kill    
+    procedure :: kill
 end type test_gradient_regu
 
 contains
@@ -34,15 +34,11 @@ contains
         call self%cline%parse_oldschool()
         call self%cline%checkvar('smpd', 1)
         call self%cline%check()
-        call self%p%new(self%cline)       
+        call self%p%new(self%cline)
         call self%alloc_imgs()
         call self%one_imgs()
         call self%alloc_motion_aniso()
-
         call self%run_tests()
-
-        
-        
         call self%kill()
     end subroutine run
 
@@ -54,7 +50,7 @@ contains
         ref_rmat = 1.
         frame_rmat = 1.
     end subroutine one_imgs
-    
+
     subroutine run_tests(self)
         class(test_gradient_regu), intent(inout) :: self
         real(dp) :: deltas(5) = (/0.001,0.0005,0.0001,0.00001, 0.000001/)
@@ -77,10 +73,7 @@ contains
         a(10) = -0.01
         a(11) = 0.005
         a(12) = -0.001
-
-        
         call self%motion_aniso%eval_fdf_foo(self%aref, self%aframe, a, f, grad)
-        
         do idelta = 1, size(deltas)
             delta = deltas(idelta)
             write (*,*) 'delta=', delta
@@ -91,11 +84,9 @@ contains
                 val = (ftmp - f) / delta
                 write (*,*) 'grad(', grad_idx, ') = ', val, '    theor: ', grad(grad_idx)
             end do
-            
         end do
-        
     end subroutine run_tests
-    
+
     subroutine alloc_imgs(self)
         class(test_gradient_regu), intent(inout) :: self
 
@@ -110,23 +101,18 @@ contains
         class(test_gradient_regu), intent(inout) :: self
         call self%motion_aniso%new()
     end subroutine alloc_motion_aniso
-    
+
     subroutine kill(self)
         class(test_gradient_regu), intent(inout) :: self
         call self%aframe%kill()
         call self%aref%kill()
     end subroutine kill
-    
+
 end module mtest_gradient_regu
 
 program simple_test_gradient_regu
     use mtest_gradient_regu
     implicit none
     type(test_gradient_regu) :: atest_gradient_regu
-
     call atest_gradient_regu%run()
-    
-
-
-    
 end program simple_test_gradient_regu

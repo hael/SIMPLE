@@ -186,8 +186,8 @@ contains
                 ! Polynomial:
                 ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
                 ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
-                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
+                z1 = xm + a(1) !+ a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
+                z2 = ym + a(2) !+ a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
                 ! remap to [1:N]
                 self%T_coords      (1,i,j) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 self%T_coords      (2,i,j) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
@@ -224,25 +224,26 @@ contains
                 ! Polynomial:
                 ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
                 ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
-                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
+                z1 = xm + a(1) !+ a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xym
+                z2 = ym + a(2) !+ a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xym
                 ! remap to [1:N]
                 T_coords(1) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 T_coords(2) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
                 ! Chiara. You are back in [1:N], but u use xm etc that are still in [-1,1]. CHECK
-                ! Derivative of the reg vterm wrt a(1)-a(12)
+                ! Derivative of the reg term wrt a(1)-a(12)
                 grad(1)  = grad(1)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp
-                grad(2)  = grad(2)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xm
-                grad(3)  = grad(3)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * ym
-                grad(4)  = grad(4)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xms
-                grad(5)  = grad(5)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * yms
-                grad(6)  = grad(6)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xym
-                grad(7)  = grad(7)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp
-                grad(8)  = grad(8)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xm
-                grad(9)  = grad(9)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * ym
-                grad(10) = grad(10) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xms
-                grad(11) = grad(11) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * yms
-                grad(12) = grad(12) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xym
+                ! grad(2)  = grad(2)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xm
+                ! grad(3)  = grad(3)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * ym
+                ! grad(4)  = grad(4)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xms
+                ! grad(5)  = grad(5)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * yms
+                ! grad(6)  = grad(6)  - 2. * (x - T_coords(1)) * (Nx - 1._dp) / 2._dp * xym
+                grad(2)  = grad(2)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp
+                ! grad(7)  = grad(7)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp
+                ! grad(8)  = grad(8)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xm
+                ! grad(9)  = grad(9)  - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * ym
+                ! grad(10) = grad(10) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xms
+                ! grad(11) = grad(11) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * yms
+                ! grad(12) = grad(12) - 2. * (y - T_coords(2)) * (Ny - 1._dp) / 2._dp * xym
             end do
         end do
     end subroutine calc_grad_coords                          ! specifically for gradient of regularization term
@@ -267,8 +268,8 @@ contains
                 ! Polynomial:
                 ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
                 ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym
-                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym
+                z1 = xm + a(1) !+ a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym
+                z2 = ym + a(2) !+ a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym
                 ! remap to [1:N]
                 self%T_coords(1,i,j) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 self%T_coords(2,i,j) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
@@ -296,8 +297,8 @@ contains
                 ! Polynomial:
                 ! Tx = a1 + a2 * x + a3 * y + a4  * x^2 + a5  * y^2 + a6  * x*y
                 ! Ty = a7 + a8 * x + a9 * y + a10 * x^2 + a11 * y^2 + a12 * x*y
-                z1 = xm + a(1) + a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym
-                z2 = ym + a(7) + a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym
+                z1 = xm + a(1) !+ a(2) * xm + a(3) * ym + a( 4) * xms + a( 5) * yms + a( 6) * xm*ym
+                z2 = ym + a(2) !+ a(8) * xm + a(9) * ym + a(10) * xms + a(11) * yms + a(12) * xm*ym
                 ! remap to [1:N]
                 self%T_coords_out(1,i,j) = ((Nx - 1._dp) * z1 + Nx + 1._dp) / 2._dp
                 self%T_coords_out(2,i,j) = ((Ny - 1._dp) * z2 + Ny + 1._dp) / 2._dp
@@ -307,7 +308,7 @@ contains
 
     subroutine motion_anisocor_dbl_calc_T_out( self, a, frame_in, frame_out )
         class(motion_anisocor_dbl), intent(inout) :: self
-        real(dp),                   intent(in)    :: a(12)
+        real(dp),                   intent(in)    :: a(2)!a(12)
         class(image), target,       intent(in)    :: frame_in
         class(image), target,       intent(inout) :: frame_out
         integer       :: i,j
@@ -414,7 +415,6 @@ contains
         call frame%get_rmat_ptr( rmat_ptr )
         self%rmat(1:self%ldim(1), 1:self%ldim(2))     = rmat_ptr(1:self%ldim(1), 1:self%ldim(2), 1)
         call self%eval_fdf(a, f, grad)
-
     end subroutine eval_fdf_foo    ! for debug purpopse
 
     subroutine eval_fdf( self, a, f, grad )
@@ -427,7 +427,7 @@ contains
         integer  :: i, j, r
         real(dp) :: poly_dfs(POLY_DIM)
         real(dp), allocatable :: atmp(:,:)
-        real(dp) :: regu_grad(12)
+        real(dp) :: regu_grad(2)!regu_grad(12)
 !!$        integer :: ithr
 !!$        ithr = omp_get_thread_num() + 1
 !!$        if( ithr == 1 )then
@@ -469,52 +469,58 @@ contains
         grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,1) )
         grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,1) )
         grad(1)   = grad_tmp1 - N *  grad_tmp2 / D_I
-        ! d/da2: poly_dfs=xm
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
-        grad(2)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da3: poly_dfs=ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
-        grad(3)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da4: poly_dfs=xm^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
-        grad(4)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da5: poly_dfs=ym^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
-        grad(5)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da6: poly_dfs=xm*ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
-        grad(6)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da2: poly_dfs=xm
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,1) )
+        ! grad(2)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da3: poly_dfs=ym
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,1) )
+        ! grad(3)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da4: poly_dfs=xm^2
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,1) )
+        ! grad(4)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da5: poly_dfs=ym^2
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,1) )
+        ! grad(5)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da6: poly_dfs=xm*ym
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,1) )
+        ! grad(6)   = grad_tmp1 - N * grad_tmp2 / D_I
         ! d/da7: poly_dfs=1
         grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,2) )
         grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,2) )
-        grad(7)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da8: poly_dfs=xm
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
-        grad(8)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da9: poly_dfs=ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
-        grad(9)   = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da10: poly_dfs=xm^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
-        grad(10)  = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da11: poly_dfs=ym^2
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
-        grad(11)  = grad_tmp1 - N * grad_tmp2 / D_I
-        ! d/da12: poly_dfs=xm*ym
-        grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
-        grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
-        grad(12)  = grad_tmp1 - N * grad_tmp2 / D_I
-        grad(1: 6) = grad(1: 6) / self%sc_alpha_x
-        grad(7:12) = grad(7:12) / self%sc_alpha_y
+        grad(2)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da7: poly_dfs=1
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) *                              self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) *                              self%rmat_T_grad(:,:,2) )
+        ! grad(7)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da8: poly_dfs=xm
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,1)    * self%rmat_T_grad(:,:,2) )
+        ! grad(8)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da9: poly_dfs=ym
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm(:,:,2)    * self%rmat_T_grad(:,:,2) )
+        ! grad(9)   = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da10: poly_dfs=xm^2
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,1) * self%rmat_T_grad(:,:,2) )
+        ! grad(10)  = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da11: poly_dfs=ym^2
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_sq(:,:,2) * self%rmat_T_grad(:,:,2) )
+        ! grad(11)  = grad_tmp1 - N * grad_tmp2 / D_I
+        ! ! d/da12: poly_dfs=xm*ym
+        ! grad_tmp1 = sum( self%rmat_ref(:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
+        ! grad_tmp2 = sum( self%rmat_T  (:,:) * self%T_coords_xm_cr(:,:)   * self%rmat_T_grad(:,:,2) )
+        ! grad(12)  = grad_tmp1 - N * grad_tmp2 / D_I
+        ! grad(1: 6) = grad(1: 6) / self%sc_alpha_x
+        ! grad(7:12) = grad(7:12) / self%sc_alpha_y
+        grad(1) = grad(1) / self%sc_alpha_x
+        grad(2) = grad(2) / self%sc_alpha_y
         grad = grad / sqrt(D_I*D_R)
         call self%calc_grad_coords(a, regu_grad)
         grad = grad - self%gamma * regu_grad / real(self%ldim(1)*self%ldim(2),dp)

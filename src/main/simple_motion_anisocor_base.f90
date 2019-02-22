@@ -10,7 +10,7 @@ public :: motion_anisocor, POLY_DIM, TOL
 #include "simple_local_flags.inc"
 
 real,    parameter                  :: TOL      = 1e-7      !< tolerance parameter
-integer, parameter                  :: POLY_DIM = 12        !< dimensionality of polynomial dome model
+integer, parameter                  :: POLY_DIM = 2    !12  !< dimensionality of polynomial dome model
 
 type, abstract, public :: motion_anisocor
     type(opt_spec)                  :: ospec                !< optimizer specification object
@@ -24,7 +24,7 @@ type, abstract, public :: motion_anisocor
     real                            :: motion_correctgtol
 contains
     procedure(motion_anisocor_calc_T_out), deferred :: calc_T_out
-    procedure(motion_anisocor_new       ), deferred :: new 
+    procedure(motion_anisocor_new       ), deferred :: new
     procedure(motion_anisocor_kill      ), deferred :: kill
     procedure(motion_anisocor_minimize  ), deferred :: minimize
 end type motion_anisocor
@@ -37,7 +37,7 @@ interface
         class(image), target,   intent(in)    :: frame_in
         class(image), target,   intent(inout) :: frame_out
     end subroutine motion_anisocor_calc_T_out
-    
+
     subroutine motion_anisocor_new( self, motion_correct_ftol, motion_correct_gtol )
         import motion_anisocor
         class(motion_anisocor), intent(inout) :: self
@@ -54,9 +54,9 @@ interface
         class(motion_anisocor), intent(inout) :: self
         class(image), target,   intent(in)    :: ref, frame
         real(kind=8),           intent(out)   :: corr, regu
-        real(kind=8) :: cxy(POLY_DIM+1) 
+        real(kind=8) :: cxy(POLY_DIM+1)
     end function motion_anisocor_minimize
-    
+
 end interface
 
 end module simple_motion_anisocor

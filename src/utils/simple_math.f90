@@ -1265,7 +1265,7 @@ contains
     pure function euclid( vec1, vec2 ) result( dist )
         real, intent(in)    :: vec1(:), vec2(:)
         real                :: dist
-        dist = sqrt(sum((vec1-vec2)**2.))
+        dist = sqrt(sum((vec1-vec2)**2))
     end function euclid
 
     !>   calculates the argument of a vector

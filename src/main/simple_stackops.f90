@@ -258,11 +258,11 @@ contains
     !                -) logarithm of the image (after pixel scaling)
     !                -) background subtraction
     !                -) median filter
-    subroutine prepare_stack( fname2process, fname, smpd, lp, winsz)
+    subroutine prepare_stack( fname2process, fname, smpd, lp)
         use simple_procimgfile,   only : subtr_backgr_imgfile, real_filter_imgfile
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lp
-        integer,          intent(in) :: winsz !for median filtering
+        !integer,    :: winsz !for median filtering
         integer     :: n, ldim(3), i
         type(image) :: img
         real        :: lambda !for tv filtering
@@ -271,28 +271,43 @@ contains
         call img%new(ldim,smpd)
         lambda = 1.
         call raise_exception( n, ldim, 'calc_log_imgfile' )
-        !call apply_tvf_stack(fname2process,fname,smpd,lambda)
         call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
         call apply_tvf_stack(fname,fname,smpd,lambda)
         call subtr_backgr_imgfile( fname, fname, smpd, lp )
-        call real_filter_imgfile(fname, fname, smpd, 'median', winsz)
+        !call real_filter_imgfile(fname, fname, smpd, 'median', winsz)
         call img%kill
     end subroutine prepare_stack
 
     !This subroutine performs Canny automatic edge detection on a stack
     !of images.
-    subroutine binarize_stack(fname2process,fname,smpd)
+    !If discard_borders is set to true, the external frame of the binary
+    !image is set to 0, to take care of border effects.
+    !default: discard_borders=.false.
+    subroutine binarize_stack(fname2process,fname,smpd,discard_borders)
       use simple_segmentation, only : canny
-      character(len=*), intent(in) :: fname2process, fname
-      real,             intent(in) :: smpd
+      character(len=*),  intent(in) :: fname2process, fname
+      real,              intent(in) :: smpd
+      logical, optional, intent(in) :: discard_borders
+      real, allocatable :: rmat_bin(:,:,:)
+      logical     :: ddiscard_borders
       integer     :: n, ldim(3), i
       type(image) :: img
       call find_ldim_nptcls(fname2process, ldim, n)
       ldim(3) = 1
+      ddiscard_borders = .false.
+      if(present(discard_borders)) ddiscard_borders = discard_borders
       call img%new(ldim,smpd)
       do i = 1, n
           call img%read(fname2process, i)
           call canny(img)
+          if(ddiscard_borders) then
+              rmat_bin = img%get_rmat()
+              rmat_bin(1:int(ldim(1)/10), :, 1) = 0.       !bottom horizontal border
+              rmat_bin(ldim(1)-int(ldim(1)/10):ldim(1),:, 1) = 0. !top horizontal border
+              rmat_bin(:,1:int(ldim(2)/10), 1) = 0.        !bottom vertical border
+              rmat_bin(:,ldim(2)-int(ldim(2)/10):ldim(2), 1) = 0.  !top vertical border
+              call img%set_rmat(rmat_bin)
+          endif
           call img%write(fname,i)
       enddo
       call img%kill

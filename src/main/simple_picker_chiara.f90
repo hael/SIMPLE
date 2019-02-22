@@ -3,9 +3,9 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
-! public :: extract_particles, center_cc, discard_borders !maybe to remove center_cc from public
-!
-! private
+ public :: extract_particles, center_cc, discard_borders, pixels_dist, get_pixel_pos !maybe to remove center_cc from public
+
+ private
 interface pixels_dist
     module procedure pixels_dist_1
     module procedure pixels_dist_2
@@ -210,17 +210,15 @@ contains
       integer,              intent(in)  :: imat_masked(:,:,:)
       integer, allocatable, intent(out) :: pos(:,:)
       integer :: s(3), i, j, k, cnt
-      ! if( any(imat_masked > 1.0001) .or. any(imat_masked < 0. ))&
-      ! &THROW_HARD('Input not binary; get_pixel_pos')
       s = shape(imat_masked)
-      allocate(pos(3, count(imat_masked > 0.5)), source = 0)
+      allocate(pos(3,count(imat_masked(:s(1),:s(2),:s(3)) > 0.5)), source = 0)
       cnt = 0
       do i = 1, s(1)
             do j = 1, s(2)
                 do k = 1, s(3)
-                    if(imat_masked(i,j,k) > 0.5) then !imat_masked is binary
+                    if(imat_masked(i,j,k) > 0.5) then
                         cnt = cnt + 1
-                        pos(:,cnt) = [i,j,k]
+                        pos(:3,cnt) = [i,j,k]
                     endif
                 enddo
             enddo
@@ -234,10 +232,11 @@ contains
     !              the selected pixel and all the others
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
-    function pixels_dist_1( px, vec, which) result( dist )
-        integer, intent(in)           :: px(3)
-        integer, intent(in)           :: vec(:,:)
-        character(len=*),  intent(in) :: which
+    function pixels_dist_1( px, vec, which, location) result( dist )
+        integer,           intent(in)  :: px(3)
+        integer,           intent(in)  :: vec(:,:)
+        character(len=*),  intent(in)  :: which
+        integer, optional, intent(out) :: location(1)
         logical :: mask(size(vec, dim = 2))
         real    :: dist
         integer :: i
@@ -247,21 +246,25 @@ contains
         enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.))
+            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
+            if(present(location)) location = maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
         case('min')
-            dist =  minval(sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.), mask)
+            dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location = minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
         case('sum')
-            dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2.+(real(px(2)-vec(2,:)))**2.+(real(px(3)-vec(3,:)))**2.))
+            if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
+            dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
         case DEFAULT
             write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
             THROW_HARD('Unsupported pixels_dist kind; pixels_dist_1')
         end select
     end function pixels_dist_1
 
-    function pixels_dist_2( px, vec, which) result( dist )
-        real, intent(in)             :: px(3)
-        real, intent(in)             :: vec(:,:)
-        character(len=*), intent(in) :: which
+    function pixels_dist_2( px, vec, which, location) result( dist )
+        real,              intent(in)  :: px(3)
+        real,              intent(in)  :: vec(:,:)
+        character(len=*),  intent(in)  :: which
+        integer, optional,    intent(out) :: location(1)
         logical :: mask(size(vec, dim = 2))
         real    :: dist
         integer :: i
@@ -272,11 +275,14 @@ contains
         enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+            if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
         case('min')
-            dist =  minval(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.), mask)
+            dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+            if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
         case('sum')
-            dist =  sum(sqrt((px(1)-vec(1,:))**2.+(px(2)-vec(2,:))**2.+(px(3)-vec(3,:))**2.))
+            if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
+            dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
         case DEFAULT
             write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
             THROW_HARD('Unsupported pixels_dist kind; pixels_dist_2')

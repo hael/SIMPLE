@@ -27,12 +27,26 @@ end subroutine laplacian_filt
   ! For Canny3D visit the following websites
   ! https://au.mathworks.com/matlabcentral/fileexchange/46260-3d-differential-canny-edge-detector
   ! https://en.wikipedia.org/wiki/Edge_detection#Second-order_approaches
+
+  ! 3D line for regression for identification atom rows
+  function fun_try(p,n) result(r)
+          real,    intent(in) :: p(:)
+          integer, intent(in) :: n
+          real :: r(n)
+          real :: x, y
+          x = p(1)
+          y = p(2)
+          r(1) = 1
+          r(2) = x*y
+  end function fun_try
+
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
     !$ use omp_lib
     !$ use omp_lib_kinds
   include 'simple_lib.f08'
+  use simple_commander_distr_wflows
   use simple_test_chiara_try_mod
   use simple_powerspec_analysis
   use gnufor2
@@ -46,16 +60,16 @@ program simple_test_chiara_try
   use simple_parameters, only: parameters
   use simple_cmdline,    only: cmdline
   use simple_tvfilter
-  type(image)       :: img1, img2, pspec_img1, pspec_img2
+  use simple_ctf
+  type(image)       :: img, img1, img2, pspec_img1, pspec_img2
   real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
   integer :: i,j, ldim(3), nptcls, box,n_vol
-  type(ctf)       :: tfun
   type(ctfparams) :: ctfparms
   real :: smpd
   integer :: h, k, sh, cnt, px(3)
   real :: ave, sdev, maxv, minv, SumSQR
   real :: thresh(1)
-  real, allocatable :: x(:)
+  real :: x(2,4), y(4), sig(4), v(2,2), w(2), chisq, a(2)
   integer, allocatable :: sz(:,:)
   integer, allocatable :: pos(:,:), imat(:,:,:)
   real :: dist, ratio, corr_real, corr_ft
@@ -65,23 +79,41 @@ program simple_test_chiara_try
   real :: m(1)
   integer :: npxls_at_mode
   real    :: stretch_lim(2)
- !call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2
+  logical :: outside
+  type(motion_correct_distr_commander) :: xmotion_correct_distr
+  type(cmdline) :: cline
+  type(ctf) :: tfun
+ !!!!!!!!!!!!!WORKING ON POWER SPECTRA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ ! call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2
 !call process_ps_stack('pspecs_saga_polii.mrc',     'saga_analysis_TVdenoising.mrc', 1.14, 50., 1, 10)
 !call process_ps_stack('pspecs_sphire_tstdat.mrc', 'sphire_analysis_TVdenoising.mrc', 1.41, 20.,1, 10)
 
-call img1%new([1854,1918,1], 1.)
-call img1%read('AnisoResIteration1.mrc')
-call img2%new([1854,1918,1], 1.)
-call img2%read('AnisoResIteration2.mrc')
-corr_real = img1%real_corr(img2)
-print *, 'REAL SPACE CORRELATION ', corr_real
-pspec_img1 = img1%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
-call pspec_img1%write('PowerSpectrum1.mrc')
-pspec_img2 = img2%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
-call pspec_img2%write('PowerSpectrum2.mrc')
-corr_ft =  pspec_img1%real_corr(pspec_img2)
-print *, 'FT SPACE CORRELATION ', corr_ft
-
+!!!!!!!!TEST CORRELATION IN REAL-F SPACE. TO CORRECT
+! call img1%new([1854,1918,1], 1.)
+! call img1%read('AnisoResIteration1.mrc')
+! call img2%new([1854,1918,1], 1.)
+! call img2%read('AnisoResIteration2.mrc')
+! corr_real = img1%real_corr(img2)
+! print *, 'REAL SPACE CORRELATION ', corr_real
+! pspec_img1 = img1%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
+! call pspec_img1%write('PowerSpectrum1.mrc')
+! pspec_img2 = img2%mic2spec(512, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
+! call pspec_img2%write('PowerSpectrum2.mrc')
+! corr_ft =  pspec_img1%real_corr(pspec_img2)
+! print *, 'FT SPACE CORRELATION ', corr_ft
+! !!!!!!! ARTIFICIAL MOVIE CREATION!!!!!!!!!!
+!  call img%new([512,512,1],1.)
+!  call img1%new([256,256,1],1.)
+! do i = 1, 6
+!  call img1%read('Dd'//int2str(i)//'.mrc')
+!  call img1%add_gauran(0.8)
+!  call img1%fft()
+!  call img1%bp(0.,10.)
+!  call img1%ifft()
+!  call img1%write('StackImagesNoiseLP2objects.mrc',i)
+! enddo
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ !call xmotion_correct_distr%execute(cline)
  end program simple_test_chiara_try
 ! !call find_ldim_nptcls('/home/chiara/Desktop/Chiara/ANTERGOS/forctf/0001_forctf.mrc', ldim, nptcls)
 

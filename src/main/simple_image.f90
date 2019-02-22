@@ -4934,7 +4934,7 @@ contains
         end do
         !omp end parallel do
         deallocate(wc,wr)
-        grad = sqrt(Ddc**2. + Ddr**2.)
+        grad = sqrt(Ddc**2 + Ddr**2)
         if(present(Dc)) Dc = Ddc
         if(present(Dr)) Dr = Ddr
         call img_p%kill
@@ -4997,7 +4997,7 @@ contains
             enddo
         enddo
         !omp end parallel do
-        grad3D = sqrt(Ddx**2. + Ddy**2. + Ddz**2.)
+        grad3D = sqrt(Ddx**2 + Ddy**2 + Ddz**2)
         deallocate(sx,sy,szx,szy,szz)
         call img_p%kill
     end subroutine calc_gradient2
@@ -5076,7 +5076,7 @@ contains
         end do
         !omp end parallel do
         deallocate(wc,wr)
-        grad = sqrt(Ddc**2. + Ddr**2.)
+        grad = sqrt(Ddc**2 + Ddr**2)
         if(present(Dc)) Dc = Ddc
         if(present(Dr)) Dr = Ddr
     end subroutine calc_gradient_improved
