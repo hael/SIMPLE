@@ -115,6 +115,12 @@ contains
                 call cline_cluster2D2%set('bfac',   1000.)
             endif
         endif
+        if( cline%defined('ptcl_filt') )then
+            if( cline%get_carg('ptcl_filt').eq.'yes' )then
+                call cline_cluster2D2%set('objfun',     'cc')
+                call cline_cluster2D2%set('match_filt', 'no')
+            endif
+        endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
@@ -274,7 +280,7 @@ contains
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2
+        real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
@@ -308,9 +314,8 @@ contains
             cline_cluster2D_stage1 = cline
             if( cline%defined('objfun') )then
                 if( cline%get_carg('objfun').eq.'euclid' )then
-                    call cline_cluster2D_stage1%set('objfun', 'cc')
-                else
-                    call cline_cluster2D_stage1%set('objfun', 'cc')
+                    call cline_cluster2D_stage1%set('objfun',     'cc')
+                    call cline_cluster2D_stage1%set('match_filt', 'no')
                 endif
             endif
             if( cline%defined('ptcl_filt') )then
@@ -410,6 +415,9 @@ contains
                 status = simple_rename(projfile_sc,orig_projfile)
                 deallocate(projfile_sc)
             endif
+            trs_stage2 = MSK_FRAC*cline_cluster2D_stage2%get_rarg('msk')
+            trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
+            call cline_cluster2D_stage2%set('trs', trs_stage2)
             ! execution
             call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
             call xcluster2D_distr%execute(cline_cluster2D_stage2)

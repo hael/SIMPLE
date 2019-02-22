@@ -398,6 +398,7 @@ contains
 
         ! VOLUMETRIC 3D RECONSTRUCTION
         call calc_3Drec( cline, which_iter )
+        call eucl_sigma%kill
 
         ! REPORT CONVERGENCE
         call qsys_job_finished(  'simple_strategy3D_matcher :: refine3D_exec')
@@ -581,7 +582,6 @@ contains
             !$omp end parallel do
         end do
         ! cleanup
-        call eucl_sigma%kill
         call pftcc_here%kill
         deallocate(ptcl_mask_not)
     end subroutine calc_ptcl_stats
@@ -646,6 +646,7 @@ contains
                             case DEFAULT
                                 call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                         end select
+                        if( eucl_sigma%sigma2_exists( iptcl )) call eucl_sigma%set_do_divide(.false.)
                     end do
                 end do
                 ! normalise structure factors

@@ -443,7 +443,7 @@ contains
         real, allocatable :: kweights(:)
         integer :: ldim(3),logi(3),h,k,phys(3),sh
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
-        real    :: rh,rk,sh_sq
+        real    :: rh,rk
         logical :: do_bfac
         ! initialize
         call self%init(dfx, dfy, angast)
@@ -459,8 +459,7 @@ contains
             do k=lims(2,1),lims(2,2)
                 rh    = real(h)
                 rk    = real(k)
-                sh_sq = real(h*h+k*k)
-                sh     = nint(sqrt(sh_sq))
+                sh     = nint(sqrt(real(h*h+k*k)))
                 ! calculate CTF and CTF**2.0 values
                 hinv      = rh * inv_ldim(1)
                 kinv      = rk * inv_ldim(2)

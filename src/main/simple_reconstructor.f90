@@ -283,7 +283,7 @@ contains
         type(ori) :: o_sym
         type(ctf) :: tfun
         complex   :: comp, oshift
-        real      :: sigma2(0:ceiling(real(self%nyq)*self%alpha**2.))
+        real      :: sigma2(0:2*self%nyq)
         real      :: vec(3), loc(3), dists(3), shconst_here(2), bfac_weights(0:self%ldim_img(1))
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rsh_sq, freq_sq
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
@@ -400,10 +400,10 @@ contains
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
         real,    optional,    intent(in)    :: bfac    !< B-factor
         integer, optional,    intent(in)    :: state   !< state to reconstruct
-        real      :: sigma2(0:ceiling(real(self%nyq)*self%alpha**2.))
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
+        real      :: sigma2(0:2*self%nyq)
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(0:self%ldim_img(1))
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, projw

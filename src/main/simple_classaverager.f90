@@ -356,19 +356,20 @@ contains
     subroutine cavger_assemble_sums( do_frac_update )
         use simple_kbinterpol,          only: kbinterpol
         use simple_strategy2D3D_common, only: read_img
-        logical,           intent(in) :: do_frac_update
-        type(kbinterpol)              :: kbwin
-        type(image)                   :: cls_imgsum_even, cls_imgsum_odd
-        type(image), allocatable      :: batch_imgs(:), cgrid_imgs(:)
-        complex,     allocatable      :: cmat_even(:,:,:), cmat_odd(:,:,:)
-        real,        allocatable      :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:), sigma2(:)
-        integer,     allocatable      :: ptcls_inds(:), batches(:,:), iprecs(:)
-        integer,     allocatable      :: ioris(:), cyc1(:), cyc2(:)
-        complex   :: zero, fcomp
-        real      :: loc(2), mat(2,2), dist(2), pw, add_phshift
-        integer   :: lims(3,2), lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
-        integer   :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
-        integer   :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
+        logical,      intent(in) :: do_frac_update
+        type(kbinterpol)         :: kbwin
+        type(image)              :: cls_imgsum_even, cls_imgsum_odd
+        type(image), allocatable :: batch_imgs(:), cgrid_imgs(:)
+        complex,     allocatable :: cmat_even(:,:,:), cmat_odd(:,:,:)
+        real,        allocatable :: rho(:,:), rho_even(:,:), rho_odd(:,:), w(:,:)
+        integer,     allocatable :: ptcls_inds(:), batches(:,:), iprecs(:)
+        integer,     allocatable :: ioris(:), cyc1(:), cyc2(:)
+        complex,     parameter   :: zero = cmplx(0.,0.)
+        complex :: fcomp
+        real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
+        integer :: lims(3,2), lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
+        integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
+        integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
         ! init cavgs
         if( do_frac_update )then
@@ -378,7 +379,6 @@ contains
             call init_cavgs_sums
         endif
         kbwin  = kbinterpol(KBWINSZ, params_glob%alpha)
-        zero   = cmplx(0.,0.)
         wdim   = kbwin%get_wdim()
         iwinsz = ceiling(kbwin%get_winsz() - 0.5)
         incr   = 0
@@ -419,9 +419,7 @@ contains
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
         allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
                  &rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                 &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                 &sigma2(1:ceiling(params_glob%alpha**2.*real(nyq))), stat=alloc_stat)
-                 ! sigma2 is allocated to paddingfactor^2*(nyquist index) so no need to care about limits
+                 &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -460,11 +458,12 @@ contains
                 if( L_BENCH ) rt_batch_loop = rt_batch_loop + toc(t_batch_loop)
                 if( L_BENCH ) t_gridding = tic()
                 !$omp parallel do default(shared) schedule(static) reduction(+:cmat_even,cmat_odd,rho_even,rho_odd) proc_bind(close)&
-                !$omp private(fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
+                !$omp private(iptcl,fcomp,win_corner,i,iprec,iori,add_phshift,rho,pw,mat,h,k,l,m,ll,mm,dist,loc,sh,phys_cmat,cyc1,cyc2,w,incr)
                 ! batch loop, direct Fourier interpolation
                 do i=1,batchsz
+                    iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     iprec = iprecs(batches(batch,1) + i - 1)
-                    iori  = ioris(batches(batch,1)  + i - 1)
+                    iori  = ioris(batches(batch,1) + i - 1)
                     ! normalise and FFT
                     call batch_imgs(i)%fft()
                     ! apply CTF, shift and optionally modulates with Bfactor

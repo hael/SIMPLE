@@ -57,10 +57,6 @@ contains
         real                  :: frac_srch_space, bfactor
         integer               :: iptcl, i, fnr, cnt, updatecnt
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy
-        l_partial_sums = .false.
-        l_snhc         = .false.
-        l_greedy       = .false.
-        l_frac_update  = .false.
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
@@ -70,6 +66,10 @@ contains
         frac_srch_space = build_glob%spproj_field%get_avg('frac')
 
         ! SWITCHES
+        l_partial_sums = .false.
+        l_snhc         = .false.
+        l_greedy       = .false.
+        l_frac_update  = .false.
         if( params_glob%extr_iter == 1 )then
             ! greedy start
             l_partial_sums = .false.
@@ -89,9 +89,10 @@ contains
         else
             ! optional fractional update, no snhc opt
             l_partial_sums = params_glob%l_frac_update
-            l_snhc         = .false.
-            l_greedy       = (params_glob%refine.eq.'greedy')
             l_frac_update  = params_glob%l_frac_update
+            l_snhc         = .false.
+            l_greedy       = (params_glob%refine.eq.'greedy') .or. (params_glob%l_ptcl_filt)&
+                            &.or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -258,7 +259,6 @@ contains
         end if
 
         ! CLEAN-UP
-        call eucl_sigma%kill
         call pftcc%kill
         deallocate(ptcl_mask)
         if( L_BENCH ) rt_align = toc(t_align)
@@ -275,6 +275,7 @@ contains
         ! write results to disk
         call cavger_readwrite_partial_sums('write')
         call cavger_kill
+        call eucl_sigma%kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then

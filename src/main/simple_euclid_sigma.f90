@@ -38,7 +38,10 @@ contains
     procedure          :: set_do_divide
     procedure          :: get_do_divide
     procedure          :: set_sigma2
-    procedure          :: get_sigma2
+    generic            :: get_sigma2 => get_sigma2_1, get_sigma2_2
+    procedure, private :: get_sigma2_1
+    procedure, private :: get_sigma2_2
+    procedure, private :: resample_sigma2
     ! destructor
     procedure          :: kill
 end type euclid_sigma
@@ -284,31 +287,51 @@ contains
         end if
     end subroutine set_sigma2
 
-    subroutine get_sigma2( self, nyq, sigma2 )
+    subroutine get_sigma2_1( self, nyq, sigma2 )
         class(euclid_sigma), intent(in)  :: self
         integer,             intent(in)  :: nyq
-        real,                intent(out) :: sigma2(:)
-        real    :: scale, loc, ld
-        integer :: k, lk, kstart
+        real,                intent(out) :: sigma2(0:2*nyq)
         sigma2 = 1.
         if( .not.self%exists )return
+        call self%resample_sigma2(nyq, self%divide_by, sigma2)
+    end subroutine get_sigma2_1
+
+    subroutine get_sigma2_2( self, nyq, iptcl, sigma2 )
+        class(euclid_sigma), intent(in)  :: self
+        integer,             intent(in)  :: nyq, iptcl
+        real,                intent(out) :: sigma2(0:2*nyq)
+        integer :: pind
+        sigma2 = 1.
+        if( .not.self%exists )return
+        pind = self%pinds(iptcl)
+        if( pind == 0 )THROW_HARD('Wrong indexing; get_sigma2_2')
+        call self%resample_sigma2(nyq, self%sigma2_noise(:,pind), sigma2)
+    end subroutine get_sigma2_2
+
+    subroutine resample_sigma2( self, nyq, sigma2_in, sigma2_out)
+        class(euclid_sigma), intent(in)    :: self
+        integer,             intent(in)    :: nyq
+        real,                intent(in)    :: sigma2_in(self%kfromto(1):self%kfromto(2))
+        real,                intent(inout) :: sigma2_out(0:2*nyq)
+        real    :: scale, loc, ld
+        integer :: k, kstart, lk
         if( nyq == self%kfromto(2) )then
-            sigma2(self%kfromto(1):self%kfromto(2)) = self%divide_by(:)
+            sigma2_out(self%kfromto(1):self%kfromto(2)) = sigma2_in
         else if( nyq > self%kfromto(2) )then
-            ! requires interpolation, assumed that kfromto(2) is nyquist index
-            scale       = real(self%kfromto(2)) / real(nyq)
-            kstart      = ceiling(real(self%kfromto(1))/scale)
-            sigma2(nyq) = self%divide_by(self%kfromto(2))
+            ! kfromto(2) is nyquist index
+            scale  = real(self%kfromto(2)) / real(nyq)
+            kstart = ceiling(real(self%kfromto(1))/scale)
+            sigma2_out(nyq) = sigma2_in(self%kfromto(2))
             do k = kstart,nyq-1
                 loc = real(k)*scale
                 lk  = floor(loc)
                 ld  = loc-real(lk)
-                sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
+                sigma2_out(k) = ld*sigma2_in(lk+1) + (1.-ld)*sigma2_in(lk)
             enddo
         else
             THROW_HARD('Incompatible requested size; get_sigma2')
         endif
-    end subroutine get_sigma2
+    end subroutine resample_sigma2
 
     ! destructor
 

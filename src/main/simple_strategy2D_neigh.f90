@@ -32,20 +32,19 @@ contains
 
     subroutine srch_neigh( self )
         class(strategy2D_neigh), intent(inout) :: self
-        integer :: iref,loc(1),inpl_ind,inn
+        integer :: iref,inpl_ind,inn
         real    :: corrs(self%s%nrots),inpl_corr,corr
         if( .not. allocated(build_glob%nnmat) )&
         &THROW_HARD('nnmat need to be associated in self%spec; srch_neigh')
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
-            corr = -1.
+            corr = -huge(corr)
             ! evaluate neighbors (greedy selection)
             do inn=1,self%s%nnn
                 iref      = build_glob%nnmat(self%s%prev_class,inn)
                 if( s2D%cls_pops(iref) == 0 )cycle
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
-                loc       = maxloc(corrs)
-                inpl_ind  = loc(1)
+                inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
                 if( inpl_corr >= corr )then
                     corr              = inpl_corr
