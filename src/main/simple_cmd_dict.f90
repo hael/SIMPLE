@@ -227,7 +227,6 @@ contains
         call chdict%push('shalgn',        'do 2D shift alignment(yes|no){no}')
         call chdict%push('shbarrier',     'use shift search barrier constraint(yes|no){yes}')
         call chdict%push('shell_norm',    'normalise based on power spectrum (yes|no){no}')
-        call chdict%push('shellw',        'shell-weight reconstruction (yes|no){no}')
         call chdict%push('sherr',         'shift error(in pixels){2}')
         call chdict%push('sigma2_fudge',  'fudge factor for sigma2_noise {1}')
         call chdict%push('single',        'simulate a single image(yes|no){no}')

@@ -44,7 +44,7 @@ contains
         real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt, bfac_min, bfac_max
-        logical :: converged, bfac_rec_there
+        logical :: converged
         601 format(A,1X,F8.3)
         602 format(A,1X,F8.3,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
@@ -58,17 +58,12 @@ contains
         call build_glob%spproj_field%stats('bfac',      self%bfac,      mask=mask)
         call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
-        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
-        if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
         write(logfhandle,601) '>>> CLASS OVERLAP:                                  ', self%mi_class
         write(logfhandle,601) '>>> # PARTICLE UPDATES             AVG:             ', avg_updatecnt
         write(logfhandle,604) '>>> IN-PLANE DIST (DEG)            AVG/SDEV/MIN/MAX:',&
         &self%dist_inpl%avg, self%dist_inpl%sdev, self%dist_inpl%minv, self%dist_inpl%maxv
         write(logfhandle,604) '>>> PER-PARTICLE B-FACTOR (SEARCH) AVG/SDEV/MIN/MAX:',&
         &self%bfac%avg, self%bfac%sdev, self%bfac%minv, self%bfac%maxv
-        if( bfac_rec_there )then
-        write(logfhandle,602) '>>> PER-PARTICLE B-FACTOR (REC)             MIN/MAX:', bfac_min, bfac_max
-        endif
         write(logfhandle,604) '>>> PARTICLE WEIGHT                AVG/SDEV/MIN/MAX:',&
         &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED         AVG/SDEV/MIN/MAX:',&
@@ -119,7 +114,7 @@ contains
         real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt, bfac_min, bfac_max
-        logical :: converged, bfac_rec_there
+        logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F8.3)
         602 format(A,1X,F8.3,1X,F8.3)
@@ -141,8 +136,6 @@ contains
         call build_glob%spproj_field%stats('shwstdev',  self%shwstdev,  mask=mask)
         self%mi_proj   = build_glob%spproj_field%get_avg('mi_proj',   mask=mask)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state',  mask=mask)
-        bfac_rec_there = build_glob%spproj_field%isthere('bfac_rec')
-        if( bfac_rec_there ) call build_glob%spproj_field%minmax('bfac_rec', bfac_min, bfac_max)
         write(logfhandle,601) '>>> ORIENTATION OVERLAP:                            ', self%mi_proj
         if( params_glob%nstates > 1 )then
         write(logfhandle,601) '>>> STATE OVERLAP:                                  ', self%mi_state
@@ -158,9 +151,6 @@ contains
         &self%npeaks%avg, self%npeaks%sdev, self%npeaks%minv, self%npeaks%maxv
         write(logfhandle,604) '>>> PER-PARTICLE B-FACTOR (SEARCH) AVG/SDEV/MIN/MAX:',&
         &self%bfac%avg, self%bfac%sdev, self%bfac%minv, self%bfac%maxv
-        if( bfac_rec_there )then
-        write(logfhandle,602) '>>> PER-PARTICLE B-FACTOR (REC)             MIN/MAX:', bfac_min, bfac_max
-        endif
         write(logfhandle,604) '>>> PARTICLE WEIGHT                AVG/SDEV/MIN/MAX:',&
         &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,604) '>>> ORIENTATION WEIGHT MAX         AVG/SDEV/MIN/MAX:',&

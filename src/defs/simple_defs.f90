@@ -169,7 +169,6 @@ integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of
 ! weighting scheme
 logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< per-particle or global orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
-real,    parameter :: BFAC_SDEV_DEFAULT    = 50.       !< B-factor standard deviation for shell-weighting in 2D/3D
 real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
 
 ! criterion for even/odd averaging in gold-FSC

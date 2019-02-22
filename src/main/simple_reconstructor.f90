@@ -2,9 +2,9 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
-use simple_kbinterpol, only: kbinterpol
-use simple_image,      only: image
-use simple_parameters, only: params_glob
+use simple_kbinterpol,   only: kbinterpol
+use simple_image,        only: image
+use simple_parameters,   only: params_glob
 use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
 use simple_fftw3
 implicit none
@@ -267,7 +267,7 @@ contains
     ! CONVOLUTION INTERPOLATION
 
     !> insert Fourier plane, single orientation
-    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght, bfac )
+    subroutine insert_fplane_1( self, se, o, ctfvars, fpl, pwght )
         use simple_ctf,  only: ctf
         use simple_ori,  only: ori
         use simple_oris, only: oris
@@ -278,16 +278,15 @@ contains
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real,       optional, intent(in)    :: bfac    !< B-factor
         real, allocatable :: rotmats(:,:,:)
         type(ori) :: o_sym
         type(ctf) :: tfun
         complex   :: comp, oshift
         real      :: sigma2(0:2*self%nyq)
-        real      :: vec(3), loc(3), dists(3), shconst_here(2), bfac_weights(0:self%ldim_img(1))
+        real      :: vec(3), loc(3), dists(3), shconst_here(2)
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rsh_sq, freq_sq
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
-        logical   :: do_bfac_rec, do_sigma2div
+        logical   :: do_sigma2div
         if( pwght < TINY )return
         do_sigma2div = associated(eucl_sigma_glob)
         if (do_sigma2div) then
@@ -301,11 +300,6 @@ contains
             ! make CTF object
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-        endif
-        ! b-factor weighted reconstruction
-        do_bfac_rec = present(bfac)
-        if( do_bfac_rec )then
-            call calc_norm_bfac_weights( self%ldim_img(1), bfac, self%get_smpd(), bfac_weights )
         endif
         ! setup rotation matrices
         nsym = se%get_nsym()
@@ -365,7 +359,6 @@ contains
                     endif
                     ! (weighted) kernel & CTF values
                     w = pwght
-                    if( do_bfac_rec ) w = w * bfac_weights(sh)
                     if( do_sigma2div) w = w / sigma2(sh)
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
@@ -387,7 +380,7 @@ contains
     end subroutine insert_fplane_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
-    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, bfac, state )
+    subroutine insert_fplane_2( self, se, os, ctfvars, fpl, pwght, state )
         use simple_ctf,        only: ctf
         use simple_ori,        only: ori
         use simple_oris,       only: oris
@@ -398,17 +391,16 @@ contains
         type(ctfparams),      intent(in)    :: ctfvars !< varaibles needed to evaluate CTF
         class(image),         intent(inout) :: fpl     !< Fourier plane
         real,                 intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real,    optional,    intent(in)    :: bfac    !< B-factor
         integer, optional,    intent(in)    :: state   !< state to reconstruct
         type(ori) :: o_sym, o
         type(ctf) :: tfun
         complex   :: comp, oshift
         real      :: sigma2(0:2*self%nyq)
-        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3), bfac_weights(0:self%ldim_img(1))
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq, bfac_sc
+        real      :: rotmats(os%get_noris(),se%get_nsym(),3,3)
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, projw
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
-        logical   :: do_bfac_rec, do_sigma2div
+        logical   :: do_sigma2div
         do_sigma2div = associated(eucl_sigma_glob)
         if (do_sigma2div) then
             do_sigma2div = eucl_sigma_glob%get_do_divide()
@@ -424,11 +416,6 @@ contains
             ! make CTF object
             tfun = ctf(self%get_smpd(), ctfvars%kv, ctfvars%cs, ctfvars%fraca)
             call tfun%init(ctfvars%dfx, ctfvars%dfy, ctfvars%angast)
-        endif
-        ! b-factor weighted reconstruction
-        do_bfac_rec = present(bfac)
-        if( do_bfac_rec )then
-            call calc_norm_bfac_weights( self%ldim_img(1), bfac, self%get_smpd(), bfac_weights )
         endif
         ! setup orientation weights/states/rotation matrices/shifts
         nsym  = se%get_nsym()
@@ -492,16 +479,7 @@ contains
                             tval   = 1.
                             tvalsq = tval
                         endif
-                        ! (weighted) kernel & CTF values
-                        if( do_bfac_rec )then
-                            if( rsh_sq >= rnyq_sq )then
-                                tval = tval * exp(-bfac_sc)
-                            else
-                                tval = tval * exp(-bfac_sc*rsh_sq/rnyq_sq)
-                            endif
-                        endif
                         w = ows(iori)
-                        if( do_bfac_rec )  w = w * bfac_weights(sh)
                         if( do_sigma2div ) w = w / sigma2(sh)
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
@@ -771,7 +749,7 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk
-                real      :: pw, bfac_rec
+                real      :: pw
                 state = o%get_state(i)
                 if( state == 0 ) return
                 orientation = o%get_ori(i)
@@ -783,14 +761,7 @@ contains
                     call img%read(stkname, ind_in_stk)
                     call img%noise_norm_pad_fft(lmsk, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    bfac_rec = 0.
-                    if( params_glob%l_shellw )then
-                        ! shell-weighted reconstruction
-                        if( orientation%isthere('bfac_rec') ) bfac_rec = orientation%get('bfac_rec')
-                        call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw, bfac=bfac_rec)
-                    else
-                        call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
-                    endif
+                    call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                     deallocate(stkname)
                 endif
             end subroutine rec_dens

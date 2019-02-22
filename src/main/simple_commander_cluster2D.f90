@@ -82,14 +82,6 @@ contains
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         endif
-        ! shell weighted classes
-        if( params%l_shellw )then
-            if( .not.build%spproj_field%isthere('bfac_rec') )then
-                call build%spproj_field%calc_bfac_rec_specscore(params%bfac_sdev)
-            endif
-        else
-            call build%spproj_field%set_all2single('bfac_rec', 0.)
-        endif
         ! even/odd partitioning
         if( build%spproj_field%get_nevenodd() == 0 ) call build%spproj_field%partition_eo
         ! write

@@ -258,7 +258,7 @@ contains
     ! INTERPOLATION
 
     !> \brief  for gridding a Fourier plane
-    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght, bfac )
+    subroutine grid_fplane_1( self, se, o, ctfvars, fpl, eo, pwght )
         use simple_ori, only: ori
         use simple_sym, only: sym
         class(reconstructor_eo), intent(inout) :: self    !< instance
@@ -268,18 +268,17 @@ contains
         class(image),            intent(inout) :: fpl     !< Fourier plane
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real,          optional, intent(in)    :: bfac
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght, bfac=bfac)
+                call self%even%insert_fplane(se, o, ctfvars, fpl, pwght)
             case(1)
-                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght, bfac=bfac)
+                call self%odd%insert_fplane(se, o, ctfvars, fpl, pwght)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_fplane_1')
         end select
     end subroutine grid_fplane_1
 
-    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, bfac, state )
+    subroutine grid_fplane_2( self, se, os, ctfvars, fpl, eo, pwght, state )
         use simple_oris, only: oris
         use simple_sym,  only: sym
         class(reconstructor_eo), intent(inout) :: self    !< instance
@@ -289,13 +288,12 @@ contains
         class(image),            intent(inout) :: fpl     !< Fourier plane
         integer,                 intent(in)    :: eo      !< eo flag
         real,                    intent(in)    :: pwght   !< external particle weight (affects both fplane and rho)
-        real,          optional, intent(in)    :: bfac
         integer,       optional, intent(in)    :: state   !< state flag
         select case(eo)
             case(-1,0)
-                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, bfac=bfac, state=state)
+                call self%even%insert_fplane(se, os, ctfvars, fpl, pwght, state=state)
             case(1)
-                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, bfac=bfac, state=state)
+                call self%odd%insert_fplane(se, os, ctfvars, fpl, pwght, state=state)
             case DEFAULT
                 THROW_HARD('unsupported eo flag; grid_fplane_2')
         end select
@@ -480,7 +478,7 @@ contains
                 character(len=:), allocatable :: stkname
                 type(ori) :: orientation
                 integer   :: state, ind_in_stk, eo
-                real      :: pw, bfac_rec
+                real      :: pw
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
                 orientation = o%get_ori(i)
@@ -494,14 +492,7 @@ contains
                     call img%read(stkname, ind_in_stk)
                     call img%noise_norm_pad_fft(lmsk, img_pad)
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
-                    bfac_rec = 0.
-                    if( params_glob%l_shellw )then
-                        ! shell-weighted reconstruction
-                        if( orientation%isthere('bfac_rec') ) bfac_rec = orientation%get('bfac_rec')
-                        call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw, bfac=bfac_rec)
-                    else
-                        call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
-                    endif
+                    call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
                     deallocate(stkname)
                 endif
             end subroutine rec_dens

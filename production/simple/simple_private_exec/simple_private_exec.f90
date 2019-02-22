@@ -72,7 +72,6 @@ type(edge_detector_commander)        :: xdetector
 type(masscen_commander)              :: xmasscen
 type(cluster_smat_commander)         :: xcluster_smat
 type(intgpeaks_commander)            :: xintgpeaks
-type(print_bfac_weights_commander)   :: xprint_bfac_weights
 type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 type(stk_corr_commander)             :: xstk_corr
@@ -357,8 +356,7 @@ select case(prg)
         keys_optional(14) = 'maxits'
         keys_optional(15) = 'center'
         keys_optional(16) = 'match_filt'
-        keys_optional(17) = 'shellw'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:17))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:16))
         ! set defaults
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
@@ -422,8 +420,7 @@ select case(prg)
         keys_optional(2) = 'inner'
         keys_optional(3) = 'nspace'
         keys_optional(4) = 'nran'
-        keys_optional(5) = 'shellw'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xrefine3D_init%execute(cline)
@@ -459,9 +456,8 @@ select case(prg)
         keys_optional(23) = 'nnn'
         keys_optional(24) = 'rrate'
         keys_optional(25) = 'update_frac'
-        keys_optional(26) = 'shellw'
-        keys_optional(27) = 'clsfrcs'
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:27))
+        keys_optional(26) = 'clsfrcs'
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('refine') )then
@@ -501,8 +497,7 @@ select case(prg)
         keys_optional(2)  = 'eo'
         keys_optional(3)  = 'frac'
         keys_optional(4)  = 'mskfile'
-        keys_optional(5)  = 'shellw'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
@@ -733,13 +728,6 @@ select case(prg)
         keys_optional(1) = 'kv'
         call cline%parse_oldschool(keys_required(:5),keys_optional(:1))
         call xprint_dose_weights%execute(cline)
-    case( 'print_bfac_weights' )
-        ! for printing the dose weights applied to individual frames
-        keys_required(1) = 'box'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'bfac'
-        call cline%parse_oldschool(keys_required(:3))
-        call xprint_bfac_weights%execute(cline)
     case( 'res' )
         ! for checking the low-pass resolution limit for a given Fourier index
         keys_required(1) = 'smpd'

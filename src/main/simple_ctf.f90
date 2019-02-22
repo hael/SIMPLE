@@ -427,7 +427,7 @@ contains
 
     !>  \brief  is for applying CTF to an image and shifting it (used in classaverager)
     !!          KEEP THIS ROUTINE SERIAL
-    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift, bfac)
+    subroutine apply_and_shift( self, img, imode, lims, rho, x, y, dfx, dfy, angast, add_phshift)
         use simple_image, only: image
         class(ctf),     intent(inout) :: self        !< instance
         class(image),   intent(inout) :: img         !< modified image (output)
@@ -439,22 +439,14 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real, optional, intent(in)    :: bfac        !< ctf b-factor weighing
         real, allocatable :: kweights(:)
         integer :: ldim(3),logi(3),h,k,phys(3),sh
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         real    :: rh,rk
-        logical :: do_bfac
         ! initialize
         call self%init(dfx, dfy, angast)
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
-        ! b-factor weighting
-        do_bfac = present(bfac)
-        if( do_bfac )then
-            allocate(kweights(0:ldim(1)))
-            call calc_norm_bfac_weights(ldim(1), bfac, self%smpd, kweights, is2d=.true.)
-        endif
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 rh    = real(h)
@@ -467,12 +459,7 @@ contains
                 ang       = atan2(rh,rk)
                 tval      = 1.0
                 if( imode <  3 ) tval = self%eval(spaFreqSq, ang, add_phshift)
-                if( do_bfac )then
-                    rho(h,k) = kweights(sh) * tval * tval   ! CTF**2
-                    tval     = kweights(sh) * tval          ! CTF
-                else
-                    rho(h,k) = tval * tval                  ! CTF**2
-                endif
+                rho(h,k) = tval * tval
                 if( imode == 1 ) tval = abs(tval)
                 ! multiply image with tval & weight
                 logi   = [h,k,0]

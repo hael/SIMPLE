@@ -165,7 +165,6 @@ type :: oris
     procedure          :: calc_hard_weights2D
     procedure          :: calc_bfac_rec_rnd
     procedure          :: calc_bfac_rec
-    procedure          :: calc_bfac_rec_specscore
     procedure          :: calc_bfac_srch
     procedure          :: find_best_classes
     procedure          :: find_closest_proj
@@ -2360,28 +2359,6 @@ contains
         call hpsort(classpops, inds)
         call reverse(inds)
     end function order_cls
-
-    subroutine calc_bfac_rec_specscore( self, bfac_sdev )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: bfac_sdev
-        real,    allocatable :: states(:), scores(:)
-        logical, allocatable :: mask(:)
-        real    :: avg, sdev, var
-        logical :: err
-        integer :: i
-        if( self%isthere('specscore') )then
-            scores = self%get_all('specscore')
-        else
-            call self%delete_entry('bfac_rec')
-            return
-        endif
-        states = self%get_all('state')
-        mask   = states > 0.5 .and. scores > TINY
-        call moment(scores, avg, sdev, var, err, mask)
-        scores = ((scores - avg) / sdev) * bfac_sdev
-        call self%set_all('bfac_rec', scores)
-        deallocate(mask,states,scores)
-    end subroutine calc_bfac_rec_specscore
 
     subroutine calc_bfac_rec( self, bfac_sdev )
         class(oris), intent(inout) :: self

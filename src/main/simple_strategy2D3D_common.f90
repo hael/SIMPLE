@@ -223,7 +223,7 @@ contains
         class(sym),      intent(inout) :: se
         class(ori),      intent(inout) :: o
         type(ctfparams), intent(in)    :: ctfvars
-        real      :: pw, bfac_rec
+        real      :: pw
         integer   :: s, eo
         ! state flag
         s = o%get_state()
@@ -235,26 +235,13 @@ contains
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
-            bfac_rec = 0.
-            if( params_glob%l_shellw )then
-                ! shell-weighted reconstruction
-                if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
-            endif
             ! fwd ft
             call img%fft()
             ! gridding
             if( params_glob%l_eo )then
-                if( params_glob%l_shellw )then
-                    call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw, bfac=bfac_rec)
-                else
-                    call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
-                endif
+                call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
             else
-                if( params_glob%l_shellw )then
-                    call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw, bfac=bfac_rec)
-                else
-                    call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
-                endif
+                call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
             endif
         endif
     end subroutine grid_ptcl_1
@@ -270,7 +257,7 @@ contains
         class(oris),     intent(inout) :: os
         type(ctfparams), intent(in)    :: ctfvars
         real, allocatable :: states(:)
-        real    :: pw, bfac_rec
+        real    :: pw
         integer :: s, eo
         ! eo flag
         eo = 0
@@ -279,44 +266,23 @@ contains
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
         if( pw > TINY )then
-            bfac_rec = 0.
-            if( params_glob%l_shellw )then
-                ! shell-weighted reconstruction
-                if( o%isthere('bfac_rec') ) bfac_rec = o%get('bfac_rec')
-            endif
             ! fwd ft
             call img%fft()
             ! gridding
             if( params_glob%nstates == 1 )then
                 if( params_glob%l_eo )then
-                    if( params_glob%l_shellw )then
-                        call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, bfac=bfac_rec)
-                    else
-                        call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
-                    endif
+                    call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
                 else
-                    if( params_glob%l_shellw )then
-                        call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw, bfac=bfac_rec)
-                    else
-                        call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
-                    endif
+                    call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
                 endif
             else
                 states = os%get_all('state')
                 do s=1,params_glob%nstates
                     if( count(nint(states) == s) > 0 )then
                         if( params_glob%l_eo )then
-                            if( params_glob%l_shellw )then
-                                call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, bfac=bfac_rec, state=s)
-                            else
-                                call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
-                            endif
+                            call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
                         else
-                            if( params_glob%l_shellw )then
-                                call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, bfac=bfac_rec, state=s)
-                            else
-                                call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
-                            endif
+                            call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
                         endif
                     endif
                 end do

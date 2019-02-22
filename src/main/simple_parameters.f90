@@ -75,7 +75,6 @@ type :: parameters
     character(len=3)      :: round='no'
     character(len=3)      :: shalgn='no'          !< do 2D shift alignment(yes|no){no}
     character(len=3)      :: shellnorm='no'
-    character(len=3)      :: shellw='no'          !< to use shell weighted reconstruction (yes|no){yes}
     character(len=3)      :: shbarrier='yes'      !< use shift search barrier constraint(yes|no){yes}
     character(len=3)      :: specstats='no'
     character(len=3)      :: stream='no'          !< sream (real time) execution mode(yes|no){no}
@@ -306,7 +305,6 @@ type :: parameters
     real    :: athres=0.           !< angular threshold(in degrees)
     real    :: batchfrac=1.0
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
-    real    :: bfac_sdev=BFAC_SDEV_DEFAULT !< B-factor standard deviation for per-particle B-factor estimation
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
     real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
@@ -413,7 +411,6 @@ type :: parameters
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
     logical :: l_rankw          = .false.
-    logical :: l_shellw         = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: sp_required      = .false.
@@ -562,7 +559,6 @@ contains
         call check_carg('shalgn',         self%shalgn)
         call check_carg('shbarrier',      self%shbarrier)
         call check_carg('shellnorm',      self%shellnorm)
-        call check_carg('shellw',         self%shellw)
         call check_carg('speckind',       self%speckind)
         call check_carg('specstats',      self%specstats)
         call check_carg('stats',          self%stats)
@@ -717,7 +713,6 @@ contains
         call check_rarg('athres',         self%athres)
         call check_rarg('batchfrac',      self%batchfrac)
         call check_rarg('bfac',           self%bfac)
-        call check_rarg('bfac_sdev',      self%bfac_sdev)
         call check_rarg('bfacerr',        self%bfacerr)
         call check_rarg('bw_ratio',       self%bw_ratio)
         call check_rarg('cenlp',          self%cenlp)
@@ -1176,8 +1171,6 @@ contains
         endif
         ! set eo flag
         self%l_eo     = self%eo     .ne. 'no'
-        ! set shellw flag
-        self%l_shellw = self%shellw .ne. 'no'
         ! set projw flag
         self%l_projw  = self%projw  .ne. 'no'
         ! set particle weighting scheme

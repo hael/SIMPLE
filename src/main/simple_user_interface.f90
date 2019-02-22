@@ -204,7 +204,6 @@ type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: rankw
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
-type(simple_input_param) :: shellw
 type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
@@ -688,7 +687,6 @@ contains
         call set_param(user_account,   'user_account', 'str',    'User account name in SLURM/PBS', 'User account name in SLURM/PBS system', 'e.g. Account084', .false., '')
         call set_param(user_project,   'user_project', 'str',    'User project name in SLURM/PBS', 'User project name in SLURM/PBS system', 'e.g. Project001', .false., '')
         call set_param(frcs,           'frcs',         'str',    'Projection FRCs file', 'Projection FRCs file', 'e.g. frcs.bin', .false., '')
-        call set_param(shellw,         'shellw',       'binary', 'B-factor weighted reconstruction', 'Whether to perform B-factor weighted reconstruction(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(focusmsk,       'focusmsk',     'num',    'Mask radius in focused refinement', 'Mask radius in pixels for application of a soft-edged circular mask to remove background noise in focused refinement', 'focused mask radius in pixels', .false., 0.)
         call set_param(nrestarts,      'nrestarts',    'num',    'Number of restarts', 'Number of program restarts to execute{1}', '# restarts{1}', .false., 1.0)
         call set_param(star_datadir,   'star_datadir', 'file',   'STAR project data directory', 'Pathname of STAR image/data files', 'e.g. Micrographs', .false., '')
@@ -823,7 +821,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 0, 0, 12, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 12, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -863,8 +861,7 @@ contains
         call cluster2D%set_input('filt_ctrls', 6, 'match_filt', 'binary', 'Matched filter', 'Filter to maximize the signal-to-noise &
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
-        call cluster2D%set_input('filt_ctrls', 7, shellw)
-        call cluster2D%set_input('filt_ctrls', 8, ptclw)
+        call cluster2D%set_input('filt_ctrls', 7, ptclw)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -1330,7 +1327,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 0, 0, 7, 7, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 6, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1358,9 +1355,8 @@ contains
         initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){yes}'
         initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){yes}'
         initial_3Dmodel%filt_ctrls(4)%cval_default      = 'yes'
-        call initial_3Dmodel%set_input('filt_ctrls', 5, shellw)
-        call initial_3Dmodel%set_input('filt_ctrls', 6, rankw)
-        call initial_3Dmodel%set_input('filt_ctrls', 7, ptclw)
+        call initial_3Dmodel%set_input('filt_ctrls', 5, rankw)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, ptclw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -2444,7 +2440,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 4, 6, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2460,11 +2456,9 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 4, sigma2_fudge)
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, eo)
-        call reconstruct3D%set_input('filt_ctrls', 2, shellw)
-        call reconstruct3D%set_input('filt_ctrls', 3, 'bfac_sdev', 'num', 'B-factor sigma','B-factor standard deviation for per-particle B-factor estimation in Angstroms^2', 'B-factor sigma in Angstroms^2(>0.0){50}', .false., 50.)
-        call reconstruct3D%set_input('filt_ctrls', 4, projw)
-        call reconstruct3D%set_input('filt_ctrls', 5, rankw)
-        call reconstruct3D%set_input('filt_ctrls', 6, ptclw)
+        call reconstruct3D%set_input('filt_ctrls', 2, projw)
+        call reconstruct3D%set_input('filt_ctrls', 3, rankw)
+        call reconstruct3D%set_input('filt_ctrls', 4, ptclw)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2480,7 +2474,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15,11, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 15, 10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2520,10 +2514,9 @@ contains
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
         call refine3D%set_input('filt_ctrls', 7, eo)
-        call refine3D%set_input('filt_ctrls', 8, shellw)
-        call refine3D%set_input('filt_ctrls', 9, projw)
-        call refine3D%set_input('filt_ctrls',10, rankw)
-        call refine3D%set_input('filt_ctrls',11, ptclw)
+        call refine3D%set_input('filt_ctrls', 8, projw)
+        call refine3D%set_input('filt_ctrls', 9, rankw)
+        call refine3D%set_input('filt_ctrls',10, ptclw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
@@ -2542,7 +2535,7 @@ contains
         &'Random initialisation of 3D refinement',&                                                            ! descr_short
         &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
         &'simple_distr_exec',&                                                                                 ! executable
-        &0, 0, 0, 3, 2, 2, 2, .true.)                                                                          ! # entries in each group, requires sp_project
+        &0, 0, 0, 3, 1, 2, 2, .true.)                                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2556,8 +2549,7 @@ contains
         call refine3D_init%set_input('srch_ctrls', 3, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample for 3D reconstruction',&
         &'# random samples', .false., 0.)
         ! filter controls
-        call refine3D_init%set_input('filt_ctrls', 1, shellw)
-        call refine3D_init%set_input('filt_ctrls', 2, eo)
+        call refine3D_init%set_input('filt_ctrls', 1, eo)
         ! mask controls
         call refine3D_init%set_input('mask_ctrls', 1, msk)
         call refine3D_init%set_input('mask_ctrls', 2, inner)

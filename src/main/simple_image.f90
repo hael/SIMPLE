@@ -232,7 +232,6 @@ contains
     procedure, private :: shellnorm_and_apply_filter_serial_2
     generic            :: shellnorm_and_apply_filter_serial =>&
         &shellnorm_and_apply_filter_serial_1, shellnorm_and_apply_filter_serial_2
-    procedure          :: shellnorm_and_apply_bfac_serial
     procedure          :: apply_bfac
     procedure          :: bp
     procedure          :: tophat
@@ -3933,44 +3932,6 @@ contains
         icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
         self%cmat(phys(1),phys(2),phys(3)) = cmplx(real(comp),icomp)
     end subroutine shellnorm_and_apply_filter_2
-
-    !> \brief  for normalising each shell to uniform (=1) power (assuming average has been
-    !!         subtracted in real-space) and applying a b-factor
-    subroutine shellnorm_and_apply_bfac_serial( self, bfac )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: bfac
-        real, allocatable  :: expec_pow(:)
-        integer            :: sh, h, k, l, phys(3), lfny, lims(3,2)
-        real               :: icomp, fwght, res, rsh
-        lfny = self%get_lfny(1)
-        lims = self%fit%loop_lims(2)
-        ! calculate the expectation value of the signal power in each shell
-        call self%spectrum('power',expec_pow )
-        ! normalise
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                do l=lims(3,1),lims(3,2)
-                    rsh  = sqrt(real(h*h+k*k+l*l))
-                    sh   = nint(rsh)
-                    phys = self%fit%comp_addr_phys([h,k,l])
-                    if( sh > lfny )then
-                        self%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                    else
-                        if( sh == 0 ) cycle
-                        if( expec_pow(sh) > 0. )then
-                            res   = rsh/(real(self%ldim(1))*self%smpd) ! assuming square dimensions
-                            fwght = max(0.,exp(-(bfac/4.)*res*res)) / sqrt(expec_pow(sh))
-                            self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3)) * fwght
-                        endif
-                    endif
-                end do
-            end do
-        end do
-        ! take care of the central spot
-        phys  = self%fit%comp_addr_phys([0,0,0])
-        icomp = aimag(self%cmat(phys(1),phys(2),phys(3)))
-        self%cmat(phys(1),phys(2),phys(3)) = cmplx(1.,icomp)
-    end subroutine shellnorm_and_apply_bfac_serial
 
     !> \brief apply_bfac  is for applying bfactor to an image
     subroutine apply_bfac( self, b )

@@ -153,15 +153,6 @@ contains
             call build_glob%spproj_field%set_all2single('w', 1.0)
         endif
 
-        ! B-FACTOR CAVGS
-        ! has to be done prior to classaverager initialization
-        if( params_glob%l_shellw .and. which_iter >= 5 )then
-            call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
-        else
-            call build_glob%spproj_field%set_all2single('bfac_rec', 0.)
-            params_glob%l_shellw = .false. ! this is reset every iteration
-        endif
-
         ! PREP REFERENCES
         call cavger_new( 'class', ptcl_mask)
         if( build_glob%spproj_field%get_nevenodd() == 0 )then

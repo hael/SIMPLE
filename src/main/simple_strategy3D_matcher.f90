@@ -139,9 +139,6 @@ contains
             call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
         endif
 
-        ! B-FACTOR WEIGHTED RECONSTRUCTION
-        if( params_glob%l_shellw ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
-
         ! EXTREMAL LOGICS
         do_extr           = .false.
         extr_score_thresh = -huge(extr_score_thresh)
@@ -674,9 +671,7 @@ contains
             call build_glob%spproj_field%calc_soft_weights(params_glob%ptclw_method)
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        endif
-        ! B-factor weighted reconstruction
-        if( params_glob%l_shellw ) call build_glob%spproj_field%calc_bfac_rec_specscore(params_glob%bfac_sdev)
+        endif        
         ! prepare particle mask
         nptcls2update = params_glob%top - params_glob%fromp + 1
         allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
