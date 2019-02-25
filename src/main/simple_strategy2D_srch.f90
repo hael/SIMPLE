@@ -92,7 +92,7 @@ contains
         self%best_class = self%prev_class
         self%best_rot   = prev_roind
         ! calculate previous best corr (treshold for better) & b-factor
-        if( params_glob%l_ptcl_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl, self%prev_class, prev_roind)
+        if( params_glob%l_match_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl, self%prev_class, prev_roind)
         if( self%prev_class > 0 )then
             if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)

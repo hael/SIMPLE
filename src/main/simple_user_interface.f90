@@ -695,7 +695,7 @@ contains
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
         call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp){no}',  '(sum|cen|exp){no}',  .false., 'no')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
-        call set_param(ptclw,          'ptclw',        'multi',  'Soft particle weights', 'Soft particle weights(spec|bfac|spread|yes|no){no}',  '(spec|bfac|spread|yes|no){no}',  .false., 'no')
+        call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 

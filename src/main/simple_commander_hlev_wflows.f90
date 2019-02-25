@@ -94,7 +94,6 @@ contains
         call cline_cluster2D1%set('maxits',     MINITS)
         call cline_cluster2D1%set('objfun',     'cc')
         call cline_cluster2D1%set('match_filt', 'no')
-        call cline_cluster2D1%set('ptcl_filt',  'no')
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
@@ -115,9 +114,6 @@ contains
                 call cline_cluster2D2%set('objfun', 'ccres')
                 call cline_cluster2D2%set('bfac',   1000.)
             endif
-        endif
-        if( cline%defined('ptcl_filt') )then
-            if( cline%get_carg('ptcl_filt').eq.'yes' ) call cline_cluster2D2%set('match_filt', 'no')
         endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
@@ -310,19 +306,8 @@ contains
             !          improved population distribution of clusters, no incremental learning,
             !          objective function is standard cross-correlation (cc)
             cline_cluster2D_stage1 = cline
-            if( cline%defined('objfun') )then
-                if( cline%get_carg('objfun').eq.'euclid' )then
-                    call cline_cluster2D_stage1%set('objfun',     'cc')
-                    call cline_cluster2D_stage1%set('match_filt', 'no')
-                endif
-            endif
-            if( cline%defined('ptcl_filt') )then
-                if( cline%get_carg('ptcl_filt').eq.'yes' )then
-                    call cline_cluster2D_stage1%set('objfun',     'cc')
-                    call cline_cluster2D_stage1%set('match_filt', 'no')
-                    call cline_cluster2D_stage1%set('ptcl_filt',  'no')
-                endif
-            endif
+            call cline_cluster2D_stage1%set('objfun',     'cc')
+            call cline_cluster2D_stage1%set('match_filt', 'no')
             if( params%l_frac_update )then
                 call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
                 call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
@@ -383,12 +368,6 @@ contains
                 ! nothing to do
             else
                 call cline_cluster2D_stage2%set('objfun', 'ccres')
-            endif
-            if( cline%defined('ptcl_filt') )then
-                if( cline%get_carg('ptcl_filt').eq.'yes' )then
-                    call cline_cluster2D_stage2%set('objfun',     'cc')
-                    call cline_cluster2D_stage2%set('match_filt', 'no')
-                endif
             endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))

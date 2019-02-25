@@ -78,7 +78,7 @@ contains
         endif
         ! setup weights
         if( params%l_ptclw )then
-            call build%spproj_field%calc_soft_weights(PTCLW_SPEC)
+            call build%spproj_field%calc_soft_weights2D
         else
             call build%spproj_field%calc_hard_weights2D(params%frac, params%ncls)
         endif

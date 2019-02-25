@@ -196,8 +196,8 @@ contains
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
-        ! particle filter
-        if( params_glob%l_ptcl_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl,self%prev_ref,self%prev_roind)
+        ! matched filter
+        if( params_glob%l_match_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl,self%prev_ref,self%prev_roind)
         ! B-factor memoization
         bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
         call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)

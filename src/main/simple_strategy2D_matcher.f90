@@ -91,7 +91,7 @@ contains
             l_partial_sums = params_glob%l_frac_update
             l_frac_update  = params_glob%l_frac_update
             l_snhc         = .false.
-            l_greedy       = (params_glob%refine.eq.'greedy') .or. (params_glob%l_ptcl_filt)&
+            l_greedy       = (params_glob%refine.eq.'greedy') .or. (params_glob%l_match_filt)&
                             &.or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
         endif
 
@@ -145,7 +145,7 @@ contains
         ! has to be done prior to classaverager initialization
         if( which_iter > 3 )then
             if( params_glob%l_ptclw )then
-                call build_glob%spproj_field%calc_soft_weights(PTCLW_SPEC)
+                call build_glob%spproj_field%calc_soft_weights2D
             else
                 call build_glob%spproj_field%calc_hard_weights2D(params_glob%frac, params_glob%ncls)
             endif

@@ -100,14 +100,6 @@ enum, bind(c)
     enumerator :: RANK_EXP_CRIT  = 3
 end enum
 
-! particle weighting schemes
-enum, bind(c)
-    enumerator :: ENUM_PTCLW   = 0
-    enumerator :: PTCLW_SPREAD = 1
-    enumerator :: PTCLW_BFAC   = 2
-    enumerator :: PTCLW_SPEC   = 3
-end enum
-
 ! export (to STAR) type enumeration
 enum, bind(c)
     enumerator :: ENUM_STARTYPE = 0

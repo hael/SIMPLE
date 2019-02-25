@@ -159,10 +159,8 @@ type :: oris
     procedure          :: order_cls
     procedure          :: calc_hard_weights
     procedure          :: calc_soft_weights
-    procedure, private :: calc_soft_weights_spread
-    procedure, private :: calc_soft_weights_specscore
-    procedure, private :: calc_soft_weights_bfac
     procedure          :: calc_hard_weights2D
+    procedure          :: calc_soft_weights2D
     procedure          :: calc_bfac_rec_rnd
     procedure          :: calc_bfac_rec
     procedure          :: calc_bfac_srch
@@ -2500,83 +2498,54 @@ contains
         endif
     end subroutine calc_hard_weights
 
-    subroutine calc_soft_weights( self, ptclw_method )
-        class(oris),                    intent(inout) :: self
-        integer(kind=kind(ENUM_PTCLW)), intent(in)    :: ptclw_method
-        select case(ptclw_method)
-            case(PTCLW_SPREAD)
-                call self%calc_soft_weights_spread
-            case(PTCLW_BFAC)
-                call self%calc_soft_weights_bfac
-            case(PTCLW_SPEC)
-                call self%calc_soft_weights_specscore
-            case DEFAULT
-                THROW_HARD('unsupported particle weighting method; calc_soft_weights')
-        end select
-    end subroutine calc_soft_weights
-
-    !>  \brief  calculates soft weights based on angular spread
-    subroutine calc_soft_weights_spread( self )
-        class(oris), intent(inout) :: self
-        real, allocatable :: spreads(:), states(:), weights(:)
-        if( self%isthere('spread') )then
-            spreads = self%get_all('spread')
-            states  = self%get_all('state')
-            where( spreads < 1.0 )  spreads = 1.0 ! bounded weigths
-            where( spreads < TINY ) spreads = 1.0 ! to prevent division with zero
-            allocate(weights(self%n), source = 1.0 / spreads)
-            where( states < 0.5 ) weights = 0.
-            weights = weights / maxval(weights)  ! minmax normalisation
-            call self%set_all('w', weights)
-            deallocate(spreads, states, weights)
-        else
-            call self%set_all2single('w', 1.0)
-        endif
-    end subroutine calc_soft_weights_spread
-
     !>  \brief  calculates soft weights based on specscore
-    subroutine calc_soft_weights_specscore( self )
+    subroutine calc_soft_weights( self, frac )
         class(oris), intent(inout) :: self
-        real, allocatable :: specscores(:), states(:), weights(:)
-        real :: minw
+        real,        intent(in)    :: frac
+        real,    allocatable :: specscores(:), states(:), weights(:), weights_glob(:)
+        integer, allocatable :: order(:), states_int(:)
+        real    :: minw
+        integer :: i, lim, state, nstates
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
             states     = self%get_all('state')
-            weights    = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
-            minw       = minval(weights, mask=specscores > TINY .and. states > 0.5)
-            where( specscores > TINY .and. states > 0.5 )
-                weights = weights + abs(minw)
-            elsewhere
-                weights = 0.
-            endwhere
-            call self%set_all('w', weights)
-            deallocate(specscores, states, weights)
+            nstates    = maxval(states)
+            if( nstates == 1 )then
+                weights = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
+                minw    = minval(weights,      mask=specscores > TINY .and. states > 0.5)
+                where( specscores > TINY .and. states > 0.5 )
+                    weights = weights + abs(minw)
+                elsewhere
+                    weights = 0. ! nuke
+                endwhere
+                call self%set_all('w', weights)
+                deallocate(weights)
+            else
+                allocate(states_int(self%n),   source=nint(states))
+                allocate(weights_glob(self%n), source=0.)
+                do state=1,nstates
+                    weights = z_scores(specscores, mask=specscores > TINY .and. states_int == state)
+                    minw    = minval(weights,      mask=specscores > TINY .and. states_int == state)
+                    where( specscores > TINY .and. states_int == state ) weights_glob = weights + abs(minw)
+                    deallocate(weights)
+                end do
+                call self%set_all('w', weights_glob)
+                deallocate(states_int, weights_glob)
+            endif
+            if( frac < 0.99 )then
+                ! in 3D frac operates globally, independent of state
+                lim   = nint(frac*real(self%n))
+                order = self%order() ! specscore ranking
+                do i=1,self%n
+                    if( i > lim ) call self%o(order(i))%set('w', 0.) ! nuke
+                end do
+                deallocate(order)
+            endif
+            deallocate(specscores, states)
         else
             call self%set_all2single('w', 1.0)
         endif
-    end subroutine calc_soft_weights_specscore
-
-    !>  \brief  calculates soft weights based on B-factor
-    subroutine calc_soft_weights_bfac( self )
-        class(oris), intent(inout) :: self
-        real, allocatable :: bfacs(:), states(:), weights(:)
-        real :: minw
-        if( self%isthere('bfac') )then
-            bfacs   = -self%get_all('bfac') ! negation beacuse we want small B-facs to get high weights
-            states  = self%get_all('state')
-            weights = z_scores(bfacs, mask=bfacs > TINY .and. states > 0.5)
-            minw    = minval(weights, mask=bfacs > TINY .and. states > 0.5)
-            where( states > 0.5 )
-                weights = weights + abs(minw)
-            elsewhere
-                weights = 0.
-            endwhere
-            call self%set_all('w', weights)
-            deallocate(bfacs, states, weights)
-        else
-            call self%set_all2single('w', 1.0)
-        endif
-    end subroutine calc_soft_weights_bfac
+    end subroutine calc_soft_weights
 
     !>  \brief  calculates hard weights based on ptcl ranking
     subroutine calc_hard_weights2D( self, frac, ncls )
@@ -2605,6 +2574,41 @@ contains
             call self%set_all2single('w', 1.)
         endif
     end subroutine calc_hard_weights2D
+
+    !>  \brief  calculates soft weights based on specscore
+    subroutine calc_soft_weights2D( self )
+        class(oris), intent(inout) :: self
+        real,    allocatable :: specscores(:), classes(:), states(:)
+        real,    allocatable :: weights(:), weights_glob(:)
+        integer, allocatable :: classes_int(:)
+        integer :: i, icls, pop, ncls
+        real    :: minw
+        if( self%isthere('specscore') )then
+            specscores = self%get_all('specscore')
+            classes    = self%get_all('class')
+            states     = self%get_all('states')
+            allocate(classes_int(self%n), source=nint(classes))
+            allocate(weights_glob(self%n), source=0.)
+            ncls = maxval(classes_int)
+            do icls=1,ncls
+                pop = count(classes == icls .and. states > 0.5)
+                if( pop == 0 )then
+                    cycle
+                else if( pop <= 3 )then
+                    where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
+                else
+                    weights = z_scores(specscores, mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
+                    minw    = minval(weights,      mask=specscores > TINY .and. (classes == icls .and. states > 0.5))
+                    where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = weights + abs(minw)
+                    deallocate(weights)
+                endif
+            end do
+            call self%set_all('w', weights_glob)
+            deallocate(specscores, classes, states, classes_int, weights_glob)
+        else
+            call self%set_all2single('w', 1.)
+        endif
+    end subroutine calc_soft_weights2D
 
     !>  \brief  to find the closest matching projection direction
     !! KEEP THIS ROUTINE SERIAL

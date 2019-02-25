@@ -105,7 +105,7 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
-    logical                          :: ptcl_filt   = .false.
+    logical                          :: match_filt   = .false.
     logical                          :: with_ctf    = .false. !< CTF flag
     logical                          :: existence   = .false. !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
@@ -436,9 +436,9 @@ contains
         do irot = 1,self%pftsz
             self%fft_factors(irot) = exp(-(0.,1.) * PI * real(irot - 1) / real(self%pftsz))
         end do
-        ! particle filter
-        self%ptcl_filt = params_glob%l_ptcl_filt
-        if( self%ptcl_filt )then
+        ! matched filter
+        self%match_filt = params_glob%l_match_filt
+        if( self%match_filt )then
             allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
         endif
         ! flag existence
@@ -778,7 +778,7 @@ contains
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i
-        if( self%ptcl_filt ) return
+        if( self%match_filt ) return
         ! memoize particle FFTs in parallel
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i = 1, self%nptcls
@@ -898,7 +898,7 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         ! shell normalization and filtering
-        if( self%ptcl_filt ) call self%shellnorm_and_filter_ref(iref, pft_ref)
+        if( self%match_filt ) call self%shellnorm_and_filter_ref(iref, pft_ref)
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
         ! for corr normalisation
@@ -916,7 +916,7 @@ contains
         real        :: pw_ptcl, w, ssnr
         integer     :: i, k, ithr, rot
         ! particle is assumed phase-flipped, reference untouched
-        if( .not.self%ptcl_filt) return
+        if( .not.self%match_filt) return
         if( iref == 0 )then
             ! just memoize
             call self%memoize_ptcl_fft(iptcl)
@@ -1401,7 +1401,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
@@ -1452,7 +1452,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1751,7 +1751,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1796,7 +1796,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -1848,7 +1848,7 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%ptcl_filt ) call self%shellnorm_and_filter_ref_dref_8(iref, pft_ref, pft_dref)
+        if( self%match_filt ) call self%shellnorm_and_filter_ref_dref_8(iref, pft_ref, pft_dref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             do j = 1,3
@@ -1902,7 +1902,7 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%ptcl_filt ) call self%shellnorm_and_filter_ref_dref_8(iref, pft_ref, pft_dref)
+        if( self%match_filt ) call self%shellnorm_and_filter_ref_dref_8(iref, pft_ref, pft_dref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
             do j = 1,3
@@ -2012,7 +2012,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
@@ -2276,7 +2276,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%ptcl_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+        if( self%match_filt )call self%shellnorm_and_filter_ref_8(iref, pft_ref)
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else

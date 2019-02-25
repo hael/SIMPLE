@@ -114,7 +114,7 @@ contains
 
         ! SETUP WEIGHTS
         if( params_glob%l_ptclw )then
-            call build_glob%spproj_field%calc_soft_weights(params_glob%ptclw_method)
+            call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
@@ -668,10 +668,10 @@ contains
         npeaks = NPEAKS2REFINE
         ! particle weights
         if( params_glob%l_ptclw )then
-            call build_glob%spproj_field%calc_soft_weights(params_glob%ptclw_method)
+            call build_glob%spproj_field%calc_soft_weights(params_glob%frac)
         else
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
-        endif        
+        endif
         ! prepare particle mask
         nptcls2update = params_glob%top - params_glob%fromp + 1
         allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))

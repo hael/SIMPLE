@@ -356,6 +356,11 @@ contains
             if( cline%defined('xsh') .or. cline%defined('ysh') .or. cline%defined('zsh') )then
                 call build%vol%shift([params%xsh,params%ysh,params%zsh])
             endif
+            if( cline%defined('lp_backgr') .and. cline%defined('mskfile') )then
+                call build%vol2%new(build%vol%get_ldim(), build%vol%get_smpd())
+                call build%vol2%read(params%mskfile)
+                call build%vol%lp_background(build%vol2, params%lp_backgr)
+            endif
             call build%vol%write(params%outvol, del_if_exists=.true.)
         endif
         ! end gracefully

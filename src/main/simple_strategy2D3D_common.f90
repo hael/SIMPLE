@@ -339,9 +339,6 @@ contains
         type(ctfparams) :: ctfparms
         real            :: frc(build_glob%projfrcs%get_filtsz())
         real            :: filter(build_glob%projfrcs%get_filtsz()), x, y
-        integer         :: ifrc
-        logical         :: l_match_filt
-        ! shift
         x = build_glob%spproj_field%get(iptcl, 'x')
         y = build_glob%spproj_field%get(iptcl, 'y')
         ! CTF parameters
@@ -350,42 +347,6 @@ contains
         call img_in%noise_norm(build_glob%lmsk)
         ! move to Fourier space
         call img_in%fft()
-        ! filters
-        ifrc = 0
-        l_match_filt = .false.
-        if( is3D )then
-            if( params_glob%l_eo )then
-                if( trim(params_glob%clsfrcs).eq.'yes' )then
-                    ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
-                else
-                    ifrc = build_glob%eulspace_red%find_closest_proj(build_glob%spproj_field%get_ori(iptcl))
-                endif
-                l_match_filt = params_glob%l_match_filt .and. (params_glob%nstates==1) .and. (ifrc/=0)
-            else
-                ifrc = 0
-            endif
-        else
-            if( build_glob%spproj_field%isthere(iptcl,'class') )then
-                ifrc = nint(build_glob%spproj_field%get(iptcl,'class'))
-            endif
-            l_match_filt = params_glob%l_match_filt .and. params_glob%l_eo .and. (ifrc/=0)
-        endif
-        if( ifrc > 0 )then
-            if( params_glob%l_ptcl_filt )then
-                ! nothing to do
-            else
-                call build_glob%projfrcs%frc_getter(ifrc, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                if( any(frc > 0.143) )then
-                    call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-                    if( l_match_filt )then
-                        ! matched filter
-                        call img_in%shellnorm_and_apply_filter_serial(filter)
-                    else
-                        call img_in%apply_filter_serial(filter)
-                    endif
-                endif
-            endif
-        endif
         ! Shift image to rotational origin & phase-flipping
         select case(ctfparms%ctfflag)
             case(CTFFLAG_NO, CTFFLAG_FLIP)  ! shift only
@@ -461,18 +422,13 @@ contains
         call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
-            if( params_glob%l_ptcl_filt )then
+            if( params_glob%l_match_filt )then
                 call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
                     &build_glob%img_match%get_filtsz(), filter, subfilter)
                 call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
-                if( params_glob%l_match_filt )then
-                    ! matched filter for both schemes
-                    call img_in%shellnorm_and_apply_filter_serial(filter)
-                else
-                    call img_in%apply_filter_serial(filter)
-                endif
+                call img_in%apply_filter_serial(filter)
             endif
         endif
         ! ensure we are in real-space before clipping
@@ -659,7 +615,7 @@ contains
         ! Volume filtering
         filtsz    = build_glob%projfrcs%get_filtsz()
         subfiltsz = build_glob%img_match%get_filtsz()
-        if( params_glob%l_ptcl_filt .and. params_glob%l_eo )then
+        if( params_glob%l_eo )then
             ! stores filters in pftcc
             if( file_exists(params_glob%frcs) )then
                 iproj = 0
@@ -681,46 +637,6 @@ contains
                 do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                     call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
                 enddo
-            endif
-        else
-            if( params_glob%l_eo )then
-                ! anisotropic matched filter
-                if( params_glob%nstates.eq.1 )then
-                    allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
-                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-                    if( file_exists(fname_vol_filter) )then
-                        call build_glob%vol2%read(fname_vol_filter)
-                        if( params_glob%l_match_filt )then
-                            call build_glob%vol%shellnorm_and_apply_filter(build_glob%vol2)
-                        else
-                            call build_glob%vol%apply_filter(build_glob%vol2)
-                        endif
-                    else
-                        ! matched filter based on Rosenthal & Henderson, 2003
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                            if( params_glob%l_match_filt )then
-                                call build_glob%vol%shellnorm_and_apply_filter(filter)
-                            else
-                                call build_glob%vol%apply_filter(filter)
-                            endif
-                        endif
-                    endif
-                else
-                    allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-                    call build_glob%vol%fft()
-                    if( file_exists(fname_vol_filter) )then
-                        ! anisotropic filter
-                        call build_glob%vol2%read(fname_vol_filter)
-                        call build_glob%vol%apply_filter(build_glob%vol2)
-                    else
-                        ! matched filter based on Rosenthal & Henderson, 2003
-                        if( any(build_glob%fsc(s,:) > 0.143) )then
-                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                            call build_glob%vol%apply_filter(filter)
-                        endif
-                    endif
-                endif
             endif
         endif
         ! back to real space
