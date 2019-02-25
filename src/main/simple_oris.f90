@@ -2508,8 +2508,12 @@ contains
         integer :: i, lim, state, nstates
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
-            states     = self%get_all('state')
-            nstates    = maxval(states)
+            if( self%isthere('states') )then
+                states = self%get_all('states')
+            else
+                allocate(states(self%n), source=1.0)
+            endif
+            nstates = nint(maxval(states))
             if( nstates == 1 )then
                 weights = z_scores(specscores, mask=specscores > TINY .and. states > 0.5)
                 minw    = minval(weights,      mask=specscores > TINY .and. states > 0.5)
@@ -2586,7 +2590,11 @@ contains
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
             classes    = self%get_all('class')
-            states     = self%get_all('states')
+            if( self%isthere('states') )then
+                states = self%get_all('states')
+            else
+                allocate(states(self%n), source=1.0)
+            endif
             allocate(classes_int(self%n), source=nint(classes))
             allocate(weights_glob(self%n), source=0.)
             ncls = maxval(classes_int)
@@ -2594,7 +2602,7 @@ contains
                 pop = count(classes == icls .and. states > 0.5)
                 if( pop == 0 )then
                     cycle
-                else if( pop <= 3 )then
+                else if( pop <= MINCLSPOPLIM )then
                     where( specscores > TINY .and. (classes == icls .and. states > 0.5) ) weights_glob = 1.0
                 else
                     weights = z_scores(specscores, mask=specscores > TINY .and. (classes == icls .and. states > 0.5))

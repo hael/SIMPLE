@@ -178,7 +178,7 @@ type :: parameters
     character(len=STDLEN) :: phshiftunit='radians'!< additional phase-shift unit (radians|degrees){radians}
     character(len=STDLEN) :: prg=''               !< SIMPLE program being executed
     character(len=STDLEN) :: projname=''          !< SIMPLE  project name
-    character(len=STDLEN) :: ptclw='no'          !< use soft particle weights(yes|no){yes}
+    character(len=STDLEN) :: ptclw='yes'          !< use soft particle weights(yes|no){yes}
     character(len=STDLEN) :: qsys_name='local'    !< name of queue system (local|slurm|pbs)
     character(len=STDLEN) :: real_filter=''
     character(len=STDLEN) :: refine='single'      !< refinement mode(snhc|single|multi|greedy_single|greedy_multi|cluster|clustersym){no}
