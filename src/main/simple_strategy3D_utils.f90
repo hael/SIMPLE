@@ -7,9 +7,9 @@ use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: pftcc_glob
 implicit none
 
-public :: extract_peaks, prob_select_peak, corrs2softmax_weights, corrs2softmax_weights_glob
-public :: states_reweight, states_reweight_glob, estimate_ang_spread, estimate_shift_increment
-public :: set_state_overlap, sort_corrs, update_softmax_weights_glob
+public :: extract_peaks, calc_softmax_weights, update_softmax_weights
+public :: states_reweight, estimate_ang_spread, estimate_shift_increment
+public :: set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
@@ -68,149 +68,10 @@ contains
         enddo
     end subroutine extract_peaks
 
-    ! assumes hard orientation assignment. Hence inpl=1
-    subroutine prob_select_peak( s, updatecnt )
-        class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: updatecnt
-        real    :: corrs(s%npeaks), shvecs(s%npeaks,2), euls(s%npeaks,3), pvec(s%npeaks)
-        integer :: inds(s%npeaks), refs(s%npeaks), states(s%npeaks), projs(s%npeaks)
-        integer :: prob_peak, ipeak, rank, loc(1)
-        real    :: bound, rnd, dists(s%npeaks), arg4softmax(s%npeaks)
-        do ipeak = 1, s%npeaks
-            ! stash peak index
-            inds(ipeak) = ipeak
-            ! stash reference index
-            refs(ipeak) = s3D%proj_space_refinds_sorted_highest(s%ithr, s%nrefs - s%npeaks + ipeak)
-            if( refs(ipeak) < 1 .or. refs(ipeak) > s%nrefs )then
-                THROW_HARD('refs(ipeak) index: '//int2str(refs(ipeak))//' out of bound; prob_select_peak')
-            endif
-            ! stash state index
-            if( params_glob%nstates > 1 )then
-                states(ipeak) = s3D%proj_space_state(refs(ipeak))
-                if( .not. s3D%state_exists(states(ipeak)) )then
-                    THROW_HARD('empty states(ipeak): '//int2str(states(ipeak))//' prob_select_peak')
-                endif
-            else
-                states(ipeak) = 1
-            endif
-            ! stash shift (obtained with vector addition)
-            shvecs(ipeak,:) = s%prev_shvec
-            if( s%doshift ) shvecs(ipeak,:) = shvecs(ipeak,:) + s3D%proj_space_shift(s%ithr,refs(ipeak),1,1:2)
-            where( abs(shvecs(ipeak,:)) < 1e-6 ) shvecs(ipeak,:) = 0.
-            ! stash corr
-            corrs(ipeak) = s3D%proj_space_corrs(s%ithr,refs(ipeak),1)
-            if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
-            ! stash proj index
-            projs(ipeak) = s3D%proj_space_proj(refs(ipeak))
-            ! stash Euler
-            euls(ipeak,:) = s3D%proj_space_euls(s%ithr,refs(ipeak),1,1:3)
-        end do
-        if( updatecnt < 5.0 )then
-            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
-                ! multinomal peak selection
-                ! convert correlations to distances
-                dists = 1.0 - corrs
-                ! scale distances with TAU
-                dists = dists / params_glob%tau
-            else
-                dists = - corrs / params_glob%sigma2_fudge
-            end if
-            ! argument for softmax function is negative distances
-            arg4softmax = -dists
-            ! subtract maxval of negative distances for numerical stability
-            arg4softmax = arg4softmax - maxval(arg4softmax)
-            ! calculate probabilities
-            pvec = exp(arg4softmax)
-            ! normalise
-            pvec = pvec / sum(pvec)
-            ! sample
-            call hpsort(pvec, inds)
-            rank = 0
-            rnd  = ran3()
-            do prob_peak=s%npeaks,1,-1 ! we want to start in the high end
-                bound = sum(pvec(prob_peak:s%npeaks))
-                rank = rank + 1
-                if( rnd <= bound ) exit
-            enddo
-            prob_peak = inds(prob_peak) ! translate to unsorted
-        else
-            ! greedy peak selection
-            loc = maxloc(corrs)
-            prob_peak = loc(1)
-        endif
-        ! update o_peaks
-        call s3D%o_peaks(s%iptcl)%set(1, 'state', real(states(prob_peak)))
-        call s3D%o_peaks(s%iptcl)%set(1, 'proj',  real(projs(prob_peak)))
-        call s3D%o_peaks(s%iptcl)%set(1, 'corr',  corrs(prob_peak))
-        call s3D%o_peaks(s%iptcl)%set(1, 'ow',    1.0)
-        call s3D%o_peaks(s%iptcl)%set_euler(1,    euls(prob_peak,:))
-        call s3D%o_peaks(s%iptcl)%set_shift(1,    shvecs(prob_peak,:))
-    end subroutine prob_select_peak
-
-    subroutine corrs2softmax_weights( s, corrs, ws, included, best_loc, wcorr )
-        use simple_ori, only: ori
-        class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(in)    :: corrs(s%npeaks)
-        real,                   intent(out)   :: ws(s%npeaks), wcorr
-        logical,                intent(out)   :: included(s%npeaks)
-        integer,                intent(out)   :: best_loc(1)
-        real    :: wsum, wavg, ep, var, dev, sig, wthresh
-        integer :: i, loc(MINNPEAKS)
-        if( s%npeaks == 1 )then
-            best_loc(1)  = 1
-            ws(1)        = 1.
-            included(1)  = .true.
-            s%npeaks_eff = 1
-            wcorr        = corrs(1)
-        else
-            ! find highest corr pos
-            best_loc = maxloc(corrs)
-            ! calculate weights
-            call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
-            ! calculate standard deviation of weights
-            wavg = sum(ws) / real(s%npeaks)
-            ep   = 0.
-            var  = 0.
-            do i=1,s%npeaks
-                dev = ws(i) - wavg
-                ep  = ep + dev
-                var = var + dev * dev
-            end do
-            var = (var - ep * ep / real(s%npeaks))/(real(s%npeaks) - 1.) ! corrected two-pass formula
-            sig = 0.
-            if( var > 0. ) sig = sqrt(var)
-            wthresh = wavg + SOFTMAXW_THRESH * sig
-            ! threshold weights
-            included = (ws >= wthresh)
-            s%npeaks_eff = count(included)
-            ! check that we don't fall below the minimum number of peaks
-            if( s%npeaks_eff < MINNPEAKS )then
-                loc = maxnloc(ws, MINNPEAKS)
-                do i=1,s%npeaks
-                    if( any(loc == i) )then
-                        included(i) = .true.
-                    else
-                        ws(i)       = 0.
-                        included(i) = .false.
-                    endif
-                end do
-            else
-                where( .not. included ) ws = 0.
-            endif
-            ! normalise again
-            wsum = sum(ws)
-            ws = ws / wsum
-            ! weighted corr
-            wcorr = sum(ws*corrs,mask=included)
-        endif
-        ! update npeaks individual weights
-        call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
-    end subroutine corrs2softmax_weights
-
     ! for dealing with the weights in a global sense:
     ! (1) Calculate normalised softmax weights per particle
     ! (2) Select the fraction (16%) of highest weights globally for inclusion in the 3D rec
-    subroutine corrs2softmax_weights_glob( s, corrs, ws, best_loc, best_corr )
+    subroutine calc_softmax_weights( s, corrs, ws, best_loc, best_corr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(in)    :: corrs(s%npeaks)
@@ -230,9 +91,9 @@ contains
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
-    end subroutine corrs2softmax_weights_glob
+    end subroutine calc_softmax_weights
 
-    subroutine update_softmax_weights_glob( iptcl, npeaks, is_euclid )
+    subroutine update_softmax_weights( iptcl, npeaks, is_euclid )
         integer, intent(in) :: iptcl, npeaks
         logical, intent(in) :: is_euclid
         real, allocatable   :: corrs(:)
@@ -240,7 +101,7 @@ contains
         corrs = s3D%o_peaks(iptcl)%get_all('corr')
         call calc_ori_weights(iptcl, npeaks, corrs, ws, is_euclid)
         call s3D%o_peaks(iptcl)%set_all('ow', ws)
-    end subroutine update_softmax_weights_glob
+    end subroutine update_softmax_weights
 
     subroutine calc_ori_weights( iptcl, npeaks, corrs, ws, is_euclid )
         integer,           intent(in)  :: iptcl, npeaks
@@ -279,44 +140,7 @@ contains
         endif
     end subroutine calc_ori_weights
 
-    subroutine states_reweight( s, ws, included, state, best_loc, wcorr )
-        class(strategy3D_srch), intent(inout) :: s
-        real,                   intent(inout) :: ws(s%npeaks)
-        real,                   intent(out)   :: wcorr
-        logical,                intent(inout) :: included(s%npeaks)
-        integer,                intent(out)   :: state, best_loc(1)
-        integer :: istate, ipeak, states(s%npeaks)
-        real    :: corrs(s%npeaks), state_ws(s%nstates)
-        if( s%npeaks > 1 .and. s%nstates > 1 )then
-            ! states weights
-            do ipeak = 1, s%npeaks
-                corrs(ipeak)  = s3D%o_peaks(s%iptcl)%get(ipeak,'corr')
-                states(ipeak) = s3D%o_peaks(s%iptcl)%get_state(ipeak)
-            enddo
-            ! greedy state assignment
-            state_ws = 0.
-            do istate = 1, s%nstates
-                state_ws(istate) = sum(ws,mask=(states==istate))
-            enddo
-            state = maxloc(state_ws, dim=1)
-            ! in-state re-weighing
-            included     = included .and. (states==state)
-            s%npeaks_eff = count(included)
-            where( .not. included ) ws = 0.
-            ws       = ws / sum(ws, mask=included)
-            best_loc = maxloc(ws)
-            ! weighted corr
-            wcorr = sum(ws*corrs, mask=included)
-            ! update individual weights
-            call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
-        else if( s%npeaks == 1 .and. s%nstates > 1 )then
-            best_loc = 1
-            state    = s3D%o_peaks(s%iptcl)%get_state(1)
-            wcorr    = s3D%o_peaks(s%iptcl)%get(1,'corr')
-        endif
-    end subroutine states_reweight
-
-    subroutine states_reweight_glob( s, ws, state, best_loc )
+    subroutine states_reweight( s, ws, state, best_loc )
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(inout) :: ws(s%npeaks)
         integer,                intent(out)   :: state, best_loc(1)
@@ -350,7 +174,7 @@ contains
             best_loc = 1
             state    = s3D%o_peaks(s%iptcl)%get_state(1)
         endif
-    end subroutine states_reweight_glob
+    end subroutine states_reweight
 
     function estimate_ang_spread( s ) result( ang_spread )
         use simple_ori,  only: ori

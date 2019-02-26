@@ -40,7 +40,6 @@ contains
     subroutine srch_cluster3D( self, ithr )
         class(strategy3D_cluster), intent(inout) :: self
         integer,                   intent(in)    :: ithr
-        real :: bfac
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
             ! prep
@@ -51,11 +50,8 @@ contains
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             self%s%prev_shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl)
-            ! B-factor memoization & specscore
-            bfac = pftcc_glob%fit_bfac(self%s%prev_ref, self%s%iptcl, self%s%prev_roind, [0.,0.])
-            if( params_glob%cc_objfun == OBJFUN_RES )call pftcc_glob%memoize_bfac(self%s%iptcl, bfac)
+            ! specscore
             self%s%specscore = pftcc_glob%specscore(self%s%prev_ref, self%s%iptcl, self%s%prev_roind)
-            call build_glob%spproj_field%set(self%s%iptcl,'bfac',     bfac)
             call build_glob%spproj_field%set(self%s%iptcl,'specscore',self%s%specscore)
             ! fork
             if( associated(self%spec%symmat) )then

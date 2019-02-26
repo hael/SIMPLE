@@ -54,7 +54,7 @@ contains
         type(strategy2D_spec) :: strategy2Dspec
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        real                  :: frac_srch_space, bfactor
+        real                  :: frac_srch_space
         integer               :: iptcl, i, fnr, cnt, updatecnt
         logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy
         if( L_BENCH )then
@@ -127,17 +127,6 @@ contains
         !         chunk_id(iptcl) = mod(iptcl,params_glob%chunksz)+1
         !     enddo
         ! endif
-
-        ! B-FACTOR SEARCH
-        bfactor = 0.
-        if( params_glob%cc_objfun == OBJFUN_RES )then
-            if( cline%defined('bfac') )then
-                bfactor = params_glob%bfac
-            else
-                call build_glob%spproj_field%calc_bfac_srch(bfactor)
-            endif
-            write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
-        endif
 
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
@@ -214,7 +203,6 @@ contains
                 ! search spec
                 strategy2Dspec%iptcl       = iptcl
                 strategy2Dspec%iptcl_map   = cnt
-                strategy2Dspec%bfac        = bfactor
                 strategy2Dspec%chunk_id    = chunk_id(iptcl)
                 strategy2Dspec%stoch_bound = snhc_sz(iptcl)
                 ! search object

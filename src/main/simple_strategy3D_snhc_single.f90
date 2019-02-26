@@ -80,7 +80,7 @@ contains
         use simple_strategy3D_utils, only: estimate_shift_increment
         class(strategy3D_snhc_single), intent(inout) :: self
         type(ori)  :: osym
-        real       :: dist_inpl, corr, frac, euldist, bfac
+        real       :: dist_inpl, corr, frac, euldist
         real       :: shwmean, shwstdev
         integer    :: ref, roind
         ! orientation parameters
@@ -97,11 +97,7 @@ contains
         call s3D%o_peaks(self%s%iptcl)%set_euler(1, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
         call s3D%o_peaks(self%s%iptcl)%set_shift(1, [0.,0.]) ! no shift search in snhc
         call s3D%o_peaks(self%s%iptcl)%set(1, 'ow', 1.0)
-        ! B factor
-        if( params_glob%cc_objfun == OBJFUN_RES )then
-            bfac  = pftcc_glob%fit_bfac(ref, self%s%iptcl, roind, [0.,0.])
-            call build_glob%spproj_field%set(self%s%iptcl, 'bfac',  bfac )
-        endif
+        ! shift incr stats
         call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
         call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&

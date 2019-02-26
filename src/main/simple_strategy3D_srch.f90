@@ -22,7 +22,7 @@ type strategy3D_spec
     integer, pointer :: symmat(:,:) => null()
     integer :: iptcl=0, szsn=0
     logical :: do_extr=.false.
-    real    :: extr_score_thresh=0., bfac=-1.
+    real    :: extr_score_thresh=0.
 end type strategy3D_spec
 
 type strategy3D_srch
@@ -48,7 +48,6 @@ type strategy3D_srch
     integer                  :: prev_ref      = 0         !< previous reference index
     integer                  :: prev_proj     = 0         !< previous projection direction index
     real                     :: prev_corr     = 1.        !< previous best correlation
-    real                     :: bfac          = -1.
     real                     :: specscore     = 0.        !< spectral score
     real                     :: prev_shvec(2) = 0.        !< previous origin shift vector
     logical                  :: neigh         = .false.   !< nearest neighbour refinement flag
@@ -72,7 +71,7 @@ contains
         integer,                 intent(in)    :: iptcl, pftcc_pind
         integer   :: prev_state, prev_roind, prev_proj, prev_ref
         type(ori) :: o_prev
-        real      :: bfac, specscore
+        real      :: specscore
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
@@ -80,13 +79,11 @@ contains
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! calc B-factor & memoize
-        bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
-        if( params_glob%cc_objfun == OBJFUN_RES )call pftcc%memoize_bfac(pftcc_pind, bfac)
+        ! particle prep
+        call pftcc_glob%prep_matchfilt(iptcl,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! update spproj_field
-        call build_glob%spproj_field%set(iptcl, 'bfac',       bfac)
         call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
@@ -97,7 +94,7 @@ contains
         integer,                 intent(in)    :: iptcl, pftcc_pind
         integer   :: prev_state, prev_roind, prev_proj, prev_ref
         type(ori) :: o_prev
-        real      :: bfac, specscore, corr, corrs(pftcc_glob%get_nrots())
+        real      :: specscore, corr, corrs(pftcc_glob%get_nrots())
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
@@ -105,9 +102,8 @@ contains
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
-        ! calc B-factor & memoize
-        bfac = pftcc%fit_bfac(prev_ref, pftcc_pind, prev_roind, [0.,0.])
-        if( params_glob%cc_objfun == OBJFUN_RES ) call pftcc%memoize_bfac(pftcc_pind, bfac)
+        ! particle prep
+        call pftcc_glob%prep_matchfilt(iptcl,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! prep corr
@@ -121,7 +117,6 @@ contains
         call build_glob%spproj_field%set(iptcl, 'proj',      real(prev_proj))
         call build_glob%spproj_field%set(iptcl, 'corr',      corr)
         call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
-        call build_glob%spproj_field%set(iptcl, 'bfac',      bfac)
         call build_glob%spproj_field%set(iptcl, 'w',         1.)
         call build_glob%spproj_field%set(iptcl, 'ow',        1.)
         DebugPrint  '>>> STRATEGY3D_SRCH :: eval_ptcl'
@@ -150,7 +145,6 @@ contains
         self%nnn          = params_glob%nnn
         self%nnnrefs      = self%nnn*self%nstates
         self%dowinpl      = npeaks /= 1
-        self%bfac         = spec%bfac
         ! create in-plane search object
         lims(:,1)         = -params_glob%trs
         lims(:,2)         =  params_glob%trs
@@ -168,7 +162,7 @@ contains
         class(strategy3D_srch), intent(inout) :: self
         integer   :: i, istate
         type(ori) :: o_prev
-        real      :: corrs(self%nrots), corr, bfac
+        real      :: corrs(self%nrots), corr
         ! previous parameters
         o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
         self%prev_state = o_prev%get_state()                                ! state index
@@ -196,15 +190,8 @@ contains
             if( self%prev_state > self%nstates )          THROW_HARD('previous best state outside boundary; prep4srch')
             if( .not. s3D%state_exists(self%prev_state) ) THROW_HARD('empty previous state; prep4srch')
         endif
-        ! matched filter
-        if( params_glob%l_match_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl,self%prev_ref,self%prev_roind)
-        ! B-factor memoization
-        bfac = pftcc_glob%fit_bfac(self%prev_ref, self%iptcl, self%prev_roind, [0.,0.])
-        call build_glob%spproj_field%set(self%iptcl, 'bfac', bfac)
-        if( params_glob%cc_objfun == OBJFUN_RES )then
-            if( self%bfac >= 0. ) bfac =  self%bfac
-            call pftcc_glob%memoize_bfac(self%iptcl, bfac)
-        endif
+        ! particle prep
+        call pftcc_glob%prep_matchfilt(self%iptcl,self%prev_ref,self%prev_roind)
         ! calc specscore
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr

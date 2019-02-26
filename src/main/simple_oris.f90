@@ -161,9 +161,6 @@ type :: oris
     procedure          :: calc_soft_weights
     procedure          :: calc_hard_weights2D
     procedure          :: calc_soft_weights2D
-    procedure          :: calc_bfac_rec_rnd
-    procedure          :: calc_bfac_rec
-    procedure          :: calc_bfac_srch
     procedure          :: find_best_classes
     procedure          :: find_closest_proj
     procedure          :: discretize
@@ -1847,7 +1844,6 @@ contains
         if( o_tmp%isthere('dfx')     ) call self%o(i)%set('dfx',     o_tmp%get('dfx'))
         if( o_tmp%isthere('dfy')     ) call self%o(i)%set('dfy',     o_tmp%get('dfy'))
         if( o_tmp%isthere('angast')  ) call self%o(i)%set('angast',  o_tmp%get('angast'))
-        if( o_tmp%isthere('bfac')    ) call self%o(i)%set('bfac',    o_tmp%get('bfac'))
         if( o_tmp%isthere('state')   )then
             call self%o(i)%set('state', o_tmp%get('state'))
         else
@@ -1915,7 +1911,7 @@ contains
     subroutine read_ctfparams_state_eo( self, ctfparamfile )
         class(oris),       intent(inout) :: self
         character(len=*),  intent(in)    :: ctfparamfile
-        logical    :: params_are_there(11)
+        logical    :: params_are_there(10)
         integer    :: i
         type(oris) :: os_tmp
         if( .not. file_exists(ctfparamfile) )then
@@ -1934,9 +1930,8 @@ contains
         params_are_there(6)  = os_tmp%isthere('dfx')
         params_are_there(7)  = os_tmp%isthere('dfy')
         params_are_there(8)  = os_tmp%isthere('angast')
-        params_are_there(9)  = os_tmp%isthere('bfac')
-        params_are_there(10) = os_tmp%isthere('state')
-        params_are_there(11) = os_tmp%isthere('eo')
+        params_are_there(9)  = os_tmp%isthere('state')
+        params_are_there(10) = os_tmp%isthere('eo')
         do i=1,self%n
             if( params_are_there(1) )  call self%set(i, 'smpd',    os_tmp%get(i, 'smpd')   )
             if( params_are_there(2) )  call self%set(i, 'kv',      os_tmp%get(i, 'kv')     )
@@ -1946,9 +1941,8 @@ contains
             if( params_are_there(6) )  call self%set(i, 'dfx',     os_tmp%get(i, 'dfx')    )
             if( params_are_there(7) )  call self%set(i, 'dfy',     os_tmp%get(i, 'dfy')    )
             if( params_are_there(8) )  call self%set(i, 'angast',  os_tmp%get(i, 'angast') )
-            if( params_are_there(9) )  call self%set(i, 'bfac',    os_tmp%get(i, 'bfac')   )
-            if( params_are_there(10) ) call self%set(i, 'state',   os_tmp%get(i, 'state')  )
-            if( params_are_there(11) ) call self%set(i, 'eo',      os_tmp%get(i, 'eo')     )
+            if( params_are_there(9) )  call self%set(i, 'state',   os_tmp%get(i, 'state')  )
+            if( params_are_there(10) ) call self%set(i, 'eo',      os_tmp%get(i, 'eo')     )
         end do
         call os_tmp%kill
     end subroutine read_ctfparams_state_eo
@@ -2358,61 +2352,6 @@ contains
         call reverse(inds)
     end function order_cls
 
-    subroutine calc_bfac_rec( self, bfac_sdev )
-        class(oris), intent(inout) :: self
-        real,        intent(in)    :: bfac_sdev
-        real,    allocatable :: states(:), scores(:)
-        logical, allocatable :: mask(:)
-        real    :: avg, sdev, var
-        logical :: err
-        integer :: i
-        if( self%isthere('bfac') )then
-            scores = self%get_all('bfac')
-        else
-            call self%delete_entry('bfac_rec')
-            return
-        endif
-        states = self%get_all('state')
-        mask   = states > 0.5 .and. scores > TINY
-        call moment(scores, avg, sdev, var, err, mask)
-        scores = ((scores - avg) / sdev) * bfac_sdev
-        call self%set_all('bfac_rec', scores)
-        deallocate(mask,states,scores)
-    end subroutine calc_bfac_rec
-
-    subroutine calc_bfac_rec_rnd( self, bfac_arg )
-        class(oris), intent(inout) :: self
-        real,        intent(in) :: bfac_arg
-        real :: bfac
-        integer :: i
-        do i=1,self%n
-            bfac = ran3() * bfac_arg * 2. - bfac_arg
-            call self%o(i)%set('bfac_rec', bfac)
-        end do
-    end subroutine calc_bfac_rec_rnd
-
-    subroutine calc_bfac_srch( self, bfac )
-        class(oris), intent(inout) :: self
-        real,        intent(out)   :: bfac
-        real,    allocatable :: states(:),x(:),bfacs(:)
-        logical, allocatable :: mask(:)
-        real    :: med, dev
-        if( self%isthere('bfac') )then
-            states = self%get_all('state')
-            bfacs  = self%get_all('bfac')
-            mask   = (states>0.5) .and. (bfacs>0.001)
-            x      = pack(bfacs, mask=mask)
-            ! bfac is two deviations better than median
-            med    = median(x)
-            dev    = mad_gau( x, med )
-            bfac = max(med-2.*dev, minval(x))
-            deallocate(x,states,bfacs,mask)
-        else
-            ! default value
-            bfac = 500.
-        endif
-    end subroutine calc_bfac_srch
-
     subroutine find_best_classes( self, box, smpd, res_thresh,cls_mask, ndev )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: box
@@ -2504,10 +2443,15 @@ contains
         real,        intent(in)    :: frac
         real,    allocatable :: specscores(:), states(:), weights(:), weights_glob(:)
         integer, allocatable :: order(:), states_int(:)
-        real    :: minw
+        real    :: minw, mins
         integer :: i, lim, state, nstates
         if( self%isthere('specscore') )then
             specscores = self%get_all('specscore')
+            mins       = minval(specscores, mask=specscores > TINY)
+            if( mins >= 0.8 )then
+                call self%set_all2single('w', 1.0)
+                return
+            endif
             if( self%isthere('states') )then
                 states = self%get_all('states')
             else
@@ -2722,8 +2666,6 @@ contains
         select case(trim(which_here))
             case('corr')
                 ! to use in conjunction with objfun=cc
-            case('bfac')
-                ! to use in conjunction with objfun=ccres
             case('specscore')
                 ! to be tested, should be amenable to any objective function
             case DEFAULT
@@ -2740,7 +2682,6 @@ contains
         ! sort & determine threshold
         n_incl      = size(scores_incl)
         call hpsort(scores_incl)
-        if( trim(which_here).eq.'bfac' )call reverse(scores_incl)
         thresh_ind  = nint(real(n_incl) * thresh)
         score_bound = scores_incl(thresh_ind)
         deallocate(scores, incl, scores_incl)

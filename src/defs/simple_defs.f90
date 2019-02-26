@@ -58,7 +58,7 @@ end enum
 ! Objective function type
 enum, bind(c)
     enumerator :: ENUM_OBJFUN= -1
-    enumerator :: OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2
+    enumerator :: OBJFUN_CC = 0, OBJFUN_EUCLID = 1
 end enum
 
 ! type for CTF parameters
@@ -120,10 +120,10 @@ real,    parameter :: RADFRAC_NORM_EXTRACT = 0.8       !< radius fraction for ex
 integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
 
 ! constants for masking/interpolation
-real, parameter :: COSMSKHALFWIDTH         = 6.0       !< spherical soft masking
-real, parameter :: KBWINSZ                 = 1.5       !< interpolation window size for 2D
-real, parameter :: KBALPHA                 = sqrt(2.0) !< interpolation alpha (oversampling constant)
-real, parameter :: RECWINSZ                = 1.5       !< half-window size for 3D reconstruction
+real, parameter    :: COSMSKHALFWIDTH      = 6.0       !< spherical soft masking
+real, parameter    :: KBWINSZ              = 1.5       !< interpolation window size for 2D
+real, parameter    :: KBALPHA              = sqrt(2.0) !< interpolation alpha (oversampling constant)
+real, parameter    :: RECWINSZ             = 1.5       !< half-window size for 3D reconstruction
 
 ! real constants that control search and convergence
 real, parameter    :: FRAC_SH_LIM          = 80.0      !< at what frac to turn on the shift search
@@ -136,32 +136,29 @@ real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                       !! smaller number means sharper distribution
-real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
-                                                       !! smaller number means sharper distribution, but with sigma2_fudge == 1 it turns into a delta
+
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
-real,    parameter :: SOFTMAXW_THRESH      = 1.0       !< threshold for orientations softmax weights, # sigmas to the right of mean
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
 integer, parameter :: LPLIM3ITERBOUND      = 7         !< # iteration bound lplim stage 2 (PRIME2D)
 integer, parameter :: MINCLSPOPLIM         = 5         !< limit for adaptive cluster splitting/spreading (PRIME2D)
-integer, parameter :: GRIDNPEAKS           = 3         !< # peaks to consider in angular grid search (PRIME3D)
 integer, parameter :: CONTNPEAKS           = 5         !< # peaks to refine continuously
 integer, parameter :: NPROJPEAKS           = 40        !< minimum # projection directions evaluated in more random stochastic search
 integer, parameter :: NPEAKS2REFINE        = 200       !< # peaks to be further optimised
 integer, parameter :: NINPLPEAKS2SORT      = 5         !< maximum # in-plane peaks to be considered for sorting
-integer, parameter :: MINNPEAKS            = 6         !< minimum # of peaks in soft assignment
 integer, parameter :: NSPACE_REDUCED       = 600       !< # projection directions for the balancing constraint (PRIME3D)
 integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 
-! weighting scheme
-logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< per-particle or global orientation weighting scheme
+! orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
+real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
+                                                       !! smaller number means sharper distribution
+real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
+                                                       !! smaller number means sharper distribution
 
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D

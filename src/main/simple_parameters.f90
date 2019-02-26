@@ -64,7 +64,7 @@ type :: parameters
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
-    character(len=3)      :: rankw='no'           !< orientation weights based on ranks(sum|inv|cen|exp){no}
+    character(len=3)      :: rankw='sum'          !< orientation weights based on ranks(sum|cen|exp|no){sum}
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -169,7 +169,7 @@ type :: parameters
     character(len=STDLEN) :: keys=''
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
-    character(len=7)      :: objfun='cc'          !< objective function(cc|ccres|euclid){cc}
+    character(len=7)      :: objfun='cc'          !< objective function(cc|euclid){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
     character(len=STDLEN) :: oritype='ptcl3D'     !< SIMPLE project orientation type(stk|ptcl2D|cls2D|cls3D|ptcl3D)
     character(len=STDLEN) :: pcontrast='black'    !< particle contrast(black|white){black}
@@ -191,7 +191,7 @@ type :: parameters
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))         :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))         :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_RES = 1, OBJFUN_EUCLID = 2)
+    integer(kind(ENUM_OBJFUN))         :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
     integer(kind=kind(ENUM_RANKWCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based orientation weights
     ! integer variables in ascending alphabetical order
     integer :: astep=1
@@ -407,7 +407,7 @@ type :: parameters
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
-    logical :: l_rankw          = .false.
+    logical :: l_rankw          = .true.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: sp_required      = .false.
@@ -1329,10 +1329,6 @@ contains
                 self%cc_objfun = OBJFUN_CC
                 ! below is to guard against over-fitting
                 if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.3
-            case('ccres')
-                self%cc_objfun = OBJFUN_RES
-                ! with ccres there is already a guarding mechanism in place
-                if( .not. cline%defined('lplim_crit') ) self%lplim_crit = 0.143
             case('euclid')
                 self%cc_objfun = OBJFUN_EUCLID
                 ! to be consistent with RELION
@@ -1344,24 +1340,13 @@ contains
         ! FILTERS
         ! matched filter and sigma needs flags
         self%l_needs_sigma = .false.
-        if( self%cc_objfun == OBJFUN_EUCLID )then
-            ! no option given when objfun is Euclid, always off
-            self%l_match_filt  = .false.
-            self%l_needs_sigma = .true.
-        else
-            select case(self%match_filt)
-                case('no')
-                    self%l_match_filt = .false.
-                case DEFAULT
-                    select case(self%cc_objfun)
-                        case(OBJFUN_CC, OBJFUN_RES)
-                            ! all ok
-                        case DEFAULT
-                            THROW_HARD('match_filt=yes incompatible with objfun='//trim(self%objfun))
-                    end select
-                    self%l_match_filt = .true.
-            end select
-        endif
+        select case(self%cc_objfun)
+            case(OBJFUN_EUCLID)
+                self%l_match_filt  = .false.
+                self%l_needs_sigma = .true.
+            case(OBJFUN_CC)
+                self%l_match_filt  = trim(self%match_filt).eq.'yes'
+        end select
         ! local resolution for filtering or  not
         self%l_locres = .false.
         if( trim(self%locres) .eq. 'yes' ) self%l_locres = .true.

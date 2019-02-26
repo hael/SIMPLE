@@ -25,9 +25,7 @@ use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
-use simple_strategy3D_hard_single,   only: strategy3D_hard_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
-use simple_strategy3D_hard_multi,    only: strategy3D_hard_multi
 use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
@@ -73,7 +71,7 @@ contains
         type(convergence)     :: conv
         type(oris)            :: o_peak_prev
         real, allocatable     :: resarr(:)
-        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio, bfactor
+        real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
         integer :: iptcl, i, fnr, ithr, updatecnt, state, n_nozero
         integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, sz
         logical :: doprint, do_extr
@@ -98,10 +96,6 @@ contains
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 npeaks = 1
-            case('hard_single','hard_multi')
-                npeaks = 40
-                ! command line overrides
-                if( cline%defined('npeaks') ) npeaks = params_glob%npeaks
             case DEFAULT
                 npeaks = NPEAKS2REFINE
                 ! command line overrides
@@ -177,15 +171,6 @@ contains
         end select
         if( L_BENCH ) rt_init = toc(t_init)
 
-        ! B-FACTOR
-        bfactor = -1.
-        if( params_glob%cc_objfun == OBJFUN_RES )then
-            if( cline%defined('bfac') .and. params_glob%bfac >= 0. )then
-                bfactor = params_glob%bfac
-                write(logfhandle,'(A,F8.2)') '>>> SEARCH B-FACTOR: ',bfactor
-            endif
-        endif
-
         ! PREPARE THE POLARFT_CORRCALC DATA STRUCTURE
         if( L_BENCH ) t_prep_pftcc = tic()
         call preppftcc4align(cline)
@@ -220,10 +205,6 @@ contains
                         endif
                     endif
                 end do
-            case('hard_single')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_hard_single   :: strategy3Dsrch(iptcl)%ptr)
-                end do
             case('greedy_single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
@@ -242,10 +223,6 @@ contains
                             allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr)
                         endif
                     endif
-                end do
-            case('hard_multi')
-                do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_hard_multi :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -270,7 +247,6 @@ contains
                         ! search spec
                         strategy3Dspec%iptcl =  iptcl
                         strategy3Dspec%szsn  =  params_glob%szsn
-                        strategy3Dspec%bfac  =  bfactor
                         strategy3Dspec%extr_score_thresh = extr_score_thresh
                         if( allocated(het_mask) ) strategy3Dspec%do_extr =  het_mask(iptcl)
                         if( allocated(symmat) )   strategy3Dspec%symmat  => symmat
@@ -350,7 +326,7 @@ contains
         end select
 
         ! CALCULATE GLOBAL ORIENTATION WEIGHTS
-        if( WEIGHT_SCHEME_GLOBAL ) call calc_global_ori_weights
+        call calc_global_ori_weights
 
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
         if( params_glob%l_projw ) call calc_proj_weights
@@ -570,8 +546,6 @@ contains
                     call prepimg4align(iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
                     ! transfer to polar coordinates
                     call match_imgs(imatch)%polarize(pftcc_here, imatch, .true., .true.)
-                    ! memoize fft on the fly
-                    call pftcc_here%memoize_ptcl_fft(imatch)
                     ! calc stats
                     call set_ptcl_stats(pftcc_here, iptcl, imatch)
                 endif
@@ -637,9 +611,6 @@ contains
                             case('clustersym')
                                 ! always C1 reconstruction
                                 call grid_ptcl(rec_imgs(ibatch), c1_symop, orientation, s3D%o_peaks(iptcl), ctfvars)
-                            case('hard_multi', 'hard_single')
-                                ! npeaks > 1 but only one is selected for reconstruction by probabilistic logic
-                                call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, ctfvars)
                             case DEFAULT
                                 call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                         end select
@@ -662,7 +633,7 @@ contains
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks
-        use simple_strategy3D_utils, only: update_softmax_weights_glob
+        use simple_strategy3D_utils, only: update_softmax_weights
         integer :: iptcl, n_nozero, i
         ! set npeaks
         npeaks = NPEAKS2REFINE
@@ -686,7 +657,7 @@ contains
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            if( WEIGHT_SCHEME_GLOBAL ) call update_softmax_weights_glob(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID )
+            call update_softmax_weights(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID )
         end do
         call close_o_peaks_io
     end subroutine setup_weights_read_o_peaks
@@ -696,7 +667,7 @@ contains
         real    :: weight_thres, wsum
         integer :: nweights, cnt, iptcl, i, nw
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
+        case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 ! nothing to do
             case DEFAULT
                 ! extract weights
@@ -756,7 +727,7 @@ contains
         integer :: mapped_projs(params_glob%nspace), i, ind, iptcl
         real    :: pw, w_per_proj(NSPACE_REDUCED), proj_weights(params_glob%nspace)
         select case(params_glob%refine)
-            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval', 'hard_single', 'hard_multi')
+            case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 ! nothing to do
             case DEFAULT
                 if( build_glob%spproj_field%get_avg('updatecnt') < 1.0 )then

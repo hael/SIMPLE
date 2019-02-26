@@ -109,12 +109,6 @@ contains
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
         if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
-        if( cline%defined('objfun') )then
-            if( cline%get_carg('objfun').eq.'ccres' )then
-                call cline_cluster2D2%set('objfun', 'ccres')
-                call cline_cluster2D2%set('bfac',   1000.)
-            endif
-        endif
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
         do_scaling = .true.
@@ -361,14 +355,8 @@ contains
                 call simple_rmdir(STKPARTSDIR)
             endif
             ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
-            !          learning for acceleration, objective function is resolution weighted
-            !          cross-correlation with automtic fitting of B-factors
+            !          learning for acceleration
             cline_cluster2D_stage2 = cline
-            if( cline%defined('objfun') )then
-                ! nothing to do
-            else
-                call cline_cluster2D_stage2%set('objfun', 'ccres')
-            endif
             call cline_cluster2D_stage2%delete('refs')
             call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
             if( cline%defined('update_frac') )then
@@ -612,10 +600,9 @@ contains
         cline_refine3D_init   = cline
         cline_symsrch         = cline
         ! In shnc & stage 1 the objective function is always standard cross-correlation,
-        ! in stage 2 it follows optional user input and defaults to ccres
+        ! in stage 2 it follows optional user input and defaults to cc
         call cline_refine3D_snhc%set('objfun', 'cc')
         call cline_refine3D_init%set('objfun', 'cc')
-        if( .not.cline%defined('objfun') ) call cline_refine3D_refine%set('objfun', 'ccres')
         ! reconstruct3D & project are not distributed executions, so remove the nparts flag
         call cline_reconstruct3D%delete('nparts')
         call cline_reproject%delete('nparts')
@@ -629,6 +616,7 @@ contains
         call cline_refine3D_snhc%set('lp',      lplims(1))
         call cline_refine3D_snhc%set('nspace',  real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',  real(MAXITS_SNHC))
+        call cline_refine3D_snhc%set('ptclw',   'no')  ! no soft particle weights in first phase
         call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',      'refine3D')
@@ -638,6 +626,7 @@ contains
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
         call cline_refine3D_init%set('lp',       lplims(1))
+        call cline_refine3D_init%set('ptclw',   'no')  ! no soft particle weights in init phase
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
@@ -848,7 +837,6 @@ contains
                 character(len=:), allocatable :: eostk, ext
                 integer :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
-                call cline_refine3D_refine%set('frcs',trim(frcs_fname))
                 ! add stks
                 ext   = '.'//fname2ext( stk )
                 eostk = add2fbody(trim(orig_stk), trim(ext), '_even')

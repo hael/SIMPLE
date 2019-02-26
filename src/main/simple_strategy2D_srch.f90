@@ -15,7 +15,6 @@ private
 #include "simple_local_flags.inc"
 
 type strategy2D_spec
-    real    :: bfac        = 0.
     real    :: stoch_bound = 0.
     integer :: iptcl       = 0
     integer :: iptcl_map   = 0
@@ -41,7 +40,6 @@ type strategy2D_srch
     real                    :: best_shvec(2) =  0.  !< best shift vector found by search
     real                    :: prev_corr     = -1.  !< previous best correlation
     real                    :: best_corr     = -1.  !< best corr found by search
-    real                    :: prev_bfac     =  0.  !< previous b-factor used for search
     real                    :: specscore     =  0.  !< spectral score
     logical                 :: doshift    = .true.  !< origin shift search indicator
   contains
@@ -63,7 +61,6 @@ contains
         self%iptcl      =  spec%iptcl
         self%iptcl_map  =  spec%iptcl_map
         self%chunk_id   =  spec%chunk_id
-        self%prev_bfac  =  spec%bfac
         self%nrefs      =  params_glob%ncls
         self%nrots      =  round2even(twopi*real(params_glob%ring2))
         self%nrefs_eval =  0
@@ -91,10 +88,9 @@ contains
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = prev_roind
-        ! calculate previous best corr (treshold for better) & b-factor
-        if( params_glob%l_match_filt ) call pftcc_glob%prep4ptclfilt(self%iptcl, self%prev_class, prev_roind)
+        ! calculate previous best corr (treshold for better)
+        call pftcc_glob%prep_matchfilt(self%iptcl, self%prev_class, prev_roind)
         if( self%prev_class > 0 )then
-            if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
             if( pftcc_glob%is_euclid(self%iptcl) )then
                 self%prev_corr  = corrs(prev_roind)
@@ -111,7 +107,6 @@ contains
                 self%prev_corr  = 0.
                 self%best_corr  = 0.
             endif
-            if(params_glob%cc_objfun == OBJFUN_RES) call pftcc_glob%memoize_bfac(self%iptcl, self%prev_bfac)
         endif
         ! calculate spectral score
         self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, prev_roind)
@@ -140,9 +135,7 @@ contains
         class(strategy2D_srch), intent(in) :: self
         integer,      optional, intent(in) :: nrefs
         real :: dist, mat(2,2), u(2), x1(2), x2(2)
-        real :: e3, mi_class, frac, bfac
-        ! updates b-factor
-        bfac = pftcc_glob%fit_bfac(self%best_class, self%iptcl, self%best_rot, -self%best_shvec)
+        real :: e3, mi_class, frac
         ! get in-plane angle
         e3   = 360. - pftcc_glob%get_rot(self%best_rot) ! change sgn to fit convention
         ! calculate in-plane rot dist (radians)
@@ -169,7 +162,6 @@ contains
         call build_glob%spproj_field%set(self%iptcl, 'class',      real(self%best_class))
         call build_glob%spproj_field%set(self%iptcl, 'corr',       self%best_corr)
         call build_glob%spproj_field%set(self%iptcl, 'specscore',  self%specscore)
-        call build_glob%spproj_field%set(self%iptcl, 'bfac',       bfac)
         call build_glob%spproj_field%set(self%iptcl, 'dist_inpl',  rad2deg(dist))
         call build_glob%spproj_field%set(self%iptcl, 'mi_class',   mi_class)
         call build_glob%spproj_field%set(self%iptcl, 'frac',       frac)

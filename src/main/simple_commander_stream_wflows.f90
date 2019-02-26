@@ -246,12 +246,10 @@ contains
         use simple_ori,                    only: ori
         class(cluster2D_stream_distr_commander), intent(inout) :: self
         class(cmdline),                          intent(inout) :: cline
-        !integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 600   ! 10mins, Frequency at which the original project file should be updated
         integer,               parameter   :: MINBOXSZ            = 72   ! minimum boxsize for scaling
         ! dev settings
-        ! integer,               parameter   :: CCRES_NPTCLS_LIM    = 10000 ! # of ptcls required to turn on objfun=ccres
         ! integer,               parameter   :: WAIT_WATCHER        = 30    ! seconds prior to new stack detection
         ! integer,               parameter   :: ORIGPROJ_WRITEFREQ  = 60    ! 10mins, Frequency at which the original project file should be updated
         real,                 parameter    :: GREEDY_TARGET_LP   = 15.
@@ -352,12 +350,6 @@ contains
         call cline_cluster2D%set('projfile',  trim(PROJFILE_POOL))
         call cline_cluster2D%set('projname',  trim(get_fbody(trim(PROJFILE_POOL),trim('simple'))))
         call cline_cluster2D%set('objfun',    'cc')
-        if( cline%defined('objfun') )then
-            if( cline%get_carg('objfun').eq.'ccres' )then
-                call cline_cluster2D%set('objfun', 'ccres')
-                call cline_cluster2D%set('bfac',   1000.)
-            endif
-        endif
         if( .not.cline%defined('match_filt') ) call cline_cluster2D%set('match_filt','no')
         if( l_greedy )then
             call cline_cluster2D%set('eo',     'no')

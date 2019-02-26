@@ -685,8 +685,12 @@ contains
         allocate(zscores(size(x)), source=x)
         if( present(mask) )then
             call normalize(zscores, err, mask)
+            if( err )then
+                where( mask ) zscores = 1.0
+            endif
         else
             call normalize(zscores, err)
+            if( err ) zscores = 1.0
         endif
     end function z_scores
 
