@@ -1352,7 +1352,7 @@ contains
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
+        !if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
         if( nlines(params%boxfile) > 0 )then
             call boxfile%new(params%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()
@@ -1373,8 +1373,8 @@ contains
         call cline%delete('boxfile')
         params%nptcls = ndatlines
         params%nparts = params%nptcls
-        if( params%ncunits > params%nparts )&
-        &THROW_HARD('# computational units (ncunits) mjust be <= number of entries in boxfiles')
+        !if( params%ncunits > params%nparts )&
+        !&THROW_HARD('# computational units (ncunits) mjust be <= number of entries in boxfiles')
         ! box and numlen need to be part of command line
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )
@@ -1395,6 +1395,7 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
+
 
     recursive subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self

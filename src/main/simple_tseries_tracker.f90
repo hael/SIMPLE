@@ -24,8 +24,9 @@ logical               :: l_neg
 
 contains
 
-    subroutine init_tracker(  boxcoord )
-        integer, intent(in) :: boxcoord(2)
+    subroutine init_tracker( boxcoord, fnames )
+        integer,                   intent(in) :: boxcoord(2)
+        character(len=LONGSTRLEN), intent(in) :: fnames(:)
         integer :: n, i
         ! set constants
         box    = params_glob%box
@@ -36,8 +37,11 @@ contains
         neg    = params_glob%neg
         l_neg  = .false.
         if( params_glob%neg .eq. 'yes' ) l_neg = .true.
-        call read_filetable(params_glob%filetab, framenames)
-        nframes = size(framenames)
+        nframes = size(fnames)
+        allocate(framenames(nframes))
+        do i = 1,nframes
+            framenames(i) = trim(fnames(i))
+        enddo
         call find_ldim_nptcls(framenames(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
             ! all ok
@@ -90,11 +94,13 @@ contains
         end do
     end subroutine track_particle
 
-    subroutine write_tracked_series( fbody )
-        character(len=*), intent(in) :: fbody
+    subroutine write_tracked_series( dir, fbody )
+        character(len=*), intent(in)  :: dir, fbody
+        character(len=:), allocatable :: fname
         integer :: funit, io_stat, iframe, xind, yind, i
         logical :: outside
-        call fopen(funit, status='REPLACE', action='WRITE', file=trim(fbody)//'.box',iostat=io_stat)
+        fname = trim(dir)//'/'//trim(fbody)//'.box'
+        call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
         do iframe=1,nframes
             xind = particle_locations(iframe,1)
@@ -103,12 +109,13 @@ contains
             call frame_img%read(framenames(iframe),1)
             call frame_img%window_slim([xind,yind,1], box, reference, outside)
             if( l_neg ) call reference%neg()
-            call reference%write(trim(fbody)//'.mrc', iframe)
+            call reference%write(trim(dir)//'/'//trim(fbody)//'.mrc', iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
         do i=1,NNN
+            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//'.mrc'
             if( l_neg ) call neigh_imgs_mean(i)%neg()
-            call neigh_imgs_mean(i)%write(trim(fbody)//'_background_nn'//int2str(i)//'.mrc')
+            call neigh_imgs_mean(i)%write(fname)
         end do
     end subroutine write_tracked_series
 

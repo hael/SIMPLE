@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(67)
+type(simple_prg_ptr) :: prg_ptr_array(68)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -133,6 +133,7 @@ type(simple_program), target :: stackops
 type(simple_program), target :: subset_project
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetry_test
+type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
@@ -296,6 +297,7 @@ contains
         call new_subset_project
         call new_symaxis_search
         call new_symmetry_test
+        call new_tseries_import
         call new_tseries_track
         call new_update_project
         call new_vizoris
@@ -368,10 +370,11 @@ contains
         prg_ptr_array(61)%ptr2prg => subset_project
         prg_ptr_array(62)%ptr2prg => symaxis_search
         prg_ptr_array(63)%ptr2prg => symmetry_test
-        prg_ptr_array(64)%ptr2prg => tseries_track
-        prg_ptr_array(65)%ptr2prg => update_project
-        prg_ptr_array(66)%ptr2prg => vizoris
-        prg_ptr_array(67)%ptr2prg => volops
+        prg_ptr_array(64)%ptr2prg => tseries_import
+        prg_ptr_array(65)%ptr2prg => tseries_track
+        prg_ptr_array(66)%ptr2prg => update_project
+        prg_ptr_array(67)%ptr2prg => vizoris
+        prg_ptr_array(68)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -505,6 +508,8 @@ contains
                 ptr2prg => symaxis_search
             case('symmetry_test')
                 ptr2prg => symmetry_test
+            case('tseries_import')
+                ptr2prg => tseries_import
             case('tseries_track')
                 ptr2prg => tseries_track
             case('update_project')
@@ -586,6 +591,7 @@ contains
         write(logfhandle,'(A)') subset_project%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetry_test%name
+        write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -3021,23 +3027,54 @@ contains
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
 
+    subroutine new_tseries_import
+        ! PROGRAM SPECIFICATION
+        call tseries_import%new(&
+        &'tseries_import',&                                                       ! name
+        &'Import & prepares time-series datasets',&                               ! descr_short
+        &'is a workflow for importing and preparing time-series data',&           ! descr_long
+        &'simple_exec',&                                                         ! executable
+        &1, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_import%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+        ! parameter input/output
+        call tseries_import%set_input('parm_ios', 1, smpd)
+        call tseries_import%set_input('parm_ios', 2, kv)
+        tseries_import%parm_ios(2)%required = .true.
+        call tseries_import%set_input('parm_ios', 3, cs)
+        tseries_import%parm_ios(3)%required = .true.
+        call tseries_import%set_input('parm_ios', 4, fraca)
+        tseries_import%parm_ios(4)%required = .true.
+        call tseries_import%set_input('parm_ios', 5, ctf_yes)
+        tseries_import%parm_ios(5)%required = .true.
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_tseries_import
+
     subroutine new_tseries_track
         ! PROGRAM SPECIFICATION
         call tseries_track%new(&
         &'tseries_track',&                                                       ! name
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
-        &'simple_exec',&                                                         ! executable
-        &1, 3, 0, 1, 2, 0, 1, .false.)                                           ! # entries in each group, requires sp_project
+        &'simple_distr_exec',&                                                   ! executable
+        &0, 2, 0, 1, 2, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_track%set_input('img_ios', 1, 'filetab', 'file', 'List of of movie frames',&
-        &'List of movie frames to track in', 'e.g. movie_frames.txt', .true., '')
+        ! <empty>
         ! parameter input/output
         call tseries_track%set_input('parm_ios', 1, 'fbody', 'string', 'Template output tracked series',&
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
-        call tseries_track%set_input('parm_ios', 2, smpd)
-        call tseries_track%set_input('parm_ios', 3, 'boxfile', 'file', 'List of particle coordiantes',&
+        call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         ! alternative inputs
         ! <empty>

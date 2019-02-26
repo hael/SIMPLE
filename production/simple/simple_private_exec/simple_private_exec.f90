@@ -86,7 +86,6 @@ type(multivariate_zscore_commander)  :: xmultizscore
 type(o_peaksstats_commander)         :: xo_peaksstats
 
 ! TIME-SERIES ANALYSIS PROGRAMS
-type(tseries_extract_commander)      :: xtseries_extract
 type(tseries_track_commander)        :: xtseries_track
 type(tseries_backgr_subtr_commander) :: xtseries_backgr_subtr
 type(tseries_split_commander)        :: xtseries_split
@@ -803,18 +802,9 @@ select case(prg)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
 
-     case( 'tseries_extract' )
-        ! for creating overlapping chunks of nframesgrp frames from time-series data
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'nframesgrp'
-        call cline%parse_oldschool(keys_required(:3))
-        call xtseries_extract%execute(cline)
     case( 'tseries_track' )
         ! for particle tracking in time-series data
-        keys_required(1) = 'filetab'
-        keys_required(2) = 'fbody'
-        keys_required(3) = 'smpd'
+        keys_required(1) = 'fbody'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'boxfile'
@@ -824,7 +814,7 @@ select case(prg)
         keys_optional(6) = 'box'
         keys_optional(7) = 'neg'
         keys_optional(8) = 'cenlp'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:8))
+        call cline%parse_oldschool(keys_required(:1), keys_optional(:8))
         ! set defaults
         if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)

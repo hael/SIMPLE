@@ -7,17 +7,17 @@ use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 implicit none
 
-public :: tseries_extract_commander
+public :: tseries_import_commander
 public :: tseries_track_commander
 public :: tseries_backgr_subtr_commander
 public :: tseries_split_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: tseries_extract_commander
+type, extends(commander_base) :: tseries_import_commander
   contains
-    procedure :: execute      => exec_tseries_extract
-end type tseries_extract_commander
+    procedure :: execute      => exec_tseries_import
+end type tseries_import_commander
 type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
@@ -33,23 +33,44 @@ end type tseries_backgr_subtr_commander
 
 contains
 
-    subroutine exec_tseries_extract( self, cline )
-        use simple_image,   only: image
-        class(tseries_extract_commander), intent(inout) :: self
-        class(cmdline),                   intent(inout) :: cline
-        character(len=LONGSTRLEN), allocatable :: filenames(:)
+    !> for creating a new project
+    subroutine exec_tseries_import( self, cline )
+        use simple_sp_project,        only: sp_project
+        use simple_image,             only: image
+        class(tseries_import_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters)            :: params
+        type(sp_project)            :: spproj
+        type(image)                 :: frame_img
+        type(ctfparams)             :: ctfvars
+        character(len=LONGSTRLEN), allocatable :: filenames(:), movfnames(:)
         character(len=LONGSTRLEN)              :: outfname
-        type(parameters) :: params
         integer          :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
         integer          :: iframe, jframe, nfiles, endit
-        type(image)      :: frame_img
-        call params%new(cline)
-        if( cline%defined('filetab') )then
-            call read_filetable(params%filetab, filenames)
-            nfiles = size(filenames)
-            numlen = len(int2str(nfiles))
+        call cline%set('oritype','mic')
+        ! check input
+        if( cline%defined('nframesgrp') )then
+            if( nint(cline%get_rarg('nframesgrp')) < 3 )then
+                THROW_HARD('nframesgrp integer (nr of frames to average) needs to be >= 3; exec_tseries_extract')
+            endif
         else
-            THROW_HARD('need filetab input, listing all the individual frames of the time series; exec_tseries_extract')
+            THROW_HARD('need nframesgrp integer input = nr of frames to average; exec_tseries_extract')
+        endif
+        select case(trim(params%ctf))
+            case('yes','no','flip')
+                ! fine
+            case DEFAULT
+                THROW_HARD('Invalid CTF flag')
+        end select
+        ! build parameters
+        call params%new(cline)
+        call read_filetable(params%filetab, filenames)
+        nfiles = size(filenames)
+        numlen = len(int2str(nfiles))
+        if( params%mkdir.eq.'yes' )then
+            do iframe = 1,nfiles
+                if(filenames(iframe)(1:1).ne.'/') filenames(iframe) = '../'//trim(filenames(iframe))
+            enddo
         endif
         call find_ldim_nptcls(filenames(1),ldim,nframes)
         if( nframes == 1 .and. ldim(3) == 1 )then
@@ -58,16 +79,12 @@ contains
         else
             write(logfhandle,*) 'ldim(3): ', ldim(3)
             write(logfhandle,*) 'nframes: ', nframes
-            THROW_HARD('exec_tseries_extract assumes one frame per file')
+            THROW_HARD('exec_tseries_import assumes one frame per file')
         endif
-        if( cline%defined('nframesgrp') )then
-            if( params%nframesgrp < 3 )then
-                THROW_HARD('nframesgrp integer (nr of frames to average) needs to be >= 3; exec_tseries_extract')
-            endif
-        else
-            THROW_HARD('need nframesgrp integer input = nr of frames to average; exec_tseries_extract')
-        endif
+        ! generates 'movies' to import
+        call spproj%read(params%projfile)
         endit = nfiles - params%nframesgrp + 1
+        allocate(movfnames(endit))
         do iframe=1,endit
             call progress(iframe, endit)
             if( cline%defined('fbody') )then
@@ -75,34 +92,60 @@ contains
             else
                 outfname = trim(params%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//params%ext
             endif
+            movfnames(iframe) = trim(outfname)
             frame_from = iframe
             frame_to   = iframe + params%nframesgrp - 1
             cnt = 0
             do jframe=frame_from,frame_to
                 cnt = cnt + 1
                 call frame_img%read(filenames(jframe),1)
-                call frame_img%write(outfname,cnt)
+                call frame_img%write(movfnames(iframe),cnt)
             end do
         end do
         call frame_img%kill
+        ! import
+        select case(trim(params%ctf))
+            case('yes')
+                ctfvars%ctfflag = CTFFLAG_YES
+            case('no')
+                ctfvars%ctfflag = CTFFLAG_YES
+            case('flip')
+                ctfvars%ctfflag = CTFFLAG_FLIP
+            case DEFAULT
+        end select
+        ctfvars%smpd    = params%smpd
+        ctfvars%cs      = params%cs
+        ctfvars%kv      = params%kv
+        ctfvars%fraca   = params%fraca
+        ctfvars%l_phaseplate = .false.
+        ctfvars%dfx     = 0.
+        ctfvars%dfy     = 0.
+        ctfvars%angast  = 0.
+        ctfvars%phshift = 0.
+        call spproj%add_movies( movfnames, ctfvars )
+        !final write
+        call spproj%write
         ! end gracefully
-        call simple_end('**** SIMPLE_TSERIES_EXTRACT NORMAL STOP ****')
-    end subroutine exec_tseries_extract
+        call simple_end('**** TSERIES_IMPORT NORMAL STOP ****')
+    end subroutine exec_tseries_import
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
-        use simple_qsys_funs, only: qsys_job_finished
+        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_sp_project, only: sp_project
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)  :: params
-        type(nrtxtfile)   :: boxfile
-        integer           :: ndatlines, j, orig_box, numlen
-        real, allocatable :: boxdata(:,:)
+        type(sp_project)                       :: spproj
+        type(parameters)                       :: params
+        type(nrtxtfile)                        :: boxfile
+        character(len=:),          allocatable :: dir
+        character(len=LONGSTRLEN), allocatable :: framenames(:)
+        real,                      allocatable :: boxdata(:,:)
+        integer :: i, iframe, ndatlines, j, orig_box, numlen, nmovs
         call params%new(cline)
-        numlen = 5 ! default value
+        numlen   = 5 ! default value
         orig_box = params%box
-        ! check file inout existence and read filetables
-        if( .not. file_exists(params%filetab) ) THROW_HARD('inputted filetab does not exist in cwd')
+        ! boxfile input
         if( cline%defined('boxfile') )then
             if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
             if( nlines(params%boxfile) > 0 )then
@@ -130,18 +173,34 @@ contains
         else
             THROW_HARD('need either boxfile or xcoord/ycoord to be part of command line; exec_tseries_track')
         endif
+        ! frames input
+        call spproj%read(params%projfile)
+        nmovs = spproj%get_nintgs()
+        allocate(framenames(nmovs))
+        iframe = 0
+        do i = 1,spproj%os_mic%get_noris()
+            if( spproj%os_mic%isthere(i,'intg') )then
+                iframe = iframe + 1
+                framenames(iframe) = trim(spproj%os_mic%get_static(i,'intg'))
+            endif
+        enddo
+        ! actual tracking
         do j=1,ndatlines
-            call init_tracker( nint(boxdata(j,1:2)))
+            call init_tracker( nint(boxdata(j,1:2)), framenames)
             call track_particle
             if( cline%defined('ind') )then
+                dir = trim(params%fbody)//int2str(params%ind)
+                call simple_mkdir(dir)
                 if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
-                call write_tracked_series(trim(params%fbody)//int2str_pad(params%ind,params%numlen))
+                call write_tracked_series(dir,trim(params%fbody)//int2str_pad(params%ind,params%numlen))
             else
-                call write_tracked_series(trim(params%fbody)//int2str_pad(j,numlen))
+                dir = trim(params%fbody)//int2str(params%ind)
+                call simple_mkdir(dir)
+                call write_tracked_series(dir,trim(params%fbody)//int2str_pad(j,numlen))
             endif
             call kill_tracker
         end do
-        if( params%l_distr_exec ) call qsys_job_finished(  'simple_commander_tseries :: exec_tseries_track')
+        call qsys_job_finished(  'simple_commander_tseries :: exec_tseries_track')
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
