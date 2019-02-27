@@ -141,7 +141,8 @@ contains
         ! identify peaks
         peakval   = maxval(zscores(2:))
         nbackgr   = count(zscores(2:) > TINY) - 1 ! -1 because peak position is omitted
-        backgrval = (sum(zscores(2:), mask=zscores(2:) > TINY) - peakval) / real(nbackgr)
+        backgrval = 0.
+        if( nbackgr > 0 ) backgrval = (sum(zscores(2:), mask=zscores(2:) > TINY) - peakval) / real(nbackgr)
         where( zscores > TINY )
             diffs_peak = sqrt((zscores - peakval)**2.0)
         elsewhere
