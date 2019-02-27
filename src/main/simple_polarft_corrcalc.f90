@@ -104,7 +104,6 @@ type :: polarft_corrcalc
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
     logical                          :: l_clsfrcs   = .false. !< CLS2D/3DRefs flag
-    logical                          :: match_filt  = .false. !< matched filter flag
     logical                          :: with_ctf    = .false. !< CTF flag
     logical                          :: existence   = .false. !< to indicate existence
     type(heap_vars),     allocatable :: heap_vars(:)          !< allocated fields to save stack allocation in subroutines and functions
@@ -255,14 +254,9 @@ contains
         self%nrefs       = nrefs                                       !< the number of references (logically indexded [1,nrefs])
         self%nrots       = round2even(twopi * real(params_glob%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
         self%pftsz       = self%nrots / 2                              !< size of reference (nrots/2) (number of vectors used for matching)
-        ! take care of objective function flags
-        self%match_filt = .false.
-        if( params_glob%cc_objfun == OBJFUN_CC )then
-            ! matched filter
-            self%match_filt = params_glob%l_match_filt
-            if( self%match_filt )then
-                allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
-            endif
+        ! allocate optimal low-pass filter if matched filter is on
+        if( params_glob%l_match_filt )then
+            allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
         endif
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
@@ -752,7 +746,7 @@ contains
     subroutine memoize_ffts( self )
         class(polarft_corrcalc), intent(inout) :: self
         integer :: i
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             ! because with match_filt=yes the particle filtering is done on the fly
             return
         endif
@@ -849,7 +843,7 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         ! shell normalization and filtering
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref(iptcl, pft_ref)
             else
@@ -874,7 +868,7 @@ contains
         integer     :: i, k, ithr, rot
         ! particle is assumed phase-flipped, reference untouched
         i = self%pinds(iptcl)
-        if( iref == 0 .or. .not. self%match_filt )then
+        if( iref == 0 .or. .not. params_glob%l_match_filt )then
             ! just memoize particle
             call self%memoize_fft(i)
             return
@@ -1358,7 +1352,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref(iptcl, pft_ref)
             else
@@ -1415,7 +1409,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref(iptcl, pft_ref)
             else
@@ -1625,7 +1619,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref(iptcl, pft_ref)
             else
@@ -1676,7 +1670,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
             else
@@ -1734,7 +1728,7 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
             else
@@ -1794,7 +1788,7 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
             else
@@ -1871,7 +1865,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
             else
@@ -1961,7 +1955,7 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( self%match_filt )then
+        if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
                 call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
             else
