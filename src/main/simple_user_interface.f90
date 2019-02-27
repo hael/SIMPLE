@@ -2569,7 +2569,7 @@ contains
         &'report_selection',&                                                           ! name
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
-        &'simple_distr_exec',&                                                          ! executable
+        &'simple_exec',&                                                                ! executable
         &0, 2, 0, 0, 0, 0, 0, .true.)                                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
