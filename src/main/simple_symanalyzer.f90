@@ -99,12 +99,12 @@ contains
         nsym       = ncsym * 2          ! because we always search for dihedral symmetries
         nsym       = nsym  - 1          ! because d1 is omitted
         if( platonic ) nsym = nsym  + 3 ! because of the Platonics (t,o,i)
-        if( cn_stop < 10 )then
-            errmsg = 'cn range must include rotational symmetries from orders up to 10. '//&
-                &'Set cn_stop >= 10 on command line; eval_point_groups'
-            THROW_HARD(trim(errmsg))
-        endif
         if( platonic )then
+            if( cn_stop < 5 )then
+                errmsg = 'cn range must include rotational symmetries from orders up to 5 when platonic=yes. '//&
+                    &'Set cn_stop >= 5 on command line; eval_point_groups'
+                THROW_HARD(trim(errmsg))
+            endif
             write(logfhandle,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL & PLATONIC GROUPS'
         else
             write(logfhandle,'(a,1x,i2,1x,a,1x,i2,1x,a)') '>>> TESTING ROTATIONAL SYMMETRIES FROM', 1, 'TO', cn_stop, ' & DIHEDRAL GROUPS'
