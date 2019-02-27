@@ -37,6 +37,7 @@ type :: motion_patched
     type(image),        allocatable  :: patches_imgs(:,:,:)
     type(ftexp_shsrch), allocatable  :: shsearch_patches(:,:,:)
     real,               allocatable  :: shifts_patches(:,:,:,:)
+    real,               allocatable  :: shifts_patches_for_fit(:,:,:,:)
     integer                          :: nframes
     integer                          :: ldim(3)       ! size of entire frame, reference
     integer                          :: ldim_patch(3) ! size of one patch
@@ -56,6 +57,7 @@ contains
     procedure, private               :: fit_polynomial
     procedure, private               :: apply_polytransfo
     procedure, private               :: write_shifts
+    procedure, private               :: write_shifts_for_fit
     procedure, private               :: write_polynomial
     procedure                        :: new             => motion_patched_new
     procedure                        :: correct         => motion_patched_correct
@@ -119,10 +121,10 @@ contains
                     patch_cntr_x = real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
                     patch_cntr_y = real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
                     idx = (iframe-1) * (NX_PATCHED * NY_PATCHED) + (i-1) * NY_PATCHED + j
-                    y(idx) = real(self%shifts_patches(2,iframe,i,j),dp)   ! shift in x-direction first
-                    x(1,idx) = real(patch_cntr_x,dp)
-                    x(2,idx) = real(patch_cntr_y,dp)
-                    x(3,idx) = real(iframe,dp)
+                    y(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j),dp)   ! shift in x-direction first
+                    x(1,idx) = real(patch_cntr_x,dp) / real(self%ldim(1),dp) - 0.5_dp
+                    x(2,idx) = real(patch_cntr_y,dp) / real(self%ldim(2),dp) - 0.5_dp
+                    x(3,idx) = real(iframe,dp) - 0.5_dp
                 end do
             end do
         end do
@@ -136,9 +138,9 @@ contains
                 if (k1 < self%nframes*NX_PATCHED*NY_PATCHED) write (123,'(A)',advance='no') ', '
             end do
             write (123,*) '];'
-            
+
             do k2 = 1,3
-                
+
                 write (123,'(A)',advance='no') 'x' // trim(int2str(k2)) // '=['
                 do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
                     write (123,'(A)',advance='no') trim(dbl2str(x(k2,k1)))
@@ -155,10 +157,8 @@ contains
         do iframe = 1, self%nframes
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
-                    patch_cntr_x = real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
-                    patch_cntr_y = real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
                     idx = (iframe-1) * (NX_PATCHED * NY_PATCHED) + (i-1) * NY_PATCHED + j
-                    y(idx) = real(self%shifts_patches(3,iframe,i,j),dp)   ! shift in y-direction first
+                    y(idx) = real(self%shifts_patches_for_fit(3,iframe,i,j),dp)   ! shift in y-direction first
                 end do
             end do
         end do
@@ -176,8 +176,8 @@ contains
         class(motion_patched),    intent(inout) :: self
         real(dp),                 intent(in)    :: p(PATCH_PDIM)
         character(len=*),         intent(in)    :: name
-        integer :: i        
-        logical :: exist        
+        integer :: i
+        logical :: exist
         inquire(file="polynomial.txt", exist=exist)
         if (exist) then
             open(123, file="polynomial.txt", status="old", position="append", action="write")
@@ -209,9 +209,9 @@ contains
         do iframe = 1, self%nframes
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
-                    t = real(iframe)
-                    x = real(i)
-                    y = real(j)
+                    t = real(iframe - 1)
+                    x = real(i) / real(self%ldim(1)) - 0.5
+                    y = real(j) / real(self%ldim(2)) - 0.5
                     x_trafo = x - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
                     y_trafo = y - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
                     rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo, iframe, rmat_ins )
@@ -308,6 +308,31 @@ contains
         close(123)
     end subroutine write_shifts
 
+    subroutine write_shifts_for_fit( self )
+        class(motion_patched), intent(inout) :: self
+        integer :: i,j
+        open(123, file='shifts_for_fit.txt')
+        write (123,*) 'shiftsff_x=[...'
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                write (123,'(A)',advance='no') real2str(self%shifts_patches_for_fit(2,1,i,j))
+                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
+            end do
+            if (i < NX_PATCHED) write (123,*) '; ...'
+        end do
+        write (123,*) '];'
+        write (123,*) 'shiftsff_y=[...'
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                write (123,'(A)',advance='no') real2str(self%shifts_patches_for_fit(3,1,i,j))
+                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
+            end do
+            if (i < NX_PATCHED) write (123,*) '; ...'
+        end do
+        write (123,*) '];'
+        close(123)
+    end subroutine write_shifts_for_fit
+
     subroutine allocate_fields( self )
         class(motion_patched), intent(inout) :: self
         integer :: alloc_stat
@@ -322,11 +347,12 @@ contains
             end if
         end if
         if (do_allocate) then
-            allocate(self%shifts_patches  (3, self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%frame_patches   (   self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%ref_patches     (   self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%patches_imgs    (   self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%shsearch_patches(   self%nframes, NX_PATCHED, NY_PATCHED),&
+            allocate(self%shifts_patches   (3, self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%shifts_patches_for_fit(3, self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%frame_patches   (    self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%ref_patches     (    self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%patches_imgs    (    self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%shsearch_patches(    self%nframes, NX_PATCHED, NY_PATCHED),&
                 stat=alloc_stat )
             if (alloc_stat /= 0) call allocchk('allocate_fields 1; simple_motion_patched')
         end if
@@ -337,6 +363,7 @@ contains
         integer :: iframe, i, j
         write (*,*) 'deallocate_fields ' ; call flush(6)
         if (allocated(self%shifts_patches)) deallocate(self%shifts_patches)
+        if (allocated(self%shifts_patches_for_fit)) deallocate(self%shifts_patches_for_fit)
         if (allocated(self%frame_patches)) then
             do iframe = 1, self%nframes
                 do j = 1, NY_PATCHED
@@ -456,6 +483,7 @@ contains
     subroutine det_shifts( self )
         class(motion_patched), intent(inout) :: self
         integer :: iframe, i, j
+        real :: interpolated_xshift0(NX_PATCHED,NY_PATCHED), interpolated_yshift0(NX_PATCHED,NY_PATCHED)
         self%shifts_patches = 0.
         !$omp parallel do collapse(3) default(shared) private(iframe,j,i) proc_bind(close) schedule(static)
         do iframe = 1, self%nframes
@@ -468,6 +496,16 @@ contains
             end do
         end do
         !$omp end parallel do
+        ! Set te first shift to 0.
+        do iframe = self%nframes, 1, -1
+            self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
+        enddo
+        interpolated_xshift0(:,:) = -0.5*self%shifts_patches(2,2,:,:)
+        interpolated_yshift0(:,:) = -0.5*self%shifts_patches(3,2,:,:)
+        do iframe = 1, self%nframes
+            self%shifts_patches_for_fit(2,2,:,:) = self%shifts_patches(2,2,:,:)  - interpolated_xshift0(:,:)
+            self%shifts_patches_for_fit(3,2,:,:) = self%shifts_patches(3,2,:,:)  - interpolated_yshift0(:,:)
+        enddo
     end subroutine det_shifts
 
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
@@ -531,7 +569,8 @@ contains
         call self%apply_polytransfo(frames, frames_output)
         if (DUMP_STUFF) then
             ! write shifts to file
-            call self%write_shifts()            
+            call self%write_shifts()
+            call self%write_shifts_for_fit()
             write (*,*) 'ldim(1:2)=', self%ldim(1:2)
             write (*,*) 'nframes=', self%nframes
             do i = 1, self%nframes

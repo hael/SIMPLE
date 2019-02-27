@@ -132,7 +132,8 @@ contains
         smpd        = ctfvars%smpd
         smpd_scaled = ctfvars%smpd/params_glob%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
-        fixed_frame = nint(real(nframes)/2.)
+        ! fixed_frame = nint(real(nframes)/2.) align the frames wrt the central one
+        fixed_frame = 1.                      !align the frames wrt the first one
         ! set reslims
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
         moldiam = 0.7 * real(params_glob%box) * smpd_scaled
