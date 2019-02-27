@@ -91,7 +91,7 @@ contains
     subroutine volpft_srch4symaxis( symaxis_best, fromto )
         class(ori),        intent(out) :: symaxis_best
         integer, optional, intent(in)  :: fromto(2)
-        real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
+        real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:), fsc(:)
         integer, allocatable :: order(:)
         class(*), pointer    :: fun_self => null()
         type(ori)  :: symaxis
@@ -99,7 +99,7 @@ contains
         type(oris) :: cand_axes
         integer    :: ffromto(2), ntot, inpl, iproj, iproj_best
         integer    :: inpl_best, istop, ithr, iloc, n_inpls
-        real       :: eul(3), corr_best, cost
+        real       :: eul(3), corr_best, cost, score
         logical    :: distr_exec
         ! flag distributed/shmem exec & set range
         distr_exec = present(fromto)
@@ -190,8 +190,13 @@ contains
         order = cand_axes%order_corr()
         ! update global symaxis
         saxis_glob = cand_axes%get_ori(order(1))
+        ! calculate fsc-based score
+        fsc   = volpft_symsrch_fsc(saxis_glob%get_euler())
+        score = sum(fsc) / real(size(fsc))
+        call saxis_glob%set('score', score)
         ! return best
         symaxis_best = cand_axes%get_ori(order(1))
+        call symaxis_best%set('score', score)
     end subroutine volpft_srch4symaxis
 
     function volpft_symsrch_costfun( fun_self, vec, D ) result( cost )
@@ -202,6 +207,14 @@ contains
         rmat = euler2m(vec(1:3))
         cost = -volpft_symsrch_scorefun(rmat)
     end function volpft_symsrch_costfun
+
+    function volpft_symsrch_fsc( eul ) result( fsc )
+        real, intent(in)  :: eul(3)
+        real, allocatable :: fsc(:)
+        real :: rmat(3,3)
+        rmat = euler2m(eul)
+        fsc  = vpftcc%fsc(rmat)
+    end function volpft_symsrch_fsc
 
     function volpft_symsrch_scorefun( rmat_symaxis ) result( cc )
         real, intent(in) :: rmat_symaxis(3,3)

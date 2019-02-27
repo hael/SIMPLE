@@ -659,7 +659,6 @@ contains
         use simple_symanalyzer
         class(symmetry_test_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        character(len=:), allocatable :: pgrp_best
         type(parameters)      :: params
         type(builder)         :: build
         character(len=STDLEN) :: fbody
@@ -700,7 +699,7 @@ contains
         endif
         ! run test
         call symmetry_tester(build%vol, params%msk, params%hp,&
-        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp_best)
+        &params%lp, params%cn_stop, params%platonic .eq. 'yes')
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
