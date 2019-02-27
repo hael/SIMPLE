@@ -1,3 +1,4 @@
+#define _GLIBCXX_USE_C99 1
 #include <string>
 #include <fstream>
 #include <sstream>
