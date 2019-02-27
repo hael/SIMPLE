@@ -40,9 +40,6 @@ type :: volpft_corrcalc
     procedure, private :: corr_1
     procedure, private :: corr_2
     generic            :: corr => corr_1, corr_2
-    procedure, private :: fsc_1
-    procedure, private :: fsc_2
-    generic            :: fsc  => fsc_1, fsc_2
     ! DESTRUCTOR
     procedure          :: kill
 end type volpft_corrcalc
@@ -236,41 +233,6 @@ contains
         cc = sum(real(self%vpft_ref * conjg(vpft_target)))
         cc = cc / sqrt(self%sqsum_ref * sqsum_target)
     end function corr_2
-
-    function fsc_1( self, rmat ) result( fsc )
-        class(volpft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: rmat(3,3)
-        real, allocatable :: fsc(:)
-        integer           :: k
-        complex           :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
-        real              :: ksumsq_ref, ksumsq_targ, sqsum_target
-        allocate(fsc(self%kfromto_vpft(1):self%kfromto_vpft(2)), source=0.)
-        call self%extract_target_1(rmat, vpft_target, sqsum_target)
-        do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-            fsc(k)      = sum(real(self%vpft_ref(k,:) * conjg(vpft_target(k,:))))
-            ksumsq_ref  = sum(csq(self%vpft_ref(k,:)))
-            ksumsq_targ = sum(csq(vpft_target(k,:)))
-            fsc(k)      = fsc(k) / sqrt(ksumsq_ref * ksumsq_targ)
-        end do
-    end function fsc_1
-
-    function fsc_2( self, rmat, shvec ) result( fsc )
-        class(volpft_corrcalc), intent(inout) :: self
-        real,                   intent(in)    :: rmat(3,3)
-        real,                   intent(in)    :: shvec(3)
-        real, allocatable :: fsc(:)
-        integer           :: k
-        complex           :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
-        real              :: ksumsq_ref, ksumsq_targ, sqsum_target
-        allocate(fsc(self%kfromto_vpft(1):self%kfromto_vpft(2)), source=0.)
-        call self%extract_target_2(rmat, shvec, vpft_target, sqsum_target)
-        do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-            fsc(k)      = sum(real(self%vpft_ref(k,:) * conjg(vpft_target(k,:))))
-            ksumsq_ref  = sum(csq(self%vpft_ref(k,:)))
-            ksumsq_targ = sum(csq(vpft_target(k,:)))
-            fsc(k)      = fsc(k) / sqrt(ksumsq_ref * ksumsq_targ)
-        end do
-    end function fsc_2
 
     subroutine kill( self )
         class(volpft_corrcalc), intent(inout) :: self

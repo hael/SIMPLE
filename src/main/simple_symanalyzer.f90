@@ -17,7 +17,7 @@ integer            :: nsym ! tot # symmetries considered
 
 type sym_stats
     character(len=:), allocatable :: str
-    real :: cc, score
+    real :: cc
 end type sym_stats
 
 contains
@@ -86,18 +86,19 @@ contains
         integer,          intent(in)    :: cn_stop
         logical,          intent(in)    :: platonic
         type(sym_stats), allocatable    :: pgrps(:)
-        real,            allocatable    :: scores(:), zscores(:), zscores_cc(:), ccs(:)
+        real,            allocatable    :: zscores(:), ccs(:), diffs_peak(:), diffs_backgr(:)
+        integer,         allocatable    :: peaks(:)
         type(sym)             :: symobj
         character(len=STDLEN) :: errmsg
-        integer :: ncsym, icsym, cnt, idsym, ldim(3), isym, fnr
-        real    :: smpd
+        integer :: ncsym, icsym, cnt, idsym, ldim(3), isym, fnr, nbackgr
+        real    :: smpd, peakval, backgrval, x
         ! get info from vol_in
-        smpd       = vol_in%get_smpd()
-        ldim       = vol_in%get_ldim()
+        smpd  = vol_in%get_smpd()
+        ldim  = vol_in%get_ldim()
         ! count # symmetries
-        ncsym      = cn_stop
-        nsym       = ncsym * 2          ! because we always search for dihedral symmetries
-        nsym       = nsym  - 1          ! because d1 is omitted
+        ncsym = cn_stop
+        nsym  = ncsym * 2               ! because we always search for dihedral symmetries
+        nsym  = nsym  - 1               ! because d1 is omitted
         if( platonic ) nsym = nsym  + 3 ! because of the Platonics (t,o,i)
         if( platonic )then
             if( cn_stop < 5 )then
@@ -128,25 +129,36 @@ contains
             pgrps(cnt + 3)%str = 'i'
         endif
         ! gather stats
-        allocate(scores(nsym), ccs(nsym))
+        allocate(ccs(nsym), peaks(nsym), diffs_peak(nsym), diffs_backgr(nsym))
         ! by definition for c1
-        pgrps(1)%cc    = 1.0
-        pgrps(1)%score = 1.0
-        scores(1)      = 1.0
+        pgrps(1)%cc = 1.0
+        ccs(1)      = 1.0
         call eval_point_groups(vol_in, msk, hp, lp, pgrps)
         ! fetch data
-        scores(:)     = pgrps(:)%score
-        ccs(:)        = pgrps(:)%cc
+        ccs(:)  = pgrps(:)%cc
         ! calculate Z-scores
-        zscores       = z_scores(scores)
-        zscores_cc    = z_scores(ccs)
+        zscores = z_scores(ccs)
+        ! identify peaks
+        peakval   = maxval(zscores(2:))
+        nbackgr   = count(zscores(2:) > TINY) - 1 ! -1 because peak position is omitted
+        backgrval = (sum(zscores(2:), mask=zscores(2:) > TINY) - peakval) / real(nbackgr)
+        where( zscores > TINY )
+            diffs_peak = sqrt((zscores - peakval)**2.0)
+        elsewhere
+            diffs_peak = huge(x)
+        endwhere
+        where( zscores > TINY ) diffs_backgr = sqrt((zscores - backgrval)**2.0)
+        where(diffs_peak < diffs_backgr)
+            peaks = 1
+        elsewhere
+            peaks = 0
+        endwhere
         ! output
         call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
         do isym=1,nsym
-            write(fnr,'(a,f5.2,a,f5.2,a,f5.2,a,f5.2)')&
-            &'POINT-GROUP: '//trim(pgrps(isym)%str)//' SCORE: ', pgrps(isym)%score, ' CORRELATION: ',&
-            &pgrps(isym)%cc, ' Z-SCORE(SCORE): ', zscores(isym), ' Z-SCORE(CC): ', zscores_cc(isym)
+            write(fnr,'(a,f5.2,a,f5.2,a,i1)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' CORRELATION: ',&
+            &pgrps(isym)%cc, ' Z-SCORE: ', zscores(isym), ' PEAK: ', peaks(isym)
         end do
         write(fnr,'(a)') ''
         call fclose(fnr)
@@ -181,12 +193,11 @@ contains
             endif
             ! make point-group object
             call symobj%new(pgrps(igrp)%str)
-            ! locate the symmetry axis and retrieve corr/score
+            ! locate the symmetry axis and retrieve corr
             if( DEBUG_HERE ) write(logfhandle,*) 'searching for the symmetry axis'
             call volpft_symsrch_init(vol_in, pgrps(igrp)%str, hp, lp)
             call volpft_srch4symaxis(symaxis)
             pgrps(igrp)%cc    = symaxis%get('corr')
-            pgrps(igrp)%score = symaxis%get('score')
         end do
         ! destruct
         call vol_pad%kill

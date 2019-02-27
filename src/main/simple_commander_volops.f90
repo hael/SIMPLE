@@ -688,8 +688,8 @@ contains
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
-            fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            call build%vol%write(trim(fbody)//'_centered.mrc')
+            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            ! call build%vol%write(trim(fbody)//'_centered.mrc')
         endif
         ! mask volume
         if( params_glob%l_innermsk )then
