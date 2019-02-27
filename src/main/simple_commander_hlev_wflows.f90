@@ -837,6 +837,7 @@ contains
                 character(len=:), allocatable :: eostk, ext
                 integer :: even_ind, odd_ind, state, icls
                 call os%delete_entry('lp')
+                call cline_refine3D_refine%set('frcs',trim(frcs_fname))
                 ! add stks
                 ext   = '.'//fname2ext( stk )
                 eostk = add2fbody(trim(orig_stk), trim(ext), '_even')

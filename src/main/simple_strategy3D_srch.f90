@@ -80,7 +80,7 @@ contains
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
         ! particle prep
-        call pftcc_glob%prep_matchfilt(iptcl,prev_ref,prev_roind)
+        call pftcc%prep_matchfilt(pftcc_pind,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! update spproj_field
@@ -103,7 +103,7 @@ contains
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
         ! particle prep
-        call pftcc_glob%prep_matchfilt(iptcl,prev_ref,prev_roind)
+        call pftcc%prep_matchfilt(pftcc_pind,prev_ref,prev_roind)
         ! calc specscore
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! prep corr
