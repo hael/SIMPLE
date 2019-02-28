@@ -623,7 +623,7 @@ contains
                     do iref = 1,2*build_glob%projfrcs%get_nprojs()
                         iproj = iproj+1
                         if( iproj > build_glob%projfrcs%get_nprojs() ) iproj = 1
-                        call build_glob%projfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc, state=s)
+                        call build_glob%projfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                         call fsc2optlp_sub(filtsz, frc, filter)
                         call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
@@ -633,7 +633,7 @@ contains
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                         iproj    = iproj+1
                         iprojred = build_glob%eulspace_red%find_closest_proj(build_glob%eulspace%get_ori(iproj))
-                        call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc, state=s)
+                        call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                         call fsc2optlp_sub(filtsz, frc, filter)
                         call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))

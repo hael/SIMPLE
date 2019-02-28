@@ -116,6 +116,8 @@ contains
         ! READ FOURIER RING CORRELATIONS
         if( params_glob%nstates.eq.1 )then
             if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        else
+            if( file_exists(CLUSTER3D_FRCS) ) call build_glob%projfrcs%read(CLUSTER3D_FRCS)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
