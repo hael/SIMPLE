@@ -95,8 +95,8 @@ contains
         call get_prg_ptr(arg(pos+1:), ptr2prg)
         if( .not. associated(ptr2prg) ) THROW_HARD(trim(arg(pos+1:))//' is not part of SIMPLE')
         exec = ptr2prg%get_executable()
-        if( exec .ne. trim(exec_cmd) )then
-            THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(exec_cmd)//' but '//exec)
+        if( .not. str_has_substr(exec_cmd,exec) )then
+            THROW_HARD('program '//trim(arg(pos+1:))//' not executed by '//trim(basename(exec_cmd))//' but '//exec)
         endif
         ! list programs if so instructed
         if( str_has_substr(self%entire_line, 'prg=list') )then
