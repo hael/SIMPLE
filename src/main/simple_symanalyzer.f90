@@ -12,15 +12,14 @@ public :: symmetrize_map, symmetry_tester
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE        = .true.
-real,    parameter :: SHSRCH_HWDTH      = 4.0
+logical, parameter :: DEBUG_HERE   = .true.
+real,    parameter :: SHSRCH_HWDTH = 4.0
 integer            :: nsym       ! total number of symmetries considered
 integer            :: kfromto(2) ! Fourier index range
 
 type sym_stats
     character(len=:), allocatable :: str
-    real,             allocatable :: fsc(:)
-    real :: cc, score
+    real :: cc
 end type sym_stats
 
 contains
@@ -89,14 +88,13 @@ contains
         integer,          intent(in)    :: cn_stop
         logical,          intent(in)    :: platonic
         type(sym_stats), allocatable    :: pgrps(:)
-        real,    allocatable  :: scores(:), res(:), zscores(:)
+        real,    allocatable  :: ccs(:), zscores(:)
         type(sym)             :: symobj
         character(len=STDLEN) :: errmsg
         integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, nsub_max
         integer :: isym, jsym, filtsz, iisym, fnr
         real    :: smpd
         ! get info from vol_in
-        res        = vol_in%get_res()
         smpd       = vol_in%get_smpd()
         filtsz     = vol_in%get_filtsz()
         ldim       = vol_in%get_ldim()
@@ -137,27 +135,21 @@ contains
             pgrps(cnt + 3)%str = 'i'
         endif
         ! gather stats
-        allocate(scores(nsym))
+        allocate(ccs(nsym))
         ! by definition for c1
-        pgrps(1)%cc    = 1.0
-        pgrps(1)%score = 1.0
-        scores(1)      = 1.0
+        pgrps(1)%cc = 1.0
+        ccs(1)      = 1.0
         call eval_point_groups(vol_in, msk, hp, lp, pgrps)
         ! fetch data
-        scores(:) = pgrps(:)%score * pgrps(:)%cc
-        where( scores > 1e-6 )
-            scores = sqrt(scores)
-        elsewhere
-            scores = 0.
-        endwhere
+        ccs(:) = pgrps(:)%cc
         ! calculate Z-scores
-        zscores = z_scores(scores)
+        zscores = z_scores(ccs)
         ! output
         call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
         do isym=1,nsym
-            write(fnr,'(a,f5.2,a,f5.2)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' SCORE: ',&
-            &scores(isym), ' Z-SCORE: ', zscores(isym)
+            write(fnr,'(a,f5.2,a,f5.2)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' CORRELATION: ',&
+            &ccs(isym), ' Z-SCORE: ', zscores(isym)
         end do
         call fclose(fnr)
     end subroutine symmetry_tester
@@ -232,13 +224,6 @@ contains
             ! calculate a correlation coefficient
             if( DEBUG_HERE ) write(logfhandle,*) 'calculating correlation'
             pgrps(igrp)%cc = vol_sym%corr(vol_asym_aligned2axis, lp_dyn=lp, hp_dyn=hp)
-            ! calculate FSC
-            if( DEBUG_HERE ) write(logfhandle,*) 'calculating FSC'
-            if( allocated(pgrps(igrp)%fsc) ) deallocate(pgrps(igrp)%fsc)
-            allocate(pgrps(igrp)%fsc(filtsz), source=0.)
-            call vol_sym%fsc(vol_asym_aligned2axis, pgrps(igrp)%fsc)
-            ! set score (average of FSC in resolution interval)
-            pgrps(igrp)%score = sum(pgrps(igrp)%fsc(kfromto(1):kfromto(2))) / real(kfromto(2) - kfromto(1) + 1)
         end do
         ! destruct
         call vol_pad%kill
