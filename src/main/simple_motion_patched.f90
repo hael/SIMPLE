@@ -23,7 +23,7 @@ integer, parameter :: Y_OVERLAP      = 0   !       "      "        "         "  
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 7.
 integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
-logical, parameter :: DUMP_STUFF     = .false.
+logical, parameter :: DUMP_STUFF     = .true.
 
 type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
@@ -130,7 +130,7 @@ contains
         end do
         sig = 1.
         ! dump the shifts for debugging purposes
-        if (.false.) then
+        if (.true.) then
             open(unit=123,file='for_fitting.txt')
             write (123,'(A)',advance='no') 'y=['
             do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
@@ -212,8 +212,8 @@ contains
                     t = real(iframe - 1)
                     x = real(i) / real(self%ldim(1)) - 0.5
                     y = real(j) / real(self%ldim(2)) - 0.5
-                    x_trafo = x - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
-                    y_trafo = y - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
+                    x_trafo = real(i) - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
+                    y_trafo = real(j) - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
                     rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo, iframe, rmat_ins )
                 end do
             end do
@@ -267,6 +267,20 @@ contains
 !!$            y2 = rmat_in(x2_hh, y1_hh, 1)
 !!$            y3 = rmat_in(x2_hh, y2_hh, 1)
 !!$            y4 = rmat_in(x1_hh, y2_hh, 1)
+            if ((x1_hh < 1).or.(x1_hh > self%ldim(1)).or.&
+                (x2_hh < 1).or.(x2_hh > self%ldim(1)).or.&
+                (y1_hh < 1).or.(y1_hh > self%ldim(2)).or.&
+                (y2_hh < 1).or.(y2_hh > self%ldim(2))) then  
+                write (*,*) 'xval = ', xval
+                write (*,*) 'yval = ', yval
+                write (*,*) 'x1_hh =', x1_hh
+                write (*,*) 'x2_hh =', x2_hh
+                write (*,*) 'y1_hh =', y1_hh
+                write (*,*) 'y2_hh =', y2_hh
+                write (*,*) 'poly_coeffs_x=', self%poly_coeffs(:,1)
+                write (*,*) 'poly_coeffs_y=', self%poly_coeffs(:,2)
+                call flush(6)
+            end if
             y1 = rmat_ins2(iiframe)%rmat_ptr(x1_hh, y1_hh, 1)
             y2 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y1_hh, 1)
             y3 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y2_hh, 1)
@@ -503,8 +517,8 @@ contains
         interpolated_xshift0(:,:) = -0.5*self%shifts_patches(2,2,:,:)
         interpolated_yshift0(:,:) = -0.5*self%shifts_patches(3,2,:,:)
         do iframe = 1, self%nframes
-            self%shifts_patches_for_fit(2,2,:,:) = self%shifts_patches(2,2,:,:)  - interpolated_xshift0(:,:)
-            self%shifts_patches_for_fit(3,2,:,:) = self%shifts_patches(3,2,:,:)  - interpolated_yshift0(:,:)
+            self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:)  - interpolated_xshift0(:,:)
+            self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:)  - interpolated_yshift0(:,:)
         enddo
     end subroutine det_shifts
 
