@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(68)
+type(simple_prg_ptr) :: prg_ptr_array(69)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -134,6 +134,7 @@ type(simple_program), target :: subset_project
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
+type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
@@ -298,6 +299,7 @@ contains
         call new_symaxis_search
         call new_symmetry_test
         call new_tseries_import
+        call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
         call new_vizoris
@@ -371,10 +373,11 @@ contains
         prg_ptr_array(62)%ptr2prg => symaxis_search
         prg_ptr_array(63)%ptr2prg => symmetry_test
         prg_ptr_array(64)%ptr2prg => tseries_import
-        prg_ptr_array(65)%ptr2prg => tseries_track
-        prg_ptr_array(66)%ptr2prg => update_project
-        prg_ptr_array(67)%ptr2prg => vizoris
-        prg_ptr_array(68)%ptr2prg => volops
+        prg_ptr_array(65)%ptr2prg => tseries_ctf_estimate
+        prg_ptr_array(66)%ptr2prg => tseries_track
+        prg_ptr_array(67)%ptr2prg => update_project
+        prg_ptr_array(68)%ptr2prg => vizoris
+        prg_ptr_array(69)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -510,6 +513,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
+            case('tseries_ctf_estimate')
+                ptr2prg => tseries_ctf_estimate
             case('tseries_track')
                 ptr2prg => tseries_track
             case('update_project')
@@ -592,6 +597,7 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -3046,8 +3052,7 @@ contains
         tseries_import%parm_ios(3)%required = .true.
         call tseries_import%set_input('parm_ios', 4, fraca)
         tseries_import%parm_ios(4)%required = .true.
-        call tseries_import%set_input('parm_ios', 5, ctf_yes)
-        tseries_import%parm_ios(5)%required = .true.
+        call tseries_import%set_input('parm_ios', 5, 'nframesgrp', 'num', 'Number of contigous frames to align', '# contigous frames for alignment', '{3}', .true., 3.)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3060,6 +3065,37 @@ contains
         ! <empty>
     end subroutine new_tseries_import
 
+    subroutine new_tseries_ctf_estimate
+        ! PROGRAM SPECIFICATION
+        call tseries_ctf_estimate%new(&
+        &'tseries_ctf_estimate', &                                              ! name
+        &'Time-series CTF parameter fitting',&                                  ! descr_short
+        &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
+        &'simple_exec',&                                                ! executable
+        &0, 1, 0, 4, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call tseries_ctf_estimate%set_input('parm_ios', 1, pspecsz)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
+        call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
+        call tseries_ctf_estimate%set_input('srch_ctrls', 3, dfstep)
+        call tseries_ctf_estimate%set_input('srch_ctrls', 4, astigtol)
+        ! filter controls
+        call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
+        tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
+        call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
+        tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_ctf_estimate%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_ctf_estimate
+
     subroutine new_tseries_track
         ! PROGRAM SPECIFICATION
         call tseries_track%new(&
@@ -3067,7 +3103,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_distr_exec',&                                                   ! executable
-        &0, 2, 0, 1, 2, 0, 1, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 4, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3076,6 +3112,8 @@ contains
         &'Template output tracked series', 'e.g. tracked_ptcl', .true., '')
         call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
+        call tseries_track%set_input('parm_ios', 3, 'ctf', 'binary', 'CTF status of output stacks',&
+        &'CTF status of output stacks(flip|no){no}', '(flip|no){no}', .true., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3087,10 +3125,15 @@ contains
         tseries_track%filt_ctrls(1)%required = .false.
         call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
+        call tseries_track%set_input('filt_ctrls', 3, 'lp_backgr', 'num','Background subtraction low-pass resolution',&
+            &'Low-pass resolution for background subtraction{1.1}', 'low-pass limit in Angstroms', .false., 1.1)
+        call tseries_track%set_input('filt_ctrls', 4, 'filter', 'multi','Alternative filter for particle tracking',&
+            &'Alternative filter for particle tracking(no|tv|nlmean){no}', '(no|tv|nlmean){no}', .false., 'no')
         ! mask controls
         ! <empty>
         ! computer controls
         call tseries_track%set_input('comp_ctrls', 1, nparts)
+        call tseries_track%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_track
 
     subroutine new_update_project

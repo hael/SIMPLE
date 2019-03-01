@@ -200,7 +200,6 @@ type :: parameters
     integer :: balance=0           !< max pop for balancing restraint{0}
     integer :: binwidth=1          !< binary layers grown for molecular envelope(in pixels){1}
     integer :: box=0               !< square image size(in pixels)
-    integer :: boxconvsz=256       !< size of box used for box-convolution(in pixels)
     integer :: boxmatch=0
     integer :: box_original
     integer :: box_extract
@@ -338,8 +337,8 @@ type :: parameters
     real    :: fraczero=0.
     real    :: ftol=1e-6
     real    :: motion_correctftol = 1e-2   !< tolerance (gradient) for motion_correctrer
-    real    :: motion_correctgtol = 1e-2   !< tolerance (function value) for motion_correctrer
-    real    :: gw=0.5
+    real    :: motion_correctgtol = 1e-2   !< tolerance (function value) for motion_correct
+    real    :: globwfrac = GLOBAL_WEIGHT_FRAC !< global weight fraction (threshold of mean + one sigma)
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
@@ -628,7 +627,6 @@ contains
         call check_iarg('binwidth',       self%binwidth)
         call check_iarg('box',            self%box)
         call check_iarg('box_extract',    self%box_extract)
-        call check_iarg('boxconvsz',      self%boxconvsz)
         call check_iarg('chunksz',        self%chunksz)
         call check_iarg('clip',           self%clip)
         call check_iarg('cn_stop',        self%cn_stop)
@@ -739,7 +737,7 @@ contains
         call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
-        call check_rarg('gw',             self%gw)
+        call check_rarg('globwfrac',      self%globwfrac)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('hp_fsc',         self%hp_fsc)

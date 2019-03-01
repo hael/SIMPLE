@@ -231,6 +231,7 @@ select case(prg)
         if( .not. cline%defined('neg')   ) call cline%set('neg',   'yes')
         if( .not. cline%defined('lp')    ) call cline%set('lp',      2.0)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   5.0)
+        if( .not. cline%defined('ctf')   )  call cline%set('ctf',  'no')
         call xtseries_track_distr%execute( cline )
 
     ! SUPPORTING WORKFLOWS

@@ -310,8 +310,15 @@ contains
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
             if( cline%defined('width') ) width = params%width
             if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
-            if( params%filter .eq. 'tv' )then
-                call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lam)
+            if( cline%defined('filter') )then
+                select case(trim(params%filter))
+                case('tv')
+                    call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lam)
+                case('nlmean')
+                    call nlmean_imgfile(params%stk, params%outstk, params%smpd)
+                case DEFAULT
+                    THROW_HARD('Unknown filter!')
+                end select
             else if( params%phrand .eq. 'no')then
                 ! projection_frcs filtering
                 if( cline%defined('frcs') )then

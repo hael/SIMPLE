@@ -687,7 +687,7 @@ contains
                 end do
                 ! find threshold
                 call hpsort(weights_glob(:cnt))
-                weight_thres = weights_glob(cnt - nint(real(cnt) * GLOBAL_WEIGHT_FRAC))
+                weight_thres = weights_glob(cnt - nint(real(cnt) * params_glob%globwfrac))
                 ! zero and normalize weights, apply rank-based weighting scheme if so specified
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then

@@ -79,7 +79,8 @@ type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
 ! TIME-SERIES PROGRAMS
-type(tseries_import_commander) :: xtseries_import
+type(tseries_import_commander)       :: xtseries_import
+type(tseries_ctf_estimate_commander) :: xtseries_ctf_estimate
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -271,7 +272,21 @@ select case(prg)
 
     case( 'tseries_import' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( cline%defined('ctf') )then
+            select case(trim(cline%get_carg('ctf')))
+            case('no','flip')
+                ! all good
+            case DEFAULT
+                THROW_HARD('Only CTF=NO|FLIP are allowed!')
+            end select
+        endif
         call xtseries_import%execute(cline)
+    case( 'tseries_ctf_estimate' )
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        ! set defaults
+        if( .not. cline%defined('hp') ) call cline%set('hp', 30.)
+        if( .not. cline%defined('lp') ) call cline%set('lp',  5.)
+        call xtseries_ctf_estimate%execute(cline)
 
     ! SYSTEM INTERACTION PROGRAMS
 

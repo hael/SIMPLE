@@ -87,7 +87,6 @@ type(o_peaksstats_commander)         :: xo_peaksstats
 
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_track_commander)        :: xtseries_track
-type(tseries_backgr_subtr_commander) :: xtseries_backgr_subtr
 type(tseries_split_commander)        :: xtseries_split
 
 ! PARALLEL PROCESSING PROGRAMS
@@ -820,26 +819,6 @@ select case(prg)
         if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
         call xtseries_track%execute(cline)
-    case('tseries_backgr_subtr')
-        ! for background subtraction in time-series data. The goal is to subtract the two graphene
-        ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
-        ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
-        keys_required(1) = 'stk'
-        keys_required(2) = 'stk_backgr'
-        keys_required(3) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'hp'
-        keys_optional(3) = 'lp'
-        keys_optional(4) = 'width'
-        keys_optional(5) = 'deftab'
-        keys_optional(6) = 'outstk'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:6))
-        ! set defaults
-        if( .not. cline%defined('hp')    ) call cline%set('hp',    5.0)
-        if( .not. cline%defined('lp')    ) call cline%set('lp',    1.1)
-        if( .not. cline%defined('width') ) call cline%set('width', 5.0)
-        call xtseries_backgr_subtr%execute(cline)
     case( 'tseries_split' )
         ! for splitting a time-series stack and its associated orientations
         keys_required(1) = 'stk'

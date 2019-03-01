@@ -17,7 +17,7 @@ public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
-public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile
+public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
 private
 #include "simple_local_flags.inc"
@@ -806,6 +806,26 @@ contains
         call img%kill
         call tv%kill
     end subroutine tvfilter_imgfile
+
+    !>  \brief  is for apply the tv filter to an image file
+    subroutine nlmean_imgfile( fname2process, fname, smpd )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: smpd
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        call raise_exception_imgfile( n, ldim, 'nlmean_imgfile' )
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> APPLYING NLMEAN FILTER TO IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2process, i)
+            call img%nlmean
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine nlmean_imgfile
 
     !>  \brief  is for applying CTF
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )

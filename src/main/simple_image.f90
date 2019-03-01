@@ -41,9 +41,8 @@ contains
     procedure          :: copy
     procedure          :: mic2spec
     procedure          :: mic2eospecs
-    procedure, private :: dampen_pspec_central_cross
+    procedure          :: dampen_pspec_central_cross
     procedure          :: scale_pspec4viz
-    procedure          :: boxconv
     procedure          :: window
     procedure          :: window_slim
     procedure          :: add_window
@@ -186,6 +185,7 @@ contains
     procedure, private :: div_cmat_at_3
     procedure, private :: div_cmat_at_4
     generic            :: div_cmat_at => div_cmat_at_1, div_cmat_at_2, div_cmat_at_3, div_cmat_at_4
+    procedure          :: sq_rt
     ! BINARY IMAGE METHODS
     procedure          :: nforeground
     procedure          :: nbackground
@@ -285,7 +285,6 @@ contains
     procedure, private :: gen_argtransf_comp
     ! MODIFIERS
     procedure          :: lp_background
-    procedure          :: thresh_cavg
     procedure          :: insert
     procedure          :: insert_lowres
     procedure          :: insert_lowres_serial
@@ -585,15 +584,16 @@ contains
         if( didft ) call self%fft()
     end function mic2spec
 
-    subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all )
-        class(image),     intent(inout) :: self
-        integer,          intent(in)    :: box
-        character(len=*), intent(in)    :: speckind
-        real,             intent(in)    :: lp_backgr_subtr
-        class(image),     intent(inout) :: pspec_lower, pspec_upper, pspec_all
+    subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all, postproc)
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: box
+        character(len=*),  intent(in)    :: speckind
+        real,              intent(in)    :: lp_backgr_subtr
+        class(image),      intent(inout) :: pspec_lower, pspec_upper, pspec_all
+        logical, optional, intent(in)    :: postproc
         type(image) :: tmp, tmp2
         integer     :: xind, yind, cnt, neven_lim, nodd_lim, neven, nodd
-        logical     :: didft, outside
+        logical     :: didft, outside, postproc_here
         if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images; mic2eoimgs')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             THROW_HARD('cannot use a box larger than the image; mic2eoimgs')
@@ -603,6 +603,8 @@ contains
             call self%ifft()
             didft = .true.
         endif
+        postproc_here = .true.
+        if( present(postproc) ) postproc_here = postproc
         ! count # images
         cnt = 0
         do xind=0,self%ldim(1)-box,box/2
@@ -644,12 +646,14 @@ contains
         call pspec_lower%div(real(neven))
         call pspec_upper%div(real(nodd))
         call pspec_all%div(real(neven + nodd))
-        call pspec_lower%dampen_pspec_central_cross
-        call pspec_upper%dampen_pspec_central_cross
-        call pspec_all%dampen_pspec_central_cross
-        call pspec_lower%subtr_backgr(lp_backgr_subtr)
-        call pspec_upper%subtr_backgr(lp_backgr_subtr)
-        call pspec_all%subtr_backgr(lp_backgr_subtr)
+        if( postproc_here )then
+            call pspec_lower%dampen_pspec_central_cross
+            call pspec_upper%dampen_pspec_central_cross
+            call pspec_all%dampen_pspec_central_cross
+            call pspec_lower%subtr_backgr(lp_backgr_subtr)
+            call pspec_upper%subtr_backgr(lp_backgr_subtr)
+            call pspec_all%subtr_backgr(lp_backgr_subtr)
+        endif
         call tmp%kill()
         call tmp2%kill()
         if( didft ) call self%fft()
@@ -700,35 +704,6 @@ contains
         call self%ifft
         call tmp%kill
     end subroutine scale_pspec4viz
-
-    function boxconv( self, box ) result( img_out )
-        class(image), intent(inout) :: self
-        integer,      intent(in)    :: box
-        type(image) :: img_out, tmp
-        integer     :: xind, yind, cnt
-        logical     :: didft
-        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images; boxconv')
-        if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            THROW_HARD('cannot boxconv using a box larger than the image')
-        endif
-        didft = .false.
-        if( self%ft )then
-            call self%ifft()
-            didft = .true.
-        endif
-        call img_out%new([box,box,1], self%smpd)
-        cnt = 0
-        do xind=0,self%ldim(1)-box,box/2
-            do yind=0,self%ldim(2)-box,box/2
-                call self%window([xind,yind],box,tmp)
-                call img_out%add(tmp)
-                cnt = cnt+1
-                call tmp%kill()
-            end do
-        end do
-        call img_out%div(real(cnt))
-        if( didft ) call self%fft()
-    end function boxconv
 
     !>  \brief window extracts a particle image from a box as defined by EMAN 1.9
     subroutine window( self_in, coord, box, self_out, noutside )
@@ -2021,19 +1996,16 @@ contains
         self%ft = self1%ft
     end function addition_const_real
 
-    !>  \brief  is for image addition(+) addition
-    !! \param self1 image object 1
-    !! \param self2  image object 2
-    !! \return lhs, copy of added images
-    !!
-    function sq_root( self1 ) result( self )
-        class(image), intent(in) :: self1
-        type(image) :: self
-        call  self%new(self1%ldim, self1%smpd)
-        self%rmat = self1%rmat
-        self%rmat = sqrt(self%rmat)
-        self%ft = self1%ft
-    end function sq_root
+    !>  \brief  square root of image, real space only
+    subroutine sq_rt( self )
+        class(image), intent(inout) :: self
+        if( self%ft ) THROW_HARD('Real space only; sq_rt')
+        where( self%rmat > 0. )
+            self%rmat = sqrt(self%rmat)
+        else where
+            self%rmat = 0.
+        end where
+    end subroutine sq_rt
 
     !>  \brief  l1norm_1 is for l1 norm calculation
     function l1norm_1( self1, self2 ) result( self )
@@ -3230,7 +3202,7 @@ contains
         class(image), intent(in)  :: img_in
         type(image),  intent(out) :: img_out
         type(image)       :: img_cc   !in this img will be stored the cc with no specific order
-        real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:)
+        real, allocatable :: mat4compare(:,:,:)
         real              :: neigh_8(9), tmp, diff
         integer           :: i, j, ii, jj, n_it, n_maxit, nsz, cnt
         logical           :: finished_job
@@ -4443,54 +4415,40 @@ contains
     !!!!!!!ADDED BY CHIARA, still to work on, to make it faster
     subroutine NLmean(self)
       class(image), intent(inout) :: self
-      real, allocatable  :: NL_image(:,:,:), NL(:,:)
-      integer, parameter :: DIM_SW = 3    !Good if use Euclidean distance
+      real,  allocatable :: rmat_pad(:,:)
+      integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
       integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
-      real               :: exponentials(2*cfr_box+1,2*cfr_box+1)
-      real               :: sw_px(DIM_SW,DIM_SW)
-      integer            :: i, j, m, n, pad, ind(2)
+      real               :: exponentials(2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW)
       real               :: z, sigma, h, h_sq
-      type(image)        :: img_p
-      real, allocatable  :: rmat(:,:,:)
-      pad = (DIM_SW-1)/2
+      integer            :: i, j, m, n, pad, indi, indj
+      pad   = (DIM_SW-1)/2
       sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
-      h = 4.*sigma !h = 12.*sigma
-      h_sq = h**2
-      call img_p%new([self%ldim(1)+2*pad,self%ldim(2)+2*pad,1],1.)
-      call self%pad(img_p)
-      rmat = img_p%get_rmat()
-      call img_p%kill
-      allocate(NL_image(self%ldim(1),self%ldim(2),1), NL(self%ldim(1),self%ldim(2)), source = 0.)
-      write(logfhandle,*) '-------------------NL MEAN FILTERING-------------------'
+      h     = 4.*sigma !h = 12.*sigma
+      h_sq  = h**2.
+      allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad), source=0.)
+      rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(:,:,1)
+      !$omp parallel do default(shared) private(m,n,sw_px,exponentials,i,j,indi,indj,z) schedule(static)&
+      !$omp collapse(2) proc_bind(close)
       do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
-        call progress(m-cfr_box,self%ldim(1) -2*cfr_box)
         do n = cfr_box+1,self%ldim(2)-cfr_box-1
-          sw_px = rmat(m:m+DIM_SW-1,n:n+DIM_SW-1,1)
+          sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
           exponentials = 0.
           do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
-              ind(1) = i+cfr_box+1
+              indi = i+cfr_box+1
               do j = -cfr_box,cfr_box
-                if(i==0.and.j==0)cycle
-                ind(2) = j+cfr_box+1
-                exponentials(ind(1),ind(2)) = &
-                & exp( -sum( (sw_px - rmat(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1,1))**2. )/h_sq) !euclidean norm
+                  if( i==0 .and. j==0 )cycle
+                  indj = j+cfr_box+1
+                  exponentials(indi,indj) = &
+                  & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) !euclidean norm
               enddo
           enddo
           z = sum(exponentials)
           if(z < 0.001) cycle
-          do i = -cfr_box,cfr_box
-              do j = -cfr_box,cfr_box
-                if(i==0.and.j==0)cycle
-                NL(m,n) = NL(m,n)+exponentials(i+cfr_box+1,j+cfr_box+1)*rmat(m+i,n+j,1)
-              enddo
-          enddo
-          NL(m,n) = NL(m,n) / z
+          self%rmat(m,n,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
         enddo
       enddo
-      NL_image(:,:,1) = NL(:,:)
-      call self%set_rmat(NL_image)
-      deallocate(NL,NL_image,rmat)
-      call img_p%kill
+      !$omp end parallel do
+      deallocate(rmat_pad)
 end subroutine NLmean
 
     ! CALCULATORS
@@ -5569,19 +5527,6 @@ end subroutine NLmean
         call weights%kill
         call self_filt%kill
     end subroutine lp_background
-
-    subroutine thresh_cavg( self, l_msk )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
-        real    :: maxv, threshold
-        if( self%ldim(3) > 1 )       THROW_HARD('only 4 2D images; thresh_cavg')
-        if( self%is_ft() )           THROW_HARD('only 4 real images; thresh_cavg')
-        maxv      = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),:), mask=l_msk)
-        threshold = -0.3 * maxv
-        where( self%rmat(1:self%ldim(1),1:self%ldim(2),1) < threshold)
-            self%rmat(1:self%ldim(1),1:self%ldim(2),1) = threshold
-        end where
-    end subroutine thresh_cavg
 
     !> \brief insert  inserts a box*box particle image into a micrograph
     !! \param self_in input image
@@ -7470,9 +7415,8 @@ end subroutine NLmean
             type(image)          :: img, img_2, img_3, img_4, img3d
             type(image)          :: imgs(20)
             integer              :: i, j, k, cnt, ldim(3)
-            real                 :: input, msk, ave, sdev, med, xyz(3)
+            real                 :: input, ave, sdev, med
             real                 :: corr, corr_lp, maxv, minv
-            real, allocatable    :: pcavec1(:), pcavec2(:)
             real                 :: smpd=2.
             logical              :: passed, test(6)
 
