@@ -15,7 +15,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG_HERE = .false.
-integer, parameter :: NPROJ      = 500
+integer, parameter :: NPROJ      = 600
 integer, parameter :: NBEST      = 20
 integer, parameter :: ANGSTEP    = 7
 
@@ -204,14 +204,25 @@ contains
     function volpft_symsrch_scorefun( rmat_symaxis ) result( cc )
         real, intent(in) :: rmat_symaxis(3,3)
         real    :: cc, rmat(3,3)
+        complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace)
+        complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace)
+        real    :: sqsum_targets(nsym), sqsum_sum
         integer :: isym
-        cc = 0.
+        sum_of_sym_targets = cmplx(0.,0.)
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym
             ! ROTATION MATRICES DO NOT COMMUTE
             ! this is the correct order
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
-            cc = cc + vpftcc%corr(rmat)
+            call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
+            sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
+        end do
+        ! correlate with the average to score the symmetry axis
+        sqsum_sum = sum(csq(sum_of_sym_targets))
+        cc = 0.
+        do isym=1,nsym
+            cc = cc + sum(real(sum_of_sym_targets * conjg(sym_targets(isym,:,:))))&
+                &/ sqrt(sqsum_sum * sqsum_targets(isym))
         end do
         cc = cc / real(nsym)
     end function volpft_symsrch_scorefun
