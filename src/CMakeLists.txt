@@ -68,7 +68,8 @@ list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
-
+list(APPEND SIMPLE_src  
+  "${CMAKE_CURRENT_SOURCE_DIR}/main/CPlot2D.cpp")
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
 list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
 if ( USE_CUDA )
