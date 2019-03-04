@@ -204,7 +204,7 @@ contains
         if( has_fsc ) call vol%bp(0., fsc0143)
         ! masking
         call vol%ifft()
-        if( has_mskfile )then
+        if( has_mskfile .and. .not. params%automsk .eq. 'yes' )then
             call vol%zero_background
             call mskvol%new(ldim, smpd)
             call mskvol%read(params%mskfile)
