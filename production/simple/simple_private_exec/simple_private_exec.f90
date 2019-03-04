@@ -3,6 +3,7 @@ program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_user_interface, only: write_ui_json, print_ui_latex
+use simple_symanalyzer,    only: print_subgroups
 use simple_commander_project
 use simple_commander_checks
 use simple_commander_distr
@@ -114,6 +115,8 @@ select case(prg)
         call write_ui_json
     case( 'print_ui_latex')
         call print_ui_latex
+    case( 'print_sym_subgroups')
+        call print_subgroups
 
     ! PRE-PROCESSING PROGRAMS
 

@@ -32,6 +32,7 @@ type sym
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
     procedure          :: get_subgrp_descr
+    procedure          :: get_all_subgrps_descr
     ! setters
     procedure, private :: set_subgrps
     ! modifiers
@@ -228,6 +229,20 @@ contains
         endif
         str_descr = self%subgrps(i)
     end function get_subgrp_descr
+
+    function get_all_subgrps_descr( self )result( str_descr )
+        class(sym),intent(in) :: self
+        character(len=:), allocatable :: str_descr, str_tmp
+        integer :: i, n
+        n = size(self%subgrps)
+        allocate(str_descr, source=trim(self%subgrps(1)))
+        if( n == 1 ) return
+        do i=2,n
+            str_tmp   = str_descr
+            str_descr = str_tmp//' '//trim(self%subgrps(i))
+            deallocate(str_tmp)
+        end do
+    end function get_all_subgrps_descr
 
     !>  \brief  is a symmetry adaptor
     function apply( self, e_in, symop ) result( e_sym )

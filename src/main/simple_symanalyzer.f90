@@ -8,7 +8,7 @@ use simple_sym,            only: sym
 use simple_ori,            only: ori, m2euler
 implicit none
 
-public :: symmetrize_map, symmetry_tester
+public :: symmetrize_map, symmetry_tester, print_subgroups
 private
 #include "simple_local_flags.inc"
 
@@ -81,6 +81,44 @@ contains
         call symaxis%kill
         call symobj%kill
     end subroutine symmetrize_map
+
+    subroutine print_subgroups
+        type(sym_stats), allocatable :: pgrps(:)
+        integer, parameter :: cn_stop = 10
+        integer   :: ncsym, nsym, cnt, icsym, idsym, isym
+        type(sym) :: symobj
+        ! count # symmetries
+        ncsym = cn_stop
+        nsym  = ncsym * 2 ! because we always search for dihedral symmetries
+        nsym  = nsym  - 1 ! because d1 is omitted
+        nsym  = nsym  + 3 ! because of the Platonics (t,o,i)
+        ! prepare point-group stats object
+        allocate(pgrps(nsym))
+        ! C-symmetries
+        cnt = 0
+        do icsym=1,cn_stop
+            cnt            = cnt + 1
+            pgrps(cnt)%str = 'c'//int2str(icsym)
+        end do
+        ! D-symmetries
+        do idsym=2,cn_stop
+            cnt            = cnt + 1
+            pgrps(cnt)%str = 'd'//int2str(idsym)
+        end do
+        ! platonic
+        pgrps(cnt + 1)%str = 't'
+        pgrps(cnt + 2)%str = 'o'
+        pgrps(cnt + 3)%str = 'i'
+        do isym=1,nsym
+            ! make point-group object
+            call symobj%new(pgrps(isym)%str)
+            write(logfhandle,'(a)') 'Subroups of point-group '//trim(pgrps(isym)%str)//':'
+            ! print subgroups
+            write(logfhandle,'(a)') symobj%get_all_subgrps_descr()
+            write(logfhandle,'(a)') ''
+        end do
+        call symobj%kill
+    end subroutine print_subgroups
 
     subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic )
         class(projector), intent(inout) :: vol_in
