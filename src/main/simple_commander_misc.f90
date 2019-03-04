@@ -15,7 +15,6 @@ use simple_parameters,     only: parameters
 implicit none
 
 public :: cluster_smat_commander
-public :: intgpeaks_commander
 public :: masscen_commander
 public :: print_dose_weights_commander
 public :: print_fsc_commander
@@ -32,10 +31,6 @@ type, extends(commander_base) :: cluster_smat_commander
   contains
     procedure :: execute      => exec_cluster_smat
 end type cluster_smat_commander
-type, extends(commander_base) :: intgpeaks_commander
-  contains
-    procedure :: execute       => exec_intgpeaks
-end type intgpeaks_commander
 type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
@@ -154,54 +149,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_SMAT NORMAL STOP ****')
     end subroutine exec_cluster_smat
-
-    subroutine exec_intgpeaks( self, cline )
-        use simple_intg_atompeak
-        use simple_atoms,  only: atoms
-        class(intgpeaks_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        type(parameters)      :: params
-        type(builder)         :: build
-        type(atoms)           :: mol
-        real, allocatable     :: attribute(:)
-        character(len=STDLEN) :: fbody, csv_name
-        real                  :: xyz(3)
-        integer               :: i, natoms, file_stat, fnr
-        call build%init_params_and_build_general_tbox(cline,params)
-        call build%vol%read(params%vols(1))
-        if(cline%defined('msk').and.cline%defined('inner'))then
-            ! peak finding
-            call set_intgvol(build%vol, params%msk)
-            call find_peaks(params%nptcls, params%inner, params%pdbfile)
-        else
-            ! peak integration
-            call mol%new(params%pdbfile)
-            natoms = mol%get_n()
-            allocate(attribute(natoms), source=0.,stat=alloc_stat)
-            if(alloc_stat.ne.0)call allocchk("In: simple_commander_misc:: exec_intgpeaks attribute")
-            call set_intgvol(build%vol)
-            do i = 1, natoms
-                xyz = mol%get_coord(i)
-                if( cline%defined('inner') )then
-                    attribute(i) = intg_shell(xyz, params%inner)
-                else
-                    attribute(i) = intg_nn(xyz)
-                endif
-            enddo
-            ! output
-            fbody = trim(get_fbody(trim(params%pdbfile), 'pdb'))
-            csv_name = PATH_HERE//trim(adjustl(fbody))//'_intg.csv'
-            call fopen(fnr, FILE=csv_name, STATUS='REPLACE', action='WRITE', iostat=file_stat)
-            call fileiochk('commander_misc; exec_intgpeaks ', file_stat)
-            do i = 1, natoms
-                write(fnr,'(I6,A1,I6,A1,F12.6)')i, ',', mol%get_num(i), ',', attribute(i)
-            enddo
-            call fclose( fnr, errmsg='commander_misc; exec_intgpeaks ')
-            deallocate(attribute)
-        endif
-        ! the end
-        call simple_end('**** SIMPLE_INTGPEAKS NORMAL STOP ****')
-    end subroutine exec_intgpeaks
 
     !> centers base on centre of mass
      subroutine exec_masscen( self, cline )

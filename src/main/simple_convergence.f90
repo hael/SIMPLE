@@ -220,9 +220,9 @@ contains
     function check_conv_cluster( self, cline ) result( converged )
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
-        real, allocatable :: statepops(:)
-        logical           :: converged
-        integer           :: iptcl, istate
+        integer, allocatable :: statepops(:)
+        logical :: converged
+        integer :: istate
         601 format(A,1X,F8.3)
         602 format(A,1X,F8.3,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
@@ -233,19 +233,13 @@ contains
         &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
-        allocate( statepops(params_glob%nstates) )
-        statepops = 0.
-        do iptcl=1,build_glob%spproj_field%get_noris()
-            istate = build_glob%spproj_field%get_state(iptcl)
-            if( istate==0 )cycle
-            statepops(istate) = statepops(istate) + 1.0
-        end do
+        call build_glob%spproj_field%get_pops(statepops,'state')
         call build_glob%spproj_field%stats('corr', self%corr)
         write(logfhandle,604) '>>> CORRELATION                    AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         ! print the overlaps and pops for the different states
         do istate=1,params_glob%nstates
-            write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', nint(statepops(istate))
+            write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
             self%frac%avg > HET_FRAC_LIM     )then

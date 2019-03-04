@@ -71,7 +71,6 @@ type(edge_detector_commander)        :: xdetector
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)              :: xmasscen
 type(cluster_smat_commander)         :: xcluster_smat
-type(intgpeaks_commander)            :: xintgpeaks
 type(print_dose_weights_commander)   :: xprint_dose_weights
 type(res_commander)                  :: xres
 type(stk_corr_commander)             :: xstk_corr
@@ -705,16 +704,6 @@ select case(prg)
         keys_optional(1) = 'nthr'
         call cline%parse_oldschool(keys_required(:4), keys_optional(:1))
         call xcluster_smat%execute(cline)
-    case( 'intgpeaks' )
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'pdbfile'
-        keys_required(3) = 'smpd'
-        ! set optional keys
-        keys_optional(1) = 'outfile'
-        keys_optional(2) = 'msk'
-        keys_optional(3) = 'inner'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
-        call xintgpeaks%execute(cline)
     case( 'print_dose_weights' )
         ! for printing the dose weights applied to individual frames
         keys_required(1) = 'nframes'

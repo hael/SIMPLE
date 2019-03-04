@@ -30,16 +30,15 @@ contains
         do s=1,params_glob%nstates
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
             if( params_glob%l_distr_exec )then ! embarrasingly parallel rec
-                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//&
-                &'_part'//int2str_pad(params_glob%part,params_glob%numlen))
+                fbody = 'recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen)
                 params_glob%vols(s) = fbody//params_glob%ext
-                rho_name      = 'rho_'//fbody//params_glob%ext
+                rho_name = 'rho_'//fbody//params_glob%ext
                 call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, part=params_glob%part)
                 call build_glob%recvol%compress_exp
                 call build_glob%recvol%write(params_glob%vols(s), del_if_exists=.true.)
                 call build_glob%recvol%write_rho(trim(rho_name))
             else ! shared-mem parallel rec
-                allocate(fbody, source='recvol_state')
+                fbody = 'recvol_state'
                 params_glob%vols(s) = fbody//int2str_pad(s,2)//params_glob%ext
                 call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s)
                 call build_glob%recvol%clip(build_glob%vol)
@@ -57,9 +56,8 @@ contains
         ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
         call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
         do s=1,params_glob%nstates
-            DebugPrint  'processing state: ', s
             if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
-            allocate(fbody, source='recvol_state')
+            fbody = 'recvol_state'
             call build_glob%eorecvol%eorec_distr( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, fbody=fbody)
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')

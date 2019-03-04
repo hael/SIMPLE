@@ -481,8 +481,8 @@ contains
         type(image)           :: img
         character(len=2)      :: str_state
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
-        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd, smpd
-        integer               :: icls, ncavgs, orig_box, box, istk, status, cnt, ncls
+        real                  :: iter, smpd_target, lplims(2), msk, scale_factor, orig_msk, orig_smpd
+        integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
         logical               :: srch4symaxis, do_autoscale, do_eo
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
@@ -1044,6 +1044,7 @@ contains
         cline_reconstruct3D_mixed_distr = cline
         ! first stage
         call cline_refine3D1%set('prg',    'refine3D')
+        call cline_refine3D1%set('match_filt',   'no')
         call cline_refine3D1%set('maxits', real(MAXITS1))
         call cline_refine3D1%set('neigh',  'yes') ! always consider neighbours
         call cline_refine3D1%set('nnn',    0.05*real(params%nspace))
@@ -1058,7 +1059,8 @@ contains
         end select
         !call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
-        call cline_refine3D2%set('prg',    'refine3D')
+        call cline_refine3D2%set('prg', 'refine3D')
+        call cline_refine3D2%set('match_filt','no')
         call cline_refine3D2%set('refine', 'multi')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
