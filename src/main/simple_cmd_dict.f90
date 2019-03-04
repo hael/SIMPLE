@@ -24,7 +24,7 @@ contains
         call chdict%push('astigtol',      'expected (tolerated) astigmatism(in microns){0.05}')
         call chdict%push('async',         'asynchronous mode of operation(yes|no){no}')
         call chdict%push('automatic',     'automatic threshold selection for edge detection(yes|no)')
-        call chdict%push('automsk',       'envelope masking(yes|no|cavg){no}')
+        call chdict%push('automsk',       'envelope masking(yes|no|file){no}')
         call chdict%push('autoscale',     'automatic down-scaling(yes|no)')
         call chdict%push('avg',           'calculate average(yes|no)')
         call chdict%push('bfac',          'bfactor for sharpening/low-pass filtering(in A**2){200.}')

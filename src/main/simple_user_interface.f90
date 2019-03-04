@@ -2001,8 +2001,8 @@ contains
         &'Binary layers grown for molecular envelope in pixels{1}', 'Molecular envelope binary layers width in pixels{1}', .false., 1.)
         call postprocess%set_input('mask_ctrls', 5, 'thres', 'num', 'Volume threshold',&
         &'Volume threshold for enevloppe mask generation', 'Volume threshold', .false., 0.)
-        call postprocess%set_input('mask_ctrls', 6, 'automsk', 'binary', 'Perform envelope masking',&
-        &'Whether to generate an envelope mask(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call postprocess%set_input('mask_ctrls', 6, 'automsk', 'multi', 'Perform envelope masking',&
+        &'Whether to generate/apply an envelope mask(yes|no|file){no}', '(yes|no|file){no}', .false., 'no')
         call postprocess%set_input('mask_ctrls', 7, mw)
         call postprocess%set_input('mask_ctrls', 8, 'width', 'num', 'Inner mask falloff',&
         &'Number of cosine edge pixels of inner mask in pixels', '# pixels cosine edge', .false., 10.)
