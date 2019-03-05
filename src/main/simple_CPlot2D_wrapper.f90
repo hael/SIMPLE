@@ -60,6 +60,10 @@ module CPlot2D_wrapper_module
             type(C_ptr), value :: this
             character(kind=c_char), dimension(*) :: fileName
         end subroutine C_CPlot2D__OutputPostScriptPlot
+        subroutine C_CPlot2D__delete(this) bind(C,name="CPlot2D__delete")
+            import
+            type(C_ptr), value :: this
+        end subroutine C_CPlot2D__delete
         function C_CDataSet__new() result(this) bind(C,name="CDataSet__new")
             import
             type(C_ptr) :: this
@@ -84,24 +88,32 @@ module CPlot2D_wrapper_module
             type(C_ptr) :: this
             real(C_double), value :: x, y
         end function C_CDataPoint__new2
+        subroutine C_CDataPoint__delete(this) bind(C,name="CDataPoint__delete")
+            import
+            type(C_ptr), value :: this
+        end subroutine C_CDataPoint__delete
         subroutine C_CDataSet__AddDataPoint(this, point) bind(C,name="CDataSet__AddDataPoint")
             import
             type(C_ptr), value :: this
             type(C_ptr), value :: point
         end subroutine C_CDataSet__AddDataPoint
+        subroutine C_CDataSet__delete(this) bind(C,name="CDataSet__delete")
+            import
+            type(C_ptr), value :: this
+        end subroutine C_CDataSet__delete
     end interface
 contains
-    subroutine CPlot2D__new(this, title) 
+    subroutine CPlot2D__new(this, title)
         type(CPlot2D_type), intent(out) :: this
         character(kind=c_char), dimension(*), intent(in) :: title
         this%object = C_CPlot2D__new(title)
     end subroutine CPlot2D__new
-    subroutine CPlot2D__SetXAxisSize(this, val) 
+    subroutine CPlot2D__SetXAxisSize(this, val)
         type(CPlot2D_type), intent(inout) :: this
         real(C_double), intent(in) :: val
         call C_CPlot2D__SetXAxisSize(this%object, val)
     end subroutine CPlot2D__SetXAxisSize
-    subroutine CPlot2D__SetYAxisSize(this, val) 
+    subroutine CPlot2D__SetYAxisSize(this, val)
         type(CPlot2D_type), intent(inout) :: this
         real(C_double), intent(in) :: val
         call C_CPlot2D__SetYAxisSize(this%object, val)
@@ -116,7 +128,7 @@ contains
         logical(C_bool), intent(in) :: flag
         call C_CPlot2D__SetFlipY(this%object, flag)
     end subroutine CPlot2D__SetFlipY
-    subroutine CPlot2D__AddDataSet(this, dataSet) 
+    subroutine CPlot2D__AddDataSet(this, dataSet)
         type(CPlot2D_type), intent(inout) :: this
         type(CDataSet_type), intent(inout) :: dataSet
         call C_CPlot2D__AddDataSet(this%object, dataSet%object)
@@ -136,6 +148,11 @@ contains
         character(kind=c_char), dimension(*), intent(in) :: fileName
         call C_CPlot2D__OutputPostScriptPlot(this%object, fileName)
     end subroutine CPlot2D__OutputPostScriptPlot
+    subroutine CPlot2D__delete(this)
+        type(CPlot2D_type), intent(inout) :: this
+        call C_CPlot2D__delete(this%object)
+        this%object = C_NULL_PTR
+    end subroutine CPlot2D__delete
     subroutine CDataSet__new(this)
         type(CDataSet_type), intent(out) :: this
         this%object = C_CDataSet__new()
@@ -150,19 +167,29 @@ contains
         real(C_double), intent(in) :: size
         call C_CDataSet__SetMarkerSize(this%object, size)
     end subroutine CDataSet__SetMarkerSize
-    subroutine CDataSet__SetDatasetColor(this, r, g, b) 
+    subroutine CDataSet__SetDatasetColor(this, r, g, b)
         type(CDataSet_type), intent(inout) :: this
         real(C_double), intent(in) :: r, g, b
         call C_CDataSet__SetDatasetColor(this%object, r, g, b)
     end subroutine CDataSet__SetDatasetColor
-    subroutine CDataPoint__new2(x, y, this) 
+    subroutine CDataSet__delete(this)
+        type(CDataSet_type), intent(inout) :: this
+        call C_CDataSet__delete(this%object)
+        this%object = C_NULL_PTR
+    end subroutine CDataSet__delete
+    subroutine CDataPoint__new2(x, y, this)
         type(CDataPoint_type), intent(out) :: this
         real(C_double), intent(in) :: x, y
         this%object = C_CDataPoint__new2(x, y)
     end subroutine CDataPoint__new2
-    subroutine CDataSet__AddDataPoint(this, point) 
+    subroutine CDataSet__AddDataPoint(this, point)
         type(CDataSet_type), intent(inout) :: this
         type(CDataPoint_type), intent(inout) :: point
         call C_CDataSet__AddDataPoint(this%object, point%object)
     end subroutine CDataSet__AddDataPoint
+    subroutine CDataPoint__delete(this)
+        type(CDataPoint_type), intent(inout) :: this
+        call C_CDataPoint__delete(this%object)
+        this%object = C_NULL_PTR
+    end subroutine CDataPoint__delete
 end module CPlot2D_wrapper_module

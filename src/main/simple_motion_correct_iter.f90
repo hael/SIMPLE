@@ -87,6 +87,7 @@ contains
         self%moviename_patched_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//FORCTF_SUFFIX//trim(params_glob%ext)
         self%moviename_patched_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//POWSPEC_SUFFIX//trim(params_glob%ext)
         self%moviename_patched_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//THUMBNAIL_SUFFIX//trim(JPG_EXT)
+        patched_shift_fname           = trim(dir_out)//trim(adjustl(fbody_here))//'_patched_shifts.eps'
         if( cline%defined('tof') )then
             self%moviename_patched_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
             &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_patched_'//INTGMOV_SUFFIX//params_glob%ext

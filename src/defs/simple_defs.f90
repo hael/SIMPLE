@@ -160,6 +160,10 @@ real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpenes
 real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
                                                        !! smaller number means sharper distribution
 
+! C-compatible boolean constants
+logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
+logical(c_bool), parameter :: C_TRUE  = logical(.true. ,kind=c_bool)
+
 ! criterion for even/odd averaging in gold-FSC
 real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D
 real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D

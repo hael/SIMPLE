@@ -19,6 +19,7 @@ public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_c
 public :: motion_correct_aniso, motion_correct_aniso_calc_sums, motion_correct_aniso_kill, motion_correct_kill_common
 public :: motion_correct_with_aniso
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
+public :: patched_shift_fname
 private
 #include "simple_local_flags.inc"
 
@@ -84,6 +85,7 @@ real    :: nsig_here      = 6.0      !< nr of sigmas (for outlier removal)
 logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
 logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
+character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 
 ! module global constants
 integer, parameter :: MITSREF       = 30     !< max # iterations of refinement optimisation
@@ -133,7 +135,7 @@ contains
         smpd_scaled = ctfvars%smpd/params_glob%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
         ! fixed_frame = nint(real(nframes)/2.) align the frames wrt the central one
-        fixed_frame = 1.                      !align the frames wrt the first one
+        fixed_frame = 1                       !align the frames wrt the first one
         ! set reslims
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
         moldiam = 0.7 * real(params_glob%box) * smpd_scaled
@@ -525,8 +527,8 @@ contains
                 ! subtract the movie frame being correlated to reduce bias
                 call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
                 ! optimise deformation
-                cxy = motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
-                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu)
+                cxy = real(motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
+                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu))
                 ! update parameter arrays
                 opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
                 ! apply deformation
@@ -671,11 +673,10 @@ contains
 
         !> patch-based motion_correction of DDD movie
     subroutine motion_correct_patched()
-        real    :: corr, ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
+        real    :: corr, corr_prev, corrfrac
         real    :: scale, smpd4scale
         integer :: iframe, i, ldim4scale(3), ithr
-        logical :: didsave, err_stat, doscale
-        real(dp):: acorr, aregu
+        logical :: didsave, doscale
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
 !!$        smpd4scale = params_glob%lpstop / 3.     ! Don't downscale images for patch-based correction
@@ -715,7 +716,7 @@ contains
         end do
         !$omp end parallel do
         ! apply deformation
-        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched )
+        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname )
         ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
         ! (see below)
         corr_prev = corr

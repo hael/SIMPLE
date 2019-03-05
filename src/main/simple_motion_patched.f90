@@ -10,6 +10,7 @@ use simple_optimizer,       only: optimizer
 use simple_image,           only: image
 use simple_ft_expanded,     only: ft_expanded
 use simple_ftexp_shsrch,    only: ftexp_shsrch
+use CPlot2D_wrapper_module
 implicit none
 private
 public :: motion_patched
@@ -23,7 +24,7 @@ integer, parameter :: Y_OVERLAP      = 0   !       "      "        "         "  
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 7.
 integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
-logical, parameter :: DUMP_STUFF     = .true.
+logical, parameter :: DUMP_STUFF     = .false.
 
 type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
@@ -38,10 +39,12 @@ type :: motion_patched
     type(ftexp_shsrch), allocatable  :: shsearch_patches(:,:,:)
     real,               allocatable  :: shifts_patches(:,:,:,:)
     real,               allocatable  :: shifts_patches_for_fit(:,:,:,:)
+    character(len=:),   allocatable  :: shift_fname
     integer                          :: nframes
     integer                          :: ldim(3)       ! size of entire frame, reference
     integer                          :: ldim_patch(3) ! size of one patch
     integer                          :: lims_patches(NX_PATCHED,NY_PATCHED,2,2) ! corners of the patches
+    real                             :: patch_centers(NX_PATCHED,NY_PATCHED,2)
     real                             :: motion_correct_ftol
     real                             :: motion_correct_gtol
     real(dp)                         :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
@@ -55,10 +58,12 @@ contains
     procedure, private               :: set_patches
     procedure, private               :: det_shifts
     procedure, private               :: fit_polynomial
+    procedure, private               :: get_local_shift
     procedure, private               :: apply_polytransfo
     procedure, private               :: write_shifts
     procedure, private               :: write_shifts_for_fit
     procedure, private               :: write_polynomial
+    procedure, private               :: plot_shifts
     procedure                        :: new             => motion_patched_new
     procedure                        :: correct         => motion_patched_correct
     procedure                        :: kill            => motion_patched_kill
@@ -111,19 +116,18 @@ contains
         real(dp) :: x(3,self%nframes*NX_PATCHED*NY_PATCHED)    ! x,y,t
         real(dp) :: sig(self%nframes*NX_PATCHED*NY_PATCHED)
         real(dp) :: a(PATCH_PDIM), v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
-        integer :: iframe, i, j
-        integer :: idx
-        real :: patch_cntr_x, patch_cntr_y   ! patch centers, x-/y-coordinate
-        integer :: k1,k2,k3,k4,k5
+        integer  :: iframe, i, j
+        integer  :: idx
+        integer  :: k1,k2
         do iframe = 1, self%nframes
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
-                    patch_cntr_x = real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
-                    patch_cntr_y = real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
+                    self%patch_centers(i,j,1)= real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
+                    self%patch_centers(i,j,2)= real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
                     idx = (iframe-1) * (NX_PATCHED * NY_PATCHED) + (i-1) * NY_PATCHED + j
                     y(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j),dp)   ! shift in x-direction first
-                    x(1,idx) = real(patch_cntr_x,dp) / real(self%ldim(1),dp) - 0.5_dp
-                    x(2,idx) = real(patch_cntr_y,dp) / real(self%ldim(2),dp) - 0.5_dp
+                    x(1,idx) = real(self%patch_centers(i,j,1),dp) / real(self%ldim(1),dp) - 0.5_dp
+                    x(2,idx) = real(self%patch_centers(i,j,2),dp) / real(self%ldim(2),dp) - 0.5_dp
                     x(3,idx) = real(iframe,dp) - 0.5_dp
                 end do
             end do
@@ -191,6 +195,105 @@ contains
         close(123)
     end subroutine write_polynomial
 
+    subroutine plot_shifts(self)
+        class(motion_patched), intent(inout) :: self
+        real, parameter       :: SCALE = 40.
+        real                  :: shift_scale
+        type(str4arr)         :: title
+        type(CPlot2D_type)    :: plot2D
+        type(CDataSet_type)   :: dataSetStart, dataSet        !!!!!! todo: we don't need this
+        type(CDataSet_type)   :: fit, obs
+        type(CDataSet_type)   :: patch_start
+        type(CDataPoint_type) :: point2, p_obs, p_fit, point
+        real                  :: xcenter, ycenter
+        integer               :: ipx, ipy, iframe, j
+        real                  :: loc_shift(2)
+        shift_scale = SCALE
+        call CPlot2D__new(plot2D, self%shift_fname)
+        call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
+        call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
+        call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
+        call CPlot2D__SetFlipY(plot2D, C_TRUE)
+        call CDataSet__new(dataSet)
+        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+        call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 1.0_c_double)
+        xcenter = real(self%ldim(1))/2.
+        ycenter = real(self%ldim(2))/2.
+        do j = 1, self%nframes
+            call CDataPoint__new2(real(xcenter,c_double), real(ycenter, c_double), point)
+            call CDataSet__AddDataPoint(dataSet, point)
+        end do
+        call CPlot2D__AddDataSet(plot2D, dataset)
+
+        call CDataSet__new(dataSetStart)
+        call CDataSet__SetDrawMarker(dataSetStart, C_TRUE)
+        call CDataSet__SetMarkerSize(dataSetStart,5._c_double)
+        call CDataSet__SetDatasetColor(dataSetStart, 1.0_c_double,0.0_c_double,0.0_c_double)
+        call CDataPoint__new2(real(xcenter,c_double), real(ycenter,c_double), point2)
+        call CDataSet__AddDataPoint(dataSetStart, point2)
+        call CPlot2D__AddDataSet(plot2D, dataSetStart)
+        do ipx = 1, NX_PATCHED
+            do ipy = 1, NY_PATCHED
+                call CDataSet__new(patch_start)
+                call CDataSet__SetDrawMarker(patch_start,C_TRUE)
+                call CDataSet__SetMarkerSize(patch_start,5.0_c_double)
+                call CDataSet__SetDatasetColor(patch_start,1.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataSet__new(fit)
+                call CDataSet__new(obs)
+                call CDataSet__SetDrawMarker(fit, C_FALSE)
+                call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataSet__SetDrawMarker(obs, C_FALSE)
+                call CDataSet__SetDatasetColor(obs, 0.5_c_double,0.5_c_double,0.5_c_double)
+                do iframe = 1, self%nframes
+                    call CDataPoint__new2(&
+                        real(self%patch_centers(ipx, ipy, 1) + &
+                        SCALE * self%shifts_patches_for_fit(2, iframe, ipx, ipy), c_double), &
+                        real(self%patch_centers(ipx, ipy, 2) + &
+                        SCALE * self%shifts_patches_for_fit(3, iframe, ipx, ipy), c_double), &
+                        p_obs)
+                    call CDataSet__AddDataPoint(obs, p_obs)
+                    call self%get_local_shift(iframe, self%patch_centers(ipx, ipy, 1), &
+                        self%patch_centers(ipy, ipy, 2), loc_shift)
+                    call CDataPoint__new2(&
+                        real(self%patch_centers(ipx, ipy, 1) + SCALE * loc_shift(1), c_double), &
+                        real(self%patch_centers(ipx, ipy, 2) + SCALE * loc_shift(2) ,c_double), &
+                        p_fit)
+                    call CDataSet__AddDataPoint(fit, p_fit)
+                    if (iframe == 1) then
+                        call CDataSet__AddDataPoint(patch_start, p_fit)
+                    end if
+                    call CDataPoint__delete(p_fit)
+                    call CDataPoint__delete(p_obs)
+                end do
+                call CPlot2D__AddDataSet(plot2D, obs)
+                call CPlot2D__AddDataSet(plot2D, fit)
+                call CPlot2D__AddDataSet(plot2D, patch_start)
+                call CDataSet__delete(patch_start)
+                call CDataSet__delete(fit)
+                call CDataSet__delete(obs)
+            end do
+        end do
+        title%str = 'X (in pixels; trajectory scaled by ' // trim(real2str(SHIFT_SCALE)) // ')' // C_NULL_CHAR
+        call CPlot2D__SetXAxisTitle(plot2D, title%str)
+        title%str(1:1) = 'Y'
+        call CPlot2D__SetYAxisTitle(plot2D, title%str)
+        call CPlot2D__OutputPostScriptPlot(plot2D, self%shift_fname)
+        call CPlot2D__delete(plot2D)
+    end subroutine plot_shifts
+
+    subroutine get_local_shift( self, iframe, x, y, shift )
+        class(motion_patched), intent(inout) :: self
+        integer,               intent(in)  :: iframe
+        real,                  intent(in)  :: x, y
+        real,                  intent(out) :: shift(2)
+        real :: t, xx, yy
+        t  = real(iframe - 1)
+        xx = x / real(self%ldim(1)) - 0.5
+        yy = y / real(self%ldim(2)) - 0.5
+        shift(1) = apply_patch_poly(self%poly_coeffs(:,1),real(xx,dp),real(yy,dp),real(t,dp))
+        shift(2) = apply_patch_poly(self%poly_coeffs(:,2),real(xx,dp),real(yy,dp),real(t,dp))
+    end subroutine get_local_shift
+
     subroutine apply_polytransfo( self, frames, frames_output )
         class(motion_patched),    intent(inout) :: self
         type(image), allocatable, intent(inout) :: frames(:)
@@ -226,7 +329,7 @@ contains
             integer, intent(in)  :: iiframe
             type(rmat_ptr_type), intent(in) :: rmat_ins2(self%nframes)
             real     :: val
-            logical  :: x1_valid, x2_valid, y1_valid, y2_valid
+            !logical  :: x1_valid, x2_valid, y1_valid, y2_valid
             integer  :: x1_h,  x2_h,  y1_h,  y2_h
             integer  :: x1_hh, x2_hh, y1_hh, y2_hh
             real     :: y1, y2, y3, y4, t, u
@@ -270,7 +373,7 @@ contains
             if ((x1_hh < 1).or.(x1_hh > self%ldim(1)).or.&
                 (x2_hh < 1).or.(x2_hh > self%ldim(1)).or.&
                 (y1_hh < 1).or.(y1_hh > self%ldim(2)).or.&
-                (y2_hh < 1).or.(y2_hh > self%ldim(2))) then  
+                (y2_hh < 1).or.(y2_hh > self%ldim(2))) then
                 write (*,*) 'xval = ', xval
                 write (*,*) 'yval = ', yval
                 write (*,*) 'x1_hh =', x1_hh
@@ -351,7 +454,6 @@ contains
         class(motion_patched), intent(inout) :: self
         integer :: alloc_stat
         logical :: do_allocate
-        integer :: i,j,iframe
         do_allocate = .true.
         if (allocated(self%shifts_patches)) then
             if (size(self%shifts_patches, dim=1) < self%nframes) then
@@ -444,11 +546,9 @@ contains
         type(image),       allocatable, intent(inout) :: stack(:)
         type(ft_expanded), allocatable, intent(inout) :: patches_ftexp(:,:,:)
         integer, intent(in) :: abc
-        integer :: i,j,iframe, k, l, kk, ll
+        integer :: i, j, iframe, k, l, kk, ll
         integer :: ip, jp           ! ip, jp: i_patch, j_patch
         integer :: lims_patch(2,2)
-        integer :: frame_cd(2,2)    ! coordinates in the system of the frame
-        integer :: patch_cd(2,2)    ! coordinates in the system of the patch
         type(rmat_ptr_type) :: rmat_ptrs(self%nframes)
         real, pointer :: rmat_patch(:,:,:)
         do iframe=1,self%nframes
@@ -545,16 +645,18 @@ contains
         self%existence = .true.
     end subroutine motion_patched_new
 
-    subroutine motion_patched_correct( self, hp, lp, references, frames, frames_output )
-        class(motion_patched),    intent(inout) :: self
-        real,                     intent(in)    :: hp, lp
-        type(image), allocatable, intent(inout) :: references(:)
-        type(image), allocatable, intent(inout) :: frames(:)
-        type(image), allocatable, intent(inout) :: frames_output(:)
-        integer                  :: ldim_frames(3)
-        integer                  :: i
+    subroutine motion_patched_correct( self, hp, lp, references, frames, frames_output, shift_fname )
+        class(motion_patched),         intent(inout) :: self
+        real,                          intent(in)    :: hp, lp
+        type(image),      allocatable, intent(inout) :: references(:)
+        type(image),      allocatable, intent(inout) :: frames(:)
+        type(image),      allocatable, intent(inout) :: frames_output(:)
+        character(len=:), allocatable, intent(in)    :: shift_fname
+        integer :: ldim_frames(3)
+        integer :: i
         self%hp = hp
         self%lp = lp
+        self%shift_fname = shift_fname // C_NULL_CHAR
         self%nframes = size(frames,dim=1)
         self%ldim   = references(1)%get_ldim()
         if (DUMP_STUFF) then
@@ -594,6 +696,8 @@ contains
                 call frames(i)%write('frame_out_'//trim(int2str(i))//'.mrc')
             end do
         end if
+        ! report visual results
+        call self%plot_shifts()
     end subroutine motion_patched_correct
 
     subroutine motion_patched_kill( self )

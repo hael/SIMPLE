@@ -51,8 +51,8 @@ typedef float RFLOAT;
       Constructor for the class. The x and y values are initialized to zero.
       */
      CDataPoint() {
-         m_dDataX=0.0;
-         m_dDataY=0.0;
+	 m_dDataX=0.0;
+	 m_dDataY=0.0;
      };
      /*!
       Nothing really to destruct...
@@ -63,36 +63,36 @@ typedef float RFLOAT;
       Constructor for the class with initialization of x and y.
       */
      CDataPoint(double x, double y) {
-         m_dDataX=x;
-         m_dDataY=y;
+	 m_dDataX=x;
+	 m_dDataY=y;
      };
 
      /*!
       Another way to set the x and y values.
       */
      void SetValues(double x, double y) {
-         m_dDataX=x;
-         m_dDataY=y;
+	 m_dDataX=x;
+	 m_dDataY=y;
      };
 
      /*!
       Get the x and y values as a pair.
       */
      void GetValues(double *x, double *y) {
-         *x=m_dDataX;
-         *y=m_dDataY;
+	 *x=m_dDataX;
+	 *y=m_dDataY;
      };
      /*!
       Get the x value individually.
       */
      double GetX() {
-         return (m_dDataX);
+	 return (m_dDataX);
      };
      /*!
       Get the y value individually.
       */
      double GetY() {
-         return (m_dDataY);
+	 return (m_dDataY);
      };
 
  protected:
@@ -116,19 +116,19 @@ typedef float RFLOAT;
       data without the need to set anything up.
       */
      CDataSet() {
-         m_dLineWidth=1.0;
-         m_dColor[0]=0.0;
-         m_dColor[1]=0.0;
-         m_dColor[2]=0.0;
-         m_strMarker="o";
-         m_dMarkerSize=7.0;
-         m_bDrawLine=true;
-         m_bDrawMarker=true;
-         m_bDrawMarkerFilled=true;
-         m_bDashedLine=false;
-         m_iDashedLinePattern="dash";
-         m_strDatasetTitle="";
-         m_strDatasetLegendFont="Times";
+	 m_dLineWidth=1.0;
+	 m_dColor[0]=0.0;
+	 m_dColor[1]=0.0;
+	 m_dColor[2]=0.0;
+	 m_strMarker="o";
+	 m_dMarkerSize=7.0;
+	 m_bDrawLine=true;
+	 m_bDrawMarker=true;
+	 m_bDrawMarkerFilled=true;
+	 m_bDashedLine=false;
+	 m_iDashedLinePattern="dash";
+	 m_strDatasetTitle="";
+	 m_strDatasetLegendFont="Times";
      };
      /*!
       Nothing really to destruct...
@@ -143,7 +143,7 @@ typedef float RFLOAT;
       which appends the new data point to the dataset.
       */
      void SetDataPoint(int index, CDataPoint point) {
-         m_dDataPoints[index]=point;
+	 m_dDataPoints[index]=point;
      };
 
      /*!
@@ -151,7 +151,7 @@ typedef float RFLOAT;
       index.
       */
      CDataPoint GetDataPoint(int index) {
-         return (m_dDataPoints[index]);
+	 return (m_dDataPoints[index]);
      };
 
      /*!
@@ -159,14 +159,14 @@ typedef float RFLOAT;
       vector.
       */
      void AddDataPoint(CDataPoint point) {
-         m_dDataPoints.push_back(point);
+	 m_dDataPoints.push_back(point);
      };
 
      /*!
       Returns the number of data points comprisig the data set.
       */
      int GetNumberOfDataPointsInSet() {
-         return ((int)m_dDataPoints.size());
+	 return ((int)m_dDataPoints.size());
      };
 
      /*!
@@ -174,13 +174,13 @@ typedef float RFLOAT;
       by iterating over all data points in the set.
       */
      double GetXMinValue() {
-         double min=DBL_MAX;
-         for (int i=0;i<m_dDataPoints.size();++i) {
-             if (m_dDataPoints[i].GetX()<min) {
-                 min=m_dDataPoints[i].GetX();
-             }
-         }
-         return (min);
+	 double min=DBL_MAX;
+	 for (int i=0;i<m_dDataPoints.size();++i) {
+	     if (m_dDataPoints[i].GetX()<min) {
+		 min=m_dDataPoints[i].GetX();
+	     }
+	 }
+	 return (min);
      };
 
      /*!
@@ -188,13 +188,13 @@ typedef float RFLOAT;
       by iterating over all data points in the set.
       */
      double GetXMaxValue() {
-         double max=-DBL_MAX;
-         for (int i=0;i<m_dDataPoints.size();++i) {
-             if (m_dDataPoints[i].GetX()>max) {
-                 max=m_dDataPoints[i].GetX();
-             }
-         }
-         return (max);
+	 double max=-DBL_MAX;
+	 for (int i=0;i<m_dDataPoints.size();++i) {
+	     if (m_dDataPoints[i].GetX()>max) {
+		 max=m_dDataPoints[i].GetX();
+	     }
+	 }
+	 return (max);
 
      };
 
@@ -203,13 +203,13 @@ typedef float RFLOAT;
       by iterating over all data points in the set.
       */
      double GetYMinValue() {
-         double min=DBL_MAX;
-         for (int i=0;i<m_dDataPoints.size();++i) {
-             if (m_dDataPoints[i].GetY()<min) {
-                 min=m_dDataPoints[i].GetY();
-             }
-         }
-         return (min);
+	 double min=DBL_MAX;
+	 for (int i=0;i<m_dDataPoints.size();++i) {
+	     if (m_dDataPoints[i].GetY()<min) {
+		 min=m_dDataPoints[i].GetY();
+	     }
+	 }
+	 return (min);
      };
 
      /*!
@@ -217,13 +217,13 @@ typedef float RFLOAT;
       by iterating over all data points in the set.
       */
      double GetYMaxValue() {
-         double max=-DBL_MAX;
-         for (int i=0;i<m_dDataPoints.size();++i) {
-             if (m_dDataPoints[i].GetY()>max) {
-                 max=m_dDataPoints[i].GetY();
-             }
-         }
-         return (max);
+	 double max=-DBL_MAX;
+	 for (int i=0;i<m_dDataPoints.size();++i) {
+	     if (m_dDataPoints[i].GetY()>max) {
+		 max=m_dDataPoints[i].GetY();
+	     }
+	 }
+	 return (max);
      };
 
      /*!
@@ -231,7 +231,7 @@ typedef float RFLOAT;
       x values in the dataset.
       */
      double GetXExtent() {
-         return (GetXMaxValue()-GetXMinValue());
+	 return (GetXMaxValue()-GetXMinValue());
      };
 
      /*!
@@ -239,7 +239,7 @@ typedef float RFLOAT;
       y values in the dataset.
       */
      double GetYExtent() {
-         return (GetYMaxValue()-GetYMinValue());
+	 return (GetYMaxValue()-GetYMinValue());
      };
 
      /*!
@@ -248,7 +248,7 @@ typedef float RFLOAT;
       */
      void SetLineWidth(double lineWidth)
      {
-         m_dLineWidth=lineWidth;
+	 m_dLineWidth=lineWidth;
      };
 
      /*!
@@ -257,7 +257,7 @@ typedef float RFLOAT;
       */
      double GetLineWidth()
      {
-         return (m_dLineWidth);
+	 return (m_dLineWidth);
      };
 
      /*!
@@ -265,18 +265,18 @@ typedef float RFLOAT;
       is 0.0-1.0.
       */
      void SetDatasetColor(double r, double g, double b) {
-         m_dColor[0]=r;
-         m_dColor[1]=g;
-         m_dColor[2]=b;
+	 m_dColor[0]=r;
+	 m_dColor[1]=g;
+	 m_dColor[2]=b;
      };
 
      /*!
       Gets the RGB color used for drawing the dataset.
       */
      void GetDatasetColor(double *r, double *g, double *b) {
-         *r=m_dColor[0];
-         *g=m_dColor[1];
-         *b=m_dColor[2];
+	 *r=m_dColor[0];
+	 *g=m_dColor[1];
+	 *b=m_dColor[2];
      };
 
      /*!
@@ -285,7 +285,7 @@ typedef float RFLOAT;
       */
      void SetMarkerSymbol(std::string symbol)
      {
-         m_strMarker=symbol;
+	 m_strMarker=symbol;
      };
 
      /*!
@@ -293,7 +293,7 @@ typedef float RFLOAT;
       */
      void SetMarkerSize(double size)
      {
-         m_dMarkerSize=size;
+	 m_dMarkerSize=size;
      };
 
      /*!
@@ -302,7 +302,7 @@ typedef float RFLOAT;
       */
      void SetDrawLine(bool flag)
      {
-         m_bDrawLine=flag;
+	 m_bDrawLine=flag;
      };
 
      /*!
@@ -310,7 +310,7 @@ typedef float RFLOAT;
       */
      void SetDrawMarker(bool flag)
      {
-         m_bDrawMarker=flag;
+	 m_bDrawMarker=flag;
      };
 
      /*!
@@ -319,7 +319,7 @@ typedef float RFLOAT;
       */
      void SetDrawMarkerFilled(bool flag)
      {
-         m_bDrawMarkerFilled=flag;
+	 m_bDrawMarkerFilled=flag;
      };
 
      /*!
@@ -327,7 +327,7 @@ typedef float RFLOAT;
       */
      std::string GetMarkerSymbol()
      {
-         return (m_strMarker);
+	 return (m_strMarker);
      };
 
      /*!
@@ -335,7 +335,7 @@ typedef float RFLOAT;
       */
      double GetMarkerSize()
      {
-         return (m_dMarkerSize);
+	 return (m_dMarkerSize);
      };
 
      /*!
@@ -344,7 +344,7 @@ typedef float RFLOAT;
       */
      bool GetDrawLine()
      {
-         return (m_bDrawLine);
+	 return (m_bDrawLine);
      };
 
      /*!
@@ -353,7 +353,7 @@ typedef float RFLOAT;
       */
      bool GetDrawMarker()
      {
-         return (m_bDrawMarker);
+	 return (m_bDrawMarker);
      };
 
      /*!
@@ -362,7 +362,7 @@ typedef float RFLOAT;
       */
      bool GetDrawMarkerFilled()
      {
-         return (m_bDrawMarkerFilled);
+	 return (m_bDrawMarkerFilled);
      };
 
      /*!
@@ -372,7 +372,7 @@ typedef float RFLOAT;
       */
      void SetDashedLinePattern(std::string pattern)
      {
-         m_iDashedLinePattern=pattern;
+	 m_iDashedLinePattern=pattern;
      };
 
      /*!
@@ -381,7 +381,7 @@ typedef float RFLOAT;
       */
      std::string GetDashedLinePattern()
      {
-         return (m_iDashedLinePattern);
+	 return (m_iDashedLinePattern);
      };
 
      /*!
@@ -390,7 +390,7 @@ typedef float RFLOAT;
       */
      void SetDashedLine(bool dashed)
      {
-         m_bDashedLine=dashed;
+	 m_bDashedLine=dashed;
      };
 
      /*!
@@ -399,7 +399,7 @@ typedef float RFLOAT;
       */
      bool GetDashedLine()
      {
-         return (m_bDashedLine);
+	 return (m_bDashedLine);
      };
 
      /*!
@@ -408,7 +408,7 @@ typedef float RFLOAT;
       */
      void SetDatasetTitle(std::string title)
      {
-         m_strDatasetTitle=title;
+	 m_strDatasetTitle=title;
      };
 
      /*!
@@ -417,7 +417,7 @@ typedef float RFLOAT;
       */
      std::string GetDatasetTitle()
      {
-         return (m_strDatasetTitle);
+	 return (m_strDatasetTitle);
      };
 
      /*!
@@ -426,7 +426,7 @@ typedef float RFLOAT;
       */
      void SetDatasetLegendFont(std::string font)
      {
-         m_strDatasetLegendFont=font;
+	 m_strDatasetLegendFont=font;
      };
 
      /*!
@@ -435,7 +435,7 @@ typedef float RFLOAT;
       */
      std::string GetDatasetLegendFont()
      {
-         return (m_strDatasetLegendFont);
+	 return (m_strDatasetLegendFont);
      }
 
  protected:
@@ -856,7 +856,7 @@ typedef float RFLOAT;
       */
      bool GetDrawLegend();
 
-     /*! 
+     /*!
       Get and Set a flag that flips the orientation of the Y axis.
      */
      bool GetFlipY();
@@ -900,7 +900,7 @@ typedef float RFLOAT;
       regarding the source of the algorithm.
       */
      void ComputeLabelTickSpacing(double dataMin, double dataMax, double *plotMin,
-                                  double *plotMax, double *tickSpacing, int numTicks, std::string axis);
+				  double *plotMax, double *tickSpacing, int numTicks, std::string axis);
      /*!
       A function to aid the computation of label spacing, see the comments at the head of the implementation
       regarding the source of the algorithm.
@@ -1510,12 +1510,15 @@ extern "C"
   void CPlot2D__SetXAxisTitle(CPlot2D* This, const char* font);
   void CPlot2D__SetYAxisTitle(CPlot2D* This, const char* font);
   void CPlot2D__OutputPostScriptPlot(CPlot2D* This, const char* fileName);
+  void CPlot2D__delete(CPlot2D* This);
   CDataSet* CDataSet__new();
   void CDataSet__SetDrawMarker(CDataSet* This, bool flag);
   void CDataSet__SetMarkerSize(CDataSet* This, double size);
   void CDataSet__SetDatasetColor(CDataSet* This, double r, double g, double b);
   CDataPoint* CDataPoint__new2(double x, double y);
+  void CDataPoint__delete(CDataPoint* This);
   void CDataSet__AddDataPoint(CDataSet* This, CDataPoint* point);
+  void CDataSet__delete(CDataSet* This);
 }
 
 
