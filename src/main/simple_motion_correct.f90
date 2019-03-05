@@ -44,6 +44,7 @@ type(ft_expanded),   allocatable :: movie_frames_ftexp(:)             !< movie f
 type(ft_expanded),   allocatable :: movie_frames_ftexp_sh(:)          !< shifted movie frames
 type(ft_expanded),   allocatable :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
 real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
+real,                allocatable :: cumul_shifts(:,:)                 !< cumulative shifts
 real,                allocatable :: opt_shifts_saved(:,:)             !< optimal shifts for local opt saved
 
 ! data structures for patch-based motion correction
@@ -161,7 +162,7 @@ contains
         ! additional allocations
         allocate(cmat(shp(1),shp(2),shp(3)), cmat_sum(shp(1),shp(2),shp(3)), rmat(ldim(1),ldim(2),1),&
         &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
-        &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), opt_shifts_saved(nframes,2),&
+        &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), cumul_shifts(nframes, 2), opt_shifts_saved(nframes,2),&
         &frameweights(nframes), frameweights_saved(nframes), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
         ! init
@@ -174,6 +175,7 @@ contains
         corrs              = 0.
         opt_shifts         = 0.
         opt_shifts_saved   = 0.
+        cumul_shifts       = 0.
         frameweights       = 1./real(nframes)
         frameweights_saved = frameweights
         ! gain reference
@@ -716,7 +718,7 @@ contains
         end do
         !$omp end parallel do
         ! apply deformation
-        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname )
+        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, cumul_shifts )
         ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
         ! (see below)
         corr_prev = corr
@@ -863,6 +865,8 @@ contains
             shifts(iframe,2) = shifts(iframe,2) + ysh
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
+            cumul_shifts(iframe,1) = cumul_shifts(iframe,1)  + shifts(iframe, 1)
+            cumul_shifts(iframe,2) = cumul_shifts(iframe,2)  + shifts(iframe, 2)
         end do
         if( imode == 0 )then
             call corrmat2weights ! initialisation

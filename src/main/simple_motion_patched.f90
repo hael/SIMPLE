@@ -40,6 +40,8 @@ type :: motion_patched
     real,               allocatable  :: shifts_patches(:,:,:,:)
     real,               allocatable  :: shifts_patches_for_fit(:,:,:,:)
     character(len=:),   allocatable  :: shift_fname
+    real,               allocatable  :: global_shifts(:,:)
+    logical                          :: has_global_shifts
     integer                          :: nframes
     integer                          :: ldim(3)       ! size of entire frame, reference
     integer                          :: ldim_patch(3) ! size of one patch
@@ -214,17 +216,23 @@ contains
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
         call CPlot2D__SetFlipY(plot2D, C_TRUE)
-        call CDataSet__new(dataSet)
-        call CDataSet__SetDrawMarker(dataSet, C_FALSE)
-        call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 1.0_c_double)
-        xcenter = real(self%ldim(1))/2.
-        ycenter = real(self%ldim(2))/2.
-        do j = 1, self%nframes
-            call CDataPoint__new2(real(xcenter,c_double), real(ycenter, c_double), point)
-            call CDataSet__AddDataPoint(dataSet, point)
-        end do
-        call CPlot2D__AddDataSet(plot2D, dataset)
-
+        if (self%has_global_shifts) then
+            call CDataSet__new(dataSet)
+            call CDataSet__SetDrawMarker(dataSet, C_FALSE)
+            call CDataSet__SetDatasetColor(dataSet, 0.0_c_double, 0.0_c_double, 1.0_c_double)
+            xcenter = real(self%ldim(1))/2.
+            ycenter = real(self%ldim(2))/2.
+            do j = 1, self%nframes
+                call CDataPoint__new2(&
+                    real(xcenter + SCALE * self%global_shifts(j, 1), c_double), &
+                    real(ycenter + SCALE * self%global_shifts(j, 2), c_double), &
+                    point)
+                call CDataSet__AddDataPoint(dataSet, point)
+                call CDataPoint__delete(point)
+            end do
+            call CPlot2D__AddDataSet(plot2D, dataset)
+            call CDataSet__delete(dataset)
+        end if
         call CDataSet__new(dataSetStart)
         call CDataSet__SetDrawMarker(dataSetStart, C_TRUE)
         call CDataSet__SetMarkerSize(dataSetStart,5._c_double)
@@ -645,18 +653,27 @@ contains
         self%existence = .true.
     end subroutine motion_patched_new
 
-    subroutine motion_patched_correct( self, hp, lp, references, frames, frames_output, shift_fname )
+    subroutine motion_patched_correct( self, hp, lp, references, frames, frames_output, shift_fname, global_shifts )
         class(motion_patched),         intent(inout) :: self
         real,                          intent(in)    :: hp, lp
         type(image),      allocatable, intent(inout) :: references(:)
         type(image),      allocatable, intent(inout) :: frames(:)
         type(image),      allocatable, intent(inout) :: frames_output(:)
         character(len=:), allocatable, intent(in)    :: shift_fname
+        real, optional,   allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
         integer :: i
         self%hp = hp
         self%lp = lp
         self%shift_fname = shift_fname // C_NULL_CHAR
+        if (allocated(self%global_shifts)) deallocate(self%global_shifts)
+        if (present(global_shifts)) then
+            allocate(self%global_shifts(size(global_shifts, 1), size(global_shifts, 2)))
+            self%global_shifts = global_shifts
+            self%has_global_shifts = .true.
+        else
+            self%has_global_shifts = .false.
+        end if
         self%nframes = size(frames,dim=1)
         self%ldim   = references(1)%get_ldim()
         if (DUMP_STUFF) then
