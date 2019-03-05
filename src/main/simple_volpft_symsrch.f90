@@ -14,10 +14,10 @@ public :: volpft_symsrch_init, volpft_srch4symaxis
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .false.
-integer, parameter :: NPROJ      = 600
-integer, parameter :: NBEST      = 20
-integer, parameter :: ANGSTEP    = 7
+logical, parameter :: DEBUG_HERE      = .false.
+integer, parameter :: NPROJ_DEFAULT   = 600
+integer, parameter :: NBEST           = 20
+integer, parameter :: ANGSTEP_DEFAULT = 7
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -31,6 +31,8 @@ type(ori)                     :: saxis_glob         !< best symaxis solution fou
 integer                       :: nrestarts = 3      !< simplex restarts (randomized bounds)
 integer                       :: nsym      = 0      !< # symmetry ops
 integer                       :: nspace    = 0      !< # complex vectors in vpftcc
+integer                       :: nproj     = 0      !< # projection directions in grid search
+integer                       :: angstep   = 0      !< # angular resolution in-plane (grid search)
 integer                       :: kfromto(2)         !< Fourier index range
 
 contains
@@ -48,6 +50,14 @@ contains
         integer :: isym, ithr
         real    :: lims(3,2)
         call volpft_symsrch_kill
+        ! set nspace / angstep
+        if( pgrp(1:1) .eq. 'i' )then
+            nproj   = 1000
+            angstep = 5
+        else
+            nspace  = NPROJ_DEFAULT
+            angstep = ANGSTEP_DEFAULT
+        endif
         ! create the correlator
         call vpftcc%new(vol, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
@@ -105,9 +115,9 @@ contains
             ffromto = fromto
         else
             ffromto(1) = 1
-            ffromto(2) = NPROJ
+            ffromto(2) = nproj
         endif
-        if( ffromto(1) < 1 .or. ffromto(2) > NPROJ )then
+        if( ffromto(1) < 1 .or. ffromto(2) > nproj )then
            THROW_HARD('range out of bound; volpft_srch4symaxis')
         endif
         ntot = ffromto(2) - ffromto(1) + 1
@@ -115,14 +125,14 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) 'ntot   : ', ntot
         ! create
         ! container for candidate symmetry axes
-        call cand_axes%new(NPROJ)
+        call cand_axes%new(nproj)
         call cand_axes%set_all2single('corr', -1.0) ! for later ordering
         ! projection directions in discrete search
-        call espace%new(NPROJ)
+        call espace%new(nproj)
         call espace%spiral
         ! count # in-plane angles
         n_inpls = 0
-        do inpl=0,359,ANGSTEP
+        do inpl=0,359,angstep
             n_inpls = n_inpls + 1
         end do
         ! allocate
@@ -130,7 +140,7 @@ contains
             &corrs(ffromto(1):ffromto(2),n_inpls))
         ! fill-in the in-plane angles
         n_inpls = 0
-        do inpl=0,359,ANGSTEP
+        do inpl=0,359,angstep
             n_inpls = n_inpls + 1
             inpl_angs(n_inpls) = real(inpl)
         end do
@@ -142,7 +152,7 @@ contains
                 rmats(iproj,inpl,:,:) = euler2m(eul)
             end do
         end do
-        ! grid search using the spiral geometry & ANGSTEP degree in-plane resolution
+        ! grid search using the spiral geometry & angstep degree in-plane resolution
         corrs  = -1.
         !$omp parallel do schedule(static) default(shared) private(iproj,inpl) proc_bind(close) collapse(2)
         do iproj=ffromto(1),ffromto(2)

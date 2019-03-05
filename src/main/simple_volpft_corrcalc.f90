@@ -106,16 +106,16 @@ contains
         class(volpft_corrcalc),   intent(inout) :: self
         class(projector), target, intent(in)    :: vol
         real,                     intent(in)    :: hp, lp, alpha
-        integer    :: ispace, k
-        real       :: vec(3), rmat(3,3)
-        type(ori)  :: e
+        integer   :: ispace, k
+        real      :: vec(3), rmat(3,3)
+        type(ori) :: e
         type(sym) :: ico
         call self%kill
         ! set pointers, we assume that the volumes have been masked and prepared
         self%vol_ref    => vol
         self%vol_target => self%vol_ref
-        ! make the icosahedral group
-        call ico%new('ico')
+        ! make the icosahedral group (defines sampling geometry)
+        call ico%new('i')
         self%nspace = ico%get_nsym()
         ! set other stuff
         self%kfromto_vpft(1) = self%vol_ref%get_find(hp)
