@@ -228,14 +228,14 @@ contains
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         call build_glob%spproj_field%stats('frac', self%frac)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
-        write(logfhandle,601) '>>> STATE OVERLAP:                                  ', self%mi_state
-        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED         AVG/SDEV/MIN/MAX:',&
+        write(logfhandle,601) '>>> STATE OVERLAP:                          ', self%mi_state
+        write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
         &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         call build_glob%spproj_field%get_pops(statepops,'state')
         call build_glob%spproj_field%stats('corr', self%corr)
-        write(logfhandle,604) '>>> CORRELATION                    AVG/SDEV/MIN/MAX:',&
+        write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         ! print the overlaps and pops for the different states
         do istate=1,params_glob%nstates

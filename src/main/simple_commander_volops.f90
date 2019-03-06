@@ -664,7 +664,7 @@ contains
         character(len=STDLEN) :: fbody
         real                  :: shvec(3), scale
         integer               :: ldim(3)
-        integer, parameter    :: MAXBOX = 256
+        integer, parameter    :: MAXBOX = 128
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         call build%vol%read(params%vols(1))
