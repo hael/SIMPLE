@@ -1049,6 +1049,10 @@ contains
         call cline_refine3D1%set('neigh',  'yes') ! always consider neighbours
         call cline_refine3D1%set('nnn',    0.05*real(params%nspace))
         select case(trim(params%refine))
+            case('soft')
+                call cline_refine3D1%set('refine',  'softcluster')
+                call cline_refine3D1%set('neigh',   'no')
+                call cline_refine3D1%set('continue','yes')
             case('sym')
                 call cline_refine3D1%set('refine', 'clustersym')
                 call cline_refine3D2%delete('neigh') ! no neighbour mode for symmetry

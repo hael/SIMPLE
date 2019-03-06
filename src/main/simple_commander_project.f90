@@ -427,21 +427,21 @@ contains
         ! update project info
         call spproj%update_projinfo( cline )
         ! updates segment
+        call read_filetable(params%filetab, movfnames)
+        if( params%mkdir.eq.'yes' )then
+            ! taking care of paths
+            do i=1,nmovf
+                if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
+            enddo
+        endif
         if( inputted_deftab )then
             ! micrographs with pre-determined CTF parameters
             call deftab%new(nlines(params%deftab))
             call deftab%read_ctfparams_state_eo(params%deftab)
-            call spproj%add_intgs(params%filetab, deftab, ctfvars)
+            call spproj%add_intgs(movfnames, deftab, ctfvars)
             call deftab%kill
         else
             ! movies/micrographs
-            call read_filetable(params%filetab, movfnames)
-            if( params%mkdir.eq.'yes' )then
-                ! taking care of paths
-                do i=1,nmovf
-                    if(movfnames(i)(1:1).ne.'/') movfnames(i) = PATH_PARENT//trim(movfnames(i))
-                enddo
-            endif
             call spproj%add_movies(movfnames, ctfvars)
         endif
         ! add boxtab

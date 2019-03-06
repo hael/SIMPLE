@@ -139,7 +139,8 @@ contains
         do_extr           = .false.
         extr_score_thresh = -huge(extr_score_thresh)
         select case(trim(params_glob%refine))
-            case('cluster','clustersym')
+            case('cluster','clustersym','clustersoft')
+                ! general logics
                 if(allocated(het_mask))deallocate(het_mask)
                 allocate(het_mask(params_glob%fromp:params_glob%top), source=ptcl_mask)
                 call build_glob%spproj_field%set_extremal_vars(params_glob%extr_init, params_glob%extr_iter,&
@@ -162,14 +163,25 @@ contains
                 else
                     het_mask = .false.
                 endif
-                if(trim(params_glob%refine).eq.'clustersym')then
+                ! refinement mode specifics
+                select case(trim(params_glob%refine))
+                case('clustersym')
                    ! symmetry pairing matrix
                     c1_symop = sym('c1')
                     params_glob%nspace = min(params_glob%nspace*build_glob%pgrpsyms%get_nsym(), 2500)
                     call build_glob%eulspace%new( params_glob%nspace )
                     call build_glob%eulspace%spiral
                     call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
-                endif
+                case('clustersoft')
+                    THROW_HARD('not functional yet!')
+                    ! read in search space from peaks
+                    ! call open_o_peaks_io(trim(params_glob%o_peaks_file))
+                    ! do iptcl=params_glob%fromp,params_glob%top
+                    !     if( .not.ptcl_mask(iptcl) )cycle
+                    !     call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
+                    ! end do
+                    ! call close_o_peaks_io
+                end select
         end select
         if( L_BENCH ) rt_init = toc(t_init)
 
@@ -234,6 +246,10 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
                 end do
+            case('clustersoft')
+                ! do iptcl=params_glob%fromp,params_glob%top
+                !     if( ptcl_mask(iptcl) ) allocate(strategy3D_softcluster :: strategy3Dsrch(iptcl)%ptr)
+                ! end do
             case('eval')
                 ! nothing to do
             case DEFAULT
@@ -299,7 +315,7 @@ contains
         ! here we read all peaks to allow deriving statistics based on the complete set
         ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
-            case('eval','cluster','clustersym')
+        case('eval','cluster','clustersym','clustersoft')
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
@@ -507,7 +523,7 @@ contains
         integer :: nptcls, nrefs, iptcl_batch, batchlims(2), iptcl, imatch, eoarr(MAXIMGBATCHSZ)
         if( .not.params_glob%l_frac_update ) return
         select case(params_glob%refine)
-        case('cluster','clustersym','eval')
+        case('cluster','clustersym','clustersoft','eval')
                 return
             case DEFAULT
                 ! all good

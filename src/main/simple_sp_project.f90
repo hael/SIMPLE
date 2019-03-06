@@ -609,20 +609,15 @@ contains
     end subroutine add_movies
 
     !> Add/append micrographs with ctf parameters
-    subroutine add_intgs( self, filetab, os, ctfvars )
+    subroutine add_intgs( self, intgs_array, os, ctfvars )
         class(sp_project), target, intent(inout) :: self
-        character(len=*),          intent(in)    :: filetab
+        character(LONGSTRLEN),     intent(in)    :: intgs_array(:)
         class(oris),               intent(in)    :: os
         type(ctfparams),           intent(in)    :: ctfvars
-        character(len=LONGSTRLEN),   allocatable :: micnames(:)
         type(ctfparams)           :: prev_ctfvars, ctfparms
         character(len=LONGSTRLEN) :: rel_micname
         real                      :: intg_smpd
         integer                   :: imic,ldim(3),nframes,nintgs,nprev_intgs,nprev_mics,cnt,ntot
-        ! file exists?
-        if( .not. file_exists(filetab) )then
-            THROW_HARD('movie list (filetab): '//trim(filetab)//' not in cwd; add_intgs')
-        endif
         nprev_mics  = self%os_mic%get_noris()
         nprev_intgs = self%get_nintgs()
         if( nprev_mics > 0 )then
@@ -642,8 +637,7 @@ contains
             if(ctfvars%l_phaseplate .neqv. prev_ctfvars%l_phaseplate ) THROW_HARD('Incompatible phaseplate info; add_intgs')
         endif
         ! read movie names
-        call read_filetable(filetab, micnames)
-        nintgs = size(micnames)
+        nintgs = size(intgs_array)
         if( nintgs /= os%get_noris() )then
             THROW_HARD('Inconsistent # of mics & ctf parameters; add_intgs')
         endif
@@ -660,16 +654,16 @@ contains
         cnt = 0
         do imic=nprev_intgs+1,ntot
             cnt = cnt + 1
-            call make_relativepath(CWD_GLOB,micnames(cnt),rel_micname)
+            call make_relativepath(CWD_GLOB,intgs_array(cnt),rel_micname)
             call find_ldim_nptcls(trim(rel_micname), ldim, nframes, smpd=intg_smpd)
             if( nframes <= 0 )then
-                THROW_HARD('# frames in movie: '//trim(micnames(cnt))//' <= zero; add_intgs')
+                THROW_HARD('# frames in movie: '//trim(intgs_array(cnt))//' <= zero; add_intgs')
             else if( nframes > 1 )then
                 THROW_HARD('Not the interface for adding movies; add_intgs')
             endif
             if( nprev_intgs > 0 )then
                 if( .not.is_equal(intg_smpd,prev_ctfvars%smpd) )then
-                    THROW_HARD('Incompatible sampling distance: '//trim(micnames(cnt))//'; add_intgs')
+                    THROW_HARD('Incompatible sampling distance: '//trim(intgs_array(cnt))//'; add_intgs')
                 endif
             endif
             ! updates segment

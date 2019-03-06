@@ -3186,7 +3186,7 @@ contains
         call vizoris%set_input('parm_ios', 2, nspace)
         call vizoris%set_input('parm_ios', 3, pgrp)
         call vizoris%set_input('parm_ios', 4, oritype)
-        call vizoris%set_input('parm_ios', 5, 'tseries', 'binary', 'Time series anlysis', 'Orientations come from analysis of a time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call vizoris%set_input('parm_ios', 5, 'tseries', 'binary', 'Time series analysis', 'Orientations originate from analysis of a time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! alternative inputs
         ! <empty>
         ! search controls

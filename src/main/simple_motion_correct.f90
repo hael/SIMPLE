@@ -154,7 +154,7 @@ contains
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
         end if
         if ( motion_correct_with_patched ) then
-            allocate( cumul_shifts(nframes, 2), stat=alloc_stat )
+            allocate( cumul_shifts(nframes, 2), source=0., stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
         end if
         do iframe=1,nframes
@@ -180,7 +180,6 @@ contains
         corrs              = 0.
         opt_shifts         = 0.
         opt_shifts_saved   = 0.
-        cumul_shifts       = 0.
         frameweights       = 1./real(nframes)
         frameweights_saved = frameweights
         ! gain reference

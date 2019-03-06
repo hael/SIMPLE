@@ -99,7 +99,7 @@ contains
         s3D%proj_space_corrs_calcd            = .false.
         ! search orders allocation
         select case( trim(params_glob%refine) )
-            case( 'cluster','clustersym')
+            case( 'cluster','clustersym','clustersoft')
                 srch_order_allocated = .false.
             case DEFAULT
                 if( params_glob%neigh.eq.'yes' )then
