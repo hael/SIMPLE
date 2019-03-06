@@ -17,7 +17,7 @@ implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
 public :: motion_correct_aniso, motion_correct_aniso_calc_sums, motion_correct_aniso_kill, motion_correct_kill_common
-public :: motion_correct_with_aniso
+public :: motion_correct_with_aniso, motion_correct_with_patched
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: patched_shift_fname
 private
@@ -86,6 +86,7 @@ real    :: nsig_here      = 6.0      !< nr of sigmas (for outlier removal)
 logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
 logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
+logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 
 ! module global constants
@@ -152,6 +153,10 @@ contains
             allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
         end if
+        if ( motion_correct_with_patched ) then
+            allocate( cumul_shifts(nframes, 2), stat=alloc_stat )
+            if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
+        end if
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
             call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
@@ -162,9 +167,9 @@ contains
         ! additional allocations
         allocate(cmat(shp(1),shp(2),shp(3)), cmat_sum(shp(1),shp(2),shp(3)), rmat(ldim(1),ldim(2),1),&
         &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
-        &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), cumul_shifts(nframes, 2), opt_shifts_saved(nframes,2),&
+        &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), opt_shifts_saved(nframes,2),&
         &frameweights(nframes), frameweights_saved(nframes), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         ! init
         cmat               = cmplx(0.,0.)
         cmat_sum           = cmplx(0.,0.)
@@ -801,6 +806,7 @@ contains
             end do
             deallocate(movie_frames_shifted_patched, movie_sum_global_threads, movie_frames_shifted_saved)
         endif
+        if ( allocated(cumul_shifts) ) deallocate(cumul_shifts)
     end subroutine motion_correct_patched_kill
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -865,8 +871,10 @@ contains
             shifts(iframe,2) = shifts(iframe,2) + ysh
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
-            cumul_shifts(iframe,1) = cumul_shifts(iframe,1)  + shifts(iframe, 1)
-            cumul_shifts(iframe,2) = cumul_shifts(iframe,2)  + shifts(iframe, 2)
+            if ( motion_correct_with_patched ) then
+                cumul_shifts(iframe,1) = cumul_shifts(iframe,1)  + shifts(iframe, 1)
+                cumul_shifts(iframe,2) = cumul_shifts(iframe,2)  + shifts(iframe, 2)
+            end if
         end do
         if( imode == 0 )then
             call corrmat2weights ! initialisation
