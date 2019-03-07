@@ -3206,9 +3206,10 @@ contains
         class(image), intent(in)  :: img_in
         type(image),  intent(out) :: img_out
         type(image)       :: img_cc   !in this img will be stored the cc with no specific order
-        real, allocatable :: mat4compare(:,:,:)
-        real              :: neigh_8(9), tmp, diff
-        integer           :: i, j, ii, jj, n_it, n_maxit, nsz, cnt
+        real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:)
+        real              :: tmp, diff
+        real, allocatable :: neigh_8(:)
+        integer           :: i, j, k, n_it, n_maxit, nsz, cnt
         logical           :: finished_job
         call img_cc%new  (img_in%ldim,img_in%smpd)
         call img_out%new (img_in%ldim,img_in%smpd)

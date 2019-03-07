@@ -45,6 +45,7 @@ type(symmetry_test_commander)  :: xsymtst
 type(postprocess_commander)    :: xpostprocess
 
 ! IMAGE PROCESSING PROGRAMS
+type(pspec_stats_commander) :: xpspecstats
 type(mask_commander)        :: xmask
 type(fsc_commander)         :: xfsc
 type(local_res_commander)   :: xlocal_res
@@ -59,6 +60,9 @@ type(scale_commander)       :: xscale
 type(stack_commander)       :: xstack
 type(stackops_commander)    :: xstackops
 type(shift_commander)       :: xshift
+
+! NANOPARTICLES PROGRAMS
+type(detect_atoms_commander)  :: xdetectatoms  !I put it in simple_commander_preprocess not to write another file
 
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
@@ -167,7 +171,8 @@ select case(prg)
 
 
     ! IMAGE PROCESSING PROGRAMS
-
+    case('pspec_stats')
+        call xpspecstats%execute(cline)
     case( 'mask' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xmask%execute(cline)
@@ -212,6 +217,10 @@ select case(prg)
     case( 'shift' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xshift%execute(cline)
+
+    ! NANOPARTICLES PROGRAMS
+    case('detect_atoms')
+        call xdetectatoms%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
 

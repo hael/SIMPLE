@@ -16,6 +16,7 @@ public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
 public :: pick_commander_chiara
+public :: detect_atoms_commander
 public :: extract_commander
 public :: reextract_commander
 public :: pick_extract_commander
@@ -51,6 +52,10 @@ type, extends(commander_base) :: pick_commander_chiara
   contains
     procedure :: execute      => exec_pick_chiara
 end type pick_commander_chiara
+type, extends(commander_base) :: detect_atoms_commander
+  contains
+    procedure :: execute      => exec_detect_atoms
+end type detect_atoms_commander
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
@@ -310,22 +315,6 @@ contains
         call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
-
-    !CHIARAAAA
-    ! subroutine exec_nanopart_analyisis( self, cline )
-    !     use simple_sp_project,          only: sp_project
-    !     use simple_nanopart_new_mod, only: nanoparticle
-    !     class(nanoparticle), intent(inout) :: self
-    !     class(cmdline),      intent(inout) :: cline !< command line input
-    !     type(sp_project)              :: spproj
-    !     character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
-    !     integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
-    !     call params%new(cline)
-    !     !call spproj%read(params%projfile)
-    !     ! end gracefully
-    !     call qsys_job_finished(  'simple_commander_preprocess :: exec_nanopart_analyisis' )
-    !     call simple_end('**** SIMPLE_NANOPARTICLE_ANALYSIS NORMAL STOP ****')
-    ! end subroutine exec_nanopart_analyisis
 
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
@@ -664,6 +653,52 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick_chiara
+
+    ! for binarizing a nanoparticle image
+    subroutine exec_detect_atoms( self, cline )
+        use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(detect_atoms_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        type(image)        :: img
+        integer :: ldim(3), nptcls
+        real    :: smpd
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
+        endif
+        call nano%set_partname(params%vols(1))
+        call nano%new()
+        call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
+        ! Creating image
+        call img%new(ldim, smpd)
+        ! Nanoparticle binarization
+        call img%read(params%vols(1))
+        call nano%set_img(img, 'img')
+        call nano%binarize()
+        ! Fetching images
+        call nano%get_img(img,'img_bin')
+        call img%write('BIN.mrc')
+        ! Atoms centers identification
+        call nano%find_centers()
+        ! Aspect ratios calculations
+        call nano%calc_aspect_ratio()
+        ! Polarization search wrt to the center of mass of the nanoparticle
+        if( .not. cline%defined('nnn') )then
+            call nano%polar_masscenter(30)  !default value
+        else
+            call nano%polar_masscenter(int(params%nnn))  !default value
+        endif
+        ! Affinity propagation test, TO REMOVE
+        call nano%affprop_cluster()
+        ! end gracefully
+        call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
+    end subroutine exec_detect_atoms
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )

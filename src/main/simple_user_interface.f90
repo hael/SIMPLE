@@ -80,6 +80,7 @@ type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
+type(simple_program), target :: detect_atoms
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
@@ -114,6 +115,7 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
+type(simple_program), target :: pspec_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
@@ -223,6 +225,7 @@ type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
 
+
 interface set_param
     module procedure set_param_1
     module procedure set_param_2
@@ -245,6 +248,7 @@ contains
         call new_convert
         call new_ctf_estimate
         call new_ctfops
+        call new_detect_atoms
         call new_extract
         call new_export_starproject
         call new_filter
@@ -279,6 +283,7 @@ contains
         call new_print_magic_boxes
         call new_print_project_info
         call new_print_project_field
+        call new_pspec_stats
         call new_reproject
         call new_reconstruct3D
         call new_reextract
@@ -319,61 +324,61 @@ contains
         prg_ptr_array(8)%ptr2prg  => convert
         prg_ptr_array(9)%ptr2prg  => ctf_estimate
         prg_ptr_array(10)%ptr2prg => ctfops
-        prg_ptr_array(11)%ptr2prg => extract
-        prg_ptr_array(12)%ptr2prg => export_starproject
-        prg_ptr_array(13)%ptr2prg => filter
-        prg_ptr_array(14)%ptr2prg => fsc
-        prg_ptr_array(15)%ptr2prg => gen_pspecs_and_thumbs
-        prg_ptr_array(16)%ptr2prg => info_image
-        prg_ptr_array(17)%ptr2prg => info_stktab
-        prg_ptr_array(18)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(19)%ptr2prg => import_boxes
-        prg_ptr_array(20)%ptr2prg => import_cavgs
-        prg_ptr_array(21)%ptr2prg => import_movies
-        prg_ptr_array(22)%ptr2prg => import_particles
-        prg_ptr_array(23)%ptr2prg => import_starproject
-        prg_ptr_array(24)%ptr2prg => local_resolution
-        prg_ptr_array(25)%ptr2prg => local_resolution2D
-        prg_ptr_array(26)%ptr2prg => make_cavgs
-        prg_ptr_array(27)%ptr2prg => make_oris
-        prg_ptr_array(28)%ptr2prg => mask
-        prg_ptr_array(29)%ptr2prg => mkdir_
-        prg_ptr_array(30)%ptr2prg => motion_correct
-        prg_ptr_array(31)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(32)%ptr2prg => new_project
-        prg_ptr_array(33)%ptr2prg => normalize_
-        prg_ptr_array(34)%ptr2prg => orisops
-        prg_ptr_array(35)%ptr2prg => oristats
-        prg_ptr_array(36)%ptr2prg => pick
-        prg_ptr_array(37)%ptr2prg => pick_extract_stream
-        prg_ptr_array(38)%ptr2prg => postprocess
-        prg_ptr_array(39)%ptr2prg => preprocess
-        prg_ptr_array(40)%ptr2prg => preprocess_stream
-        prg_ptr_array(41)%ptr2prg => print_fsc
-        prg_ptr_array(42)%ptr2prg => print_magic_boxes
-        prg_ptr_array(43)%ptr2prg => print_project_info
-        prg_ptr_array(44)%ptr2prg => print_project_field
-        prg_ptr_array(45)%ptr2prg => reproject
-        prg_ptr_array(46)%ptr2prg => reconstruct3D
-        prg_ptr_array(47)%ptr2prg => reextract
-        prg_ptr_array(48)%ptr2prg => refine3D
-        prg_ptr_array(49)%ptr2prg => refine3D_init
-        prg_ptr_array(50)%ptr2prg => report_selection
-        prg_ptr_array(51)%ptr2prg => scale
-        prg_ptr_array(52)%ptr2prg => scale_project
-        prg_ptr_array(53)%ptr2prg => select_
-        prg_ptr_array(54)%ptr2prg => shift
-        prg_ptr_array(55)%ptr2prg => simulate_movie
-        prg_ptr_array(56)%ptr2prg => simulate_noise
-        prg_ptr_array(57)%ptr2prg => simulate_particles
-        prg_ptr_array(58)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(59)%ptr2prg => stack
-        prg_ptr_array(60)%ptr2prg => stackops
-        prg_ptr_array(61)%ptr2prg => subset_project
-        prg_ptr_array(62)%ptr2prg => symaxis_search
-        prg_ptr_array(63)%ptr2prg => symmetry_test
-        prg_ptr_array(64)%ptr2prg => tseries_import
-        prg_ptr_array(65)%ptr2prg => tseries_ctf_estimate
+        prg_ptr_array(11)%ptr2prg => detect_atoms
+        prg_ptr_array(12)%ptr2prg => extract
+        prg_ptr_array(13)%ptr2prg => export_starproject
+        prg_ptr_array(14)%ptr2prg => filter
+        prg_ptr_array(15)%ptr2prg => fsc
+        prg_ptr_array(16)%ptr2prg => gen_pspecs_and_thumbs
+        prg_ptr_array(17)%ptr2prg => info_image
+        prg_ptr_array(18)%ptr2prg => info_stktab
+        prg_ptr_array(19)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(20)%ptr2prg => import_boxes
+        prg_ptr_array(21)%ptr2prg => import_cavgs
+        prg_ptr_array(22)%ptr2prg => import_movies
+        prg_ptr_array(23)%ptr2prg => import_particles
+        prg_ptr_array(24)%ptr2prg => import_starproject
+        prg_ptr_array(25)%ptr2prg => local_resolution
+        prg_ptr_array(26)%ptr2prg => local_resolution2D
+        prg_ptr_array(27)%ptr2prg => make_cavgs
+        prg_ptr_array(28)%ptr2prg => make_oris
+        prg_ptr_array(29)%ptr2prg => mask
+        prg_ptr_array(30)%ptr2prg => mkdir_
+        prg_ptr_array(31)%ptr2prg => motion_correct
+        prg_ptr_array(32)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(33)%ptr2prg => new_project
+        prg_ptr_array(34)%ptr2prg => normalize_
+        prg_ptr_array(35)%ptr2prg => orisops
+        prg_ptr_array(36)%ptr2prg => oristats
+        prg_ptr_array(37)%ptr2prg => pick
+        prg_ptr_array(38)%ptr2prg => pick_extract_stream
+        prg_ptr_array(39)%ptr2prg => postprocess
+        prg_ptr_array(40)%ptr2prg => preprocess
+        prg_ptr_array(41)%ptr2prg => preprocess_stream
+        prg_ptr_array(42)%ptr2prg => print_fsc
+        prg_ptr_array(43)%ptr2prg => print_magic_boxes
+        prg_ptr_array(44)%ptr2prg => print_project_info
+        prg_ptr_array(45)%ptr2prg => print_project_field
+        prg_ptr_array(46)%ptr2prg => pspec_stats
+        prg_ptr_array(47)%ptr2prg => reproject
+        prg_ptr_array(48)%ptr2prg => reconstruct3D
+        prg_ptr_array(49)%ptr2prg => reextract
+        prg_ptr_array(50)%ptr2prg => refine3D
+        prg_ptr_array(51)%ptr2prg => refine3D_init
+        prg_ptr_array(52)%ptr2prg => report_selection
+        prg_ptr_array(53)%ptr2prg => scale
+        prg_ptr_array(54)%ptr2prg => scale_project
+        prg_ptr_array(55)%ptr2prg => select_
+        prg_ptr_array(56)%ptr2prg => shift
+        prg_ptr_array(57)%ptr2prg => simulate_movie
+        prg_ptr_array(58)%ptr2prg => simulate_noise
+        prg_ptr_array(59)%ptr2prg => simulate_particles
+        prg_ptr_array(60)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(61)%ptr2prg => stack
+        prg_ptr_array(62)%ptr2prg => stackops
+        prg_ptr_array(63)%ptr2prg => subset_project
+        prg_ptr_array(64)%ptr2prg => symaxis_search
+        prg_ptr_array(65)%ptr2prg => symmetry_test
         prg_ptr_array(66)%ptr2prg => tseries_track
         prg_ptr_array(67)%ptr2prg => update_project
         prg_ptr_array(68)%ptr2prg => vizoris
@@ -405,6 +410,8 @@ contains
                 ptr2prg => ctf_estimate
             case('ctfops')
                 ptr2prg => ctfops
+            case('detect_atoms')
+                ptr2prg => detect_atoms
             case('extract')
                 ptr2prg => extract
             case('export_starproject')
@@ -473,6 +480,8 @@ contains
                 ptr2prg => print_project_info
             case('print_project_field')
                 ptr2prg => print_project_field
+            case('pspec_stats')
+                ptr2prg => pspec_stats
             case('reproject')
                 ptr2prg => reproject
             case('reconstruct3D')
@@ -558,6 +567,7 @@ contains
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctfops%name
+        write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
@@ -582,6 +592,7 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') pspec_stats%name
         write(logfhandle,'(A)') report_selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
@@ -1153,6 +1164,33 @@ contains
         ! computer controls
         call ctfops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_ctfops
+
+    subroutine new_detect_atoms
+        ! PROGRAM SPECIFICATION
+        call detect_atoms%new(&
+        &'detect_atoms', &                                   ! name
+        &'Detect atoms in nanoparticle vol',&                ! descr_short
+        &'is a program for identify atoms in nanoparticle vols and dump statistics',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &1, 1, 0, 1, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call detect_atoms%set_input('parm_ios',   1, smpd)
+        ! search controls
+        call detect_atoms%set_input('srch_ctrls', 1, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest neighbours &
+                                   & to consider in the polarization search', &
+                                   & '# polarization neighbours', .false., 30.)
+        ! alternative inputs
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
+    end subroutine new_detect_atoms
 
     subroutine new_extract
         ! PROGRAM SPECIFICATION
@@ -2248,6 +2286,29 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_print_project_info
+
+    subroutine new_pspec_stats
+        ! PROGRAM SPECIFICATION
+        call pspec_stats%new(&
+        &'pspec_stats', &                                    ! name
+        &'Analyse powerspectra images stack',&               ! descr_short
+        &'is a program for validation statistic on powerspectra images prior ctf estimation',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &1, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call pspec_stats%set_input('img_ios', 1, 'stk', 'file', 'Stack of powerspectra images', 'Stack of powerspectra images', 'e.g. pspec_stk.mrc', .true., '')
+        ! parameter input/output
+        call pspec_stats%set_input('parm_ios',   1, smpd)
+        ! search controls
+        ! <empty>
+        ! alternative inputs
+        ! filter controls
+        call pspec_stats%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 35.)        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_pspec_stats
 
     subroutine new_reextract
         ! PROGRAM SPECIFICATION

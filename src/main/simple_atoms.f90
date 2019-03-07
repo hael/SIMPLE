@@ -129,10 +129,14 @@ contains
             end function
     end subroutine new_from_pdb
 
-    subroutine new_instance( self, n )
-        class(atoms), intent(inout) :: self
-        integer,      intent(inout) :: n
-        integer :: alloc_stat
+    subroutine new_instance( self, n, dummy )
+        class(atoms),      intent(inout) :: self
+        integer,           intent(inout) :: n
+        logical, optional, intent(in)    :: dummy
+        integer :: i,alloc_stat
+        logical :: ddummy
+        ddummy = .false.
+        if(present(dummy)) ddummy = dummy
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
@@ -152,6 +156,17 @@ contains
         self%Z      = 0
         self%n      = n
         self%het    = .false.
+        if(ddummy)then
+            do i=1,self%n
+                self%name(i)    = ' X  '
+                self%resname(:) = ' X '
+                self%chain(:)   = 'A'
+                self%beta      = 1.
+                self%occupancy = 1.
+                self%num    = i
+                self%resnum = 1
+            enddo
+        endif
         self%exists = .true.
     end subroutine new_instance
 

@@ -13,6 +13,7 @@ public :: convert_commander
 public :: ctfops_commander
 public :: filter_commander
 public :: normalize_commander
+public :: pspec_stats_commander
 public :: scale_commander
 public :: stack_commander
 public :: stackops_commander
@@ -43,6 +44,10 @@ type, extends(commander_base) :: normalize_commander
   contains
     procedure :: execute      => exec_normalize
 end type normalize_commander
+type, extends(commander_base) :: pspec_stats_commander
+  contains
+    procedure :: execute      => exec_pspec_stats
+end type pspec_stats_commander
 type, extends(commander_base) :: scale_commander
   contains
     procedure :: execute      => exec_scale
@@ -453,6 +458,30 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_NORMALIZE NORMAL STOP ****')
     end subroutine exec_normalize
+
+    !> for online power spectra analysis through statistic calculation
+    !! to perform prior ctf estimation.
+    subroutine exec_pspec_stats( self, cline )
+        use simple_powerspec_analysis, only: powerspectrum
+        class(pspec_stats_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters)    :: params
+        type(powerspectrum) :: pspec
+        integer :: ldim(3), nptcls
+        real    :: smpd
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_pspec_stats')
+        endif
+        if( .not. cline%defined('stk') )then
+            THROW_HARD('ERROR!   stk needs to be present; exec_pspec_stats')
+        endif
+        call pspec%new(params%stk, 10) !it also create a new instance of the class powerspectrum
+        call find_ldim_nptcls (params%stk, ldim, nptcls, smpd)
+        call pspec%run()
+        ! end gracefully
+        call simple_end('**** SIMPLE_PSPEC_STATS NORMAL STOP ****')
+    end subroutine exec_pspec_stats
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
     recursive subroutine exec_scale( self, cline )

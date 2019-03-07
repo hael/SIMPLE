@@ -181,11 +181,13 @@ contains
         integer     :: idx(2)
         real,    allocatable :: dist(:,:)        !to extract the window according to the px which minimize the dist
         logical, allocatable :: mask(:,:)        !to calc the min of an array along a specific dim
+        logical, allocatable :: mask_dist(:)     !for sum dist calculation
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
         s = shape(masked_mat)
         call get_pixel_pos(masked_mat, pos)
         allocate(dist(4,size(pos, dim = 2)), source = 0.)
         allocate(mask(4,size(pos, dim = 2)), source = .false.)
+        allocate(mask_dist(size(pos, dim = 2)), source = .true.)
         mask(4,:) = .true.
         n_px = 0
         do i = 1, s(1)
@@ -193,7 +195,7 @@ contains
                 do k = 1, s(3)
                     if(masked_mat(i,j,k) > 0.5) then
                         n_px = n_px + 1
-                        dist( 4, n_px) = pixels_dist( [i,j,k], pos, 'sum')
+                        dist( 4, n_px) = pixels_dist( [i,j,k], pos, 'sum', mask_dist)
                         dist(:3, n_px) = [real(i),real(j),real(k)]
                     endif
                 enddo
@@ -201,7 +203,7 @@ contains
         enddo
         idx   = minloc(dist, mask)
         px(:) = int(dist(1:3, idx(2)))
-        deallocate(pos, mask, dist)
+        deallocate(pos, mask, dist, mask_dist)
     end function center_cc
 
   ! This subroutine stores in pos the indeces corresponding to
@@ -232,25 +234,27 @@ contains
     !              the selected pixel and all the others
     ! if which == 'sum' then distance is the sum of the distances between the
     !              selected pixel and all the others.
-    function pixels_dist_1( px, vec, which, location) result( dist )
-        integer,           intent(in)  :: px(3)
-        integer,           intent(in)  :: vec(:,:)
-        character(len=*),  intent(in)  :: which
-        integer, optional, intent(out) :: location(1)
-        logical :: mask(size(vec, dim = 2))
+    function pixels_dist_1( px, vec, which, mask, location) result( dist )
+        integer,           intent(in)     :: px(3)
+        integer,           intent(in)     :: vec(:,:)
+        character(len=*),  intent(in)     :: which
+        logical,           intent(inout)  :: mask(:)
+        integer, optional, intent(out)    :: location(1)
         real    :: dist
         integer :: i
-        mask(:) = .true. !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+        if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_1')
+        if(any(mask .eqv. .false.) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
+        !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
         do i = 1, size(vec, dim = 2)
             if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) ) mask(i) = .false.
         enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
-            if(present(location)) location = maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
+            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location = maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
         case('min')
             dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-            if(present(location)) location = minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
+            if(present(location)) location = minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
         case('sum')
             if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
             dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
@@ -260,26 +264,28 @@ contains
         end select
     end function pixels_dist_1
 
-    function pixels_dist_2( px, vec, which, location) result( dist )
-        real,              intent(in)  :: px(3)
-        real,              intent(in)  :: vec(:,:)
-        character(len=*),  intent(in)  :: which
-        integer, optional,    intent(out) :: location(1)
-        logical :: mask(size(vec, dim = 2))
+    function pixels_dist_2( px, vec, which, mask, location) result( dist )
+        real,              intent(in)     :: px(3)
+        real,              intent(in)     :: vec(:,:)
+        character(len=*),  intent(in)     :: which
+        logical,           intent(inout)  :: mask(:)
+        integer, optional, intent(out)    :: location(1)
         real    :: dist
         integer :: i
-        mask(:) = .true. !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+        if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_2')
+        if(any(mask .eqv. .false.) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_2')
+        !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
         do i = 1, size(vec, dim = 2)
             if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
             &  .and. abs(px(3)-vec(3,i)) < TINY ) mask(i) = .false.
         enddo
         select case(which)
         case('max')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
-            if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+            if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
         case('min')
             dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
-            if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+            if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
         case('sum')
             if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
             dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
@@ -298,12 +304,14 @@ contains
         type(image), intent(inout) :: img
         real, allocatable    :: rmat(:,:,:), dist(:)
         integer, allocatable :: imat_masked(:,:,:), pos(:,:)
+        logical, allocatable :: mask_dist(:)  !for maximum dist calculation
         real :: diameter
         integer :: ldim(3), i, j,k, cnt
         ldim = img%get_ldim()
         rmat = img%get_rmat()
         call img%prepare_connected_comps() !consider just one particle, not multiple
         allocate(imat_masked(ldim(1),ldim(2),ldim(3)), source = 0)
+        allocate(mask_dist(size(pos,2)), source = .true.)
         imat_masked = int(img%get_rmat())
         call get_pixel_pos(imat_masked,pos)
         cnt = 0
@@ -313,11 +321,12 @@ contains
                 do k = 1, ldim(3)
                     if(imat_masked(i,j,k) > 0.5) then  !just ones
                         cnt = cnt + 1
-                        dist(cnt) = pixels_dist([i,j,k],pos, 'max')
+                        dist(cnt) = pixels_dist([i,j,k],pos, 'max', mask_dist)
                     endif
                 enddo
             enddo
         enddo
         diameter = maxval(dist)
+        deallocate(rmat, dist, imat_masked, mask_dist)
     end function part_longest_dim
 end module simple_picker_chiara

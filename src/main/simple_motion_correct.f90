@@ -6,7 +6,6 @@ include 'simple_lib.f08'
 use simple_ft_expanded,         only: ft_expanded
 use simple_motion_anisocor,     only: motion_anisocor, POLY_DIM
 use simple_motion_patched,      only: motion_patched
-use simple_motion_anisocor_sgl, only: motion_anisocor_sgl
 use simple_motion_anisocor_dbl, only: motion_anisocor_dbl
 use simple_image,               only: image
 use simple_parameters,          only: params_glob
@@ -90,7 +89,7 @@ logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or 
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 
 ! module global constants
-integer, parameter :: MITSREF       = 30     !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF       = 1!30   !< max # iterations of refinement optimisation
 integer, parameter :: MITSREF_ANISO = 9      !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2.     !< small initial shift to blur out fixed pattern noise
 logical, parameter :: ANISO_DBL     = .true. !< use double-precision for anisotropic motion correct?
@@ -128,14 +127,9 @@ contains
             ldim_scaled(2) = round2even(real(ldim(2))*params_glob%scale)
             ldim_scaled(3) = 1
             do_scale        = .true.
-            !Chiara
-            print *, 'SCALED!!, motion_correct_init ', params_glob%scale, do_scale
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         else
             ldim_scaled = ldim
             do_scale     = .false.
-            print *, '>>>>>>>>>>>>>> NOT SCALED!!, motion_correct_init ', params_glob%scale, do_scale
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         endif
         ! set sampling distance
         smpd        = ctfvars%smpd
@@ -218,6 +212,9 @@ contains
         call tmpmovsum%new(ldim, smpd)
         call tmpmovsum%set_rmat(rmat_sum)
         call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
+        !!!!!!!!!!!!!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!
+        !call tmpmovsum%write('TMPmovSUM.mrc')
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call tmpmovsum%kill
         write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
         write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
@@ -291,10 +288,15 @@ contains
         if( err ) return
         ! make search objects for parallel execution
         allocate(ftexp_srch(nframes))
+        !!!!!!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        !write (*,*) 'TRS=', params_glob%trs
+        !params_glob%trs = 10. !max pixel motion
         do iframe=1,nframes
             call ftexp_srch(iframe)%new(movie_sum_global_ftexp_threads(iframe), movie_frames_ftexp(iframe),&
                 &params_glob%scale * params_glob%trs, motion_correct_ftol = params_glob%motion_correctftol,&
             &motion_correct_gtol = params_glob%motion_correctgtol)
+            !!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            !if(iframe == 1) call movie_sum_global_ftexp_threads(iframe)%read('TMPmovSUM.mrc')
             ! initialise with small random shifts (to average out dead/hot pixels)
             opt_shifts(iframe,1) = ran3() * 2. * SMALLSHIFT - SMALLSHIFT
             opt_shifts(iframe,2) = ran3() * 2. * SMALLSHIFT - SMALLSHIFT
@@ -485,31 +487,27 @@ contains
         integer :: iframe, nimproved, i, ldim4scale(3)
         logical :: didsave, err_stat, doscale
         real(dp):: acorr, aregu
-        !Chiara
-        type(image) :: pspec_img, movie_sum_global_pspec
-        !!!!
+        !Chiara!!!!!!!!!!!!
+        !type(image) :: pspec_img, movie_sum_global_pspec
+        !!!!1!!!!!!!!!!!!!!!!
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
             doscale = .true.
             scale   = smpd_scaled / smpd4scale
-            !Chiara
-            print *, 'SCALED!! motion_correct_aniso ', params_glob%scale, do_scale
             ldim4scale(1) = round2even(scale * real(ldim_scaled(1)))
             ldim4scale(2) = round2even(scale * real(ldim_scaled(2)))
             ldim4scale(3) = 1
         else
             ldim4scale = ldim_scaled
             smpd4scale = smpd_scaled
-            print *, '>>>>>>>>>>>>>>>>NOT SCALED!! motion_correct_aniso ', params_glob%scale, do_scale
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
         endif
         if( allocated(shifts) ) deallocate(shifts)
         ! construct
         if (ANISO_DBL) then
             allocate(motion_anisocor_dbl :: motion_aniso(nframes))
         else
-            allocate(motion_anisocor_sgl :: motion_aniso(nframes))
+            !allocate(motion_anisocor_sgl :: motion_aniso(nframes))
         end if
         allocate(movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
             &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_sp(nframes,POLY_DIM), &
@@ -540,6 +538,11 @@ contains
         PRINT_NEVALS = .true.
         do i=1,MITSREF_ANISO
             nimproved = 0
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            ! do iframe=1,nframes
+            !     if(i == 1) call movie_sum_global_threads(iframe)%read('TMPmovSUM.mrc') !for the first it set to avg of the frames
+            ! enddo
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
                 ! subtract the movie frame being correlated to reduce bias
@@ -570,14 +573,17 @@ contains
             corrfrac = corr_prev / corr
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             !!!!!!!!!!!!!!!!!!!!!!!!Chiara, to give an output for each of the 9 iterations (max)
-            print *, '>>>>>>>>>>>>>>BEFORE DOING >>>>>>>>>>>>>>>>>>>>>>'
-            call gen_aniso_sum()
-            call movie_sum_global%write('AnisoResIteration'//int2str(i)//'.mrc')
-            call motion_correct_aniso_calc_sums(movie_sum_global,movie_sum_global_pspec)
-            print*, 'generating power-spectra'
-            pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR)
-            call pspec_img%write('AnisoResIterationPOWERSPECTRUM'//int2str(i)//'.mrc')
-            print *, ">>>>>>>>>>>>>>>>>>>I AM DONE>>>>>>>>>>>>>>>>>>>>>>>>>"
+            ! print *, '>>>>>>>>>>>>>>BEFORE DOING >>>>>>>>>>>>>>>>>>>>>>'
+            ! call gen_aniso_sum()
+            ! call movie_sum_global%write('AnisoResIteration'//int2str(i)//'.mrc')
+            ! call motion_correct_aniso_calc_sums(movie_sum_global,movie_sum_global_pspec)
+            ! print*, 'generating power-spectra'
+            ! print *, "ANISO ANISO ANISO "
+            ! print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
+            ! pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR) !lp = 20
+            ! !pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR) !lp = 20
+            ! call pspec_img%write('AnisoResIterationPOWERSPECTRUM'//int2str(i)//'.mrc')
+            ! print *, ">>>>>>>>>>>>>>>>>>>I AM DONE>>>>>>>>>>>>>>>>>>>>>>>>>"
             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             if( nimproved == 0 .and. i > 2 )  exit
             if( i > 5 .and. corrfrac > 0.9999 ) exit
@@ -1102,13 +1108,13 @@ contains
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         if (.false.) then
-            call movie_sum_global%set_ft(.true.)
-            if( do_dose_weight )then
-                call gen_dose_weight_filter(filtarr)
-            endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
-            cmat_sum = cmplx(0.,0.)
-            !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
-            do iframe=ffromto(1),ffromto(2)
+        call movie_sum_global%set_ft(.true.)
+!!$        if( do_dose_weight )then
+!!$            call gen_dose_weight_filter(filtarr)
+!!$        endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
+        cmat_sum = cmplx(0.,0.)
+        !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+        do iframe=ffromto(1),ffromto(2)
 !!$            if( do_dose_weight )then
 !!$                call movie_frames_shifted_patched(iframe)%fft
 !!$                call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))

@@ -229,25 +229,37 @@ contains
     ! This subroutine calculates the logaritm of all the micrographs in a stack.
     ! It is meant to be applied to power spectra images, in order to decrease
     ! the influence of the central pixel.
-    subroutine apply_tvf_stack( fname2process, fname, smpd, lambda)
+    ! Edge detaction is more challengin in close to focus powerspectra
+    ! images. There are more appropriate settings for this case, in
+    ! order to set them, flag the variable 'close_to_focus'
+    subroutine apply_tvf_stack( fname2process, fname, smpd, lambda, close_to_focus)
         use simple_tvfilter
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd
-        real,             intent(in) :: lambda ! parameter for tv filtering
+        character(len=*),  intent(in) :: fname2process, fname
+        real,              intent(in) :: smpd
+        real,              intent(in) :: lambda ! parameter for tv filtering
+        logical, optional, intent(in) :: close_to_focus(:)
         type(image)       :: img
         integer           :: n, ldim(3), i
         type(tvfilter)    :: tvf
+        real              :: llambda !to override var lambda in case of close_to_focus imaging
+        logical, allocatable :: cclose_to_focus(:)
         call find_ldim_nptcls(fname2process, ldim, n)
+        if(present(close_to_focus) .and. size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; apply_tvf_stack')
+        allocate (cclose_to_focus(n), source = .false.)
+        if(present(close_to_focus)) cclose_to_focus = close_to_focus
         ldim(3) = 1
         call tvf%new()
         call raise_exception( n, ldim, 'apply_tvf_imgfile' )
         call img%new(ldim,smpd)
-        do i=1,n
+        llambda = lambda
+        do i = 1, n
+            if(cclose_to_focus(i)) llambda = 10.
             call img%read(fname2process, i)
             !call img%scale_pixels([1.,real(ldim(1))*2.+1.]) !not to have problems in calculating the log
-             call tvf%apply_filter(img, lambda)
-             call img%write(fname, i)
-        end do
+            call tvf%apply_filter(img, llambda)
+            call img%write(fname, i)
+            llambda = lambda !restore input
+        enddo
         call img%kill
     end subroutine apply_tvf_stack
 
@@ -258,23 +270,37 @@ contains
     !                -) logarithm of the image (after pixel scaling)
     !                -) background subtraction
     !                -) median filter
-    subroutine prepare_stack( fname2process, fname, smpd, lp)
+    subroutine prepare_stack( fname2process, fname, smpd, lp, close_to_focus)
         use simple_procimgfile,   only : subtr_backgr_imgfile, real_filter_imgfile
-        character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: smpd, lp
-        !integer,    :: winsz !for median filtering
+        character(len=*),  intent(in) :: fname2process, fname
+        real,              intent(in) :: smpd, lp
+        logical, optional, intent(in) :: close_to_focus(:)
+        integer     :: winsz !for median filtering
         integer     :: n, ldim(3), i
         type(image) :: img
         real        :: lambda !for tv filtering
+        logical, allocatable :: cclose_to_focus(:)
         call find_ldim_nptcls(fname2process, ldim, n)
+        if(present(close_to_focus) .and. size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; prepare_stack')
+        allocate (cclose_to_focus(n), source = .false.)
+        if(present(close_to_focus)) cclose_to_focus = close_to_focus
         ldim(3) = 1
         call img%new(ldim,smpd)
-        lambda = 1.
+        lambda  = 1 !10. for close to focus images
+        winsz   = 7 !just for close to focus images
         call raise_exception( n, ldim, 'calc_log_imgfile' )
         call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
-        call apply_tvf_stack(fname,fname,smpd,lambda)
+        call apply_tvf_stack(fname,fname,smpd,lambda,cclose_to_focus)
         call subtr_backgr_imgfile( fname, fname, smpd, lp )
-        !call real_filter_imgfile(fname, fname, smpd, 'median', winsz)
+        write(logfhandle,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname, i)
+            if(cclose_to_focus(i)) then !otherwise do not median filter
+                call img%real_space_filter(winsz, 'median')
+            endif
+            call img%write(fname, i)
+        end do
         call img%kill
     end subroutine prepare_stack
 

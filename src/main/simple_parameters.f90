@@ -469,7 +469,7 @@ contains
         call check_carg('append',         self%append)
         call check_carg('async',          self%async)
         call check_carg('automsk',        self%automsk)
-        call check_carg('automatic',      self%automatic)          !!!!!!!!!!!!!ADDED BY CHIARA
+        call check_carg('automatic',      self%automatic)
         call check_carg('autoscale',      self%autoscale)
         call check_carg('avg',            self%avg)
         call check_carg('bin',            self%bin)
@@ -483,7 +483,7 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
-        call check_carg('detector',       self%detector)           !!!!!!!!!!!!!ADDED BY CHIARA
+        call check_carg('detector',       self%detector)   
         call check_carg('dfunit',         self%dfunit)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)
@@ -760,8 +760,8 @@ contains
         call check_rarg('ndev',           self%ndev)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
-        call check_rarg('part_concentration', self%part_concentration)  !!!ADDED BY CHIARA
-        call check_rarg('part_radius',    self%part_radius)             !!!ADDED BY CHIARA
+        call check_rarg('part_concentration', self%part_concentration)
+        call check_rarg('part_radius',    self%part_radius)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
@@ -772,8 +772,8 @@ contains
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)
         call check_rarg('thres',          self%thres)
-        call check_rarg('thres_low',      self%thres_low)               !!!ADDED BY CHIARA
-        call check_rarg('thres_up',       self%thres_up)                 !!!ADDED BY CHIARA
+        call check_rarg('thres_low',      self%thres_low)
+        call check_rarg('thres_up',       self%thres_up)
         call check_rarg('time_per_image', self%time_per_image)
         call check_rarg('trs',            self%trs)
         call check_rarg('motion_correctftol', self%motion_correctftol)
