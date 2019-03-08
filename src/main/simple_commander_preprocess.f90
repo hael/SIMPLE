@@ -547,8 +547,8 @@ contains
         class(cmdline),               intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir
         type(parameters)   :: params
-        type(image)        :: mic_shrunken, mic_bin, mic_copy
-        type(image)        :: imgcc, imgwi
+        type(image)        :: mic_shrunken, mic_copy
+        type(image)        :: imgcc
         integer            :: ldim_shrunken(3), box_shrunken, winsz, min_sz, max_sz
         real               :: part_radius
         real,    parameter :: SHRINK = 4.
@@ -845,7 +845,6 @@ contains
                     endif
                 endif
                 ! filter out frequencies lower than the box can express to avoid aliasing
-                call micrograph%bp(real(params%box) * params%smpd, 0.)
                 call micrograph%ifft ! need to be here in case it was flipped
                 ! write new stack
                 stk_stats(1)   = huge(stk_stats(1))
@@ -1006,6 +1005,8 @@ contains
             write(logfhandle,'(A)')'>>> EXTRACTING... '
             call spproj_in%read_segment('ptcl3D', params%projfile)
             allocate(ptcl_mask(spproj_in%os_ptcl2D%get_noris()),source=.false.)
+            ! set normalization radius & mask
+            params%msk = RADFRAC_NORM_EXTRACT * real(params%box/2)
             call mskimg%disc([params%box,params%box,1], params%smpd, params%msk, pmsk)
             call mskimg%kill
             call micrograph%new([ldim(1),ldim(2),1], params%smpd)
@@ -1029,7 +1030,6 @@ contains
                         call tfun%apply_serial(micrograph, 'flip', ctfparms)
                     endif
                 endif
-                call micrograph%bp(real(params%box) * params%smpd, 0.)
                 call micrograph%ifft ! need to be here in case it was flipped
                 stack = trim(EXTRACT_STK_FBODY)//trim(basename(mic_name))
                 ! particles extraction loop
@@ -1260,11 +1260,10 @@ contains
         type(sym)                     :: pgrpsyms
         type(image)                   :: ref3D, ref2D
         type(image),      allocatable :: projs(:)
-        character(len=:), allocatable :: imgkind
         integer, parameter :: NREFS=100, NPROJS=20
         real    :: ang, rot, smpd_here
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
-        integer :: ncls2D, cnt, n_os_out, i, norefs
+        integer :: cnt, norefs
         ! set oritype
         call cline%set('oritype', 'mic')
         ! parse parameters

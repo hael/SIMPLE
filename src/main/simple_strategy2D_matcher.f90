@@ -91,8 +91,7 @@ contains
             l_partial_sums = params_glob%l_frac_update
             l_frac_update  = params_glob%l_frac_update
             l_snhc         = .false.
-            l_greedy       = (params_glob%refine.eq.'greedy') .or. (params_glob%l_match_filt)&
-                            &.or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
+            l_greedy       = (params_glob%refine.eq.'greedy') .or.(params_glob%cc_objfun.eq.OBJFUN_EUCLID)
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)

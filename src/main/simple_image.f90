@@ -711,7 +711,7 @@ contains
         integer,           intent(in)    :: coord(2), box
         class(image),      intent(inout) :: self_out
         integer, optional, intent(inout) :: noutside
-        integer :: fromc(2), toc(2), xoshoot, yoshoot, xushoot, yushoot, xboxrange(2), yboxrange(2)
+        integer :: i, fromc(2), toc(2), xoshoot, yoshoot, xushoot, yushoot, xboxrange(2), yboxrange(2)
         if( self_in%ldim(3) > 1 ) THROW_HARD('only 4 2D images; window')
         if( self_in%is_ft() )     THROW_HARD('only 4 real images; window')
         if( self_out%exists() )then
@@ -751,6 +751,26 @@ contains
         yboxrange(2)  = box      - yoshoot
         self_out%rmat = 0.
         self_out%rmat(xboxrange(1):xboxrange(2),yboxrange(1):yboxrange(2),1) = self_in%rmat(fromc(1):toc(1),fromc(2):toc(2),1)
+        if( xboxrange(1) > 1 )then
+            do i=1,xboxrange(1)
+                self_out%rmat(i,:,1) = self_out%rmat(xboxrange(1),:,1)
+            enddo
+        endif
+        if( xboxrange(2) < self_out%ldim(1) )then
+            do i=xboxrange(2),self_out%ldim(1)
+                self_out%rmat(i,:,1) = self_out%rmat(xboxrange(2),:,1)
+            enddo
+        endif
+        if( yboxrange(1) > 1 )then
+            do i=1,yboxrange(1)
+                self_out%rmat(:,i,1) = self_out%rmat(:,yboxrange(1),1)
+            enddo
+        endif
+        if( yboxrange(2) < self_out%ldim(2) )then
+            do i=yboxrange(2),self_out%ldim(2)
+                self_out%rmat(:,i,1) = self_out%rmat(:,yboxrange(2),1)
+            enddo
+        endif
     end subroutine window
 
     !>  window_slim  extracts a particle image from a box as defined by EMAN 1.9
@@ -4412,28 +4432,30 @@ contains
         call img_filt%kill()
     end subroutine real_space_filter
 
-    !!!!!!!ADDED BY CHIARA, still to work on, to make it faster
+    !>  \brief Non-local mean filter
     subroutine NLmean(self)
-      class(image), intent(inout) :: self
-      real,  allocatable :: rmat_pad(:,:)
-      integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
-      integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
-      real               :: exponentials(2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW)
-      real               :: z, sigma, h, h_sq
-      integer            :: i, j, m, n, pad, indi, indj
-      pad   = (DIM_SW-1)/2
-      sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
-      h     = 4.*sigma !h = 12.*sigma
-      h_sq  = h**2.
-      allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad), source=0.)
-      rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(:,:,1)
-      !$omp parallel do default(shared) private(m,n,sw_px,exponentials,i,j,indi,indj,z) schedule(static)&
-      !$omp collapse(2) proc_bind(close)
-      do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
+        class(image), intent(inout) :: self
+        real,  allocatable :: rmat_pad(:,:)
+        integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
+        integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
+        real               :: exponentials(2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW)
+        real               :: z, sigma, h, h_sq
+        integer            :: i, j, m, n, pad, indi, indj
+        if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
+        if( .not.self%ft ) THROW_HARD('Real space only; NLmean')
+        pad   = (DIM_SW-1)/2
+        sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
+        h     = 4.*sigma
+        h_sq  = h**2.
+        allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad), source=0.)
+        rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(:,:,1)
+        !$omp parallel do default(shared) private(m,n,sw_px,exponentials,i,j,indi,indj,z) schedule(static)&
+        !$omp collapse(2) proc_bind(close)
+        do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
         do n = cfr_box+1,self%ldim(2)-cfr_box-1
-          sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
-          exponentials = 0.
-          do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
+            sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1)
+            exponentials = 0.
+            do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
               indi = i+cfr_box+1
               do j = -cfr_box,cfr_box
                   if( i==0 .and. j==0 )cycle
@@ -4441,15 +4463,15 @@ contains
                   exponentials(indi,indj) = &
                   & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1, n+j:n+j+DIM_SW-1))**2. )/h_sq) !euclidean norm
               enddo
-          enddo
-          z = sum(exponentials)
-          if(z < 0.001) cycle
-          self%rmat(m,n,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
+            enddo
+            z = sum(exponentials)
+            if(z < 0.0001) cycle
+            self%rmat(m,n,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
         enddo
-      enddo
-      !$omp end parallel do
-      deallocate(rmat_pad)
-end subroutine NLmean
+        enddo
+        !$omp end parallel do
+        deallocate(rmat_pad)
+    end subroutine NLmean
 
     ! CALCULATORS
 

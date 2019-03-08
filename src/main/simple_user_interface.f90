@@ -3103,7 +3103,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_distr_exec',&                                                   ! executable
-        &0, 3, 0, 1, 4, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 3, 0, 1, 6, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3113,7 +3113,7 @@ contains
         call tseries_track%set_input('parm_ios', 2, 'boxfile', 'file', 'List of particle coordinates',&
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call tseries_track%set_input('parm_ios', 3, 'ctf', 'binary', 'CTF status of output stacks',&
-        &'CTF status of output stacks(flip|no){no}', '(flip|no){no}', .true., 'no')
+        &'CTF status of output stacks(flip|no)', '(flip|no)', .true., '')
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3126,9 +3126,11 @@ contains
         call tseries_track%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the particle and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
         call tseries_track%set_input('filt_ctrls', 3, 'lp_backgr', 'num','Background subtraction low-pass resolution',&
-            &'Low-pass resolution for background subtraction{1.1}', 'low-pass limit in Angstroms', .false., 1.1)
+            &'Low-pass resolution for background subtraction{1.1}', 'low-pass limit in Angstroms{1.1}', .false., 1.1)
         call tseries_track%set_input('filt_ctrls', 4, 'filter', 'multi','Alternative filter for particle tracking',&
             &'Alternative filter for particle tracking(no|tv|nlmean){no}', '(no|tv|nlmean){no}', .false., 'no')
+        call tseries_track%set_input('filt_ctrls', 5, hp)
+        call tseries_track%set_input('filt_ctrls', 6, 'width', 'num', 'Low-pass bandwidth', 'Low-pass bandwidth', '# Fourier pixels{5}', .false., 5.)
         ! mask controls
         ! <empty>
         ! computer controls

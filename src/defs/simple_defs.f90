@@ -116,7 +116,7 @@ real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.     !< default low-pass limit 
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
 real,    parameter :: PICKER_SHRINK_REFINE = 2.        !< picker shrink factor, peak refine step
 real,    parameter :: GAUPICK_SIGMA_SHRINK = 13.0      !< picker shrink factor, Gaussian convolution
-real,    parameter :: RADFRAC_NORM_EXTRACT = 0.8       !< radius fraction for extraction background normalization
+real,    parameter :: RADFRAC_NORM_EXTRACT = 0.75      !< radius fraction for extraction background normalization
 integer, parameter :: PICKER_OFFSET        = 3         !< picker offset for grid search
 
 ! constants for masking/interpolation

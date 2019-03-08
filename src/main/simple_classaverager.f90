@@ -458,7 +458,7 @@ contains
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     iprec = iprecs(batches(batch,1) + i - 1)
                     iori  = ioris(batches(batch,1) + i - 1)
-                    ! normalise and FFT
+                    ! FFT
                     call batch_imgs(i)%fft()
                     ! apply CTF, shift
                     if( phaseplate )then
