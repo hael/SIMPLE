@@ -44,7 +44,7 @@ type(ft_expanded),   allocatable :: movie_frames_ftexp(:)             !< movie f
 type(ft_expanded),   allocatable :: movie_frames_ftexp_sh(:)          !< shifted movie frames
 type(ft_expanded),   allocatable :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
 real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
-real,                allocatable :: cumul_shifts(:,:)                 !< cumulative shifts
+real,                allocatable :: shifts_toplot(:,:)                !< shifts for plotting (in patch-based mc)
 real,                allocatable :: opt_shifts_saved(:,:)             !< optimal shifts for local opt saved
 
 ! data structures for patch-based motion correction
@@ -154,7 +154,7 @@ contains
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
         end if
         if ( motion_correct_with_patched ) then
-            allocate( cumul_shifts(nframes, 2), source=0., stat=alloc_stat )
+            allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
         end if
         do iframe=1,nframes
@@ -180,6 +180,7 @@ contains
         corrs              = 0.
         opt_shifts         = 0.
         opt_shifts_saved   = 0.
+        shifts_toplot       = 0.
         frameweights       = 1./real(nframes)
         frameweights_saved = frameweights
         ! gain reference
@@ -681,7 +682,7 @@ contains
     subroutine motion_correct_patched()
         real    :: corr, corr_prev, corrfrac
         real    :: scale, smpd4scale
-        integer :: iframe, i, ldim4scale(3), ithr
+        integer :: iframe, ldim4scale(3), ithr
         logical :: didsave, doscale
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
@@ -715,18 +716,12 @@ contains
         corr_saved = -1.
         didsave    = .false.
         PRINT_NEVALS = .true.
-        !$omp parallel do schedule(static) default(shared) private(iframe,ithr) proc_bind(close)
-        do iframe=1,nframes
-            ! subtract the movie frame being correlated to reduce bias
-            call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_patched(iframe), w=frameweights(iframe))
-        end do
-        !$omp end parallel do
         ! apply deformation
-        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, cumul_shifts )
+        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
         ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
         ! (see below)
         corr_prev = corr
-        call gen_patched_wsum_calc_corrs(i)
+        call gen_patched_wsum_calc_corrs(0)
         corr = sum(corrs) / real(nframes)
         if( corr >= corr_saved )then ! save the local optimum
             corr_saved             = corr
@@ -764,8 +759,6 @@ contains
                 else
                     corr = movie_frames_shifted_patched(iframe)%real_corr(movie_sum_global_threads(iframe))
                 endif
-                ! add the subtracted movie frame back to the weighted sum
-                call movie_sum_global_threads(iframe)%add(movie_frames_shifted_patched(iframe), w=frameweights(iframe))
             end do
             !$omp end do
             !$omp end parallel
@@ -805,7 +798,7 @@ contains
             end do
             deallocate(movie_frames_shifted_patched, movie_sum_global_threads, movie_frames_shifted_saved)
         endif
-        if ( allocated(cumul_shifts) ) deallocate(cumul_shifts)
+        if ( allocated(shifts_toplot) ) deallocate(shifts_toplot)
     end subroutine motion_correct_patched_kill
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -871,8 +864,8 @@ contains
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
             if ( motion_correct_with_patched ) then
-                cumul_shifts(iframe,1) = cumul_shifts(iframe,1)  + shifts(iframe, 1)
-                cumul_shifts(iframe,2) = cumul_shifts(iframe,2)  + shifts(iframe, 2)
+                shifts_toplot(iframe,1) = shifts(iframe, 1)
+                shifts_toplot(iframe,2) = shifts(iframe, 2)
             end if
         end do
         if( imode == 0 )then
