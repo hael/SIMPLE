@@ -1343,7 +1343,7 @@ contains
                 self%l_match_filt  = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                self%l_match_filt  = trim(self%match_filt).eq.'yes'
+                self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. self%l_eo
         end select
         ! local resolution for filtering or  not
         self%l_locres = .false.

@@ -180,7 +180,6 @@ contains
         corrs              = 0.
         opt_shifts         = 0.
         opt_shifts_saved   = 0.
-        shifts_toplot       = 0.
         frameweights       = 1./real(nframes)
         frameweights_saved = frameweights
         ! gain reference

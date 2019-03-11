@@ -662,7 +662,7 @@ contains
                     call build_glob%vol2%read(fname_vol_filter)
                     call build_glob%vol%apply_filter(build_glob%vol2)
                 else
-                    ! matched filter based on Rosenthal & Henderson, 2003
+                    ! match filter based on Rosenthal & Henderson, 2003
                     if( any(build_glob%fsc(s,:) > 0.143) )then
                         call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
                         call build_glob%vol%apply_filter(filter)

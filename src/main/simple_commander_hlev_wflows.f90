@@ -97,6 +97,8 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('wfun',       'bilinear')
         call cline_cluster2D1%set('autoscale',  'no')
+        call cline_cluster2D1%set('ptclw',      'no')
+        call cline_cluster2D1%set('eo',         'no')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
@@ -108,6 +110,7 @@ contains
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
+        call cline_cluster2D2%set('eo',         'no')
         if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling
@@ -616,7 +619,8 @@ contains
         call cline_refine3D_snhc%set('lp',      lplims(1))
         call cline_refine3D_snhc%set('nspace',  real(NSPACE_SNHC))
         call cline_refine3D_snhc%set('maxits',  real(MAXITS_SNHC))
-        call cline_refine3D_snhc%set('ptclw',   'no')  ! no soft particle weights in first phase
+        call cline_refine3D_snhc%set('match_filt', 'no')
+        call cline_refine3D_snhc%set('ptclw',      'no')  ! no soft particle weights in first phase
         call cline_refine3D_snhc%delete('update_frac') ! no fractional update in first phase
         ! (2) REFINE3D_INIT
         call cline_refine3D_init%set('prg',      'refine3D')
@@ -626,7 +630,8 @@ contains
         call cline_refine3D_init%set('maxits',   real(MAXITS_INIT))
         call cline_refine3D_init%set('vol1',     trim(SNHCVOL)//trim(str_state)//params%ext)
         call cline_refine3D_init%set('lp',       lplims(1))
-        call cline_refine3D_init%set('ptclw',   'no')  ! no soft particle weights in init phase
+        call cline_refine3D_init%set('match_filt','no')
+        call cline_refine3D_init%set('ptclw',     'no')  ! no soft particle weights in init phase
         if( .not. cline_refine3D_init%defined('nspace') )then
             call cline_refine3D_init%set('nspace', real(NSPACE_INIT))
         endif
@@ -658,10 +663,11 @@ contains
         call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
         if( do_eo )then
             call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('eo',         'yes')
-            call cline_refine3D_refine%set('lplim_crit', 0.5)
-            call cline_refine3D_refine%set('lpstop',     lplims(2))
-            call cline_refine3D_refine%set('clsfrcs',   'yes')
+            call cline_refine3D_refine%set('eo',          'yes')
+            call cline_refine3D_refine%set('lplim_crit',  0.5)
+            call cline_refine3D_refine%set('lpstop',      lplims(2))
+            call cline_refine3D_refine%set('clsfrcs',    'yes')
+            call cline_refine3D_refine%set('match_filt', 'yes')
         else
             call cline_refine3D_refine%set('lp', lplims(2))
         endif
@@ -940,7 +946,7 @@ contains
         orig_projfile   = trim(params%projfile)
         params%projfile = trim(params%cwd)//'/'//trim(params%projname)//trim(METADATA_EXT)
         call cline%set('projfile',params%projfile)
-        if(params%eo .eq. 'no' .and. .not.cline%defined('lp')) THROW_HARD('need lp input when eo .eq. no; cluster3D')
+        if( .not.params%l_eo .and. .not.cline%defined('lp') ) THROW_HARD('need lp input when eo .eq. no; cluster3D')
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! prep project
@@ -1017,10 +1023,10 @@ contains
         deallocate(labels)
 
         ! e/o partition
-        if( params%eo.eq.'no' )then
-            call os%set_all2single('eo', -1.)
-        else
+        if( params%l_eo )then
             if( os%get_nevenodd() == 0 ) call os%partition_eo
+        else
+            call os%set_all2single('eo', -1.)
         endif
         if( trim(params%refine) .eq. 'sym' )then
             ! randomize projection directions with respect to symmetry
@@ -1033,7 +1039,8 @@ contains
         call cline%delete('refine')
         ! resolution limits
         if( trim(params%oritype).eq.'cls3D' )then
-            params%eo = 'no'
+            params%eo   = 'no'
+            params%l_eo = .false.
             call cline%set('eo','no')
             call cline%set('lp',lp_cls3D)
         else
@@ -1061,7 +1068,7 @@ contains
             case DEFAULT
                 call cline_refine3D1%set('refine', 'cluster')
         end select
-        !call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
+        call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
         call cline_refine3D2%set('match_filt','no')
@@ -1084,7 +1091,7 @@ contains
 
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( params%eo .ne. 'no' )then
+        if( params%l_eo )then
             work_proj%os_ptcl3D = os
             call work_proj%write
             call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
