@@ -284,8 +284,8 @@ select case(prg)
     case( 'tseries_ctf_estimate' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! set defaults
-        if( .not. cline%defined('hp') ) call cline%set('hp', 30.)
-        if( .not. cline%defined('lp') ) call cline%set('lp',  5.)
+        if( .not. cline%defined('hp') ) call cline%set('hp', 10.)
+        if( .not. cline%defined('lp') ) call cline%set('lp', 2.5)
         call xtseries_ctf_estimate%execute(cline)
 
     ! SYSTEM INTERACTION PROGRAMS

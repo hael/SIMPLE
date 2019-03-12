@@ -3088,8 +3088,10 @@ contains
         ! filter controls
         call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
         tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
+        tseries_ctf_estimate%filt_ctrls(1)%rval_default = 2.5
         call tseries_ctf_estimate%set_input('filt_ctrls', 2, hp)
         tseries_ctf_estimate%filt_ctrls(2)%required     = .false.
+        tseries_ctf_estimate%filt_ctrls(2)%rval_default = 10.
         ! mask controls
         ! <empty>
         ! computer controls

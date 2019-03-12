@@ -66,7 +66,7 @@ character(len=*), parameter :: STREAM_SELMICS       = './stream_selected_mics.tx
 character(len=*), parameter :: TERM_STREAM          = './SIMPLE_TERM_STREAM'
 character(len=*), parameter :: PAUSE_STREAM         = './SIMPLE_PAUSE_STREAM'
 ! MISCELLANEOUS
-character(len=*), parameter :: NIL                  = 'nil'
+character(len=3), parameter :: NIL                  = 'nil'
 character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
 ! character constants
 character(len=*), parameter :: NEWLINE              = new_line('a')
