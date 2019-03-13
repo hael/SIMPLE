@@ -535,7 +535,7 @@ contains
         type(ctfparams)               :: prev_ctfvars
         character(len=:), allocatable :: name
         character(len=LONGSTRLEN)     :: rel_moviename
-        integer                       :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot
+        integer                       :: imic, ldim(3), nframes, nmics, nprev_mics, cnt, ntot, nframes_first
         logical                       :: is_movie
         is_movie = .true.
         ! oris object pointer
@@ -558,6 +558,7 @@ contains
             call os_ptr%reallocate(ntot)
         endif
         cnt = 0
+        nframes_first = 0
         do imic=nprev_mics + 1,ntot
             cnt = cnt + 1
             call make_relativepath(CWD_GLOB,movies_array(cnt),rel_moviename)
@@ -565,14 +566,25 @@ contains
             if( nframes <= 0 )then
                 THROW_WARN('# frames in movie: '//trim(movies_array(imic))//' <= zero, omitting')
                 cycle
-            else if( nframes > 1 )then
-                call os_ptr%set(imic, 'movie', trim(rel_moviename))
-                call os_ptr%set(imic, 'imgkind', 'movie')
-                is_movie = .true.
             else
-                call os_ptr%set(imic, 'intg',  trim(rel_moviename))
-                call os_ptr%set(imic, 'imgkind', 'mic')
-                is_movie = .false.
+                if( nframes > 1 )then
+                    call os_ptr%set(imic, 'movie', trim(rel_moviename))
+                    call os_ptr%set(imic, 'imgkind', 'movie')
+                    is_movie = .true.
+                else
+                    call os_ptr%set(imic, 'intg',  trim(rel_moviename))
+                    call os_ptr%set(imic, 'imgkind', 'mic')
+                    is_movie = .false.
+                endif
+                if( nframes_first == 0 )then
+                    nframes_first = nframes
+                else
+                    if( nframes /= nframes_first )then
+                        write(logfhandle,*) trim(rel_moviename), ' has ', nframes, ' frame(s)'
+                        write(logfhandle,*) 'Previous import have ', nframes_first, ' frame(s)'
+                        THROW_HARD('You cannot import both micrographs and movies at the same time! add_movies')
+                    endif
+                endif
             endif
             ! updates segment
             call os_ptr%set(imic, 'xdim',    real(ldim(1)))

@@ -985,8 +985,6 @@ contains
                 if( .not.file_exists(mic_name) )cycle
                 call find_ldim_nptcls(mic_name, ldim_foo, nframes )
                 if( nframes > 1 ) THROW_HARD('multi-frame extraction not supported; exec_reextract')
-                if( ldim_foo(1).ne.nint(o_mic%get('xdim')) )THROW_HARD('Inconsistent x dimensions; exec_reextract')
-                if( ldim_foo(2).ne.nint(o_mic%get('ydim')) )THROW_HARD('Inconsistent y dimensions; exec_reextract')
                 if( any(ldim == 0) ) ldim = ldim_foo
                 stk_ind = mic2stk_inds(imic)
                 o_stk   = spproj_in%os_stk%get_ori(stk_ind)
