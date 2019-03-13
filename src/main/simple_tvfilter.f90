@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 private
-public :: tvfilter
+public :: tvfilter, test_tvfilter
 #include "simple_local_flags.inc"
 
 type :: tvfilter
@@ -239,6 +239,49 @@ contains
 
     end subroutine fill_r
 
+    !>  TEST ROUTINE
+    subroutine test_tvfilter( ldim, smpd, lambda )
+        integer, intent(in) :: ldim(3)
+        real,    intent(in) :: smpd, lambda
+        type(tvfilter) :: tv
+        type(image)    :: img_ref, img_filt, img_tmp
+        real           :: cc
+        integer        :: i, j, in, jn
+        write(logfhandle,*)'>>> REPRODUCIBILITY'
+        call tv%new()
+        call img_ref%ring(ldim, smpd, real(minval(ldim(1:2)))/4., real(minval(ldim(1:2)))/6.)
+        call img_ref%add_gauran(1.)
+        call img_ref%shift([32.,48.,0.])
+        call img_tmp%ring(ldim, smpd, real(minval(ldim(1:2)))/7., real(minval(ldim(1:2)))/8.)
+        call img_tmp%mul(4.)
+        call img_tmp%add_gauran(0.5)
+        call img_ref%add(img_tmp)
+        call img_ref%add_gauran(0.5)
+        call img_tmp%kill
+        call img_ref%write('test_tvfilter.mrc')
+        img_filt = img_ref
+        call tv%apply_filter(img_filt, lambda)
+        call img_filt%write('test_tvfilter_filt.mrc')
+        in = 10
+        jn = 10
+        do j=1,jn
+            call tv%new()
+            call progress(j,jn)
+            do i = 1,in
+                img_tmp = img_ref
+                call tv%apply_filter(img_tmp, lambda)
+                cc = img_filt%real_corr(img_tmp)
+                if( cc < 0.99 )then
+                    write(logfhandle,*)'*** Fail at trial: ',i,' - ',j
+                    call img_tmp%write('test_tvfilter_filt_'//int2str(i)//'_'//int2str(j)//'.mrc')
+                endif
+            enddo
+            call tv%kill
+            call img_tmp%kill
+        enddo
+    end subroutine test_tvfilter
+
+    !>  DESTRUCTOR
     subroutine kill_tvfilter( self )
         class(tvfilter), intent(inout) :: self
         call self%r_img%kill()

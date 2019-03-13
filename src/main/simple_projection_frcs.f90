@@ -36,6 +36,7 @@ contains
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
+    procedure          :: downscale
     ! I/O
     procedure          :: read
     procedure          :: write
@@ -251,6 +252,23 @@ contains
         lp = median(lp3)
     end function estimate_lp_for_align
 
+    subroutine downscale( self, newbox, self_out )
+        use simple_estimate_ssnr, only: subsample_optlp
+        class(projection_frcs), intent(in)  :: self
+        integer,                intent(in)  :: newbox
+        type(projection_frcs),  intent(out) :: self_out
+        integer :: istate, iproj
+        real    :: new_smpd
+        if( newbox > self%box4frc_calc ) THROW_HARD('New > old filter size; downscale')
+        new_smpd = self%smpd * real(self%box4frc_calc) / real(newbox)
+        call self_out%new(self%nprojs, newbox, new_smpd, self%nstates)
+        do istate = 1,self%nstates
+            do iproj = 1,self%nprojs
+                call subsample_optlp(self%filtsz, self_out%filtsz, self%frcs(istate, iproj,:), self_out%frcs(istate, iproj,:))
+            enddo
+        enddo
+    end subroutine downscale
+
     ! I/O
 
     subroutine read( self, fname )
@@ -263,7 +281,7 @@ contains
         ! re-create the object according to file_header info
         call self%new(nint(self%file_header(1)), nint(self%file_header(2)), self%file_header(3), nint(self%file_header(4)))
         read(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='projection_frcs; read; fhandle cose')
+        call fclose(funit, errmsg='projection_frcs; read; fhandle close')
     end subroutine read
 
     subroutine write( self, fname )
@@ -274,7 +292,7 @@ contains
         call fileiochk('projection_frcs; write; open for write '//trim(fname), io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) self%frcs
-        call fclose(funit, errmsg='projection_frcs; write; fhandle cose')
+        call fclose(funit, errmsg='projection_frcs; write; fhandle close')
     end subroutine write
 
     subroutine print_frcs( self, fname, state )
