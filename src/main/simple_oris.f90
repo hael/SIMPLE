@@ -2568,12 +2568,11 @@ contains
         class(oris), intent(inout) :: self
         class(ori),  intent(in) :: o_in
         real    :: dists(self%n)
-        integer :: loc(1), closest, i
+        integer :: closest, i
         do i=1,self%n
             dists(i)=self%o(i).euldist.o_in
         end do
-        loc     = minloc( dists )
-        closest = loc(1)
+        closest = minloc( dists, dim=1 )
     end function find_closest_proj
 
     !>  \brief  method for discretization of the projection directions

@@ -6,6 +6,7 @@ use simple_oris,  only: oris
 implicit none
 
 public :: open_o_peaks_io, close_o_peaks_io, write_empty_o_peaks_file, write_o_peak, read_o_peak
+public :: get_o_peak_filesz
 private
 #include "simple_local_flags.inc"
 
@@ -154,5 +155,16 @@ contains
             end do
         endif
     end subroutine read_o_peak
+
+    integer function get_o_peak_filesz( fname )
+        character(len=*), intent(in) :: fname
+        type(o_peak_ori) :: o_peak_record(NPEAKS2REFINE)
+        integer :: recsz, o_peak_recsz
+        get_o_peak_filesz = 0
+        inquire(iolength=o_peak_recsz) o_peak_record
+        inquire(file=fname, size=recsz)
+        if( mod(recsz,o_peak_recsz) /= 0 ) THROW_HARD('OPEAKS file has inconsistent size: '//trim(fname))
+        get_o_peak_filesz = recsz / o_peak_recsz
+    end function get_o_peak_filesz
 
 end module simple_o_peaks_io

@@ -968,9 +968,10 @@ contains
 
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
-        use simple_oris,             only: oris
-        use simple_sym,              only: sym
-        use simple_cluster_seed,     only: gen_labelling
+        use simple_o_peaks_io
+        use simple_oris,                   only: oris
+        use simple_sym,                    only: sym
+        use simple_cluster_seed,           only: gen_labelling
         use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
@@ -980,22 +981,25 @@ contains
         character(len=*),  parameter :: one            = '01'
         character(len=12), parameter :: cls3D_projfile = 'cls3D.simple'
         ! distributed commanders
-        type(refine3D_distr_commander)      :: xrefine3D_distr
-        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
+        type(refine3D_distr_commander)         :: xrefine3D_distr
+        type(reconstruct3D_distr_commander)    :: xreconstruct3D_distr
         ! command lines
-        type(cmdline)                 :: cline_refine3D1, cline_refine3D2
-        type(cmdline)                 :: cline_reconstruct3D_mixed_distr
+        type(cmdline)                          :: cline_refine3D1, cline_refine3D2
+        type(cmdline)                          :: cline_reconstruct3D_mixed_distr
+        type(cmdline)                          :: cline_reconstruct3D_multi_distr
         ! other variables
-        type(parameters)              :: params
-        type(sym)                     :: symop
-        type(sp_project)              :: spproj, work_proj
-        type(oris)                    :: os
-        type(ctfparams)               :: ctfparms
-        character(len=:), allocatable :: cavg_stk, orig_projfile
-        real,             allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
-        integer,          allocatable :: labels(:), states(:), tmp_iarr(:)
-        real     :: trs, extr_init, lp_cls3D
-        integer  :: iter, startit, rename_stat, ncls
+        type(parameters)                       :: params
+        type(sym)                              :: symop
+        type(sp_project)                       :: spproj, work_proj
+        type(oris)                             :: os, opeaks
+        type(ctfparams)                        :: ctfparms
+        character(len=:),          allocatable :: cavg_stk, orig_projfile, prev_vol, target_name
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        real,                      allocatable :: corrs(:), x(:), z(:), res(:), tmp_rarr(:)
+        integer,                   allocatable :: labels(:), states(:), tmp_iarr(:)
+        real     :: trs, extr_init, lp_cls3D, smpdfoo
+        integer  :: i, iter, startit, rename_stat, ncls, boxfoo, iptcl, ipart
+        integer  :: nptcls_part, istate, n_nozero
         logical  :: fall_over, cavgs_import
         ! sanity check
         if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
@@ -1108,25 +1112,13 @@ contains
         cline_refine3D1                 = cline ! first stage, extremal optimization
         cline_refine3D2                 = cline ! second stage, stochastic refinement
         cline_reconstruct3D_mixed_distr = cline
+        cline_reconstruct3D_multi_distr = cline
         ! first stage
-        call cline_refine3D1%set('prg',    'refine3D')
-        call cline_refine3D1%set('match_filt',   'no')
-        call cline_refine3D1%set('maxits', real(MAXITS1))
-        call cline_refine3D1%set('neigh',  'yes') ! always consider neighbours
-        call cline_refine3D1%set('nnn',    0.05*real(params%nspace))
-        select case(trim(params%refine))
-            case('soft')
-                call cline_refine3D1%set('refine',  'softcluster')
-                call cline_refine3D1%set('neigh',   'no')
-                call cline_refine3D1%set('continue','yes')
-            case('sym')
-                call cline_refine3D1%set('refine', 'clustersym')
-                call cline_refine3D2%delete('neigh') ! no neighbour mode for symmetry
-                call cline_refine3D2%delete('nnn')
-                call cline_refine3D2%set('pgrp','c1')
-            case DEFAULT
-                call cline_refine3D1%set('refine', 'cluster')
-        end select
+        call cline_refine3D1%set('prg',       'refine3D')
+        call cline_refine3D1%set('match_filt','no')
+        call cline_refine3D1%set('maxits',     real(MAXITS1))
+        call cline_refine3D1%set('neigh',     'yes') ! always consider neighbours
+        call cline_refine3D1%set('nnn',        0.05*real(params%nspace))
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
@@ -1134,10 +1126,15 @@ contains
         call cline_refine3D2%set('refine', 'multi')
         if( .not.cline%defined('update_frac') )call cline_refine3D2%set('update_frac', 0.5)
         ! reconstructions
-        call cline_reconstruct3D_mixed_distr%set('prg', 'reconstruct3D')
-        call cline_reconstruct3D_mixed_distr%delete('lp')
+        call cline_reconstruct3D_mixed_distr%set('prg',    'reconstruct3D')
         call cline_reconstruct3D_mixed_distr%set('nstates', 1.)
-        if( trim(params%refine) .eq. 'sym' ) call cline_reconstruct3D_mixed_distr%set('pgrp', 'c1')
+        call cline_reconstruct3D_mixed_distr%delete('lp')
+        call cline_reconstruct3D_multi_distr%set('prg', 'reconstruct3D')
+        call cline_reconstruct3D_multi_distr%delete('lp')
+        if( trim(params%refine) .eq. 'sym' )then
+            call cline_reconstruct3D_multi_distr%set('pgrp','c1')
+            call cline_reconstruct3D_mixed_distr%set('pgrp','c1')
+        endif
         if( cline%defined('trs') )then
             ! all good
         else
@@ -1147,13 +1144,44 @@ contains
             call cline_refine3D1%set('trs',trs)
             call cline_refine3D2%set('trs',trs)
         endif
+        ! refinement specific section
+        select case(trim(params%refine))
+            case('soft')
+                call cline_refine3D1%set('refine','clustersoft')
+                call cline_refine3D1%set('neigh', 'no')
+                call cline_reconstruct3D_mixed_distr%set('dir_refine',PATH_HERE)
+                call cline_reconstruct3D_multi_distr%set('dir_refine',PATH_HERE)
+            case('sym')
+                call cline_refine3D1%set('refine','clustersym')
+                call cline_refine3D2%set('pgrp','c1')
+                call cline_refine3D2%delete('neigh') ! no neighbour mode for symmetry
+                call cline_refine3D2%delete('nnn')
+            case DEFAULT
+                call cline_refine3D1%set('refine', 'cluster')
+        end select
+
+        ! copy the orientation peak distributions
+        if( trim(params%refine).eq.'soft' )then
+            call work_proj%get_vol('vol', 1, prev_vol, smpdfoo, boxfoo)
+            params%dir_refine = get_fpath(prev_vol)
+            call simple_list_files(trim(params%dir_refine)//'/oridistributions_part*', list)
+            if( size(list) == 0 )then
+                THROW_HARD('No peaks could be found in: '//trim(params%dir_refine))
+            elseif( size(list) /= params%nparts )then
+                THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+            endif
+            do ipart=1,params%nparts
+                target_name = PATH_HERE//basename(trim(list(ipart)))
+                call simple_copy_file(trim(list(ipart)), target_name)
+            end do
+        endif
 
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
         if( params%l_eo )then
             work_proj%os_ptcl3D = os
             call work_proj%write
-            call xreconstruct3D_distr%execute( cline_reconstruct3D_mixed_distr )
+            call xreconstruct3D_distr%execute(cline_reconstruct3D_mixed_distr)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//params%ext, trim(CLUSTER3D_VOL)//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
@@ -1182,10 +1210,37 @@ contains
         write(logfhandle,'(A)') '>>>'
         call gen_labelling(os, params%nstates, 'squared_uniform')
         call os%write('cluster3D_init.txt') ! analysis purpose only
-        ! writes for refine3D
         work_proj%os_ptcl3D = os
+        ! writes for reconstruct3D,refine3D
         call work_proj%write
         call work_proj%kill
+
+        if( trim(params%refine).eq.'soft' )then
+            ! update states
+            do ipart=1,params%nparts
+                target_name = PATH_HERE//basename(trim(list(ipart)))
+                nptcls_part = get_o_peak_filesz(target_name)
+                call open_o_peaks_io(target_name)
+                iptcl = 0
+                do i = 1,nptcls_part
+                    iptcl  = iptcl+1
+                    istate = os%get_state(iptcl)
+                    if( istate <= 1 )cycle
+                    call opeaks%new(NPEAKS2REFINE)
+                    call read_o_peak(opeaks, [1,nptcls_part], i, n_nozero)
+                    call opeaks%set_all2single('state',real(istate))
+                    call write_o_peak(opeaks, [1,nptcls_part], i)
+                enddo
+                call close_o_peaks_io
+            enddo
+            deallocate(list)
+            call opeaks%kill
+            ! reconstruct & updates starting volumes
+            call xreconstruct3D_distr%execute(cline_reconstruct3D_multi_distr)
+            do istate = 1,params%nstates
+                call cline_refine3D1%set('vol'//int2str(istate), trim(VOL_FBODY)//int2str_pad(istate,2)//params%ext)
+            enddo
+        endif
         call os%kill
 
         ! STAGE1: extremal optimization, frozen orientation parameters

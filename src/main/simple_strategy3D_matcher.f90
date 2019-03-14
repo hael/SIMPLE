@@ -21,6 +21,7 @@ use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
     prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
+use simple_strategy3D_clustersoft,   only: strategy3D_clustersoft
 use simple_strategy3D_single,        only: strategy3D_single
 use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
@@ -73,7 +74,7 @@ contains
         real, allocatable     :: resarr(:)
         real    :: frac_srch_space, extr_thresh, extr_score_thresh, mi_proj, anneal_ratio
         integer :: iptcl, i, fnr, ithr, updatecnt, state, n_nozero
-        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start, sz
+        integer :: ibatch, iextr_lim, lpind_anneal, lpind_start
         logical :: doprint, do_extr
 
         if( L_BENCH )then
@@ -172,15 +173,6 @@ contains
                     call build_glob%eulspace%new( params_glob%nspace )
                     call build_glob%eulspace%spiral
                     call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
-                case('clustersoft')
-                    THROW_HARD('not functional yet!')
-                    ! read in search space from peaks
-                    ! call open_o_peaks_io(trim(params_glob%o_peaks_file))
-                    ! do iptcl=params_glob%fromp,params_glob%top
-                    !     if( .not.ptcl_mask(iptcl) )cycle
-                    !     call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-                    ! end do
-                    ! call close_o_peaks_io
                 end select
         end select
         if( L_BENCH ) rt_init = toc(t_init)
@@ -247,9 +239,14 @@ contains
                     if( ptcl_mask(iptcl) ) allocate(strategy3D_cluster :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('clustersoft')
-                ! do iptcl=params_glob%fromp,params_glob%top
-                !     if( ptcl_mask(iptcl) ) allocate(strategy3D_softcluster :: strategy3Dsrch(iptcl)%ptr)
-                ! end do
+                call open_o_peaks_io(trim(params_glob%o_peaks_file))
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) )then
+                        allocate(strategy3D_clustersoft :: strategy3Dsrch(iptcl)%ptr)
+                        call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
+                    endif
+                end do
+                call close_o_peaks_io
             case('eval')
                 ! nothing to do
             case DEFAULT
@@ -315,7 +312,7 @@ contains
         ! here we read all peaks to allow deriving statistics based on the complete set
         ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
-        case('eval','cluster','clustersym','clustersoft')
+            case('eval','cluster','clustersym')
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then

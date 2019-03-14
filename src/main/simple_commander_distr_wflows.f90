@@ -939,6 +939,7 @@ contains
             vol = 'vol'//int2str( state )
             call cline_check_3Dconv%delete( trim(vol) )
             call cline_volassemble%delete( trim(vol) )
+            call cline_postprocess%delete( trim(vol) )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
         DebugPrint ' In exec_refine3D_distr; begin starting models'
@@ -1166,8 +1167,8 @@ contains
                         endif
                         ! updates cmdlines & job description
                         vol = 'vol'//trim(int2str(state))
-                        call job_descr%set( trim(vol), trim(vol_iter) )
-                        call cline%set( trim(vol), trim(vol_iter) )
+                        call job_descr%set( vol, vol_iter )
+                        call cline%set(vol, vol_iter )
                     endif
                 enddo
                 ! volume mask, one for all states
@@ -1253,14 +1254,20 @@ contains
         if( params%l_rec_soft )then
             call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
             call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
-            if( size(list) /= params%nparts )then
+            if( size(list) == 0 )then
+                THROW_HARD('No peaks can be found in '//trim(params%dir_refine))
+            elseif( size(list) /= params%nparts )then
                 THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
             endif
             ! copy the orientation peak distributions
-            do ipart=1,params%nparts
-                target_name = PATH_HERE//basename(trim(list(ipart)))
-                call simple_copy_file(trim(list(ipart)), target_name)
-            end do
+            if( trim(params%dir_refine).eq.trim(CWD_GLOB) )then
+                ! already here
+            else
+                do ipart=1,params%nparts
+                    target_name = PATH_HERE//basename(trim(list(ipart)))
+                    call simple_copy_file(trim(list(ipart)), target_name)
+                end do
+            endif
         endif
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -1395,7 +1402,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
-
 
     recursive subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
