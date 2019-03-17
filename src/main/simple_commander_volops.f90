@@ -631,24 +631,47 @@ contains
         use simple_symanalyzer
         class(symmetrize_map_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters) :: params
-        type(builder)    :: build
-        real             :: shvec(3)
+        type(parameters)   :: params
+        type(builder)      :: build
+        real               :: shvec(3), scale, smpd
+        integer            :: ldim(3)
+        integer, parameter :: MAXBOX = 128
         character(len=:), allocatable :: fbody
         ! init
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not. cline%defined('outvol') ) params%outvol = 'symmetrized_map'//params%ext
         call build%vol%read(params%vols(1))
+        ! possible downscaling of input vol
+        ldim = build%vol%get_ldim()
+        scale = 1.
+        if( ldim(1) > MAXBOX )then
+            scale = real(MAXBOX) / real(ldim(1))
+            call build%vol%fft
+            call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
+            call build%vol%ifft
+            smpd         = build%vol%get_smpd()
+            params%msk   = round2even(scale * params%msk)
+            params%inner = round2even(scale * params%inner)
+            params%width = scale * params%width
+        endif
         if( params%center.eq.'yes' )then
             shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
             call build%vol%shift(shvec)
-            fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            call build%vol%write(trim(fbody)//'_centered.mrc')
+            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            ! call build%vol%write(trim(fbody)//'_centered.mrc')
+            ! store un-scaled shift parameters
+            params%xsh = shvec(1) / scale
+            params%ysh = shvec(1) / scale
+            params%zsh = shvec(1) / scale
+        else
+            params%xsh = 0.
+            params%ysh = 0.
+            params%zsh = 0.
         endif
         ! mask volume
         call build%vol%mask(params%msk, 'soft')
         ! symmetrize
-        call symmetrize_map(build%vol, params%pgrp, params%hp, params%lp, build%vol2)
+        call symmetrize_map(build%vol, params, build%vol2)
         ! write
         call build%vol2%write(trim(params%outvol))
         ! end gracefully
@@ -662,7 +685,7 @@ contains
         type(parameters)      :: params
         type(builder)         :: build
         character(len=STDLEN) :: fbody
-        real                  :: shvec(3), scale
+        real                  :: shvec(3), scale, smpd
         integer               :: ldim(3)
         integer, parameter    :: MAXBOX = 128
         ! init
@@ -676,13 +699,13 @@ contains
             call build%vol%fft
             call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
             call build%vol%ifft
-            params%smpd  = build%vol%get_smpd()
+            smpd         = build%vol%get_smpd()
             params%msk   = round2even(scale * params%msk)
             params%inner = round2even(scale * params%inner)
             params%width = scale * params%width
         endif
         ! low-pass limit safety
-        params%lp = max(2. * params%smpd, params%lp)
+        params%lp = max(2. * smpd, params%lp)
         ! centering
         shvec = 0.
         if( params%center.eq.'yes' )then

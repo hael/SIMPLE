@@ -24,20 +24,20 @@ end type sym_stats
 
 contains
 
-    subroutine symmetrize_map( vol_in, pgrp, hp, lp, vol_out )
-        class(projector), intent(inout) :: vol_in
-        character(len=*), intent(in)    :: pgrp
-        real,             intent(in)    :: hp, lp
-        class(image),     intent(inout) :: vol_out
+    subroutine symmetrize_map( vol_in, params, vol_out )
+        use simple_parameters, only: parameters
+        class(projector),  intent(inout) :: vol_in
+        class(parameters), intent(inout) :: params
+        class(image),      intent(inout) :: vol_out
         type(ori)         :: symaxis, o
         type(sym)         :: symobj
-        type(image)       :: rovol_pad, rovol
+        type(image)       :: rovol_pad, rovol, vol_asym_aligned2axis
         type(projector)   :: vol_pad
         real, allocatable :: sym_rmats(:,:,:)
         integer           :: isym, ldim(3), boxpd, ldim_pd(3)
         real              :: rmat_symaxis(3,3), rmat(3,3), smpd
         ! make point-group object
-        call symobj%new(pgrp)
+        call symobj%new(params%pgrp)
         nsym = symobj%get_nsym()
         ! extract the rotation matrices for the symops
         allocate(sym_rmats(nsym,3,3))
@@ -46,24 +46,32 @@ contains
             sym_rmats(isym,:,:) = o%get_mat()
         end do
         ! init search object
-        call volpft_symsrch_init(vol_in, pgrp, hp, lp)
+        call volpft_symsrch_init(vol_in, params%pgrp, params%hp, params%lp)
         ! identify the symmetry axis
         call volpft_srch4symaxis(symaxis)
         ! get the rotation matrix for the symaxis
         rmat_symaxis = symaxis%get_mat()
         ! prepare for volume rotation
+        ldim = [params%box,params%box,params%box]
+        call vol_in%new(ldim, params%smpd)
+        call vol_in%read(params%vols(1))
+        call vol_in%shift([params%xsh,params%ysh,params%zsh])
         ldim    = vol_in%get_ldim()
         smpd    = vol_in%get_smpd()
         boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call vol_in%ifft
         call vol_out%new(ldim, smpd)
+        call vol_asym_aligned2axis%new(ldim, smpd)
         call rovol%new(ldim, smpd)
         call rovol_pad%new(ldim_pd, smpd)
         call vol_pad%new(ldim_pd, smpd)
         call vol_in%pad(vol_pad)
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)
+        ! generate volume aligned to symaxis
+        call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
+        call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(params%pgrp)//'axis.mrc')
         ! rotate over symmetry related rotations and update average
         do isym=1,nsym
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
@@ -77,6 +85,7 @@ contains
         call vol_pad%kill
         call rovol%kill
         call rovol_pad%kill
+        call vol_asym_aligned2axis%kill
         call o%kill
         call symaxis%kill
         call symobj%kill

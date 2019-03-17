@@ -617,7 +617,7 @@ select case(prg)
         keys_optional(1) = 'hp'
         keys_optional(2) = 'outvol'
         keys_optional(3) = 'cenlp'
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:2))
+        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
         ! set defaults
         if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
         call xsymmetrize_map%execute(cline)
