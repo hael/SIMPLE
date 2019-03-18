@@ -94,7 +94,7 @@ contains
         nonzero_x   (3) = self%img_dims(1)
         nonzero_pt_x(3) = -1.
         nonzero_y   (1) = 1
-        nonzero_pt_x(1) = 0.
+        nonzero_pt_y(1) = 0.
         nonzero_y   (2) = 2
         nonzero_pt_y(2) = 1.
         nonzero_y   (3) = self%img_dims(2)
