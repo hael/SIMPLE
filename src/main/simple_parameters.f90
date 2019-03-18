@@ -129,6 +129,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: plaintexttab=''      !< plain text file of input parameters
     character(len=LONGSTRLEN) :: projfile=''          !< SIMPLE *.simple project file
     character(len=LONGSTRLEN) :: projfile_target=''   !< another SIMPLE *.simple project file
+    character(len=LONGSTRLEN) :: proj_weights_file=''
     character(len=LONGSTRLEN) :: refs=''              !< initial2Dreferences.ext
     character(len=LONGSTRLEN) :: refs_even=''
     character(len=LONGSTRLEN) :: refs_odd=''
@@ -1364,6 +1365,12 @@ contains
             self%o_peaks_file = O_PEAKS_FBODY//int2str_pad(self%part, self%numlen)//BIN_EXT
         else
             self%o_peaks_file = O_PEAKS_FBODY//int2str(self%part)//BIN_EXT
+        endif
+        ! proj_weights file
+        if(self%numlen > 0 )then
+            self%proj_weights_file = PROJ_WEIGHTS_FBODY//int2str_pad(self%part, self%numlen)//BIN_EXT
+        else
+            self%proj_weights_file = PROJ_WEIGHTS_FBODY//int2str(self%part)//BIN_EXT
         endif
         !>>> END, IMAGE-PROCESSING-RELATED
 

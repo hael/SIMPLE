@@ -398,7 +398,7 @@ contains
         real      :: sigma2(0:2*self%nyq)
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3)
         real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq
-        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, projw
+        real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
         logical   :: do_sigma2div
         do_sigma2div = associated(eucl_sigma_glob)
@@ -422,9 +422,7 @@ contains
         noris = os%get_noris()
         do iori=1,noris
             o            = os%get_ori(iori)
-            projw        = 1.0
-            if( params_glob%l_projw .and. o%isthere('projw') ) projw = o%get('projw')
-            ows(iori)    = pwght * o%get('ow') * projw
+            ows(iori)    = pwght * o%get('ow')
             states(iori) = nint(o%get('state'))
             if( ows(iori) < TINY ) cycle
             rotmats(iori,1,:,:) = o%get_mat()

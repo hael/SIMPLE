@@ -344,7 +344,7 @@ contains
         call calc_global_ori_weights
 
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
-        if( params_glob%l_projw ) call calc_proj_weights
+        call calc_proj_weights
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton
@@ -421,9 +421,9 @@ contains
 
     !> Prepare alignment search using polar projection Fourier cross correlation
     subroutine preppftcc4align( cline )
-        use simple_polarizer,             only: polarizer
-        use simple_cmdline,               only: cmdline
-        use simple_strategy2D3D_common,   only: calcrefvolshift_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
+        use simple_polarizer,           only: polarizer
+        use simple_cmdline,             only: cmdline
+        use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
         class(cmdline), intent(inout) :: cline !< command line
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
@@ -738,9 +738,9 @@ contains
     end subroutine calc_global_ori_weights
 
     subroutine calc_proj_weights
-        real, allocatable :: weights(:), projs(:), projws(:)
-        integer :: mapped_projs(params_glob%nspace), i, ind, iptcl
-        real    :: pw, w_per_proj(NSPACE_REDUCED), proj_weights(params_glob%nspace)
+        real, allocatable :: weights(:), projs(:)
+        integer :: i, ind, iptcl
+        real    :: pw, proj_weights(params_glob%nspace), minw
         select case(params_glob%refine)
             case('cluster', 'snhc', 'clustersym', 'cont_single', 'eval')
                 ! nothing to do
@@ -748,10 +748,8 @@ contains
                 if( build_glob%spproj_field%get_avg('updatecnt') < 1.0 )then
                     ! nothing to do
                 else
-                    ! map projection directions of eulspace to eulspace_red (reduced set)
-                    call build_glob%eulspace%remap_projs(build_glob%eulspace_red, mapped_projs)
                     ! calculate the weight strenght per projection direction
-                    w_per_proj = 0.
+                    proj_weights = 0.
                     do iptcl=params_glob%fromp,params_glob%top
                         pw = 1.0
                         if( build_glob%spproj_field%isthere(iptcl, 'w') ) pw = build_glob%spproj_field%get(iptcl, 'w')
@@ -759,32 +757,16 @@ contains
                             weights = s3D%o_peaks(iptcl)%get_all('ow')
                             projs   = s3D%o_peaks(iptcl)%get_all('proj')
                             do i=1,size(projs)
-                                if( weights(i) > TINY )then
-                                    ind = mapped_projs(nint(projs(i)))
-                                    w_per_proj(ind) = w_per_proj(ind) + weights(i) * pw
-                                endif
+                                ind = nint(projs(i))
+                                if( weights(i) > TINY ) proj_weights(ind) = proj_weights(ind) + weights(i) * pw
                             end do
                             deallocate(weights, projs)
                         endif
                     end do
-                    ! calculate projection direction weights
-                    where( w_per_proj < TINY ) w_per_proj = 1.0 ! to prevent division with zero
-                    do i=1,params_glob%nspace
-                        proj_weights(i) = 1. / max(1., w_per_proj(mapped_projs(i)))
-                    end do
-                    proj_weights = proj_weights / maxval(proj_weights) ! minmax normalisation
-                    ! update o_peaks with projection direction weights (projw)
-                    do iptcl=params_glob%fromp,params_glob%top
-                        weights = s3D%o_peaks(iptcl)%get_all('ow')
-                        projs   = s3D%o_peaks(iptcl)%get_all('proj')
-                        allocate(projws(size(projs)), source=0.)
-                        do i=1,size(projs)
-                            if( weights(i) > TINY ) projws(i) = proj_weights(nint(projs(i)))
-                        end do
-                        call s3D%o_peaks(iptcl)%set_all('projw', projws)
-                        deallocate(weights, projs, projws)
-                    end do
+                    minw = minval(proj_weights, mask=proj_weights > TINY)
+                    where( proj_weights < TINY ) proj_weights = minw ! to prevent division with zero
                 endif
+                call arr2file(proj_weights, params_glob%proj_weights_file)
         end select
     end subroutine calc_proj_weights
 

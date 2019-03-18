@@ -1,10 +1,10 @@
 ! routines for distributed SIMPLE execution
 module simple_map_reduce
- use simple_defs
- use simple_strings, only:int2str, int2str_pad
- use simple_error, only: allocchk
- use simple_fileio, only: fopen, fileiochk, fclose
- use simple_jiffys, only: progress
+use simple_defs
+use simple_strings, only: int2str, int2str_pad
+use simple_error,   only: allocchk
+use simple_fileio,  only: fopen, fileiochk, fclose, file2rarr
+use simple_jiffys,  only: progress
 
 implicit none
 private
@@ -168,7 +168,6 @@ contains
         parts  = split_nobjs_even(nobjs, nparts)                                        !! realloc lhs
         numlen = len(int2str(nparts))
         ! compress the partial nearest neighbour matrices into a single matrix
-
         do ipart=1,nparts
             allocate(fname, source='nnmat_part'//int2str_pad(ipart,numlen)//'.bin')
             if(alloc_stat.ne.0)call allocchk('In: simple_map_reduce::merge_nnmat_from_parts, 1',alloc_stat)
@@ -218,5 +217,30 @@ contains
         end do
         deallocate(parts)
     end function merge_rmat_from_parts
+
+    subroutine merge_proj_weights_from_parts( nparts, proj_weights )
+        integer,           intent(in)  :: nparts
+        real, allocatable, intent(out) :: proj_weights(:)
+        character(len=:), allocatable  :: fname
+        real, allocatable :: pwpart(:)
+        logical :: file_exists
+        integer :: ipart, numlen
+        if( allocated(proj_weights) ) deallocate(proj_weights)
+        numlen = len(int2str(nparts))
+        do ipart=1,nparts
+            allocate(fname, source=PROJ_WEIGHTS_FBODY//int2str_pad(ipart, numlen)//BIN_EXT)
+            if( file_exists )then
+                pwpart = file2rarr(fname)
+                if( allocated(proj_weights) )then
+                    proj_weights = proj_weights + pwpart
+                else
+                    proj_weights = pwpart
+                endif
+            else
+                write(logfhandle,'(A)') 'WARNING! '//fname//' does not exist; merge_proj_weights_from_parts'
+            endif
+            deallocate(fname)
+        end do
+    end subroutine merge_proj_weights_from_parts
 
 end module simple_map_reduce
