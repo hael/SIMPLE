@@ -106,16 +106,17 @@ contains
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
-        call moment(shifts(1,:), shstats(1)%avg, shstats(1)%sdev, var, err)
-        call moment(shifts(2,:), shstats(2)%avg, shstats(2)%sdev, var, err)
+        call moment(shifts(:,1), shstats(1)%avg, shstats(1)%sdev, var, err)
+        call moment(shifts(:,2), shstats(2)%avg, shstats(2)%sdev, var, err)
         call orientation%set('xavg',  shstats(1)%avg)
         call orientation%set('xsdev', shstats(1)%sdev)
-        call orientation%set('xmax',  maxval(shifts(1,:)))
-        call orientation%set('xmin',  minval(shifts(1,:)))
+        call orientation%set('xmax',  maxval(shifts(:,1)))
+        call orientation%set('xmin',  minval(shifts(:,1)))
         call orientation%set('yavg',  shstats(2)%avg)
         call orientation%set('ysdev', shstats(2)%sdev)
-        call orientation%set('ymax',  maxval(shifts(2,:)))
-        call orientation%set('ymin',  minval(shifts(2,:)))
+        call orientation%set('ymax',  maxval(shifts(:,2)))
+        call orientation%set('ymin',  minval(shifts(:,2)))
+        call orientation%print_ori
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then
             call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
