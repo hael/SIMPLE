@@ -147,6 +147,8 @@ contains
         ldim_thumb(1) = round2even(real(ldim(1))*scale)
         ldim_thumb(2) = round2even(real(ldim(2))*scale)
         ldim_thumb(3) = 1
+        call orientation%set('xdim', real(ldim(1)))
+        call orientation%set('ydim', real(ldim(2)))
         call self%thumbnail%new(ldim_thumb, ctfvars%smpd)
         call self%moviesum_corrected%fft()
         call self%moviesum_corrected%clip(self%thumbnail)

@@ -74,7 +74,6 @@ contains
     procedure, private :: get_rmat_at_1
     procedure, private :: get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
-    procedure          :: get_cmatfull
     procedure          :: set
     procedure          :: set_rmat
     procedure, private :: set_cmat_1
@@ -1295,24 +1294,6 @@ contains
         complex,      intent(out) :: cmat(self%array_shape(1),self%array_shape(2),self%array_shape(3))
         cmat=self%cmat
     end subroutine get_cmat_sub
-
-    !>  \brief   get_cmatfull get the image object's complex matrix, including index limits
-    function get_cmatfull( self , llims) result( cmat )
-        class(image), intent(in) :: self
-        integer, intent(inout), optional :: llims(3,2)
-        complex, allocatable :: cmat(:,:,:)
-        integer :: llimits(3,2)
-        if (present(llims))then
-            llimits=llims
-        else
-            llimits      = 1
-            llimits(:,2) = self%array_shape
-        end if
-        allocate(cmat(llimits(1,1):llimits(1,2),&
-            &llimits(2,1):llimits(2,2),&
-            &llimits(3,1):llimits(3,2)), source=self%cmat, stat=alloc_stat)
-        if (alloc_stat /= 0)call allocchk("simple_image::get_cmat ",alloc_stat)
-    end function get_cmatfull
 
     pure function get_cmat_at_1( self, phys ) result( comp )
         class(image), intent(in)  :: self
