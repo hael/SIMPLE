@@ -12,7 +12,7 @@ public :: symmetrize_map, symmetry_tester, print_subgroups
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE   = .true.
+logical, parameter :: DEBUG_HERE   = .false.
 real,    parameter :: SHSRCH_HWDTH = 4.0
 integer            :: nsym       ! total number of symmetries considered
 integer            :: kfromto(2) ! Fourier index range
