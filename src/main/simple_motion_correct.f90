@@ -280,10 +280,10 @@ contains
         integer :: iframe, nimproved, updateres, i
         logical :: didsave, didupdateres, err, err_stat
         ! initialise
-        call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
-        if( err ) return
         nsig_here = 6.0
         if( present(nsig) ) nsig_here = nsig
+        call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
+        if( err ) return
         ! make search objects for parallel execution
         allocate(ftexp_srch(nframes))
         do iframe=1,nframes
