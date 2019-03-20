@@ -42,7 +42,7 @@ private
 logical, parameter              :: L_BENCH = .false., DEBUG_HERE = .false.
 type(polarft_corrcalc),  target :: pftcc
 type(polarizer),    allocatable :: match_imgs(:)
-integer,            allocatable :: pinds(:)
+integer,            allocatable :: pinds(:), prev_states(:)
 logical,            allocatable :: ptcl_mask(:)
 type(sym)                       :: c1_symop
 integer                         :: nptcls2update
@@ -173,6 +173,8 @@ contains
                     call build_glob%eulspace%new( params_glob%nspace )
                     call build_glob%eulspace%spiral
                     call build_glob%pgrpsyms%nearest_sym_neighbors(build_glob%eulspace, symmat)
+                case('clustersoft')
+                    prev_states = nint(build_glob%spproj_field%get_all('state',[params_glob%fromp,params_glob%top]))
                 end select
         end select
         if( L_BENCH ) rt_init = toc(t_init)
