@@ -1,10 +1,11 @@
 !USAGE : simple_exec prg=detect_atoms smpd=0.358 vol1='particle1.mrc' (optional nnn=40)
 module simple_nanoparticles_mod
 include 'simple_lib.f08'
-use simple_image, only : image
-use simple_picker_chiara, only: pixels_dist, get_pixel_pos
-use simple_cmdline,       only: cmdline
-use simple_parameters,    only: parameters
+use simple_image,         only : image
+use simple_picker_chiara, only : pixels_dist, get_pixel_pos
+use simple_cmdline,       only : cmdline
+use simple_parameters,    only : parameters
+use simple_atoms,         only : atoms
 
 implicit none
 
@@ -18,17 +19,28 @@ integer, parameter :: N_THRESH         = 20      !number of thresholds for binar
 real, parameter    :: MAX_DIST_CENTERS = 3.1     !to determin atoms belonging to the same row
 logical, parameter :: DEBUGG           = .false. !for debuggin purposes
 
+
+!TO REMOVE FROM HEREEEEE, TEMPORARY JUSWT TO SEE IF IT WORKS
+real :: sum_dist_closest_atom
+real :: avg_dist_atoms
+real :: sum_angles             ! TO REMOVE
+real, allocatable :: angles(:) ! TO REMOVE
+real    :: SCALE_FACTOR           !for oversampling
+integer :: dim_over(3)
+
 type :: nanoparticle
     private
     ! these image objects are part of the instance to avoid excessive memory re-allocations
-    type(image) :: img, img_bin, img_cc
-    type(image) :: img_rows
+    type(atoms) :: centers_pdb
+    type(image) :: img, img_bin, img_cc, img_over_smp
     integer     :: ldim(3)
     real        :: smpd
     real        :: nanop_mass_cen(3)                    !coordinates of the center of mass of the nanoparticle
     integer     :: n_cc   !number of atoms (connected components)
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
+    real,    allocatable  :: circularity(:)
+    real,    allocatable  :: ang_var(:)
     integer, allocatable  :: loc_longest_dist(:,:)   !for indentific of the vxl that determins the longest dim of the atom
     type(parameters)      :: p
     type(cmdline)         :: cline
@@ -43,19 +55,22 @@ type :: nanoparticle
     ! segmentation
     procedure          :: binarize => nanopart_binarization
     procedure          :: find_centers
+    procedure          :: discard_outliers
     procedure, private :: nanopart_masscen
+    procedure          :: calc_circularity
     procedure, private :: calc_aspect_ratio_private
     procedure          :: calc_aspect_ratio
-    procedure, private :: atom_rows
+    procedure          :: make_soft_mask
     ! polarization search
-    procedure          :: polar_masscenter
-    procedure, private :: find_nearest_neigh
-    procedure, private :: search_neigh_polarization
+    ! procedure          :: polar_masscenter
+    procedure          :: search_polarization
     ! clustering
-    procedure          :: affprop_cluster
+    procedure          :: affprop_cluster_ar
+    procedure          :: affprop_cluster_ang
+    ! others
+    procedure, private :: over_sample
     ! running
-    procedure, private :: run_nanoparticle_job
-    procedure          :: run
+    !procedure          :: run
     ! kill
     procedure, private ::  kill => kill_nanoparticle
 end type nanoparticle
@@ -63,15 +78,20 @@ end type nanoparticle
 contains
 
     !constructor
-     subroutine new_nanoparticle(self)
+     subroutine new_nanoparticle(self, sc_fac)
          class(nanoparticle), intent(inout) :: self
+         real,                intent(in)    :: sc_fac
          integer :: nptcls
+         SCALE_FACTOR = sc_fac
          call find_ldim_nptcls(self%partname,  self%ldim, nptcls, self%smpd)
          call self%img%new         (self%ldim, self%smpd)
-         call self%img_bin%new     (self%ldim, self%smpd)
-         call self%img_cc%new      (self%ldim, self%smpd) !don't think I need to initializate it
-         call self%img_rows%new    (self%ldim, self%smpd) !don't know if need it
-     end subroutine new_nanoparticle
+         call self%img_bin%new     (int(real(self%ldim)*SCALE_FACTOR), self%smpd/SCALE_FACTOR)
+         !call self%img_cc%new      (int(real(self%ldim)*SCALE_FACTOR), self%smpd/SCALE_FACTOR) !don't think I need to initializate it
+         call self%img_over_smp%new(int(real(self%ldim)*SCALE_FACTOR), self%smpd/SCALE_FACTOR)
+         dim_over(1) = int(real(self%ldim(1))*SCALE_FACTOR)
+         dim_over(2) = int(real(self%ldim(2))*SCALE_FACTOR)
+         dim_over(3) = int(real(self%ldim(3))*SCALE_FACTOR)
+    end subroutine new_nanoparticle
 
      !get one of the images of the nanoparticle type
      subroutine get_img( self, img, which )
@@ -80,36 +100,40 @@ contains
          character(len=*),    intent(in)    :: which
          integer :: ldim(3)
          ldim = img%get_ldim()
-         if(self%ldim(1) .ne. ldim(1) .or. self%ldim(2) .ne. ldim(2) .or. self%ldim(3) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; get_img')
       select case(which)
       case('img')
+           if(self%ldim(1) .ne. ldim(1) .or. self%ldim(2) .ne. ldim(2) .or. self%ldim(3) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; get_img')
           img = self%img
       case('img_bin')
+          if(int(real(self%ldim(1))*SCALE_FACTOR) .ne. ldim(1) .or. int(real(self%ldim(2))*SCALE_FACTOR) .ne. ldim(2) .or. int(real(self%ldim(3))*SCALE_FACTOR) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; get_img')
           img = self%img_bin
       case('img_cc')
+         if(int(real(self%ldim(1))*SCALE_FACTOR) .ne. ldim(1) .or. int(real(self%ldim(2))*SCALE_FACTOR) .ne. ldim(2) .or. int(real(self%ldim(3))*SCALE_FACTOR) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; get_img')
           img = self%img_cc
       case DEFAULT
-         THROW_HARD('Wrong input parameter img type; get_img')
+          THROW_HARD('Wrong input parameter img type; get_img')
      end select
      end subroutine get_img
 
      !set one of the images of the nanoparticle type
      subroutine set_img( self, img, which )
-         class(nanoparticle), intent(inout)    :: self
+         class(nanoparticle), intent(inout) :: self
          type(image),         intent(inout) :: img
          character(len=*),    intent(in)    :: which
          integer :: ldim(3)
          ldim = img%get_ldim()
-         if(self%ldim(1) .ne. ldim(1) .or. self%ldim(2) .ne. ldim(2) .or. self%ldim(3) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img;   set_img')
          select case(which)
          case('img')
+             if(self%ldim(1) .ne. ldim(1) .or. self%ldim(2) .ne. ldim(2) .or. self%ldim(3) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img;   set_img')
              self%img = img
          case('img_bin')
              self%img_bin = img
+             if(int(real(self%ldim(1))*SCALE_FACTOR) .ne. ldim(1) .or. int(real(self%ldim(2))*SCALE_FACTOR) .ne. ldim(2) .or. int(real(self%ldim(3))*SCALE_FACTOR) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; set_img')
          case('img_cc')
              self%img_cc = img
+            if(int(real(self%ldim(1))*SCALE_FACTOR) .ne. ldim(1) .or. int(real(self%ldim(2))*SCALE_FACTOR) .ne. ldim(2) .or. int(real(self%ldim(3))*SCALE_FACTOR) .ne. ldim(3)) THROW_HARD('Wrong dimension in input img; set_img')
          case DEFAULT
-            THROW_HARD('Wrong input parameter img type; set_img')
+             THROW_HARD('Wrong input parameter img type; set_img')
         end select
     end subroutine set_img
 
@@ -131,7 +155,7 @@ contains
     ! ones (dust). So the threshold with the maximum median value would
     ! correspond to the most consistent one, meaning that the size of the ccs
     ! would have a gaussian distribution.
-     subroutine nanopart_binarization( self )
+     subroutine nanopart_binarization( self)
          class(nanoparticle), intent(inout) :: self
          real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
          real    :: step          !histogram disretization step
@@ -140,11 +164,14 @@ contains
          real    :: x_thresh(N_THRESH-1), y_med(N_THRESH-1)
          integer, allocatable :: sz(:) !size of the ccs and correspondent label
          integer ::  i
+         !over sampling
+         call self%over_sample()
          write(logfhandle,*) '****binarization, init'
-         rmat = self%img%get_rmat()
-         allocate(rmat_t(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0.)
+         rmat = self%img_over_smp%get_rmat()
+         allocate(rmat_t(dim_over(1), dim_over(2), dim_over(3)), source = 0.)
          step = maxval(rmat)/real(N_THRESH)
          do i = 1, N_THRESH-1
+             call progress(i,N_THRESH-1)
              thresh = real(i)*step
              where(rmat > thresh)
                  rmat_t = 1.
@@ -173,31 +200,42 @@ contains
      ! and save it in the global variable centers.
      subroutine find_centers(self)
          use simple_atoms, only: atoms
-         class(nanoparticle),         intent(inout) :: self
-         type(atoms) :: centers_pdb
-         real, allocatable :: rmat_cc(:,:,:)
-         integer :: i,label
+         class(nanoparticle), intent(inout) :: self
+         real,    allocatable :: rmat_cc(:,:,:)
+         logical, allocatable :: mask(:)
+         integer :: i
+         real    :: dist_closest_atom
          ! next lines are too expensive, work on that
          call self%img_bin%find_connected_comps(self%img_cc)
-         call self%img_cc%elim_cc([5, 800]) !connected components clean up
+         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         !Connected components size polishing,
+         !I commented it because it takes a lot of time and anyway I discard
+         !outliers wrt the contact score, it should be enough.
+         !Maybe I should discard a bigger percentage.
+         call self%img_cc%elim_cc([7, 500]) !connected components clean up
          call self%img_cc%bin(0.5) !binarize to re-calculate the cc, to have them in order again
          self%img_bin = self%img_cc
          call self%img_cc%kill
          call self%img_bin%find_connected_comps(self%img_cc) !cc re-calculation
-         if(DEBUGG) call self%img_cc%write('PolishedOrderedCC.mrc')
+         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
          rmat_cc   = self%img_cc%get_rmat()
          self%n_cc = nint(maxval(rmat_cc))
          ! global variables allocation
          allocate(self%centers         (3, self%n_cc) , source = 0.)     !global variable
-         allocate(self%loc_longest_dist(3, self%n_cc) , source = 0 )     !global variable
-         ! centers plot
-         call centers_pdb%new(self%n_cc, dummy=.true.)
          do i=1,self%n_cc
              self%centers(:,i) = atom_masscen(self,i)
-             call centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd) !-1 because of the different indexing: starting from 0 or 1
          enddo
-         call centers_pdb%writepdb('atom_centers')
-
+         sum_dist_closest_atom = 0. !initialise
+         avg_dist_atoms        = 0. !initialise
+         allocate(mask(self%n_cc), source = .true.)
+         do i = 1, self%n_cc
+             mask(:) = .true.  ! restore
+             mask(i) = .false. ! not to consider the pixel itself, but I think its unnecessary
+             dist_closest_atom     = pixels_dist(self%centers(:,i), self%centers,'min', mask)
+             sum_dist_closest_atom = sum_dist_closest_atom + dist_closest_atom !updating
+         enddo
+         avg_dist_atoms = sum_dist_closest_atom/real(self%n_cc)
+         deallocate(rmat_cc, mask)
      contains
 
          !This function calculates the centers of mass of an
@@ -219,18 +257,95 @@ contains
              m = 0.
              !ASK HANS HOW TO PARALLELISE IT
              !omp do collapse(3) reduction(+:m) private(i,j,k) reduce schedule(static)
-             do i = 1, self%ldim(1)
-                 do j = 1, self%ldim(2)
-                     do k = 1, self%ldim(3)
+             do i = 1, int(real(self%ldim(1))*SCALE_FACTOR)
+                 do j = 1, int(real(self%ldim(2))*SCALE_FACTOR)
+                     do k = 1, int(real(self%ldim(3))*SCALE_FACTOR)
                          if(abs(rmat_in(i,j,k))> TINY) m = m + rmat_in(i,j,k)*[i,j,k]
                      enddo
                  enddo
              enddo
              !omp end do
              m = m/real(sz)
-             if(self%ldim(3) == 1) m(3) = 0. !for 2D imgs
+             deallocate(rmat_in, rmat_cc_in)
          end function atom_masscen
      end subroutine find_centers
+
+     ! This subroutine discard outliers that resisted binarization.
+     ! It calculates the contact score of each atom and discards the bottom
+     ! 5% of the atoms according to the contact score.
+     ! It modifies the img_bin and img_cc instances deleting the
+     ! identified outliers.
+     ! Contact score: fix a radius and an atom A. Count the number N of atoms
+     ! in the sphere centered in A of that radius. Define contact score of A
+     ! equal to N. Do it for each atom.
+     subroutine discard_outliers(self, radius)
+         class(nanoparticle), intent(inout) :: self
+         real, optional,      intent(in)    :: radius !radius of the sphere to consider
+         real    :: rradius  !default
+         integer :: cc
+         integer :: cnt      !contact_score
+         logical :: mask(self%n_cc)
+         real    :: dist
+         integer :: loc(1)
+         integer :: n_discard
+         integer :: label(1)
+         real,    allocatable :: rmat(:,:,:), rmat_cc(:,:,:)
+         real,    allocatable :: centers_polished(:,:)
+         integer, allocatable :: contact_scores(:)
+         rradius = 2.*avg_dist_atoms
+         if(present(radius)) rradius = radius
+         allocate(contact_scores(self%n_cc), source = 0)
+         do cc = 1, self%n_cc !fix the atom
+             dist = 0.
+             mask(1:self%n_cc) = .true.
+             cnt = 0.
+             mask(cc)  = .false.
+             do while(dist < rradius)
+                 dist = pixels_dist(self%centers(:,cc), self%centers,'min', mask, loc)
+                 mask(loc) = .false.
+                 cnt = cnt + 1
+             enddo
+             contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
+             !call self%centers_pdb%set_beta(cc, real(contact_scores(cc)))
+         enddo
+         ! call self%centers_pdb%writepdb('contact_scores')
+         n_discard = self%n_cc*10/100 ! discard bottom 5%??
+         mask(1:self%n_cc) = .true.
+         rmat    = self%img_bin%get_rmat()
+         rmat_cc = self%img_cc%get_rmat()
+         ! Removing outliers from the binary image and the connected components image
+         do cc = 1, n_discard
+             label = minloc(contact_scores, mask)
+             where(abs(rmat_cc-real(label(1))) < TINY) rmat    = 0. ! discard atom corresponding to label_discard(i)
+             mask(label(1)) = .false.
+             self%centers(:,label) = -1. !identify to discard them
+         enddo
+         call self%img_bin%set_rmat(rmat)
+         call self%img_bin%find_connected_comps(self%img_cc) !connected components image updating
+         rmat_cc = self%img_cc%get_rmat()
+         self%n_cc = nint(maxval(rmat_cc)) !update
+         ! fix centers, removing the discarded ones
+         allocate(centers_polished         (3, self%n_cc), source = 0.)
+         cnt = 0
+         do cc = 1, self%n_cc + n_discard
+             if(abs(self%centers(1,cc)+1.) > TINY) then
+                 cnt = cnt + 1
+                 centers_polished(:,cnt)          = self%centers(:,cc)
+             endif
+         enddo
+         deallocate(self%centers)
+         allocate(self%centers(3,self%n_cc),          source = centers_polished)
+         ! centers plot
+         call self%centers_pdb%new(self%n_cc, dummy=.true.)
+         do cc=1,self%n_cc
+             ! call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd) !-1 because of the different indexing: starting from 0 or 1
+             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+             call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd/SCALE_FACTOR)
+             !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+         enddo
+         call self%centers_pdb%writepdb('atom_centers_polished')
+         deallocate(rmat, rmat_cc, centers_polished)
+     end subroutine discard_outliers
 
     ! calc the avg of the centers coords
     function nanopart_masscen(self) result(m)
@@ -242,8 +357,38 @@ contains
              m = m + 1.*self%centers(:,i)
         enddo
         m = m/real(self%n_cc)
-        if(self%ldim(3) == 1) m(3) = 0. !for 2D imgs
     end function nanopart_masscen
+
+    ! This function estimates the circularity of each blob
+    ! (atom) in the following way:
+    !    c := 6*pi*V/S.
+    ! c = 1 <=> the blob is a perfect sphere, otherwise it's < 1.
+    ! See circularity definition (in shape factor page) and adapt
+    ! it to 3D volumes.
+    subroutine calc_circularity(self)
+        class(nanoparticle), intent(inout) :: self
+        real,    allocatable :: rmat_cc(:,:,:)
+        logical, allocatable :: border(:,:,:)
+        integer, allocatable :: imat(:,:,:)
+        integer :: label
+        integer, allocatable :: v(:), s(:) !volumes and surfaces of each atom
+        real, parameter :: pi = 3.14159265359
+        allocate(self%circularity(self%n_cc), source = 0.)
+        rmat_cc = self%img_cc%get_rmat()
+        allocate(imat(dim_over(1),dim_over(2),dim_over(3)),source = nint(rmat_cc)) !for function get_pixel_pos
+        allocate(v(self%n_cc), s(self%n_cc), source = 0)
+        do label = 1, self%n_cc
+            v(label) = count(imat == label) !just count the number of vxls in the cc
+            call self%img_cc%border_mask(border, label, .true.) !the subroutine border_mask allocated/deallocates itself matrix border
+                                                                !true it means that 4nieghbours have to be calculated instead of 8-neigh.
+                                                                !This is because atoms are very small blobs, otherwhise the border would coincide
+                                                                !with the atom itself
+            s(label) = count(border .eqv. .true.)
+            self%circularity(label) = (6*sqrt(pi)*real(v(label)))/ (real(s(label))**(3/2))
+            print *, 'atom = ', label, 'vol = ', v(label), 'surf = ', s(label), 'circ = ', self%circularity(label)
+        enddo
+        deallocate(v, s, imat, border, rmat_cc)
+    end subroutine calc_circularity
 
     ! This subroutine takes in input a connected component (cc) image
     ! and the label of one of its ccs and calculates its aspect ratio, which
@@ -263,33 +408,42 @@ contains
         logical, allocatable :: border(:,:,:)
         logical, allocatable :: mask_dist(:) !for min and max dist calculation
         integer :: location(1) !location of the farest vxls of the atom from its center
-        integer :: i
         real    :: shortest_dist, longest_dist
-        rmat    = self%img%get_rmat()
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+        integer :: loc_min(1)
+        real    :: vec1(3), vec2(3)
+        integer :: ldim(3)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+        rmat    = self%img_over_smp%get_rmat()
         rmat_cc = self%img_cc%get_rmat()
-        allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)),source = nint(rmat_cc)) !for function get_pixel_pos
-        call self%img_cc%border_mask(border, label)
+        ldim = shape(rmat_cc)
+        allocate(imat(dim_over(1),dim_over(2),dim_over(3)),source = nint(rmat_cc)) !for function get_pixel_pos
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! call self%img_cc%border_mask(border, label)
+        call self%img_cc%border_mask(border, label, .true. ) !use 4neigh instead of 8neigh
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         where(border .eqv. .true.)
             imat = 1
         elsewhere
             imat = 0
         endwhere
-        call get_pixel_pos(imat,pos)                       !pxls positions of the shell
+        call get_pixel_pos(imat,pos)   !pxls positions of the shell
         if(allocated(mask_dist)) deallocate(mask_dist)
         allocate(mask_dist(size(pos, dim = 2)), source = .true. )
-        shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist)
+        shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist, loc_min)
         longest_dist  = pixels_dist(self%centers(:,label), real(pos),'max', mask_dist, location)
-        self%loc_longest_dist(:3, label) =  pos(:3,location(1))
         if(abs(longest_dist) > TINY) then
             ratio = shortest_dist/longest_dist
         else
             ratio = 0.
             if(DEBUGG) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
         endif
-        write(logfhandle,*) 'CC # ', label
-        write(logfhandle,*) 'shortest dist = ', shortest_dist
-        write(logfhandle,*) 'longest dist = ',   longest_dist
-        write(logfhandle,*) 'RATIO = ', self%ratios(label)
+        !if(DEBUGG) then
+            write(logfhandle,*) 'ATOM #          ', label
+            write(logfhandle,*) 'shortest dist = ', shortest_dist
+            write(logfhandle,*) 'longest  dist = ', longest_dist
+            write(logfhandle,*) 'RATIO         = ', self%ratios(label)
+        !endif
         deallocate(rmat, rmat_cc, border, imat, pos, mask_dist)
     end subroutine calc_aspect_ratio_private
 
@@ -298,13 +452,19 @@ contains
         class(nanoparticle), intent(inout) :: self
         integer :: label
         allocate(self%ratios(self%n_cc), source = 0.)
+        !sum_angles = 0.
+        !allocate(angles(self%n_cc), source = 0.)
+        allocate(self%loc_longest_dist(3, self%n_cc) , source = 0 )     !global variable
         do label = 1, self%n_cc
             call calc_aspect_ratio_private(self, label, self%ratios(label))
         enddo
+        !call self%centers_pdb%writepdb('AnglesShouldBe90')
+        !call hist(angles, 20)
+        !print *, 'AVG angle longest-shortest dim = ', sum_angles/real(self%n_cc)
         call hist(self%ratios, 20)
         ! To dump some of the analysis on aspect ratios on file compatible
         ! with Matlab.
-         open(123, file='Ratios', position='append')
+         open(123, file='Ratios')!, position='append')
          write (123,*) 'ratios=[...'
          do label = 1, size(self%ratios)
              write (123,'(A)', advance='no') trim(real2str(self%ratios(label)))
@@ -315,349 +475,102 @@ contains
         write(logfhandle,*)'**aspect ratios calculations completed'
     end subroutine calc_aspect_ratio
 
-    ! This subrotuine indentifies the 'rows' of atoms in the z direction.
-    ! The idea is to look at the projection of the nanoparticle on the
-    ! xy plane and identify all the atoms whose center has (almost, see
-    ! MAX_DIST_CENTERS) the same x and y coords.
-    ! The inputs are:
-    ! -) centers, coordinates of the centers of mass of the atoms;
-    ! For how it is built, self%centers(:3,i) contains the coords of the
-    ! center of mass of the i-th cc.
-    subroutine atom_rows(self) !change the name
-        use gnufor2
+    ! This subroutine creates a soft mask for reducing the influence of
+    ! background in the refinement of the nanoparticles.
+    subroutine make_soft_mask(self)
         class(nanoparticle), intent(inout) :: self
-          integer, allocatable :: imat(:,:,:)
-          real, allocatable    :: rmat_rows(:,:,:), rmat_cc(:,:,:), rmat_aux_cc(:,:,:)
-          real, allocatable    :: ang_var(:), cc_in_the_row(:)
-          real, allocatable    :: loc_ld_real(:,:)
-          logical, allocatable :: flag(:)    !not to check more than once the same center
-          logical, allocatable :: do_it(:)   ! not to do it more than once, cnt sometimes is not increased
-          type(image) :: img_aux, img_aux_cc !to store the cc of just one row of atoms
-          integer :: n_row                   !number of atoms rows
-          integer :: i, j, h, k
-          integer :: cnt, cnt_additional
-          integer :: label_max, label1, label2
-          integer :: m(3)
-          real    :: label_i, label_j
-          real    :: theta, mod_1, mod_2, dot_prod
-          write(logfhandle,*)'atom rows analysis'
-          call img_aux%new   (self%ldim, self%smpd)
-          call img_aux_cc%new(self%ldim, self%smpd)
-          allocate(flag(self%n_cc),  source = .true. )
-          allocate(imat     (self%ldim(1),self%ldim(2),self%ldim(3)), source = 0 )
-          allocate(rmat_rows(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0.)
-          allocate(loc_ld_real(3,size(self%loc_longest_dist, dim=2)), source = 0. )
-          rmat_cc = self%img_cc%get_rmat()
-          cnt = 0
-          cnt_additional = 0
-          allocate(do_it(self%n_cc), source = .true.)  !initialise
-          do i = 1, self%n_cc -1
-              if(flag(i)) cnt = cnt + 1
-              do j = 2, self%n_cc
-                  if(j > i .and. flag(i) .and. flag(j)) then
-                      if(sqrt((self%centers(1,i)-self%centers(1,j))**2+(self%centers(2,i)-self%centers(2,j))**2) < MAX_DIST_CENTERS) then
-                         if(DEBUGG ) then
-                             write(logfhandle,*)'i = ', i, '& j = ', j, 'PARALLEL,&
-                                        &  tot dist = ', &
-                                        & sqrt((self%centers(1,i)-self%centers(1,j))**2+(self%centers(2,i)-self%centers(2,j))**2+(self%centers(3,i)-self%centers(3,j))**2)
-                         endif
-                         imat(nint(self%centers(1,i)),&
-                              & nint(self%centers(2,i)),nint(self%centers(3,i))) = cnt
-                         imat(nint(self%centers(1,j)),&
-                              & nint(self%centers(2,j)),nint(self%centers(3,j))) = cnt
-                         flag(j) = .false.
-                         ! Set rmat_rows=cnt for the whole atom (not just the center)
-                         label_j = rmat_cc(nint(self%centers(1,j)),nint(self%centers(2,j)),nint(self%centers(3,j)))
-                         label_i = rmat_cc(nint(self%centers(1,i)),nint(self%centers(2,i)),nint(self%centers(3,i)))
-                         if(abs(label_j) > TINY) then
-                             where(abs(rmat_cc-label_j)<TINY)
-                                  rmat_rows = cnt
-                             endwhere
-                         endif
-                      endif
-                  endif
-              enddo
-              if(abs(label_i)>TINY) then
-                  where(abs(rmat_cc-label_i)<TINY) rmat_rows = real(cnt)
-              endif
-              ! surf each row
-              where(abs(rmat_rows - real(cnt)) > TINY) rmat_rows = 0.
-              if(flag(i) .and. any(rmat_rows > TINY)) then
-                  cnt_additional = cnt_additional + 1
-                  call self%img_rows%set_rmat(rmat_rows)
-                  call self%img_rows%write('FULLRow'//int2str(cnt_additional)//'xy.mrc')
-              endif
-          enddo
-          call self%img_rows%set_rmat(rmat_rows)
-          call self%img_rows%write('ImgROWS.mrc')
-          !take each atom row and analyse it for polarization
-          do n_row = 1, cnt
-              if(do_it(n_row)) then
-                  do_it(n_row) = .false.
-                  rmat_rows = self%img_rows%get_rmat()   ! restore rmat_rows
-                  rmat_cc   = self%img_cc%get_rmat()     ! restore rmat_cc
-                  where(abs(rmat_rows - real(n_row)) > TINY)
-                      rmat_rows = 0.
-                      rmat_cc = 0.
-                  endwhere
-                  call img_aux%set_rmat(rmat_cc)
-                  call img_aux%find_connected_comps(img_aux_cc)
-                  rmat_aux_cc = img_aux_cc%get_rmat()
-                  cnt_additional = 0
-                  label_max = nint(maxval(rmat_aux_cc)) ! cc which corresponds to the highest label in the row
-                  !label_max has to be at least 4 to have significance (rows with enough number of atoms)
-                  if(label_max > 3) then
-                      allocate(ang_var      (label_max-1), source = 0.)
-                      allocate(cc_in_the_row(label_max-1), source = 0.)
-                      do k = 1, label_max-1
-                          m = minloc(abs(rmat_aux_cc(:,:,:)-real(k))) !select one pxl labeled k
-                          label1 = nint(rmat_cc(m(1),m(2),m(3)))      !identify the corresponding label in rmat_cc
-                          ! calculate for k just the first time
-                          if (k == 1) self%loc_longest_dist(:3,k) = self%loc_longest_dist(:3,k)-nint(self%centers(:3,label1))+1 !vxl identifying the longest dim of the atom translated into the origin
-                          m = minloc(abs(rmat_aux_cc(:,:,:)-real(k+1))) !select one pxl labeled k+1
-                          label2 = nint(rmat_cc(m(1),m(2),m(3)))
-                          !translating initial point(self%centers) of the vector center-loc_longest_dist in the origin(1,1,1)
-                          self%loc_longest_dist(:3,k+1) = self%loc_longest_dist(:3,k+1)-nint(self%centers(:3,label2))+1 !+1 because the origin is not (0,0,0)
-                          loc_ld_real = real(self%loc_longest_dist) !translation in reals
-                          dot_prod = loc_ld_real(1,k)*loc_ld_real(1,k+1)+ &
-                          &          loc_ld_real(2,k)*loc_ld_real(2,k+1)+ &
-                          &          loc_ld_real(3,k)*loc_ld_real(3,k+1)
-                          mod_1 = sqrt(loc_ld_real(1,k  )**2+loc_ld_real(2,k  )**2+loc_ld_real(3,k  )**2)
-                          mod_2 = sqrt(loc_ld_real(1,k+1)**2+loc_ld_real(2,k+1)**2+loc_ld_real(3,k+1)**2)
-                          if(dot_prod/(mod_1*mod_2) > 1. .or. dot_prod/(mod_1*mod_2)< -1.) then
-                              THROW_WARN('Out of the domain of definition of arccos; atom_rows')
-                              theta = 0.
-                          else
-                              theta = acos(dot_prod/(mod_1*mod_2))
-                          endif
-                          write(logfhandle,*) 'neighbour' , k, 'angles in degrees = ', rad2deg(theta)
-                          if(DEBUGG) then
-                              write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
-                              write(logfhandle,*)'dot_prod = ', dot_prod
-                              write(logfhandle,*)'mod_1 = ', mod_1
-                              write(logfhandle,*)'mod_2 = ', mod_2
-                              write(logfhandle,*)'mod1*mod2=',(mod_1*mod_2), 'frac = ', dot_prod/(mod_1*mod_2)
-                          endif
-                          ang_var(k) = rad2deg(theta) !radians
-                          cc_in_the_row(k) = real(k)
-                      enddo
-                      if(DEBUGG) then
-                          write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
-                          write(logfhandle,*)'N_ROW = ', n_row
-                          write(logfhandle,*)'cc_in_the_row=', cc_in_the_row
-                          write(logfhandle,*)'ang_var=', ang_var
-                      endif
-                      open(129, file='Polarization_xy',position = 'append')
-                      write (129,*) 'Ang_vars'//int2str(n_row)//'=[...'
-                      do k = 1, label_max-1
-                              write (129,'(A)', advance='no') trim(real2str(cc_in_the_row(k)))
-                              write (129,'(A)', advance='no') ', '
-                              write (129,'(A)', advance='no') trim(real2str(ang_var(k)))
-                              write (129,'(A)')'; ...'
-                      end do
-                      write (129,*) '];'
-                      close(129)
-                      deallocate(ang_var,cc_in_the_row)
-                  endif
-              endif
-          enddo
-          write(logfhandle,*)'atom rows analysis completed'
-    end subroutine atom_rows
+        call self%img_bin%grow_bins(nint(0.5*avg_dist_atoms)+1)
+        call self%img_bin%cos_edge(6)
+        call self%img_bin%write('SoftMask.mrc')
+    end subroutine make_soft_mask
 
-   ! This subroutine performs polarization search with respect
-   ! to the center of mass of the nanoparticle.
-    subroutine polar_masscenter(self, n)
-        use simple_atoms, only: atoms
-        class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: n !number of neighbours to consider
-        integer            :: labels_out(n)
-        integer            :: i, pdb_sz
-        type(atoms)        :: masscen_pdb, neigh_pdb
-        self%nanop_mass_cen = self%nanopart_masscen()
-        pdb_sz = 1
-        call masscen_pdb%new(pdb_sz, dummy=.true.)
-        call masscen_pdb%set_coord(1,(self%nanop_mass_cen(:)-1.)*self%smpd) !-1 because of the different indexing: starting from 0 or 1
-        call masscen_pdb%writepdb('MassCenter')
-        call self%find_nearest_neigh(labels_out)
-        pdb_sz = n
-        call neigh_pdb%new(pdb_sz, dummy=.true.)
-        do i=1,n
-            call neigh_pdb%set_coord(i,(self%centers(:,labels_out(i))-1.)*self%smpd) !-1 because of the different indexing: starting from 0 or 1
-        enddo
-        call neigh_pdb%writepdb(int2str(n)//'NeighMassCenter')
-        call self%search_neigh_polarization(labels_out)
-    end subroutine polar_masscenter
-
-    ! This subroutine finds the labels of the connected components
-    ! whose centers are the m nearest neighbours of the atom
-    ! identified by label_in and stores them in labels_out.
-    ! The size of labels_out determines the numbers of neighbours
-    ! to consider. Remember that for how it is built, self%centers(:3,i)
-    ! contains the coords of the
-    ! center of mass of the i-th cc.
-    subroutine find_nearest_neigh(self, labels_out, label_in)
-        class(nanoparticle),  intent(inout) :: self
-        integer,              intent(inout) :: labels_out(:)
-        integer, optional,    intent(in)    :: label_in      !If label in is NOT present, then it considers the neighbors of the center of mass
-        integer :: neigh_nb
-        integer :: cnt
-        real    :: dist
-        integer :: location(1)
-        logical :: mask(self%n_cc)
-        if(.not. allocated(self%centers)) THROW_HARD('Atom centers have to be calculated at first; find_nearest_neigh')
-        if(size(labels_out) < 2) THROW_HARD('Too small number of neighbours; find_nearest_neigh')
-        if(size(labels_out) > self%n_cc) THROW_HARD('Cannot look for too many neighbours; find_nearest_neigh')
-        if(size(labels_out) == self%n_cc) then
-            labels_out(:) = nint(self%centers(:,2))
-            return
-        endif
-        !initialise
-        mask = .true.                     ! every atom center could be neighbour
-        neigh_nb = size(labels_out)       ! number of neighs to find
-        if(.not. present(label_in)) then  ! find neighbous of center of mass
-            do cnt = 1, neigh_nb
-                dist =  pixels_dist(self%nanop_mass_cen(:), self%centers, 'min', mask, location)
-                labels_out(cnt) = location(1)
-                mask(location)  = .false. ! do not consider this atom again
-            enddo
+    ! This subroutine takes in input 2 3D vectors, centered in the origin
+    ! and it gives as an output the angle between them, IN DEGREES.
+    function ang3D_vecs(vec1, vec2) result(ang)
+        real, intent(inout) :: vec1(3), vec2(3)
+        real :: ang        !output angle
+        real :: ang_rad    !angle in radians
+        real :: mod1, mod2
+        real :: dot_prod
+        mod1 = sqrt(vec1(1)**2+vec1(2)**2+vec1(3)**2)
+        mod2 = sqrt(vec2(1)**2+vec2(2)**2+vec2(3)**2)
+        ! normalise
+        vec1 = vec1/mod1
+        vec2 = vec2/mod2
+        ! dot product
+        dot_prod = vec1(1)*vec2(1)+vec1(2)*vec2(2)+vec1(3)*vec2(3)
+        ! sanity check
+        if(dot_prod > 1. .or. dot_prod< -1.) then
+            THROW_WARN('Out of the domain of definition of arccos; ang3D_vecs')
+            ang_rad = 0.
         else
-            mask(label_in) = .false.      !do not consider the center of the selected atom
-            do cnt = 1, neigh_nb
-                dist =  pixels_dist(self%centers(:,label_in), self%centers, 'min', mask, location)
-                labels_out(cnt) = location(1)
-                mask(location)  = .false.
-            enddo
+            ang_rad = acos(dot_prod)
         endif
-    end subroutine find_nearest_neigh
+        if(DEBUGG) then
+            write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
+            write(logfhandle,*)'mod_1     = ', mod1
+            write(logfhandle,*)'mod_2     = ', mod2
+            write(logfhandle,*)'dot_prod  = ', dot_prod
+            write(logfhandle,*) 'ang in radians', acos(dot_prod)
+        endif
+        !output angle
+        ang = rad2deg(ang_rad)
+    end function ang3D_vecs
 
-    ! polarization search via angle variance. The considered angle is:
-    ! -)  IF label_atom is present: the angle between the direction of
-    !    the longest dim in the atom identified by label_atom and the
-    !    direction of the longest dim of its neighbours, identified
-    !    by labels_neigh
-    ! -) IF label_atom is NOT present: the angle between the direction
-    !    [1,1,1] and the direction of the longest dim of the atoms identified
-    !    by labels_neigh, which are the neighbours of the masscenter.
-    subroutine search_neigh_polarization(self, labels_neigh, label_atom)
+    ! Polarization search via angle variance. The considered angle is
+    ! the angle between the vector [0,0,1] and the direction of the
+    ! longest dim of the atom.
+    ! This is done for each of the atoms and then there is a search
+    ! of the similarity between the calculated angles.
+   subroutine search_polarization(self)
         class(nanoparticle), intent(inout) :: self
-        integer,             intent(in)    :: labels_neigh(:)
-        integer, optional,   intent(in)    :: label_atom   !if it is not present it calculates the angles wrt a fixed direction
-        real, allocatable :: ang_var(:)
         real, allocatable :: loc_ld_real(:,:)
-        integer :: nb_neigh
         integer :: k, i
+        real    :: vec_fixed(3)     !vector indentifying z direction
         real    :: theta, mod_1, mod_2, dot_prod
-        logical :: mask(size(labels_neigh)) !printing purposes
-        nb_neigh = size(labels_neigh)
-        if(allocated(ang_var)) deallocate(ang_var)
-        allocate(ang_var(nb_neigh), source = 0.)
+        logical :: mask(self%n_cc) !printing purposes
+        if(allocated(self%ang_var)) deallocate(self%ang_var)
+        allocate(self%ang_var(self%n_cc), source = 0.)
         if(allocated(loc_ld_real)) deallocate(loc_ld_real)
         allocate(loc_ld_real(3,size(self%loc_longest_dist, dim=2)), source = 0.)
-        if(present(label_atom)) then
-            self%loc_longest_dist(:3,label_atom) = self%loc_longest_dist(:3,label_atom)-nint(self%centers(:3,label_atom))+1 !vxl identifying the longest dim of the atom translated into the origin
-            write(logfhandle,*)'>>>>> Variance angles wrt the direction of the longest dim in the aom identified by', label_atom
-            do k = 1, nb_neigh
-                self%loc_longest_dist(:3,labels_neigh(k)) = self%loc_longest_dist(:3,labels_neigh(k))-nint(self%centers(:3,labels_neigh(k)))+1 !vxl identifying the longest dim of the atom translated into the origin
-                ! https://www.intmath.com/vectors/7-vectors-in-3d-space.php FORMULAE HERE
-                loc_ld_real = real(self%loc_longest_dist) !translation in reals
-                dot_prod = loc_ld_real(1,label_atom)*loc_ld_real(1,labels_neigh(k))+ &
-                         & loc_ld_real(2,label_atom)*loc_ld_real(2,labels_neigh(k))+ &
-                         & loc_ld_real(3,label_atom)*loc_ld_real(3,labels_neigh(k))
-                mod_1 = sqrt(loc_ld_real(1,label_atom     )**2+loc_ld_real(2,label_atom     )**2+loc_ld_real(3,label_atom     )**2)
-                mod_2 = sqrt(loc_ld_real(1,labels_neigh(k))**2+loc_ld_real(2,labels_neigh(k))**2+loc_ld_real(3,labels_neigh(k))**2)
-                if(dot_prod/(mod_1*mod_2) > 1. .or. dot_prod/(mod_1*mod_2)< -1.) then
-                    THROW_WARN('Out of the domain of definition of arccos; search_neigh_polarization')
-                    theta = 0.
-                else
-                    theta = acos(dot_prod/(mod_1*mod_2)) !the output of acos in RADIANS
-                endif
-                write(logfhandle,*) 'neighbour' , k, 'angles in degrees = ', rad2deg(theta)
-                if(DEBUGG) then
-                    write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
-                    write(logfhandle,*)'dot_prod = ', dot_prod
-                    write(logfhandle,*)'mod_1 = ', mod_1
-                    write(logfhandle,*)'mod_2 = ', mod_2
-                    write(logfhandle,*)'mod1*mod2=',(mod_1*mod_2), 'frac = ', dot_prod/(mod_1*mod_2)
-                endif
-                ang_var(k) = rad2deg(theta) !radians
-            enddo
-            open(129, file='Polarization_NEIGH',position = 'append')
-            write (129,*) 'ang_var'//int2str(label_atom)//'=[...'
-            do k = 1, nb_neigh
-                    write (129,'(A)', advance='no') trim(int2str(k))
-                    write (129,'(A)', advance='no') ', '
-                    write (129,'(A)', advance='no') trim(real2str(ang_var(k)))
-                    write (129,'(A)')'; ...'
-            end do
-            write (129,*) '];'
-            close(129)
-        else !consider fixed direction [1,1,1] (it should be the direction of maximum atoms density)
-            write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>variance angles wrt the direction [1,1,1]'
-            do k = 1, nb_neigh
-                self%loc_longest_dist(:3,labels_neigh(k)) = self%loc_longest_dist(:3,labels_neigh(k))-nint(self%centers(:3,labels_neigh(k)))+1
-                loc_ld_real = real(self%loc_longest_dist) !casting
-                dot_prod = 1.*loc_ld_real(1,labels_neigh(k))+ &
-                         & 1.*loc_ld_real(2,labels_neigh(k))+ &
-                         & 1.*loc_ld_real(3,labels_neigh(k))
-                mod_1 = sqrt(3.) !modulus of vec [1,1,1]
-                mod_2 = sqrt(loc_ld_real(1,labels_neigh(k))**2+loc_ld_real(2,labels_neigh(k))**2+loc_ld_real(3,labels_neigh(k))**2)
-                if(dot_prod/(mod_1*mod_2) > 1. .or. dot_prod/(mod_1*mod_2)< -1.) then
-                    THROW_WARN('Out of the domain of definition of arccos; search_neigh_polarization')
-                    theta = 0.
-                else
-                    theta = acos(dot_prod/(mod_1*mod_2))
-                endif
-                write(logfhandle,*) 'neighbour' , k, 'angles in degrees = ', rad2deg(theta)
-                if(DEBUGG) then
-                    write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
-                    write(logfhandle,*)'dot_prod = ', dot_prod
-                    write(logfhandle,*)'mod_1 = ', mod_1
-                    write(logfhandle,*)'mod_2 = ', mod_2
-                    write(logfhandle,*)'mod1*mod2=',(mod_1*mod_2), 'frac = ', dot_prod/(mod_1*mod_2)
-                endif
-                ang_var(k) = rad2deg(theta) !radians
-            enddo
-            open(129, file='Polarization_MASSCEN',position = 'append')
-            write (129,*) 'ang_var=[...'
-            do k = 1, nb_neigh
-                    write (129,'(A)', advance='no') trim(int2str(k))
-                    write (129,'(A)', advance='no') ', '
-                    write (129,'(A)', advance='no') trim(real2str(ang_var(k)))
-                    write (129,'(A)')'; ...'
-            end do
-            write (129,*) '];'
-            close(129)
-        endif
+        !translating loc_longest_dist in the origin
+        loc_ld_real(:3,:) = real(self%loc_longest_dist(:3,:))-self%centers(:3,:)+1
+        !consider fixed vector [0,0,1] (z direction)
+        vec_fixed(1) = 0.
+        vec_fixed(2) = 0.
+        vec_fixed(2) = 1.
+        write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
+        do k = 1, self%n_cc
+            self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
+            print *, 'ATOM ', k, 'ANGLE ', self%ang_var(k)
+        enddo
+        open(129, file='AnglesLongestDims')
+        write (129,*) 'ang=[...'
+        do k = 1, self%n_cc
+                write (129,'(A)', advance='no') trim(int2str(k))
+                write (129,'(A)', advance='no') ', '
+                write (129,'(A)', advance='no') trim(real2str(self%ang_var(k)))
+                write (129,'(A)')'; ...'
+        end do
+        write (129,*) '];'
+        close(129)
         mask = .true. !not to overprint
-        do i = 1,  nb_neigh-1
-            do k = i+1,  nb_neigh
-                if(abs(ang_var(i)-ang_var(k))< 0.05 .and. mask(i)) then
-                    if(present(label_atom)) then
-                        write(logfhandle,*)'Neighbours', i, 'and', k, 'of cc ',label_atom, 'have the same ang_var'
-                        mask(k) = .false.
-                    else
-                        write(logfhandle,*)'Neighbours', i, 'and', k,'have the same ang_var wrt direction [1,1,1]'
-                        mask(k) = .false.
-                    endif
+        ! Searching coincident angles
+        do i = 1,  self%n_cc-1
+            do k = i+1, self%n_cc
+                if(abs(self%ang_var(i)-self%ang_var(k))< 1.5 .and. mask(i)) then !1.5 degrees allowed
+                    write(logfhandle,*)'Atoms', i, 'and', k,'have the same ang_var wrt vector [0,0,1]'
+                    mask(k) = .false.
                 endif
             enddo
         enddo
-        ! TO SAVE THE COUPLES OF ANGLES
-        ! coords(:) = nint(self%centers(:,labels_neigh(1)))
-        ! rmat(coords(1),coords(2),coords(3)) = 1
-        ! coords(:) = nint(self%centers(:,labels_neigh(9)))
-        ! rmat(coords(1),coords(2),coords(3)) = 1
-        ! coords(:) = nint(self%centers(:,labels_neigh(36)))
-        ! rmat(coords(1),coords(2),coords(3)) = 1
-        ! call img_couple%set_rmat(rmat)
-        ! call img_couple%write('2Couples1_'//int2str(label_atom)//'.mrc')
-        ! rmat = 0
-        deallocate(ang_var, loc_ld_real)
-    end subroutine search_neigh_polarization
+        deallocate(loc_ld_real)
+    end subroutine search_polarization
 
     !Affinity propagation clustering based on aspect ratios
-    subroutine affprop_cluster(self)
+    subroutine affprop_cluster_ar(self)
       use simple_aff_prop
+      use simple_atoms, only : atoms
       class(nanoparticle), intent(inout) :: self
       type(aff_prop)       :: ap_nano
       real, allocatable    :: simmat(:,:)
@@ -665,11 +578,8 @@ contains
       integer, allocatable :: centers_ap(:), labels_ap(:)
       integer              :: i, j, ncls, nerr
       integer :: dim
-      real, allocatable :: rmat(:,:,:)
-      type(image)       :: img_clusters
       dim = size(self%ratios)
       allocate(simmat(dim, dim), source = 0.)
-      write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
       do i=1,dim-1
           do j=i+1,dim
               simmat(i,j) = -sqrt((self%ratios(i)-self%ratios(j))**2)
@@ -679,53 +589,74 @@ contains
       call ap_nano%new(dim, simmat)
       call ap_nano%propagate(centers_ap, labels_ap, simsum)
       ncls = size(centers_ap)
-      write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
-      write(logfhandle,*) 'CENTERS'
-      do i=1,size(centers_ap)
-          write(logfhandle,*) self%ratios(centers_ap(i))
-      end do
-      call img_clusters%new(self%ldim, self%smpd)
-      rmat = img_clusters%get_rmat() !allocation
+      write(logfhandle,*) 'NR OF CLUSTERS FOUND AR:', ncls
       do i = 1, self%n_cc
-          rmat(nint(self%centers(1,i)),nint(self%centers(2,i)),nint(self%centers(3,i))) = labels_ap(i)
+          call self%centers_pdb%set_beta(i, real(labels_ap(i)))
       enddo
-      call img_clusters%set_rmat(rmat)
-      call img_clusters%write('AspectRatioClusters.mrc')
+      call self%centers_pdb%writepdb('AspectRatioClusters')
       deallocate(simmat, labels_ap, centers_ap)
-    end subroutine affprop_cluster
+  end subroutine affprop_cluster_ar
 
-   ! To test it.
-    subroutine run_nanoparticle_job(self)
-      class(nanoparticle), intent(inout) :: self
-      !binarization
-       call self%img%read(self%partname)
-       call self%binarize()
-      !centers identifications
-      call self%find_centers()
-      !aspect ratios
-      call self%calc_aspect_ratio()
-      !polarization search wrt to the center of mass of the nanoparticle
-      call self%polar_masscenter(10)
-    end subroutine run_nanoparticle_job
+  ! Affinity propagation clustering based on ahgles wrt vec [0,0,1].
+  subroutine affprop_cluster_ang(self)
+    use simple_aff_prop
+    use simple_atoms, only : atoms
+    class(nanoparticle), intent(inout) :: self
+    type(aff_prop)       :: ap_nano
+    real, allocatable    :: simmat(:,:)
+    real                 :: simsum
+    integer, allocatable :: centers_ap(:), labels_ap(:)
+    integer              :: i, j, ncls, nerr
+    integer :: dim
+    dim = self%n_cc
+    allocate(simmat(dim, dim), source = 0.)
+    do i=1,dim-1
+        do j=i+1,dim
+            simmat(i,j) = -sqrt((self%ang_var(i)-self%ang_var(j))**2)
+            simmat(j,i) = simmat(i,j)
+        end do
+    end do
+    call ap_nano%new(dim, simmat)
+    call ap_nano%propagate(centers_ap, labels_ap, simsum)
+    ncls = size(centers_ap)
+    write(logfhandle,*) 'NR OF CLUSTERS FOUND ANG:', ncls
+    do i = 1, self%n_cc
+        call self%centers_pdb%set_beta(i, real(labels_ap(i)))
+    enddo
+    call self%centers_pdb%writepdb('AnglesClusters')
+    deallocate(simmat, labels_ap, centers_ap)
+end subroutine affprop_cluster_ang
 
-    subroutine run(self)
-        class(nanoparticle), intent(inout) :: self
-        call self%cline%parse_oldschool()
-        call self%cline%checkvar('smpd', 1)
-        call self%cline%checkvar('vol1', 2)
-        call self%cline%check()
-        call self%p%new(self%cline)
-        call self%new()
-        call self%run_nanoparticle_job() !just one nanoparticle
-        call self%kill()
-    end subroutine run
+! This subroutine takes the connected component image
+! and it subsamples it. We need it because in the circularity
+! estimation otherwhise surface and volume would coincide.
+subroutine over_sample(self)
+    class(nanoparticle), intent(inout) :: self
+    call self%img%fft()
+    call self%img%pad(self%img_over_smp)
+    call self%img_over_smp%ifft()
+    call self%img_over_smp%write('OverSampled.mrc')
+end subroutine over_sample
 
-    subroutine kill_nanoparticle(self)
+subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self
         call self%img%kill()
         call self%img_bin%kill()
         call self%img_cc%kill()
-        call self%img_rows%kill()
+        call self%img_over_smp%kill()
         deallocate(self%centers,self%ratios,self%loc_longest_dist)
-    end subroutine kill_nanoparticle
+end subroutine kill_nanoparticle
 end module simple_nanoparticles_mod
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! To calculate angles between shortest and longest dimension
+! shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist)
+! longest_dist  = pixels_dist(self%centers(:,label), real(pos),'max', mask_dist, location)
+! self%loc_longest_dist(:3, label) =  pos(:3,location(1))
+! vec1 = real(pos(:3,location(1)))- self%centers(:,location(1)) + 1 !translating to the origin
+! vec2 = real(pos(:3,loc_min (1)))- self%centers(:,loc_min(1)) + 1
+! angles(label) =  ang3D_vecs(vec1,vec2)
+! !print *, 'ATOM ', label, 'ANG', angles(label)
+! call self%centers_pdb%set_beta(label,angles(label))
+! sum_angles = sum_angles + ang3D_vecs(vec1,vec2)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

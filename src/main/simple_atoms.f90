@@ -52,6 +52,7 @@ type :: atoms
     procedure          :: set_coord
     procedure          :: set_chain
     procedure          :: set_num
+    procedure          :: set_beta
     procedure          :: set_resnum
     ! I/O
     procedure          :: print_atom
@@ -249,6 +250,14 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_num')
         self%num(i) = num
     end subroutine set_num
+
+    subroutine set_beta( self, i, bfac )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        real,             intent(in)    :: bfac
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_beta')
+        self%beta(i) = bfac
+    end subroutine set_beta
 
     subroutine set_resnum( self, i, resnum )
         class(atoms),     intent(inout) :: self

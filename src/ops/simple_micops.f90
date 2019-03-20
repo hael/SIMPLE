@@ -58,7 +58,7 @@ contains
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
         !high-pass filter shrunken micrograph according to box_shrunken
-        call micrograph_shrunken%bp(4*box_shrunken *micrograph_shrunken%get_smpd(), 0., width=30.)!, width=real(box_shrunken)) ! Chiara
+        call micrograph_shrunken%bp(4*box_shrunken *micrograph_shrunken%get_smpd(), 0.)!width=real(box_shrunken)) ! width = 30. Chiara
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
         if(present(snr)) call micrograph_shrunken%add_gauran(snr)

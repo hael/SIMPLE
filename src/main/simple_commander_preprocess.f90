@@ -542,8 +542,9 @@ contains
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
-    subroutine exec_pick_chiara( self, cline)
+    subroutine exec_pick_chiara( self, cline )
         use simple_picker_chiara
+        use simple_tvfilter, only : tvfilter
         use simple_micops
         use simple_image
         use simple_stackops
@@ -558,6 +559,8 @@ contains
         real               :: part_radius
         real,    parameter :: SHRINK = 4.
         real               :: smpd_shrunken, lp, ave, sdev, maxv, minv, thresh(1)
+        type(tvfilter)     :: tvf !total variation denoising
+        real               :: lambda
         if( .not. cline%defined('fname') )then
             THROW_HARD('ERROR! fname needs to be present; exec_pick_chiara')
         endif
@@ -581,10 +584,15 @@ contains
         output_dir = PATH_HERE
         ! 0) Reading and saving original micrograph
         call read_micrograph(micfname = params%fname, smpd = params%smpd)
+        print *, 'SELECTED SMPD = ', params%smpd
         ! 1) Shrink and high pass filtering
         part_radius = params%part_radius
         call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
         call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! To take care of shrinking
+        part_radius = part_radius/SHRINK
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
         call mic_shrunken%read('shrunken_hpassfiltered.mrc')
         call mic_copy%new(ldim_shrunken, smpd_shrunken) !work on a copy not to modify the original mic
@@ -597,6 +605,13 @@ contains
         endif
         call mic_copy%bp(0.,lp)
         call mic_copy%ifft()
+        ! 2.1) TV denoising
+        call tvf%new()
+        lambda = 5.
+        call tvf%apply_filter(mic_copy, lambda)
+        call mic_copy%write('tvfiltered.mrc')
+        ! 2.3) negative image, otherwise I have a binarization with inverted labels
+        call mic_copy%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
         ! 3) Edge Detection
         call mic_copy%stats( ave, sdev, maxv, minv )
         if(params%detector .eq. 'sobel') then
@@ -630,8 +645,8 @@ contains
         ! 6) cc filtering
         min_sz = 10*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
         max_sz = 70*int(part_radius)
-        call imgcc%elim_cc([min_sz,max_sz])
-        call imgcc%write('ConnectedComponentsElimin.mrc')
+        !call imgcc%elim_cc([min_sz,max_sz])
+        !call imgcc%write('ConnectedComponentsElimin.mrc')
         call extract_particles(mic_shrunken, imgcc, int(part_radius))
         open(unit = 17, file = "PickerInfo.txt")
         write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
@@ -639,16 +654,17 @@ contains
         write(unit = 17, fmt = '(a,a)') 'Working Directory ', output_dir
         write(unit = 17, fmt = "(a,f0.0)")  'Mic Shrunken by factor ', SHRINK
         write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dim after shrink ', ldim_shrunken
-        write(unit = 17, fmt = "(a,f0.0)")  'Smpd after shrink ', smpd_shrunken
+        write(unit = 17, fmt = "(a,f5.2)")  'Smpd after shrink ', smpd_shrunken
         write(unit = 17, fmt = "(a,i0)")  'Hp box ', int(SHRINK*( 4*part_radius+10 ))
         write(unit = 17, fmt = "(a,f0.0)")  'Lp  ', lp
         write(unit = 17, fmt = "(a,i0,tr1, i0)")  'Connected Components size filtering  ', min_sz, max_sz
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
         write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a,tr1,f0.0)")  'smpd ', params%smpd
+        write(unit = 17, fmt = "(a,tr1,f5.2)")  'smpd ', params%smpd
         write(unit = 17, fmt = "(a,tr1,f0.0)")  'part_radius  ', params%part_radius
         write(unit = 17, fmt = "(a,a)")  'detector  ', params%detector
+        write(unit = 17, fmt = "(a,f0.0)")  'TVF parameter  ',lambda
         close(17, status = "keep")
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
@@ -662,9 +678,10 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        type(image)        :: img
+        type(image)        :: img, img_over
         integer :: ldim(3), nptcls
         real    :: smpd
+        real, parameter :: SCALE_FACTOR = 1.0
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -673,29 +690,37 @@ contains
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
         call nano%set_partname(params%vols(1))
-        call nano%new()
+        call nano%new(SCALE_FACTOR)
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
         ! Creating image
         call img%new(ldim, smpd)
+        call img_over%new(int(real(ldim)*SCALE_FACTOR), smpd/real(SCALE_FACTOR))
         ! Nanoparticle binarization
         call img%read(params%vols(1))
         call nano%set_img(img, 'img')
-        call nano%binarize()
-        ! Fetching images
-        call nano%get_img(img,'img_bin')
-        call img%write('BIN.mrc')
+        call nano%binarize() !scale factor is for over sampling purposes
         ! Atoms centers identification
         call nano%find_centers()
+        ! Outliers discarding
+        call nano%discard_outliers()
+        ! Fetching images
+        call nano%get_img(img_over,'img_bin')
+        call img_over%write('BINnano.mrc')
+        stop
         ! Aspect ratios calculations
         call nano%calc_aspect_ratio()
-        ! Polarization search wrt to the center of mass of the nanoparticle
-        if( .not. cline%defined('nnn') )then
-            call nano%polar_masscenter(30)  !default value
-        else
-            call nano%polar_masscenter(int(params%nnn))  !default value
-        endif
-        ! Affinity propagation test, TO REMOVE
-        call nano%affprop_cluster()
+        ! Circularities calculation
+        call nano%calc_circularity()
+        ! Make soft mask
+        call nano%make_soft_mask()
+        ! Polarization search
+        call nano%search_polarization()
+        ! Affinity propagation test, TO PUT ALLTOGETHER
+        call nano%affprop_cluster_ar()
+        call nano%affprop_cluster_ang()
+        ! kill
+        call img%kill
+        call img_over%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms

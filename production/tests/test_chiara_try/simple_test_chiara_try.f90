@@ -39,63 +39,54 @@ end subroutine laplacian_filt
           r(1) = 1
           r(2) = x*y
   end function fun_try
-  !
-  !
-  ! subroutine aff_prop
-  !     real                 :: centers(3,303)
-  !     type(aff_prop)       :: apcls
-  !     real                 :: simmat(900,900), simsum
-  !     integer, allocatable :: centers(:), labels(:)
-  !     integer              :: i, j, ncls, nerr
-  !     write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
-  !     ! make data
-  !     do i=1,300
-  !         datavecs(i,:) = 1.
-  !     end do
-  !     do i=301,600
-  !         datavecs(i,:) = 5.
-  !     end do
-  !     do i=601,900
-  !         datavecs(i,:) = 10.
-  !     end do
-  !     do i=1,900-1
-  !         do j=i+1,900
-  !             simmat(i,j) = -euclid(datavecs(i,:),datavecs(j,:))
-  !             simmat(j,i) = simmat(i,j)
-  !         end do
-  !     end do
-  !     call apcls%new(900, simmat)
-  !     call apcls%propagate(centers, labels, simsum)
-  !     ncls = size(centers)
-  !     nerr = 0
-  !     do i=1,299
-  !         do j=i+1,300
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     do i=301,599
-  !         do j=i+1,600
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     do i=601,899
-  !         do j=i+1,900
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
-  !     write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
-  !     write(logfhandle,*) 'CENTERS'
-  !     do i=1,size(centers)
-  !         write(logfhandle,*) datavecs(centers(i),:)
-  !     end do
-  !     if( ncls == 3 .and. nerr == 0 )then
-  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
-  !     else
-  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
-  !     endif
-  ! end subroutine aff_prop
 
+      SUBROUTINE PRINT_EIGENVALUES( DESC, N, WR, WI )
+          CHARACTER(len= *)    :: DESC
+          INTEGER ::  N
+          REAL    ::  WR( : ), WI( : )
+          REAL, parameter ::   ZERO = 0.0
+          INTEGER ::  J
+          WRITE(*,*)
+          WRITE(*,*) DESC
+          DO J = 1, N
+             IF( WI( J ).EQ.ZERO ) THEN
+                WRITE(*,9998,ADVANCE='NO') WR( J )
+             ELSE
+                WRITE(*,9999,ADVANCE='NO') WR( J ), WI( J )
+             END IF
+          END DO
+          WRITE(*,*)
+     9998 FORMAT( 11(:,1X,F6.2) )
+     9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
+          RETURN
+      END SUBROUTINE PRINT_EIGENVALUES
+
+      SUBROUTINE PRINT_EIGENVECTORS( DESC, N, WI, V, LDV )
+          CHARACTER(len = *) ::   DESC
+          INTEGER            :: N, LDV
+          REAL   :: WI( : ), V( :, : )
+          REAL, parameter    :: ZERO = 0.0
+          INTEGER   ::       I, J
+          WRITE(*,*)
+          WRITE(*,*) DESC
+          DO I = 1, N
+             J = 1
+             DO WHILE( J.LE.N )
+                IF( WI( J ).EQ.ZERO ) THEN
+                   WRITE(*,9998,ADVANCE='NO') V( I, J )
+                   J = J + 1
+                ELSE
+                   WRITE(*,9999,ADVANCE='NO') V( I, J ), V( I, J+1 )
+                   WRITE(*,9999,ADVANCE='NO') V( I, J ), -V( I, J+1 )
+                   J = J + 2
+                END IF
+             END DO
+             WRITE(*,*)
+          END DO
+     9998 FORMAT( 11(:,1X,F6.2) )
+     9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
+          RETURN
+      END SUBROUTINE PRINT_EIGENVECTORS
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
@@ -119,15 +110,17 @@ program simple_test_chiara_try
   use simple_tvfilter
   use simple_ctf
   use simple_ppca
+  use simple_stat
+  use simple_lapackblas, only : sgeev
   type(image)       :: img, img_cc
   real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
   integer :: i,j, ldim(3), nptcls,n_vol
   type(ctfparams) :: ctfparms
   real :: smpd
-  integer :: h, k, sh, cnt, px(3), n
+  integer :: h, k, sh, cnt, px(3)
   real :: ave, sdev, maxv, minv, SumSQR
   real :: thresh(1)
-  real :: x(2,4), y(4), sig(4), v(2,2), w(2), chisq, a(2)
+  real :: x(2,4), y(4), sig(4), v(2,2), w(2), chisq
   integer, allocatable :: sz(:)
   integer, allocatable :: pos(:,:), imat(:,:,:)
   real :: dist, ratio, corr_real, corr_ft
@@ -143,7 +136,7 @@ program simple_test_chiara_try
   type(ctf) :: tfun
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   integer              :: ldim_shrunken(3), n_images, D, recsz, ifeat, box_shrunken
-  real,    allocatable :: avg(:), feat(:), dat(:), matrix(:,:,:)
+  real,    allocatable :: avg(:), feat(:), dat(:), mat(:,:,:)
   logical, allocatable :: l_mask(:,:,:)
   integer, allocatable :: coords(:,:)
   integer, parameter   :: BOX = 256, OFFSET = BOX/4-1, BOFFSET = 20 !BOX/4-1
@@ -151,9 +144,56 @@ program simple_test_chiara_try
   type(ppca)           :: my_ppca
   type(image)          :: img_rev, img_msk, mic_denoised, mic_denoised_norm
   real                 :: mskrad, smpd_shrunken
-  logical              :: do_overlap, do_discextract
-  do_overlap = .false.
-  do_discextract = .false.
+  logical              :: err
+  logical, allocatable :: border(:,:,:)
+  !TRY BORDER MASK
+  call img%new([50,50,50], 1.)
+  rmat = img%get_rmat()
+  rmat(20:30,20:30,20:30) = 1.
+  call img%set_rmat(rmat)
+  call img%write('Cube.mrc')
+  print *, 'count = ', count(rmat > 0.)
+  call img%border_mask(border,1)
+  print *, 'count border = ', count(border .eqv. .true.)
+  rmat = 0.
+  where(border .eqv. .true.) rmat = 1.
+  call img%set_rmat(rmat)
+  call img%write('BorderCube.mrc')
+
+
+  !eigenvectors and eigenvalues
+  ! real    :: A(5,5)
+  ! integer, parameter :: N = 5
+  ! integer, parameter :: LDA = 5, LDVL = 5, LDVR = 5
+  ! integer, parameter :: LWMAX = 1000
+  ! integer :: INFO, LWORK
+  ! real    :: matrix( 5, 5 ), VL(  5, 5  ), VR(  5, 5  ),    WR( 5 ), WI( 5 ), WORK(  1000 )
+! ! EIGENVECTORS AND VALUES CALCULATION WITH LAPACK see
+! ! http://www.netlib.org/lapack/explore-html/d3/dfb/group__real_g_eeigen_ga104525b749278774f7b7f57195aa6798.html https://software.intel.com/sites/products/documentation/doclib/mkl_sa/11/mkl_lapack_examples/sgeev_ex.f.htm
+! ! https://github.com/joe-of-all-trades/regionprops3/blob/master/regionprops3.m
+!  A = reshape([-1.01, 0.86, -4.6, 3.31,-4.81, &
+!                  &  3.98, 0.53,-7.04, 5.29, 3.55, &
+!                  &  3.30, 8.26,-3.89, 8.20,-1.51, &
+!                  &  4.43, 4.96,-7.66,-7.33, 6.18, &
+!                  &  7.31,-6.43,-6.16, 2.47, 5.58],[5,5])
+!  matrix = transpose(matrix)
+!  LWORK = -1
+!  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+!  LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
+! !Solve eigenproblem.
+!  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+! !Check for convergence.
+!  IF( INFO.GT.0 ) THEN
+!      WRITE(*,*)'The algorithm failed to compute eigenvalues.'
+!      STOP
+!  END IF
+!  !Print eigenvalues.
+! CALL PRINT_EIGENVALUES( 'Eigenvalues', N, WR, WI )
+! !Print left eigenvectors.
+!  CALL PRINT_EIGENVECTORS( 'Left eigenvectors', N, WI, VL, LDVL )
+! !Print right eigenvectors.
+!  CALL PRINT_EIGENVECTORS( 'Right eigenvectors', N, WI, VR, LDVR )
+
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  !!!!!!!!!!!!!WORKING ON POWER SPECTRA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  ! call process_ps_stack('pspecs_saga_polii.mrc', 'analisedSAGA.mrc', 1.14, 35., 1, 10) !winsz = 2

@@ -265,6 +265,7 @@ contains
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
     procedure          :: calc3D_neigh_8
+    procedure          :: calc3D_neigh_4
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -3413,20 +3414,27 @@ contains
      ! the input image self. Border is true in corrispondence of
      ! the border pixels in self. Self is meant to be binary.
      ! It is necessary for erosion operation
-    subroutine border_mask(self, border, label)
+    subroutine border_mask(self, border, label, four)
         class(image),         intent(in)    :: self
         logical, allocatable, intent(inout) :: border(:,:,:)
         integer, optional,    intent(in)    :: label
+        logical, optional,    intent(in)    :: four
         real,    allocatable :: neigh_8(:)
         integer              :: i, j, k, nsz, llabel
+        logical              :: ffour
         llabel = 1
         if(present(label)) llabel = label
+        ffour = .false.
+        if(present(four)) ffour = four
+        if(present(four) .and. self%ldim(3) .eq. 1) THROW_HARD('4-neighbours identification hasn t been implemented for 2D images; border_mask')
         if(allocated(border)) deallocate(border)
         allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
         if(self%ldim(3) == 1) then
             allocate(neigh_8(9), source = 0.)
-        else
+        elseif(.not. ffour) then
             allocate(neigh_8(27), source = 0.)
+        elseif(four) then
+            allocate(neigh_8(6), source = 0.) !actually this is neigh_4
         endif
         do i = 1,self%ldim(1)
             do j = 1, self%ldim(2)
@@ -3434,10 +3442,12 @@ contains
                     if(abs(self%rmat(i,j,k)-real(llabel)) < TINY ) then !white pixels
                         if(self%ldim(3) == 1) then
                             call self%calc_neigh_8  ([i,j,k], neigh_8, nsz)
-                        else
+                        elseif(.not. ffour) then
                             call self%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                        elseif(ffour) then
+                            call self%calc3D_neigh_4([i,j,k], neigh_8, nsz)
                         endif
-                        if(any(abs(neigh_8(:nsz))<TINY)) border(i,j,k) = .true.
+                        if(any(abs(neigh_8(:nsz))<0.5)) border(i,j,k) = .true. !the image is supposed to be either binary or connected components image
                     endif
                 enddo
             enddo
@@ -5164,7 +5174,7 @@ contains
         endif
     end subroutine calc_neigh_8_1
 
-    ! Returns 8-neighborhoods of the pixel position px in self
+    ! Returns 8-neighborhoods (in 3D they are 27) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! of the first slice, then central slice and finally third slice.
     ! The value of the pixel itself is saved as the last one.
@@ -5178,7 +5188,7 @@ contains
         i = px(1)
         j = px(2)
         k = px(3)
-        if(k-1 < 0 .or. k+1 > self%ldim(3)) then
+        if(k-1 < 1 .or. k+1 > self%ldim(3)) then
             write(logfhandle,*) 'Please consider padding on the 3rd dim, I didn t implement all the cases :) '
             THROW_HARD('Neigh of this px would exceed dim of the img; calc3D_neigh_8')
         endif
@@ -5350,6 +5360,84 @@ contains
             nsz = 27
         endif
     end subroutine calc3D_neigh_8
+
+    ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self
+    ! it returns the INTENSITY values of the 8-neigh in a fixed order.
+    ! The value of the pixel itself is NOT saved.
+    ! This function is for volumes.
+    subroutine calc3D_neigh_4(self, px, neigh_4, nsz )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: px(3)
+        real,         intent(inout) :: neigh_4(6)
+        integer,      intent(out)   :: nsz
+        integer :: i, j, k
+        i = px(1)
+        j = px(2)
+        k = px(3)
+        if( i == 1 .and. j == 1 .and. k == 1) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(2) = self%rmat(i,j+1,k)
+            neigh_4(3) = self%rmat(i+1,j,k)
+            nsz = 3
+            return
+        elseif( i == 1 .and. j == 1) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(2) = self%rmat(i,j,k-1)
+            neigh_4(3) = self%rmat(i,j+1,k)
+            neigh_4(4) = self%rmat(i+1,j,k)
+            nsz = 4
+            return
+        elseif( i == 1 .and. k == 1) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(3) = self%rmat(i,j+1,k)
+            neigh_4(3) = self%rmat(i,j-1,k)
+            neigh_4(4) = self%rmat(i+1,j,k)
+            nsz = 4
+            return
+        elseif( j == 1 .and. k == 1) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(2) = self%rmat(i,j+1,k)
+            neigh_4(3) = self%rmat(i+1,j,k)
+            neigh_4(4) = self%rmat(i-1,j,k)
+            nsz = 4
+            return
+        endif
+        if( i+1 == self%ldim(1) .and. j+1 == self%ldim(2) .and. k+1 == self%ldim(3)) then
+            neigh_4(1) = self%rmat(i,j,k-1)
+            neigh_4(2) = self%rmat(i,j-1,k)
+            neigh_4(3) = self%rmat(i-1,j,k)
+            nsz = 3
+            return
+        elseif( i+1 == self%ldim(1) .and. j+1 == self%ldim(2)) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(2) = self%rmat(i,j,k-1)
+            neigh_4(3) = self%rmat(i,j-1,k)
+            neigh_4(4) = self%rmat(i-1,j,k)
+            nsz = 4
+            return
+        elseif( i+1 == self%ldim(1) .and. k+1 == self%ldim(3)) then
+            neigh_4(1) = self%rmat(i,j,k-1)
+            neigh_4(3) = self%rmat(i,j+1,k)
+            neigh_4(3) = self%rmat(i,j-1,k)
+            neigh_4(4) = self%rmat(i-1,j,k)
+            nsz = 4
+            return
+        elseif( j+1 == self%ldim(2) .and. k+1 == self%ldim(3)) then
+            neigh_4(1) = self%rmat(i,j,k-1)
+            neigh_4(2) = self%rmat(i,j-1,k)
+            neigh_4(3) = self%rmat(i+1,j,k)
+            neigh_4(4) = self%rmat(i-1,j,k)
+            nsz = 4
+            return
+        endif
+        neigh_4(1) = self%rmat(i,j,k+1)
+        neigh_4(2) = self%rmat(i,j,k-1)
+        neigh_4(3) = self%rmat(i,j+1,k)
+        neigh_4(4) = self%rmat(i,j-1,k)
+        neigh_4(5) = self%rmat(i+1,j,k)
+        neigh_4(6) = self%rmat(i-1,j,k)
+        nsz = 6
+    end subroutine calc3D_neigh_4
 
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,

@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_volpft_symsrch
 use simple_image,          only: image
 use simple_projector,      only: projector
-use simple_projector_hlev, only: rotvol_slim
+use simple_projector_hlev, only: rotvol_slim, rotvol
 use simple_sym,            only: sym
 use simple_ori,            only: ori, m2euler
 implicit none
@@ -61,6 +61,9 @@ contains
         boxpd   = 2 * round2even(KBALPHA * real(ldim(1) / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         call vol_in%ifft
+        ! rotate asymmetric volume
+        call o%set_euler(m2euler(rmat_symaxis))
+        ! rotate over symmetry related rotations and update average
         call vol_out%new(ldim, smpd)
         call vol_asym_aligned2axis%new(ldim, smpd)
         call rovol%new(ldim, smpd)

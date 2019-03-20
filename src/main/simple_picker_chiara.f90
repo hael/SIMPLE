@@ -1,3 +1,4 @@
+! USAGE: simple_private_exec prg=pick_chiara detector=bin smpd=1. part_radius=15 fname='/home/chiara/Desktop/Chiara/ParticlePICKING/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc'
 module simple_picker_chiara
 include 'simple_lib.f08'
 use simple_image, only : image
@@ -64,21 +65,26 @@ contains
     ! particles and the approximate radius of the particle.
     ! The output is a new list of coordinates where aggregate picked particles
     ! have been deleted
-    !if the dist beetween the 2 particles is in [r,2r], delete them
+    ! If the dist beetween the 2 particles is in [r,2r] -> delete them.
     subroutine elimin_aggregation( saved_coord, part_radius, refined_coords )
         integer,              intent(in)  :: saved_coord(:,:)     !Coordinates of picked particles
         integer,              intent(in)  :: part_radius          !Approximate radius of the particle
         integer, allocatable, intent(out) :: refined_coords(:,:)  !New coordinates of not aggregated particles
         logical, allocatable :: msk(:)
         integer              :: i, j, cnt
-        allocate(msk(size(saved_coord, dim = 1)), source = .true.) !initialise to 'keep all'
+        real :: ppart_radius
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        ! ppart_radius = part_radius*4. !because of shrinking
+        ppart_radius = part_radius
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        allocate(msk(size(saved_coord,dim=1)), source = .true.) !initialise to 'keep all'
         cnt = 0
         do i = 1, size(saved_coord, dim = 1)             !fix one coord
             do j = 1, size(saved_coord, dim = 1)         !fix another coord to compare
                 if(j > i .and. msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
                     if(  sqrt(real((saved_coord(i,1)-saved_coord(j,1))**2 &
-                        & + (saved_coord(i,2)-saved_coord(j,2))**2)) <= real(2*part_radius) &
-                        & .and. real(part_radius) < &
+                        & + (saved_coord(i,2)-saved_coord(j,2))**2)) <= real(2*ppart_radius) &
+                        & .and. real(ppart_radius) < &
                         & real((saved_coord(i,1)-saved_coord(j,1))**2 &
                         &    + (saved_coord(i,2)-saved_coord(j,2))**2)) then
                         msk(i) = .false.
@@ -117,20 +123,19 @@ contains
       real    :: pos(3)                                       !central position of each cc
       real    :: ave, sdev, maxv, minv, med                   !stats
       real    :: aveB, sdevB, maxvB, minvB, medB      !stats
-      ! character (len = *), parameter :: fmt_1 = "(a)" !I/O
       integer, allocatable :: xyz_saved(:,:), xyz_norep_noagg(:,:)
       real,    allocatable :: rmat(:,:,:)                     !matrix corresponding to the cc image
       integer, allocatable :: imat_masked(:,:,:)              !to identify each cc
       logical              :: outside, discard, errout, erroutB
       ! Initialisations
       ldim = self%get_ldim()
-      box  = (part_radius)*4 + 10
+      box  = (part_radius)*4 + 2*part_radius !needs to be slightly bigger than the particle
       rmat = img_cc%get_rmat()
       call imgwin_particle%new([box,box,1],1.)
       !call imgwin_bin%new([box,box,1],1.)
       outside = .false.
       allocate(xyz_saved(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
-      allocate(imat_masked(ldim(1),ldim(2),1))
+      allocate(imat_masked(1:ldim(1),1:ldim(2),1))
       ! Copy of the micrograph, to highlight on it the picked particles
       call self_back%copy(self)
       ! Particle identification, extraction and centering
@@ -138,15 +143,20 @@ contains
       cnt_likely = 0
       do n_cc = 1, int(maxval(rmat))   !fix cc
           imat_masked = 0              !reset
-          if(any(abs(int(rmat)-n_cc)< TINY)) then
+          if(any(abs(int(rmat)-n_cc)< TINY)) then !if there is a cc labelled n_cc
               where((abs(int(rmat)-n_cc)) < TINY) imat_masked = 1
               cnt_likely = cnt_likely + 1
               pos = center_cc(imat_masked)
-              xyz_saved(cnt_likely,:) = int(pos(:))
+              xyz_saved(cnt_likely,:) = int(pos(:2))
           endif
       enddo
-      call elimin_aggregation(xyz_saved, part_radius  + 0, xyz_norep_noagg) !+ 7 not to pick too close particles
+      !call elimin_aggregation(xyz_saved, part_radius  + 0, xyz_norep_noagg)
+      call elimin_aggregation(xyz_saved, 2*part_radius, xyz_norep_noagg)      ! x2 not to pick too close particles
       cnt_particle = 0
+      print *, 'xyz_saved = '
+      call vis_mat(xyz_saved)
+      print *, 'xyz_norep_noagg = '
+      call vis_mat(xyz_norep_noagg)
       do n_cc = 1, cnt_likely
           if( abs(xyz_norep_noagg(n_cc,1)) >  0) then !useless?
               if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3)
@@ -171,7 +181,7 @@ contains
     ! This function returns the index of a pixel (assuming to have a 2D)
     ! image in a connected component. The pixel identified is the one
     ! that minimizes the distance between itself and all the other pixels of
-    ! the connected component.
+    ! the connected component. It corresponds to the geometric median.
     function center_cc(masked_mat) result (px)
         integer, intent(in) :: masked_mat(:,:,:)
         integer     :: px(3)               !index of the central px of the cc
@@ -185,8 +195,8 @@ contains
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
         s = shape(masked_mat)
         call get_pixel_pos(masked_mat, pos)
-        allocate(dist(4,size(pos, dim = 2)), source = 0.)
-        allocate(mask(4,size(pos, dim = 2)), source = .false.)
+        allocate(dist(4,   size(pos, dim = 2)), source = 0.)
+        allocate(mask(4,   size(pos, dim = 2)), source = .false.)
         allocate(mask_dist(size(pos, dim = 2)), source = .true.)
         mask(4,:) = .true.
         n_px = 0
@@ -195,7 +205,7 @@ contains
                 do k = 1, s(3)
                     if(masked_mat(i,j,k) > 0.5) then
                         n_px = n_px + 1
-                        dist( 4, n_px) = pixels_dist( [i,j,k], pos, 'sum', mask_dist)
+                        dist( 4, n_px) = pixels_dist([i,j,k], pos, 'sum', mask_dist)
                         dist(:3, n_px) = [real(i),real(j),real(k)]
                     endif
                 enddo
@@ -213,6 +223,7 @@ contains
       integer, allocatable, intent(out) :: pos(:,:)
       integer :: s(3), i, j, k, cnt
       s = shape(imat_masked)
+      if(allocated(pos)) deallocate(pos)
       allocate(pos(3,count(imat_masked(:s(1),:s(2),:s(3)) > 0.5)), source = 0)
       cnt = 0
       do i = 1, s(1)
@@ -243,7 +254,10 @@ contains
         real    :: dist
         integer :: i
         if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_1')
-        if(any(mask .eqv. .false.) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
+        ! if((any(mask .eqv. .false.)) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
+        ! if(which .eq. 'sum') then
+        !     if(any(mask .eqv. .false.)) THROW_WARN('Not considering mask for sum; pixels_dist_1')
+        ! endif
         !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
         do i = 1, size(vec, dim = 2)
             if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) ) mask(i) = .false.
@@ -251,10 +265,10 @@ contains
         select case(which)
         case('max')
             dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-            if(present(location)) location = maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location =  maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
         case('min')
             dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-            if(present(location)) location = minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location =  minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
         case('sum')
             if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
             dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
