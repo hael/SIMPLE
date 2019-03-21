@@ -314,7 +314,6 @@ contains
         call cline%delete('lp')
         call cline%delete('refine')
         call cline%delete('eo')
-        call cline%set('wfun', 'bilinear')
         cline_cluster2D         = cline
         cline_cluster2D_buffer  = cline
         cline_make_cavgs        = cline

@@ -52,7 +52,7 @@ logical,           allocatable :: pptcl_mask(:)
 logical                        :: phaseplate    = .false.       !< Volta phaseplate images or not
 logical                        :: l_is_class    = .true.        !< for prime2D or not
 logical                        :: l_hard_assign = .true.        !< npeaks == 1 or not
-logical                        :: l_fastinterp  = .false.       !< interpolation type, convolution by default
+logical                        :: l_bilinear    = .true.        !< whether to use bilinear or convolution interpolation
 logical                        :: exists        = .false.       !< to flag instance existence
 
 integer, parameter      :: BATCHTHRSZ   = 50
@@ -111,8 +111,6 @@ contains
         ldim_pd    = [params_glob%boxpd,params_glob%boxpd,1]
         ldim_pd(3) = 1
         filtsz     = build_glob%img%get_filtsz()
-        ! interpolation
-        l_fastinterp = trim(params_glob%wfun).eq.'bilinear'
         ! build arrays
         allocate(precs(partsz), cavgs_even(ncls), cavgs_odd(ncls),&
         &cavgs_merged(ncls), ctfsqsums_even(ncls),&
@@ -497,7 +495,7 @@ contains
                     ! rotation
                     call rotmat2d(-precs(iprec)%e3s(iori), mat)
                     ! Interpolation
-                    if( l_fastinterp )then
+                    if( l_bilinear )then
                         ! bi-linear interpolation
                         do h=lims(1,1),lims(1,2)
                             do k=lims(2,1),lims(2,2)

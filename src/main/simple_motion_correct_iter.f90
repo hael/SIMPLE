@@ -116,7 +116,6 @@ contains
         call orientation%set('ysdev', shstats(2)%sdev)
         call orientation%set('ymax',  maxval(shifts(:,2)))
         call orientation%set('ymin',  minval(shifts(:,2)))
-        call orientation%print_ori
         ! generate sums
         if( params_glob%tomo .eq. 'yes' )then
             call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
