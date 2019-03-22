@@ -229,7 +229,7 @@ contains
     ! This subroutine calculates the logaritm of all the micrographs in a stack.
     ! It is meant to be applied to power spectra images, in order to decrease
     ! the influence of the central pixel.
-    ! Edge detaction is more challengin in close to focus powerspectra
+    ! Edge detaction is more challenging in close to focus powerspectra
     ! images. There are more appropriate settings for this case, in
     ! order to set them, flag the variable 'close_to_focus'
     subroutine apply_tvf_stack( fname2process, fname, smpd, lambda, close_to_focus)

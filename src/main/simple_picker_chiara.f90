@@ -4,7 +4,7 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
- public :: extract_particles, center_cc, discard_borders, pixels_dist, get_pixel_pos !maybe to remove center_cc from public
+ public :: extract_particles, center_cc, discard_borders, pixels_dist, get_pixel_pos, polish_cc !maybe to remove center_cc from public
 
  private
 interface pixels_dist
@@ -18,7 +18,7 @@ contains
 
     ! This function takes in input an image and gives in output another image
     ! with smaller size in which are discarded about 4% of the borders. It
-    ! is meantt o deal with border effects.
+    ! is meant to deal with border effects.
     subroutine discard_borders(img_in, img_out, reduce_ldim)
         class(image),      intent(in)  :: img_in
         class(image),      intent(out) :: img_out
@@ -123,10 +123,12 @@ contains
       real    :: pos(3)                                       !central position of each cc
       real    :: ave, sdev, maxv, minv, med                   !stats
       real    :: aveB, sdevB, maxvB, minvB, medB      !stats
-      integer, allocatable :: xyz_saved(:,:), xyz_norep_noagg(:,:)
+      integer, allocatable :: xyz_saved(:,:), xyz_norep_noagg1(:,:),xyz_norep_noagg(:,:)
+      integer, allocatable :: imat(:,:,:)
       real,    allocatable :: rmat(:,:,:)                     !matrix corresponding to the cc image
       integer, allocatable :: imat_masked(:,:,:)              !to identify each cc
       logical              :: outside, discard, errout, erroutB
+      real :: vec_tiny(2)
       ! Initialisations
       ldim = self%get_ldim()
       box  = (part_radius)*4 + 2*part_radius !needs to be slightly bigger than the particle
@@ -135,31 +137,39 @@ contains
       !call imgwin_bin%new([box,box,1],1.)
       outside = .false.
       allocate(xyz_saved(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
-      allocate(imat_masked(1:ldim(1),1:ldim(2),1))
+      allocate(imat_masked(1:ldim(1),1:ldim(2),ldim(3)))
       ! Copy of the micrograph, to highlight on it the picked particles
       call self_back%copy(self)
       ! Particle identification, extraction and centering
       !open(unit = 17, file = "Statistics.txt")
+      allocate(imat(ldim(1),ldim(2),ldim(3)), source = int(rmat)) !rmat is the connected component matrix
       cnt_likely = 0
       do n_cc = 1, int(maxval(rmat))   !fix cc
           imat_masked = 0              !reset
-          if(any(abs(int(rmat)-n_cc)< TINY)) then !if there is a cc labelled n_cc
-              where((abs(int(rmat)-n_cc)) < TINY) imat_masked = 1
+          if(any(imat == n_cc)) then
+              where(imat == n_cc) imat_masked = 1
               cnt_likely = cnt_likely + 1
               pos = center_cc(imat_masked)
               xyz_saved(cnt_likely,:) = int(pos(:2))
           endif
       enddo
-      !call elimin_aggregation(xyz_saved, part_radius  + 0, xyz_norep_noagg)
-      call elimin_aggregation(xyz_saved, 2*part_radius, xyz_norep_noagg)      ! x2 not to pick too close particles
+      deallocate(imat)
+      !call elimin_aggregation(xyz_saved, 2*part_radius, xyz_norep_noagg)
+      call elimin_aggregation(xyz_saved, part_radius, xyz_norep_noagg1)      ! x2 not to pick too close particles
+      vec_tiny = [TINY, TINY]
+      cnt_likely = 0.
+      do n_cc = 1, size(xyz_norep_noagg1, dim=1)
+          if(xyz_norep_noagg1(n_cc,1) > TINY) cnt_likely = cnt_likely+1
+      enddo
+      allocate(xyz_norep_noagg(cnt_likely,2), source = xyz_norep_noagg1(1:cnt_likely,:))
       cnt_particle = 0
       print *, 'xyz_saved = '
       call vis_mat(xyz_saved)
       print *, 'xyz_norep_noagg = '
       call vis_mat(xyz_norep_noagg)
-      do n_cc = 1, cnt_likely
+      do n_cc = 1, size(xyz_norep_noagg, dim = 1)
           if( abs(xyz_norep_noagg(n_cc,1)) >  0) then !useless?
-              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3)
+              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3, 'white')
               call   self%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_particle, outside)
               !call img_cc%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_bin, outside)
               if( .not. outside) then
@@ -198,7 +208,7 @@ contains
         allocate(dist(4,   size(pos, dim = 2)), source = 0.)
         allocate(mask(4,   size(pos, dim = 2)), source = .false.)
         allocate(mask_dist(size(pos, dim = 2)), source = .true.)
-        mask(4,:) = .true.
+        mask(4,:) = .true. !to calc the min wrt the dist
         n_px = 0
         do i = 1, s(1)
             do j = 1, s(2)
@@ -254,13 +264,12 @@ contains
         real    :: dist
         integer :: i
         if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_1')
-        ! if((any(mask .eqv. .false.)) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
-        ! if(which .eq. 'sum') then
-        !     if(any(mask .eqv. .false.)) THROW_WARN('Not considering mask for sum; pixels_dist_1')
-        ! endif
+        if((any(mask .eqv. .false.)) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
         !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
         do i = 1, size(vec, dim = 2)
-            if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) ) mask(i) = .false.
+            if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) )then
+                if(which .ne. 'sum') mask(i) = .false.
+            endif
         enddo
         select case(which)
         case('max')
@@ -309,38 +318,25 @@ contains
         end select
     end function pixels_dist_2
 
-    ! This function calculates the longest dimension of the biggest connected
-    ! component in the image img. Img is supposed to be either a binary
-    ! image or a connected component image.
-    ! The connected component whose longest dimension is calculated is
-    ! supposed to be circular.
-    function part_longest_dim(img) result(diameter)
-        type(image), intent(inout) :: img
-        real, allocatable    :: rmat(:,:,:), dist(:)
-        integer, allocatable :: imat_masked(:,:,:), pos(:,:)
-        logical, allocatable :: mask_dist(:)  !for maximum dist calculation
-        real :: diameter
-        integer :: ldim(3), i, j,k, cnt
-        ldim = img%get_ldim()
-        rmat = img%get_rmat()
-        call img%prepare_connected_comps() !consider just one particle, not multiple
-        allocate(imat_masked(ldim(1),ldim(2),ldim(3)), source = 0)
-        allocate(mask_dist(size(pos,2)), source = .true.)
-        imat_masked = int(img%get_rmat())
-        call get_pixel_pos(imat_masked,pos)
-        cnt = 0
-        allocate(dist(count(imat_masked > 0.5))) !one for each white px
-        do i = 1, ldim(1)
-            do j = 1, ldim(2)
-                do k = 1, ldim(3)
-                    if(imat_masked(i,j,k) > 0.5) then  !just ones
-                        cnt = cnt + 1
-                        dist(cnt) = pixels_dist([i,j,k],pos, 'max', mask_dist)
-                    endif
-                enddo
-            enddo
-        enddo
-        diameter = maxval(dist)
-        deallocate(rmat, dist, imat_masked, mask_dist)
-    end function part_longest_dim
+    ! This subroutine takes in input a connected components (cc)
+    ! image and eliminates some of the ccs according to thei size.
+    ! The decision method consists in calculate the avg size of the ccs
+    ! and their standar deviation.
+    ! Elimin ccs which have size: > ave + 0.8*stdev
+    !                             < ave - 0.8*stdev
+    subroutine polish_cc(img_cc)
+        type(image), intent(inout) :: img_cc
+        integer, allocatable :: sz(:)
+        real :: lt, ht !low and high thresh for ccs polising
+        real :: ave, stdev ! avg and stdev of the size od the ccs
+        integer :: n_cc
+        sz = img_cc%size_connected_comps()
+        ave = sum(sz)/size(sz)
+        stdev = 0.
+        do n_cc = 1, size(sz)
+            stdev = stdev + (sz(n_cc)-ave)**2
+         enddo
+        stdev = sqrt(stdev/(size(sz)-1))
+        call img_cc%elim_cc([ floor(ave-0.8*stdev) , ceiling(ave+0.8*stdev) ])
+    end subroutine polish_cc
 end module simple_picker_chiara

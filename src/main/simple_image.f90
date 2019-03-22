@@ -210,6 +210,7 @@ contains
     procedure          :: size_connected_comps
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc
+    procedure          :: order_cc
     procedure          :: dilatation
     procedure          :: erosion
     procedure          :: morpho_closing
@@ -264,8 +265,8 @@ contains
     procedure, private :: calc_neigh_8_1
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
-    procedure          :: calc3D_neigh_8
-    procedure          :: calc3D_neigh_4
+    procedure          :: calc3D_neigh_8 !which are actually 26 in 3D
+    procedure          :: calc3D_neigh_4 !which are actually 6 in 3D
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -3344,7 +3345,29 @@ contains
                 endwhere
             endif
         enddo
+        ! re-oder cc
+        call self%order_cc()
     end subroutine elim_cc
+
+    !This function is meant to re-order the connected components (cc)
+    !after some of them have been eliminated, so that they have an
+    !increasing labelling (1,2,3..) with NO holes (NOT 1,2,5..).
+    !Self is meant to be a connected component image.
+    subroutine order_cc(self)
+        class(image), intent(inout) :: self
+        integer, allocatable :: imat_aux(:,:,:)
+        integer :: cnt, i,s(3)
+        cnt = 0
+        s = shape(self%rmat)
+        allocate(imat_aux(s(1),s(2),s(3)), source = int(self%rmat))
+        if( self%is_ft() ) THROW_HARD('just for real images; order_cc')
+        do i = 1, maxval(imat_aux) !for each cc
+            if(any(imat_aux(:,:,:) == i)) then !there is cc labelled i
+                cnt = cnt + 1                  !increasin order cc
+                where(imat_aux == i) self%rmat = real(cnt)
+            endif
+        enddo
+    end subroutine order_cc
 
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation dilatation.
@@ -3409,11 +3432,14 @@ contains
         call self%dilatation()
     end subroutine morpho_opening
 
-
-     ! This subroutine builds the logical array 'border' of the same dims of
-     ! the input image self. Border is true in corrispondence of
-     ! the border pixels in self. Self is meant to be binary.
-     ! It is necessary for erosion operation
+    ! This subroutine builds the logical array 'border' of the same dims of
+    ! the input image self. Border is true in corrispondence of
+    ! the border pixels in self. Self is meant to be binary.
+    ! It is necessary for erosion operation.
+    ! Optional parameter neigh_4 decides whether to perform calculations
+    ! using 4neighbours of 8neighbours. It's just for 3D volumes. It is
+    ! useful in the case of very small objects, to make so that
+    ! surface does not coincide con the volume itself.
     subroutine border_mask(self, border, label, four)
         class(image),         intent(in)    :: self
         logical, allocatable, intent(inout) :: border(:,:,:)
@@ -6430,22 +6456,32 @@ contains
         self%ft = .false.
     end subroutine square
 
-    !!!!!!!!!!!!!ADDED BY CHIARA!!!!!!!!!!!!!!
     ! This functions draws a window in self centered in part_coords.
     ! Required inputs: coordinates of the particle, radius of the particle.
     ! This function is meant to mark picked particles (visual purpose).
-    subroutine draw_picked(self, part_coords, part_radius, border)
-      class(image),intent(inout)    :: self
-      integer,     intent(in)       :: part_coords(2)  !coordinates of the picked particle
-      integer,     intent(in)       :: part_radius
-      integer, optional, intent(in) :: border          !width of the border of the drawn line
+    subroutine draw_picked(self, part_coords, part_radius, border, color)
+      class(image),               intent(inout)    :: self
+      integer,                    intent(in)       :: part_coords(2)  !coordinates of the picked particle
+      integer,                    intent(in)       :: part_radius
+      integer,          optional, intent(in) :: border                !width of the border of the drawn line
+      character(len=*), optional, intent(in) :: color                 !whether to draw in white or in black
+      character(len=10) :: ccolor
       integer :: bborder
       real    :: value             !intensity value of the window
       integer :: wide              !side width of the window
       integer :: length            !length of the drawn side
       bborder = 1
       if(present(border)) bborder = border
-      value = minval(self%rmat(:,:,:)) !maxval(self%rmat(:,:,:))
+      ccolor = 'white' !default
+      if(present(color))   ccolor = color
+      if((color=='b') .or. (color=='black')) then
+          value = minval(self%rmat(:,:,:))
+     else if((color=='w') .or. (color=='white')) then
+          value = maxval(self%rmat(:,:,:))
+      else
+          THROW_WARN('Invalid color; draw_picked')
+          value = maxval(self%rmat(:,:,:))
+      endif
       wide = 4*part_radius
       length = int(part_radius/2)
       if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')

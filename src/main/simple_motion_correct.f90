@@ -89,7 +89,7 @@ logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or 
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 
 ! module global constants
-integer, parameter :: MITSREF       = 1!30   !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF       = 30   !< max # iterations of refinement optimisation
 integer, parameter :: MITSREF_ANISO = 9      !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT    = 2.     !< small initial shift to blur out fixed pattern noise
 logical, parameter :: ANISO_DBL     = .true. !< use double-precision for anisotropic motion correct?
@@ -295,9 +295,6 @@ contains
             call ftexp_srch(iframe)%new(movie_sum_global_ftexp_threads(iframe), movie_frames_ftexp(iframe),&
                 &params_glob%scale * params_glob%trs, motion_correct_ftol = params_glob%motion_correctftol,&
             &motion_correct_gtol = params_glob%motion_correctgtol)
-            !!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            !if(iframe == 1) call movie_sum_global_ftexp_threads(iframe)%read('TMPmovSUM.mrc')
-            ! initialise with small random shifts (to average out dead/hot pixels)
             opt_shifts(iframe,1) = ran3() * 2. * SMALLSHIFT - SMALLSHIFT
             opt_shifts(iframe,2) = ran3() * 2. * SMALLSHIFT - SMALLSHIFT
         end do
@@ -487,9 +484,6 @@ contains
         integer :: iframe, nimproved, i, ldim4scale(3)
         logical :: didsave, err_stat, doscale
         real(dp):: acorr, aregu
-        !Chiara!!!!!!!!!!!!
-        !type(image) :: pspec_img, movie_sum_global_pspec
-        !!!!1!!!!!!!!!!!!!!!!
         smpd4scale = params_glob%lpstop / 3.
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -538,11 +532,6 @@ contains
         PRINT_NEVALS = .true.
         do i=1,MITSREF_ANISO
             nimproved = 0
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            ! do iframe=1,nframes
-            !     if(i == 1) call movie_sum_global_threads(iframe)%read('TMPmovSUM.mrc') !for the first it set to avg of the frames
-            ! enddo
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,nframes
                 ! subtract the movie frame being correlated to reduce bias
@@ -571,20 +560,6 @@ contains
                 didsave                = .true.
             endif
             corrfrac = corr_prev / corr
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            !!!!!!!!!!!!!!!!!!!!!!!!Chiara, to give an output for each of the 9 iterations (max)
-            ! print *, '>>>>>>>>>>>>>>BEFORE DOING >>>>>>>>>>>>>>>>>>>>>>'
-            ! call gen_aniso_sum()
-            ! call movie_sum_global%write('AnisoResIteration'//int2str(i)//'.mrc')
-            ! call motion_correct_aniso_calc_sums(movie_sum_global,movie_sum_global_pspec)
-            ! print*, 'generating power-spectra'
-            ! print *, "ANISO ANISO ANISO "
-            ! print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
-            ! pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR) !lp = 20
-            ! !pspec_img = movie_sum_global_pspec%mic2spec(params_glob%pspecsz, 'sqrt', LP_PSPEC_BACKGR_SUBTR) !lp = 20
-            ! call pspec_img%write('AnisoResIterationPOWERSPECTRUM'//int2str(i)//'.mrc')
-            ! print *, ">>>>>>>>>>>>>>>>>>>I AM DONE>>>>>>>>>>>>>>>>>>>>>>>>>"
-            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
             if( nimproved == 0 .and. i > 2 )  exit
             if( i > 5 .and. corrfrac > 0.9999 ) exit
         end do
@@ -1109,17 +1084,9 @@ contains
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         if (.false.) then
         call movie_sum_global%set_ft(.true.)
-!!$        if( do_dose_weight )then
-!!$            call gen_dose_weight_filter(filtarr)
-!!$        endif                                    !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
         cmat_sum = cmplx(0.,0.)
         !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
         do iframe=ffromto(1),ffromto(2)
-!!$            if( do_dose_weight )then
-!!$                call movie_frames_shifted_patched(iframe)%fft
-!!$                call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))
-!!$                !call movie_frames_shifted_patched(iframe)%ifft                !!!!!!!!!!!!!!!!!!!!!!!! TODO: FIXME
-!!$            endif
                 if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
                 call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
                 if( l_w_scalar )then

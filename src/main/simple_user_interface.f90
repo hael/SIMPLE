@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(69)
+type(simple_prg_ptr) :: prg_ptr_array(70)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -81,6 +81,7 @@ type(simple_program), target :: convert
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
+type(simple_program), target :: compare_nano
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
@@ -249,6 +250,7 @@ contains
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
+        call new_compare_nano
         call new_extract
         call new_export_starproject
         call new_filter
@@ -325,64 +327,65 @@ contains
         prg_ptr_array(9)%ptr2prg  => ctf_estimate
         prg_ptr_array(10)%ptr2prg => ctfops
         prg_ptr_array(11)%ptr2prg => detect_atoms
-        prg_ptr_array(12)%ptr2prg => extract
-        prg_ptr_array(13)%ptr2prg => export_starproject
-        prg_ptr_array(14)%ptr2prg => filter
-        prg_ptr_array(15)%ptr2prg => fsc
-        prg_ptr_array(16)%ptr2prg => gen_pspecs_and_thumbs
-        prg_ptr_array(17)%ptr2prg => info_image
-        prg_ptr_array(18)%ptr2prg => info_stktab
-        prg_ptr_array(19)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(20)%ptr2prg => import_boxes
-        prg_ptr_array(21)%ptr2prg => import_cavgs
-        prg_ptr_array(22)%ptr2prg => import_movies
-        prg_ptr_array(23)%ptr2prg => import_particles
-        prg_ptr_array(24)%ptr2prg => import_starproject
-        prg_ptr_array(25)%ptr2prg => local_resolution
-        prg_ptr_array(26)%ptr2prg => local_resolution2D
-        prg_ptr_array(27)%ptr2prg => make_cavgs
-        prg_ptr_array(28)%ptr2prg => make_oris
-        prg_ptr_array(29)%ptr2prg => mask
-        prg_ptr_array(30)%ptr2prg => mkdir_
-        prg_ptr_array(31)%ptr2prg => motion_correct
-        prg_ptr_array(32)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(33)%ptr2prg => new_project
-        prg_ptr_array(34)%ptr2prg => normalize_
-        prg_ptr_array(35)%ptr2prg => orisops
-        prg_ptr_array(36)%ptr2prg => oristats
-        prg_ptr_array(37)%ptr2prg => pick
-        prg_ptr_array(38)%ptr2prg => pick_extract_stream
-        prg_ptr_array(39)%ptr2prg => postprocess
-        prg_ptr_array(40)%ptr2prg => preprocess
-        prg_ptr_array(41)%ptr2prg => preprocess_stream
-        prg_ptr_array(42)%ptr2prg => print_fsc
-        prg_ptr_array(43)%ptr2prg => print_magic_boxes
-        prg_ptr_array(44)%ptr2prg => print_project_info
-        prg_ptr_array(45)%ptr2prg => print_project_field
-        prg_ptr_array(46)%ptr2prg => pspec_stats
-        prg_ptr_array(47)%ptr2prg => reproject
-        prg_ptr_array(48)%ptr2prg => reconstruct3D
-        prg_ptr_array(49)%ptr2prg => reextract
-        prg_ptr_array(50)%ptr2prg => refine3D
-        prg_ptr_array(51)%ptr2prg => refine3D_init
-        prg_ptr_array(52)%ptr2prg => report_selection
-        prg_ptr_array(53)%ptr2prg => scale
-        prg_ptr_array(54)%ptr2prg => scale_project
-        prg_ptr_array(55)%ptr2prg => select_
-        prg_ptr_array(56)%ptr2prg => shift
-        prg_ptr_array(57)%ptr2prg => simulate_movie
-        prg_ptr_array(58)%ptr2prg => simulate_noise
-        prg_ptr_array(59)%ptr2prg => simulate_particles
-        prg_ptr_array(60)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(61)%ptr2prg => stack
-        prg_ptr_array(62)%ptr2prg => stackops
-        prg_ptr_array(63)%ptr2prg => subset_project
-        prg_ptr_array(64)%ptr2prg => symaxis_search
-        prg_ptr_array(65)%ptr2prg => symmetry_test
-        prg_ptr_array(66)%ptr2prg => tseries_track
-        prg_ptr_array(67)%ptr2prg => update_project
-        prg_ptr_array(68)%ptr2prg => vizoris
-        prg_ptr_array(69)%ptr2prg => volops
+        prg_ptr_array(12)%ptr2prg => compare_nano
+        prg_ptr_array(13)%ptr2prg => extract
+        prg_ptr_array(14)%ptr2prg => export_starproject
+        prg_ptr_array(15)%ptr2prg => filter
+        prg_ptr_array(16)%ptr2prg => fsc
+        prg_ptr_array(17)%ptr2prg => gen_pspecs_and_thumbs
+        prg_ptr_array(18)%ptr2prg => info_image
+        prg_ptr_array(19)%ptr2prg => info_stktab
+        prg_ptr_array(20)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(21)%ptr2prg => import_boxes
+        prg_ptr_array(22)%ptr2prg => import_cavgs
+        prg_ptr_array(23)%ptr2prg => import_movies
+        prg_ptr_array(24)%ptr2prg => import_particles
+        prg_ptr_array(25)%ptr2prg => import_starproject
+        prg_ptr_array(26)%ptr2prg => local_resolution
+        prg_ptr_array(27)%ptr2prg => local_resolution2D
+        prg_ptr_array(28)%ptr2prg => make_cavgs
+        prg_ptr_array(29)%ptr2prg => make_oris
+        prg_ptr_array(30)%ptr2prg => mask
+        prg_ptr_array(31)%ptr2prg => mkdir_
+        prg_ptr_array(32)%ptr2prg => motion_correct
+        prg_ptr_array(33)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(34)%ptr2prg => new_project
+        prg_ptr_array(35)%ptr2prg => normalize_
+        prg_ptr_array(36)%ptr2prg => orisops
+        prg_ptr_array(37)%ptr2prg => oristats
+        prg_ptr_array(38)%ptr2prg => pick
+        prg_ptr_array(39)%ptr2prg => pick_extract_stream
+        prg_ptr_array(40)%ptr2prg => postprocess
+        prg_ptr_array(41)%ptr2prg => preprocess
+        prg_ptr_array(42)%ptr2prg => preprocess_stream
+        prg_ptr_array(43)%ptr2prg => print_fsc
+        prg_ptr_array(44)%ptr2prg => print_magic_boxes
+        prg_ptr_array(45)%ptr2prg => print_project_info
+        prg_ptr_array(46)%ptr2prg => print_project_field
+        prg_ptr_array(47)%ptr2prg => pspec_stats
+        prg_ptr_array(48)%ptr2prg => reproject
+        prg_ptr_array(49)%ptr2prg => reconstruct3D
+        prg_ptr_array(50)%ptr2prg => reextract
+        prg_ptr_array(51)%ptr2prg => refine3D
+        prg_ptr_array(52)%ptr2prg => refine3D_init
+        prg_ptr_array(53)%ptr2prg => report_selection
+        prg_ptr_array(54)%ptr2prg => scale
+        prg_ptr_array(55)%ptr2prg => scale_project
+        prg_ptr_array(56)%ptr2prg => select_
+        prg_ptr_array(57)%ptr2prg => shift
+        prg_ptr_array(58)%ptr2prg => simulate_movie
+        prg_ptr_array(59)%ptr2prg => simulate_noise
+        prg_ptr_array(60)%ptr2prg => simulate_particles
+        prg_ptr_array(61)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(62)%ptr2prg => stack
+        prg_ptr_array(63)%ptr2prg => stackops
+        prg_ptr_array(64)%ptr2prg => subset_project
+        prg_ptr_array(65)%ptr2prg => symaxis_search
+        prg_ptr_array(66)%ptr2prg => symmetry_test
+        prg_ptr_array(67)%ptr2prg => tseries_track
+        prg_ptr_array(68)%ptr2prg => update_project
+        prg_ptr_array(69)%ptr2prg => vizoris
+        prg_ptr_array(70)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -412,6 +415,8 @@ contains
                 ptr2prg => ctfops
             case('detect_atoms')
                 ptr2prg => detect_atoms
+            case('compare_nano')
+                ptr2prg => compare_nano
             case('extract')
                 ptr2prg => extract
             case('export_starproject')
@@ -568,6 +573,7 @@ contains
         write(logfhandle,'(A)') convert%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') detect_atoms%name
+        write(logfhandle,'(A)') compare_nano%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
@@ -1172,7 +1178,7 @@ contains
         &'Detect atoms in nanoparticle vol',&                ! descr_short
         &'is a program for identify atoms in nanoparticle vols and dump statistics',& ! descr long
         &'simple_exec',&                                     ! executable
-        &1, 1, 0, 1, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1180,10 +1186,9 @@ contains
         ! parameter input/output
         call detect_atoms%set_input('parm_ios',   1, smpd)
         ! search controls
-        call detect_atoms%set_input('srch_ctrls', 1, 'nnn', 'num', 'Number of nearest neighbours', 'Number of nearest neighbours &
-                                   & to consider in the polarization search', &
-                                   & '# polarization neighbours', .false., 30.)
+        ! <empty>
         ! alternative inputs
+        ! <empty>
         ! filter controls
         ! <empty>
         ! mask controls
@@ -1191,6 +1196,31 @@ contains
         ! computer controls
         !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
     end subroutine new_detect_atoms
+
+    subroutine new_compare_nano
+        ! PROGRAM SPECIFICATION
+        call compare_nano%new(&
+        &'compare_nano', &                                   ! name
+        &'Compare nanoparticle',&                ! descr_short
+        &'is a program for calculate the rmsd between atomic model of a symmetric nanoparticle and asymetric',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &2, 0, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call compare_nano%set_input('img_ios', 2, 'vol2', 'file', 'Volume', '2nd Nanoparticle volume to compare', &
+        & 'input volume e.g. vol.mrc', .true., '')        ! search controls
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        !call compare_nano%set_input('comp_ctrls', 1, nthr) to change if it works
+    end subroutine new_compare_nano
 
     subroutine new_extract
         ! PROGRAM SPECIFICATION

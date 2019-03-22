@@ -150,11 +150,11 @@ type :: parameters
     character(len=LONGSTRLEN) :: voltab2=''           !< 2nd table (text file) of volume files(.txt)
     ! other character variables in ascending alphabetical order
     character(len=STDLEN) :: angastunit='degrees' !< angle of astigmatism unit (radians|degrees){degrees}
-    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no} !!!!!!!!ADDED BY CHIARAA
+    character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny|bin)     !!!!!!!!ADDED BY CHIARAA
+    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny|bin)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
@@ -365,8 +365,8 @@ type :: parameters
     real    :: nsig=2.5            !< # sigmas
     real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
-    real    :: part_concentration  !< concentration of particles in the micrograph !!!!!!!!!ADDED BY CHIARA
-    real    :: part_radius         !< particle   radius(in pixels)  !!!!!!!!!ADDED BY CHIARA
+    real    :: part_concentration  !< concentration of particles in the micrograph
+    real    :: part_radius         !< particle   radius(in pixels)  
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -483,7 +483,7 @@ contains
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
-        call check_carg('detector',       self%detector)   
+        call check_carg('detector',       self%detector)
         call check_carg('dfunit',         self%dfunit)
         call check_carg('discrete',       self%discrete)
         call check_carg('diverse',        self%diverse)

@@ -17,6 +17,7 @@ public :: map_cavgs_selection_commander
 public :: pick_commander
 public :: pick_commander_chiara
 public :: detect_atoms_commander
+public :: compare_nano_commander
 public :: extract_commander
 public :: reextract_commander
 public :: pick_extract_commander
@@ -56,6 +57,10 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+type, extends(commander_base) :: compare_nano_commander
+  contains
+    procedure :: execute      => exec_compare_nano
+end type compare_nano_commander
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
@@ -316,6 +321,22 @@ contains
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
 
+    !CHIARAAAA
+    ! subroutine exec_nanopart_analyisis( self, cline )
+    !     use simple_sp_project,          only: sp_project
+    !     use simple_nanopart_new_mod, only: nanoparticle
+    !     class(nanoparticle), intent(inout) :: self
+    !     class(cmdline),      intent(inout) :: cline !< command line input
+    !     type(sp_project)              :: spproj
+    !     character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
+    !     integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
+    !     call params%new(cline)
+    !     !call spproj%read(params%projfile)
+    !     ! end gracefully
+    !     call qsys_job_finished(  'simple_commander_preprocess :: exec_nanopart_analyisis' )
+    !     call simple_end('**** SIMPLE_NANOPARTICLE_ANALYSIS NORMAL STOP ****')
+    ! end subroutine exec_nanopart_analyisis
+
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
         use simple_binoris_io,       only: binwrite_oritab
@@ -553,8 +574,8 @@ contains
         class(cmdline),               intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir
         type(parameters)   :: params
-        type(image)        :: mic_shrunken, mic_copy
-        type(image)        :: imgcc
+        type(image)        :: mic_shrunken, mic_copy, mic_bin
+        type(image)        :: imgcc, imgwi
         integer            :: ldim_shrunken(3), box_shrunken, winsz, min_sz, max_sz
         real               :: part_radius
         real,    parameter :: SHRINK = 4.
@@ -589,10 +610,8 @@ contains
         part_radius = params%part_radius
         call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
         call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         ! To take care of shrinking
         part_radius = part_radius/SHRINK
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
         call mic_shrunken%read('shrunken_hpassfiltered.mrc')
         call mic_copy%new(ldim_shrunken, smpd_shrunken) !work on a copy not to modify the original mic
@@ -643,10 +662,8 @@ contains
         call mic_copy%find_connected_comps(imgcc)
         call imgcc%write('ConnectedComponents.mrc')
         ! 6) cc filtering
-        min_sz = 10*int(part_radius)  !CHOSE A PERCENTAGE OF THE of the size of the particle
-        max_sz = 70*int(part_radius)
-        !call imgcc%elim_cc([min_sz,max_sz])
-        !call imgcc%write('ConnectedComponentsElimin.mrc')
+        call polish_cc(imgcc)
+        call imgcc%write('ConnectedComponentsElimin.mrc')
         call extract_particles(mic_shrunken, imgcc, int(part_radius))
         open(unit = 17, file = "PickerInfo.txt")
         write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
@@ -681,7 +698,7 @@ contains
         type(image)        :: img, img_over
         integer :: ldim(3), nptcls
         real    :: smpd
-        real, parameter :: SCALE_FACTOR = 1.0
+        real, parameter :: SCALE_FACTOR = 1.5
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -706,7 +723,6 @@ contains
         ! Fetching images
         call nano%get_img(img_over,'img_bin')
         call img_over%write('BINnano.mrc')
-        stop
         ! Aspect ratios calculations
         call nano%calc_aspect_ratio()
         ! Circularities calculation
@@ -715,15 +731,59 @@ contains
         call nano%make_soft_mask()
         ! Polarization search
         call nano%search_polarization()
-        ! Affinity propagation test, TO PUT ALLTOGETHER
-        call nano%affprop_cluster_ar()
-        call nano%affprop_cluster_ang()
+        ! Clustering
+        call nano%cluster
         ! kill
         call img%kill
         call img_over%kill
+        call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    ! for comparison of atomic models od 2nanoparticles
+    subroutine exec_compare_nano( self, cline )
+    use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(compare_nano_commander), intent(inout) :: self
+        class(cmdline),                intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano1, nano2
+        type(image)        :: img
+        integer :: nptcls
+        integer :: ldim1(3), ldim2(3)
+        real    :: smpd1,smpd2
+        call params%new(cline)
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_compare_nano')
+        endif
+        if( .not. cline%defined('vol2') )then
+            THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
+        endif
+        ! COMPARING
+        call nano1%set_partname(params%vols(1))
+        call nano2%set_partname(params%vols(2))
+    call nano1%new()
+        call nano2%new()
+        call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
+        call find_ldim_nptcls (params%vols(1), ldim2, nptcls, smpd2)
+        if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
+        if(abs(smpd1-smpd2) > TINY) THROW_HARD('Non compatible particles, different smpd; compare_atomic_models')
+        ! Image
+        call img%new(ldim1, smpd1) !at this point ldim1==ldim2 and smpd1==smpd2
+        ! Nanoparticle binarization
+        call img%read(params%vols(1))
+    call nano1%set_img(img, 'img')
+        call img%read(params%vols(2))
+        call nano2%set_img(img, 'img')
+        call nano1%compare_atomic_models(nano2,params%vols(1),params%vols(2))
+        ! kill
+        call nano1%kill
+        call nano2%kill
+        call img%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
+    end subroutine exec_compare_nano
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )

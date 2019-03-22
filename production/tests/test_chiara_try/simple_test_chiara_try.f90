@@ -87,6 +87,154 @@ end subroutine laplacian_filt
      9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
           RETURN
       END SUBROUTINE PRINT_EIGENVECTORS
+  ! subroutine aff_prop
+  !     real                 :: centers(3,303)
+  !     type(aff_prop)       :: apcls
+  !     real                 :: simmat(900,900), simsum
+  !     integer, allocatable :: centers(:), labels(:)
+  !     integer              :: i, j, ncls, nerr
+  !     write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
+  !     ! make data
+  !     do i=1,300
+  !         datavecs(i,:) = 1.
+  !     end do
+  !     do i=301,600
+  !         datavecs(i,:) = 5.
+  !     end do
+  !     do i=601,900
+  !         datavecs(i,:) = 10.
+  !     end do
+  !     do i=1,900-1
+  !         do j=i+1,900
+  !             simmat(i,j) = -euclid(datavecs(i,:),datavecs(j,:))
+  !             simmat(j,i) = simmat(i,j)
+  !         end do
+ !     end do
+  !     call apcls%new(900, simmat)
+  !     call apcls%propagate(centers, labels, simsum)
+  !     ncls = size(centers)
+  !     nerr = 0
+  !     do i=1,299
+  !         do j=i+1,300
+  !             if( labels(i) /= labels(j) ) nerr = nerr+1
+  !         end do
+  !     end do
+  !     do i=301,599
+  !         do j=i+1,600
+  !             if( labels(i) /= labels(j) ) nerr = nerr+1
+  !         end do
+  !     end do
+  !     do i=601,899
+  !         do j=i+1,900
+  !             if( labels(i) /= labels(j) ) nerr = nerr+1
+  !         end do
+  !     end do
+  !     write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
+ !     write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
+  !     write(logfhandle,*) 'CENTERS'
+  !     do i=1,size(centers)
+  !         write(logfhandle,*) datavecs(centers(i),:)
+  !     end do
+  !     if( ncls == 3 .and. nerr == 0 )then
+  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
+  !     else
+  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
+  !     endif
+  ! end subroutine aff_prop
+
+  ! This subroutine takes in input coords of the atomic positions
+  ! in the nanoparticles to compare and calculates the rmsd
+  ! between them.
+  ! See formula
+  ! https://en.wikipedia.org/wiki/Root-mean-square_deviation_of_atomic_positions
+  subroutine calc_rmsd(centers1,centers2,r)
+      real, intent(in) :: centers1(:,:), centers2(:,:)
+      real, optional, intent(out) :: r !rmsd calculated
+      integer :: N, i, j
+      real    :: sum, rmsd
+      real, allocatable :: dist(:)
+      logical, allocatable :: mask(:)
+      integer :: location(1)
+      ! If they don't have the same nb of atoms.
+      if(size(centers1, dim = 2) <= size(centers2, dim = 2)) then
+          N = size(centers1, dim = 2) !compare based on centers1
+          print *, 'N = ', N
+          allocate(dist(N), source = 0.)
+          allocate(mask(size(centers2, dim = 2)), source = .true.)
+          do i = 1, N
+              dist(i)  = pixels_dist(centers1(:,i),centers2(:,:),'min',mask,location)
+              print *, 'pixel = ', i, 'location = ', location
+              dist(i) = dist(i)**2 !formula wants them square
+              mask(location(1)) = .false. ! not to consider the same atom more than once
+          enddo
+          print *, 'dist = ', dist, 'sum_dist = ', sum(dist), 'sum(dist)/N = ', sum(dist)/real(N)
+          rmsd = sqrt(sum(dist)/real(N))
+      print *, 'RMSD = ', rmsd
+      else
+          N = size(centers2, dim = 2) !compare based on centers2
+          allocate(dist(N), source = 0.)
+          allocate(mask(size(centers1, dim = 2)), source = .true.)
+          do i = 1, N
+              dist(i) = pixels_dist(centers2(:,i),centers1(:,:),'min',mask,location)
+              dist(i) = dist(i)**2        !formula wants them square
+              mask(location(1)) = .false. ! not to consider the same atom more than once
+      enddo
+          rmsd = sqrt(sum(dist)/real(N))
+          print *, 'RMSD = ', rmsd
+
+      endif
+      if(present(r)) r=rmsd
+  end subroutine calc_rmsd
+
+  subroutine calc_circ(img)
+      type(image), intent(inout) :: img
+      type(image) :: img_cc
+      real,    allocatable :: rmat(:,:,:)
+      logical, allocatable :: border(:,:,:)
+      integer, allocatable :: imat(:,:,:)
+  integer :: label
+      integer :: v(1), s(1) !volumes and surfaces of each atom
+      real, parameter :: pi = 3.14159265359
+      real :: circularity
+      integer, allocatable :: pos(:,:)
+      logical, allocatable :: mask_dist(:) !for min and max dist calculation
+      integer :: location(1) !location of the farest vxls of the atom from its center
+  integer :: loc_min(1)
+      real    :: longest_dist
+      real :: volume, surface
+      call img%find_connected_comps(img_cc)
+      ! call img_cc%write('ImgCc.mrc')
+      ! rmat = img_cc%get_rmat()
+      ! allocate(imat(50,50,50),source = nint(rmat)) !for function get_pixel_pos
+      ! call img_cc%border_mask(border, 1, .true.) !use 4neigh instead of 8neigh
+      ! where(border .eqv. .true.)
+      !     imat = 1
+      ! elsewhere
+      !     imat = 0
+      ! endwhere
+      ! call get_pixel_pos(imat,pos)   !pxls positions of the shell
+      ! if(allocated(mask_dist)) deallocate(mask_dist)
+      ! allocate(mask_dist(size(pos, dim = 2)), source = .true. )
+      ! longest_dist  = pixels_dist([24.5,24.5,24.5], real(pos),'max', mask_dist, location)
+      ! print *, 'radius = ', longest_dist
+      ! volume  = (4.*pi)/3.*(longest_dist)**3
+      ! print *, 'volume =', volume
+      ! surface = (4.*pi)*(longest_dist)**2
+      ! circularity = (6.*sqrt(pi)*volume)/ sqrt((surface**3))
+      ! print *, 'circularity = ',circularity
+      ! stop
+      rmat = img_cc%get_rmat()
+      allocate(imat(150,150,150),source = nint(rmat)) !for function get_pixel_pos
+      v(1) = count(imat == 1) !just count the number of vxls in the cc
+      call img%border_mask(border, 1, .true.)
+      rmat = 0.
+      where(border .eqv. .true.) rmat = 1.
+      call img%set_rmat(rmat)
+      s(1) = count(border .eqv. .true.)
+      circularity = (6.*sqrt(pi)*real(v(1)))/ sqrt(real(s(1))**3)
+         print*, 'vol = ', v(1), 'surf = ', s(1), 'circ = ', circularity
+      deallocate(imat, border, rmat)
+  end subroutine calc_circ
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
@@ -113,86 +261,65 @@ program simple_test_chiara_try
   use simple_stat
   use simple_lapackblas, only : sgeev
   type(image)       :: img, img_cc
-  real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
-  integer :: i,j, ldim(3), nptcls,n_vol
-  type(ctfparams) :: ctfparms
-  real :: smpd
-  integer :: h, k, sh, cnt, px(3)
-  real :: ave, sdev, maxv, minv, SumSQR
-  real :: thresh(1)
-  real :: x(2,4), y(4), sig(4), v(2,2), w(2), chisq
-  integer, allocatable :: sz(:)
-  integer, allocatable :: pos(:,:), imat(:,:,:)
-  real :: dist, ratio, corr_real, corr_ft
-  type(tvfilter) :: tvf
-  real,    allocatable :: xhist(:) !discretization of the values
-  integer, allocatable :: yhist(:)
-  real :: lambda
-  integer :: npxls_at_mode
-  real    :: stretch_lim(2)
-  logical :: outside
-  type(motion_correct_distr_commander) :: xmotion_correct_distr
-  type(cmdline) :: cline
-  type(ctf) :: tfun
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  integer              :: ldim_shrunken(3), n_images, D, recsz, ifeat, box_shrunken
-  real,    allocatable :: avg(:), feat(:), dat(:), mat(:,:,:)
-  logical, allocatable :: l_mask(:,:,:)
-  integer, allocatable :: coords(:,:)
-  integer, parameter   :: BOX = 256, OFFSET = BOX/4-1, BOFFSET = 20 !BOX/4-1
-  real,    parameter   :: SHRINK = 1.
-  type(ppca)           :: my_ppca
-  type(image)          :: img_rev, img_msk, mic_denoised, mic_denoised_norm
-  real                 :: mskrad, smpd_shrunken
-  logical              :: err
-  logical, allocatable :: border(:,:,:)
-  !TRY BORDER MASK
-  call img%new([50,50,50], 1.)
-  rmat = img%get_rmat()
-  rmat(20:30,20:30,20:30) = 1.
-  call img%set_rmat(rmat)
-  call img%write('Cube.mrc')
-  print *, 'count = ', count(rmat > 0.)
-  call img%border_mask(border,1)
-  print *, 'count border = ', count(border .eqv. .true.)
-  rmat = 0.
-  where(border .eqv. .true.) rmat = 1.
-  call img%set_rmat(rmat)
-  call img%write('BorderCube.mrc')
+  integer           :: i, j, ncls
+  real, allocatable :: rmat(:,:,:)
+  real :: centers1(3,4)
+  real :: centers2(3,4)
 
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!calc_rmas test!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! centers1 = reshape([1.,1.,1.,1.5,1.5,1.5,2.3,2.4,2.5,4.1,4.3,4.7],[3,4])
+    ! print *, 'centers1(:3,1) = ',centers1(:3,1)
+    ! call vis_mat(centers1)
+    ! centers2 = reshape([2.1,2.3,2.5,1.,0.7,0.6,1.4,1.3,1.6,4.3,3.9,4.9],[3,4])
+    ! print *, 'centers2 = '
+    ! call vis_mat(centers2)
+   ! call calc_rmsd(centers1,centers2)
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    do i = 1, 100
+        call img%disc([150,150,150],1.,real(i))
+        call calc_circ(img)
+       call img%kill
+    enddo
+   ! vec = reshape([1.,2.,0.,0.,5.,0.,0.,8.,9.,0., 0.,12.,13.,0.,0.,16.,17.,0.,0.,20.], [10,2])
+    ! print *, 'Vec Before = '
+   ! call vis_mat(vec)
+    ! packed_vec = pack(vec,vec  > TINY)
+    ! print *, 'Vec After = '
+   ! call vis_mat(packed_vec)
 
-  !eigenvectors and eigenvalues
-  ! real    :: A(5,5)
-  ! integer, parameter :: N = 5
-  ! integer, parameter :: LDA = 5, LDVL = 5, LDVR = 5
-  ! integer, parameter :: LWMAX = 1000
-  ! integer :: INFO, LWORK
-  ! real    :: matrix( 5, 5 ), VL(  5, 5  ), VR(  5, 5  ),    WR( 5 ), WI( 5 ), WORK(  1000 )
-! ! EIGENVECTORS AND VALUES CALCULATION WITH LAPACK see
-! ! http://www.netlib.org/lapack/explore-html/d3/dfb/group__real_g_eeigen_ga104525b749278774f7b7f57195aa6798.html https://software.intel.com/sites/products/documentation/doclib/mkl_sa/11/mkl_lapack_examples/sgeev_ex.f.htm
-! ! https://github.com/joe-of-all-trades/regionprops3/blob/master/regionprops3.m
-!  A = reshape([-1.01, 0.86, -4.6, 3.31,-4.81, &
-!                  &  3.98, 0.53,-7.04, 5.29, 3.55, &
-!                  &  3.30, 8.26,-3.89, 8.20,-1.51, &
-!                  &  4.43, 4.96,-7.66,-7.33, 6.18, &
-!                  &  7.31,-6.43,-6.16, 2.47, 5.58],[5,5])
-!  matrix = transpose(matrix)
-!  LWORK = -1
-!  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
-!  LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
-! !Solve eigenproblem.
-!  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
-! !Check for convergence.
-!  IF( INFO.GT.0 ) THEN
-!      WRITE(*,*)'The algorithm failed to compute eigenvalues.'
-!      STOP
-!  END IF
-!  !Print eigenvalues.
-! CALL PRINT_EIGENVALUES( 'Eigenvalues', N, WR, WI )
-! !Print left eigenvectors.
-!  CALL PRINT_EIGENVECTORS( 'Left eigenvectors', N, WI, VL, LDVL )
-! !Print right eigenvectors.
-!  CALL PRINT_EIGENVECTORS( 'Right eigenvectors', N, WI, VR, LDVR )
+   !eigenvectors and eigenvalues
+    ! real    :: A(5,5)
+   ! integer, parameter :: N = 5
+   ! integer, parameter :: LDA = 5, LDVL = 5, LDVR = 5
+   ! integer, parameter :: LWMAX = 1000
+   ! integer :: INFO, LWORK
+    ! real    :: matrix( 5, 5 ), VL(  5, 5  ), VR(  5, 5  ),    WR( 5 ), WI( 5 ), WORK(  1000 )
+  ! ! EIGENVECTORS AND VALUES CALCULATION WITH LAPACK see
+  ! ! http://www.netlib.org/lapack/explore-html/d3/dfb/group__real_g_eeigen_ga104525b749278774f7b7f57195aa6798.html https://software.intel.com/sites/products/documentation/doclib/mkl_sa/11/mkl_lapack_examples/sgeev_ex.f.htm
+  ! ! https://github.com/joe-of-all-trades/regionprops3/blob/master/regionprops3.m
+  !  A = reshape([-1.01, 0.86, -4.6, 3.31,-4.81, &
+  !                  &  3.98, 0.53,-7.04, 5.29, 3.55, &
+  !                  &  3.30, 8.26,-3.89, 8.20,-1.51, &
+  !                  &  4.43, 4.96,-7.66,-7.33, 6.18, &
+  !                  &  7.31,-6.43,-6.16, 2.47, 5.58],[5,5])
+  !  matrix = transpose(matrix)
+  !  LWORK = -1
+  !  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+  !  LWORK = MIN( LWMAX, INT( WORK( 1 ) ) )
+  ! !Solve eigenproblem.
+  !  CALL SGEEV( 'Vectors', 'Vectors', N, A, LDA, WR, WI, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
+   !Check for convergence.
+  !  IF( INFO.GT.0 ) THEN
+  !      WRITE(*,*)'The algorithm failed to compute eigenvalues.'
+  !      STOP
+  !  END IF
+  !  !Print eigenvalues.
+  ! CALL PRINT_EIGENVALUES( 'Eigenvalues', N, WR, WI )
+  ! !Print left eigenvectors.
+  !  CALL PRINT_EIGENVECTORS( 'Left eigenvectors', N, WI, VL, LDVL )
+ ! !Print right eigenvectors.
+  !  CALL PRINT_EIGENVECTORS( 'Right eigenvectors', N, WI, VR, LDVR )
+      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
  !!!!!!!!!!!!!WORKING ON POWER SPECTRA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
