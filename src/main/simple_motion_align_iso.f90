@@ -21,9 +21,9 @@ type :: motion_align_iso
     private
     logical, public                                   :: existence = .false.
     type(image), pointer                              :: frames(:)                         !< pointer to stack of frames
-    integer                                           :: nframes_allocd                    !< number of frames allocated
-    integer                                           :: nframes = 0                       !< number of frames
-    integer                                           :: iter                              !< iteration number
+    integer                                           :: nframes_allocd = 0                !< number of frames allocated
+    integer                                           :: nframes        = 0                !< number of frames
+    integer                                           :: iter           = 0                !< iteration number
     integer                                           :: mitsref                           !< maximum iteration number
     integer                                           :: fixed_frame = 1                   !< fixed (non-shifted) frame
     real                                              :: trs                               !< size of box constraint
@@ -78,6 +78,7 @@ contains
     procedure                                         :: get_corr             => motion_align_iso_get_corr
     procedure                                         :: get_corrs            => motion_align_iso_get_corrs
     procedure                                         :: get_opt_shifts       => motion_align_iso_get_opt_shifts
+    procedure                                         :: get_shifts_toplot    => motion_align_iso_get_shifts_toplot
     procedure                                         :: set_mitsref          => motion_align_iso_set_mitsref
     procedure                                         :: set_fixed_frame      => motion_align_iso_set_fixed_frame
     procedure                                         :: get_frac_improved    => motion_align_iso_get_frac_improved
@@ -90,14 +91,14 @@ end type motion_align_iso
 abstract interface
     subroutine align_iso_callback(aptr, align_iso, converged)
         import motion_align_iso
-        class(*), pointer,       intent(inout) :: aptr
+        class(*),                intent(inout) :: aptr
         class(motion_align_iso), intent(inout) :: align_iso
         logical,                 intent(out)   :: converged
     end subroutine align_iso_callback
 
     subroutine align_iso_fw_callback(aptr, align_iso)
         import motion_align_iso
-        class(*), pointer,       intent(inout) :: aptr
+        class(*),                intent(inout) :: aptr
         class(motion_align_iso), intent(inout) :: align_iso
     end subroutine align_iso_fw_callback
 end interface
@@ -129,7 +130,7 @@ contains
 
     subroutine motion_align_iso_align( self, callback_ptr )
         class(motion_align_iso),    intent(inout) :: self
-        class(*), pointer,          intent(inout) :: callback_ptr   !< callback pointer to be passed as first argument
+        class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
         integer :: i, iter, iframe
         real    :: cxy(3)
@@ -144,8 +145,9 @@ contains
         if (( self%hp < 0. ) .or. ( self%lp < 0.)) then
             THROW_HARD('hp or lp < 0; simple_motion_align_iso: align')
         end if
+        self%iter = 0
         call self%create_ftexp_objs
-        call self%corrmat2weights
+        call self%calc_frameweights( callback_ptr )
         if ( self%rand_init_shifts ) then
             do iframe = 1, self%nframes
                 self%opt_shifts(iframe,1) = ran3() * 2. * self%smallshift - self%smallshift
@@ -165,7 +167,6 @@ contains
                 self%movie_frames_ftexp(iframe),&
                 self%trs, motion_correct_ftol=self%ftol, motion_correct_gtol=self%gtol)
         end do
-        self%iter = 0
         self%corr_saved = -1.
         do iter=1,self%mitsref
             self%iter = iter
@@ -249,7 +250,7 @@ contains
 
     subroutine calc_frameweights( self, callback_ptr )
         class(motion_align_iso), intent(inout) :: self
-        class(*), pointer :: callback_ptr
+        class(*),                intent(inout) :: callback_ptr
         if ( associated(self%frameweights_callback) ) then
             call self%frameweights_callback(callback_ptr, self)
         else
@@ -442,7 +443,7 @@ contains
         class(motion_align_iso), intent(inout) :: self
         real, allocatable,       intent(in)    :: frameweights(:)
         if (size(frameweights) /= self%nframes) then
-            THROW_HARD('')
+            THROW_HARD('inconsistency; simple_motion_align_iso: set_weights')
         end if
         self%frameweights(:) = frameweights(:)
     end subroutine motion_align_iso_set_weights
@@ -481,6 +482,12 @@ contains
         real, allocatable,       intent(out)   :: opt_shifts(:,:)
         allocate( opt_shifts(self%nframes, 2), source=self%opt_shifts )
     end subroutine motion_align_iso_get_opt_shifts
+
+    subroutine motion_align_iso_get_shifts_toplot( self, shifts_toplot )
+        class(motion_align_iso), intent(inout) :: self
+        real, allocatable,       intent(out)   :: shifts_toplot(:,:)
+        allocate( shifts_toplot(self%nframes, 2), source=self%shifts_toplot )
+    end subroutine motion_align_iso_get_shifts_toplot
 
     subroutine motion_align_iso_set_mitsref( self, mitsref )
         class(motion_align_iso), intent(inout) :: self

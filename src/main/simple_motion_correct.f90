@@ -312,7 +312,6 @@ contains
 
     !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( movie_stack_fname, ctfvars, shifts, gainref_fname, nsig )
-        use simple_ftexp_shsrch, only: ftexp_shsrch
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
         type(ctfparams),            intent(inout) :: ctfvars           !< CTF params
         real,          allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
