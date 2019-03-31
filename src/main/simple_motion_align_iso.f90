@@ -9,7 +9,7 @@ use simple_ft_expanded,           only: ft_expanded
 use simple_ftexp_shsrch,          only: ftexp_shsrch
 use simple_image,                 only: image
 use simple_parameters,            only: params_glob
-use simple_motion_correct_common
+! use simple_motion_correct_common
 use simple_opt_lbfgsb,            only: PRINT_NEVALS
 use CPlot2D_wrapper_module
 implicit none
