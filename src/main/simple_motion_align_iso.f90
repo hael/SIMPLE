@@ -181,6 +181,7 @@ contains
                 self%corrs(iframe)        = cxy(1)
             end do
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
+            write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
             call self%recenter_shifts(self%opt_shifts)
             call self%calc_frameweights( callback_ptr )
             ! build new reference
@@ -207,8 +208,9 @@ contains
                     call self%calc_frameweights( callback_ptr )
                     call self%shift_wsum_and_calc_corrs
                     ! need to destroy all previous knowledge about correlations
-                    self%corr_prev = self%corr
-                    self%corr      = sum(self%corrs) / real(self%nframes)
+                    self%corr       = sum(self%corrs) / real(self%nframes)
+                    self%corr_prev  = self%corr
+                    self%corr_saved = self%corr
                 end if
             end if
         end do

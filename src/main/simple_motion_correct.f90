@@ -340,7 +340,9 @@ contains
             write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
             THROW_WARN('OPTIMAL CORRELATION < 0.0')
         endif
-        call align_iso%get_opt_shifts(shifts)
+        call align_iso%get_opt_shifts(opt_shifts)
+        if( allocated(shifts) ) deallocate(shifts)
+        allocate(shifts(nframes,2), source=opt_shifts)
         call align_iso%get_weights(frameweights)
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
