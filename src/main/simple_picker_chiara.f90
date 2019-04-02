@@ -338,5 +338,6 @@ contains
          enddo
         stdev = sqrt(stdev/(size(sz)-1))
         call img_cc%elim_cc([ floor(ave-0.8*stdev) , ceiling(ave+0.8*stdev) ])
+        call img_cc%order_cc()
     end subroutine polish_cc
 end module simple_picker_chiara

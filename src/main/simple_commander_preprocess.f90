@@ -695,7 +695,6 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        type(image)        :: img, img_over
         integer :: ldim(3), nptcls
         real    :: smpd
         real, parameter :: SCALE_FACTOR = 1.5
@@ -706,23 +705,14 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call nano%set_partname(params%vols(1))
-        call nano%new(SCALE_FACTOR)
+        call nano%new(params%vols(1),SCALE_FACTOR)
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
-        ! Creating image
-        call img%new(ldim, smpd)
-        call img_over%new(int(real(ldim)*SCALE_FACTOR), smpd/real(SCALE_FACTOR))
         ! Nanoparticle binarization
-        call img%read(params%vols(1))
-        call nano%set_img(img, 'img')
         call nano%binarize() !scale factor is for over sampling purposes
         ! Atoms centers identification
         call nano%find_centers()
         ! Outliers discarding
         call nano%discard_outliers()
-        ! Fetching images
-        call nano%get_img(img_over,'img_bin')
-        call img_over%write('BINnano.mrc')
         ! Aspect ratios calculations
         call nano%calc_aspect_ratio()
         ! Circularities calculation
@@ -734,8 +724,6 @@ contains
         ! Clustering
         call nano%cluster
         ! kill
-        call img%kill
-        call img_over%kill
         call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
@@ -749,7 +737,6 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano1, nano2
-        type(image)        :: img
         integer :: nptcls
         integer :: ldim1(3), ldim2(3)
         real    :: smpd1,smpd2
@@ -761,26 +748,17 @@ contains
             THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
         endif
         ! COMPARING
-        call nano1%set_partname(params%vols(1))
-        call nano2%set_partname(params%vols(2))
-    call nano1%new()
-        call nano2%new()
+        call nano1%new(params%vols(1))
+        call nano2%new(params%vols(2))
         call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
-        call find_ldim_nptcls (params%vols(1), ldim2, nptcls, smpd2)
+        call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
         if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
         if(abs(smpd1-smpd2) > TINY) THROW_HARD('Non compatible particles, different smpd; compare_atomic_models')
-        ! Image
-        call img%new(ldim1, smpd1) !at this point ldim1==ldim2 and smpd1==smpd2
         ! Nanoparticle binarization
-        call img%read(params%vols(1))
-    call nano1%set_img(img, 'img')
-        call img%read(params%vols(2))
-        call nano2%set_img(img, 'img')
-        call nano1%compare_atomic_models(nano2,params%vols(1),params%vols(2))
+        call nano1%compare_atomic_models(nano2)
         ! kill
         call nano1%kill
         call nano2%kill
-        call img%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_compare_nano

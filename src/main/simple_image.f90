@@ -3432,53 +3432,54 @@ contains
         call self%dilatation()
     end subroutine morpho_opening
 
+
     ! This subroutine builds the logical array 'border' of the same dims of
-    ! the input image self. Border is true in corrispondence of
-    ! the border pixels in self. Self is meant to be binary.
-    ! It is necessary for erosion operation.
-    ! Optional parameter neigh_4 decides whether to perform calculations
-    ! using 4neighbours of 8neighbours. It's just for 3D volumes. It is
-    ! useful in the case of very small objects, to make so that
-    ! surface does not coincide con the volume itself.
-    subroutine border_mask(self, border, label, four)
-        class(image),         intent(in)    :: self
-        logical, allocatable, intent(inout) :: border(:,:,:)
-        integer, optional,    intent(in)    :: label
-        logical, optional,    intent(in)    :: four
-        real,    allocatable :: neigh_8(:)
-        integer              :: i, j, k, nsz, llabel
-        logical              :: ffour
-        llabel = 1
-        if(present(label)) llabel = label
-        ffour = .false.
-        if(present(four)) ffour = four
-        if(present(four) .and. self%ldim(3) .eq. 1) THROW_HARD('4-neighbours identification hasn t been implemented for 2D images; border_mask')
-        if(allocated(border)) deallocate(border)
-        allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
-        if(self%ldim(3) == 1) then
-            allocate(neigh_8(9), source = 0.)
-        elseif(.not. ffour) then
-            allocate(neigh_8(27), source = 0.)
-        elseif(four) then
-            allocate(neigh_8(6), source = 0.) !actually this is neigh_4
-        endif
-        do i = 1,self%ldim(1)
-            do j = 1, self%ldim(2)
-                do k = 1, self%ldim(3)
-                    if(abs(self%rmat(i,j,k)-real(llabel)) < TINY ) then !white pixels
-                        if(self%ldim(3) == 1) then
-                            call self%calc_neigh_8  ([i,j,k], neigh_8, nsz)
-                        elseif(.not. ffour) then
-                            call self%calc3D_neigh_8([i,j,k], neigh_8, nsz)
-                        elseif(ffour) then
-                            call self%calc3D_neigh_4([i,j,k], neigh_8, nsz)
-                        endif
-                        if(any(abs(neigh_8(:nsz))<0.5)) border(i,j,k) = .true. !the image is supposed to be either binary or connected components image
-                    endif
-                enddo
-            enddo
-        enddo
-    end subroutine border_mask
+   ! the input image self. Border is true in corrispondence of
+   ! the border pixels in self. Self is meant to be binary.
+   ! It is necessary for erosion operation.
+   ! Optional parameter neigh_4 decides whether to perform calculations
+   ! using 4neighbours of 8neighbours. It's just for 3D volumes. It is
+   ! useful in the case of very small objects, to make so that
+   ! surface does not coincide con the volume itself.
+   subroutine border_mask(self, border, label, four)
+       class(image),         intent(in)    :: self
+       logical, allocatable, intent(inout) :: border(:,:,:)
+       integer, optional,    intent(in)    :: label
+       logical, optional,    intent(in)    :: four
+       real,    allocatable :: neigh_8(:)
+       integer              :: i, j, k, nsz, llabel
+       logical              :: ffour
+       llabel = 1
+       if(present(label)) llabel = label
+       ffour = .false.
+       if(present(four)) ffour = four
+       if(present(four) .and. self%ldim(3) .eq. 1) THROW_HARD('4-neighbours identification hasn t been implemented for 2D images; border_mask')
+       if(allocated(border)) deallocate(border)
+       allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
+       if(self%ldim(3) == 1) then
+           allocate(neigh_8(9), source = 0.)
+       elseif(.not. ffour) then
+           allocate(neigh_8(27), source = 0.)
+       elseif(four) then
+           allocate(neigh_8(6), source = 0.) !actually this is neigh_4
+       endif
+       do i = 1,self%ldim(1)
+           do j = 1, self%ldim(2)
+               do k = 1, self%ldim(3)
+                   if(abs(self%rmat(i,j,k)-real(llabel)) < TINY ) then !white pixels
+                       if(self%ldim(3) == 1) then
+                           call self%calc_neigh_8  ([i,j,k], neigh_8, nsz)
+                       elseif(.not. ffour) then
+                           call self%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                       elseif(ffour) then
+                           call self%calc3D_neigh_4([i,j,k], neigh_8, nsz)
+                       endif
+                       if(any(abs(neigh_8(:nsz))<0.5)) border(i,j,k) = .true. !the image is supposed to be either binary or connected components image
+                   endif
+               enddo
+           enddo
+       enddo
+  end subroutine border_mask
 
     ! FILTERS
 
@@ -6456,63 +6457,63 @@ contains
         self%ft = .false.
     end subroutine square
 
-    ! This functions draws a window in self centered in part_coords.
-    ! Required inputs: coordinates of the particle, radius of the particle.
-    ! This function is meant to mark picked particles (visual purpose).
-    subroutine draw_picked(self, part_coords, part_radius, border, color)
-      class(image),               intent(inout)    :: self
-      integer,                    intent(in)       :: part_coords(2)  !coordinates of the picked particle
-      integer,                    intent(in)       :: part_radius
-      integer,          optional, intent(in) :: border                !width of the border of the drawn line
-      character(len=*), optional, intent(in) :: color                 !whether to draw in white or in black
-      character(len=10) :: ccolor
-      integer :: bborder
-      real    :: value             !intensity value of the window
-      integer :: wide              !side width of the window
-      integer :: length            !length of the drawn side
-      bborder = 1
-      if(present(border)) bborder = border
-      ccolor = 'white' !default
-      if(present(color))   ccolor = color
-      if((color=='b') .or. (color=='black')) then
-          value = minval(self%rmat(:,:,:))
-     else if((color=='w') .or. (color=='white')) then
-          value = maxval(self%rmat(:,:,:))
-      else
-          THROW_WARN('Invalid color; draw_picked')
-          value = maxval(self%rmat(:,:,:))
-      endif
-      wide = 4*part_radius
-      length = int(part_radius/2)
-      if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
-      if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
-      &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
-        write(logfhandle,*) 'The window is out of the border of the image!'
-        return    !Do not throw error, just do not draw
-      endif
-      ! Edges of the window
-      ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length, &
-      !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
-      ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
-      !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
-      ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
-      !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
-      ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
-      !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
-      ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length,&
-      !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
-      ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
-      !    & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
-      ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
-      !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
-      ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
-      ! & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
-      ! Central cross
-      self%rmat(part_coords(1)-length:part_coords(1)+length, &
-             &  part_coords(2)-int((bborder-1)/2):part_coords(2)+int((bborder-1)/2), 1) = value
-      self%rmat(part_coords(1)-int((bborder-1)/2):part_coords(1)+int((bborder-1)/2), &
-             &  part_coords(2)-length:part_coords(2)+length, 1) = value
-    end subroutine draw_picked
+   ! This functions draws a window in self centered in part_coords.
+   ! Required inputs: coordinates of the particle, radius of the particle.
+   ! This function is meant to mark picked particles (visual purpose).
+   subroutine draw_picked(self, part_coords, part_radius, border, color)
+     class(image),               intent(inout)    :: self
+     integer,                    intent(in)       :: part_coords(2)  !coordinates of the picked particle
+     integer,                    intent(in)       :: part_radius
+     integer,          optional, intent(in) :: border                !width of the border of the drawn line
+     character(len=*), optional, intent(in) :: color                 !whether to draw in white or in black
+     character(len=10) :: ccolor
+     integer :: bborder
+     real    :: value             !intensity value of the window
+     integer :: wide              !side width of the window
+     integer :: length            !length of the drawn side
+     bborder = 1
+     if(present(border)) bborder = border
+     ccolor = 'white' !default
+     if(present(color))   ccolor = color
+     if((color=='b') .or. (color=='black')) then
+         value = minval(self%rmat(:,:,:))
+    else if((color=='w') .or. (color=='white')) then
+         value = maxval(self%rmat(:,:,:))
+     else
+         THROW_WARN('Invalid color; draw_picked')
+         value = maxval(self%rmat(:,:,:))
+     endif
+     wide = 4*part_radius
+     length = int(part_radius/2)
+     if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
+     if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
+     &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then
+       write(logfhandle,*) 'The window is out of the border of the image!'
+       return    !Do not throw error, just do not draw
+     endif
+     ! Edges of the window
+     ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length, &
+     !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
+     ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
+     !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
+     ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
+     !    & part_coords(2)-wide/2-int((bborder-1)/2):part_coords(2)-wide/2+int((bborder-1)/2), 1) = value
+     ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
+     !    & part_coords(2)-wide/2:part_coords(2)-wide/2+length, 1) = value
+     ! self%rmat(part_coords(1)-wide/2:part_coords(1)-wide/2+length,&
+     !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
+     ! self%rmat(part_coords(1)-wide/2-int((bborder-1)/2):part_coords(1)-wide/2+int((bborder-1)/2),&
+     !    & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
+     ! self%rmat(part_coords(1)+wide/2-length:part_coords(1)+wide/2,&
+     !    & part_coords(2)+wide/2-int((bborder-1)/2):part_coords(2)+wide/2+int((bborder-1)/2), 1) = value
+     ! self%rmat(part_coords(1)+wide/2-int((bborder-1)/2):part_coords(1)+wide/2+int((bborder-1)/2),&
+     ! & part_coords(2)+wide/2-length:part_coords(2)+wide/2, 1) = value
+     ! Central cross
+     self%rmat(part_coords(1)-length:part_coords(1)+length, &
+            &  part_coords(2)-int((bborder-1)/2):part_coords(2)+int((bborder-1)/2), 1) = value
+     self%rmat(part_coords(1)-int((bborder-1)/2):part_coords(1)+int((bborder-1)/2), &
+            &  part_coords(2)-length:part_coords(2)+length, 1) = value
+   end subroutine draw_picked
 
     !>  \brief  just a corner filling fun for testing purposes
     !! \param sqrad half width of square

@@ -252,11 +252,11 @@ contains
     end subroutine set_num
 
     subroutine set_beta( self, i, bfac )
-        class(atoms),     intent(inout) :: self
-        integer,          intent(in)    :: i
-        real,             intent(in)    :: bfac
-        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_beta')
-        self%beta(i) = bfac
+     class(atoms),     intent(inout) :: self
+     integer,          intent(in)    :: i
+     real,             intent(in)    :: bfac
+     if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_beta')
+     self%beta(i) = bfac
     end subroutine set_beta
 
     subroutine set_resnum( self, i, resnum )
