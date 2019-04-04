@@ -38,6 +38,8 @@ type :: motion_align_iso
     real                                              :: corr                              !< correlation
     real                                              :: corr_prev                         !< previous correlation
     real                                              :: corr_saved                        !< best correlation
+    real                                              :: shsrch_tol
+    logical                                           :: has_shsrch_tol = .false.
     real,              allocatable                    :: shifts_toplot(:,:)                !< for plotting
     real,              allocatable                    :: opt_shifts(:,:)                   !< shifts identified
     real,              allocatable                    :: opt_shifts_saved(:,:)             !< best shifts
@@ -64,6 +66,7 @@ contains
     procedure                                         :: new                  => motion_align_iso_new
     procedure                                         :: align                => motion_align_iso_align
     procedure                                         :: kill                 => motion_align_iso_kill
+    procedure                                         :: set_shsrch_tol       => motion_align_iso_set_shsrch_tol
     procedure                                         :: set_frames           => motion_align_iso_set_frames
     procedure                                         :: set_hp_lp            => motion_align_iso_set_hp_lp
     procedure                                         :: set_trs              => motion_align_iso_set_trs
@@ -166,6 +169,9 @@ contains
             call ftexp_srch(iframe)%new(self%movie_sum_global_ftexp_threads(iframe),&
                 self%movie_frames_ftexp(iframe),&
                 self%trs, motion_correct_ftol=self%ftol, motion_correct_gtol=self%gtol)
+            if (self%has_shsrch_tol) then
+                call ftexp_srch(iframe)%set_shsrch_tol(self%shsrch_tol)
+            end if
         end do
         self%corr_saved = -1.
         do iter=1,self%mitsref
@@ -523,6 +529,13 @@ contains
         real :: corrfrac
         corrfrac = self%corrfrac
     end function motion_align_iso_get_corrfrac
+
+    subroutine motion_align_iso_set_shsrch_tol( self, shsrch_tol )
+        class(motion_align_iso), intent(inout) :: self
+        real, intent(in) :: shsrch_tol
+        self%shsrch_tol = shsrch_tol
+        self%has_shsrch_tol = .true.
+    end subroutine motion_align_iso_set_shsrch_tol
 
     subroutine motion_align_iso_set_callback( self, callback )
         class(motion_align_iso), intent(inout) :: self

@@ -25,6 +25,7 @@ type :: ftexp_shsrch
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
     real                        :: motion_correctftol = 1e-4 !< function error tolerance
     real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
+    real                        :: shsrch_tol         = TOL
     integer                     :: lims(3,2)                 !< physical limits for the Fourier transform
     integer                     :: flims(3,2)                !< shifted limits
     integer                     :: ldim(3)                   !< logical dimension
@@ -40,6 +41,7 @@ contains
     procedure          :: corr_shifted_8 => ftexp_shsrch_corr_shifted_8
     procedure          :: kill           => ftexp_shsrch_kill
     procedure, private :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
+    procedure          :: set_shsrch_tol              
     procedure, private :: corr_shifted_cost_8                !< cost function for minimizer, f only
     procedure, private :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
     procedure, private :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
@@ -118,7 +120,7 @@ contains
         cxy(1)  = -cxy(1) ! correlation
         cxy(2:) = self%ospec%x ! shift
         if( present(prev_corr) )then
-            if( abs(cxy(1)-prev_corr) <= TOL )then
+            if( abs(cxy(1)-prev_corr) <= self%shsrch_tol )then
                 cxy(1)  = prev_corr
                 if( present(prev_shift) ) cxy(2:) = prev_shift
             endif
@@ -191,6 +193,12 @@ contains
             if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
         end if
     end subroutine set_dims_and_alloc
+
+    subroutine set_shsrch_tol( self, shsrch_tol )
+        class(ftexp_shsrch),     intent(inout) :: self
+        real,         intent(in)    :: shsrch_tol
+        self%shsrch_tol = shsrch_tol
+    end subroutine set_shsrch_tol
 
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( self, vec, D ) result( cost )
