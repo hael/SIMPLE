@@ -9,7 +9,6 @@ use simple_ft_expanded,           only: ft_expanded
 use simple_ftexp_shsrch,          only: ftexp_shsrch
 use simple_image,                 only: image
 use simple_parameters,            only: params_glob
-! use simple_motion_correct_common
 use simple_opt_lbfgsb,            only: PRINT_NEVALS
 use CPlot2D_wrapper_module
 implicit none
@@ -105,6 +104,7 @@ end interface
 
 real,    parameter :: SMALLSHIFT_DEFAULT = 2.
 integer, parameter :: MITSREF_DEFAULT    = 30
+real,    parameter :: NIMPROVED_TOL      = 1e-7
 
 contains
 
@@ -132,7 +132,7 @@ contains
         class(motion_align_iso),    intent(inout) :: self
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        integer :: i, iter, iframe
+        integer :: i, iter, iframe, nimproved
         real    :: cxy(3)
         logical :: callback_convgd
         real    :: hp_saved, lp_saved
@@ -170,16 +170,19 @@ contains
         self%corr_saved = -1.
         do iter=1,self%mitsref
             self%iter = iter
-            self%nimproved = 0
+            nimproved = 0
+            !$omp parallel do default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,self%nframes
                 call self%movie_sum_global_ftexp_threads(iframe)%subtr(&
                     self%movie_frames_ftexp_sh(iframe), w=self%frameweights(iframe))
                 PRINT_NEVALS = .true.
                 cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), self%opt_shifts(iframe,:))
-                if( cxy(1) > self%corrs(iframe) ) self%nimproved = self%nimproved + 1
+                if( cxy(1) - self%corrs(iframe) > NIMPROVED_TOL ) nimproved = nimproved + 1
                 self%opt_shifts(iframe,:) = cxy(2:3)
                 self%corrs(iframe)        = cxy(1)
             end do
+            !$omp end parallel do
+            self%nimproved = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
             call self%recenter_shifts(self%opt_shifts)
