@@ -332,6 +332,7 @@ contains
         call align_iso%set_hp_lp(hp,lp)
         updateres = 0
         call align_iso%set_trs(params_glob%scale*params_glob%trs)
+        call align_iso%set_smallshift(2.)
         call align_iso%set_rand_init_shifts(.true.)
         call align_iso%set_ftol_gtol(1e-7, 1e-7)
         call align_iso%set_shsrch_tol(1e-5)
@@ -346,6 +347,7 @@ contains
         if( allocated(shifts) ) deallocate(shifts)
         allocate(shifts(nframes,2), source=opt_shifts)
         call align_iso%get_weights(frameweights)
+        call align_iso%get_shifts_toplot(shifts_toplot)
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
@@ -630,7 +632,7 @@ contains
 
         ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
-        !> patch-based motion_correction of DDD movie
+   !> patch-based motion_correction of DDD movie
     subroutine motion_correct_patched()
         real    :: corr, corr_prev, corrfrac
         real    :: scale, smpd4scale
@@ -638,7 +640,6 @@ contains
         logical :: didsave, doscale
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
-!!$        smpd4scale = params_glob%lpstop / 3.     ! Don't downscale images for patch-based correction
         smpd4scale = params_glob%smpd
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -669,7 +670,8 @@ contains
         didsave    = .false.
         PRINT_NEVALS = .true.
         ! apply deformation
-        call motion_patch%correct( hp, lp, movie_sum_global_threads, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+        call motion_patch%set_frameweights( frameweights )
+        call motion_patch%correct( hp, lp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
         ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
         ! (see below)
         corr_prev = corr

@@ -4,12 +4,12 @@ module simple_motion_patched
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_parameters,      only: params_glob
-use simple_opt_factory,     only: opt_factory
-use simple_opt_spec,        only: opt_spec
-use simple_optimizer,       only: optimizer
-use simple_image,           only: image
-use simple_ft_expanded,     only: ft_expanded
-use simple_ftexp_shsrch,    only: ftexp_shsrch
+use simple_opt_factory,      only: opt_factory
+use simple_opt_spec,         only: opt_spec
+use simple_optimizer,        only: optimizer
+use simple_image,            only: image
+use simple_ft_expanded,      only: ft_expanded
+use simple_motion_align_iso, only: motion_align_iso
 use CPlot2D_wrapper_module
 implicit none
 private
@@ -30,45 +30,55 @@ type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
 end type rmat_ptr_type
 
+type :: stack_type
+    type(image), allocatable :: stack(:)
+end type stack_type
+
 type :: motion_patched
     private
-    logical                          :: existence
-    type(ft_expanded),  allocatable  :: frame_patches(:,:,:)
-    type(ft_expanded),  allocatable  :: ref_patches(:,:,:)
-    type(image),        allocatable  :: patches_imgs(:,:,:)
-    type(ftexp_shsrch), allocatable  :: shsearch_patches(:,:,:)
-    real,               allocatable  :: shifts_patches(:,:,:,:)
-    real,               allocatable  :: shifts_patches_for_fit(:,:,:,:)
-    character(len=:),   allocatable  :: shift_fname
-    real,               allocatable  :: global_shifts(:,:)
-    logical                          :: has_global_shifts
-    integer                          :: nframes
-    integer                          :: ldim(3)       ! size of entire frame, reference
-    integer                          :: ldim_patch(3) ! size of one patch
-    integer                          :: lims_patches(NX_PATCHED,NY_PATCHED,2,2) ! corners of the patches
-    real                             :: patch_centers(NX_PATCHED,NY_PATCHED,2)
-    real                             :: motion_correct_ftol
-    real                             :: motion_correct_gtol
-    real(dp)                         :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
-    real                             :: trs
-    real                             :: hp
-    real                             :: lp
+    logical                             :: existence
+    type(stack_type),       allocatable :: frame_patches(:,:)
+    type(motion_align_iso), allocatable :: align_iso(:,:)
+    real,                   allocatable :: shifts_patches(:,:,:,:)
+    real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
+    character(len=:),       allocatable :: shift_fname
+    real,                   allocatable :: global_shifts(:,:)
+    real,                   allocatable :: frameweights(:)
+    logical                             :: has_global_shifts
+    logical                             :: has_frameweights    = .false.
+    integer                             :: nframes
+    integer                             :: ldim(3)       ! size of entire frame, reference
+    integer                             :: ldim_patch(3) ! size of one patch
+    integer                             :: lims_patches(NX_PATCHED,NY_PATCHED,2,2) ! corners of the patches
+    real                                :: patch_centers(NX_PATCHED,NY_PATCHED,2)
+    real                                :: motion_correct_ftol
+    real                                :: motion_correct_gtol
+    real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
+    real                                :: trs
+    real, public                        :: hp
+!    real                                :: lp
+    integer, allocatable                :: updateres(:,:)
+    real, allocatable                   :: lp(:,:)
+    real                                :: resstep
 contains
-    procedure, private               :: allocate_fields
-    procedure, private               :: deallocate_fields
-    procedure, private               :: set_size_frames_ref
-    procedure, private               :: set_patches
-    procedure, private               :: det_shifts
-    procedure, private               :: fit_polynomial
-    procedure, private               :: get_local_shift
-    procedure, private               :: apply_polytransfo
-    procedure, private               :: write_shifts
-    procedure, private               :: write_shifts_for_fit
-    procedure, private               :: write_polynomial
-    procedure, private               :: plot_shifts
-    procedure                        :: new             => motion_patched_new
-    procedure                        :: correct         => motion_patched_correct
-    procedure                        :: kill            => motion_patched_kill
+    procedure, private                  :: allocate_fields
+    procedure, private                  :: deallocate_fields
+    procedure, private                  :: set_size_frames_ref
+    procedure, private                  :: set_patches
+    procedure, private                  :: det_shifts
+    procedure, private                  :: fit_polynomial
+    procedure, private                  :: get_local_shift
+    procedure, private                  :: apply_polytransfo
+    procedure, private                  :: write_shifts
+    procedure, private                  :: write_shifts_for_fit
+    procedure, private                  :: write_polynomial
+    procedure, private                  :: plot_shifts
+    procedure, private                  :: frameweights_callback
+    procedure, private                  :: motion_patched_callback
+    procedure                           :: set_frameweights    
+    procedure                           :: new             => motion_patched_new
+    procedure                           :: correct         => motion_patched_correct
+    procedure                           :: kill            => motion_patched_kill
 end type motion_patched
 
 contains
@@ -136,7 +146,7 @@ contains
         end do
         sig = 1.
         ! dump the shifts for debugging purposes
-        if (.true.) then
+        if (DUMP_STUFF) then
             open(unit=123,file='for_fitting.txt')
             write (123,'(A)',advance='no') 'y=['
             do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
@@ -342,10 +352,10 @@ contains
             integer  :: x1_hh, x2_hh, y1_hh, y2_hh
             real     :: y1, y2, y3, y4, t, u
             ! if outside of image
-!!$        if ((x(1) < 1._dp) .or. (x(1) >= self%ldim_out(1)) .or. (x(2) < 1._dp) .or. (x(2) >= self%ldim_out(2))) then
-!!$            val  = 0._dp
-!!$            return
-!!$        end if
+            if ((xval < 1._dp) .or. (xval >= self%ldim(1)) .or. (yval < 1._dp) .or. (yval >= self%ldim(2))) then
+                val  = 0._dp
+                return
+            end if
             x1_h = floor(xval)
             x1_hh = x1_h
             if (x1_h < 1) then
@@ -462,6 +472,7 @@ contains
         class(motion_patched), intent(inout) :: self
         integer :: alloc_stat
         logical :: do_allocate
+        integer :: i, j
         do_allocate = .true.
         if (allocated(self%shifts_patches)) then
             if (size(self%shifts_patches, dim=1) < self%nframes) then
@@ -473,12 +484,15 @@ contains
         if (do_allocate) then
             allocate(self%shifts_patches   (3, self%nframes, NX_PATCHED, NY_PATCHED),&
                 self%shifts_patches_for_fit(3, self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%frame_patches   (    self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%ref_patches     (    self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%patches_imgs    (    self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%shsearch_patches(    self%nframes, NX_PATCHED, NY_PATCHED),&
+                self%frame_patches         (                 NX_PATCHED, NY_PATCHED),&
                 stat=alloc_stat )
             if (alloc_stat /= 0) call allocchk('allocate_fields 1; simple_motion_patched')
+            do i = 1, NX_PATCHED
+                do j = 1, NY_PATCHED
+                    allocate( self%frame_patches(i, j)%stack(self%nframes), stat=alloc_stat )            
+                    if (alloc_stat /= 0) call allocchk('allocate_fields 2; simple_motion_patched')
+                end do
+            end do            
         end if
     end subroutine allocate_fields
 
@@ -489,44 +503,15 @@ contains
         if (allocated(self%shifts_patches)) deallocate(self%shifts_patches)
         if (allocated(self%shifts_patches_for_fit)) deallocate(self%shifts_patches_for_fit)
         if (allocated(self%frame_patches)) then
-            do iframe = 1, self%nframes
-                do j = 1, NY_PATCHED
-                    do i = 1, NX_PATCHED
-                        call self%frame_patches(iframe,i,j)%kill()
+            do j = 1, NY_PATCHED
+                do i = 1, NX_PATCHED
+                    do iframe = 1, self%nframes
+                        call self%frame_patches(i,j)%stack(iframe)%kill()
                     end do
+                    deallocate(self%frame_patches(i,j)%stack)
                 end do
             end do
             deallocate(self%frame_patches)
-        end if
-        if (allocated(self%ref_patches)) then
-            do iframe = 1, self%nframes
-                do j = 1, NY_PATCHED
-                    do i = 1, NX_PATCHED
-                        call self%ref_patches(iframe,i,j)%kill()
-                    end do
-                end do
-            end do
-            deallocate(self%ref_patches)
-        end if
-        if (allocated(self%patches_imgs)) then
-            do iframe = 1, self%nframes
-                do j = 1, NY_PATCHED
-                    do i = 1, NX_PATCHED
-                        call self%patches_imgs(iframe,i,j)%kill()
-                    end do
-                end do
-            end do
-            deallocate(self%patches_imgs)
-        end if
-        if (allocated(self%shsearch_patches)) then
-            do iframe = 1, self%nframes
-                do j = 1, NY_PATCHED
-                    do i = 1, NX_PATCHED
-                        call self%shsearch_patches(iframe,i,j)%kill()
-                    end do
-                end do
-            end do
-            deallocate(self%shsearch_patches)
         end if
     end subroutine deallocate_fields
 
@@ -549,20 +534,19 @@ contains
         end do
     end subroutine set_size_frames_ref
 
-    subroutine set_patches( self, stack, patches_ftexp, abc )
+    subroutine set_patches( self, stack, patches )
         class(motion_patched),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)
-        type(ft_expanded), allocatable, intent(inout) :: patches_ftexp(:,:,:)
-        integer, intent(in) :: abc
+        type(stack_type),  allocatable, intent(inout) :: patches(:,:)
         integer :: i, j, iframe, k, l, kk, ll
         integer :: ip, jp           ! ip, jp: i_patch, j_patch
         integer :: lims_patch(2,2)
         type(rmat_ptr_type) :: rmat_ptrs(self%nframes)
         real, pointer :: rmat_patch(:,:,:)
-        do iframe=1,self%nframes
-            do j = 1, NY_PATCHED
-                do i = 1, NX_PATCHED
-                    call self%patches_imgs(iframe,i,j)%new(self%ldim_patch, params_glob%smpd)
+        do j = 1, NY_PATCHED
+            do i = 1, NX_PATCHED
+                do iframe=1,self%nframes
+                    call patches(i,j)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
                 end do
             end do
         end do
@@ -573,7 +557,7 @@ contains
         do iframe=1,self%nframes
             do j = 1, NY_PATCHED
                 do i = 1, NX_PATCHED
-                    call self%patches_imgs(iframe,i,j)%get_rmat_ptr(rmat_patch)
+                    call patches(i,j)%stack(iframe)%get_rmat_ptr(rmat_patch)
                     lims_patch(:,:) = self%lims_patches(i,j,:,:)
                     do k = lims_patch(1,1), lims_patch(1,2)
                         kk = k
@@ -594,8 +578,7 @@ contains
                             ! now copy the value
                             rmat_patch(ip,jp,1) = rmat_ptrs(iframe)%rmat_ptr(kk,ll,1)
                         end do
-                    end do
-                    call patches_ftexp(iframe,i,j)%extract_img(self%patches_imgs(iframe,i,j), self%hp, self%lp)
+                    end do                    
                 end do
             end do
         end do
@@ -603,22 +586,45 @@ contains
     end subroutine set_patches
 
     subroutine det_shifts( self )
-        class(motion_patched), intent(inout) :: self
+        class(motion_patched), target, intent(inout) :: self
         integer :: iframe, i, j
         real :: interpolated_xshift0(NX_PATCHED,NY_PATCHED), interpolated_yshift0(NX_PATCHED,NY_PATCHED)
+        integer :: alloc_stat
+        real, allocatable :: opt_shifts(:,:)
         self%shifts_patches = 0.
-        !$omp parallel do collapse(3) default(shared) private(iframe,j,i) proc_bind(close) schedule(static)
-        do iframe = 1, self%nframes
-            do i = 1, NX_PATCHED
-                do j = 1, NY_PATCHED
-                    call self%shsearch_patches(iframe,i,j)%new(self%ref_patches(iframe,i,j),self%frame_patches(iframe,i,j),&
-                        self%trs, self%motion_correct_ftol, self%motion_correct_gtol)
-                    self%shifts_patches(:,iframe,i,j) = self%shsearch_patches(iframe,i,j)%minimize()
-                end do
+        allocate( self%align_iso(NX_PATCHED, NY_PATCHED), stat=alloc_stat )
+        if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
+        !$omp parallel do collapse(2) default(shared) private(j,i) proc_bind(close) schedule(static)
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso(i,j)%new
+                call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
+                if ((.true.).and.(self%has_frameweights)) then
+                    call self%align_iso(i,j)%set_frameweights_callback(frameweights_callback_wrapper)
+                end if
+                call self%align_iso(i,j)%set_mitsref(50)
+                call self%align_iso(i,j)%set_smallshift(1.)
+                call self%align_iso(i,j)%set_rand_init_shifts(.true.)
+                call self%align_iso(i,j)%set_hp_lp(self%hp, self%lp(i,j))                
+                call self%align_iso(i,j)%set_trs(self%trs)
+                call self%align_iso(i,j)%set_ftol_gtol(1e-7, 1e-7)
+                call self%align_iso(i,j)%set_shsrch_tol(1e-7)
+                call self%align_iso(i,j)%set_maxits(100)
+                call self%align_iso(i,j)%set_coords(i,j)
+                call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
+                call self%align_iso(i,j)%align(self)                    
             end do
         end do
         !$omp end parallel do
         ! Set te first shift to 0.
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso(i,j)%get_opt_shifts(opt_shifts)
+                do iframe = 1, self%nframes
+                    self%shifts_patches(2:3,iframe,i,j) = opt_shifts(iframe, 1:2)
+                end do
+            end do
+        end do       
         do iframe = self%nframes, 1, -1
             self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
         enddo
@@ -628,8 +634,24 @@ contains
             self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:)  - interpolated_xshift0(:,:)
             self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:)  - interpolated_yshift0(:,:)
         enddo
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso(i,j)%kill
+            end do
+        end do
+        deallocate(self%align_iso)
     end subroutine det_shifts
 
+    subroutine set_frameweights( self, frameweights )
+        class(motion_patched), intent(inout) :: self
+        real, allocatable, intent(in) :: frameweights(:)
+        integer :: nlen
+        nlen = size(frameweights)
+        if (allocated(self%frameweights)) deallocate(self%frameweights)
+        allocate(self%frameweights(nlen), source=frameweights)
+        self%has_frameweights = .true.
+    end subroutine set_frameweights
+    
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
         class(motion_patched), intent(inout) :: self
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
@@ -651,12 +673,16 @@ contains
             self%trs = TRS_DEFAULT
         end if
         self%existence = .true.
+        allocate(self%lp(NX_PATCHED,NY_PATCHED),&
+            &self%updateres(NX_PATCHED,NY_PATCHED))
+        self%updateres = 0
+        self%lp = params_glob%lpstart
     end subroutine motion_patched_new
 
-    subroutine motion_patched_correct( self, hp, lp, references, frames, frames_output, shift_fname, global_shifts )
+    subroutine motion_patched_correct( self, hp, lp, resstep, frames, frames_output, shift_fname, &
+        global_shifts )
         class(motion_patched),         intent(inout) :: self
-        real,                          intent(in)    :: hp, lp
-        type(image),      allocatable, intent(inout) :: references(:)
+        real,                          intent(in)    :: hp, lp, resstep
         type(image),      allocatable, intent(inout) :: frames(:)
         type(image),      allocatable, intent(inout) :: frames_output(:)
         character(len=:), allocatable, intent(in)    :: shift_fname
@@ -664,7 +690,10 @@ contains
         integer :: ldim_frames(3)
         integer :: i
         self%hp = hp
-        self%lp = lp
+        !self%lp = lp
+        self%lp = params_glob%lpstart
+        self%resstep = resstep
+        self%updateres = 0
         self%shift_fname = shift_fname // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
         if (present(global_shifts)) then
@@ -675,7 +704,7 @@ contains
             self%has_global_shifts = .false.
         end if
         self%nframes = size(frames,dim=1)
-        self%ldim   = references(1)%get_ldim()
+        self%ldim   = frames(1)%get_ldim()
         if (DUMP_STUFF) then
             write (*,*) 'ldim(1:2)=', self%ldim(1:2)
             write (*,*) 'nframes=', self%nframes
@@ -692,9 +721,8 @@ contains
         call self%allocate_fields()
         call self%set_size_frames_ref()
         ! divide the reference into patches
-        call self%set_patches(references, self%ref_patches  ,1)
-        call self%set_patches(frames,     self%frame_patches,2)
-        ! determine shifts for patches
+        call self%set_patches(frames, self%frame_patches)
+        ! determine shifts for patches        
         call self%det_shifts()
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
@@ -720,7 +748,93 @@ contains
     subroutine motion_patched_kill( self )
         class(motion_patched), intent(inout) :: self
         call self%deallocate_fields()
+        if (allocated(self%frameweights)) deallocate(self%frameweights)
+        if (allocated(self%updateres)) deallocate(self%updateres)
+        if (allocated(self%lp)) deallocate(self%lp)
+        self%has_frameweights = .false.
         self%existence = .false.
     end subroutine motion_patched_kill
 
+    subroutine motion_patched_callback(self, align_iso, converged)
+        class(motion_patched),   intent(inout) :: self
+        class(motion_align_iso), intent(inout) :: align_iso
+        logical,                 intent(out)   :: converged
+        integer :: i, j
+        integer :: nimproved, iter
+        real    :: corrfrac, frac_improved
+        logical :: didupdateres
+        write (*,*) 'motion_patched_callback: align_iso%iter=', align_iso%get_iter()
+        call align_iso%get_coords(i, j)
+        
+        corrfrac      = align_iso%get_corrfrac()
+        frac_improved = align_iso%get_frac_improved()
+        nimproved     = align_iso%get_nimproved()
+        iter          = align_iso%get_iter()
+        didupdateres  = .false.
+        select case(self%updateres(i,j))
+        case(0)
+            call update_res( 0.96, 40., self%updateres(i,j) )
+        case(1)
+            call update_res( 0.97, 30., self%updateres(i,j) )
+        case(2)
+            call update_res( 0.98, 20., self%updateres(i,j) )
+        case DEFAULT
+            ! nothing to do
+        end select
+        if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+            if( nimproved == 0 .and. iter > 2 )     converged = .true.
+            if( iter > 10 .and. corrfrac > 0.9999 )  converged = .true.
+        else
+            converged = .false.
+        end if
+
+        
+    contains
+        subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
+            real,    intent(in) :: thres_corrfrac, thres_frac_improved
+            integer, intent(in) :: which_update
+            if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
+                .and. self%updateres(i,j) == which_update )then
+                self%lp(i,j) = self%lp(i,j) - self%resstep
+                call align_iso%set_hp_lp(self%hp, self%lp(i,j))
+                write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', self%lp(i,j)
+                ! need to indicate that we updated resolution limit
+                self%updateres(i,j)  = self%updateres(i,j) + 1
+                ! indicate that reslim was updated
+                didupdateres = .true.
+            endif
+        end subroutine update_res        
+    end subroutine motion_patched_callback
+
+    subroutine motion_patched_callback_wrapper(aptr, align_iso, converged)
+        class(*),                intent(inout) :: aptr
+        class(motion_align_iso), intent(inout) :: align_iso
+        logical,                 intent(out)   :: converged
+        select type(aptr)
+        class is (motion_patched)
+            call aptr%motion_patched_callback(align_iso, converged)
+        class default
+            THROW_HARD('error in motion_patched_callback_wrapper: unknown type; simple_motion_patched')
+        end select
+    end subroutine motion_patched_callback_wrapper
+    
+    subroutine frameweights_callback( self, align_iso )
+        class(motion_patched),   intent(inout) :: self
+        class(motion_align_iso), intent(inout) :: align_iso
+        if (self%has_frameweights) then
+            call align_iso%set_weights(self%frameweights)
+        end if
+    end subroutine frameweights_callback
+
+    subroutine frameweights_callback_wrapper( aptr, align_iso )
+        class(*),                intent(inout) :: aptr
+        class(motion_align_iso), intent(inout) :: align_iso
+        select type(aptr)
+        class is (motion_patched)
+            call aptr%frameweights_callback(align_iso)
+        class default
+            THROW_HARD('error in frameweights_callback_wrapper: unknown type; simple_motion_patched')
+        end select
+    end subroutine frameweights_callback_wrapper
+    
 end module simple_motion_patched

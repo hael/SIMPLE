@@ -38,8 +38,10 @@ type :: motion_align_iso
     real                                              :: corr                              !< correlation
     real                                              :: corr_prev                         !< previous correlation
     real                                              :: corr_saved                        !< best correlation
-    real                                              :: shsrch_tol
-    logical                                           :: has_shsrch_tol = .false.
+    real                                              :: shsrch_tol                        !< tolerance parameter for shsrch update
+    integer                                           :: maxits = 0                        !< maximum number of iterations; 0: default
+    logical                                           :: has_shsrch_tol = .false.          !< is shsrch_tol set
+    integer                                           :: coord_x, coord_y                  !< x,y coordinates for patch-based alignment callback
     real,              allocatable                    :: shifts_toplot(:,:)                !< for plotting
     real,              allocatable                    :: opt_shifts(:,:)                   !< shifts identified
     real,              allocatable                    :: opt_shifts_saved(:,:)             !< best shifts
@@ -86,6 +88,9 @@ contains
     procedure                                         :: get_frac_improved    => motion_align_iso_get_frac_improved
     procedure                                         :: get_nimproved        => motion_align_iso_get_nimproved
     procedure                                         :: get_corrfrac         => motion_align_iso_get_corrfrac
+    procedure                                         :: set_maxits           => motion_align_iso_set_maxits
+    procedure                                         :: set_coords           => motion_align_iso_set_coords
+    procedure                                         :: get_coords           => motion_align_iso_get_coords
     procedure                                         :: set_callback         => motion_align_iso_set_callback
     procedure                                         :: set_frameweights_callback => motion_align_iso_set_frameweights_callback
 end type motion_align_iso
@@ -135,7 +140,7 @@ contains
         class(motion_align_iso),    intent(inout) :: self
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        integer :: i, iter, iframe, nimproved
+        integer :: i, iter, iframe, nimproved, maxits_saved
         real    :: cxy(3)
         logical :: callback_convgd
         real    :: hp_saved, lp_saved
@@ -172,6 +177,11 @@ contains
             if (self%has_shsrch_tol) then
                 call ftexp_srch(iframe)%set_shsrch_tol(self%shsrch_tol)
             end if
+            if (self%maxits > 0) then
+                write (*,*) 'setting ftexp_srch(iframe)%ospec%maxits to', self%maxits
+                ftexp_srch(iframe)%ospec%maxits = self%maxits
+                write (*,*) 'ftexp_srch(iframe)%ospec%maxits set to', ftexp_srch(iframe)%ospec%maxits
+            end if
         end do
         self%corr_saved = -1.
         do iter=1,self%mitsref
@@ -207,7 +217,13 @@ contains
                 hp_saved = self%hp
                 lp_saved = self%lp
                 callback_convgd = .false.
+                maxits_saved = self%maxits
                 call self%callback(callback_ptr, self, callback_convgd)
+                if (maxits_saved /= self%maxits) then
+                    do iframe = 1, self%nframes
+                        ftexp_srch(iframe)%ospec%maxits = self%maxits
+                    end do
+                end if
                 if (callback_convgd) exit
                 if ((abs(hp_saved-self%hp) > epsilon(hp_saved)) .or. &
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
@@ -537,6 +553,26 @@ contains
         self%has_shsrch_tol = .true.
     end subroutine motion_align_iso_set_shsrch_tol
 
+    subroutine motion_align_iso_set_maxits( self, maxits )
+        class(motion_align_iso), intent(inout) :: self
+        integer, intent(in) :: maxits
+        self%maxits = maxits
+    end subroutine motion_align_iso_set_maxits
+
+    subroutine motion_align_iso_set_coords( self, x, y )
+        class(motion_align_iso), intent(inout) :: self
+        integer, intent(in) :: x, y
+        self%coord_x = x
+        self%coord_y = y
+    end subroutine motion_align_iso_set_coords
+
+    subroutine motion_align_iso_get_coords(self, x, y )
+        class(motion_align_iso), intent(inout) :: self
+        integer, intent(out) :: x, y
+        x = self%coord_x
+        y = self%coord_y
+    end subroutine motion_align_iso_get_coords
+    
     subroutine motion_align_iso_set_callback( self, callback )
         class(motion_align_iso), intent(inout) :: self
         procedure(align_iso_callback)          :: callback
