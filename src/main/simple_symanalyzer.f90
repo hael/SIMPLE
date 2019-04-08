@@ -12,8 +12,11 @@ public :: symmetrize_map, symmetry_tester, print_subgroups
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE   = .false.
-real,    parameter :: SHSRCH_HWDTH = 4.0
+logical, parameter :: DEBUG_HERE         = .false.
+logical, parameter :: WRITE_VOLUMES      = .false.
+real,    parameter :: SHSRCH_HWDTH       = 4.0
+real,    parameter :: ZSCORE_LBOUND_PEAK = 1.0
+real,    parameter :: ZSCORE_LBOUND_C1   = 2.9
 integer            :: nsym       ! total number of symmetries considered
 integer            :: kfromto(2) ! Fourier index range
 
@@ -132,17 +135,20 @@ contains
         call symobj%kill
     end subroutine print_subgroups
 
-    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic )
+    subroutine symmetry_tester( vol_in, msk, hp, lp, cn_stop, platonic, pgrp_out )
         class(projector), intent(inout) :: vol_in
         real,             intent(in)    :: msk, hp, lp
         integer,          intent(in)    :: cn_stop
         logical,          intent(in)    :: platonic
+        character(len=3), intent(out)   :: pgrp_out
         type(sym_stats), allocatable    :: pgrps(:)
         real,    allocatable  :: ccs(:), zscores(:)
+        integer, allocatable  :: peaks(:)
         type(sym)             :: symobj
         character(len=STDLEN) :: errmsg
-        integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, nsub_max
-        integer :: isym, jsym, filtsz, iisym, fnr
+        character(len=3)      :: pgrp_sub
+        integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, isub
+        integer :: isym, jsym, filtsz, iisym, fnr, highest_pgrp_detected
         real    :: smpd
         ! get info from vol_in
         smpd       = vol_in%get_smpd()
@@ -185,7 +191,7 @@ contains
             pgrps(cnt + 3)%str = 'i'
         endif
         ! gather stats
-        allocate(ccs(nsym))
+        allocate(ccs(nsym), peaks(nsym))
         ! by definition for c1
         pgrps(1)%cc = 1.0
         ccs(1)      = 1.0
@@ -194,13 +200,43 @@ contains
         ccs(:) = pgrps(:)%cc
         ! calculate Z-scores
         zscores = z_scores(ccs)
+        ! set peaks
+        ! test for assymetry
+        if( zscores(1) >= ZSCORE_LBOUND_C1 )then
+            peaks    = 0
+            peaks(1) = 1
+        else ! identify symmetry peaks
+            where( zscores >= ZSCORE_LBOUND_PEAK )
+                peaks = 1
+            elsewhere
+                peaks = 0
+            endwhere
+        endif
         ! output
         call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
         do isym=1,nsym
-            write(fnr,'(a,f5.2,a,f5.2)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' CORRELATION: ',&
-            &ccs(isym), ' Z-SCORE: ', zscores(isym)
+            write(fnr,'(a,f5.2,a,f5.2,a,i1)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' CORRELATION: ',&
+            &ccs(isym), ' Z-SCORE: ', zscores(isym), ' PEAK: ', peaks(isym)
+            if( peaks(isym) == 1 ) highest_pgrp_detected = isym
         end do
+        pgrp_out = trim(pgrps(highest_pgrp_detected)%str)
+        if( highest_pgrp_detected == 1 )then
+            write(fnr,'(a)') '>>> NO SYMMETRY DETECTED, SUGGESTED POINT-GROUP: c1'
+        else
+            write(fnr,'(a)') '>>> SYMMETRY DETECTED, SUGGESTED POINT-GROUP: '//trim(pgrp_out)
+            call symobj%new(pgrp_out)
+            nsub = symobj%get_nsubgrp()
+            cnt  = 0
+            do isub=1,nsub
+                pgrp_sub = symobj%get_subgrp_descr(isub)
+                do isym=1,nsym
+                    if( trim(pgrps(isym)%str) .eq. trim(pgrp_sub) ) cnt = cnt + peaks(isym)
+                enddo
+            end do
+            call symobj%kill
+            write(fnr,'(a)') int2str(cnt)//'/'//int2str(nsub)//' SUBGROUPS OF THE SUGGESTED POINT-GROUP ALSO DETECTED'
+        endif
         call fclose(fnr)
     end subroutine symmetry_tester
 
@@ -247,7 +283,7 @@ contains
             ! rotate input (non-symmetrized) volume to symmetry axis
             if( DEBUG_HERE ) write(logfhandle,*) 'rotating input volume to symmetry axis'
             call rotvol_slim(vol_pad, rovol_pad, vol_asym_aligned2axis, symaxis)
-            if( DEBUG_HERE ) call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc')
+            if( WRITE_VOLUMES ) call vol_asym_aligned2axis%write('vol_c1_aligned2_'//trim(pgrps(igrp)%str)//'axis.mrc')
             call vol_asym_aligned2axis%mask(msk, 'soft')
             ! generate symmetrized volume
             if( DEBUG_HERE ) write(logfhandle,*) 'generating symmetrized volume'
@@ -264,7 +300,7 @@ contains
             if( DEBUG_HERE ) write(logfhandle,*) 'shifting volume'
             call vol_sym%read('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             call vol_sym%shift(cxyz(2:4))
-            if( DEBUG_HERE )then
+            if( WRITE_VOLUMES )then
                 call vol_sym%write('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')
             else
                 call del_file('vol_sym_'//trim(pgrps(igrp)%str)//'.mrc')

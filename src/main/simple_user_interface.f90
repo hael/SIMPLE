@@ -3110,7 +3110,7 @@ contains
         call symmetry_test%set_input('srch_ctrls', 1, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
         call symmetry_test%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
         &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call symmetry_test%set_input('srch_ctrls', 3, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call symmetry_test%set_input('srch_ctrls', 3, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls
         call symmetry_test%set_input('filt_ctrls', 1, lp)
         call symmetry_test%set_input('filt_ctrls', 2, hp)

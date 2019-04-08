@@ -685,6 +685,7 @@ contains
         type(parameters)      :: params
         type(builder)         :: build
         character(len=STDLEN) :: fbody
+        character(len=3)      :: pgrp
         real                  :: shvec(3), scale, smpd
         integer               :: ldim(3)
         integer, parameter    :: MAXBOX = 128
@@ -722,7 +723,7 @@ contains
         endif
         ! run test
         call symmetry_tester(build%vol, params%msk, params%hp,&
-        &params%lp, params%cn_stop, params%platonic .eq. 'yes')
+        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
