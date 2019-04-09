@@ -4576,7 +4576,7 @@ contains
         real               :: z, sigma, h, h_sq
         integer            :: i, j, m, n, pad, indi, indj
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
-        if( .not.self%ft ) THROW_HARD('Real space only; NLmean')
+        if( .not.self%ft ) THROW_HARD('Real space only;NLmean')
         pad   = (DIM_SW-1)/2
         sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
         h     = 4.*sigma
