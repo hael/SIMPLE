@@ -266,7 +266,9 @@ contains
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
     procedure          :: calc3D_neigh_8 !which are actually 26 in 3D
-    procedure          :: calc3D_neigh_4 !which are actually 6 in 3D
+    procedure          :: calc3D_neigh_4_1 !which are actually 6 in 3D
+    procedure          :: calc3D_neigh_4_2
+    generic            :: calc3D_neigh_4 => calc3D_neigh_4_1, calc3D_neigh_4_2
     procedure          :: comp_addr_phys1
     procedure          :: comp_addr_phys2
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
@@ -5392,7 +5394,7 @@ contains
     ! it returns the INTENSITY values of the 8-neigh in a fixed order.
     ! The value of the pixel itself is NOT saved.
     ! This function is for volumes.
-    subroutine calc3D_neigh_4(self, px, neigh_4, nsz )
+    subroutine calc3D_neigh_4_1(self, px, neigh_4, nsz )
         class(image), intent(in)    :: self
         integer,      intent(in)    :: px(3)
         real,         intent(inout) :: neigh_4(6)
@@ -5464,7 +5466,85 @@ contains
         neigh_4(5) = self%rmat(i+1,j,k)
         neigh_4(6) = self%rmat(i-1,j,k)
         nsz = 6
-    end subroutine calc3D_neigh_4
+    end subroutine calc3D_neigh_4_1
+
+    ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self
+    ! it returns the COORDINATES of the 8-neigh in a fixed order.
+    ! The value of the pixel itself is NOT saved.
+    ! This function is for volumes.
+    subroutine calc3D_neigh_4_2(self, px, neigh_4, nsz )
+        class(image), intent(in)    :: self
+        integer,      intent(in)    :: px(3)
+        real,         intent(inout) :: neigh_4(3,6)
+        integer,      intent(out)   :: nsz
+        integer :: i, j, k
+        i = px(1)
+        j = px(2)
+        k = px(3)
+         if( i == 1 .and. j == 1 .and. k == 1) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            nsz = 3
+            return
+         elseif( i == 1 .and. j == 1) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+         elseif( i == 1 .and. k == 1) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i+1,j,k]
+            nsz = 4
+            return
+         elseif( j == 1 .and. k == 1) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j+1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+         endif
+         if( i+1 == self%ldim(1) .and. j+1 == self%ldim(2) .and. k+1 == self%ldim(3)) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i-1,j,k]
+            nsz = 3
+            return
+         elseif( i+1 == self%ldim(1) .and. j+1 == self%ldim(2)) then
+            neigh_4(1:3,1) = [i,j,k+1]
+            neigh_4(1:3,2) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+         elseif( i+1 == self%ldim(1) .and. k+1 == self%ldim(3)) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,3) = [i,j+1,k]
+            neigh_4(1:3,3) = [i,j-1,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+         elseif( j+1 == self%ldim(2) .and. k+1 == self%ldim(3)) then
+            neigh_4(1:3,1) = [i,j,k-1]
+            neigh_4(1:3,2) = [i,j-1,k]
+            neigh_4(1:3,3) = [i+1,j,k]
+            neigh_4(1:3,4) = [i-1,j,k]
+            nsz = 4
+            return
+         endif
+        neigh_4(1:3,1) = [i,j,k+1]
+        neigh_4(1:3,2) = [i,j,k-1]
+        neigh_4(1:3,3) = [i,j+1,k]
+        neigh_4(1:3,4) = [i,j-1,k]
+        neigh_4(1:3,5) = [i+1,j,k]
+        neigh_4(1:3,6) = [i-1,j,k]
+        nsz = 6
+    end subroutine calc3D_neigh_4_2
 
     ! Returns 8-neighborhoods of the pixel position px in self
     ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,

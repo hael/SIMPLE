@@ -697,7 +697,7 @@ contains
         type(nanoparticle) :: nano
         integer :: ldim(3), nptcls
         real    :: smpd
-        real, parameter :: SCALE_FACTOR = 1.5
+        real, parameter :: SCALE_FACTOR = 1.0
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
