@@ -331,10 +331,12 @@ contains
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     t = real(iframe - 1)
-                    x = real(i) / real(self%ldim(1)) - 0.5
-                    y = real(j) / real(self%ldim(2)) - 0.5
-                    x_trafo = real(i) - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
-                    y_trafo = real(j) - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
+                    x = real(i-1) / real(self%ldim(1)) - 0.5
+                    y = real(j-1) / real(self%ldim(2)) - 0.5
+                    x_trafo = real(i-1) - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
+                    y_trafo = real(j-1) - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
+                    x_trafo = x_trafo + 1.
+                    y_trafo = y_trafo + 1.
                     rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo, iframe, rmat_ins )
                 end do
             end do
