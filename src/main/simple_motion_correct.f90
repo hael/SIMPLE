@@ -715,8 +715,6 @@ contains
             end do
             !$omp end do
             !$omp end parallel
-            ! update frame weights
-            frameweights = corrs2weights(corrs)
         end subroutine gen_patched_wsum_calc_corrs
     end subroutine motion_correct_patched
 
@@ -923,10 +921,10 @@ contains
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
         if (.false.) then
-        call movie_sum_global%set_ft(.true.)
-        cmat_sum = cmplx(0.,0.)
-        !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
-        do iframe=ffromto(1),ffromto(2)
+            call movie_sum_global%set_ft(.true.)
+            cmat_sum = cmplx(0.,0.)
+            !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+            do iframe=ffromto(1),ffromto(2)
                 if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
                 call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
                 if( l_w_scalar )then
