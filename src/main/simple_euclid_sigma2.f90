@@ -1,20 +1,22 @@
-module simple_euclid_sigma
+module simple_euclid_sigma2
 include 'simple_lib.f08'
 use simple_parameters,       only: params_glob
 use simple_polarft_corrcalc, only: polarft_corrcalc, pftcc_glob
 use simple_oris,             only: oris
 implicit none
 
-public :: euclid_sigma, eucl_sigma_glob
+public :: euclid_sigma2, eucl_sigma2_glob
 private
 #include "simple_local_flags.inc"
 
-type euclid_sigma
+type euclid_sigma2
     private
     real,    allocatable  :: divide_by(:)
     real,    allocatable  :: sigma2_noise(:,:)
+    real,    allocatable  :: mic_sigma2_noise(:,:)
     logical, allocatable  :: sigma2_exists_msk(:)
     integer, allocatable  :: pinds(:)
+    integer, allocatable  :: micinds(:)
     integer               :: file_header(4) = 0
     integer               :: kfromto(2)     = 0
     integer               :: headsz         = 0
@@ -30,28 +32,26 @@ contains
     procedure          :: read
     procedure, private :: create_empty
     procedure          :: calc_and_write_sigmas
-    procedure          :: calc_and_write_sigmas2D
     procedure, private :: open_and_check_header
     procedure, private :: write
     ! getters / setters
     procedure          :: sigma2_exists
-    procedure          :: set_do_divide
+    procedure, private :: set_do_divide
     procedure          :: get_do_divide
     procedure          :: set_sigma2
-    generic            :: get_sigma2 => get_sigma2_1, get_sigma2_2
-    procedure, private :: get_sigma2_1
-    procedure, private :: get_sigma2_2
-    procedure, private :: resample_sigma2
+    procedure          :: unset_sigma2
+    procedure          :: get_sigma2
     ! destructor
+    procedure          :: kill_ptclsigma2
     procedure          :: kill
-end type euclid_sigma
+end type euclid_sigma2
 
-class(euclid_sigma), pointer :: eucl_sigma_glob => null()
+class(euclid_sigma2), pointer :: eucl_sigma2_glob => null()
 
 contains
 
     subroutine new( self, fname )
-        class(euclid_sigma), target, intent(inout) :: self
+        class(euclid_sigma2), target, intent(inout) :: self
         character(len=*),            intent(in)    :: fname
         real(sp)                                   :: r
         call self%kill
@@ -62,7 +62,7 @@ contains
             self%divide_by(self%kfromto(1):self%kfromto(2)) )
         call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
         call pftcc_glob%assign_pinds(self%pinds)
-        self%fname = trim(fname)
+        self%fname             = trim(fname)
         self%file_header(1)    = params_glob%fromp
         self%file_header(2)    = params_glob%top
         self%file_header(3:4)  = self%kfromto
@@ -72,44 +72,78 @@ contains
         self%exists            = .true.
         self%sigma2_noise      = 0.
         self%sigma2_exists_msk = .false.
-        eucl_sigma_glob        => self
+        eucl_sigma2_glob       => self
     end subroutine new
 
     ! I/O
 
-    subroutine read( self, ptcl_mask )
-        class(euclid_sigma),    intent(inout) :: self
-        logical, optional,      intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        integer                               :: funit
-        integer                               :: iptcl
-        real(sp)                              :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        integer                               :: addr
-        logical                               :: success
+    subroutine read( self, os, ptcl_mask )
+        class(euclid_sigma2),    intent(inout) :: self
+        class(oris),            intent(inout) :: os
+        logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
+        real, parameter :: scale = 1000.0 ! to avoide overflow
+        real(sp)        :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
+        integer         :: fromm, tom, funit, iptcl, addr, pind, imic, micpop
+        logical         :: success, defined
         call pftcc_glob%assign_pinds(self%pinds)
+        self%sigma2_noise      = 0.
+        self%sigma2_exists_msk = .false.
         if (.not. file_exists(trim(self%fname))) call self%create_empty()
         success = self%open_and_check_header(funit)
         if (success) then
+            ! mic related init
+            fromm = huge(fromm)
+            tom   = -1
             do iptcl = params_glob%fromp, params_glob%top
-                if (.not. ptcl_mask(iptcl)) cycle
+                imic  = nint(os%get(iptcl, 'stkind'))
+                fromm = min(fromm, imic)
+                tom   = max(tom, imic)
+            enddo
+            allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),source=0.)
+            allocate(self%micinds(params_glob%fromp:params_glob%top),source=0)
+            ! set arrays & sum
+            do iptcl = params_glob%fromp, params_glob%top
+                ! read
                 addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
                 read(unit=funit,pos=addr) sigma2_noise_n
-                self%sigma2_noise(:,self%pinds(iptcl))    = sigma2_noise_n
-                self%sigma2_exists_msk(self%pinds(iptcl)) = (.not. any(sigma2_noise_n == 0.))
+                defined = any(sigma2_noise_n > TINY)
+                pind    = self%pinds(iptcl)
+                if( ptcl_mask(iptcl) .and. defined )then
+                    ! set
+                    self%sigma2_noise(:,pind)    = sigma2_noise_n
+                    self%sigma2_exists_msk(pind) = .true.
+                endif
+                if( defined )then
+                    ! stk sum over all defined sigmas, not just within mask
+                    imic = nint(os%get(iptcl, 'stkind'))
+                    self%micinds(iptcl) = imic
+                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic)+ sigma2_noise_n/scale
+                endif
             end do
-            call fclose(funit, errmsg='euclid_sigma; read; fhandle cose')
-        else
-            sigma2_noise_n = 0.
-            do iptcl = params_glob%fromp, params_glob%top
-                if (.not. ptcl_mask(iptcl)) cycle
-                self%sigma2_noise(:,self%pinds(iptcl))    = sigma2_noise_n
-                self%sigma2_exists_msk(self%pinds(iptcl)) = .false.
-            end do
+            call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
+            if( any(self%micinds > 0) )then
+                ! average
+                do imic = fromm,tom
+                    micpop = count(self%micinds == imic)
+                    if( micpop > 0 )then
+                        self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) * (scale/real(micpop))
+                    endif
+                enddo
+                ! transfer average to masked ptcls only
+                do iptcl = params_glob%fromp, params_glob%top
+                    if( .not.ptcl_mask(iptcl) )cycle
+                    pind = self%pinds(iptcl)
+                    if( self%sigma2_exists_msk(pind) )then
+                        self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,self%micinds(iptcl))
+                    endif
+                end do
+            endif
         end if
     end subroutine read
 
     !>  For soft assignment
     subroutine calc_and_write_sigmas( self, os, o_peaks, ptcl_mask )
-        class(euclid_sigma),              intent(inout) :: self
+        class(euclid_sigma2),              intent(inout) :: self
         class(oris),                      intent(inout) :: os
         type(oris),          allocatable, intent(inout) :: o_peaks(:)
         logical,             allocatable, intent(in)    :: ptcl_mask(:)
@@ -122,7 +156,7 @@ contains
             call self%create_empty()
         else
             success = self%open_and_check_header(funit)
-            call fclose(funit, errmsg='euclid_sigma; write ')
+            call fclose(funit, errmsg='euclid_sigma2; write ')
             if (.not. success) then
                 THROW_HARD('sigmas file has wrong dimensions')
             end if
@@ -138,58 +172,20 @@ contains
             do ipeak = 1,npeaks
                 weight = o_peaks(iptcl)%get(ipeak, 'ow')
                 if (weight < TINY) cycle
-                iref   = int(o_peaks(iptcl)%get(ipeak, 'proj'))
+                iref   = nint(o_peaks(iptcl)%get(ipeak, 'proj'))
                 shvec  = o_peaks(iptcl)%get_2Dshift(ipeak)
                 irot   = pftcc_glob%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
                 call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
                 sigmas_tmp = sigmas_tmp + 0.5 * weight * sigma_contrib
             end do
-            self%sigma2_noise(:,self%pinds(iptcl))    = sigmas_tmp
-            self%sigma2_exists_msk(self%pinds(iptcl)) = (.not. any(sigmas_tmp == 0.))
+            self%sigma2_noise(:,self%pinds(iptcl)) = sigmas_tmp
         end do
         !$omp end parallel do
         call self%write(funit, os, ptcl_mask)
     end subroutine calc_and_write_sigmas
 
-    !>  For 2D (hard assignment)
-    subroutine calc_and_write_sigmas2D( self, os, ptcl_mask )
-        class(euclid_sigma),              intent(inout) :: self
-        class(oris),                      intent(inout) :: os
-        logical,             allocatable, intent(in)    :: ptcl_mask(:)
-        real    :: sigma_contrib(self%kfromto(1):self%kfromto(2))
-        real    :: shvec(2), weight
-        integer :: i,iptcl, iref, irot, funit
-        logical :: success
-        if (.not. file_exists(trim(self%fname))) then
-            call self%create_empty()
-        else
-            success = self%open_and_check_header(funit)
-            call fclose(funit, errmsg='euclid_sigma; write ')
-            if (.not. success) THROW_HARD('sigmas file has wrong dimensions')
-        endif
-        self%sigma2_noise = 0.
-        !$omp parallel do default(shared) schedule(static) private(iref,iptcl,weight,shvec,irot,i,sigma_contrib)&
-        !$omp proc_bind(close)
-        do iptcl = params_glob%fromp,params_glob%top
-            if (.not. ptcl_mask(iptcl)  ) cycle
-            if ( os%get_state(iptcl)==0 ) cycle
-            weight = os%get(iptcl, 'w')
-            if (weight < TINY) cycle
-            i      = self%pinds(iptcl)
-            iref   = nint(os%get(iptcl, 'class'))
-            shvec  = os%get_2Dshift(iptcl)
-            irot   = pftcc_glob%get_roind(360. - os%e3get(iptcl))
-            call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-            sigma_contrib = 0.5 * weight * sigma_contrib
-            self%sigma2_noise(:,i)    = sigma_contrib
-            self%sigma2_exists_msk(i) = (.not. any(sigma_contrib == 0.))
-        end do
-        !$omp end parallel do
-        call self%write(funit, os, ptcl_mask)
-    end subroutine calc_and_write_sigmas2D
-
     function open_and_check_header( self, funit ) result ( success )
-        class(euclid_sigma), intent(inout) :: self
+        class(euclid_sigma2), intent(inout) :: self
         integer,             intent(out)   :: funit
         logical                            :: success
         integer                            :: io_stat
@@ -199,7 +195,7 @@ contains
             return
         end if
         call fopen(funit,trim(self%fname),access='STREAM',action='READ',status='OLD', iostat=io_stat)
-        call fileiochk('euclid_sigma; read_sigmas; open for read '//trim(self%fname), io_stat)
+        call fileiochk('euclid_sigma2; read_sigmas; open for read '//trim(self%fname), io_stat)
         read(unit=funit,pos=1) self%file_header
         fromp_here      = self%file_header(1)
         top_here        = self%file_header(2)
@@ -219,137 +215,136 @@ contains
     end function open_and_check_header
 
     subroutine create_empty( self )
-        class(euclid_sigma), intent(in) :: self
-        real(sp), allocatable           :: sigmas_empty(:,:)
-        integer                         :: funit, io_stat
-        allocate(sigmas_empty(self%kfromto(1):self%kfromto(2), params_glob%fromp:params_glob%top))
+        class(euclid_sigma2), intent(in) :: self
+        integer  :: funit, io_stat
+        real(sp) :: sigmas_empty(self%kfromto(1):self%kfromto(2), params_glob%fromp:params_glob%top)
         sigmas_empty = 0.
         call fopen(funit,trim(self%fname),access='STREAM',action='WRITE',status='REPLACE', iostat=io_stat)
         write(unit=funit,pos=1) self%file_header
         write(unit=funit,pos=self%headsz + 1) sigmas_empty
         call fclose(funit)
-        deallocate(sigmas_empty)
     end subroutine create_empty
 
     subroutine write( self, funit, os, ptcl_mask )
-        class(euclid_sigma),  intent(inout) :: self
+        class(euclid_sigma2),  intent(inout) :: self
         integer,              intent(inout) :: funit
         class(oris),          intent(in)    :: os
         logical, allocatable, intent(in)    :: ptcl_mask(:)
         integer :: io_stat, addr, iptcl
         call fopen(funit,trim(self%fname),access='STREAM',iostat=io_stat)
-        call fileiochk('euclid_sigma; write; open for write '//trim(self%fname), io_stat)
+        call fileiochk('euclid_sigma2; write; open for write '//trim(self%fname), io_stat)
         do iptcl = params_glob%fromp,params_glob%top
             if (.not. ptcl_mask(iptcl) ) cycle
             if( os%get_state(iptcl)==0 ) cycle
             addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
             write(funit,pos=addr) self%sigma2_noise(:,self%pinds(iptcl))
         end do
-        call fclose(funit, errmsg='euclid_sigma; write; fhandle close')
+        call fclose(funit, errmsg='euclid_sigma2; write; fhandle close')
     end subroutine
 
     ! getters / setters
 
-    function sigma2_exists( self, iptcl ) result( l_flag )
-        class(euclid_sigma), intent(in) :: self
+    logical function sigma2_exists( self, iptcl )
+        class(euclid_sigma2), intent(in) :: self
         integer,             intent(in) :: iptcl
-        logical                         :: l_flag
-        l_flag = .false.
+        sigma2_exists = .false.
         if( .not. self%exists ) return
         if( self%pinds(iptcl) .eq. 0 )then
             write (*,*) 'iptcl = ', iptcl
             THROW_HARD('sigma2_exists. iptcl index wrong!')
         else
-            l_flag = self%sigma2_exists_msk(self%pinds(iptcl))
+            sigma2_exists = self%sigma2_exists_msk(self%pinds(iptcl))
         end if
     end function sigma2_exists
 
     subroutine set_do_divide( self, do_divide )
-        class(euclid_sigma), intent(inout) :: self
+        class(euclid_sigma2), intent(inout) :: self
         logical,             intent(in)    :: do_divide
         self%do_divide = do_divide
     end subroutine set_do_divide
 
     logical function get_do_divide( self )
-        class(euclid_sigma), intent(in) :: self
+        class(euclid_sigma2), intent(in) :: self
         get_do_divide = .false.
         if( self%exists ) get_do_divide = self%do_divide
     end function get_do_divide
 
+    !>  push sigma2 average to buffer
     subroutine set_sigma2( self, iptcl )
-        class(euclid_sigma), intent(inout) :: self
+        class(euclid_sigma2), intent(inout) :: self
         integer,             intent(in)    :: iptcl
-        if (self%pinds(iptcl) .eq. 0) then
-            write (*,*) ' iptcl = ', iptcl
-            THROW_HARD('set_divide_by. iptcl index wrong!')
+        integer :: micind
+        self%do_divide = .false.
+        if( .not. self%exists ) return
+        if( self%sigma2_exists(iptcl) )then
+            micind = self%micinds(iptcl)
+            if( micind <= 0 ) THROW_HARD('set_sigma2; mic index wrong! micind='//int2str(micind))
+            self%divide_by(:) = self%mic_sigma2_noise(:,micind)
+            self%do_divide    = .true.
         else
-            self%divide_by(:) = self%sigma2_noise(:,self%pinds(iptcl))
+            call self%unset_sigma2
         end if
     end subroutine set_sigma2
 
-    subroutine get_sigma2_1( self, nyq, sigma2 )
-        class(euclid_sigma), intent(in)  :: self
-        integer,             intent(in)  :: nyq
-        real,                intent(out) :: sigma2(0:2*nyq)
-        sigma2 = 1.
-        if( .not.self%exists )return
-        call self%resample_sigma2(nyq, self%divide_by, sigma2)
-    end subroutine get_sigma2_1
+    !>  push sigma2 average to buffer
+    subroutine unset_sigma2( self )
+        class(euclid_sigma2), intent(inout) :: self
+        self%do_divide = .false.
+        if( .not. self%exists ) return
+        self%divide_by(:) = 1.
+    end subroutine unset_sigma2
 
-    subroutine get_sigma2_2( self, nyq, iptcl, sigma2 )
-        class(euclid_sigma), intent(in)  :: self
-        integer,             intent(in)  :: nyq, iptcl
-        real,                intent(out) :: sigma2(0:2*nyq)
-        integer :: pind
-        sigma2 = 1.
-        if( .not.self%exists )return
-        pind = self%pinds(iptcl)
-        if( pind == 0 )THROW_HARD('Wrong indexing; get_sigma2_2')
-        call self%resample_sigma2(nyq, self%sigma2_noise(:,pind), sigma2)
-    end subroutine get_sigma2_2
-
-    subroutine resample_sigma2( self, nyq, sigma2_in, sigma2_out)
-        class(euclid_sigma), intent(in)    :: self
-        integer,             intent(in)    :: nyq
-        real,                intent(in)    :: sigma2_in(self%kfromto(1):self%kfromto(2))
-        real,                intent(inout) :: sigma2_out(0:2*nyq)
+    !>  fetch sigma2 average from buffer
+    subroutine get_sigma2( self, nyq, sigma2 )
+        class(euclid_sigma2), intent(in)  :: self
+        integer,              intent(in)  :: nyq ! oversampling nyquist limit
+        real,                 intent(out) :: sigma2(0:2*nyq)
         real    :: scale, loc, ld
         integer :: k, kstart, lk
+        sigma2 = 1.
+        if( .not.self%exists )return
         if( nyq == self%kfromto(2) )then
-            sigma2_out(self%kfromto(1):self%kfromto(2)) = sigma2_in
+            sigma2(self%kfromto(1):self%kfromto(2)) = self%divide_by
         else if( nyq > self%kfromto(2) )then
-            ! kfromto(2) is nyquist index
+            ! resampling
             scale  = real(self%kfromto(2)) / real(nyq)
             kstart = ceiling(real(self%kfromto(1))/scale)
-            sigma2_out(nyq) = sigma2_in(self%kfromto(2))
+            sigma2(nyq) = self%divide_by(self%kfromto(2))
             do k = kstart,nyq-1
                 loc = real(k)*scale
                 lk  = floor(loc)
                 ld  = loc-real(lk)
-                sigma2_out(k) = ld*sigma2_in(lk+1) + (1.-ld)*sigma2_in(lk)
+                sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
             enddo
         else
             THROW_HARD('Incompatible requested size; get_sigma2')
         endif
-    end subroutine resample_sigma2
+    end subroutine get_sigma2
 
     ! destructor
 
+    subroutine kill_ptclsigma2( self )
+        class(euclid_sigma2), intent(inout) :: self
+        if(allocated(self%sigma2_noise)) deallocate(self%sigma2_noise)
+    end subroutine kill_ptclsigma2
+
     subroutine kill( self )
-        class(euclid_sigma), intent(inout) :: self
+        class(euclid_sigma2), intent(inout) :: self
         if( self%exists )then
-            if ( allocated(self%sigma2_noise) )      deallocate(self%sigma2_noise)
-            if ( allocated(self%sigma2_exists_msk) ) deallocate(self%sigma2_exists_msk)
-            if ( allocated(self%pinds) )             deallocate(self%pinds)
-            if ( allocated(self%divide_by) )         deallocate(self%divide_by)
+            call self%kill_ptclsigma2
+            if(allocated(self%sigma2_exists_msk)) deallocate(self%sigma2_exists_msk)
+            if(allocated(self%pinds))             deallocate(self%pinds)
+            if(allocated(self%divide_by))         deallocate(self%divide_by)
+            if(allocated(self%mic_sigma2_noise))  deallocate(self%mic_sigma2_noise)
+            if(allocated(self%micinds))           deallocate(self%micinds)
             self%file_header  = 0
             self%headsz       = 0
             self%sigmassz     = 0
             self%kfromto      = 0
             self%do_divide    = .false.
             self%exists       = .false.
-            eucl_sigma_glob  => null()
+            eucl_sigma2_glob  => null()
         endif
     end subroutine kill
 
-end module simple_euclid_sigma
+end module simple_euclid_sigma2

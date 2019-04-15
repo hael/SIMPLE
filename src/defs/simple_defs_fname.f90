@@ -53,6 +53,8 @@ character(len=*), parameter :: CLUSTER3D_FSC        = 'mixed_fsc'//BIN_EXT
 character(len=*), parameter :: CLUSTER3D_FRCS       = 'mixed_frcs'//BIN_EXT
 character(len=*), parameter :: CLUSTER3D_ANISOLP    = 'mixed_aniso_optlp'
 character(len=*), parameter :: CLUSTER3D_VOL        = 'mixed_recvol'
+! ML
+character(len=*), parameter :: SIGMA2_FBODY         = 'sigma2_noise_part'
 ! OLD DIRECTORIES
 character(len=*), parameter :: STDERROUT_DIR        = 'stderrout/'
 ! NEW DIRECTORIES

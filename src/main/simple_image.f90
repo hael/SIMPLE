@@ -6651,6 +6651,7 @@ contains
                 else
                     ba%rmat(ldim(1)/2+1:,:ldim(2),1) = right%rmat(ldim(1)/2+1:,:ldim(2),1)
                 endif
+                ba%rmat(ldim(1)/2:ldim(1)/2+1,:,1) = 0.
             else
                 THROW_HARD('before (left) and after (right) not of same smpd; before_after')
             endif

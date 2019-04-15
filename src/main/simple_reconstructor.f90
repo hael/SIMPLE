@@ -2,10 +2,10 @@
 module simple_reconstructor
 !$ use omp_lib
 include 'simple_lib.f08'
-use simple_kbinterpol,   only: kbinterpol
-use simple_image,        only: image
-use simple_parameters,   only: params_glob
-use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
+use simple_kbinterpol,    only: kbinterpol
+use simple_image,         only: image
+use simple_parameters,    only: params_glob
+use simple_euclid_sigma2, only: euclid_sigma2, eucl_sigma2_glob
 use simple_fftw3
 implicit none
 
@@ -288,10 +288,10 @@ contains
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
         logical   :: do_sigma2div
         if( pwght < TINY )return
-        do_sigma2div = associated(eucl_sigma_glob)
+        do_sigma2div = associated(eucl_sigma2_glob)
         if (do_sigma2div) then
-            do_sigma2div = eucl_sigma_glob%get_do_divide()
-            if (do_sigma2div) call eucl_sigma_glob%get_sigma2(self%nyq, sigma2)
+            do_sigma2div = eucl_sigma2_glob%get_do_divide()
+            if (do_sigma2div) call eucl_sigma2_glob%get_sigma2(self%nyq, sigma2)
         end if
         ! window size
         iwinsz = ceiling(self%winsz - 0.5)
@@ -397,14 +397,14 @@ contains
         complex   :: comp, oshift
         real      :: sigma2(0:2*self%nyq)
         real      :: rotmats(os%get_noris(),se%get_nsym(),3,3)
-        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq, rnyq_sq
+        real      :: vec(3), loc(3), shifts(os%get_noris(),2), ows(os%get_noris()), rsh_sq
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq
         integer   :: logi(3), sh, i, h, k, nsym, isym, iori, noris, sstate, states(os%get_noris()), iwinsz, win(2,3)
         logical   :: do_sigma2div
-        do_sigma2div = associated(eucl_sigma_glob)
+        do_sigma2div = associated(eucl_sigma2_glob)
         if (do_sigma2div) then
-            do_sigma2div = eucl_sigma_glob%get_do_divide()
-            if (do_sigma2div) call eucl_sigma_glob%get_sigma2(self%nyq, sigma2)
+            do_sigma2div = eucl_sigma2_glob%get_do_divide()
+            if (do_sigma2div) call eucl_sigma2_glob%get_sigma2(self%nyq, sigma2)
         end if
         ! take care of optional state flag
         sstate = 1

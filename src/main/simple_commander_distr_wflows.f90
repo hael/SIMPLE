@@ -986,7 +986,7 @@ contains
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
             if( trim(params%objfun) .eq. 'euclid' )then
-                call simple_list_files(prev_refine_path//'sigma2_noise_part*', list)
+                call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
                 nfiles = size(list)
                 if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
                 do i=1,nfiles

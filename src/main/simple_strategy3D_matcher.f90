@@ -31,7 +31,7 @@ use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
 use simple_convergence,              only: convergence
-use simple_euclid_sigma,             only: euclid_sigma
+use simple_euclid_sigma2,            only: euclid_sigma2
 implicit none
 
 public :: refine3D_exec, preppftcc4align, pftcc, setup_weights_read_o_peaks
@@ -51,7 +51,7 @@ integer(timer_int_kind)         :: t_init, t_prep_pftcc, t_align, t_rec, t_tot, 
 real(timer_int_kind)            :: rt_init, rt_prep_pftcc, rt_align, rt_rec, rt_prep_primesrch3D
 real(timer_int_kind)            :: rt_tot
 character(len=STDLEN)           :: benchfname
-type(euclid_sigma)              :: eucl_sigma
+type(euclid_sigma2)             :: eucl_sigma
 
 contains
 
@@ -305,6 +305,7 @@ contains
         ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
         if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+            call eucl_sigma%kill_ptclsigma2
         end if
 
         ! UPDATE PARTICLE STATS
@@ -440,10 +441,9 @@ contains
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
-            call eucl_sigma%read(ptcl_mask)
+            call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
+            call eucl_sigma%read(build_glob%spproj_field, ptcl_mask)
         end if
-
         ! PREPARATION OF REFERENCES IN PFTCC
         ! read reference volumes and create polar projections
         cnt = 0
@@ -620,10 +620,7 @@ contains
                         orientation = build_glob%spproj_field%get_ori(iptcl)
                         ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                         if( orientation%isstatezero() ) cycle
-                        if( eucl_sigma%sigma2_exists( iptcl ))then
-                            call eucl_sigma%set_do_divide(.true.)
-                            call eucl_sigma%set_sigma2(iptcl)
-                        end if
+                        call eucl_sigma%set_sigma2(iptcl)
                         select case(trim(params_glob%refine))
                             case('clustersym')
                                 ! always C1 reconstruction
@@ -631,7 +628,7 @@ contains
                             case DEFAULT
                                 call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                         end select
-                        if( eucl_sigma%sigma2_exists( iptcl )) call eucl_sigma%set_do_divide(.false.)
+                        call eucl_sigma%unset_sigma2
                     end do
                 end do
                 ! normalise structure factors

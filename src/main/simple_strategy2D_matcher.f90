@@ -7,8 +7,6 @@ use simple_polarft_corrcalc, only: polarft_corrcalc
 use simple_cmdline,          only: cmdline
 use simple_builder,          only: build_glob
 use simple_parameters,       only: params_glob
-use simple_euclid_sigma,     only: euclid_sigma
-
 use simple_classaverager
 implicit none
 
@@ -19,7 +17,6 @@ private
 logical, parameter      :: L_BENCH           = .false.
 
 type(polarft_corrcalc)  :: pftcc
-type(euclid_sigma)      :: eucl_sigma
 logical,    allocatable :: ptcl_mask(:)
 integer                 :: nptcls2update
 integer(timer_int_kind) :: t_init, t_prep_pftcc, t_align, t_cavg, t_tot
@@ -231,11 +228,6 @@ contains
         end do
         deallocate(strategy2Dsrch, pinds)
 
-        ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
-        if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%calc_and_write_sigmas2D(build_glob%spproj_field, ptcl_mask)
-        end if
-
         ! CLEAN-UP
         call pftcc%kill
         deallocate(ptcl_mask)
@@ -253,7 +245,6 @@ contains
         ! write results to disk
         call cavger_readwrite_partial_sums('write')
         call cavger_kill
-        call eucl_sigma%kill
         if( L_BENCH ) rt_cavg = toc(t_cavg)
         call qsys_job_finished('simple_strategy2D_matcher :: cluster2D_exec')
         if( L_BENCH )then
@@ -294,10 +285,6 @@ contains
         ! create the polarft_corrcalc object
         call pftcc%new(params_glob%ncls, [params_glob%fromp,params_glob%top],&
             &eoarr=nint(build_glob%spproj_field%get_all('eo',[params_glob%fromp,params_glob%top])))
-        if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%new('sigma2_noise_part'//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
-            call eucl_sigma%read(ptcl_mask)
-        end if
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
         ! this is tro avoid excessive allocation, allocate what is the upper bound on the
