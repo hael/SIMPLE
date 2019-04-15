@@ -5,7 +5,6 @@ use simple_builder,      only: build_glob
 use simple_parameters,   only: params_glob
 use simple_ctf,          only: ctf
 use simple_image,        only: image
-use simple_euclid_sigma, only: euclid_sigma, eucl_sigma_glob
 implicit none
 
 public :: cavger_new, cavger_transf_oridat, cavger_gen2Dclassdoc, cavger_assemble_sums,&
