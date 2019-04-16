@@ -116,6 +116,7 @@ type(simple_program), target :: print_fsc
 type(simple_program), target :: print_magic_boxes
 type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
+type(simple_program), target :: prune_project
 type(simple_program), target :: pspec_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
@@ -133,7 +134,6 @@ type(simple_program), target :: simulate_particles
 type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
-type(simple_program), target :: subset_project
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
@@ -285,6 +285,7 @@ contains
         call new_print_magic_boxes
         call new_print_project_info
         call new_print_project_field
+        call new_prune_project
         call new_pspec_stats
         call new_reproject
         call new_reconstruct3D
@@ -302,7 +303,6 @@ contains
         call new_simulate_subtomogram
         call new_stack
         call new_stackops
-        call new_subset_project
         call new_symaxis_search
         call new_symmetry_test
         call new_tseries_import
@@ -362,24 +362,24 @@ contains
         prg_ptr_array(44)%ptr2prg => print_magic_boxes
         prg_ptr_array(45)%ptr2prg => print_project_info
         prg_ptr_array(46)%ptr2prg => print_project_field
-        prg_ptr_array(47)%ptr2prg => pspec_stats
-        prg_ptr_array(48)%ptr2prg => reproject
-        prg_ptr_array(49)%ptr2prg => reconstruct3D
-        prg_ptr_array(50)%ptr2prg => reextract
-        prg_ptr_array(51)%ptr2prg => refine3D
-        prg_ptr_array(52)%ptr2prg => refine3D_init
-        prg_ptr_array(53)%ptr2prg => report_selection
-        prg_ptr_array(54)%ptr2prg => scale
-        prg_ptr_array(55)%ptr2prg => scale_project
-        prg_ptr_array(56)%ptr2prg => select_
-        prg_ptr_array(57)%ptr2prg => shift
-        prg_ptr_array(58)%ptr2prg => simulate_movie
-        prg_ptr_array(59)%ptr2prg => simulate_noise
-        prg_ptr_array(60)%ptr2prg => simulate_particles
-        prg_ptr_array(61)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(62)%ptr2prg => stack
-        prg_ptr_array(63)%ptr2prg => stackops
-        prg_ptr_array(64)%ptr2prg => subset_project
+        prg_ptr_array(47)%ptr2prg => prune_project
+        prg_ptr_array(48)%ptr2prg => pspec_stats
+        prg_ptr_array(49)%ptr2prg => reproject
+        prg_ptr_array(50)%ptr2prg => reconstruct3D
+        prg_ptr_array(51)%ptr2prg => reextract
+        prg_ptr_array(52)%ptr2prg => refine3D
+        prg_ptr_array(53)%ptr2prg => refine3D_init
+        prg_ptr_array(54)%ptr2prg => report_selection
+        prg_ptr_array(55)%ptr2prg => scale
+        prg_ptr_array(56)%ptr2prg => scale_project
+        prg_ptr_array(57)%ptr2prg => select_
+        prg_ptr_array(58)%ptr2prg => shift
+        prg_ptr_array(59)%ptr2prg => simulate_movie
+        prg_ptr_array(60)%ptr2prg => simulate_noise
+        prg_ptr_array(61)%ptr2prg => simulate_particles
+        prg_ptr_array(62)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(63)%ptr2prg => stack
+        prg_ptr_array(64)%ptr2prg => stackops
         prg_ptr_array(65)%ptr2prg => symaxis_search
         prg_ptr_array(66)%ptr2prg => symmetry_test
         prg_ptr_array(67)%ptr2prg => tseries_track
@@ -485,6 +485,8 @@ contains
                 ptr2prg => print_project_info
             case('print_project_field')
                 ptr2prg => print_project_field
+            case('prune_project')
+                ptr2prg => prune_project
             case('pspec_stats')
                 ptr2prg => pspec_stats
             case('reproject')
@@ -519,8 +521,6 @@ contains
                 ptr2prg => stack
             case('stackops')
                 ptr2prg => stackops
-            case('subset_project')
-                ptr2prg => subset_project
             case('symaxis_search')
                 ptr2prg => symaxis_search
             case('symmetry_test')
@@ -598,6 +598,7 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
+        write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
         write(logfhandle,'(A)') report_selection%name
         write(logfhandle,'(A)') reproject%name
@@ -610,7 +611,6 @@ contains
         write(logfhandle,'(A)') scale%name
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
-        write(logfhandle,'(A)') subset_project%name
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
@@ -2533,6 +2533,32 @@ contains
         call oristats%set_input('comp_ctrls', 1, nthr)
     end subroutine new_oristats
 
+    subroutine new_prune_project
+        ! PROGRAM SPECIFICATION
+        call prune_project%new(&
+        &'prune_project',&                            ! name
+        &'discards deselected data from a project',&  ! descr_short
+        &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
+        &'simple_exec',&                             ! executable
+        &0, 2, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call prune_project%set_input('parm_ios', 1, projfile)
+        call prune_project%set_input('parm_ios', 2, clip)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_prune_project
+
     subroutine new_reconstruct3D
         ! PROGRAM SPECIFICATION
         call reconstruct3D%new(&
@@ -3028,32 +3054,6 @@ contains
         ! computer controls
         call stackops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_stackops
-
-    subroutine new_subset_project
-        ! PROGRAM SPECIFICATION
-        call subset_project%new(&
-        &'subset_project',&                          ! name
-        &'generates a random subset of a project',&  ! descr_short
-        &'is a program that generates a random subset of an existing project',& ! descr_long
-        &'simple_exec',&                             ! executable
-        &0, 2, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        call subset_project%set_input('parm_ios', 1, projfile)
-        call subset_project%set_input('parm_ios', 2,  nptcls)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        ! <empty>
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        ! <empty>
-    end subroutine new_subset_project
 
     subroutine new_symaxis_search
         ! PROGRAM SPECIFICATION

@@ -92,7 +92,7 @@ contains
     procedure          :: merge_algndocs
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
-    procedure          :: gen_ptcls_subset
+    procedure          :: prune_project
     procedure          :: report_state2stk
     procedure          :: set_boxcoords
     ! I/O
@@ -2288,93 +2288,150 @@ contains
         end do
     end subroutine map2ptcls_state
 
-    subroutine gen_ptcls_subset( self_in, nptcls_subset )
+    subroutine prune_project( self_in, cline, nptcls_subset )
         use simple_image,   only: image
         use simple_cmdline, only: cmdline
         class(sp_project), intent(inout) :: self_in
-        integer,           intent(in)    :: nptcls_subset
-        character(len=STDLEN), parameter :: newstkname = 'substk/stk_subset.mrc'
-        character(len=:),    allocatable :: stkname, projname, new_projname, projfile, new_projfile
+        class(cmdline),    intent(in)    :: cline
+        integer, optional, intent(in)    :: nptcls_subset
+        character(len=STDLEN), parameter :: stkdir = './ptcls/'
+        character(len=:),    allocatable :: newstkname,stkname,projname,new_projname,projfile,new_projfile,ext
+        character(len=LONGSTRLEN)        :: relstkname
+        type(image)          :: img, img_clip
+        type(cmdline)        :: cline_tmp
         type(sp_project)     :: self_out
-        type(cmdline)        :: cline
-        type(ctfparams)      :: ctfparms
-        type(oris)           :: ctftab
-        type(image)          :: img
-        type(ran_tabu)       :: rt
-        integer, allocatable :: order(:)
+        logical, allocatable :: stks_mask(:), ptcls_mask(:)
+        integer, allocatable :: stkinds(:), stk2mic_inds(:)
         real    :: smpd
-        integer :: inds(nptcls_subset)
-        integer :: i, iptcl, nonzero_nptcls, nptcls_tot, cnt, box, ind_in_stk
-        call self_out%kill
-        if( self_in%os_ptcl2D%get_noris() < nptcls_subset )THROW_HARD('Asking for too many particles 1; sp_project :: gen_ptcls_subset')
-        nptcls_tot = self_in%get_nptcls()
-        if( nptcls_subset > nptcls_tot )THROW_HARD('Asking for too many particles 2; sp_project :: gen_ptcls_subset')
-        order = (/(iptcl,iptcl=1,nptcls_tot)/)
-        rt    = ran_tabu(nptcls_tot)
-        call rt%shuffle(order)
-        call rt%kill
-        cnt  = 0
-        inds = 0
-        do i = 1,nptcls_tot
-            iptcl = order(i)
-            if( self_in%os_ptcl2D%get(iptcl,'state') > 0.5 )then
-                cnt = cnt + 1
-                if( cnt > nptcls_subset )exit
-                inds(cnt) = iptcl
+        integer :: iptcl, istk, stk_cnt, nptcls, nptcls_tot, ptcl_cnt, nmics_sel, imic
+        integer :: box, boxclip, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
+        logical :: l_clip
+        if( present(nptcls_subset) )then
+            ! TODO
+        else
+            nptcls_tot = self_in%os_ptcl2D%get_noris()
+            nstks_tot  = self_in%get_nstks()
+            nmics_tot  = self_in%os_mic%get_noris()
+            allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot), stks_mask(nstks_tot))
+            ! clipping
+            box  = self_in%get_box()
+            l_clip = .false.
+            if( cline%defined('clip') )then
+                boxclip = nint(cline%get_rarg('clip'))
+                l_clip  = (boxclip <= box) .and. (is_even(boxclip))
+                if( .not. l_clip ) THROW_HARD('Invalid CLIP argument; prune_project')
+                if( boxclip==box ) l_clip = .false.
             endif
-        enddo
-        nonzero_nptcls = count(inds>0)
-        if( nonzero_nptcls /= nptcls_subset ) THROW_HARD('Asking for too many particles 3; sp_project :: gen_ptcls_subset')
-        ! gather defocus and create stack
-        write(logfhandle,'(A)')'>>> GENERATING STACK'
-        call simple_mkdir('substk')
-        call ctftab%new(nptcls_subset)
-        box  = self_in%get_box()
-        smpd = self_in%get_smpd()
-        call img%new([box,box,1],smpd)
-        do i=1,nptcls_subset
-            iptcl = inds(i)
-            call ctftab%set_ctfvars(i, self_in%get_ctfparams('ptcl2D',iptcl))
-            call self_in%get_stkname_and_ind('ptcl2D', iptcl, stkname, ind_in_stk )
-            call img%read(stkname,ind_in_stk)
-            call img%write(newstkname,i)
-            call progress(i,nptcls_subset)
-        enddo
-        ! import stack into new project
-        ctfparms = self_in%get_ctfparams('ptcl2D',inds(1))
-        call self_out%add_single_stk(newstkname, ctfparms, ctftab)
-        ! transfer orientation parameters
-        write(logfhandle,'(A)')'>>> UPDATING PROJECT FILE'
-        do i=1,nptcls_subset
-            iptcl = inds(i)
-            if( self_in%os_ptcl2D%has_been_searched(iptcl) )then
-                call self_out%os_ptcl2D%set_euler(i, self_in%os_ptcl2D%get_euler(iptcl))
-                call self_out%os_ptcl2D%set_shift(i, self_in%os_ptcl2D%get_2Dshift(iptcl))
+            ! stacks mask
+            do istk=1,nstks_tot
+                stks_mask(istk) = self_in%os_stk%get_state(istk) > 0
+            enddo
+            nstks  = count(stks_mask)
+            call self_out%os_stk%new(nstks)
+            ! micrographs mask
+            if( nmics_tot > 0 )then
+                nmics_sel  = self_in%os_mic%get_noris(consider_state=.true.)
+                if( nmics_sel /= nstks_tot )then
+                    THROW_HARD('Inconsistent # of selected micrographs and # of stacks; prune_project')
+                endif
+                allocate(stk2mic_inds(nstks_tot),source=0)
+                istk = 0
+                do imic=1,nmics_tot
+                    if(self_in%os_mic%get_state(imic) == 0) cycle
+                    istk = istk+1
+                    if( stks_mask(istk) ) stk2mic_inds(istk) = imic
+                enddo
+                call self_out%os_mic%new(nstks)
             endif
-            if( self_in%os_ptcl3D%has_been_searched(iptcl) )then
-                call self_out%os_ptcl3D%set_euler(i, self_in%os_ptcl3D%get_euler(iptcl))
-                call self_out%os_ptcl3D%set_shift(i, self_in%os_ptcl3D%get_2Dshift(iptcl))
+            ! particles mask
+            do iptcl=1,nptcls_tot
+                ptcls_mask(iptcl) = self_in%os_ptcl2D%get_state(iptcl) > 0
+                stkinds(iptcl)    = nint(self_in%os_ptcl2D%get(iptcl,'stkind'))
+            enddo
+            nptcls = count(ptcls_mask)
+            call self_out%os_ptcl2D%new(nptcls)
+            call self_out%os_ptcl3D%new(nptcls)
+            ! drops state=0
+            write(logfhandle,'(A)')'>>> GENERATING STACK(S)'
+            smpd = self_in%get_smpd()
+            call img%new([box,box,1],smpd)
+            if( l_clip ) call img_clip%new([boxclip,boxclip,1],smpd)
+            call simple_mkdir(stkdir)
+            top_glob = 0
+            stk_cnt  = 0
+            do istk=1,nstks_tot
+                call progress(istk,nstks_tot)
+                if( .not.stks_mask(istk) )cycle
+                stks_mask(istk) = count(stkinds == istk) > 0
+                if( .not.stks_mask(istk) )cycle
+                stk_cnt = stk_cnt+1
+                call self_in%os_stk%getter(istk,'stk',stkname)
+                ext = fname2ext(stkname)
+                newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//'_purge.mrc'
+                fromp_glob = top_glob+1
+                fromp      = nint(self_in%os_stk%get(istk,'fromp'))
+                top        = nint(self_in%os_stk%get(istk,'top'))
+                ptcl_cnt   = 0
+                do iptcl=fromp,top
+                    if( .not.ptcls_mask(iptcl) )cycle
+                    top_glob = top_glob+1
+                    ptcl_cnt = ptcl_cnt+1
+                    ! copy image
+                    call img%read(stkname, iptcl-fromp+1)
+                    if( l_clip )then
+                        call img%clip(img_clip)
+                        call img_clip%write(newstkname, ptcl_cnt)
+                    else
+                        call img%write(newstkname, ptcl_cnt)
+                    endif
+                    ! update orientations
+                    call self_out%os_ptcl2D%set_ori(top_glob, self_in%os_ptcl2D%get_ori(iptcl))
+                    call self_out%os_ptcl3D%set_ori(top_glob, self_in%os_ptcl3D%get_ori(iptcl))
+                    call self_out%os_ptcl2D%set(top_glob, 'stkind', real(stk_cnt))
+                    call self_out%os_ptcl3D%set(top_glob, 'stkind', real(stk_cnt))
+                enddo
+                ! update stack
+                call self_out%os_stk%set_ori(stk_cnt, self_in%os_stk%get_ori(istk))
+                call make_relativepath(CWD_GLOB, newstkname, relstkname)
+                call self_out%os_stk%set(stk_cnt,'stk',   relstkname)
+                call self_out%os_stk%set(stk_cnt,'fromp', real(fromp_glob))
+                call self_out%os_stk%set(stk_cnt,'top',   real(top_glob))
+                call self_out%os_stk%set(stk_cnt,'nptcls',real(ptcl_cnt))
+                if( l_clip ) call self_out%os_stk%set(stk_cnt,'box',real(boxclip))
+                ! update micrograph
+                if( nmics_tot > 0 )then
+                    imic = stk2mic_inds(istk)
+                    call self_out%os_mic%set_ori(stk_cnt, self_in%os_mic%get_ori(imic))
+                endif
+            enddo
+            ! update other fields & write
+            self_out%projinfo = self_in%projinfo
+            self_out%compenv  = self_in%compenv
+            if( .not.l_clip )then
+                self_out%os_cls2D = self_in%os_cls2D
+                self_out%os_cls3D = self_in%os_cls3D
+                self_out%os_out = self_in%os_out
             endif
-            call progress(i,nptcls_subset)
-        enddo
-        ! update other fields & write
-        self_out%projinfo = self_in%projinfo
-        self_out%compenv  = self_in%compenv
-        if( self_in%jobproc%get_noris()  > 0 ) self_out%jobproc = self_in%jobproc
-        call self_out%projinfo%getter(1, 'projfile', projfile)
-        call self_out%projinfo%getter(1, 'projname', projname)
-        if( trim(projname).eq.'' ) projname = get_fbody(projfile, METADATA_EXT, separator=.false.)
-        new_projname = trim(projname)//'_subset'
-        new_projfile = trim(new_projname)//'.simple'
-        call cline%set('projname', trim(new_projname))
-        call cline%delete('projfile')
-        call self_out%update_projinfo(cline)
-        call self_out%write(new_projfile)
-        ! cleanup
-        call img%kill
-        call ctftab%kill
-        deallocate(order)
-    end subroutine gen_ptcls_subset
+            if( self_in%jobproc%get_noris()  > 0 ) self_out%jobproc = self_in%jobproc
+            call self_out%projinfo%getter(1, 'projfile', projfile)
+            call self_out%projinfo%getter(1, 'projname', projname)
+            if( trim(projname).eq.'' ) projname = get_fbody(projfile, METADATA_EXT, separator=.false.)
+            new_projname = trim(projname)//'_purge'
+            new_projfile = trim(new_projname)//trim(METADATA_EXT)
+            call cline_tmp%set('projname', new_projname)
+            call cline_tmp%delete('projfile')
+            call self_out%update_projinfo(cline_tmp)
+            call self_out%write(new_projfile)
+            write(logfhandle,'(A,I8,A,I8)')'>>> # OF PARTICLES  :',nptcls_tot,' -> ', nptcls
+            write(logfhandle,'(A,I8,A,I8)')'>>> # OF STACKS     :',nstks_tot,' -> ', nstks
+            if( nmics_tot > 0 )then
+                write(logfhandle,'(A,I8,A,I8)')'>>> # OF MICROGRAPHS:',nmics_tot,' -> ', nstks
+            endif
+            ! cleanup
+            call img%kill
+            call img_clip%kill
+        endif
+    end subroutine prune_project
 
     ! report state selection to os_stk & os_ptcl2D/3D
     subroutine report_state2stk( self, states )

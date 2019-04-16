@@ -33,7 +33,7 @@ type(import_movies_commander)       :: ximport_movies
 type(import_boxes_commander)        :: ximport_boxes
 type(import_particles_commander)    :: ximport_particles
 type(import_cavgs_commander)        :: ximport_cavgs
-type(subset_project_commander)      :: xsubset_project
+type(prune_project_commander)       :: xprune_project
 type(export_starproject_commander)  :: xexport_starproject
 type(import_starproject_commander)  :: ximport_starproject
 type(report_selection_commander)    :: xreport_selection
@@ -137,9 +137,9 @@ select case(prg)
     case( 'import_cavgs' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call ximport_cavgs%execute(cline)
-    case( 'subset_project' )
+    case( 'prune_project' )
         call cline%set('mkdir', 'yes')
-        call xsubset_project%execute(cline)
+        call xprune_project%execute(cline)
     case( 'export_starproject' )
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
