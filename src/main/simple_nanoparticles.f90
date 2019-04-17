@@ -54,6 +54,7 @@ type :: nanoparticle
     procedure          :: calc_circularity
     procedure          :: discard_outliers
     procedure, private :: distances_distribution
+    procedure, private :: per_shell_dist_distr
     ! clustering
     procedure          :: cluster => nanopart_cluster
     procedure, private :: affprop_cluster_ar
@@ -227,6 +228,8 @@ contains
         write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD = ', rmsd*nano1%smpd, "A"
         write(unit = 121, fmt = '(a)') '***comparison completed'
         close(121)
+        ! RMSD per shells
+        call nano1%per_shell_dist_distr(nano2)
         ! Circularities calculation
         call nano1%calc_circularity()
         call nano2%calc_circularity()
@@ -248,7 +251,7 @@ contains
             real,           intent(in)  :: ada !minimum average dist atoms between nano1 and nano2
             real, optional, intent(out) :: r   !rmsd calculated
             logical, allocatable :: mask(:)
-            real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:)
+            real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
             integer :: location(1)
             integer :: i, j
             integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
@@ -256,6 +259,7 @@ contains
             integer :: cnt, cnt_zeros
             real    :: sum, rmsd
             type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
+            type(atoms) :: centers_close1, centers_close2
             ! If they don't have the same nb of atoms
             if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
                 N_min = size(nano1%centers, dim = 2)
@@ -263,24 +267,32 @@ contains
                 write(logfhandle,*) 'NB atoms in vol1   ', N_min
                 write(logfhandle,*) 'NB atoms in vol2   ', N_max
                 write(logfhandle,*) abs(N_max-N_min), 'atoms do NOT correspond'
-                call centers_coupled1%new(N_min, dummy=.true.)
+                call centers_coupled1%new(N_max, dummy=.true.)
                 call centers_coupled2%new(N_max, dummy=.true.)
-                allocate(dist(N_min), dist_sq(N_min), source = 0.)
-                allocate(mask(size(nano2%centers, dim = 2)), source = .true.)
+                call centers_close1%new  (N_max, dummy=.true.)
+                call centers_close2%new  (N_max, dummy=.true.)
+                allocate(dist(N_max), dist_sq(N_max), source = 0.)
+                allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
+                allocate(mask(N_min), source = .true.)
                 cnt = 0
-                do i = 1, N_min !compare based on centers1
-                    dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
-                    if(dist(i)*nano1%smpd > VDW_RAD_PT+0.2*VDW_RAD_PT) then
+                do i = 1, N_max !compare based on centers2
+                    dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                    if(dist(i)*nano2%smpd > 2.2) then
                         dist(i) = 0. !it means there is no correspondent atom in the other nano
                         cnt = cnt+1  !to discard them in the rmsd calculation
                     else
+                        if(dist(i)*nano2%smpd < 0.5) then
+                            dist_close(i) = dist(i)**2
+                            call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                            call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                        endif
                          dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
                          if(DEBUG_HERE) then
-                             write(logfhandle,*) 'ATOM', i,'coords: ', nano1%centers(:,i), 'coupled with '
-                             write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                             write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
+                             write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                          endif
-                         call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*0.358/nano1%SCALE_FACTOR)
-                         call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*0.358/nano2%SCALE_FACTOR)
+                         call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                         call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano1%SCALE_FACTOR)
                          mask(location(1)) = .false. ! not to consider the same atom more than once
                      endif
                 enddo
@@ -290,37 +302,48 @@ contains
                 write(logfhandle,*) 'NB atoms in vol1   ', N_max
                 write(logfhandle,*) 'NB atoms in vol2   ', N_min
                 write(logfhandle,*) abs(N_max-N_min), 'atoms do NOT correspond'
-                allocate(dist(N_min), dist_sq(N_min), source = 0.)
+                allocate(dist(N_max), dist_sq(N_max), source = 0.)
+                allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
                 call centers_coupled1%new(N_max, dummy=.true.)
-                call centers_coupled2%new(N_min, dummy=.true.)
-                allocate(mask(size(nano1%centers, dim = 2)), source = .true.)
+                call centers_coupled2%new(N_max, dummy=.true.)
+                call centers_close1%new  (N_max, dummy=.true.)
+                call centers_close2%new  (N_max, dummy=.true.)
+                allocate(mask(N_min), source = .true.)
                 cnt = 0
-                do i = 1, N_min !compare based on centers2
-                    dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
-                    if(dist(i)*nano1%smpd > VDW_RAD_PT+0.2*VDW_RAD_PT) then
+                do i = 1, N_max !compare based on centers1
+                    dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                    if(dist(i)*nano2%smpd > 2.2) then ! 2.2 is the biggest lattice spacing they found in the paper
                         dist(i) = 0.
                         cnt = cnt+1
                     else
+                        if(dist(i)*nano2%smpd <= 0.5) then
+                            dist_close(i) = dist(i)**2
+                            call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                            call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                        endif
                         dist_sq(i) = dist(i)**2        !formula wants them square
                          if(DEBUG_HERE) then
-                            write(logfhandle,*) 'ATOM', i,'coordinates: ', nano2%centers(:,i), 'coupled with '
-                            write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                            write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
+                            write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                          endif
-                        call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*0.358/nano2%SCALE_FACTOR)
-                        call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*0.358/nano1%SCALE_FACTOR)
+                        call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                        call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
                         mask(location(1)) = .false. ! not to consider the same atom more than once
                     endif
                 enddo
             endif
+            call centers_close1%writepdb  ('atom_close_couples_vol1')
+            call centers_close2%writepdb  ('atom_close_couples_vol2')
             call centers_coupled1%writepdb('atom_couples_vol1')
             call centers_coupled2%writepdb('atom_couples_vol2')
-            write(logfhandle,*) cnt, 'atoms correspond with error bigger tahn 5pm correspond. They are ', real(cnt)/real(N_min)*100., '% of the # of atoms'
-            rmsd = sqrt(sum(dist_sq)/real(N_min-cnt))
-            allocate(dist_no_zero(N_min-cnt), source = 0.) ! not to consider in the hist the uncoupled atoms
+            write(logfhandle,*) cnt-(N_max-N_min), 'atoms are considered not to correspond since they have error bigger than 220pm. They are ', nint(real(cnt)/real(N_min)*100.), '% of the # of atoms'
+            rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
             dist_no_zero = pack(dist, dist>TINY)
             dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
+            dist_close   = dist_close*nano1%smpd
             call hist(dist_no_zero, 50)
-            write(logfhandle,*)count(dist_no_zero <= 0.5),'atoms correspond withing 5pm. They are about', count(dist_no_zero <= 0.5)*100./(N_min-cnt), '% of the coupled atoms'
+            write(logfhandle,*)count(dist_no_zero <= 0.5),'atoms correspond withing 50pm. They are', count(dist_no_zero <= 0.5)*100/(N_min), '% of the atoms'
+            print *, 'RMSD CLOSE ATOMS = ', sqrt(sum(dist_close)/real(count(dist_close > TINY)))
             write(logfhandle,*) 'RMSD =', rmsd*nano1%smpd, 'A'
             if(present(r)) r=rmsd
             deallocate(dist, dist_sq, dist_no_zero, mask)
@@ -345,7 +368,7 @@ contains
             avg_dist(i) = avg_dist(i)/6. ! average
         enddo
         do i = 1,self%n_cc
-            call self%centers_pdb%set_beta(i, avg_dist(i))
+            call self%centers_pdb%set_beta(i, avg_dist(i)*self%smpd)
         enddo
         call self%centers_pdb%writepdb(trim(self%fbody)//'DistancesDistr')
     contains     ! This subroutine identifies the coordinates of the centers of the 6
@@ -366,6 +389,153 @@ contains
             enddo
         end subroutine find_nearest_neigh
     end subroutine distances_distribution
+
+    subroutine per_shell_dist_distr(nano1,nano2)
+        class(nanoparticle), intent(inout) :: nano1
+        class(nanoparticle), intent(inout) :: nano2
+        real,    allocatable :: dist_1(:), dist_2(:), dist_3(:)
+        logical, allocatable :: mask(:)
+        real    :: rmsd1, rmsd2, rmsd3
+        real    :: mass_center(3)
+        real    :: d
+        real    :: t1, t2 ! threshold for shell definition
+        integer :: N_min, N_max, i
+        integer :: cnt1, cnt2, cnt3
+        integer :: location(1)
+        type(atoms) :: atom_shell11, atom_shell12
+        type(atoms) :: atom_shell21, atom_shell22
+        type(atoms) :: atom_shell31, atom_shell32
+        t1 = 8.5
+        t2 = 10.5
+        cnt1 = 0
+        cnt2 = 0
+        cnt3 = 0
+        if(nano1%n_cc <= nano2%n_cc) then
+            N_min =nano1%n_cc
+            N_max =nano2%n_cc
+            allocate(dist_1(N_max), source = 0.)
+            allocate(dist_2(N_max), source = 0.)
+            allocate(dist_3(N_max), source = 0.)
+            call atom_shell11%new(N_max, dummy=.true.)
+            call atom_shell12%new(N_max, dummy=.true.)
+            call atom_shell21%new(N_max, dummy=.true.)
+            call atom_shell22%new(N_max, dummy=.true.)
+            call atom_shell31%new(N_max, dummy=.true.)
+            call atom_shell32%new(N_max, dummy=.true.)
+            allocate(mask(N_min), source = .true.)
+            mass_center = nano2%nanopart_masscen()
+            do i = 1, N_max
+                d = euclid(nano2%centers(:,i), mass_center)*nano2%smpd !in A
+                if(d <= t1) then
+                    cnt1 = cnt1 + 1
+                    dist_1(cnt1) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                    if(dist_1(cnt1)*nano2%smpd > 2.2) then
+                        dist_1(cnt1) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell12%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                        call atom_shell11%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    endif
+                elseif(d>t1 .and. d <= t2) then
+                    cnt2 = cnt2 + 1
+                    dist_2(cnt2) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                    if(dist_2(cnt2)*nano2%smpd > 2.2) then
+                        dist_2(cnt2) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell22%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                        call atom_shell21%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    endif
+                elseif(d>t2) then
+                    cnt3 = cnt3 + 1
+                    dist_3(cnt3) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                    if(dist_3(cnt3)*nano2%smpd > 2.2) then
+                        dist_3(cnt3) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell32%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                        call atom_shell31%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    endif
+                end if
+            enddo
+        else
+            N_min =nano2%n_cc
+            N_max =nano1%n_cc
+            allocate(dist_1(N_max), source = 0.)
+            allocate(dist_2(N_max), source = 0.)
+            allocate(dist_3(N_max), source = 0.)
+            call atom_shell11%new(N_max, dummy=.true.)
+            call atom_shell12%new(N_max, dummy=.true.)
+            call atom_shell21%new(N_max, dummy=.true.)
+            call atom_shell22%new(N_max, dummy=.true.)
+            call atom_shell31%new(N_max, dummy=.true.)
+            call atom_shell32%new(N_max, dummy=.true.)
+            allocate(mask(N_min), source = .true.)
+            mass_center = nano1%nanopart_masscen()
+            do i = 1, N_max
+                d = euclid(nano1%centers(:,i), mass_center)*nano1%smpd !in A
+                if(d <= t1) then
+                    cnt1 = cnt1 + 1
+                    dist_1(cnt1) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                    if(dist_1(cnt1)*nano1%smpd > 2.2) then
+                        dist_1(cnt1) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell11%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                        call atom_shell12%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    endif
+                elseif(d > t1 .and. d <= t2) then
+                    cnt2 = cnt2 + 1
+                    dist_2(cnt2) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                    if(dist_2(cnt2)*nano1%smpd > 2.2) then
+                        dist_2(cnt2) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell21%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                        call atom_shell22%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    endif
+                else if(d>t2) then
+                    cnt3 = cnt3 + 1
+                    dist_3(cnt3) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                    if(dist_3(cnt3)*nano1%smpd > 2.2) then
+                        dist_3(cnt3) = 0.
+                    else
+                        mask(location(1)) = .false.
+                        call atom_shell31%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                        call atom_shell32%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    endif
+                end if
+            enddo
+        endif
+        call atom_shell11%writepdb('Shell11')
+        call atom_shell21%writepdb('Shell21')
+        call atom_shell31%writepdb('Shell31')
+        call atom_shell12%writepdb('Shell12')
+        call atom_shell22%writepdb('Shell22')
+        call atom_shell32%writepdb('Shell32')
+        dist_1 = dist_1*nano1%smpd !in A
+        dist_2 = dist_2*nano1%smpd
+        dist_3 = dist_3*nano1%smpd
+        dist_1 = dist_1**2 !square
+        dist_2 = dist_2**2
+        dist_3 = dist_3**2
+        rmsd1 = sqrt(sum(dist_1)/(count(dist_1 > TINY)))
+        rmsd2 = sqrt(sum(dist_2)/(count(dist_2 > TINY)))
+        rmsd3 = sqrt(sum(dist_3)/(count(dist_3 > TINY)))
+        write(logfhandle,*) 'Shell  0-', trim(real2str(t1)),'A, nb of atoms', count(dist_1 > TINY), ' RMSD =', rmsd1
+        write(logfhandle,*) 'Shell',  trim(real2str(t1)),'-',  trim(real2str(t2)),' A, nb of atoms', count(dist_2 > TINY), ' RMSD =', rmsd2
+        write(logfhandle,*) 'Shell > ' , trim(real2str(t2)),'A, nb of atoms', count(dist_3 > TINY), ' RMSD =', rmsd3
+        if(DEBUG_HERE) then
+            write(logfhandle,*) '>>>>>>>>>>>>>>>>>>>>>>>>>'
+            write(logfhandle,*) 'dist_1 = ', pack(dist_1, dist_1>TINY)
+            write(logfhandle,*) '>>>>>>>>>>>>>>>>>>>>>>>>>'
+            write(logfhandle,*) 'dist_2 = ', pack(dist_2, dist_2>TINY)
+            write(logfhandle,*) '>>>>>>>>>>>>>>>>>>>>>>>>>'
+            write(logfhandle,*) 'dist_3 = ', pack(dist_3, dist_3>TINY)
+        endif
+        print *, 'RMSD total = ', sqrt((sum(dist_1)+sum(dist_2)+sum(dist_3))/(count(dist_1 > TINY)+count(dist_2 > TINY)+count(dist_3 > TINY)))
+        deallocate(dist_1,dist_2,dist_3,mask)
+    end subroutine per_shell_dist_distr
 
     ! This subroutine has visualization purpose only.
     ! It prints out the 3 asymmetric units in a nanoparticle

@@ -275,11 +275,13 @@ program simple_test_chiara_try
     ! call vis_mat(centers2)
    ! call calc_rmsd(centers1,centers2)
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    do i = 1, 100
-        call img%disc([150,150,150],1.,real(i))
-        call calc_circ(img)
-       call img%kill
-    enddo
+    call img%new([512,512,1],1.41)
+    call img%read('pspecs_saga_polii.mrc',25 )
+    call img%write('Ugly.mrc')
+    call img%read('binarised_stack.mrc', 25)
+    call img%write('UglyBIN.mrc')
+    call img%read('analysed_stack.mrc', 25)
+    call img%write('UglyAn.mrc')
    ! vec = reshape([1.,2.,0.,0.,5.,0.,0.,8.,9.,0., 0.,12.,13.,0.,0.,16.,17.,0.,0.,20.], [10,2])
     ! print *, 'Vec Before = '
    ! call vis_mat(vec)
