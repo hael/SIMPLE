@@ -2326,12 +2326,12 @@ contains
             do istk=1,nstks_tot
                 stks_mask(istk) = self_in%os_stk%get_state(istk) > 0
             enddo
-            nstks  = count(stks_mask)
+            nstks = count(stks_mask)
             call self_out%os_stk%new(nstks)
             ! micrographs mask
             if( nmics_tot > 0 )then
                 nmics_sel  = self_in%os_mic%get_noris(consider_state=.true.)
-                if( nmics_sel /= nstks_tot )then
+                if( nmics_sel /= nstks )then
                     THROW_HARD('Inconsistent # of selected micrographs and # of stacks; prune_project')
                 endif
                 allocate(stk2mic_inds(nstks_tot),source=0)

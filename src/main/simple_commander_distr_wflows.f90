@@ -166,11 +166,16 @@ contains
         ! read in integrated movies
         call spproj%read(params%projfile)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
-        if( spproj%get_nstks() /= 0 ) THROW_HARD('This project file already contains stacks!')
         nmics_tot = spproj%os_mic%get_noris()
-        if( nmics_tot < params%nparts )then
-            params%nparts = nmics_tot
-        endif
+        if( nmics_tot < params%nparts ) params%nparts = nmics_tot
+        ! wipes previous stacks & particles
+        call spproj%os_stk%kill
+        call spproj%os_ptcl2D%kill
+        call spproj%os_ptcl3D%kill
+        call spproj%os_cls2D%kill
+        call spproj%os_cls3D%kill
+        call spproj%os_out%kill
+        call spproj%write
         ! input directory
         if( cline%defined('dir_box') )then
             if( params%mkdir.eq.'yes' .and. params%dir_box(1:1).ne.'/')then
@@ -229,9 +234,6 @@ contains
         ! schedule & clean
         call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
         ! ASSEMBLY
-        call spproj%os_stk%kill
-        call spproj%os_ptcl2D%kill
-        call spproj%os_ptcl3D%kill
         allocate(parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
         do ipart = 1,params%nparts
