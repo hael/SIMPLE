@@ -32,28 +32,24 @@ contains
         use simple_qsys_funs,    only: qsys_job_finished
         use simple_binoris_io,   only: binwrite_oritab
         use simple_strategy2D3D_common,   only: set_bp_range2d
-        use simple_strategy2D,            only: strategy2D
+        use simple_strategy2D,            only: strategy2D, strategy2D_per_ptcl
         use simple_strategy2D_srch,       only: strategy2D_spec
         use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         use simple_strategy2D_greedy,     only: strategy2D_greedy
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_snhc,       only: strategy2D_snhc
-        class(cmdline),        intent(inout) :: cline
-        integer,               intent(in)    :: which_iter
-        integer, allocatable :: pinds(:)
-        !---> The below is to allow particle-dependent decision about which 2D strategy to use
-        type :: strategy2D_per_ptcl
-            class(strategy2D), pointer         :: ptr => null()
-        end type strategy2D_per_ptcl
+        use simple_strategy2D_inpl,       only: strategy2D_inpl
+        use simple_strategy2D_eval,       only: strategy2D_eval
+        class(cmdline),          intent(inout) :: cline
+        integer,                 intent(in)    :: which_iter
         type(strategy2D_per_ptcl), allocatable :: strategy2Dsrch(:)
-        !<---- hybrid or combined search strategies can then be implemented as extensions of the
-        !      relevant strategy2D base class
         type(strategy2D_spec) :: strategy2Dspec
+        integer, allocatable  :: pinds(:)
         real                  :: snhc_sz(params_glob%fromp:params_glob%top)
         integer               :: chunk_id(params_glob%fromp:params_glob%top)
-        real                  :: frac_srch_space
+        real                  :: frac_srch_space, rrnd
         integer               :: iptcl, i, fnr, cnt, updatecnt
-        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy
+        logical               :: doprint, l_partial_sums, l_frac_update, l_snhc, l_greedy, l_stream
         if( L_BENCH )then
             t_init = tic()
             t_tot  = t_init
@@ -67,6 +63,7 @@ contains
         l_snhc         = .false.
         l_greedy       = .false.
         l_frac_update  = .false.
+        l_stream       = trim(params_glob%stream).eq.'yes'
         if( params_glob%extr_iter == 1 )then
             ! greedy start
             l_partial_sums = .false.
@@ -182,10 +179,38 @@ contains
             do iptcl=params_glob%fromp,params_glob%top
                 if( ptcl_mask(iptcl) )then
                     updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                    if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
-                        allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                    if( l_stream )then
+                        ! online mode, based on particle history
+                        if( updatecnt <= STREAM_SRCHLIM )then
+                            ! reproduces offline mode
+                            if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
+                                allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            endif
+                        else
+                            ! stochastic per particle decision: stochastic/greedy or in-plane searches or evaluation
+                            rrnd = ran3()
+                            if( rrnd < STREAM_SRCHFRAC )then
+                                if( l_greedy)then
+                                    allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                                else
+                                    allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                                endif
+                            else if( rrnd < STREAM_SRCHFRAC+STREAM_INPLFRAC )then
+                                allocate(strategy2D_inpl :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_eval :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                                call build_glob%spproj_field%set(iptcl,'updatecnt',real(updatecnt-1))
+                            endif
+                        endif
                     else
-                        allocate(strategy2D_snhc   :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        ! offline mode, based on iteration
+                        if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
+                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        else
+                            allocate(strategy2D_snhc :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                        endif
                     endif
                     if(alloc_stat/=0)call allocchk("In strategy2D_matcher:: cluster2D_exec strategy2Dsrch objects ")
                 endif

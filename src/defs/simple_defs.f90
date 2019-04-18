@@ -136,8 +136,8 @@ real, parameter    :: LP2SMPDFAC           = 0.4125    !< low-pass limit scaling
 real, parameter    :: LP2SMPDFAC2D         = 0.4       !< low-pass limit scaling constant
 real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for determining npeaks (PRIME3D)
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
-
-integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
+real, parameter    :: STREAM_SRCHFRAC      = 0.2       !< fraction of times full 2D search is performed in the pool
+real, parameter    :: STREAM_INPLFRAC      = 0.2       !< fraction of times in-plane search is performed in the pool
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)
@@ -151,6 +151,8 @@ integer, parameter :: NSPACE_REDUCED       = 600       !< # projection direction
 integer, parameter :: GRIDCORR_MAXITS      = 2         !< # iterations for reconstruction gridding correction
 integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
+integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
+integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systematic iterations for streaming 2D pool
 
 ! orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma

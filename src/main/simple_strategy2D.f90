@@ -1,10 +1,10 @@
-! abstract strategy2D base class
 module simple_strategy2D
 implicit none
 
-public :: strategy2D
+public :: strategy2D, strategy2D_per_ptcl
 private
 
+! abstract strategy2D base class
 type, abstract :: strategy2D
   contains
     procedure(generic_new),  deferred :: new
@@ -32,5 +32,12 @@ abstract interface
     end subroutine generic_kill
 
 end interface
+
+! This type is to allow particle-dependent decision about which 2D strategy to
+! use hybrid or combined search strategies can then be implemented as extensions
+! of the relevant strategy2D base class
+type :: strategy2D_per_ptcl
+    class(strategy2D), pointer :: ptr => null()
+end type strategy2D_per_ptcl
 
 end module simple_strategy2D

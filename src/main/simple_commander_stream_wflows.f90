@@ -327,8 +327,8 @@ contains
         call cline_cluster2D_buffer%set('center',    'no')
         call cline_cluster2D_buffer%set('match_filt','no')
         call cline_cluster2D_buffer%set('autoscale', 'no')
-        call cline_cluster2D_buffer%set('stream',    'yes') ! more stringent convergence
         call cline_cluster2D_buffer%set('refine',    'snhc')
+        call cline_cluster2D_buffer%set('ptclw',     'no')
         call cline_cluster2D_buffer%delete('update_frac')
         if( l_greedy )then
             call cline_cluster2D_buffer%set('eo',     'no')
@@ -433,6 +433,7 @@ contains
             call o_stk%set_ctfvars(ctfvars)
             call os_stk%set_ori(iproj, o_stk)
         enddo
+        call stream_proj%kill
         ! updates & scales stacks
         call scale_stks( stk_list ) ! must come first as names updated
         call pool_proj%add_stktab(stk_list, os_stk)
@@ -450,7 +451,7 @@ contains
         ! transfer picking coordinates
         iptcl = 0
         do iproj=1,n_spprojs
-            call stream_proj%read_segment('ptcl2D',spproj_list(iproj))
+            call stream_proj%read(spproj_list(iproj))
             do i = 1,stream_proj%os_ptcl2D%get_noris()
                 iptcl = iptcl+1
                 if( iptcl > nptcls_glob ) THROW_HARD('picking coordinates indexing error 1')
@@ -498,6 +499,9 @@ contains
                     call reject_from_pool
                     call pool_proj%write
                 endif
+                do_wait = .false.
+            else if( mod(iter,5) /= 0 )then
+                do_wait = .true.
             endif
             ! termination and/or pause
             do while( file_exists(trim(PAUSE_STREAM)) )
@@ -819,6 +823,7 @@ contains
                 call cline_cluster2D_buffer%set('nparts',  real(nparts))
                 call cline_cluster2D_buffer%set('msk',     large_msk)
                 call cline_cluster2D_buffer%set('ring2',   real(large_ring2))
+                call cline_cluster2D_buffer%set('stream',  'yes')
                 if( l_greedy )then
                     ! done
                 else
@@ -882,6 +887,7 @@ contains
                 call cline_cluster2D%set('refs',    trim(refs_glob))
                 call cline_cluster2D%set('frcs',    trim(FRCS_FILE))
                 call cline_cluster2D%set('msk',     msk)
+                call cline_cluster2D%set('stream',  'yes')
                 if( l_greedy .and. .not.cline%defined('msk') )then
                     call cline_cluster2D%set('msk',   large_msk)
                     call cline_cluster2D%set('ring2', real(large_ring2))
@@ -1319,7 +1325,7 @@ contains
 
             subroutine scale_stks( stk_fnames )
                 character(len=*), allocatable, intent(inout) :: stk_fnames(:)
-                character(len=*), parameter :: SCALE_FILETAB = 'stkscale.txt'
+                character(len=*), parameter   :: SCALE_FILETAB = 'stkscale.txt'
                 character(len=:), allocatable :: fname
                 type(qsys_env) :: qenv
                 type(cmdline)  :: cline_scale
@@ -1344,6 +1350,7 @@ contains
                     stk_fnames(istk) = filepath(trim(SCALE_DIR), basename(fname))
                 enddo
                 call del_file(SCALE_FILETAB)
+                call qenv%kill
             end subroutine scale_stks
 
     end subroutine exec_cluster2D_stream_distr

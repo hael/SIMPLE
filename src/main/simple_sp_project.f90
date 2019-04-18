@@ -2294,7 +2294,7 @@ contains
         class(sp_project), intent(inout) :: self_in
         class(cmdline),    intent(in)    :: cline
         integer, optional, intent(in)    :: nptcls_subset
-        character(len=STDLEN), parameter :: stkdir = './ptcls/'
+        character(len=STDLEN), parameter :: stkdir = './'
         character(len=:),    allocatable :: newstkname,stkname,projname,new_projname,projfile,new_projfile,ext
         character(len=LONGSTRLEN)        :: relstkname
         type(image)          :: img, img_clip

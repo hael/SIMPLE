@@ -714,8 +714,11 @@ contains
         integer                   :: iter
         type(chash)               :: job_descr
         real                      :: frac_srch_space
+        logical                   :: l_stream
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         ! streaming gets its own logics because it is an exception to rules in parameters
+        l_stream = .false.
+        if( cline%defined('stream') ) l_stream = trim(cline%get_carg('stream')).eq.'yes'
         call cline%set('stream','no')
         ! builder & params
         call build%init_params_and_build_spproj(cline, params)
@@ -729,6 +732,13 @@ contains
         call qenv%new(params%nparts)
         ! prepare job description
         call cline%gen_job_descr(job_descr)
+        if( l_stream )then
+            call job_descr%set('stream','yes')
+            ! need to be explicity defined for streaming
+            call job_descr%set('box',   int2str(params%box))
+            call job_descr%set('smpd',  real2str(params%smpd))
+            call job_descr%set('nptcls',int2str(params%nptcls))
+        endif
         ! splitting
         call build%spproj%split_stk(params%nparts)
         ! prepare command lines from prototype master
@@ -739,6 +749,7 @@ contains
         call cline_cavgassemble%set('prg', 'cavgassemble')
         call cline_cavgassemble%set('nthr', 0.) ! to ensure use of all resources in assembly
         call cline_make_cavgs%set('prg',   'make_cavgs')
+        if( l_stream )call cline_check_2Dconv%set('stream','yes')
         ! execute initialiser
         if( .not. cline%defined('refs') )then
             refs             = 'start2Drefs' // params%ext
