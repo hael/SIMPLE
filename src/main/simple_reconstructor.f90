@@ -59,6 +59,8 @@ type, extends(image) :: reconstructor
     procedure          :: expand_exp
     ! SUMMATION
     procedure          :: sum_reduce
+    procedure          :: add_invtausq2rho
+    procedure          :: update_pssnr3d
     ! RECONSTRUCTION
     procedure          :: rec
 
@@ -358,14 +360,15 @@ contains
                         tvalsq = tval
                     endif
                     ! (weighted) kernel & CTF values
-                    w = pwght
-                    if( do_sigma2div) w = w / sigma2(sh)
+                    w = 1.
                     do i=1,self%wdim
                         dists    = real(win(1,:) + i - 1) - loc
                         w(i,:,:) = w(i,:,:) * self%kbwin%apod(dists(1))
                         w(:,i,:) = w(:,i,:) * self%kbwin%apod(dists(2))
                         w(:,:,i) = w(:,:,i) * self%kbwin%apod(dists(3))
                     enddo
+                    w = w * pwght / sum(w)
+                    if( do_sigma2div) w = w / sigma2(sh)
                     ! expanded matrices update
                     ! CTF and w modulates the component before origin shift
                     self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
@@ -477,13 +480,14 @@ contains
                             tval   = 1.
                             tvalsq = tval
                         endif
-                        w = ows(iori)
-                        if( do_sigma2div ) w = w / sigma2(sh)
+                        w = 1.
                         do i=1,self%wdim
                             w(i,:,:) = w(i,:,:) * self%kbwin%apod(real(win(1,1) + i - 1) - loc(1))
                             w(:,i,:) = w(:,i,:) * self%kbwin%apod(real(win(1,2) + i - 1) - loc(2))
                             w(:,:,i) = w(:,:,i) * self%kbwin%apod(real(win(1,3) + i - 1) - loc(3))
                         enddo
+                        w = w * ows(iori) / sum(w)
+                        if( do_sigma2div ) w = w / sigma2(sh)
                         ! expanded matrices update
                         ! CTF and w modulates the component before origin shift
                         self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2), win(1,3):win(2,3)) =&
@@ -682,6 +686,88 @@ contains
          class(reconstructor), intent(in)    :: self_in !< other instance
          call self%add_workshare(self_in, self%rho, self_in%rho)
     end subroutine sum_reduce
+
+    subroutine add_invtausq2rho( self, fsc )
+        use simple_estimate_ssnr, only: fsc2optlp_sub
+        class(reconstructor), intent(inout) :: self !< this instance
+        real,    allocatable, intent(in)    :: fsc(:)
+        real,   parameter :: tau2_fudge = 1. ! ??
+        real, allocatable :: optlp(:), ssnr(:)
+        real    :: rsum(0:self%nyq), invtau2(0:self%nyq), tau2, sig2, alpha_cub
+        integer :: cnt(0:self%nyq), i,h,k,m, sh, phys(3), sz
+        sz = size(fsc)
+        allocate(optlp(sz), ssnr(sz), source=0.)
+        alpha_cub = self%alpha**3.
+        rsum = 0.
+        cnt  = 0
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > self%nyq ) cycle
+                    phys     = self%comp_addr_phys(h, k, m)
+                    cnt(sh)  = cnt(sh) + 1
+                    rsum(sh) = rsum(sh) + self%rho(phys(1),phys(2),phys(3))*alpha_cub
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        ! tau2 & ssnr are determined from the corrected fsc
+        ! (eg Henderson & Rosenthal optimal filter)
+        call fsc2optlp_sub(sz, fsc, optlp)
+        ssnr = optlp / (1.-optlp)
+        ssnr = ssnr * tau2_fudge
+        invtau2(0) = 0. ! central spot
+        do k = 1,self%nyq
+            i = min(max(1,nint(real(k*sz)/real(self%nyq))), sz)
+            sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
+            tau2 = ssnr(i) * sig2
+            if( tau2 > TINY )then
+                invtau2(k) = 1. / ( tau2_fudge * tau2 * alpha_cub )
+            else
+                invtau2(k) = 0.0001
+            endif
+        enddo
+        ! add estimated Tau2 inverse
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,sh) proc_bind(close)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > self%nyq ) cycle
+                    phys = self%comp_addr_phys(h, k, m )
+                    self%rho(phys(1),phys(2),phys(3)) = &
+                        &self%rho(phys(1),phys(2),phys(3)) + invtau2(sh)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        deallocate(ssnr,optlp)
+    end subroutine add_invtausq2rho
+
+    subroutine update_pssnr3d( self, cntvec, ctfsqsumvec)
+        class(reconstructor), intent(inout) :: self                     !< this object
+        integer,              intent(inout) :: cntvec(self%nyq)       !< assumed already initialized
+        real,                 intent(inout) :: ctfsqsumvec(self%nyq)  !< assumed already initialized
+        integer :: phys(3), h,k,m, sh
+        !$omp parallel do collapse(3) default(shared) schedule(static)&
+        !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cntvec,ctfsqsumvec)
+        do h = self%lims(1,1),self%lims(1,2)
+            do k = self%lims(2,1),self%lims(2,2)
+                do m = self%lims(3,1),self%lims(3,2)
+                    sh = nint(sqrt(real(h*h + k*k + m*m)))
+                    if( sh > self%nyq ) cycle
+                    phys = self%comp_addr_phys(h, k, m)
+                    cntvec(sh)      = cntvec(sh) + 1
+                    ctfsqsumvec(sh) = ctfsqsumvec(sh) + self%rho(phys(1),phys(2),phys(3))
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine update_pssnr3d
 
     ! RECONSTRUCTION
 

@@ -58,6 +58,7 @@ type :: reconstructor_eo
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
+    procedure, private :: calc_pssnr3d
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -329,18 +330,65 @@ contains
         call self%odd%expand_exp
     end subroutine expand_exp
 
+    subroutine calc_pssnr3d( self, fsc, pssnr )
+        use simple_estimate_ssnr, only: fsc2ssnr
+        class(reconstructor_eo), intent(inout) :: self
+        real,                    intent(in)    :: fsc(:)
+        real,    allocatable,    intent(inout) :: pssnr(:)
+        real,    allocatable :: ctfsqsumvec(:)
+        integer, allocatable :: cntvec(:)
+        real    :: frac
+        integer :: k, kk, sz, szpd, pssnrk
+        szpd = self%eosum%get_filtsz()
+        sz   = size(fsc)
+        if( allocated(pssnr) ) deallocate(pssnr)
+        allocate(cntvec(szpd), ctfsqsumvec(szpd))
+        ! ssnr
+        pssnr = fsc2ssnr(fsc)
+        ! padded #voxels/shell & CTF2 sum/shell
+        cntvec      = 0
+        ctfsqsumvec = 0.
+        call self%even%update_pssnr3d(cntvec, ctfsqsumvec)
+        cntvec      = 0 ! # of voxels is not summed twice
+        call self%odd%update_pssnr3d(cntvec, ctfsqsumvec)
+        ! volume & area fraction
+        frac = 5. ! empirical
+        ! pssnr3D
+        do k = 1,sz
+            kk = nint(real(k)*real(szpd)/real(sz))
+            kk = min(max(1,kk),szpd)
+            pssnr(k) = pssnr(k) * real(cntvec(kk)) / ctfsqsumvec(kk) * frac
+        enddo
+        deallocate(cntvec,ctfsqsumvec)
+    end subroutine calc_pssnr3d
+
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
         class(reconstructor_eo), intent(inout) :: self                  !< instance
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
-        real, allocatable :: res(:), corrs(:)
-        type(image)       :: even, odd
-        integer           :: j, find_plate
+        real,     allocatable :: res(:), corrs(:), fsc_arr(:), pssnr(:)
+        type(image)           :: even, odd
+        character(len=STDLEN) :: fsc_fname
+        integer               :: j, find_plate
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
+        ! add estimate of inverse SSNR to normalization matrix
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            if( params_glob%nstates > 1 )then
+                fsc_fname = trim(CLUSTER3D_FSC)
+            else
+                fsc_fname = trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+            endif
+            if( file_exists(fsc_fname) )then
+                fsc_arr = file2rarr(fsc_fname)
+                call self%even%add_invtausq2rho(fsc_arr)
+                call self%odd%add_invtausq2rho(fsc_arr)
+                deallocate(fsc_arr)
+            endif
+        endif
         ! correct for the uneven sampling density
         call self%even%sampl_dens_correct
         call self%odd%sampl_dens_correct
@@ -381,6 +429,11 @@ contains
         do j=1,size(res)
            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
+        ! pssnr
+        if( params_glob%l_pssnr )then
+            call self%calc_pssnr3d(corrs, pssnr)
+            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'.bin')
+        endif
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
         call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)

@@ -306,7 +306,7 @@ contains
         if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
             call eucl_sigma%kill_ptclsigma2
-            call eucl_sigma%kill ! deactivate shell-weighting for now as degrades resolution
+            ! call eucl_sigma%kill ! deactivate shell-weighting for now as degrades resolution
         end if
 
         ! UPDATE PARTICLE STATS

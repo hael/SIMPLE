@@ -3,7 +3,7 @@ module simple_estimate_ssnr
 include 'simple_lib.f08'
 implicit none
 
-public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp
+public :: fsc2ssnr, fsc2optlp, fsc2optlp_sub, ssnr2fsc, ssnr2optlp, subsample_optlp, subsample_filter
 public :: acc_dose2filter, dose_weight, local_res, local_res_lp
 private
 #include "simple_local_flags.inc"
@@ -66,12 +66,36 @@ contains
                 floorx     = floor(x)
                 fracx      = x-real(floorx)
                 subfilt(i) = (1.-fracx)*filt(floorx) + fracx*filt(ceiling(x))
-                subfilt(i) = max(min(subfilt(i),1.),0.)
+                subfilt(i) = max(min(subfilt(i),1.),0.) ! always in [0.,1.]
+            enddo
+            subfilt(1)         = max(min(filt(1),1.),0.)
+            subfilt(subfiltsz) = max(min(filt(filtsz),1.),0.)
+        endif
+    end subroutine subsample_optlp
+
+    subroutine subsample_filter( filtsz, subfiltsz, filt, subfilt )
+        integer, intent(in)  :: filtsz, subfiltsz   !< sz of filters
+        real,    intent(in)  :: filt(filtsz)        !< filter coefficients
+        real,    intent(out) :: subfilt(subfiltsz)  !< output filter coefficients
+        real    :: x, fracx, step
+        integer :: i, floorx
+        if( filtsz < subfiltsz )then
+            THROW_HARD('Invalid filter sizes!')
+        else if( filtsz == subfiltsz )then
+            subfilt = filt
+        else
+            x    = 1.
+            step = real(filtsz-1) / real(subfiltsz-1)
+            do i = 2,subfiltsz-1
+                x          = x+step
+                floorx     = floor(x)
+                fracx      = x-real(floorx)
+                subfilt(i) = (1.-fracx)*filt(floorx) + fracx*filt(ceiling(x))
             enddo
             subfilt(1)         = filt(1)
             subfilt(subfiltsz) = filt(filtsz)
         endif
-    end subroutine subsample_optlp
+    end subroutine subsample_filter
 
     !> \brief  converts the SSNR to FSC
     function ssnr2fsc( ssnr ) result( corrs )

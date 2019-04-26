@@ -63,6 +63,7 @@ type :: parameters
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
+    character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: rankw='sum'          !< orientation weights based on ranks(sum|cen|exp|no){sum}
     character(len=3)      :: readwrite='no'
@@ -366,7 +367,7 @@ type :: parameters
     real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
     real    :: part_concentration  !< concentration of particles in the micrograph
-    real    :: part_radius         !< particle   radius(in pixels)  
+    real    :: part_radius         !< particle   radius(in pixels)
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -403,6 +404,7 @@ type :: parameters
     logical :: l_innermsk       = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
+    logical :: l_pssnr          = .false.
     logical :: l_ptclw          = .true.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
@@ -539,6 +541,7 @@ contains
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
         call check_carg('projw',          self%projw)
+        call check_carg('pssnr',          self%pssnr)
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
@@ -1342,9 +1345,11 @@ contains
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_match_filt  = .false.
+                self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
                 self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. self%l_eo
+                self%l_pssnr       = (trim(self%pssnr).eq.'yes') .and. self%l_match_filt
         end select
         ! local resolution for filtering or  not
         self%l_locres = .false.

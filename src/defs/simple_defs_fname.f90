@@ -39,6 +39,7 @@ character(len=*), parameter :: SNHCDOC              = 'snhc_oris'//trim(METADATA
 character(len=*), parameter :: SNHCVOL              = 'snhc_recvol_state'
 ! 2D/3D COMMON
 character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
+character(len=*), parameter :: PSSNR_FBODY          = 'pssnr3D_state'
 character(len=*), parameter :: FRCS_FBODY           = 'frcs_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'

@@ -81,9 +81,8 @@ contains
         class(euclid_sigma2),    intent(inout) :: self
         class(oris),            intent(inout) :: os
         logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        real, parameter :: scale = 1000.0 ! to avoide overflow
         real(sp)        :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        integer         :: fromm, tom, funit, iptcl, addr, pind, imic, micpop
+        integer         :: fromm, tom, funit, iptcl, addr, pind, imic
         logical         :: success, defined
         call pftcc_glob%assign_pinds(self%pinds)
         self%sigma2_noise      = 0.
@@ -117,18 +116,11 @@ contains
                     ! stk sum over all defined sigmas, not just within mask
                     imic = nint(os%get(iptcl, 'stkind'))
                     self%micinds(iptcl) = imic
-                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic)+ sigma2_noise_n/scale
+                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic)+ sigma2_noise_n
                 endif
             end do
             call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
             if( any(self%micinds > 0) )then
-                ! average
-                do imic = fromm,tom
-                    micpop = count(self%micinds == imic)
-                    if( micpop > 0 )then
-                        self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) * (scale/real(micpop))
-                    endif
-                enddo
                 ! transfer average to masked ptcls only
                 do iptcl = params_glob%fromp, params_glob%top
                     if( .not.ptcl_mask(iptcl) )cycle
@@ -286,7 +278,7 @@ contains
         end if
     end subroutine set_sigma2
 
-    !>  push sigma2 average to buffer
+    !>  re-initialize sigma2 average to buffer
     subroutine unset_sigma2( self )
         class(euclid_sigma2), intent(inout) :: self
         self%do_divide = .false.

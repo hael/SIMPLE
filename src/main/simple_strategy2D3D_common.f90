@@ -592,7 +592,7 @@ contains
     !>  \brief  prepares one volume for references extraction
     subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp
+        use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
@@ -601,6 +601,7 @@ contains
         real,                    intent(in)    :: xyz(3)
         type(image)                   :: mskvol
         character(len=:), allocatable :: fname_vol_filter
+        real,             allocatable :: pssnr(:)
         real    :: subfilter(build_glob%img_match%get_filtsz())
         real    :: filter(build_glob%projfrcs%get_filtsz()), frc(build_glob%projfrcs%get_filtsz())
         integer :: iref, iproj, iprojred, filtsz, subfiltsz
@@ -617,55 +618,73 @@ contains
         if( params_glob%l_eo )then
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
-                if( file_exists(params_glob%frcs) )then
-                    if( params_glob%clsfrcs.eq.'yes')then
-                        iproj = 0
-                        do iref = 1,2*build_glob%projfrcs%get_nprojs()
-                            iproj = iproj+1
-                            if( iproj > build_glob%projfrcs%get_nprojs() ) iproj = 1
-                            call build_glob%projfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                            call fsc2optlp_sub(filtsz, frc, filter)
-                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                        enddo
-                    else
-                        iproj = 0
-                        do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                            iproj    = iproj+1
-                            iprojred = build_glob%eulspace_red%find_closest_proj(build_glob%eulspace%get_ori(iproj))
-                            call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
-                            call fsc2optlp_sub(filtsz, frc, filter)
-                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
-                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                        enddo
-                    endif
-                else
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
-                        call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                if( params_glob%pssnr.eq.'yes' )then
+                    allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'.bin')
+                    if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
+                        pssnr = file2rarr(fname_vol_filter)
+                        call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
                     else
                         subfilter = 1.
                     endif
                     do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                         call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
                     enddo
+                else
+                    ! stores filters in pftcc
+                    if( file_exists(params_glob%frcs) )then
+                        if( params_glob%clsfrcs.eq.'yes')then
+                            iproj = 0
+                            do iref = 1,2*build_glob%projfrcs%get_nprojs()
+                                iproj = iproj+1
+                                if( iproj > build_glob%projfrcs%get_nprojs() ) iproj = 1
+                                call build_glob%projfrcs%frc_getter(iproj, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                                call fsc2optlp_sub(filtsz, frc, filter)
+                                call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                                call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                            enddo
+                        else
+                            iproj = 0
+                            do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                                iproj    = iproj+1
+                                iprojred = build_glob%eulspace_red%find_closest_proj(build_glob%eulspace%get_ori(iproj))
+                                call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
+                                call fsc2optlp_sub(filtsz, frc, filter)
+                                call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                                call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                            enddo
+                        endif
+                    else
+                        if( any(build_glob%fsc(s,:) > 0.143) )then
+                            call fsc2optlp_sub(filtsz, build_glob%fsc(s,:), filter)
+                            call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
+                        else
+                            subfilter = 1.
+                        endif
+                        do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
+                            call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
+                        enddo
+                    endif
                 endif
             else
-                call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
-                if( params_glob%nstates == 1 )then
-                    allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
+                if( params_glob%cc_objfun == OBJFUN_EUCLID)then
+                    ! nothing to do
                 else
-                    allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
-                endif
-                if( file_exists(fname_vol_filter) )then
-                    ! anisotropic filter
-                    call build_glob%vol2%read(fname_vol_filter)
-                    call build_glob%vol%apply_filter(build_glob%vol2)
-                else
-                    ! match filter based on Rosenthal & Henderson, 2003
-                    if( any(build_glob%fsc(s,:) > 0.143) )then
-                        call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
-                        call build_glob%vol%apply_filter(filter)
+                    call build_glob%vol%fft() ! needs to be here in case the shift was never applied (above)
+                    if( params_glob%nstates == 1 )then
+                        allocate(fname_vol_filter, source=trim(ANISOLP_FBODY)//int2str_pad(s,2)//trim(params_glob%ext))
+                    else
+                        allocate(fname_vol_filter, source=trim(CLUSTER3D_ANISOLP)//trim(params_glob%ext))
+                    endif
+                    if( file_exists(fname_vol_filter) )then
+                        ! anisotropic filter
+                        call build_glob%vol2%read(fname_vol_filter)
+                        call build_glob%vol%apply_filter(build_glob%vol2)
+                    else
+                        ! match filter based on Rosenthal & Henderson, 2003
+                        if( any(build_glob%fsc(s,:) > 0.143) )then
+                            call fsc2optlp_sub(filtsz,build_glob%fsc(s,:),filter)
+                            call build_glob%vol%apply_filter(filter)
+                        endif
                     endif
                 endif
             endif
