@@ -178,7 +178,7 @@ contains
         logical           :: limset, converged, update_res
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         limset = .false. ;  update_res = .false.
-        if( params%eo .ne. 'no' )then
+        if( params%l_eo )then
             allocate( maplp(params%nstates), stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk("In simple_commander_refine3D:: exec_check3D_conv", alloc_stat)
             maplp = 0.

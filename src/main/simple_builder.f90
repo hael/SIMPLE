@@ -35,6 +35,7 @@ type :: builder
     type(image)                         :: vol2                   !< -"-
     type(masker)                        :: mskimg                 !< mask image
     type(projection_frcs)               :: projfrcs               !< projection FRC's used in the anisotropic Wiener filter
+    type(projection_frcs)               :: projpssnrs             !<
     type(image),            allocatable :: imgbatch(:)            !< batch of images
     ! COMMON LINES TOOLBOX
     type(image),            allocatable :: imgs(:)                !< images (all should be read in)
@@ -333,6 +334,7 @@ contains
             endif
         endif
         call self%projfrcs%new(params%ncls, params%box, params%smpd, params%nstates)
+        call self%projpssnrs%new(params%ncls, params%box, params%smpd, params%nstates)
         if( .not. associated(build_glob) ) build_glob => self
         self%strategy2D_tbox_exists = .true.
         write(logfhandle,'(A)') '>>> DONE BUILDING STRATEGY2D TOOLBOX'
@@ -342,6 +344,7 @@ contains
         class(builder), intent(inout) :: self
         if( self%strategy2D_tbox_exists )then
             call self%projfrcs%kill
+            call self%projpssnrs%kill
             self%strategy2D_tbox_exists = .false.
         endif
     end subroutine kill_strategy2D_tbox

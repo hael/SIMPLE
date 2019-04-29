@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(70)
+type(simple_prg_ptr) :: prg_ptr_array(71)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -122,6 +122,7 @@ type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
+type(simple_program), target :: replace_project_field
 type(simple_program), target :: report_selection
 type(simple_program), target :: reproject
 type(simple_program), target :: scale
@@ -198,6 +199,7 @@ type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
+type(simple_input_param) :: projfile_target
 type(simple_input_param) :: projname
 type(simple_input_param) :: projw
 type(simple_input_param) :: pspecsz
@@ -292,6 +294,7 @@ contains
         call new_reextract
         call new_refine3D
         call new_refine3D_init
+        call new_replace_project_field
         call new_report_selection
         call new_scale
         call new_scale_project
@@ -369,23 +372,24 @@ contains
         prg_ptr_array(51)%ptr2prg => reextract
         prg_ptr_array(52)%ptr2prg => refine3D
         prg_ptr_array(53)%ptr2prg => refine3D_init
-        prg_ptr_array(54)%ptr2prg => report_selection
-        prg_ptr_array(55)%ptr2prg => scale
-        prg_ptr_array(56)%ptr2prg => scale_project
-        prg_ptr_array(57)%ptr2prg => select_
-        prg_ptr_array(58)%ptr2prg => shift
-        prg_ptr_array(59)%ptr2prg => simulate_movie
-        prg_ptr_array(60)%ptr2prg => simulate_noise
-        prg_ptr_array(61)%ptr2prg => simulate_particles
-        prg_ptr_array(62)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(63)%ptr2prg => stack
-        prg_ptr_array(64)%ptr2prg => stackops
-        prg_ptr_array(65)%ptr2prg => symaxis_search
-        prg_ptr_array(66)%ptr2prg => symmetry_test
-        prg_ptr_array(67)%ptr2prg => tseries_track
-        prg_ptr_array(68)%ptr2prg => update_project
-        prg_ptr_array(69)%ptr2prg => vizoris
-        prg_ptr_array(70)%ptr2prg => volops
+        prg_ptr_array(54)%ptr2prg => replace_project_field
+        prg_ptr_array(55)%ptr2prg => report_selection
+        prg_ptr_array(56)%ptr2prg => scale
+        prg_ptr_array(57)%ptr2prg => scale_project
+        prg_ptr_array(58)%ptr2prg => select_
+        prg_ptr_array(59)%ptr2prg => shift
+        prg_ptr_array(60)%ptr2prg => simulate_movie
+        prg_ptr_array(61)%ptr2prg => simulate_noise
+        prg_ptr_array(62)%ptr2prg => simulate_particles
+        prg_ptr_array(63)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(64)%ptr2prg => stack
+        prg_ptr_array(65)%ptr2prg => stackops
+        prg_ptr_array(66)%ptr2prg => symaxis_search
+        prg_ptr_array(67)%ptr2prg => symmetry_test
+        prg_ptr_array(68)%ptr2prg => tseries_track
+        prg_ptr_array(69)%ptr2prg => update_project
+        prg_ptr_array(70)%ptr2prg => vizoris
+        prg_ptr_array(71)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -499,6 +503,8 @@ contains
                 ptr2prg => refine3D
             case('refine3D_init')
                 ptr2prg => refine3D_init
+            case('replace_project_field')
+                ptr2prg => replace_project_field
             case('report_selection')
                 ptr2prg => report_selection
             case('scale')
@@ -600,6 +606,7 @@ contains
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
+        write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') report_selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
@@ -624,6 +631,7 @@ contains
 
     subroutine set_common_params
         call set_param(projfile,      'projfile',      'file',   'Project file', 'SIMPLE projectfile', 'e.g. myproject.simple', .true., 'myproject.simple')
+        call set_param(projfile_target,'projfile_target','file', 'Another project file', 'SIMPLE projectfile', 'e.g. myproject2.simple', .true., 'myproject2.simple')
         call set_param(stk,           'stk',           'file',   'Particle image stack', 'Particle image stack', 'xxx.mrc file with particles', .false., 'stk.mrc')
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
@@ -2685,6 +2693,34 @@ contains
         call refine3D_init%set_input('comp_ctrls', 1, nparts)
         call refine3D_init%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D_init
+
+    subroutine new_replace_project_field
+        ! PROGRAM SPECIFICATION
+        call replace_project_field%new(&
+        &'replace_project_field',&                    ! name
+        &'hard substitution of project field',&       ! descr_short
+        &'is a program for hard substitution of project field, for development purposes',& ! descr_long
+        &'simple_exec',&                             ! executable
+        &0, 3, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call replace_project_field%set_input('parm_ios', 1, projfile)
+        call replace_project_field%set_input('parm_ios', 2, projfile_target)
+        call replace_project_field%set_input('parm_ios', 3, oritype)
+        replace_project_field%parm_ios(3)%required = .true.
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_replace_project_field
 
     subroutine new_report_selection
         ! PROGRAM SPECIFICATION

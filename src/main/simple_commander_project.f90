@@ -23,6 +23,7 @@ public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
 public :: prune_project_commander
+public :: replace_project_field_commander
 private
 #include "simple_local_flags.inc"
 
@@ -82,7 +83,10 @@ type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project
 end type prune_project_commander
-
+type, extends(commander_base) :: replace_project_field_commander
+  contains
+    procedure :: execute      => exec_replace_project_field
+end type replace_project_field_commander
 contains
 
     !> convert text (.txt) oris doc to binary (.simple)
@@ -801,7 +805,7 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
-    !> for generating a subset of a project
+    !> for purging of a project of state=0
     subroutine exec_prune_project( self, cline )
         class(prune_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -812,5 +816,19 @@ contains
         call spproj%prune_project(cline)
         call simple_end('**** PRUNE_PROJECT NORMAL STOP ****')
     end subroutine exec_prune_project
+
+    !> for substituting one project field for another, for dev only
+    subroutine exec_replace_project_field( self, cline )
+        class(replace_project_field_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call params%new(cline)
+        ! projfile <- projfile_target
+        call spproj%read(params%projfile)
+        call spproj%replace_project(params%projfile_target, params%oritype)
+        call spproj%write
+        call simple_end('**** REPLACE_PROJECT_FIELD NORMAL STOP ****')
+    end subroutine exec_replace_project_field
 
 end module simple_commander_project

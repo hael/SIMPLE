@@ -25,18 +25,19 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PROJECT MANAGEMENT PROGRAMS
-type(new_project_commander)         :: xnew_project
-type(update_project_commander)      :: xupdate_project
-type(print_project_info_commander)  :: xprint_project_info
-type(print_project_field_commander) :: xprint_project_field
-type(import_movies_commander)       :: ximport_movies
-type(import_boxes_commander)        :: ximport_boxes
-type(import_particles_commander)    :: ximport_particles
-type(import_cavgs_commander)        :: ximport_cavgs
-type(prune_project_commander)       :: xprune_project
-type(export_starproject_commander)  :: xexport_starproject
-type(import_starproject_commander)  :: ximport_starproject
-type(report_selection_commander)    :: xreport_selection
+type(new_project_commander)           :: xnew_project
+type(update_project_commander)        :: xupdate_project
+type(print_project_info_commander)    :: xprint_project_info
+type(print_project_field_commander)   :: xprint_project_field
+type(import_movies_commander)         :: ximport_movies
+type(import_boxes_commander)          :: ximport_boxes
+type(import_particles_commander)      :: ximport_particles
+type(import_cavgs_commander)          :: ximport_cavgs
+type(prune_project_commander)         :: xprune_project
+type(replace_project_field_commander) :: xreplace_project_field
+type(export_starproject_commander)    :: xexport_starproject
+type(import_starproject_commander)    :: ximport_starproject
+type(report_selection_commander)      :: xreport_selection
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(cluster_cavgs_commander)  :: xcluster_cavgs
@@ -140,6 +141,9 @@ select case(prg)
     case( 'prune_project' )
         call cline%set('mkdir', 'yes')
         call xprune_project%execute(cline)
+    case( 'replace_project_field' )
+        call cline%set('mkdir', 'yes')
+        call xreplace_project_field%execute(cline)
     case( 'export_starproject' )
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')

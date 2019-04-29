@@ -43,7 +43,6 @@ type(ptcl_record), allocatable :: precs(:)                      !< particle reco
 type(image),       allocatable :: cavgs_even(:)                 !< class averages
 type(image),       allocatable :: cavgs_odd(:)                  !< -"-
 type(image),       allocatable :: cavgs_merged(:)               !< -"-
-type(image),       allocatable :: cavgs_pproc(:)                !< -"-
 type(image),       allocatable :: ctfsqsums_even(:)             !< CTF**2 sums for Wiener normalisation
 type(image),       allocatable :: ctfsqsums_odd(:)              !< -"-
 type(image),       allocatable :: ctfsqsums_merged(:)           !< -"-
@@ -123,12 +122,6 @@ contains
             call ctfsqsums_odd(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
             call ctfsqsums_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
         end do
-        if(params_glob%wiener.eq.'yes')then
-            allocate(cavgs_pproc(ncls))
-            do icls=1,ncls
-                call cavgs_pproc(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            enddo
-        endif
         ! flag existence
         exists = .true.
     end subroutine cavger_new
@@ -263,10 +256,6 @@ contains
             call ctfsqsums_even(icls)%zero_and_flag_ft
             call ctfsqsums_odd(icls)%zero_and_flag_ft
             call ctfsqsums_merged(icls)%zero_and_flag_ft
-            if( params_glob%wiener.eq.'yes' )then
-                call cavgs_pproc(icls)%new(ldim,smpd,wthreads=.false.)
-                call cavgs_pproc(icls)%zero_and_flag_ft
-            endif
         end do
     end subroutine init_cavgs_sums
 
@@ -627,7 +616,6 @@ contains
                 call cavgs_even(icls)%zero_and_unflag_ft
                 call cavgs_odd(icls)%zero_and_unflag_ft
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
-                if( params_glob%wiener .eq. 'wiener' )call cavgs_pproc(icls)%zero_and_unflag_ft
             else
                 call cavgs_merged(icls)%zero_and_flag_ft
                 call cavgs_merged(icls)%add(cavgs_even(icls))
@@ -635,10 +623,6 @@ contains
                 call ctfsqsums_merged(icls)%zero_and_flag_ft
                 call ctfsqsums_merged(icls)%add(ctfsqsums_even(icls))
                 call ctfsqsums_merged(icls)%add(ctfsqsums_odd(icls))
-                if( params_glob%wiener .eq. 'yes' )then
-                    call cavgs_pproc(icls)%zero_and_flag_ft
-                    call cavgs_pproc(icls)%add(cavgs_merged(icls))
-                endif
                 ! (w*CTF)**2 density correction
                 if(eo_pop(1) > 1) call cavgs_even(icls)%ctf_dens_correct(ctfsqsums_even(icls))
                 if(eo_pop(2) > 1) call cavgs_odd(icls)%ctf_dens_correct(ctfsqsums_odd(icls))
@@ -653,7 +637,6 @@ contains
 
     !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
-        use simple_estimate_ssnr, only: fsc2ssnr
         character(len=*), intent(in) :: fname
         type(image), allocatable     :: even_imgs(:), odd_imgs(:), shnorm_imgs(:)
         real,        allocatable     :: frc(:)
@@ -680,10 +663,6 @@ contains
             find_plate = 0
             if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call build_glob%projfrcs%set_frc(icls, frc, 1)
-            if( params_glob%wiener.eq.'yes' )then
-                call cavgs_pproc(icls)%ctf_dens_correct_wiener(ctfsqsums_merged(icls), fsc2ssnr(frc))
-                call cavgs_pproc(icls)%ifft()
-            endif
             ! average low-resolution info between eo pairs to keep things in register
             if( params_glob%l_eo )then
                 find = build_glob%projfrcs%estimate_find_for_eoavg(icls, 1)
@@ -701,6 +680,8 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%projfrcs%write(fname)
+        ! calc and write pssnrs
+        if( params_glob%l_pssnr) call cavger_calc_and_write_pssnrs
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -710,12 +691,36 @@ contains
         deallocate(even_imgs, odd_imgs, shnorm_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
+    subroutine cavger_calc_and_write_pssnrs
+        use simple_estimate_ssnr, only: fsc2ssnr
+        real, allocatable :: frc(:), avgctf2(:), pssnr(:)
+        real, parameter   :: frac = 4.
+        integer :: k, kk, icls, sz, szpd
+        szpd = ctfsqsums_merged(1)%get_filtsz()
+        do icls=1,ncls
+            frc   = build_glob%projfrcs%get_frc(icls, params_glob%box)
+            pssnr = fsc2ssnr(frc)
+            call ctfsqsums_merged(icls)%spectrum('absreal', avgctf2, norm=.true.)
+            do k = 1,filtsz
+                kk = nint(real(k)*real(szpd)/real(filtsz))
+                kk = min(max(1,kk),szpd)
+                if( avgctf2(kk) > TINY )then
+                    pssnr(k) = pssnr(k) * (1./avgctf2(kk)) * frac
+                else
+                    pssnr(k) = 0.
+                endif
+            enddo
+            call build_glob%projpssnrs%set_frc(icls, pssnr, 1)
+            print *,icls,pssnr
+        enddo
+        call build_glob%projpssnrs%write(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
+    end subroutine cavger_calc_and_write_pssnrs
+
     ! I/O
 
     !>  \brief  writes class averages to disk
     subroutine cavger_write( fname, which )
         character(len=*),  intent(in) :: fname, which
-        character(len=STDLEN) :: pproc_fname
         integer               :: icls
         select case(which)
             case('even')
@@ -732,13 +737,6 @@ contains
                  do icls=1,ncls
                     call cavgs_merged(icls)%write(fname, icls)
                 end do
-                if( params_glob%wiener.eq.'yes' )then
-                    pproc_fname = add2fbody(trim(fname),trim(params_glob%ext),'_pproc')
-                    do icls=1,ncls
-                        call cavgs_pproc(icls)%ifft()
-                       call cavgs_pproc(icls)%write(pproc_fname, icls)
-                   end do
-               endif
             case DEFAULT
                 THROW_HARD('unsupported which flag')
         end select
@@ -929,12 +927,6 @@ contains
             end do
             deallocate( cavgs_even, cavgs_odd, cavgs_merged,&
             &ctfsqsums_even, ctfsqsums_odd, ctfsqsums_merged, pptcl_mask)
-            if(allocated(cavgs_pproc))then
-                do icls=1,ncls
-                    call cavgs_pproc(icls)%kill
-                end do
-                deallocate(cavgs_pproc)
-            endif
             do iprec=1,partsz
                 if( allocated(precs(iprec)%classes) ) deallocate(precs(iprec)%classes)
                 if( allocated(precs(iprec)%states)  ) deallocate(precs(iprec)%states)

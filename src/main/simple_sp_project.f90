@@ -93,6 +93,7 @@ contains
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
     procedure          :: prune_project
+    procedure          :: replace_project
     procedure          :: report_state2stk
     procedure          :: set_boxcoords
     ! I/O
@@ -2432,6 +2433,134 @@ contains
             call img_clip%kill
         endif
     end subroutine prune_project
+
+    subroutine replace_project( self, projfile_src, oritype )
+        use simple_ori, only: ori
+        class(sp_project),     intent(inout) :: self
+        character(len=*),      intent(in)    :: projfile_src
+        character(len=STDLEN), intent(in)    :: oritype
+        integer,          allocatable :: states(:)
+        character(len=:), allocatable :: boxfname, stkfname, movfname, micfname, src_path
+        character(len=LONGSTRLEN)     :: relstkname, relboxname, relmicname, relmovname
+        type(sp_project) :: self_src
+        type(ori)        :: o, o_src
+        integer          :: istk, nstks, imic, nmics
+        logical          :: err
+        src_path = get_fpath(projfile_src)
+        call self_src%read(projfile_src)
+        select case(trim(oritype))
+        case('ptcl2D','ptcl3D')
+            if(  self%os_ptcl2D%get_noris() /= self_src%os_ptcl2D%get_noris() .or.&
+                &self%os_ptcl3D%get_noris() /= self_src%os_ptcl3D%get_noris())then
+                THROW_HARD('Inconsistent # of ptcls in project files!')
+            endif
+            if( trim(oritype) == 'ptcl2D' )then
+                if( self_src%os_ptcl2D%get_noris() == 0 ) return
+                self%os_ptcl2D = self_src%os_ptcl2D
+                states = self%os_ptcl2D%get_all('state')
+                call self%os_ptcl3D%set_all('state', real(states))
+            else
+                if( self_src%os_ptcl3D%get_noris() == 0 ) return
+                self%os_ptcl3D = self_src%os_ptcl3D
+                states = self%os_ptcl3D%get_all('state')
+                call self%os_ptcl2D%set_all('state', real(states))
+            endif
+            deallocate(states)
+        case('stk')
+            if( self%os_stk%get_noris() /= self_src%os_stk%get_noris())then
+                THROW_HARD('Inconsistent # of stk/ptcls in project files!')
+            endif
+            nstks = self_src%os_stk%get_noris()
+            if( nint(self_src%os_stk%get(nstks,'top')) /= self%os_ptcl2D%get_noris() )then
+                THROW_HARD('Inconsistent # of particles between stk & particles fields')
+            endif
+            if( nstks == 0 ) return
+            do istk = 1,nstks
+                err   = .false.
+                o_src = self_src%os_stk%get_ori(istk)
+                o     = self%os_stk%get_ori(istk)
+                if( nint(o%get('box')) /= nint(o_src%get('box')) )then
+                    THROW_HARD('Inconsistent box size')
+                endif
+                if( .not.is_equal(o%get('smpd'),o_src%get('smpd')) )then
+                    THROW_HARD('Inconsistent sampling distance')
+                endif
+                if( o_src%isthere('stk') )then
+                    call o_src%getter('stk',stkfname)
+                    if( stkfname(1:1).ne.'/' ) stkfname = trim(src_path)//'/'//trim(stkfname)
+                    call make_relativepath(CWD_GLOB, stkfname, relstkname)
+                    if( file_exists(relstkname) )then
+                        call o_src%set('stk', relstkname)
+                    else
+                        err = .true.
+                    endif
+                else
+                    err = .true.
+                endif
+                if( o_src%isthere('boxfile') )then
+                    call o_src%getter('boxfile',boxfname)
+                    if( boxfname(1:1).ne.'/' ) boxfname = trim(src_path)//'/'//trim(boxfname)
+                    call make_relativepath(CWD_GLOB, boxfname, relboxname)
+                    if( file_exists(relboxname) )then
+                        call o_src%set('boxfile', relboxname)
+                    else
+                        err = .true.
+                    endif
+                endif
+                if( err )then
+                    call o_src%print_ori
+                    write(logfhandle,*) trim(relstkname)
+                    write(logfhandle,*) trim(relboxname)
+                    THROW_HARD('Missing stack or boxfile!')
+                else
+                    call self%os_stk%set_ori(istk,o_src)
+                endif
+            enddo
+        case('mic')
+            if( self%os_mic%get_noris() /= self_src%os_mic%get_noris())then
+                THROW_HARD('Inconsistent # of movies/micrographs in project files!')
+            endif
+            nmics = self_src%os_mic%get_noris()
+            if( nmics == 0 ) return
+            do imic = 1,nmics
+                o     = self%os_mic%get_ori(imic)
+                o_src = self_src%os_mic%get_ori(imic)
+                if(  nint(o%get('xdim')) /= nint(o_src%get('xdim')) .or.&
+                    &nint(o%get('ydim')) /= nint(o_src%get('ydim')))then
+                    THROW_HARD('Inconsistent dimensions')
+                endif
+                if( .not.is_equal(o%get('smpd'),o_src%get('smpd')) )then
+                    THROW_HARD('Inconsistent sampling distance')
+                endif
+                if( o_src%isthere('movie') )then
+                    call o_src%getter('movie',movfname)
+                    if( movfname(1:1).ne.'/' ) movfname = trim(src_path)//'/'//trim(movfname)
+                    call make_relativepath(CWD_GLOB, movfname, relmovname)
+                    if( file_exists(relmovname) )then
+                        call o_src%set('movie', relmovname)
+                    else
+                        THROW_WARN('Movie could not be substituted: '//trim(movfname))
+                    endif
+                endif
+                if( o_src%isthere('intg') )then
+                    call o_src%getter('intg',micfname)
+                    if( micfname(1:1).ne.'/' ) micfname = trim(src_path)//'/'//trim(micfname)
+                    call make_relativepath(CWD_GLOB, micfname, relmicname)
+                    if( file_exists(relmicname) )then
+                        call o_src%set('movie', relmicname)
+                    else
+                        call o_src%print_ori
+                        write(logfhandle,*) trim(relmicname)
+                        THROW_HARD('Missing micrograph!')
+                    endif
+                endif
+                call self%os_mic%set_ori(imic,o_src)
+            enddo
+            call o%kill
+        case DEFAULT
+            THROW_HARD('Invalid ORITYPE!')
+        end select
+    end subroutine replace_project
 
     ! report state selection to os_stk & os_ptcl2D/3D
     subroutine report_state2stk( self, states )

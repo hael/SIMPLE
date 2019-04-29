@@ -905,7 +905,6 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         pft_ptcl = self%pfts_ptcls(:,:,i)
-
         if( params_glob%l_pssnr )then
             do k=params_glob%kfromto(1),params_glob%kfromto(2)
                 ! particle power spectrum

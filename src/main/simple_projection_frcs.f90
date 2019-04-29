@@ -33,6 +33,7 @@ contains
     procedure          :: set_frc
     procedure          :: get_frc
     procedure          :: frc_getter
+    procedure          :: getter
     procedure          :: estimate_res
     procedure          :: estimate_find_for_eoavg
     procedure          :: estimate_lp_for_align
@@ -174,6 +175,7 @@ contains
         end do
     end function resample_filter
 
+    !>  getter for values interepreted as FRCs
     function get_frc( self, proj, box, state ) result( frc )
         class(projection_frcs), intent(in) :: self
         integer,                intent(in) :: proj, box
@@ -192,6 +194,7 @@ contains
         endif
     end function get_frc
 
+    !>  getter for values interepreted as FRCs
     subroutine frc_getter( self, proj, hpind_fsc, phaseplate, frc, state )
         class(projection_frcs), intent(in)  :: self
         integer,                intent(in)  :: proj, hpind_fsc
@@ -208,6 +211,19 @@ contains
         endif
         if( hpind_fsc > 0 ) frc(:hpind_fsc) = frc(hpind_fsc + 1)
     end subroutine frc_getter
+
+    !>  getter for raw values
+    subroutine getter( self, proj, frc, state )
+        class(projection_frcs), intent(in)  :: self
+        integer,                intent(in)  :: proj
+        real,                   intent(out) :: frc(self%filtsz)
+        integer, optional,      intent(in)  :: state
+        integer :: sstate
+        sstate = 1
+        if( present(state) ) sstate = state
+        call self%raise_exception( proj, sstate, 'ERROR, out of bounds in frc_getter')
+        frc = self%frcs(sstate,proj,:)
+    end subroutine getter
 
     subroutine estimate_res( self, proj, res_frc05, res_frc0143, state )
         class(projection_frcs), intent(in)  :: self

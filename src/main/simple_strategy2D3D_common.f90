@@ -422,8 +422,14 @@ contains
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
             if( params_glob%l_match_filt )then
-                call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
-                    &build_glob%img_match%get_filtsz(), filter, subfilter)
+                if( params_glob%l_pssnr )then
+                    call build_glob%projpssnrs%getter(icls, filter)
+                    call subsample_optlp(build_glob%projpssnrs%get_filtsz(),&
+                        &build_glob%img_match%get_filtsz(), filter, subfilter)
+                else
+                    call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
+                        &build_glob%img_match%get_filtsz(), filter, subfilter)
+                endif
                 call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
@@ -618,7 +624,7 @@ contains
         if( params_glob%l_eo )then
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
-                if( params_glob%pssnr.eq.'yes' )then
+                if( params_glob%l_pssnr )then
                     allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'.bin')
                     if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
                         pssnr = file2rarr(fname_vol_filter)

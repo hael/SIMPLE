@@ -905,8 +905,9 @@ contains
         character(len=STDLEN)     :: str_state, fsc_file
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd
-        integer :: i, state, iter, iostat, box, nfiles
+        integer :: i, state, iter, iostat, box, nfiles, niters, niter4eo
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
+        logical :: l_projection_matching
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
@@ -950,9 +951,9 @@ contains
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,params%nstates
             vol = 'vol'//int2str( state )
-            call cline_check_3Dconv%delete( trim(vol) )
-            call cline_volassemble%delete( trim(vol) )
-            call cline_postprocess%delete( trim(vol) )
+            call cline_check_3Dconv%delete( vol )
+            call cline_volassemble%delete( vol )
+            call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
         DebugPrint ' In exec_refine3D_distr; begin starting models'
@@ -983,12 +984,11 @@ contains
                 call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                 nfiles = size(list)
                 err    = .false.
-                select case(trim(params%eo))
-                    case('no')
-                        if( params%nparts * 2 /= nfiles ) err = .true.
-                    case DEFAULT
-                        if( params%nparts * 4 /= nfiles ) err = .true.
-                end select
+                if( params%l_eo )then
+                    if( params%nparts * 4 /= nfiles ) err = .true.
+                else
+                    if( params%nparts * 2 /= nfiles ) err = .true.
+                endif
                 if( err )then
                     THROW_HARD('# partitions not consistent with previous refinement round')
                 endif
@@ -1027,7 +1027,9 @@ contains
             have_oris = .true.
             call build%spproj%write_segment_inside(params%oritype)
         endif
-        if( have_oris .and. .not. vol_defined )then
+        l_projection_matching = .false.
+        niter4eo = huge(niter4eo)
+        if( have_oris .and. .not.vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
             do state = 1,params%nstates
@@ -1038,7 +1040,7 @@ contains
                 iostat = simple_rename( trim(vol), trim(str) )
                 vol = 'vol'//trim(int2str(state))
                 call cline%set( trim(vol), trim(str) )
-                if( params%eo .ne. 'no' )then
+                if( params%l_eo )then
                     vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
                     str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
                     iostat= simple_rename( trim(vol_even), trim(str) )
@@ -1047,14 +1049,25 @@ contains
                     iostat =  simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
-        else if( .not. have_oris .and. vol_defined )then
+        else if( .not.have_oris .and. vol_defined )then
             ! projection matching
+            l_projection_matching = .true.
             select case( params%neigh )
                 case( 'yes' )
                     THROW_HARD('refinement method requires input orientations')
                 case DEFAULT
                     ! all good
             end select
+            if( params%l_eo )then
+                if( .not.cline%defined('lp')) THROW_HARD('LP needs be defined for the first step of projection matching!')
+                niter4eo = 1
+                if( cline%defined('update_frac') ) niter4eo = ceiling(1./params%update_frac)
+                call cline%set('eo','no')
+                call cline_check_3Dconv%set('eo','no')
+                params%eo        = 'no'
+                params%l_eo      = .false.
+            endif
+            call cline%set('refine','greedy_single')
         endif
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then
@@ -1064,7 +1077,7 @@ contains
         endif
         ! EO PARTITIONING
         DebugPrint ' In exec_refine3D_distr; begin partition_eo'
-        if( params%eo .ne. 'no' )then
+        if( params%l_eo )then
             if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
                     call build%spproj_field%partition_eo(tseries=.true.)
@@ -1077,12 +1090,14 @@ contains
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! MAIN LOOP
-        iter = params%startit - 1
-        corr = -1.
+        niters = 0
+        iter   = params%startit - 1
+        corr   = -1.
         do
-            iter = iter + 1
+            niters            = niters + 1
+            iter              = iter + 1
             params%which_iter = iter
-            str_iter = int2str_pad(iter,3)
+            str_iter          = int2str_pad(iter,3)
             write(logfhandle,'(A)')   '>>>'
             write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
             write(logfhandle,'(A)')   '>>>'
@@ -1122,17 +1137,17 @@ contains
             case('eval')
                 ! nothing to do
             case DEFAULT
-                if( params%eo.ne.'no' )then
+                if( params%l_eo )then
                     call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
                 else
                     call cline_volassemble%set( 'prg', 'volassemble' )    ! required for cmdline exec
                 endif
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
-                    if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    if( params%l_eo ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
                     call cline_volassemble%set( 'state', real(state) )
                     if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-                    if( params%eo .ne. 'no' )then
+                    if( params%l_eo )then
                         call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
                         &'simple_script_state'//trim(str_state), volassemble_output)
                     else
@@ -1149,7 +1164,7 @@ contains
                         ! cleanup for empty state
                         vol = 'vol'//trim(int2str(state))
                         call cline%delete( vol )
-                        call job_descr%delete( trim(vol) )
+                        call job_descr%delete( vol )
                     else
                         ! rename state volume
                         vol = trim(VOL_FBODY)//trim(str_state)//params%ext
@@ -1158,25 +1173,25 @@ contains
                         else
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
                         endif
-                        iostat = simple_rename( trim(vol), trim(vol_iter) )
-                        if( params%eo .ne. 'no' )then
+                        iostat = simple_rename( vol, vol_iter )
+                        if( params%l_eo )then
                             vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
                             vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
                             vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
                             vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
-                            iostat        = simple_rename( trim(vol_even), trim(vol_iter_even) )
-                            iostat        = simple_rename( trim(vol_odd),  trim(vol_iter_odd)  )
+                            iostat        = simple_rename( vol_even, vol_iter_even )
+                            iostat        = simple_rename( vol_odd,  vol_iter_odd  )
                             fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                             optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
                             ! add filters to os_out
-                            call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
-                            call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
+                            call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                            call build%spproj%add_vol2os_out(optlp_file, params%smpd, state, 'vol_filt', box=params%box)
                         endif
                         ! add state volume to os_out
                         if( trim(params%oritype).eq.'cls3D' )then
-                            call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol_cavg')
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
                         else
-                            call build%spproj%add_vol2os_out(trim(vol_iter), params%smpd, state, 'vol')
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol')
                         endif
                         ! updates cmdlines & job description
                         vol = 'vol'//trim(int2str(state))
@@ -1193,7 +1208,7 @@ contains
                     if( state_pops(state) == 0 )cycle
                     call cline_postprocess%set('state', real(state))
                     call cline_postprocess%set('lp', params%lp)
-                    if( params%eo .ne. 'no' )call cline_postprocess%delete('lp')
+                    if( params%l_eo ) call cline_postprocess%delete('lp')
                     call xpostprocess%execute(cline_postprocess)
                 enddo
             end select
@@ -1222,6 +1237,37 @@ contains
                 str = real2str(cline_check_3Dconv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
+            endif
+            if( l_projection_matching .and. niter4eo == niters )then
+                ! e/o projection matching
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD REFINEMENT'
+                write(logfhandle,'(A)')'>>>'
+                l_projection_matching = .false.
+                params%l_eo = .true.
+                params%eo   = 'yes'
+                call cline%set('eo', 'yes')
+                call cline_check_3Dconv%set('eo','yes')
+                call cline%delete('lp')
+                call job_descr%set('eo', 'yes')
+                ! e/o: reconstruct volumes and partition
+                call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    ! rename volumes & updates cmdlines & job description
+                    vol      = trim(VOL_FBODY)//trim(str_state)//params%ext
+                    vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
+                    iostat   = simple_rename( vol, vol_iter )
+                    vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                    vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                    vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
+                    vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
+                    iostat        = simple_rename( vol_even, vol_iter_even )
+                    iostat        = simple_rename( vol_odd,  vol_iter_odd  )
+                    vol = 'vol'//trim(int2str(state))
+                    call job_descr%set( vol, vol_iter )
+                    call cline%set(vol, vol_iter )
+                enddo
             endif
         end do
         call qsys_cleanup
@@ -1292,7 +1338,7 @@ contains
             call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
         endif
         ! eo partitioning
-        if( params%eo .ne. 'no' )then
+        if( params%l_eo )then
             if( build%spproj_field%get_nevenodd() == 0 )then
                 if( params%tseries .eq. 'yes' )then
                     call build%spproj_field%partition_eo(tseries=.true.)
@@ -1311,7 +1357,7 @@ contains
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
         cline_volassemble = cline
-        if( params%eo .ne. 'no' )then
+        if( params%l_eo )then
             call cline_volassemble%set('prg', 'volassemble_eo')
         else
             call cline_volassemble%set('prg', 'volassemble')
@@ -1320,10 +1366,10 @@ contains
         ! parallel assembly
         do state = 1,params%nstates
             str_state = int2str_pad(state,2)
-            if( params%eo .ne. 'no' ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+            if( params%l_eo ) volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
             call cline_volassemble%set( 'state', real(state) )
             if( params%nstates>1 )call cline_volassemble%set('part', real(state))
-            if( params%eo .ne. 'no' )then
+            if( params%l_eo )then
                 call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
                 'simple_script_state'//trim(str_state), trim(volassemble_output))
             else
@@ -1335,7 +1381,7 @@ contains
         ! updates project file only if called from another workflow
         if( params%mkdir.eq.'yes' )then
             do state = 1,params%nstates
-                if( params%eo .ne. 'no' )then
+                if( params%l_eo )then
                     fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                     optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
                     call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)

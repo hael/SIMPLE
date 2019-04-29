@@ -349,7 +349,7 @@ contains
         cntvec      = 0
         ctfsqsumvec = 0.
         call self%even%update_pssnr3d(cntvec, ctfsqsumvec)
-        cntvec      = 0 ! # of voxels is not summed twice
+        cntvec      = 0 ! # of voxels is not summed
         call self%odd%update_pssnr3d(cntvec, ctfsqsumvec)
         ! volume & area fraction
         frac = 5. ! empirical

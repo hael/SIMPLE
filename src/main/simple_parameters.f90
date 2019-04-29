@@ -89,7 +89,6 @@ type :: parameters
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
-    character(len=3)      :: wiener='no'
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
@@ -574,7 +573,6 @@ contains
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
-        call check_carg('wiener',         self%wiener)
         call check_carg('wfun',           self%wfun)
         call check_carg('zero',           self%zero)
         ! File args

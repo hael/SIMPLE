@@ -156,6 +156,11 @@ contains
 
         ! READ FOURIER RING CORRELATIONS
         if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
+        if( params_glob%l_pssnr )then
+            if( file_exists(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT) )then
+                call build_glob%projpssnrs%read(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
+            endif
+        endif
         ! SET FOURIER INDEX RANGE
         call set_bp_range2D(cline, which_iter, frac_srch_space )
         if( L_BENCH ) rt_init = toc(t_init)

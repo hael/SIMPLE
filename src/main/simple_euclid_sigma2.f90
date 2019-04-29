@@ -81,9 +81,9 @@ contains
         class(euclid_sigma2),    intent(inout) :: self
         class(oris),            intent(inout) :: os
         logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        real(sp)        :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        integer         :: fromm, tom, funit, iptcl, addr, pind, imic
-        logical         :: success, defined
+        real(sp) :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
+        integer  :: fromm, tom, funit, iptcl, addr, pind, imic, micpop
+        logical  :: success, defined
         call pftcc_glob%assign_pinds(self%pinds)
         self%sigma2_noise      = 0.
         self%sigma2_exists_msk = .false.
@@ -99,7 +99,7 @@ contains
                 tom   = max(tom, imic)
             enddo
             allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),source=0.)
-            allocate(self%micinds(params_glob%fromp:params_glob%top),source=0)
+            allocate(self%micinds(params_glob%fromp:params_glob%top), source=0)
             ! set arrays & sum
             do iptcl = params_glob%fromp, params_glob%top
                 ! read
@@ -121,7 +121,14 @@ contains
             end do
             call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
             if( any(self%micinds > 0) )then
-                ! transfer average to masked ptcls only
+                ! average sums
+                do imic = fromm,tom
+                    micpop = count(self%micinds == imic)
+                    if( micpop > 0 )then
+                        self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / real(micpop)
+                    endif
+                enddo
+                ! transfer sums to masked ptcls only
                 do iptcl = params_glob%fromp, params_glob%top
                     if( .not.ptcl_mask(iptcl) )cycle
                     pind = self%pinds(iptcl)
