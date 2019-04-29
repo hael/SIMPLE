@@ -16,8 +16,6 @@ public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
 public :: pick_commander_chiara
-public :: detect_atoms_commander
-public :: compare_nano_commander
 public :: extract_commander
 public :: reextract_commander
 public :: pick_extract_commander
@@ -53,14 +51,6 @@ type, extends(commander_base) :: pick_commander_chiara
   contains
     procedure :: execute      => exec_pick_chiara
 end type pick_commander_chiara
-type, extends(commander_base) :: detect_atoms_commander
-  contains
-    procedure :: execute      => exec_detect_atoms
-end type detect_atoms_commander
-type, extends(commander_base) :: compare_nano_commander
-  contains
-    procedure :: execute      => exec_compare_nano
-end type compare_nano_commander
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
@@ -320,22 +310,6 @@ contains
         call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
     end subroutine exec_motion_correct
-
-    !CHIARAAAA
-    ! subroutine exec_nanopart_analyisis( self, cline )
-    !     use simple_sp_project,          only: sp_project
-    !     use simple_nanopart_new_mod, only: nanoparticle
-    !     class(nanoparticle), intent(inout) :: self
-    !     class(cmdline),      intent(inout) :: cline !< command line input
-    !     type(sp_project)              :: spproj
-    !     character(len=:), allocatable :: output_dir, moviename, imgkind, fbody
-    !     integer :: nmovies, fromto(2), imovie, ntot, frame_counter, lfoo(3), nframes, cnt
-    !     call params%new(cline)
-    !     !call spproj%read(params%projfile)
-    !     ! end gracefully
-    !     call qsys_job_finished(  'simple_commander_preprocess :: exec_nanopart_analyisis' )
-    !     call simple_end('**** SIMPLE_NANOPARTICLE_ANALYSIS NORMAL STOP ****')
-    ! end subroutine exec_nanopart_analyisis
 
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
@@ -686,82 +660,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick_chiara
-
-    ! for binarizing a nanoparticle image
-    subroutine exec_detect_atoms( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
-        class(detect_atoms_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano
-        integer :: ldim(3), nptcls
-        real    :: smpd
-        real, parameter :: SCALE_FACTOR = 1.0
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
-        endif
-        call nano%new(params%vols(1),SCALE_FACTOR)
-        call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
-        ! Nanoparticle binarization
-        call nano%binarize() !scale factor is for over sampling purposes
-        ! Atoms centers identification
-        call nano%find_centers()
-        ! Outliers discarding
-        call nano%discard_outliers()
-        ! Aspect ratios calculations
-        call nano%calc_aspect_ratio()
-        ! Circularities calculation
-        call nano%calc_circularity()
-        ! Make soft mask
-        call nano%make_soft_mask()
-        ! Polarization search
-        call nano%search_polarization()
-        ! Clustering
-        call nano%cluster
-        ! kill
-        call nano%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
-    end subroutine exec_detect_atoms
-
-    ! for comparison of atomic models od 2nanoparticles
-    subroutine exec_compare_nano( self, cline )
-    use simple_nanoparticles_mod
-        use simple_image, only : image
-        class(compare_nano_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano1, nano2
-        integer :: nptcls
-        integer :: ldim1(3), ldim2(3)
-        real    :: smpd1,smpd2
-        call params%new(cline)
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_compare_nano')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
-        endif
-        ! COMPARING
-        call nano1%new(params%vols(1))
-        call nano2%new(params%vols(2))
-        call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
-        call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
-        if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
-        if(abs(smpd1-smpd2) > TINY) THROW_HARD('Non compatible particles, different smpd; compare_atomic_models')
-        ! Nanoparticle binarization
-        call nano1%compare_atomic_models(nano2)
-        ! kill
-        call nano1%kill
-        call nano2%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
-    end subroutine exec_compare_nano
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )

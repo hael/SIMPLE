@@ -34,48 +34,48 @@ type(make_pickrefs_commander)         :: xmake_pickrefs
 type(pick_commander_chiara)           :: xpickchiara
 
 ! CLUSTER2D PROGRAMS
-type(make_cavgs_commander)           :: xmake_cavgs
-type(cluster2D_commander)            :: xcluster2D
-type(cavgassemble_commander)         :: xcavgassemble
-type(check_2Dconv_commander)         :: xcheck_2Dconv
-type(rank_cavgs_commander)           :: xrank_cavgs
-type(export_cavgs_commander)         :: xexport_cavgs
+type(make_cavgs_commander)            :: xmake_cavgs
+type(cluster2D_commander)             :: xcluster2D
+type(cavgassemble_commander)          :: xcavgassemble
+type(check_2Dconv_commander)          :: xcheck_2Dconv
+type(rank_cavgs_commander)            :: xrank_cavgs
+type(export_cavgs_commander)          :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
-type(nspace_commander)               :: xnspace
-type(refine3D_init_commander)        :: xrefine3D_init
-type(refine3D_commander)             :: xprime3D
-type(check_3Dconv_commander)         :: xcheck_3Dconv
+type(nspace_commander)                :: xnspace
+type(refine3D_init_commander)         :: xrefine3D_init
+type(refine3D_commander)              :: xprime3D
+type(check_3Dconv_commander)          :: xcheck_3Dconv
 
 ! RECONSTRUCTION PROGRAMS
-type(volassemble_eo_commander)       :: xvolassemble_eo
-type(reconstruct3D_commander)        :: xreconstruct3D
-type(volassemble_commander)          :: xvolassemble
+type(volassemble_eo_commander)        :: xvolassemble_eo
+type(reconstruct3D_commander)         :: xreconstruct3D
+type(volassemble_commander)           :: xvolassemble
 
 ! CHECKER PROGRAMS
-type(check_box_commander)            :: xcheck_box
-type(check_nptcls_commander)         :: xcheck_nptcls
+type(check_box_commander)             :: xcheck_box
+type(check_nptcls_commander)          :: xcheck_nptcls
 
 ! VOLOPS PROGRAMS
-type(postprocess_commander)          :: xpostprocess   ! DUPLICATED
-type(reproject_commander)            :: xreproject     ! DUPLICATED
-type(volume_smat_commander)          :: xvolume_smat
-type(dock_volpair_commander)         :: xdock_volpair
-type(symmetrize_map_commander)       :: xsymmetrize_map
-type(automask_commander)             :: xautomask
+type(postprocess_commander)           :: xpostprocess   ! DUPLICATED
+type(reproject_commander)             :: xreproject     ! DUPLICATED
+type(volume_smat_commander)           :: xvolume_smat
+type(dock_volpair_commander)          :: xdock_volpair
+type(symmetrize_map_commander)        :: xsymmetrize_map
+type(automask_commander)              :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(scale_commander)                :: xscale         ! DUPLICATED
-type(binarise_commander)             :: xbinarise
-type(edge_detector_commander)        :: xdetector
+type(scale_commander)                 :: xscale         ! DUPLICATED
+type(binarise_commander)              :: xbinarise
+type(edge_detector_commander)         :: xdetector
 
 ! MISCELLANOUS PROGRAMS
-type(masscen_commander)              :: xmasscen
-type(cluster_smat_commander)         :: xcluster_smat
-type(print_dose_weights_commander)   :: xprint_dose_weights
-type(res_commander)                  :: xres
-type(stk_corr_commander)             :: xstk_corr
-type(kstest_commander)               :: xkstst
+type(masscen_commander)               :: xmasscen
+type(cluster_smat_commander)          :: xcluster_smat
+type(print_dose_weights_commander)    :: xprint_dose_weights
+type(res_commander)                   :: xres
+type(stk_corr_commander)              :: xstk_corr
+type(kstest_commander)                :: xkstst
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)         :: xrotmats2oris

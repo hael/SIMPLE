@@ -63,7 +63,7 @@ type(shift_commander)       :: xshift
 
 ! NANOPARTICLES PROGRAMS
 type(detect_atoms_commander)  :: xdetectatoms  !I put it in simple_commander_preprocess not to write another file
-type(compare_nano_commander)  :: xcomparenano
+type(compare_nano_commander)  :: xcompare_nano
 
 
 ! ORIENTATION PROCESSING PROGRAMS
@@ -224,7 +224,7 @@ select case(prg)
     case('detect_atoms')
         call xdetectatoms%execute(cline)
     case('compare_nano')
-        call xcomparenano%execute(cline)
+        call xcompare_nano%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
 
