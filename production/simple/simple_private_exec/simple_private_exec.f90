@@ -61,7 +61,6 @@ type(postprocess_commander)           :: xpostprocess   ! DUPLICATED
 type(reproject_commander)             :: xreproject     ! DUPLICATED
 type(volume_smat_commander)           :: xvolume_smat
 type(dock_volpair_commander)          :: xdock_volpair
-type(symmetrize_map_commander)        :: xsymmetrize_map
 type(automask_commander)              :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
@@ -606,21 +605,6 @@ select case(prg)
         call cline%parse_oldschool(keys_required(:7), keys_optional(:3))
         ! set defaults
         call xdock_volpair%execute(cline)
-    case( 'symmetrize_map' )
-        ! for finding the symmetry axis and average over the symmetry-related rotations
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'smpd'
-        keys_required(3) = 'lp'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'pgrp'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'outvol'
-        keys_optional(3) = 'cenlp'
-        call cline%parse_oldschool(keys_required(:5), keys_optional(:3))
-        ! set defaults
-        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
-        call xsymmetrize_map%execute(cline)
     case( 'automask' )
         ! for volumetric envelope masking
         keys_required(1) = 'msk'

@@ -41,7 +41,7 @@ type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 type(cluster3D_commander)                   :: xcluster3D
 type(cluster3D_refine_commander)            :: xcluster3D_refine
 
-! TIME-SERIES WORKFLOWS
+! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 type(tseries_track_distr_commander)         :: xtseries_track_distr
 
 ! MISCELLANEOUS WORKFLOWS
@@ -159,7 +159,7 @@ select case(prg)
         if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
         if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'no' )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
         if( .not. cline%defined('center')    ) call cline%set('center',     'no')
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     15. )
         if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
@@ -169,13 +169,13 @@ select case(prg)
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
         if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
         if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
         if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       30.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       20.)
         if( .not. cline%defined('center')    ) call cline%set('center',     'no')
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
@@ -201,7 +201,7 @@ select case(prg)
     case( 'refine3D_init' )
         call xrefine3D_init_distr%execute( cline )
     case( 'refine3D' )
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       30.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       20.)
         if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
         if( .not. cline%defined('eo')     ) call cline%set('eo',         'no')
         if( cline%get_carg('eo').eq.'no' .and. .not.cline%defined('lp') )then
@@ -224,7 +224,7 @@ select case(prg)
         if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xcluster3D_refine%execute( cline )
 
-    ! TIME-SERIES WORKFLOWS
+    ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 
     case( 'tseries_track' )
         call cline%set('nthr', 1.0)

@@ -305,7 +305,7 @@ type :: parameters
     real    :: bfac=200            !< bfactor for sharpening/low-pass filtering(in A**2){200.}
     real    :: bfacerr=50.         !< bfactor error in simulated images(in A**2){0}
     real    :: bw_ratio=0.3        !< ratio between foreground-background pixel desired in edge detection
-    real    :: cenlp=30.           !< low-pass limit for binarisation in centering(in A){30 A}
+    real    :: cenlp=20.           !< low-pass limit for binarisation in centering(in A){30 A}
     real    :: cs=2.7              !< spherical aberration constant(in mm){2.7}
     real    :: ctfreslim=8.
     real    :: dcrit_rel=0.5       !< critical distance relative to box(0-1){0.5}

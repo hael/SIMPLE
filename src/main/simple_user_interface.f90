@@ -136,6 +136,7 @@ type(simple_program), target :: simulate_subtomogram
 type(simple_program), target :: stack
 type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
+type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_ctf_estimate
@@ -307,6 +308,7 @@ contains
         call new_stack
         call new_stackops
         call new_symaxis_search
+        call new_symmetrize_map
         call new_symmetry_test
         call new_tseries_import
         call new_tseries_ctf_estimate
@@ -385,11 +387,12 @@ contains
         prg_ptr_array(64)%ptr2prg => stack
         prg_ptr_array(65)%ptr2prg => stackops
         prg_ptr_array(66)%ptr2prg => symaxis_search
-        prg_ptr_array(67)%ptr2prg => symmetry_test
-        prg_ptr_array(68)%ptr2prg => tseries_track
-        prg_ptr_array(69)%ptr2prg => update_project
-        prg_ptr_array(70)%ptr2prg => vizoris
-        prg_ptr_array(71)%ptr2prg => volops
+        prg_ptr_array(67)%ptr2prg => symmetrize_map
+        prg_ptr_array(68)%ptr2prg => symmetry_test
+        prg_ptr_array(69)%ptr2prg => tseries_track
+        prg_ptr_array(70)%ptr2prg => update_project
+        prg_ptr_array(71)%ptr2prg => vizoris
+        prg_ptr_array(72)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -529,6 +532,8 @@ contains
                 ptr2prg => stackops
             case('symaxis_search')
                 ptr2prg => symaxis_search
+            case('symmetrize_map')
+                ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
             case('tseries_import')
@@ -619,6 +624,7 @@ contains
         write(logfhandle,'(A)') stack%name
         write(logfhandle,'(A)') stackops%name
         write(logfhandle,'(A)') symaxis_search%name
+        write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
@@ -3124,6 +3130,41 @@ contains
         ! computer controls
         call symaxis_search%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symaxis_search
+
+    subroutine new_symmetrize_map
+        ! PROGRAM SPECIFICATION
+        call symmetrize_map%new(&
+        &'symmetrize_map',&                                                                                           ! name
+        &'Symmetrization of density map',&                                                                            ! descr_short
+        &'is a program that implements symmetrization of the input density map. &
+        &Input is a volume and point-group symmetry, output is the volume aligned to the principal symmetry axis and averaged over the symmetry operations',& ! descr long
+        &'simple_exec',&                                                                                             ! executable
+        &2, 1, 0, 2, 3, 2, 1, .false.)                                                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call symmetrize_map%set_input('img_ios', 1, 'vol1', 'file', 'Volume to symmetrize', 'Volume to symmetrize', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        call symmetrize_map%set_input('img_ios', 2, outvol)
+        ! parameter input/output
+        call symmetrize_map%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call symmetrize_map%set_input('srch_ctrls', 1, pgrp)
+        call symmetrize_map%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
+        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        ! filter controls
+        call symmetrize_map%set_input('filt_ctrls', 1, lp)
+        call symmetrize_map%set_input('filt_ctrls', 2, hp)
+        call symmetrize_map%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 20.)
+        ! mask controls
+        call symmetrize_map%set_input('mask_ctrls', 1, msk)
+        call symmetrize_map%set_input('mask_ctrls', 2, inner)
+        ! computer controls
+        call symmetrize_map%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_symmetrize_map
 
     subroutine new_symmetry_test
         ! PROGRAM SPECIFICATION

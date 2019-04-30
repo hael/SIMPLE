@@ -43,6 +43,7 @@ type(report_selection_commander)      :: xreport_selection
 type(cluster_cavgs_commander)  :: xcluster_cavgs
 type(symaxis_search_commander) :: xsymsrch
 type(symmetry_test_commander)  :: xsymtst
+type(symmetrize_map_commander) :: xsymmetrize_map
 type(postprocess_commander)    :: xpostprocess
 
 ! IMAGE PROCESSING PROGRAMS
@@ -62,11 +63,6 @@ type(stack_commander)       :: xstack
 type(stackops_commander)    :: xstackops
 type(shift_commander)       :: xshift
 
-! NANOPARTICLES PROGRAMS
-type(detect_atoms_commander)  :: xdetectatoms  !I put it in simple_commander_preprocess not to write another file
-type(compare_nano_commander)  :: xcompare_nano
-
-
 ! ORIENTATION PROCESSING PROGRAMS
 type(make_oris_commander) :: xmake_oris
 type(orisops_commander)   :: xorisops
@@ -85,9 +81,11 @@ type(simulate_particles_commander)   :: xsimulate_particles
 type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
-! TIME-SERIES PROGRAMS
+! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)       :: xtseries_import
 type(tseries_ctf_estimate_commander) :: xtseries_ctf_estimate
+type(detect_atoms_commander)         :: xdetect_atoms
+type(compare_nano_commander)         :: xcompare_nano
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -163,7 +161,7 @@ select case(prg)
         call xcluster_cavgs%execute(cline)
     case( 'symaxis_search' )
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    30.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )
@@ -171,10 +169,14 @@ select case(prg)
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymtst%execute( cline )
+    case( 'symmetrize_map' )
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
+        call xsymmetrize_map%execute(cline)
     case( 'postprocess' )
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)
-
 
     ! IMAGE PROCESSING PROGRAMS
     case('pspec_stats')
@@ -190,7 +192,7 @@ select case(prg)
         call xlocal_res%execute(cline)
     case( 'center' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   30.)
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call xcenter%execute(cline)
     case( 'reproject' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -223,12 +225,6 @@ select case(prg)
     case( 'shift' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xshift%execute(cline)
-
-    ! NANOPARTICLES PROGRAMS
-    case('detect_atoms')
-        call xdetectatoms%execute(cline)
-    case('compare_nano')
-        call xcompare_nano%execute(cline)
 
     ! ORIENTATION PROCESSING PROGRAMS
 
@@ -285,7 +281,7 @@ select case(prg)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xsimulate_subtomogram%execute(cline)
 
-    ! TIME-SERIES PROGRAM
+    ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 
     case( 'tseries_import' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -304,6 +300,10 @@ select case(prg)
         if( .not. cline%defined('hp') ) call cline%set('hp', 10.)
         if( .not. cline%defined('lp') ) call cline%set('lp', 2.5)
         call xtseries_ctf_estimate%execute(cline)
+    case('detect_atoms')
+        call xdetect_atoms%execute(cline)
+    case('compare_nano')
+        call xcompare_nano%execute(cline)
 
     ! SYSTEM INTERACTION PROGRAMS
 
