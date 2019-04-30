@@ -44,6 +44,7 @@ type(cluster_cavgs_commander)  :: xcluster_cavgs
 type(symaxis_search_commander) :: xsymsrch
 type(symmetry_test_commander)  :: xsymtst
 type(symmetrize_map_commander) :: xsymmetrize_map
+type(dock_volpair_commander)   :: xdock_volpair
 type(postprocess_commander)    :: xpostprocess
 
 ! IMAGE PROCESSING PROGRAMS
@@ -174,6 +175,9 @@ select case(prg)
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
         if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call xsymmetrize_map%execute(cline)
+    case( 'dock_volpair' )
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        call xdock_volpair%execute(cline)
     case( 'postprocess' )
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call xpostprocess%execute(cline)

@@ -60,7 +60,6 @@ type(check_nptcls_commander)          :: xcheck_nptcls
 type(postprocess_commander)           :: xpostprocess   ! DUPLICATED
 type(reproject_commander)             :: xreproject     ! DUPLICATED
 type(volume_smat_commander)           :: xvolume_smat
-type(dock_volpair_commander)          :: xdock_volpair
 type(automask_commander)              :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
@@ -589,22 +588,6 @@ select case(prg)
         keys_optional(2) = 'hp'
         call cline%parse_oldschool(keys_required(:4), keys_optional(:2))
         call xvolume_smat%execute(cline)
-    case( 'dock_volpair' )
-        ! for docking a pair of volumes. vol1 is reference and vol2 target
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'vol2'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'lpstart'
-        keys_required(5) = 'lpstop'
-        keys_required(6) = 'msk'
-        keys_required(7) = 'trs'
-        ! set optional keys
-        keys_optional(1) = 'hp'
-        keys_optional(2) = 'outvol'
-        keys_optional(3) = 'dockmode'
-        call cline%parse_oldschool(keys_required(:7), keys_optional(:3))
-        ! set defaults
-        call xdock_volpair%execute(cline)
     case( 'automask' )
         ! for volumetric envelope masking
         keys_required(1) = 'msk'

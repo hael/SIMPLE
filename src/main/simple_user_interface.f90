@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(71)
+type(simple_prg_ptr) :: prg_ptr_array(72)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -78,10 +78,11 @@ type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
+type(simple_program), target :: compare_nano
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
-type(simple_program), target :: compare_nano
+type(simple_program), target :: dock_volpair
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
@@ -250,10 +251,11 @@ contains
         call new_cluster3D_refine
         call new_cluster_cavgs
         call new_convert
+        call new_compare_nano
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
-        call new_compare_nano
+        call new_dock_volpair
         call new_extract
         call new_export_starproject
         call new_filter
@@ -416,14 +418,16 @@ contains
                 ptr2prg => cluster_cavgs
             case('convert')
                 ptr2prg => convert
+            case('compare_nano')
+                ptr2prg => compare_nano
             case('ctf_estimate')
                 ptr2prg => ctf_estimate
             case('ctfops')
                 ptr2prg => ctfops
             case('detect_atoms')
                 ptr2prg => detect_atoms
-            case('compare_nano')
-                ptr2prg => compare_nano
+            case('dock_volpair')
+                ptr2prg => dock_volpair
             case('extract')
                 ptr2prg => extract
             case('export_starproject')
@@ -582,9 +586,10 @@ contains
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') convert%name
+        write(logfhandle,'(A)') compare_nano%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') detect_atoms%name
-        write(logfhandle,'(A)') compare_nano%name
+        write(logfhandle,'(A)') dock_volpair%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
@@ -1121,6 +1126,31 @@ contains
         ! <empty>
     end subroutine new_convert
 
+    subroutine new_compare_nano
+        ! PROGRAM SPECIFICATION
+        call compare_nano%new(&
+        &'compare_nano', &                                   ! name
+        &'Compare a pair of nanoparticle atomic-resolution maps',& ! descr_short
+        &'is a program for providing statistics of differences between pairs of nanoparticle atomic-resolution maps',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &2, 0, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call compare_nano%set_input('img_ios', 2, 'vol2', 'file', 'Volume', '2nd Nanoparticle volume to compare', &
+        & 'input volume e.g. vol.mrc', .true., '')        ! search controls
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        !call compare_nano%set_input('comp_ctrls', 1, nthr) to change if it works
+    end subroutine new_compare_nano
+
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION
         call ctf_estimate%new(&
@@ -1188,11 +1218,11 @@ contains
     subroutine new_detect_atoms
         ! PROGRAM SPECIFICATION
         call detect_atoms%new(&
-        &'detect_atoms', &                                   ! name
-        &'Detect atoms in nanoparticle vol',&                ! descr_short
-        &'is a program for identify atoms in nanoparticle vols and dump statistics',& ! descr long
-        &'simple_exec',&                                     ! executable
-        &1, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &'detect_atoms', &                                      ! name
+        &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
+        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and provide statistics',& ! descr long
+        &'simple_exec',&                                        ! executable
+        &1, 1, 0, 0, 0, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call detect_atoms%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
@@ -1211,30 +1241,37 @@ contains
         !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
     end subroutine new_detect_atoms
 
-    subroutine new_compare_nano
+    subroutine new_dock_volpair
         ! PROGRAM SPECIFICATION
-        call compare_nano%new(&
-        &'compare_nano', &                                   ! name
-        &'Compare nanoparticle',&                ! descr_short
-        &'is a program for calculate the rmsd between atomic model of a symmetric nanoparticle and asymetric',& ! descr long
-        &'simple_exec',&                                     ! executable
-        &2, 0, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        call dock_volpair%new(&
+        &'dock_volpair', &                              ! name
+        &'Dock a pair of volumes',&                     ! descr_short
+        &'is a program for docking a pair of volumes',& ! descr long
+        &'simple_exec',&                                ! executable
+        &3, 1, 0, 2, 3, 1, 1, .false.)                  ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
-        & 'input volume e.g. vol.mrc', .true., '')
+        call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
+        & 'input reference volume e.g. vol1.mrc', .true., '')
+        call dock_volpair%set_input('img_ios', 2, 'vol1', 'file', 'Volume', 'Target volume', &
+        & 'input target volume e.g. vol2.mrc', .true., '')
+        call dock_volpair%set_input('img_ios', 3, outvol)
         ! parameter input/output
-        call compare_nano%set_input('img_ios', 2, 'vol2', 'file', 'Volume', '2nd Nanoparticle volume to compare', &
-        & 'input volume e.g. vol.mrc', .true., '')        ! search controls
-        ! <empty>
+        call dock_volpair%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
+        ! search controls
+        call dock_volpair%set_input('srch_ctrls', 1, trs)
+        call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
         ! filter controls
-        ! <empty>
+        call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)
+        call dock_volpair%set_input('filt_ctrls', 2, 'lstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
+        call dock_volpair%set_input('filt_ctrls', 3, hp)
         ! mask controls
-        ! <empty>
-        !call compare_nano%set_input('comp_ctrls', 1, nthr) to change if it works
-    end subroutine new_compare_nano
+        call dock_volpair%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call dock_volpair%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_dock_volpair
 
     subroutine new_extract
         ! PROGRAM SPECIFICATION
