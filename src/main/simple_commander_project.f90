@@ -12,7 +12,7 @@ implicit none
 public :: project2txt_commander
 public :: txt2project_commander
 public :: print_project_info_commander
-public :: report_selection_commander
+public :: selection_commander
 public :: print_project_vals_commander
 public :: print_project_field_commander
 public :: new_project_commander
@@ -47,10 +47,10 @@ type, extends(commander_base) :: print_project_field_commander
   contains
     procedure :: execute      => exec_print_project_field
 end type print_project_field_commander
-type, extends(commander_base) :: report_selection_commander
+type, extends(commander_base) :: selection_commander
   contains
-    procedure :: execute      => exec_report_selection
-end type report_selection_commander
+    procedure :: execute      => exec_selection
+end type selection_commander
 type, extends(commander_base) :: new_project_commander
   contains
     procedure :: execute      => exec_new_project
@@ -236,9 +236,9 @@ contains
         call spproj%kill
     end subroutine exec_print_project_field
 
-    subroutine exec_report_selection( self, cline )
+    subroutine exec_selection( self, cline )
         use simple_sp_project, only: sp_project, oritype2segment
-        class(report_selection_commander), intent(inout) :: self
+        class(selection_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters)                :: params
         type(sp_project)                :: spproj
@@ -262,7 +262,7 @@ contains
         if( noris /= n_lines )then
             write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
             write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
-            THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_report_selection')
+            THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
             return
         endif
         ! updates relevant segments
@@ -293,11 +293,11 @@ contains
                 call spproj%os_ptcl2D%set_all('state', real(states))
                 call spproj%os_ptcl3D%set_all('state', real(states))
             case DEFAULT
-                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_report_selection')
+                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
         end select
         ! final full write
         call spproj%write(params%projfile)
-    end subroutine exec_report_selection
+    end subroutine exec_selection
 
     !> for creating a new project
     subroutine exec_new_project( self, cline )

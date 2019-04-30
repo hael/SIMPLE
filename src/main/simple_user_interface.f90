@@ -67,7 +67,7 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(72)
+type(simple_prg_ptr) :: prg_ptr_array(73)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -124,7 +124,7 @@ type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
 type(simple_program), target :: refine3D_init
 type(simple_program), target :: replace_project_field
-type(simple_program), target :: report_selection
+type(simple_program), target :: selection
 type(simple_program), target :: reproject
 type(simple_program), target :: scale
 type(simple_program), target :: scale_project
@@ -298,7 +298,7 @@ contains
         call new_refine3D
         call new_refine3D_init
         call new_replace_project_field
-        call new_report_selection
+        call new_selection
         call new_scale
         call new_scale_project
         call new_select_
@@ -335,66 +335,67 @@ contains
         prg_ptr_array(10)%ptr2prg => ctfops
         prg_ptr_array(11)%ptr2prg => detect_atoms
         prg_ptr_array(12)%ptr2prg => compare_nano
-        prg_ptr_array(13)%ptr2prg => extract
-        prg_ptr_array(14)%ptr2prg => export_starproject
-        prg_ptr_array(15)%ptr2prg => filter
-        prg_ptr_array(16)%ptr2prg => fsc
-        prg_ptr_array(17)%ptr2prg => gen_pspecs_and_thumbs
-        prg_ptr_array(18)%ptr2prg => info_image
-        prg_ptr_array(19)%ptr2prg => info_stktab
-        prg_ptr_array(20)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(21)%ptr2prg => import_boxes
-        prg_ptr_array(22)%ptr2prg => import_cavgs
-        prg_ptr_array(23)%ptr2prg => import_movies
-        prg_ptr_array(24)%ptr2prg => import_particles
-        prg_ptr_array(25)%ptr2prg => import_starproject
-        prg_ptr_array(26)%ptr2prg => local_resolution
-        prg_ptr_array(27)%ptr2prg => local_resolution2D
-        prg_ptr_array(28)%ptr2prg => make_cavgs
-        prg_ptr_array(29)%ptr2prg => make_oris
-        prg_ptr_array(30)%ptr2prg => mask
-        prg_ptr_array(31)%ptr2prg => mkdir_
-        prg_ptr_array(32)%ptr2prg => motion_correct
-        prg_ptr_array(33)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(34)%ptr2prg => new_project
-        prg_ptr_array(35)%ptr2prg => normalize_
-        prg_ptr_array(36)%ptr2prg => orisops
-        prg_ptr_array(37)%ptr2prg => oristats
-        prg_ptr_array(38)%ptr2prg => pick
-        prg_ptr_array(39)%ptr2prg => pick_extract_stream
-        prg_ptr_array(40)%ptr2prg => postprocess
-        prg_ptr_array(41)%ptr2prg => preprocess
-        prg_ptr_array(42)%ptr2prg => preprocess_stream
-        prg_ptr_array(43)%ptr2prg => print_fsc
-        prg_ptr_array(44)%ptr2prg => print_magic_boxes
-        prg_ptr_array(45)%ptr2prg => print_project_info
-        prg_ptr_array(46)%ptr2prg => print_project_field
-        prg_ptr_array(47)%ptr2prg => prune_project
-        prg_ptr_array(48)%ptr2prg => pspec_stats
-        prg_ptr_array(49)%ptr2prg => reproject
-        prg_ptr_array(50)%ptr2prg => reconstruct3D
-        prg_ptr_array(51)%ptr2prg => reextract
-        prg_ptr_array(52)%ptr2prg => refine3D
-        prg_ptr_array(53)%ptr2prg => refine3D_init
-        prg_ptr_array(54)%ptr2prg => replace_project_field
-        prg_ptr_array(55)%ptr2prg => report_selection
-        prg_ptr_array(56)%ptr2prg => scale
-        prg_ptr_array(57)%ptr2prg => scale_project
-        prg_ptr_array(58)%ptr2prg => select_
-        prg_ptr_array(59)%ptr2prg => shift
-        prg_ptr_array(60)%ptr2prg => simulate_movie
-        prg_ptr_array(61)%ptr2prg => simulate_noise
-        prg_ptr_array(62)%ptr2prg => simulate_particles
-        prg_ptr_array(63)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(64)%ptr2prg => stack
-        prg_ptr_array(65)%ptr2prg => stackops
-        prg_ptr_array(66)%ptr2prg => symaxis_search
-        prg_ptr_array(67)%ptr2prg => symmetrize_map
-        prg_ptr_array(68)%ptr2prg => symmetry_test
-        prg_ptr_array(69)%ptr2prg => tseries_track
-        prg_ptr_array(70)%ptr2prg => update_project
-        prg_ptr_array(71)%ptr2prg => vizoris
-        prg_ptr_array(72)%ptr2prg => volops
+        prg_ptr_array(13)%ptr2prg => dock_volpair
+        prg_ptr_array(14)%ptr2prg => extract
+        prg_ptr_array(15)%ptr2prg => export_starproject
+        prg_ptr_array(16)%ptr2prg => filter
+        prg_ptr_array(17)%ptr2prg => fsc
+        prg_ptr_array(18)%ptr2prg => gen_pspecs_and_thumbs
+        prg_ptr_array(19)%ptr2prg => info_image
+        prg_ptr_array(20)%ptr2prg => info_stktab
+        prg_ptr_array(21)%ptr2prg => initial_3Dmodel
+        prg_ptr_array(22)%ptr2prg => import_boxes
+        prg_ptr_array(23)%ptr2prg => import_cavgs
+        prg_ptr_array(24)%ptr2prg => import_movies
+        prg_ptr_array(25)%ptr2prg => import_particles
+        prg_ptr_array(26)%ptr2prg => import_starproject
+        prg_ptr_array(27)%ptr2prg => local_resolution
+        prg_ptr_array(28)%ptr2prg => local_resolution2D
+        prg_ptr_array(29)%ptr2prg => make_cavgs
+        prg_ptr_array(30)%ptr2prg => make_oris
+        prg_ptr_array(31)%ptr2prg => mask
+        prg_ptr_array(32)%ptr2prg => mkdir_
+        prg_ptr_array(33)%ptr2prg => motion_correct
+        prg_ptr_array(34)%ptr2prg => motion_correct_tomo
+        prg_ptr_array(35)%ptr2prg => new_project
+        prg_ptr_array(36)%ptr2prg => normalize_
+        prg_ptr_array(37)%ptr2prg => orisops
+        prg_ptr_array(38)%ptr2prg => oristats
+        prg_ptr_array(39)%ptr2prg => pick
+        prg_ptr_array(40)%ptr2prg => pick_extract_stream
+        prg_ptr_array(41)%ptr2prg => postprocess
+        prg_ptr_array(42)%ptr2prg => preprocess
+        prg_ptr_array(43)%ptr2prg => preprocess_stream
+        prg_ptr_array(44)%ptr2prg => print_fsc
+        prg_ptr_array(45)%ptr2prg => print_magic_boxes
+        prg_ptr_array(46)%ptr2prg => print_project_info
+        prg_ptr_array(47)%ptr2prg => print_project_field
+        prg_ptr_array(48)%ptr2prg => prune_project
+        prg_ptr_array(49)%ptr2prg => pspec_stats
+        prg_ptr_array(50)%ptr2prg => reproject
+        prg_ptr_array(51)%ptr2prg => reconstruct3D
+        prg_ptr_array(52)%ptr2prg => reextract
+        prg_ptr_array(53)%ptr2prg => refine3D
+        prg_ptr_array(54)%ptr2prg => refine3D_init
+        prg_ptr_array(55)%ptr2prg => replace_project_field
+        prg_ptr_array(56)%ptr2prg => selection
+        prg_ptr_array(57)%ptr2prg => scale
+        prg_ptr_array(58)%ptr2prg => scale_project
+        prg_ptr_array(59)%ptr2prg => select_
+        prg_ptr_array(60)%ptr2prg => shift
+        prg_ptr_array(61)%ptr2prg => simulate_movie
+        prg_ptr_array(62)%ptr2prg => simulate_noise
+        prg_ptr_array(63)%ptr2prg => simulate_particles
+        prg_ptr_array(64)%ptr2prg => simulate_subtomogram
+        prg_ptr_array(65)%ptr2prg => stack
+        prg_ptr_array(66)%ptr2prg => stackops
+        prg_ptr_array(67)%ptr2prg => symaxis_search
+        prg_ptr_array(68)%ptr2prg => symmetrize_map
+        prg_ptr_array(69)%ptr2prg => symmetry_test
+        prg_ptr_array(70)%ptr2prg => tseries_track
+        prg_ptr_array(71)%ptr2prg => update_project
+        prg_ptr_array(72)%ptr2prg => vizoris
+        prg_ptr_array(73)%ptr2prg => volops
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
     end subroutine set_prg_ptr_array
 
@@ -512,8 +513,8 @@ contains
                 ptr2prg => refine3D_init
             case('replace_project_field')
                 ptr2prg => replace_project_field
-            case('report_selection')
-                ptr2prg => report_selection
+            case('selection')
+                ptr2prg => selection
             case('scale')
                 ptr2prg => scale
             case('scale_project')
@@ -617,7 +618,7 @@ contains
         write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
         write(logfhandle,'(A)') replace_project_field%name
-        write(logfhandle,'(A)') report_selection%name
+        write(logfhandle,'(A)') selection%name
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
         write(logfhandle,'(A)') shift%name
@@ -2765,10 +2766,10 @@ contains
         ! <empty>
     end subroutine new_replace_project_field
 
-    subroutine new_report_selection
+    subroutine new_selection
         ! PROGRAM SPECIFICATION
-        call report_selection%new(&
-        &'report_selection',&                                                           ! name
+        call selection%new(&
+        &'selection',&                                                           ! name
         &'Reports external selection through state 0/1 tags to project',&               ! descr_short
         &'is a program for reporting external (GUI) selections to the SIMPLE project',& ! descr_long
         &'simple_exec',&                                                                ! executable
@@ -2777,9 +2778,9 @@ contains
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call report_selection%set_input('parm_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
+        call selection%set_input('parm_ios', 1, 'infile', 'file', 'File with selection state (0/1) flags', 'Plain text file (.txt) with selection state (0/1) flags',&
         &'give .txt selection file', .true., '')
-        call report_selection%set_input('parm_ios', 2, oritype)
+        call selection%set_input('parm_ios', 2, oritype)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2790,7 +2791,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_report_selection
+    end subroutine new_selection
 
     subroutine new_scale
         ! PROGRAM SPECIFICATION
