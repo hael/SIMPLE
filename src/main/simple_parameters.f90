@@ -316,7 +316,7 @@ type :: parameters
     real    :: dffar=4.
     real    :: dferr=1.            !< defocus error(in microns){1.0}
     real    :: dfmax=5.0           !< maximum expected defocus(in microns)
-    real    :: dfmin=0.5           !< minimum expected defocus(in microns)
+    real    :: dfmin=0.3           !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
     real    :: dfstep=0.05         !< defocus step size for grid search
     real    :: dose_rate=30.0      !< dose rate(in e/A2/s)
