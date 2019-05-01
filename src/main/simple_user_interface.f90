@@ -67,7 +67,9 @@ type simple_prg_ptr
 end type simple_prg_ptr
 
 ! array of pointers to all programs
-type(simple_prg_ptr) :: prg_ptr_array(73)
+integer, parameter   :: NMAX_PTRS  = 200
+integer              :: n_prg_ptrs = 0
+type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare protected program specifications here
 type(simple_program), target :: center
@@ -323,80 +325,90 @@ contains
     end subroutine make_user_interface
 
     subroutine set_prg_ptr_array
-        prg_ptr_array(1)%ptr2prg  => center
-        prg_ptr_array(2)%ptr2prg  => cleanup2D
-        prg_ptr_array(3)%ptr2prg  => cluster2D
-        prg_ptr_array(4)%ptr2prg  => cluster2D_stream
-        prg_ptr_array(5)%ptr2prg  => cluster3D
-        prg_ptr_array(6)%ptr2prg  => cluster3D_refine
-        prg_ptr_array(7)%ptr2prg  => cluster_cavgs
-        prg_ptr_array(8)%ptr2prg  => convert
-        prg_ptr_array(9)%ptr2prg  => ctf_estimate
-        prg_ptr_array(10)%ptr2prg => ctfops
-        prg_ptr_array(11)%ptr2prg => detect_atoms
-        prg_ptr_array(12)%ptr2prg => compare_nano
-        prg_ptr_array(13)%ptr2prg => dock_volpair
-        prg_ptr_array(14)%ptr2prg => extract
-        prg_ptr_array(15)%ptr2prg => export_starproject
-        prg_ptr_array(16)%ptr2prg => filter
-        prg_ptr_array(17)%ptr2prg => fsc
-        prg_ptr_array(18)%ptr2prg => gen_pspecs_and_thumbs
-        prg_ptr_array(19)%ptr2prg => info_image
-        prg_ptr_array(20)%ptr2prg => info_stktab
-        prg_ptr_array(21)%ptr2prg => initial_3Dmodel
-        prg_ptr_array(22)%ptr2prg => import_boxes
-        prg_ptr_array(23)%ptr2prg => import_cavgs
-        prg_ptr_array(24)%ptr2prg => import_movies
-        prg_ptr_array(25)%ptr2prg => import_particles
-        prg_ptr_array(26)%ptr2prg => import_starproject
-        prg_ptr_array(27)%ptr2prg => local_resolution
-        prg_ptr_array(28)%ptr2prg => local_resolution2D
-        prg_ptr_array(29)%ptr2prg => make_cavgs
-        prg_ptr_array(30)%ptr2prg => make_oris
-        prg_ptr_array(31)%ptr2prg => mask
-        prg_ptr_array(32)%ptr2prg => mkdir_
-        prg_ptr_array(33)%ptr2prg => motion_correct
-        prg_ptr_array(34)%ptr2prg => motion_correct_tomo
-        prg_ptr_array(35)%ptr2prg => new_project
-        prg_ptr_array(36)%ptr2prg => normalize_
-        prg_ptr_array(37)%ptr2prg => orisops
-        prg_ptr_array(38)%ptr2prg => oristats
-        prg_ptr_array(39)%ptr2prg => pick
-        prg_ptr_array(40)%ptr2prg => pick_extract_stream
-        prg_ptr_array(41)%ptr2prg => postprocess
-        prg_ptr_array(42)%ptr2prg => preprocess
-        prg_ptr_array(43)%ptr2prg => preprocess_stream
-        prg_ptr_array(44)%ptr2prg => print_fsc
-        prg_ptr_array(45)%ptr2prg => print_magic_boxes
-        prg_ptr_array(46)%ptr2prg => print_project_info
-        prg_ptr_array(47)%ptr2prg => print_project_field
-        prg_ptr_array(48)%ptr2prg => prune_project
-        prg_ptr_array(49)%ptr2prg => pspec_stats
-        prg_ptr_array(50)%ptr2prg => reproject
-        prg_ptr_array(51)%ptr2prg => reconstruct3D
-        prg_ptr_array(52)%ptr2prg => reextract
-        prg_ptr_array(53)%ptr2prg => refine3D
-        prg_ptr_array(54)%ptr2prg => refine3D_init
-        prg_ptr_array(55)%ptr2prg => replace_project_field
-        prg_ptr_array(56)%ptr2prg => selection
-        prg_ptr_array(57)%ptr2prg => scale
-        prg_ptr_array(58)%ptr2prg => scale_project
-        prg_ptr_array(59)%ptr2prg => select_
-        prg_ptr_array(60)%ptr2prg => shift
-        prg_ptr_array(61)%ptr2prg => simulate_movie
-        prg_ptr_array(62)%ptr2prg => simulate_noise
-        prg_ptr_array(63)%ptr2prg => simulate_particles
-        prg_ptr_array(64)%ptr2prg => simulate_subtomogram
-        prg_ptr_array(65)%ptr2prg => stack
-        prg_ptr_array(66)%ptr2prg => stackops
-        prg_ptr_array(67)%ptr2prg => symaxis_search
-        prg_ptr_array(68)%ptr2prg => symmetrize_map
-        prg_ptr_array(69)%ptr2prg => symmetry_test
-        prg_ptr_array(70)%ptr2prg => tseries_track
-        prg_ptr_array(71)%ptr2prg => update_project
-        prg_ptr_array(72)%ptr2prg => vizoris
-        prg_ptr_array(73)%ptr2prg => volops
+        n_prg_ptrs = 0
+        call push2prg_ptr_array(center)
+        call push2prg_ptr_array(cleanup2D)
+        call push2prg_ptr_array(cluster2D)
+        call push2prg_ptr_array(cluster2D_stream)
+        call push2prg_ptr_array(cluster3D)
+        call push2prg_ptr_array(cluster3D_refine)
+        call push2prg_ptr_array(cluster_cavgs)
+        call push2prg_ptr_array(convert)
+        call push2prg_ptr_array(ctf_estimate)
+        call push2prg_ptr_array(ctfops)
+        call push2prg_ptr_array(detect_atoms)
+        call push2prg_ptr_array(compare_nano)
+        call push2prg_ptr_array(dock_volpair)
+        call push2prg_ptr_array(extract)
+        call push2prg_ptr_array(export_starproject)
+        call push2prg_ptr_array(filter)
+        call push2prg_ptr_array(fsc)
+        call push2prg_ptr_array(gen_pspecs_and_thumbs)
+        call push2prg_ptr_array(info_image)
+        call push2prg_ptr_array(info_stktab)
+        call push2prg_ptr_array(initial_3Dmodel)
+        call push2prg_ptr_array(import_boxes)
+        call push2prg_ptr_array(import_cavgs)
+        call push2prg_ptr_array(import_movies)
+        call push2prg_ptr_array(import_particles)
+        call push2prg_ptr_array(import_starproject)
+        call push2prg_ptr_array(local_resolution)
+        call push2prg_ptr_array(local_resolution2D)
+        call push2prg_ptr_array(make_cavgs)
+        call push2prg_ptr_array(make_oris)
+        call push2prg_ptr_array(mask)
+        call push2prg_ptr_array(mkdir_)
+        call push2prg_ptr_array(motion_correct)
+        call push2prg_ptr_array(motion_correct_tomo)
+        call push2prg_ptr_array(new_project)
+        call push2prg_ptr_array(normalize_)
+        call push2prg_ptr_array(orisops)
+        call push2prg_ptr_array(oristats)
+        call push2prg_ptr_array(pick)
+        call push2prg_ptr_array(pick_extract_stream)
+        call push2prg_ptr_array(postprocess)
+        call push2prg_ptr_array(preprocess)
+        call push2prg_ptr_array(preprocess_stream)
+        call push2prg_ptr_array(print_fsc)
+        call push2prg_ptr_array(print_magic_boxes)
+        call push2prg_ptr_array(print_project_info)
+        call push2prg_ptr_array(print_project_field)
+        call push2prg_ptr_array(prune_project)
+        call push2prg_ptr_array(pspec_stats)
+        call push2prg_ptr_array(reproject)
+        call push2prg_ptr_array(reconstruct3D)
+        call push2prg_ptr_array(reextract)
+        call push2prg_ptr_array(refine3D)
+        call push2prg_ptr_array(refine3D_init)
+        call push2prg_ptr_array(replace_project_field)
+        call push2prg_ptr_array(selection)
+        call push2prg_ptr_array(scale)
+        call push2prg_ptr_array(scale_project)
+        call push2prg_ptr_array(select_)
+        call push2prg_ptr_array(shift)
+        call push2prg_ptr_array(simulate_movie)
+        call push2prg_ptr_array(simulate_noise)
+        call push2prg_ptr_array(simulate_particles)
+        call push2prg_ptr_array(simulate_subtomogram)
+        call push2prg_ptr_array(stack)
+        call push2prg_ptr_array(stackops)
+        call push2prg_ptr_array(symaxis_search)
+        call push2prg_ptr_array(symmetrize_map)
+        call push2prg_ptr_array(symmetry_test)
+        call push2prg_ptr_array(tseries_track)
+        call push2prg_ptr_array(update_project)
+        call push2prg_ptr_array(vizoris)
+        call push2prg_ptr_array(volops)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
+
+        contains
+
+            subroutine push2prg_ptr_array( prg )
+                type(simple_program), target :: prg
+                n_prg_ptrs = n_prg_ptrs + 1
+                prg_ptr_array(n_prg_ptrs)%ptr2prg => prg
+            end subroutine push2prg_ptr_array
+
     end subroutine set_prg_ptr_array
 
     subroutine get_prg_ptr( which_program, ptr2prg )
@@ -3667,7 +3679,7 @@ contains
         type(simple_program), pointer :: ptr => null()
         ! init UI descriptions
         call make_user_interface
-        do i=1,size(prg_ptr_array)
+        do i=1,n_prg_ptrs
             ptr => prg_ptr_array(i)%ptr2prg
             write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
             write(logfhandle, '(a)') '\label{'      // ptr%name // '}'
@@ -3816,7 +3828,7 @@ contains
         call json%initialize()
         ! create array of program entries
         call json%create_array(all_programs, 'SIMPLE User Interface')
-        do iprg=1,size(prg_ptr_array)
+        do iprg=1,n_prg_ptrs
             call create_program_entry
             call json%add(all_programs, program_entry)
         end do
