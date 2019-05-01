@@ -77,7 +77,6 @@ contains
         call chdict%push('discrete',      'discrete(yes|no){no}')
         call chdict%push('diverse',       'diverse or not flag (yes|no){no}')
         call chdict%push('doclist',       'list of oritabs for different states')
-        call chdict%push('dockmode',      'mode of docking(rot|shift|rotshift|refine){rotshift}')
         call chdict%push('doprint',       'whether to print(yes|no){no}')
         call chdict%push('dose_rate',     'dose rate(in e/A2/s)')
         call chdict%push('dynlp',         'automatic resolution limit update(yes|no){yes}')

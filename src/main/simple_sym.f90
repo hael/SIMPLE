@@ -31,6 +31,7 @@ type sym
     procedure          :: get_symori
     procedure          :: get_nsubgrp
     procedure          :: get_subgrp
+    procedure          :: has_subgrp
     procedure          :: get_subgrp_descr
     procedure          :: get_all_subgrps_descr
     ! setters
@@ -216,6 +217,22 @@ contains
         endif
         symobj = sym(self%subgrps(i))
     end function get_subgrp
+
+    function has_subgrp( self, subgrp ) result( has )
+        class(sym),       intent(in) :: self
+        character(len=*), intent(in) :: subgrp
+        integer :: i, n
+        logical :: has
+        has = .false.
+        n   = size(self%subgrps)
+        if( n < 1 ) return
+        do i=1,n
+            if( trim(self%subgrps(i)) .eq. trim(subgrp) )then
+                has = .true.
+                return
+            endif
+        end do
+    end function has_subgrp
 
     !>  \brief  is a getter
     function get_subgrp_descr( self, i )result( str_descr )

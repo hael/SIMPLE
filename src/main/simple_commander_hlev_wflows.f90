@@ -489,7 +489,7 @@ contains
         real                  :: iter, smpd_target, lplims(2), msk, orig_msk, orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
-        logical               :: srch4symaxis, do_autoscale, do_eo
+        logical               :: srch4symaxis, do_autoscale, do_eo, symran_before_refine
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
         ! auto-scaling prep
@@ -511,11 +511,22 @@ contains
         pgrp_init    = trim(params%pgrp_start)
         pgrp_refine  = trim(params%pgrp)
         srch4symaxis = trim(pgrp_refine) .ne. trim(pgrp_init)
-        if( pgrp_init.ne.'c1' )then
+        symran_before_refine = .false.
+        if( pgrp_init.ne.'c1' .or. pgrp_refine.ne.'c1' )then
             se1 = sym(pgrp_init)
             se2 = sym(pgrp_refine)
-            if(se1%get_nsym() > se2%get_nsym())&
-                &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
+            if(se1%get_nsym() > se2%get_nsym())then
+                ! ensure se2 is a subgroup of se1
+                if( .not. se1%has_subgrp(pgrp_refine) )&
+                    &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
+                ! set flag for symmetry randomisation before refinmement
+                ! in case we are moving from a higher to lower group
+                symran_before_refine = .true.
+            else if(se2%get_nsym() > se1%get_nsym())then
+                ! ensure se1 is a subgroup of se2
+                if( .not. se2%has_subgrp(pgrp_init) )&
+                    &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
+            endif
             call se1%kill
             call se2%kill
         endif
