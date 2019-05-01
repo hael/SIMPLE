@@ -153,7 +153,7 @@ contains
                 endif
                 ! low-pass limit equals interpolation limit for correlation search
                 params_glob%kstop = params_glob%kfromto(2)
-                if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) params_glob%kfromto(2) = k_nyq
+                if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
                 ! set high-pass Fourier index limit
                 params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, &
                     params_glob%boxmatch, params_glob%smpd))
@@ -210,7 +210,7 @@ contains
             if( lpstart_find > params_glob%kfromto(2) ) params_glob%kfromto(2) = lpstart_find
         endif
         params_glob%kstop = params_glob%kfromto(2)
-        if( params_glob%cc_objfun .eq. OBJFUN_EUCLID) params_glob%kfromto(2) = k_nyq
+        if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
         call build_glob%spproj_field%set_all2single('lp',lplim)
         DebugPrint  '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range2D
@@ -619,9 +619,9 @@ contains
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
         ! Volume filtering
-        filtsz    = build_glob%projfrcs%get_filtsz()
-        subfiltsz = build_glob%img_match%get_filtsz()
         if( params_glob%l_eo )then
+            filtsz    = build_glob%projfrcs%get_filtsz()
+            subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%l_pssnr )then

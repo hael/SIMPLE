@@ -534,7 +534,7 @@ contains
     subroutine set_ref_optlp( self, iref, optlp )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iref
-        real,                    intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kfromto(2))
+        real,                    intent(in)    :: optlp(params_glob%kfromto(1):params_glob%kstop)
         self%ref_optlp(:,iref) = optlp(:)
     end subroutine set_ref_optlp
 
@@ -702,12 +702,12 @@ contains
         real    :: pw
         integer :: k
         if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz)
                 pft(:,k) = pft(:,k) * sqrt(self%ref_optlp(k,iref) / pw)
             enddo
         else
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz)
                 pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
             enddo
@@ -721,12 +721,12 @@ contains
         real(dp) :: pw
         integer  :: k
         if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
                 pft(:,k) = pft(:,k) * dsqrt(real(self%ref_optlp(k,iref),kind=dp) / pw)
             enddo
         else
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
                 pft(:,k) = pft(:,k) * (real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw))
             enddo
@@ -741,14 +741,14 @@ contains
         real(dp) :: w, pw
         integer  :: k
         if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
                 w  = dsqrt( real(self%ref_optlp(k,iref),kind=dp) / pw)
                 pft(:,k)    = w * pft(:,k)
                 dpft(:,k,:) = w * dpft(:,k,:)
             enddo
         else
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
                 w  = real(self%ref_optlp(k,iref),kind=dp) / dsqrt(pw)
                 pft(:,k)    = w * pft(:,k)
@@ -906,7 +906,7 @@ contains
         endif
         pft_ptcl = self%pfts_ptcls(:,:,i)
         if( params_glob%l_pssnr )then
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
                 pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
                 ! shell normalization
@@ -925,7 +925,7 @@ contains
             pw_ref  = sum(csq(pft_ref), dim=1) / real(self%pftsz)
             ! power spectrum difference
             rot = merge(irot - self%pftsz, irot, irot >= self%pftsz + 1)
-            do k = params_glob%kfromto(1), params_glob%kfromto(2)
+            do k = params_glob%kfromto(1), params_glob%kstop
                 if( irot == 1 )then
                     pw_diff(k) = sum(csq(pft_ref(:,k) - pft_ptcl(:,k)))
                 else if( irot <= self%pftsz )then
@@ -941,12 +941,12 @@ contains
             end do
             ! fitting of difference
             pw_diff_fit = pw_diff
-            call SavitzkyGolay_filter(params_glob%kfromto(2)-params_glob%kfromto(1)+1, pw_diff_fit)
+            call SavitzkyGolay_filter(params_glob%kstop-params_glob%kfromto(1)+1, pw_diff_fit)
             where( pw_diff_fit <= 0.) pw_diff_fit = pw_diff                 ! takes care of range
             pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(1)+2) =& ! to avoid left border effect
                 &pw_diff(params_glob%kfromto(1):params_glob%kfromto(1)+2)
             ! shell normalize & filter particle
-            do k=params_glob%kfromto(1),params_glob%kfromto(2)
+            do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
                 pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
                 ! shell normalization
@@ -1573,6 +1573,7 @@ contains
                 call self%gencorrs_cc_1(iref, iptcl, cc)
             case(OBJFUN_EUCLID)
                 if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
+                    !print *,iptcl,self%pinds(iptcl),self%sigma2_exists_msk(self%pinds(iptcl))
                     call self%gencorrs_euclid_1(iref, iptcl, cc)
                 else
                     call self%gencorrs_cc_1(iref, iptcl, cc)
@@ -1590,6 +1591,7 @@ contains
                 call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
             case(OBJFUN_EUCLID)
                 if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
+                    !print *,iptcl,self%pinds(iptcl),self%sigma2_exists_msk(self%pinds(iptcl))
                     call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
                 else
                     call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
@@ -2212,7 +2214,7 @@ contains
         real(sp),                intent(out)   :: sigma_contrib(params_glob%kfromto(1):params_glob%kfromto(2))
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: argmat(:,:)
-        integer  :: i, ithr, ik
+        integer  :: i, ithr, k
         i       =  self%pinds(iptcl)
         ithr    =  omp_get_thread_num() + 1
         pft_ref => self%heap_vars(ithr)%pft_ref
@@ -2230,8 +2232,8 @@ contains
         else
             pft_ref = pft_ref * shmat
         endif
-        do ik = params_glob%kfromto(1), params_glob%kfromto(2)
-            sigma_contrib(ik) = self%calc_euclidk_for_rot(pft_ref, i, ik, irot)
+        do k = params_glob%kfromto(1), params_glob%kfromto(2)
+            sigma_contrib(k) = self%calc_euclidk_for_rot(pft_ref, i, k, irot)
         end do
         sigma_contrib = sigma_contrib / real(self%nrots)
     end subroutine gencorr_sigma_contrib

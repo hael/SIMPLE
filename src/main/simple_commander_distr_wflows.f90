@@ -905,10 +905,21 @@ contains
         character(len=STDLEN)     :: str_state, fsc_file
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd
-        integer :: i, state, iter, iostat, box, nfiles, niters, niter4eo
+        integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projection_matching
+        logical :: l_projection_matching, l_switch2euclid, l_continue
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        ! objfun=euclid logics, part 1
+        l_switch2euclid  = .false.
+        if( cline%defined('objfun') )then
+            l_continue = .false.
+            if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
+            if( (trim(cline%get_carg('objfun')).eq.'euclid') .and. .not.l_continue )then
+                l_switch2euclid = .true.
+                call cline%set('objfun','cc')
+            endif
+        endif
+        ! init
         call build%init_params_and_build_spproj(cline, params)
         ! sanity check
         fall_over = .false.
@@ -1028,7 +1039,6 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         l_projection_matching = .false.
-        niter4eo = huge(niter4eo)
         if( have_oris .and. .not.vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
@@ -1060,12 +1070,11 @@ contains
             end select
             if( params%l_eo )then
                 if( .not.cline%defined('lp')) THROW_HARD('LP needs be defined for the first step of projection matching!')
-                niter4eo = 1
-                if( cline%defined('update_frac') ) niter4eo = ceiling(1./params%update_frac)
                 call cline%set('eo','no')
                 call cline_check_3Dconv%set('eo','no')
-                params%eo        = 'no'
-                params%l_eo      = .false.
+                params%eo   = 'no'
+                params%l_eo = .false.
+                call cline%delete('update_frac')
             endif
             call cline%set('refine','greedy_single')
         endif
@@ -1086,6 +1095,13 @@ contains
                 endif
                 call build%spproj%write_segment_inside(params%oritype)
             endif
+        endif
+        ! objfun=euclid logics, part 2
+        iter_switch2euclid = -1
+        if( l_switch2euclid )then
+            iter_switch2euclid = 1
+            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+            call cline%set('needs_sigma','yes')
         endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
@@ -1238,7 +1254,7 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_projection_matching .and. niter4eo == niters )then
+            if( l_projection_matching .and. (niters == 1) )then
                 ! e/o projection matching
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD REFINEMENT'
@@ -1250,6 +1266,13 @@ contains
                 call cline_check_3Dconv%set('eo','yes')
                 call cline%delete('lp')
                 call job_descr%set('eo', 'yes')
+                call job_descr%delete('lp')
+                if( params%l_frac_update )then
+                    call job_descr%set('update_frac', real2str(params%update_frac))
+                    call cline%set('update_frac', params%update_frac)
+                    call cline_check_3Dconv%set('update_frac', params%update_frac)
+                    call cline_volassemble%set('update_frac', params%update_frac)
+                endif
                 ! e/o: reconstruct volumes and partition
                 call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
                 do state = 1,params%nstates
@@ -1268,6 +1291,19 @@ contains
                     call job_descr%set( vol, vol_iter )
                     call cline%set(vol, vol_iter )
                 enddo
+            endif
+            ! objfun=euclid, part 3: actual switch
+            if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+                call cline%set('objfun','euclid')
+                call cline%set('match_filt','no')
+                call job_descr%set('objfun','euclid')
+                call job_descr%set('match_filt','no')
+                call cline_volassemble%set('objfun','euclid')
+                params%objfun    = 'euclid'
+                params%cc_objfun = OBJFUN_EUCLID
+                l_switch2euclid  = .false.
             endif
         end do
         call qsys_cleanup

@@ -304,9 +304,8 @@ contains
 
         ! CALCULATE AND WRITE SIGMAS FOR ML-BASED REFINEMENT
         if ( params_glob%l_needs_sigma ) then
-            call eucl_sigma%calc_and_write_sigmas( build_glob%spproj_field, s3D%o_peaks, ptcl_mask )
+            call eucl_sigma%calc_and_write_sigmas(build_glob%spproj_field, s3D%o_peaks, ptcl_mask)
             call eucl_sigma%kill_ptclsigma2
-            ! call eucl_sigma%kill ! deactivate shell-weighting for now as degrades resolution
         end if
 
         ! UPDATE PARTICLE STATS
@@ -355,6 +354,7 @@ contains
         call pftcc%kill
         call build_glob%vol%kill
         call build_glob%vol_odd%kill
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) call eucl_sigma%kill
         select case(trim(params_glob%refine))
             case('eval')
                 ! nothing to do
@@ -435,7 +435,7 @@ contains
         nrefs             = params_glob%nspace * params_glob%nstates
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
         ! must be done here since params_glob%kfromto is dynamically set
-        if( params_glob%eo .ne. 'no' )then
+        if( params_glob%l_eo )then
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask,&
                 &nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
         else
@@ -629,7 +629,6 @@ contains
                             case DEFAULT
                                 call grid_ptcl(rec_imgs(ibatch), build_glob%pgrpsyms, orientation, s3D%o_peaks(iptcl), ctfvars)
                         end select
-                        call eucl_sigma%unset_sigma2
                     end do
                 end do
                 ! normalise structure factors

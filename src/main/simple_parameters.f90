@@ -49,6 +49,7 @@ type :: parameters
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
+    character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no)
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: neigh='no'           !< neighbourhood refinement(yes|no){no}
     character(len=3)      :: noise_norm ='no'
@@ -518,6 +519,7 @@ contains
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
         call check_carg('msktype',        self%msktype)
+        call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
         call check_carg('noise_norm',     self%noise_norm)
@@ -1339,7 +1341,6 @@ contains
         end select
         ! FILTERS
         ! matched filter and sigma needs flags
-        self%l_needs_sigma = .false.
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
                 self%l_match_filt  = .false.
@@ -1348,6 +1349,11 @@ contains
             case(OBJFUN_CC)
                 self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. self%l_eo
                 self%l_pssnr       = (trim(self%pssnr).eq.'yes') .and. self%l_match_filt
+                self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
+                if( self%l_needs_sigma )then
+                    self%l_match_filt = .false.
+                    self%l_pssnr      = .false.
+                endif
         end select
         ! local resolution for filtering or  not
         self%l_locres = .false.

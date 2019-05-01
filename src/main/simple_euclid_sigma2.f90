@@ -12,9 +12,9 @@ private
 type euclid_sigma2
     private
     real,    allocatable  :: divide_by(:)
-    real,    allocatable  :: sigma2_noise(:,:)
-    real,    allocatable  :: mic_sigma2_noise(:,:)
-    logical, allocatable  :: sigma2_exists_msk(:)
+    real,    allocatable  :: sigma2_noise(:,:)      !< for reading & calculating individual contributions
+    real,    allocatable  :: mic_sigma2_noise(:,:)  !< weighted average for euclidian distance calculation and reconstruction
+    logical, allocatable  :: sigma2_exists_msk(:)   !< particle &
     integer, allocatable  :: pinds(:)
     integer, allocatable  :: micinds(:)
     integer               :: file_header(4) = 0
@@ -39,7 +39,6 @@ contains
     procedure, private :: set_do_divide
     procedure          :: get_do_divide
     procedure          :: set_sigma2
-    procedure          :: unset_sigma2
     procedure          :: get_sigma2
     ! destructor
     procedure          :: kill_ptclsigma2
@@ -62,16 +61,16 @@ contains
             self%divide_by(self%kfromto(1):self%kfromto(2)) )
         call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
         call pftcc_glob%assign_pinds(self%pinds)
-        self%fname             = trim(fname)
-        self%file_header(1)    = params_glob%fromp
-        self%file_header(2)    = params_glob%top
-        self%file_header(3:4)  = self%kfromto
-        self%headsz            = sizeof(self%file_header)
-        self%sigmassz          = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
-        self%do_divide         = .false.
-        self%exists            = .true.
-        self%sigma2_noise      = 0.
-        self%sigma2_exists_msk = .false.
+        self%fname            = trim(fname)
+        self%file_header(1)   = params_glob%fromp
+        self%file_header(2)   = params_glob%top
+        self%file_header(3:4) = self%kfromto
+        self%headsz           = sizeof(self%file_header)
+        self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+        self%sigma2_noise     = 0.
+        self%do_divide          = .false.
+        self%sigma2_exists_msk  = .false.
+        self%exists             = .true.
         eucl_sigma2_glob       => self
     end subroutine new
 
@@ -82,15 +81,18 @@ contains
         class(oris),            intent(inout) :: os
         logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         real(sp) :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        integer  :: fromm, tom, funit, iptcl, addr, pind, imic, micpop
+        real     :: w, sumw
+        integer  :: fromm, tom, funit, iptcl, addr, pind, imic
         logical  :: success, defined
         call pftcc_glob%assign_pinds(self%pinds)
         self%sigma2_noise      = 0.
         self%sigma2_exists_msk = .false.
         if (.not. file_exists(trim(self%fname))) call self%create_empty()
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) return
         success = self%open_and_check_header(funit)
         if (success) then
             ! mic related init
+            allocate(self%micinds(params_glob%fromp:params_glob%top), source=0)
             fromm = huge(fromm)
             tom   = -1
             do iptcl = params_glob%fromp, params_glob%top
@@ -99,44 +101,44 @@ contains
                 tom   = max(tom, imic)
             enddo
             allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),source=0.)
-            allocate(self%micinds(params_glob%fromp:params_glob%top), source=0)
-            ! set arrays & sum
+            ! read
             do iptcl = params_glob%fromp, params_glob%top
-                ! read
+                if( os%get_state(iptcl) == 0 ) cycle
                 addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
                 read(unit=funit,pos=addr) sigma2_noise_n
                 defined = any(sigma2_noise_n > TINY)
-                pind    = self%pinds(iptcl)
-                if( ptcl_mask(iptcl) .and. defined )then
-                    ! set
-                    self%sigma2_noise(:,pind)    = sigma2_noise_n
-                    self%sigma2_exists_msk(pind) = .true.
-                endif
                 if( defined )then
-                    ! stk sum over all defined sigmas, not just within mask
-                    imic = nint(os%get(iptcl, 'stkind'))
-                    self%micinds(iptcl) = imic
-                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic)+ sigma2_noise_n
+                    pind = self%pinds(iptcl)
+                    ! set particle array & mask
+                    self%sigma2_noise(:,pind) = sigma2_noise_n
+                    if( ptcl_mask(iptcl) ) self%sigma2_exists_msk(pind) = .true.
+                    self%micinds(iptcl) = nint(os%get(iptcl, 'stkind'))
                 endif
             end do
             call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
-            if( any(self%micinds > 0) )then
-                ! average sums
-                do imic = fromm,tom
-                    micpop = count(self%micinds == imic)
-                    if( micpop > 0 )then
-                        self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / real(micpop)
-                    endif
+            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
+            !$omp private(iptcl,imic,w,sumw,pind)
+            do imic = fromm,tom
+                ! calculate micrograph weighted average
+                sumw = 0.
+                do iptcl = params_glob%fromp,params_glob%top
+                    if( self%micinds(iptcl) /= imic ) cycle
+                    w = os%get(iptcl, 'w')
+                    if( w < TINY ) cycle
+                    pind = self%pinds(iptcl)
+                    sumw = sumw + w
+                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) + w*self%sigma2_noise(:,pind)
                 enddo
-                ! transfer sums to masked ptcls only
+                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / sumw
+                ! transfer micrograph sigma2 to masked ptcls only for euclidian distance calculation
                 do iptcl = params_glob%fromp, params_glob%top
                     if( .not.ptcl_mask(iptcl) )cycle
+                    if( self%micinds(iptcl) /= imic ) cycle
                     pind = self%pinds(iptcl)
-                    if( self%sigma2_exists_msk(pind) )then
-                        self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,self%micinds(iptcl))
-                    endif
+                    self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,imic)
                 end do
-            endif
+            enddo
+            !$omp end parallel do
         end if
     end subroutine read
 
@@ -281,23 +283,15 @@ contains
             self%divide_by(:) = self%mic_sigma2_noise(:,micind)
             self%do_divide    = .true.
         else
-            call self%unset_sigma2
+            self%divide_by(:) = 1.
         end if
     end subroutine set_sigma2
-
-    !>  re-initialize sigma2 average to buffer
-    subroutine unset_sigma2( self )
-        class(euclid_sigma2), intent(inout) :: self
-        self%do_divide = .false.
-        if( .not. self%exists ) return
-        self%divide_by(:) = 1.
-    end subroutine unset_sigma2
 
     !>  fetch sigma2 average from buffer
     subroutine get_sigma2( self, nyq, sigma2 )
         class(euclid_sigma2), intent(in)  :: self
         integer,              intent(in)  :: nyq ! oversampling nyquist limit
-        real,                 intent(out) :: sigma2(0:2*nyq)
+        real,                 intent(out) :: sigma2(1:2*nyq)
         real    :: scale, loc, ld
         integer :: k, kstart, lk
         sigma2 = 1.

@@ -284,7 +284,7 @@ contains
         type(ori) :: o_sym
         type(ctf) :: tfun
         complex   :: comp, oshift
-        real      :: sigma2(0:2*self%nyq)
+        real      :: sigma2(1:2*self%nyq)
         real      :: vec(3), loc(3), dists(3), shconst_here(2)
         real      :: w(self%wdim,self%wdim,self%wdim), arg, tval, tvalsq, rsh_sq, freq_sq
         integer   :: logi(3), phys(3), i, h, k, nsym, isym, iwinsz, sh, win(2,3)
@@ -693,8 +693,8 @@ contains
         real,    allocatable, intent(in)    :: fsc(:)
         real,   parameter :: tau2_fudge = 1. ! ??
         real, allocatable :: optlp(:), ssnr(:)
-        real    :: rsum(0:self%nyq), invtau2(0:self%nyq), tau2, sig2, alpha_cub
-        integer :: cnt(0:self%nyq), i,h,k,m, sh, phys(3), sz
+        real    :: rsum(self%nyq), invtau2(self%nyq), tau2, sig2, alpha_cub
+        integer :: cnt(self%nyq), i,h,k,m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(optlp(sz), ssnr(sz), source=0.)
         alpha_cub = self%alpha**3.
@@ -714,12 +714,10 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        ! tau2 & ssnr are determined from the corrected fsc
-        ! (eg Henderson & Rosenthal optimal filter)
+        ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal 2002)
         call fsc2optlp_sub(sz, fsc, optlp)
         ssnr = optlp / (1.-optlp)
         ssnr = ssnr * tau2_fudge
-        invtau2(0) = 0. ! central spot
         do k = 1,self%nyq
             i = min(max(1,nint(real(k*sz)/real(self%nyq))), sz)
             sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
@@ -730,14 +728,16 @@ contains
                 invtau2(k) = 0.0001
             endif
         enddo
-        ! add estimated Tau2 inverse
+        ! add Tau2 inverse to denominator
+        ! because signal assumed infinite at very low resolution there is no addition
+        reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1), params_glob%smpd))
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
-                    if( sh > self%nyq ) cycle
+                    if( (sh < reslim_ind) .or. (sh > self%nyq) ) cycle
                     phys = self%comp_addr_phys(h, k, m )
                     self%rho(phys(1),phys(2),phys(3)) = &
                         &self%rho(phys(1),phys(2),phys(3)) + invtau2(sh)

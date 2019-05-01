@@ -375,15 +375,15 @@ contains
         ! make clipped volumes
         call even%new([self%box,self%box,self%box],self%smpd)
         call odd%new([self%box,self%box,self%box],self%smpd)
-        ! add estimate of inverse SSNR to normalization matrix
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            ! add estimate of inverse signal squared to normalization matrix
             if( params_glob%nstates > 1 )then
                 fsc_fname = trim(CLUSTER3D_FSC)
             else
                 fsc_fname = trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
             endif
             if( file_exists(fsc_fname) )then
-                fsc_arr = file2rarr(fsc_fname)
+                fsc_arr = file2rarr(fsc_fname) ! previous FSC
                 call self%even%add_invtausq2rho(fsc_arr)
                 call self%odd%add_invtausq2rho(fsc_arr)
                 deallocate(fsc_arr)
