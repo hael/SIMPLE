@@ -58,7 +58,6 @@ type :: reconstructor_eo
     procedure          :: expand_exp
     procedure          :: sum_eos    !< for merging even and odd into sum
     procedure          :: sum_reduce !< for summing eo_recs obtained by parallel exec
-    procedure, private :: calc_pssnr3d
     procedure          :: sampl_dens_correct_eos
     procedure          :: sampl_dens_correct_sum
     ! RECONSTRUCTION
@@ -330,38 +329,6 @@ contains
         call self%odd%expand_exp
     end subroutine expand_exp
 
-    subroutine calc_pssnr3d( self, fsc, pssnr )
-        use simple_estimate_ssnr, only: fsc2ssnr
-        class(reconstructor_eo), intent(inout) :: self
-        real,                    intent(in)    :: fsc(:)
-        real,    allocatable,    intent(inout) :: pssnr(:)
-        real,    allocatable :: ctfsqsumvec(:)
-        integer, allocatable :: cntvec(:)
-        real    :: frac
-        integer :: k, kk, sz, szpd, pssnrk
-        szpd = self%eosum%get_filtsz()
-        sz   = size(fsc)
-        if( allocated(pssnr) ) deallocate(pssnr)
-        allocate(cntvec(szpd), ctfsqsumvec(szpd))
-        ! ssnr
-        pssnr = fsc2ssnr(fsc)
-        ! padded #voxels/shell & CTF2 sum/shell
-        cntvec      = 0
-        ctfsqsumvec = 0.
-        call self%even%update_pssnr3d(cntvec, ctfsqsumvec)
-        cntvec      = 0 ! # of voxels is not summed
-        call self%odd%update_pssnr3d(cntvec, ctfsqsumvec)
-        ! volume & area fraction
-        frac = 5. ! empirical
-        ! pssnr3D
-        do k = 1,sz
-            kk = nint(real(k)*real(szpd)/real(sz))
-            kk = min(max(1,kk),szpd)
-            pssnr(k) = pssnr(k) * real(cntvec(kk)) / ctfsqsumvec(kk) * frac
-        enddo
-        deallocate(cntvec,ctfsqsumvec)
-    end subroutine calc_pssnr3d
-
     !> \brief  for sampling density correction of the eo pairs
     subroutine sampl_dens_correct_eos( self, state, fname_even, fname_odd, find4eoavg )
         class(reconstructor_eo), intent(inout) :: self                  !< instance
@@ -431,8 +398,10 @@ contains
         end do
         ! pssnr
         if( params_glob%l_pssnr )then
-            call self%calc_pssnr3d(corrs, pssnr)
-            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'.bin')
+            call self%even%calc_pssnr3d(corrs, pssnr)
+            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_even'//BIN_EXT)
+            call self%odd%calc_pssnr3d(corrs, pssnr)
+            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_odd'//BIN_EXT)
         endif
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')

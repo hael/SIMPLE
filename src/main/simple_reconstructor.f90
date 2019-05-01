@@ -60,7 +60,7 @@ type, extends(image) :: reconstructor
     ! SUMMATION
     procedure          :: sum_reduce
     procedure          :: add_invtausq2rho
-    procedure          :: update_pssnr3d
+    procedure          :: calc_pssnr3d
     ! RECONSTRUCTION
     procedure          :: rec
 
@@ -728,6 +728,7 @@ contains
                 invtau2(k) = 0.0001
             endif
         enddo
+        print *,invtau2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1), params_glob%smpd))
@@ -748,11 +749,20 @@ contains
         deallocate(ssnr,optlp)
     end subroutine add_invtausq2rho
 
-    subroutine update_pssnr3d( self, cntvec, ctfsqsumvec)
-        class(reconstructor), intent(inout) :: self                     !< this object
-        integer,              intent(inout) :: cntvec(self%nyq)       !< assumed already initialized
-        real,                 intent(inout) :: ctfsqsumvec(self%nyq)  !< assumed already initialized
-        integer :: phys(3), h,k,m, sh
+    subroutine calc_pssnr3d( self, fsc, pssnr)
+        use simple_estimate_ssnr, only: fsc2ssnr
+        class(reconstructor), intent(inout) :: self
+        real,                 intent(in)    :: fsc(:)
+        real,    allocatable, intent(out)   :: pssnr(:)
+        real    :: ctfsqsumvec(self%nyq), frac
+        integer :: cntvec(self%nyq), phys(3), h,k,m, sh, kk, sz
+        sz = size(fsc)
+        ! ssnr
+        if( allocated(pssnr) ) deallocate(pssnr)
+        pssnr = fsc2ssnr(fsc)
+        ! padded #voxels & CTF2 sum
+        cntvec = 0
+        ctfsqsumvec = 0.
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cntvec,ctfsqsumvec)
         do h = self%lims(1,1),self%lims(1,2)
@@ -767,7 +777,16 @@ contains
             enddo
         enddo
         !$omp end parallel do
-    end subroutine update_pssnr3d
+        ! volume & area fraction
+        frac = 5. ! empirical
+        ! pssnr3D
+        do k = 1,sz
+            kk = nint(real(k*self%nyq)/real(sz))
+            kk = min(max(1,kk),self%nyq)
+            pssnr(k) = pssnr(k) * (real(cntvec(kk)) / ctfsqsumvec(kk)) * frac
+        enddo
+    end subroutine calc_pssnr3d
+
 
     ! RECONSTRUCTION
 

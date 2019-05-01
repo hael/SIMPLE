@@ -209,9 +209,6 @@ contains
         call tmpmovsum%new(ldim, smpd)
         call tmpmovsum%set_rmat(rmat_sum)
         call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
-        !!!!!!!!!!!!!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!
-        !call tmpmovsum%write('TMPmovSUM.mrc')
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call tmpmovsum%kill
         write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
         write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)

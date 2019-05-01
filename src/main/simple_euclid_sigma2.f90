@@ -80,8 +80,8 @@ contains
         class(euclid_sigma2),    intent(inout) :: self
         class(oris),            intent(inout) :: os
         logical,                intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
-        real(sp) :: sigma2_noise_n(self%kfromto(1):self%kfromto(2))
-        real     :: w, sumw
+        real, allocatable :: wsums(:)
+        real(sp) :: sigma2_noise_n(self%kfromto(1):self%kfromto(2)),w
         integer  :: fromm, tom, funit, iptcl, addr, pind, imic
         logical  :: success, defined
         call pftcc_glob%assign_pinds(self%pinds)
@@ -92,7 +92,7 @@ contains
         success = self%open_and_check_header(funit)
         if (success) then
             ! mic related init
-            allocate(self%micinds(params_glob%fromp:params_glob%top), source=0)
+            allocate(self%micinds(params_glob%fromp:params_glob%top),source=0)
             fromm = huge(fromm)
             tom   = -1
             do iptcl = params_glob%fromp, params_glob%top
@@ -100,45 +100,41 @@ contains
                 fromm = min(fromm, imic)
                 tom   = max(tom, imic)
             enddo
-            allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),source=0.)
-            ! read
+            allocate(self%mic_sigma2_noise(self%kfromto(1):self%kfromto(2),fromm:tom),&
+            &wsums(fromm:tom),source=0.)
+            ! read & sum
             do iptcl = params_glob%fromp, params_glob%top
                 if( os%get_state(iptcl) == 0 ) cycle
                 addr = self%headsz + (iptcl - params_glob%fromp) * self%sigmassz + 1
                 read(unit=funit,pos=addr) sigma2_noise_n
                 defined = any(sigma2_noise_n > TINY)
-                if( defined )then
-                    pind = self%pinds(iptcl)
-                    ! set particle array & mask
-                    self%sigma2_noise(:,pind) = sigma2_noise_n
-                    if( ptcl_mask(iptcl) ) self%sigma2_exists_msk(pind) = .true.
-                    self%micinds(iptcl) = nint(os%get(iptcl, 'stkind'))
+                if( .not.defined .and. ptcl_mask(iptcl) )then
+                    print *,'UNDEFINED SIGMA2:', iptcl
                 endif
+                ! sets mask
+                if( ptcl_mask(iptcl) ) self%sigma2_exists_msk(self%pinds(iptcl)) = .true.
+                ! accumulates weighted sum
+                w    = os%get(iptcl, 'w')
+                imic = nint(os%get(iptcl, 'stkind'))
+                self%micinds(iptcl) = imic
+                wsums(imic) = wsums(imic) + w
+                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) + w*sigma2_noise_n
             end do
             call fclose(funit, errmsg='euclid_sigma2; read; fhandle close')
-            !$omp parallel do default(shared) schedule(static) proc_bind(close)&
-            !$omp private(iptcl,imic,w,sumw,pind)
+            ! micrograph weighted average
             do imic = fromm,tom
-                ! calculate micrograph weighted average
-                sumw = 0.
-                do iptcl = params_glob%fromp,params_glob%top
-                    if( self%micinds(iptcl) /= imic ) cycle
-                    w = os%get(iptcl, 'w')
-                    if( w < TINY ) cycle
-                    pind = self%pinds(iptcl)
-                    sumw = sumw + w
-                    self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) + w*self%sigma2_noise(:,pind)
-                enddo
-                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / sumw
-                ! transfer micrograph sigma2 to masked ptcls only for euclidian distance calculation
-                do iptcl = params_glob%fromp, params_glob%top
-                    if( .not.ptcl_mask(iptcl) )cycle
-                    if( self%micinds(iptcl) /= imic ) cycle
-                    pind = self%pinds(iptcl)
-                    self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,imic)
-                end do
+                w = wsums(imic)
+                if( w <= TINY ) cycle
+                self%mic_sigma2_noise(:,imic) = self%mic_sigma2_noise(:,imic) / w
             enddo
-            !$omp end parallel do
+            ! transfer micrograph sigma2 to masked ptcls only for euclidian distance calculation
+            do iptcl = params_glob%fromp, params_glob%top
+                if( .not.ptcl_mask(iptcl) )cycle
+                imic = self%micinds(iptcl)
+                pind = self%pinds(iptcl)
+                self%sigma2_noise(:,pind) = self%mic_sigma2_noise(:,imic)
+            end do
+            deallocate(wsums)
         end if
     end subroutine read
 

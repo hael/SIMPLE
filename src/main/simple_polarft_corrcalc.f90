@@ -88,6 +88,7 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: polar(:,:)            !< table of polar coordinates (in Cartesian coordinates)
     real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),            allocatable :: ref_optlp(:,:)        !< references optimal filter
+    real(sp),            allocatable :: pssnr_filt(:,:)       !< filter for particle ssnr
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:) !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -117,6 +118,7 @@ type :: polarft_corrcalc
     procedure          :: set_dref_fcomp
     procedure          :: set_ptcl_fcomp
     procedure          :: set_ref_optlp
+    procedure          :: set_pssnr_filt
     procedure          :: cp_even2odd_ref
     procedure          :: cp_even_ref2ptcl
     procedure          :: cp_refs
@@ -256,7 +258,11 @@ contains
         self%pftsz       = self%nrots / 2                              !< size of reference (nrots/2) (number of vectors used for matching)
         ! allocate optimal low-pass filter if matched filter is on
         if( params_glob%l_match_filt )then
-            allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
+            if( params_glob%l_pssnr )then
+                allocate(self%pssnr_filt(params_glob%kfromto(1):params_glob%kstop,2),source=1.)
+            else
+                allocate(self%ref_optlp(params_glob%kfromto(1):params_glob%kstop,self%nrefs),source=1.)
+            endif
         endif
         ! generate polar coordinates & eo assignment
         allocate( self%polar(2*self%nrots,params_glob%kfromto(1):params_glob%kfromto(2)),&
@@ -538,6 +544,18 @@ contains
         self%ref_optlp(:,iref) = optlp(:)
     end subroutine set_ref_optlp
 
+    subroutine set_pssnr_filt( self, filt, iseven )
+        class(polarft_corrcalc), intent(inout) :: self
+        real,                    intent(in)    :: filt(params_glob%kfromto(1):params_glob%kstop)
+        logical,                 intent(in)    :: iseven
+        if( iseven )then
+            ! even is 1
+            self%pssnr_filt(:,1) = filt(:)
+        else
+            self%pssnr_filt(:,2) = filt(:)
+        endif
+    end subroutine set_pssnr_filt
+
     ! GETTERS
 
     !>  \brief  for getting the number of in-plane rotations
@@ -695,16 +713,17 @@ contains
 
     ! MODIFIERS
 
-    subroutine shellnorm_and_filter_ref( self, iref, pft )
+    subroutine shellnorm_and_filter_ref( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real    :: pw
-        integer :: k
+        real    :: w, pw
+        integer :: k, j
         if( params_glob%l_pssnr )then
+            j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz)
-                pft(:,k) = pft(:,k) * sqrt(self%ref_optlp(k,iref) / pw)
+                pft(:,k) = pft(:,k) * sqrt(self%pssnr_filt(k,j) / pw)
             enddo
         else
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -714,16 +733,17 @@ contains
         endif
     end subroutine shellnorm_and_filter_ref
 
-    subroutine shellnorm_and_filter_ref_8( self, iref, pft )
+    subroutine shellnorm_and_filter_ref_8( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real(dp) :: pw
-        integer  :: k
+        integer  :: j, k
         if( params_glob%l_pssnr )then
+            j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw       = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                pft(:,k) = pft(:,k) * dsqrt(real(self%ref_optlp(k,iref),kind=dp) / pw)
+                pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp) / pw)
             enddo
         else
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -733,17 +753,18 @@ contains
         endif
     end subroutine shellnorm_and_filter_ref_8
 
-    subroutine shellnorm_and_filter_ref_dref_8( self, iref, pft, dpft )
+    subroutine shellnorm_and_filter_ref_dref_8( self, iptcl, iref, pft, dpft )
         class(polarft_corrcalc), intent(in)    :: self
-        integer,                 intent(in)    :: iref
+        integer,                 intent(in)    :: iptcl, iref
         complex(dp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         complex(dp),             intent(inout) :: dpft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),3)
         real(dp) :: w, pw
-        integer  :: k
+        integer  :: k, j
         if( params_glob%l_pssnr )then
+            j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
-                w  = dsqrt( real(self%ref_optlp(k,iref),kind=dp) / pw)
+                w  = dsqrt( real(self%pssnr_filt(k,j),kind=dp) / pw)
                 pft(:,k)    = w * pft(:,k)
                 dpft(:,k,:) = w * dpft(:,k,:)
             enddo
@@ -868,9 +889,9 @@ contains
         ! shell normalization and filtering
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref(iref, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
             endif
         endif
         ! multiply with CTF
@@ -888,7 +909,7 @@ contains
         real        :: pw_diff(params_glob%kfromto(1):params_glob%kfromto(2))
         real        :: pw_diff_fit(params_glob%kfromto(1):params_glob%kfromto(2))
         real        :: pw_ptcl, w, ssnr
-        integer     :: i, k, ithr, rot
+        integer     :: i, j, k, ithr, rot
         ! particle is assumed phase-flipped, reference untouched
         i = self%pinds(iptcl)
         if( iref == 0 .or. .not. params_glob%l_match_filt )then
@@ -906,13 +927,14 @@ contains
         endif
         pft_ptcl = self%pfts_ptcls(:,:,i)
         if( params_glob%l_pssnr )then
+            j = merge(1, 2, self%iseven(i))
             do k=params_glob%kfromto(1),params_glob%kstop
                 ! particle power spectrum
                 pw_ptcl = sum(csq(pft_ptcl(:,k))) / real(self%pftsz)
                 ! shell normalization
                 pft_ptcl(:,k) = pft_ptcl(:,k) / sqrt(pw_ptcl)
                 ! pssnr filter
-                pft_ptcl(:,k) = pft_ptcl(:,k) * sqrt(1. + self%ref_optlp(k,iref) * self%ctfmats(:,k,i)**2.)
+                pft_ptcl(:,k) = pft_ptcl(:,k) * sqrt(1. + self%pssnr_filt(k,j) * self%ctfmats(:,k,i)**2.)
             enddo
         else
             ! CTF
@@ -1388,9 +1410,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref(iref, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1445,9 +1467,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref(iref, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1657,9 +1679,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref(iref, pft_ref)
+                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1708,9 +1730,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1766,9 +1788,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1826,9 +1848,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1903,9 +1925,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then
@@ -1993,9 +2015,9 @@ contains
         endif
         if( params_glob%l_match_filt )then
             if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
             else
-                call self%shellnorm_and_filter_ref_8(iref, pft_ref)
+                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
             endif
         endif
         if( self%with_ctf )then

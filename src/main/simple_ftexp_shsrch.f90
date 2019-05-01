@@ -41,7 +41,7 @@ contains
     procedure          :: corr_shifted_8 => ftexp_shsrch_corr_shifted_8
     procedure          :: kill           => ftexp_shsrch_kill
     procedure, private :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
-    procedure          :: set_shsrch_tol              
+    procedure          :: set_shsrch_tol
     procedure, private :: corr_shifted_cost_8                !< cost function for minimizer, f only
     procedure, private :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
     procedure, private :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient

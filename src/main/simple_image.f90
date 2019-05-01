@@ -588,6 +588,8 @@ contains
         call img_out%dampen_pspec_central_cross
         call img_out%subtr_backgr(lp_backgr_subtr)
         if( didft ) call self%fft()
+        call tmp%kill
+        call tmp2%kill
     end function mic2spec
 
     subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all, postproc)

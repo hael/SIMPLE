@@ -625,16 +625,14 @@ contains
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%l_pssnr )then
-                    allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'.bin')
+                    allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_even'//BIN_EXT)
                     if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
                         pssnr = file2rarr(fname_vol_filter)
                         call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
                     else
                         subfilter = 1.
                     endif
-                    do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
-                        call pftcc%set_ref_optlp(iref, subfilter(params_glob%kfromto(1):params_glob%kstop))
-                    enddo
+                    call pftcc%set_pssnr_filt(subfilter(params_glob%kfromto(1):params_glob%kstop), iseven=.true.)
                 else
                     ! stores filters in pftcc
                     if( file_exists(params_glob%frcs) )then
