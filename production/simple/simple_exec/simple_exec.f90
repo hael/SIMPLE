@@ -37,7 +37,7 @@ type(prune_project_commander)         :: xprune_project
 type(replace_project_field_commander) :: xreplace_project_field
 type(export_starproject_commander)    :: xexport_starproject
 type(import_starproject_commander)    :: ximport_starproject
-type(selection_commander)      :: xselection
+type(selection_commander)             :: xselection
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(cluster_cavgs_commander)  :: xcluster_cavgs
@@ -151,7 +151,7 @@ select case(prg)
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
         call ximport_starproject%execute(cline)
-    case( 'selection' )
+    case( 'selection', 'report_selection' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xselection%execute(cline)
 
