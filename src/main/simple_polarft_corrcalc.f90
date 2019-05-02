@@ -1595,7 +1595,6 @@ contains
                 call self%gencorrs_cc_1(iref, iptcl, cc)
             case(OBJFUN_EUCLID)
                 if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    !print *,iptcl,self%pinds(iptcl),self%sigma2_exists_msk(self%pinds(iptcl))
                     call self%gencorrs_euclid_1(iref, iptcl, cc)
                 else
                     call self%gencorrs_cc_1(iref, iptcl, cc)
@@ -1613,7 +1612,6 @@ contains
                 call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
             case(OBJFUN_EUCLID)
                 if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    !print *,iptcl,self%pinds(iptcl),self%sigma2_exists_msk(self%pinds(iptcl))
                     call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
                 else
                     call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
@@ -2257,7 +2255,7 @@ contains
         do k = params_glob%kfromto(1), params_glob%kfromto(2)
             sigma_contrib(k) = self%calc_euclidk_for_rot(pft_ref, i, k, irot)
         end do
-        sigma_contrib = sigma_contrib / real(self%nrots)
+        sigma_contrib = sigma_contrib / real(self%pftsz)
     end subroutine gencorr_sigma_contrib
 
     real function specscore_1( self, iref, iptcl, irot )

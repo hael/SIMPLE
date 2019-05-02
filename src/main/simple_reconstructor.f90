@@ -727,7 +727,6 @@ contains
                 invtau2(k) = 10000.
             endif
         enddo
-        print *,invtau2
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1), params_glob%smpd))

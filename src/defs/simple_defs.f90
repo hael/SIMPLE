@@ -157,7 +157,7 @@ integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systemati
 ! orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
-real, parameter    :: SIGMA2_FUDGE_DEFAULT = 100.      !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
+real, parameter    :: SIGMA2_FUDGE_DEFAULT = 50.       !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
                                                        !! smaller number means sharper distribution
 real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
                                                        !! smaller number means sharper distribution

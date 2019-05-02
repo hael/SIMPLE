@@ -44,9 +44,8 @@ contains
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
         logical :: converged
-        601 format(A,1X,F8.3)
-        602 format(A,1X,F8.3,1X,F8.3)
-        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
+        601 format(A,1X,F12.3)
+        604 format(A,1X,F12.3,1X,F12.3,1X,F12.3,1X,F12.3)
         updatecnts    = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
         allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
@@ -113,7 +112,6 @@ contains
         logical :: converged
         integer :: iptcl, istate
         601 format(A,1X,F8.3)
-        602 format(A,1X,F8.3,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
         avg_updatecnt = sum(updatecnts) / size(updatecnts)
@@ -224,7 +222,6 @@ contains
         logical :: converged
         integer :: istate
         601 format(A,1X,F8.3)
-        602 format(A,1X,F8.3,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         call build_glob%spproj_field%stats('frac', self%frac)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
