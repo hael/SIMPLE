@@ -23,6 +23,7 @@ character(len=*), parameter :: INTGMOV_SUFFIX       = '_intg'
 character(len=*), parameter :: FORCTF_SUFFIX        = '_forctf'
 character(len=*), parameter :: POWSPEC_SUFFIX       = '_pspec'
 character(len=*), parameter :: PPROC_SUFFIX         = '_pproc'
+character(len=*), parameter :: MIRR_SUFFIX          = '_mirr'
 ! STACK PART RELATED AND FILE FORMAT CONSTANTS
 character(len=*), parameter :: STKPARTSDIR          = 'stack_parts'
 character(len=*), parameter :: STKPARTFBODY         = trim(STKPARTSDIR)//'/stack_part'

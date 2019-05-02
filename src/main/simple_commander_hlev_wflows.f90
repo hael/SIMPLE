@@ -455,9 +455,10 @@ contains
         real,                  parameter :: CENLP=30. !< consistency with refine3D
         integer,               parameter :: MAXITS_SNHC=30, MAXITS_INIT=15, MAXITS_REFINE=40
         integer,               parameter :: NSPACE_SNHC=1000, NSPACE_INIT=1000, NSPACE_REFINE=2500
-        character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE = 'initial_3Dmodel_tmpproj.simple'
-        character(len=STDLEN), parameter :: REC_FBODY          = 'rec_final'
-        character(len=STDLEN), parameter :: REC_PPROC_FBODY    = trim(REC_FBODY)//trim(PPROC_SUFFIX)
+        character(len=STDLEN), parameter :: ORIG_WORK_PROJFILE   = 'initial_3Dmodel_tmpproj.simple'
+        character(len=STDLEN), parameter :: REC_FBODY            = 'rec_final'
+        character(len=STDLEN), parameter :: REC_PPROC_FBODY      = trim(REC_FBODY)//trim(PPROC_SUFFIX)
+        character(len=STDLEN), parameter :: REC_PPROC_MIRR_FBODY = trim(REC_PPROC_FBODY)//trim(MIRR_SUFFIX)
         character(len=2) :: str_state
         ! distributed commanders
         type(refine3D_distr_commander)      :: xrefine3D_distr
@@ -739,7 +740,7 @@ contains
             call del_file(trim(stk))
         enddo
         call work_proj1%kill()
-        call del_file(trim(WORK_PROJFILE))
+        call del_file(WORK_PROJFILE)
         deallocate(WORK_PROJFILE)
         call del_files(O_PEAKS_FBODY, params_glob%nparts, ext=BIN_EXT)
         ! re-create project
@@ -836,7 +837,10 @@ contains
             call set_iter_dependencies
         endif
         status = simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
-        status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX),trim(REC_PPROC_FBODY)//params%ext)
+        status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX),&
+            &trim(REC_PPROC_FBODY)//params%ext)
+        status = simple_rename(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)),&
+            &trim(REC_PPROC_MIRR_FBODY)//params%ext)
         ! updates original cls3D segment
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')
@@ -882,6 +886,7 @@ contains
         ! end gracefully
         call img%kill
         call spproj%kill
+        if( allocated(WORK_PROJFILE) ) call del_file(WORK_PROJFILE)
         call del_file(ORIG_WORK_PROJFILE)
         call simple_rmdir(STKPARTSDIR)
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')

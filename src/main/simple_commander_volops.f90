@@ -239,7 +239,7 @@ contains
         ! also output mirrored by default (unless otherwise stated on command line)
         if( .not. cline%defined('mirr') .or. params%mirr .ne. 'no' )then
             call vol%mirror('x')
-            params%outvol = add2fbody(params%outvol, params%ext, '_mirr')
+            params%outvol = add2fbody(params%outvol, params%ext, MIRR_SUFFIX)
             call vol%write(params%outvol)
         endif
         ! destruct

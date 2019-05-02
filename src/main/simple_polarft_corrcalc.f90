@@ -717,7 +717,7 @@ contains
         class(polarft_corrcalc), intent(in)    :: self
         integer,                 intent(in)    :: iptcl, iref
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        real    :: w, pw
+        real    :: pw
         integer :: k, j
         if( params_glob%l_pssnr )then
             j = merge(1, 2, self%iseven(self%pinds(iptcl)))
@@ -2339,8 +2339,9 @@ contains
                     call fftwf_free(self%fftdat_ptcls(i,ik)%p_im)
                 end do
             end do
-            if( allocated(self%ctfmats)           ) deallocate(self%ctfmats)
-            if( allocated(self%ref_optlp)         ) deallocate(self%ref_optlp)
+            if( allocated(self%ctfmats)    ) deallocate(self%ctfmats)
+            if( allocated(self%ref_optlp)  ) deallocate(self%ref_optlp)
+            if( allocated(self%pssnr_filt) ) deallocate(self%pssnr_filt)
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&

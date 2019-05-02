@@ -513,11 +513,11 @@ contains
         if( allocated(lmsk) ) deallocate(lmsk)
         allocate(lmsk(ldim(1),ldim(2),ldim(3)))
         where(self%rmat(:ldim(1),:ldim(2),:ldim(3)) <= radius)
-            self%rmat = 1.
-            lmsk      = .true.
+            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = 1.
+            lmsk = .true.
         else where
-            self%rmat = 0.
-            lmsk      = .false.
+            self%rmat(:ldim(1),:ldim(2),:ldim(3)) = 0.
+            lmsk = .false.
         end where
         if( present(npix) ) npix = count(lmsk)
     end subroutine disc_2

@@ -693,11 +693,10 @@ contains
         real,    allocatable, intent(in)    :: fsc(:)
         real,   parameter :: tau2_fudge = 1. ! ??
         real, allocatable :: optlp(:), ssnr(:)
-        real    :: rsum(self%nyq), invtau2(self%nyq), tau2, sig2, alpha_cub
+        real    :: rsum(self%nyq), invtau2(self%nyq), tau2, sig2
         integer :: cnt(self%nyq), i,h,k,m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(optlp(sz), ssnr(sz), source=0.)
-        alpha_cub = self%alpha**3.
         rsum = 0.
         cnt  = 0
         !$omp parallel do collapse(3) default(shared) schedule(static)&
@@ -709,7 +708,7 @@ contains
                     if( sh > self%nyq ) cycle
                     phys     = self%comp_addr_phys(h, k, m)
                     cnt(sh)  = cnt(sh) + 1
-                    rsum(sh) = rsum(sh) + self%rho(phys(1),phys(2),phys(3))*alpha_cub
+                    rsum(sh) = rsum(sh) + self%rho(phys(1),phys(2),phys(3))
                 enddo
             enddo
         enddo
@@ -723,9 +722,9 @@ contains
             sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
             tau2 = ssnr(i) * sig2
             if( tau2 > TINY )then
-                invtau2(k) = 1. / ( tau2_fudge * tau2 * alpha_cub )
+                invtau2(k) = 1. / ( tau2_fudge * tau2 )
             else
-                invtau2(k) = 0.0001
+                invtau2(k) = 10000.
             endif
         enddo
         print *,invtau2
@@ -759,6 +758,7 @@ contains
         sz = size(fsc)
         ! ssnr
         if( allocated(pssnr) ) deallocate(pssnr)
+        ! need to use Rosenthal & Henderson corrected FSC here
         pssnr = fsc2ssnr(fsc)
         ! padded #voxels & CTF2 sum
         cntvec = 0
@@ -786,7 +786,6 @@ contains
             pssnr(k) = pssnr(k) * (real(cntvec(kk)) / ctfsqsumvec(kk)) * frac
         enddo
     end subroutine calc_pssnr3d
-
 
     ! RECONSTRUCTION
 
