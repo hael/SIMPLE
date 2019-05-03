@@ -3400,16 +3400,21 @@ contains
 
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation erosion.
-    subroutine erosion(self)
+    subroutine erosion(self, label)
         class(image) :: self
+        integer, optional, intent(in) :: label
         logical, allocatable :: border(:,:,:)
-        if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; erosion')
-        if( any(self%rmat > 1.0001) .or. any(self%rmat < 0. ))&
-            THROW_HARD('input for erosion not binary; erosion')
-        call self%border_mask(border)
+        real,    allocatable :: rmat(:,:,:)
+        allocate(rmat(self%ldim(1), self%ldim(2), self%ldim(3)), source = self%rmat(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)))
+        if(present(label)) then
+            call self%border_mask(border,label, .true.)
+        else
+            call self%border_mask(border)
+        endif
         where(border)
-            self%rmat = 0.
+            rmat = 0.
         endwhere
+        self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(:,:,:)
     end subroutine erosion
 
 
@@ -3459,7 +3464,7 @@ contains
        if(present(four)) ffour = four
        if(present(four) .and. self%ldim(3) .eq. 1) THROW_HARD('4-neighbours identification hasn t been implemented for 2D images; border_mask')
        if(allocated(border)) deallocate(border)
-       allocate(border(self%ldim(1), self%ldim(2), self%ldim(3)), source = .false.)
+       allocate(border(1:self%ldim(1), 1:self%ldim(2), 1:self%ldim(3)), source = .false.)
        if(self%ldim(3) == 1) then
            allocate(neigh_8(9), source = 0.)
        elseif(.not. ffour) then

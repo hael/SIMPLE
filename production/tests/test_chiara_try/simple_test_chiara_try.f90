@@ -262,7 +262,7 @@ program simple_test_chiara_try
   use simple_lapackblas, only : sgeev
   type(image)       :: img, img_cc
   integer           :: i, j, ncls
-  real, allocatable :: rmat(:,:,:)
+  real, allocatable :: rmat(:,:,:), rmat_mask(:,:,:), rmat_prod(:,:,:)
   real :: centers1(3,4)
   real :: centers2(3,4)
 
@@ -275,13 +275,16 @@ program simple_test_chiara_try
     ! call vis_mat(centers2)
    ! call calc_rmsd(centers1,centers2)
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    call img%new([512,512,1],1.41)
-    call img%read('pspecs_saga_polii.mrc',25 )
-    call img%write('Ugly.mrc')
-    call img%read('binarised_stack.mrc', 25)
-    call img%write('UglyBIN.mrc')
-    call img%read('analysed_stack.mrc', 25)
-    call img%write('UglyAn.mrc')
+    call img%new([160,160,160],0.358)
+    call img%read('particle1.mrc')
+    rmat = img%get_rmat()
+    call img%read('particle1SoftMask.mrc')
+    rmat_mask = img%get_rmat()
+    allocate(rmat_prod(160,160,160), source = 0.)
+    rmat_prod = rmat*rmat_mask
+    call img%set_rmat(rmat_prod)
+    call img%write('particle1SoftMasked.mrc')
+
    ! vec = reshape([1.,2.,0.,0.,5.,0.,0.,8.,9.,0., 0.,12.,13.,0.,0.,16.,17.,0.,0.,20.], [10,2])
     ! print *, 'Vec Before = '
    ! call vis_mat(vec)
