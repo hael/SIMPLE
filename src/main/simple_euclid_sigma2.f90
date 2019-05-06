@@ -59,7 +59,7 @@ contains
             self%sigma2_exists_msk(1:pftcc_glob%get_nptcls()),&
             self%pinds(params_glob%fromp:params_glob%top),&
             self%divide_by(self%kfromto(1):self%kfromto(2)) )
-        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise, self%sigma2_exists_msk)
+        call pftcc_glob%assign_sigma2_noise(self%sigma2_noise )
         call pftcc_glob%assign_pinds(self%pinds)
         self%fname            = trim(fname)
         self%file_header(1)   = params_glob%fromp

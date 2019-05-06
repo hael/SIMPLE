@@ -461,7 +461,7 @@ contains
             if( params_glob%eo .ne. 'no' )then
                 if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES
-                    call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz)
+                    call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz, .false.)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
@@ -473,7 +473,7 @@ contains
                     ! expand for fast interpolation
                     call build_glob%vol_odd%expand_cmat(params_glob%alpha)
                     ! PREPARE EVEN REFERENCES
-                    call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz)
+                    call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
@@ -481,7 +481,7 @@ contains
                     end do
                     !$omp end parallel do
                 else
-                    call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz)
+                    call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
@@ -493,7 +493,7 @@ contains
                 endif
             else
                 ! low-pass set or multiple states
-                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz)
+                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
                 !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
                     call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
@@ -671,7 +671,7 @@ contains
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            call update_softmax_weights(iptcl, npeaks, params_glob%cc_objfun == OBJFUN_EUCLID )
+            call update_softmax_weights(iptcl, npeaks )
         end do
         call close_o_peaks_io
     end subroutine setup_weights_read_o_peaks

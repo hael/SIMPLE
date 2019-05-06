@@ -337,72 +337,119 @@ contains
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
         real,     allocatable :: res(:), corrs(:), fsc_arr(:), pssnr(:)
         type(image)           :: even, odd
+        complex, allocatable  :: cmat(:,:,:)
         character(len=STDLEN) :: fsc_fname
         integer               :: j, find_plate
-        ! make clipped volumes
-        call even%new([self%box,self%box,self%box],self%smpd)
-        call odd%new([self%box,self%box,self%box],self%smpd)
-        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            ! add estimate of inverse signal squared to normalization matrix
-            if( params_glob%nstates > 1 )then
-                fsc_fname = trim(CLUSTER3D_FSC)
+        if( (params_glob%cc_objfun == OBJFUN_EUCLID) .or. params_glob%l_pssnr )then
+            ! even
+            cmat = self%even%get_cmat()
+            call self%even%sampl_dens_correct(do_gridcorr=.false.)
+            even = self%even
+            call self%even%set_cmat(cmat)
+            deallocate(cmat)
+            call even%ifft()
+            call even%clip_inplace([self%box,self%box,self%box])
+            ! odd
+            cmat = self%odd%get_cmat()
+            call self%odd%sampl_dens_correct(do_gridcorr=.false.)
+            odd = self%odd
+            call self%odd%set_cmat(cmat)
+            deallocate(cmat)
+            call odd%ifft()
+            call odd%clip_inplace([self%box,self%box,self%box])
+            ! masking
+            if( self%automsk )then
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(self%envmask)
+                call odd%mul(self%envmask)
             else
-                fsc_fname = trim(FSC_FBODY)//int2str_pad(state,2)//BIN_EXT
+                ! spherical masking
+                if( self%inner > 1. )then
+                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                else
+                    call even%mask(self%msk, 'soft')
+                    call odd%mask(self%msk, 'soft')
+                endif
             endif
-            if( file_exists(fsc_fname) )then
-                fsc_arr = file2rarr(fsc_fname) ! previous FSC
-                call self%even%add_invtausq2rho(fsc_arr)
-                call self%odd%add_invtausq2rho(fsc_arr)
-                deallocate(fsc_arr)
+            ! forward FT
+            call even%fft()
+            call odd%fft()
+            ! calculate FSC
+            res = even%get_res()
+            allocate(corrs(even%get_filtsz()))
+            call even%fsc(odd, corrs)
+            call even%kill
+            call odd%kill
+            if( params_glob%l_pssnr )then
+                ! pssnr
+                call self%even%calc_pssnr3d(corrs, pssnr)
+                call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_even'//BIN_EXT)
+                call self%odd%calc_pssnr3d(corrs, pssnr)
+                call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_odd'//BIN_EXT)
+            else
+                ! regularization for objfun = euclid
+                call self%even%add_invtausq2rho(corrs)
+                call self%odd%add_invtausq2rho(corrs)
             endif
-        endif
-        ! correct for the uneven sampling density
-        call self%even%sampl_dens_correct
-        call self%odd%sampl_dens_correct
-        ! reverse FT
-        call self%even%ifft()
-        call self%odd%ifft()
-        ! clip
-        call self%even%clip(even)
-        call self%odd%clip(odd)
-        ! write unnormalised unmasked even/odd volumes
-        call even%write(trim(fname_even), del_if_exists=.true.)
-        call odd%write(trim(fname_odd),   del_if_exists=.true.)
-        if( self%automsk )then
-            call even%zero_background
-            call odd%zero_background
-            call even%mul(self%envmask)
-            call odd%mul(self%envmask)
+            ! correct for the uneven sampling density
+            call self%even%sampl_dens_correct
+            call self%odd%sampl_dens_correct
+            ! reverse FT
+            call self%even%ifft()
+            call self%odd%ifft()
+            ! Clip
+            call self%even%clip_inplace([self%box,self%box,self%box])
+            call self%odd%clip_inplace([self%box,self%box,self%box])
+            ! write unnormalised unmasked even/odd volumes
+            call self%even%write(trim(fname_even), del_if_exists=.true.)
+            call self%odd%write(trim(fname_odd),   del_if_exists=.true.)
         else
-            ! spherical masking
-            if( self%inner > 1. )then
-                call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+            ! make clipped volumes
+            call even%new([self%box,self%box,self%box],self%smpd)
+            call odd%new([self%box,self%box,self%box],self%smpd)
+            ! correct for the uneven sampling density
+            call self%even%sampl_dens_correct
+            call self%odd%sampl_dens_correct
+            ! reverse FT
+            call self%even%ifft()
+            call self%odd%ifft()
+            ! clip
+            call self%even%clip(even)
+            call self%odd%clip(odd)
+            ! write unnormalised unmasked even/odd volumes
+            call even%write(trim(fname_even), del_if_exists=.true.)
+            call odd%write(trim(fname_odd),   del_if_exists=.true.)
+            if( self%automsk )then
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(self%envmask)
+                call odd%mul(self%envmask)
             else
-                call even%mask(self%msk, 'soft')
-                call odd%mask(self%msk, 'soft')
+                ! spherical masking
+                if( self%inner > 1. )then
+                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                else
+                    call even%mask(self%msk, 'soft')
+                    call odd%mask(self%msk, 'soft')
+                endif
             endif
+            ! forward FT
+            call even%fft()
+            call odd%fft()
+            ! calculate FSC
+            res = even%get_res()
+            allocate(corrs(even%get_filtsz()))
+            call even%fsc(odd, corrs)
         endif
-        ! forward FT
-        call even%fft()
-        call odd%fft()
-        ! calculate FSC
-        res = even%get_res()
-        allocate(corrs(even%get_filtsz()))
-        call even%fsc(odd, corrs)
         find_plate = 0
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
         do j=1,size(res)
            write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
         end do
-        ! pssnr
-        if( params_glob%l_pssnr )then
-            call self%even%calc_pssnr3d(corrs, pssnr)
-            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_even'//BIN_EXT)
-            call self%odd%calc_pssnr3d(corrs, pssnr)
-            call arr2file(pssnr, PSSNR_FBODY//int2str_pad(state,2)//'_odd'//BIN_EXT)
-        endif
         ! save, get & print resolution
         call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
         call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)

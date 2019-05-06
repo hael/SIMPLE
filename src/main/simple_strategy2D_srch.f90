@@ -92,7 +92,7 @@ contains
         call pftcc_glob%prep_matchfilt(self%iptcl, self%prev_class, prev_roind)
         if( self%prev_class > 0 )then
             call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
-            if( pftcc_glob%is_euclid(self%iptcl) )then
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
                 self%prev_corr  = corrs(prev_roind)
             else
                 self%prev_corr  = max(0., corrs(prev_roind))
@@ -100,7 +100,7 @@ contains
             self%best_corr  = self%prev_corr
         else
             self%prev_class = irnd_uni(self%nrefs)
-            if( pftcc_glob%is_euclid(self%iptcl) )then
+            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
                 self%prev_corr  = -huge(self%prev_corr)
                 self%best_corr  = -huge(self%best_corr)
             else

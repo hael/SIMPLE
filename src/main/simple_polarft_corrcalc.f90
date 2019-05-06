@@ -100,7 +100,6 @@ type :: polarft_corrcalc
     type(fftw_carr),     allocatable :: fft_carray(:)         !< for on-the-fly memoization of particle  FFTs
     logical,             allocatable :: iseven(:)             !< eo assignment for gold-standard FSC
     real,                pointer     :: sigma2_noise(:,:)    => null() !< for euclidean distances
-    logical,             pointer     :: sigma2_exists_msk(:) => null() !< mask indicating if sigma2_noise exists for particle
     type(c_ptr)                      :: plan_fwd_1            !< FFTW plans for gencorrs
     type(c_ptr)                      :: plan_fwd_2            !< -"-
     type(c_ptr)                      :: plan_bwd              !< -"-
@@ -137,7 +136,6 @@ type :: polarft_corrcalc
     procedure          :: ptcl_iseven
     procedure          :: get_nptcls
     procedure          :: assign_pinds
-    procedure          :: is_euclid
     ! PRINTERS/VISUALISERS
     procedure          :: print
     procedure          :: vis_ptcl
@@ -529,12 +527,10 @@ contains
         endif
     end subroutine set_eos
 
-    subroutine assign_sigma2_noise( self, sigma2_noise, sigma2_exists_msk )
+    subroutine assign_sigma2_noise( self, sigma2_noise )
         class(polarft_corrcalc),      intent(inout) :: self
         real,    allocatable, target, intent(inout) :: sigma2_noise(:,:)
-        logical, allocatable, target, intent(inout) :: sigma2_exists_msk(:)
         self%sigma2_noise      => sigma2_noise
-        self%sigma2_exists_msk => sigma2_exists_msk
     end subroutine assign_sigma2_noise
 
     subroutine set_ref_optlp( self, iref, optlp )
@@ -661,22 +657,6 @@ contains
         integer, allocatable,    intent(out)   :: pinds(:)
         pinds = self%pinds
     end subroutine assign_pinds
-
-    function is_euclid( self, iptcl ) result( res )
-        class(polarft_corrcalc), intent(in) :: self
-        integer,                 intent(in) :: iptcl
-        logical                             :: res
-        if (params_glob%cc_objfun .ne. OBJFUN_EUCLID) then
-            res = .false.
-        else
-            if (self%pinds(iptcl) .eq. 0) then
-                write (*,*) 'sigma2_exists. iptcl = ', iptcl
-                THROW_HARD('is_euclid. iptcl index wrong!')
-            else
-                res = self%sigma2_exists_msk(self%pinds(iptcl))
-            end if
-        end if
-    end function is_euclid
 
     ! PRINTERS/VISUALISERS
 
@@ -1594,11 +1574,7 @@ contains
             case(OBJFUN_CC)
                 call self%gencorrs_cc_1(iref, iptcl, cc)
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    call self%gencorrs_euclid_1(iref, iptcl, cc)
-                else
-                    call self%gencorrs_cc_1(iref, iptcl, cc)
-                endif
+                call self%gencorrs_euclid_1(iref, iptcl, cc)
         end select
     end subroutine gencorrs_1
 
@@ -1611,11 +1587,7 @@ contains
             case(OBJFUN_CC)
                 call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
-                else
-                    call self%gencorrs_cc_2(iref, iptcl, shvec, cc)
-                endif
+                call self%gencorrs_euclid_2(iref, iptcl, shvec, cc)
         end select
     end subroutine gencorrs_2
 
@@ -1628,11 +1600,7 @@ contains
             case(OBJFUN_CC)
                 call self%gencorrs_cc_mir(iref, iptcl, cc, cc_mir)
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    call self%gencorrs_euclid_mir(iref, iptcl, cc, cc_mir)
-                else
-                    call self%gencorrs_cc_mir(iref, iptcl, cc, cc_mir)
-                end if
+                call self%gencorrs_euclid_mir(iref, iptcl, cc, cc_mir)
         end select
     end subroutine gencorrs_mir
 
@@ -1646,11 +1614,7 @@ contains
             case(OBJFUN_CC)
                 cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    cc = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
-                else
-                    cc = self%gencorr_cc_for_rot_8( iref, iptcl, shvec, irot )
-                endif
+                cc = self%gencorr_euclid_for_rot_8( iref, iptcl, shvec, irot )
         end select
     end function gencorr_for_rot_8
 
@@ -1890,11 +1854,7 @@ contains
             case(OBJFUN_CC)
                 call self%gencorr_cc_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    call self%gencorr_euclid_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-                else
-                    call self%gencorr_cc_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
-                endif
+                call self%gencorr_euclid_grad_for_rot_8( iref, iptcl, shvec, irot, f, grad )
         end select
     end subroutine gencorr_grad_for_rot_8
 
@@ -1980,11 +1940,7 @@ contains
             case(OBJFUN_CC)
                 call self%gencorr_cc_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
             case(OBJFUN_EUCLID)
-                if( self%sigma2_exists_msk(self%pinds(iptcl)) )then
-                    call self%gencorr_euclid_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-                else
-                    call self%gencorr_cc_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
-                endif
+                call self%gencorr_euclid_grad_only_for_rot_8( iref, iptcl, shvec, irot, grad )
         end select
     end subroutine gencorr_grad_only_for_rot_8
 
@@ -2348,7 +2304,6 @@ contains
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
             self%sigma2_noise      => null()
-            self%sigma2_exists_msk => null()
             self%existence = .false.
         endif
     end subroutine kill

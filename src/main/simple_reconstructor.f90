@@ -504,9 +504,10 @@ contains
 
     !>  is for uneven distribution of orientations correction
     !>  from Pipe & Menon 1999
-    subroutine sampl_dens_correct( self )
+    subroutine sampl_dens_correct( self, do_gridcorr )
         use simple_gridding, only: mul_w_instr
         class(reconstructor), intent(inout) :: self
+        logical, optional,    intent(in)    :: do_gridcorr
         type(kbinterpol)   :: kbwin
         type(image)        :: W_img, Wprev_img
         real, allocatable  :: antialw(:)
@@ -514,11 +515,15 @@ contains
         integer            :: h, k, m, phys(3), iter, sh
         complex, parameter :: one   = cmplx(1.,0.)
         complex, parameter :: zero  = cmplx(0.,0.)
+        logical            :: l_gridcorr
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
         kbwin   = kbinterpol(winsz, self%alpha)
         antialw = self%hannw()
-        if( GRIDCORR_MAXITS > 0 )then
+        l_gridcorr = .true.
+        if( present(do_gridcorr) ) l_gridcorr = do_gridcorr
+        l_gridcorr = l_gridcorr .and. (GRIDCORR_MAXITS > 0)
+        if( l_gridcorr )then
             call W_img%new(self%ldim_img, self%get_smpd())
             call Wprev_img%new(self%ldim_img, self%get_smpd())
             call W_img%set_ft(.true.)
@@ -599,16 +604,17 @@ contains
                 end do
             end do
             !$omp end parallel do
+            ! cleanup
+            call W_img%kill
         else
             ! division by rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys,rsh_sq,sh) proc_bind(close)
+            !$omp private(h,k,m,phys,sh) proc_bind(close)
             do h = self%lims(1,1),self%lims(1,2)
                 do k = self%lims(2,1),self%lims(2,2)
                     do m = self%lims(3,1),self%lims(3,2)
-                        rsh_sq = real(h*h + k*k + m*m)
-                        sh     = nint(sqrt(rsh_sq))
-                        phys   = self%comp_addr_phys(h, k, m )
+                        sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                        phys = self%comp_addr_phys(h, k, m )
                         if( sh > self%sh_lim )then
                             ! outside Nyqvist, zero
                             call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
@@ -620,8 +626,6 @@ contains
             end do
             !$omp end parallel do
         endif
-        ! cleanup
-        call W_img%kill
     end subroutine sampl_dens_correct
 
     subroutine compress_exp( self )
@@ -691,9 +695,9 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
-        real,   parameter :: tau2_fudge = 1. ! ??
+        real,   parameter :: tau2_fudge = 1.
         real, allocatable :: optlp(:), ssnr(:)
-        real    :: rsum(self%nyq), invtau2(self%nyq), tau2, sig2
+        real    :: rsum(self%nyq), invtau2(self%nyq), tau2(self%nyq), sig2
         integer :: cnt(self%nyq), i,h,k,m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(optlp(sz), ssnr(sz), source=0.)
@@ -720,16 +724,11 @@ contains
         do k = 1,self%nyq
             i = min(max(1,nint(real(k*sz)/real(self%nyq))), sz)
             sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
-            tau2 = ssnr(i) * sig2
-            if( tau2 > TINY )then
-                invtau2(k) = 1. / ( tau2_fudge * tau2 )
-            else
-                invtau2(k) = 10000.
-            endif
+            tau2(k) = ssnr(i) * sig2
         enddo
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
-        reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1), params_glob%smpd))
+        reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1),params_glob%smpd))
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
@@ -737,9 +736,14 @@ contains
                 do m = self%lims(3,1),self%lims(3,2)
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( (sh < reslim_ind) .or. (sh > self%nyq) ) cycle
-                    phys = self%comp_addr_phys(h, k, m )
-                    self%rho(phys(1),phys(2),phys(3)) = &
-                        &self%rho(phys(1),phys(2),phys(3)) + invtau2(sh)
+                    phys = self%comp_addr_phys(h, k, m)
+                    if( tau2(k) > TINY )then
+                        self%rho(phys(1),phys(2),phys(3)) =&
+                            &self%rho(phys(1),phys(2),phys(3)) + 1./(tau2_fudge * tau2(k))
+                    else
+                        self%rho(phys(1),phys(2),phys(3)) =&
+                            &self%rho(phys(1),phys(2),phys(3)) + 1./(0.001*self%rho(phys(1),phys(2),phys(3)))
+                    endif
                 enddo
             enddo
         enddo

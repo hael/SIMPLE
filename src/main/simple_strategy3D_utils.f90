@@ -51,7 +51,7 @@ contains
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
             corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
-            if (.not. pftcc_glob%is_euclid(s%iptcl)) then
+            if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
                 if( corrs(cnt) < 0. ) corrs(cnt) = 0.
             end if
             if( l_multistates )then
@@ -93,36 +93,28 @@ contains
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
     end subroutine calc_softmax_weights
 
-    subroutine update_softmax_weights( iptcl, npeaks, is_euclid )
+    subroutine update_softmax_weights( iptcl, npeaks )
         integer, intent(in) :: iptcl, npeaks
-        logical, intent(in) :: is_euclid
         real, allocatable   :: corrs(:)
         real :: ws(npeaks)
         corrs = s3D%o_peaks(iptcl)%get_all('corr')
-        call calc_ori_weights(iptcl, npeaks, corrs, ws, is_euclid)
+        call calc_ori_weights(iptcl, npeaks, corrs, ws )
         call s3D%o_peaks(iptcl)%set_all('ow', ws)
     end subroutine update_softmax_weights
 
-    subroutine calc_ori_weights( iptcl, npeaks, corrs, ws, is_euclid )
+    subroutine calc_ori_weights( iptcl, npeaks, corrs, ws )
         integer,           intent(in)  :: iptcl, npeaks
         real,              intent(in)  :: corrs(npeaks)
         real,              intent(out) :: ws(npeaks)
-        logical, optional, intent(in)  :: is_euclid
         real    :: dists(npeaks), arg4softmax(npeaks)
         real    :: wsum
-        logical :: iis_euclid
-        if( present(is_euclid) )then
-            iis_euclid = is_euclid
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            dists = - corrs / params_glob%sigma2_fudge
         else
-            iis_euclid = pftcc_glob%is_euclid(iptcl)
-        endif
-        if( .not. iis_euclid )then
             ! convert correlations to distances
             dists = 1.0 - corrs
             ! scale distances with TAU
             dists = dists / params_glob%tau
-        else
-            dists = - corrs / params_glob%sigma2_fudge
         end if
         ! argument for softmax function is negative distances
         arg4softmax = -dists
@@ -130,7 +122,7 @@ contains
         arg4softmax = arg4softmax - maxval(arg4softmax)
         ! calculate softmax weights
         ws = exp(arg4softmax)
-        if( .not. iis_euclid ) where( corrs <= TINY ) ws = 0.
+        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) where( corrs <= TINY ) ws = 0.
         ! critical for performance to normalize here as well
         wsum = sum(ws)
         if( wsum > TINY )then

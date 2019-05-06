@@ -422,14 +422,8 @@ contains
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)
             if( params_glob%l_match_filt )then
-                if( params_glob%l_pssnr )then
-                    call build_glob%projpssnrs%getter(icls, filter)
-                    call subsample_optlp(build_glob%projpssnrs%get_filtsz(),&
-                        &build_glob%img_match%get_filtsz(), filter, subfilter)
-                else
-                    call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
-                        &build_glob%img_match%get_filtsz(), filter, subfilter)
-                endif
+                call subsample_optlp(build_glob%projfrcs%get_filtsz(),&
+                    &build_glob%img_match%get_filtsz(), filter, subfilter)
                 call pftcc%set_ref_optlp(icls, subfilter(params_glob%kfromto(1):params_glob%kstop))
             else
                 call img_in%fft() ! needs to be here in case the shift was never applied (above)
@@ -596,7 +590,7 @@ contains
     end subroutine calcrefvolshift_and_mapshifts2ptcls
 
     !>  \brief  prepares one volume for references extraction
-    subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz )
+    subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
         class(polarft_corrcalc), intent(inout) :: pftcc
@@ -605,6 +599,7 @@ contains
         character(len=*),        intent(in)    :: volfname
         logical,                 intent(in)    :: do_center
         real,                    intent(in)    :: xyz(3)
+        logical,                 intent(in)    :: iseven
         type(image)                   :: mskvol
         character(len=:), allocatable :: fname_vol_filter
         real,             allocatable :: pssnr(:)
@@ -625,14 +620,18 @@ contains
             if( params_glob%l_match_filt )then
                 ! stores filters in pftcc
                 if( params_glob%l_pssnr )then
-                    allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_even'//BIN_EXT)
+                    if( iseven )then
+                        allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_even'//BIN_EXT)
+                    else
+                        allocate(fname_vol_filter, source=PSSNR_FBODY//int2str_pad(s,2)//'_odd'//BIN_EXT)
+                    endif
                     if( any(build_glob%fsc(s,:) > 0.143) .and. file_exists(fname_vol_filter))then
                         pssnr = file2rarr(fname_vol_filter)
                         call subsample_filter(filtsz, subfiltsz, pssnr, subfilter)
                     else
                         subfilter = 1.
                     endif
-                    call pftcc%set_pssnr_filt(subfilter(params_glob%kfromto(1):params_glob%kstop), iseven=.true.)
+                    call pftcc%set_pssnr_filt(subfilter(params_glob%kfromto(1):params_glob%kstop), iseven)
                 else
                     ! stores filters in pftcc
                     if( file_exists(params_glob%frcs) )then

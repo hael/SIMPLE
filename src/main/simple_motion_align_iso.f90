@@ -191,7 +191,7 @@ contains
             do iframe=1,self%nframes
                 call self%movie_sum_global_ftexp_threads(iframe)%subtr(&
                     self%movie_frames_ftexp_sh(iframe), w=self%frameweights(iframe))
-                PRINT_NEVALS = .true.
+                PRINT_NEVALS = .false.
                 cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), self%opt_shifts(iframe,:))
                 if( cxy(1) - self%corrs(iframe) > NIMPROVED_TOL ) nimproved = nimproved + 1
                 self%opt_shifts(iframe,:) = cxy(2:3)
@@ -572,7 +572,7 @@ contains
         x = self%coord_x
         y = self%coord_y
     end subroutine motion_align_iso_get_coords
-    
+
     subroutine motion_align_iso_set_callback( self, callback )
         class(motion_align_iso), intent(inout) :: self
         procedure(align_iso_callback)          :: callback

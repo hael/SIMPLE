@@ -187,9 +187,6 @@ contains
             endif
             call motion_correct_aniso_kill
             ! generate power-spectra
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
-            print *, 'params_glob%pspecsz', params_glob%pspecsz
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
             self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
             self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
             call self%pspec_half_n_half%scale_pspec4viz

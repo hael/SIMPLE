@@ -108,7 +108,7 @@ contains
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! prep corr
         call pftcc_glob%gencorrs(prev_ref, pftcc_pind, corrs)
-        if( pftcc_glob%is_euclid(pftcc_pind) )then
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             corr = maxval(corrs)
         else
             corr = max(0.,maxval(corrs))
@@ -196,7 +196,7 @@ contains
         self%specscore = pftcc_glob%specscore(self%prev_ref, self%iptcl, self%prev_roind)
         ! prep corr
         call pftcc_glob%gencorrs(self%prev_ref, self%iptcl, corrs)
-        if( pftcc_glob%is_euclid(self%iptcl) )then
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             corr = maxval(corrs)
         else
             corr = max(0.,maxval(corrs))

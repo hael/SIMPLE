@@ -478,7 +478,7 @@ contains
         write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
-        PRINT_NEVALS = .true.
+        PRINT_NEVALS = .false.
         do i=1,MITSREF_ANISO
             nimproved = 0
             !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
@@ -665,7 +665,7 @@ contains
         write(logfhandle,'(a)') '>>> PATCH-BASED REFINEMENT'
         corr_saved = -1.
         didsave    = .false.
-        PRINT_NEVALS = .true.
+        PRINT_NEVALS = .false.
         ! apply deformation
         call motion_patch%set_frameweights( frameweights )
         call motion_patch%correct( hp, lp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )

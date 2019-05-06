@@ -680,8 +680,6 @@ contains
         !$omp end parallel do
         ! write FRCs
         call build_glob%projfrcs%write(fname)
-        ! calc and write pssnrs
-        if( params_glob%l_pssnr) call cavger_calc_and_write_pssnrs
         ! destruct
         do icls=1,ncls
             call even_imgs(icls)%kill
@@ -690,31 +688,6 @@ contains
         end do
         deallocate(even_imgs, odd_imgs, shnorm_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
-
-    subroutine cavger_calc_and_write_pssnrs
-        use simple_estimate_ssnr, only: fsc2ssnr
-        real, allocatable :: frc(:), avgctf2(:), pssnr(:)
-        real, parameter   :: frac = 4.
-        integer :: k, kk, icls, sz, szpd
-        szpd = ctfsqsums_merged(1)%get_filtsz()
-        do icls=1,ncls
-            frc   = build_glob%projfrcs%get_frc(icls, params_glob%box)
-            pssnr = fsc2ssnr(frc)
-            call ctfsqsums_merged(icls)%spectrum('absreal', avgctf2, norm=.true.)
-            do k = 1,filtsz
-                kk = nint(real(k)*real(szpd)/real(filtsz))
-                kk = min(max(1,kk),szpd)
-                if( avgctf2(kk) > TINY )then
-                    pssnr(k) = pssnr(k) * (1./avgctf2(kk)) * frac
-                else
-                    pssnr(k) = 0.
-                endif
-            enddo
-            call build_glob%projpssnrs%set_frc(icls, pssnr, 1)
-            print *,icls,pssnr
-        enddo
-        call build_glob%projpssnrs%write(trim(PSSNR_FBODY)//int2str_pad(1,2)//BIN_EXT)
-    end subroutine cavger_calc_and_write_pssnrs
 
     ! I/O
 
