@@ -717,9 +717,14 @@ contains
 
     subroutine motion_correct_patched_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
         type(image), intent(out) :: movie_sum_corrected, movie_sum_ctf
+        logical :: l_tmp
+        ! scalar weights, no dose-weighting
+        l_tmp = do_dose_weight
+        do_dose_weight = .false.
         call gen_patched_sum(scalar_weight=1./real(nframes))
         movie_sum_ctf = movie_sum_global
-        ! re-calculate the weighted sum
+        do_dose_weight = l_tmp
+        ! re-calculate the dose-weighted sum
         call gen_patched_sum
         movie_sum_corrected = movie_sum_global
     end subroutine motion_correct_patched_calc_sums_1
@@ -728,7 +733,7 @@ contains
         type(image), intent(out) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
         logical :: l_tmp
-        ! re-calculate the weighted sum with dose_weighting turned off
+        ! weighted sum, no dose-weighting
         l_tmp = do_dose_weight
         do_dose_weight = .false.
         call gen_patched_sum(fromto=fromto)

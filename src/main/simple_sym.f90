@@ -41,7 +41,7 @@ type sym
     procedure, private :: apply2all
     procedure          :: apply_sym_with_shift
     procedure          :: rot_to_asym
-    procedure, private :: rotall_to_asym
+    procedure          :: rotall_to_asym
     procedure          :: symrandomize
     procedure          :: build_refspiral
     ! calculators

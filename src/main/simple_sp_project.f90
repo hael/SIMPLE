@@ -2444,7 +2444,7 @@ contains
         character(len=LONGSTRLEN)     :: relstkname, relboxname, relmicname, relmovname
         type(sp_project) :: self_src
         type(ori)        :: o, o_src
-        integer          :: istk, nstks, imic, nmics
+        integer          :: istk, nstks, imic, nmics, iptcl
         logical          :: err
         src_path = get_fpath(projfile_src)
         call self_src%read(projfile_src)
@@ -2457,13 +2457,25 @@ contains
             if( trim(oritype) == 'ptcl2D' )then
                 if( self_src%os_ptcl2D%get_noris() == 0 ) return
                 self%os_ptcl2D = self_src%os_ptcl2D
+                ! proagates state and eo flags
                 states = self%os_ptcl2D%get_all('state')
                 call self%os_ptcl3D%set_all('state', real(states))
+                if( .not.self%os_ptcl2D%isthere('eo') .and. self_src%os_ptcl3D%isthere('eo') )then
+                    do iptcl=1,self_src%os_ptcl3D%get_noris()
+                        call self%os_ptcl2D%set(iptcl,'eo', self_src%os_ptcl3D%get(iptcl,'eo'))
+                    enddo
+                endif
             else
                 if( self_src%os_ptcl3D%get_noris() == 0 ) return
                 self%os_ptcl3D = self_src%os_ptcl3D
+                ! proagates state and eo flags
                 states = self%os_ptcl3D%get_all('state')
                 call self%os_ptcl2D%set_all('state', real(states))
+                if( .not.self%os_ptcl3D%isthere('eo') .and. self_src%os_ptcl2D%isthere('eo') )then
+                    do iptcl=1,self_src%os_ptcl2D%get_noris()
+                        call self%os_ptcl3D%set(iptcl,'eo', self_src%os_ptcl2D%get(iptcl,'eo'))
+                    enddo
+                endif
             endif
             deallocate(states)
         case('stk')
