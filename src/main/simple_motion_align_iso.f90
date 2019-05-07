@@ -178,9 +178,9 @@ contains
                 call ftexp_srch(iframe)%set_shsrch_tol(self%shsrch_tol)
             end if
             if (self%maxits > 0) then
-                write (*,*) 'setting ftexp_srch(iframe)%ospec%maxits to', self%maxits
+                !write (*,*) 'setting ftexp_srch(iframe)%ospec%maxits to', self%maxits
                 ftexp_srch(iframe)%ospec%maxits = self%maxits
-                write (*,*) 'ftexp_srch(iframe)%ospec%maxits set to', ftexp_srch(iframe)%ospec%maxits
+                !write (*,*) 'ftexp_srch(iframe)%ospec%maxits set to', ftexp_srch(iframe)%ospec%maxits
             end if
         end do
         self%corr_saved = -1.

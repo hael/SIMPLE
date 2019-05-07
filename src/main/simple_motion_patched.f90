@@ -75,7 +75,7 @@ contains
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
-    procedure                           :: set_frameweights    
+    procedure                           :: set_frameweights
     procedure                           :: new             => motion_patched_new
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: kill            => motion_patched_kill
@@ -344,77 +344,48 @@ contains
         !$omp end parallel do
     contains
 
-        function interp_bilin( xval, yval, iiframe, rmat_ins2 ) result(val)
-            real,  intent(in)    :: xval, yval
-            integer, intent(in)  :: iiframe
+        pure real function interp_bilin( xval, yval, iiframe, rmat_ins2 )
+            real,                intent(in)  :: xval, yval
+            integer,             intent(in)  :: iiframe
             type(rmat_ptr_type), intent(in) :: rmat_ins2(self%nframes)
-            real     :: val
-            !logical  :: x1_valid, x2_valid, y1_valid, y2_valid
             integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            integer  :: x1_hh, x2_hh, y1_hh, y2_hh
             real     :: y1, y2, y3, y4, t, u
-            ! if outside of image
-            if ((xval < 1._dp) .or. (xval >= self%ldim(1)) .or. (yval < 1._dp) .or. (yval >= self%ldim(2))) then
-                val  = 0._dp
-                return
-            end if
+            logical :: outside
+            outside = .false.
             x1_h = floor(xval)
-            x1_hh = x1_h
-            if (x1_h < 1) then
-                x1_hh = x1_h + self%ldim(1)
-            else if (x1_h > self%ldim(1)) then
-                x1_hh = x1_h - self%ldim(1)
-            end if
             x2_h = x1_h + 1
-            x2_hh = x2_h
-            if (x2_h < 1) then
-                x2_hh = x2_h + self%ldim(1)
-            else if (x2_h > self%ldim(1)) then
-                x2_hh = x2_h - self%ldim(1)
-            end if
+            if( x1_h<1 .or. x2_h<1 )then
+                x1_h    = 1
+                outside = .true.
+            endif
+            if( x1_h>self%ldim(1) .or. x2_h>self%ldim(1) )then
+                x1_h    = self%ldim(1)
+                outside = .true.
+            endif
             y1_h = floor(yval)
-            y1_hh = y1_h
-            if (y1_h < 1) then
-                y1_hh = y1_h + self%ldim(2)
-            else if (y1_h > self%ldim(2)) then
-                y1_hh = y1_h - self%ldim(2)
-            end if
             y2_h = y1_h + 1
-            y2_hh = y2_h
-            if (y2_h < 1) then
-                y2_hh = y2_h + self%ldim(2)
-            else if (y2_h > self%ldim(2)) then
-                y2_hh = y2_h - self%ldim(2)
-            end if
-!!$            y1 = rmat_in(x1_hh, y1_hh, 1)
-!!$            y2 = rmat_in(x2_hh, y1_hh, 1)
-!!$            y3 = rmat_in(x2_hh, y2_hh, 1)
-!!$            y4 = rmat_in(x1_hh, y2_hh, 1)
-            if ((x1_hh < 1).or.(x1_hh > self%ldim(1)).or.&
-                (x2_hh < 1).or.(x2_hh > self%ldim(1)).or.&
-                (y1_hh < 1).or.(y1_hh > self%ldim(2)).or.&
-                (y2_hh < 1).or.(y2_hh > self%ldim(2))) then
-                write (*,*) 'xval = ', xval
-                write (*,*) 'yval = ', yval
-                write (*,*) 'x1_hh =', x1_hh
-                write (*,*) 'x2_hh =', x2_hh
-                write (*,*) 'y1_hh =', y1_hh
-                write (*,*) 'y2_hh =', y2_hh
-                write (*,*) 'poly_coeffs_x=', self%poly_coeffs(:,1)
-                write (*,*) 'poly_coeffs_y=', self%poly_coeffs(:,2)
-                call flush(6)
-            end if
-            y1 = rmat_ins2(iiframe)%rmat_ptr(x1_hh, y1_hh, 1)
-            y2 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y1_hh, 1)
-            y3 = rmat_ins2(iiframe)%rmat_ptr(x2_hh, y2_hh, 1)
-            y4 = rmat_ins2(iiframe)%rmat_ptr(x1_hh, y2_hh, 1)
-
-            t    = xval - x1_h
-            u    = yval - y1_h
-            val  =  (1. - t) * (1. - u) * y1 + &
-               t  * (1. - u) * y2 + &
-               t  *          u  * y3 + &
-                (1. - t) *          u  * y4
+            if( y1_h<1 .or. y2_h<1 )then
+                y1_h    = 1
+                outside = .true.
+            endif
+            if( y1_h>self%ldim(2) .or. y2_h>self%ldim(2) )then
+                y1_h    = self%ldim(2)
+                outside = .true.
+            endif
+            if( outside )then
+                interp_bilin = rmat_ins2(iiframe)%rmat_ptr(x1_h, y1_h, 1)
+                return
+            endif
+            y1 = rmat_ins2(iiframe)%rmat_ptr(x1_h, y1_h, 1)
+            y2 = rmat_ins2(iiframe)%rmat_ptr(x2_h, y1_h, 1)
+            y3 = rmat_ins2(iiframe)%rmat_ptr(x2_h, y2_h, 1)
+            y4 = rmat_ins2(iiframe)%rmat_ptr(x1_h, y2_h, 1)
+            t   = xval - x1_h
+            u   = yval - y1_h
+            interp_bilin =  (1. - t) * (1. - u) * y1 + &
+                        &t  * (1. - u) * y2 + &
+                        &t  *       u  * y3 + &
+                        &(1. - t) * u  * y4
         end function interp_bilin
 
     end subroutine apply_polytransfo
@@ -491,10 +462,10 @@ contains
             if (alloc_stat /= 0) call allocchk('allocate_fields 1; simple_motion_patched')
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
-                    allocate( self%frame_patches(i, j)%stack(self%nframes), stat=alloc_stat )            
+                    allocate( self%frame_patches(i, j)%stack(self%nframes), stat=alloc_stat )
                     if (alloc_stat /= 0) call allocchk('allocate_fields 2; simple_motion_patched')
                 end do
-            end do            
+            end do
         end if
     end subroutine allocate_fields
 
@@ -580,7 +551,7 @@ contains
                             ! now copy the value
                             rmat_patch(ip,jp,1) = rmat_ptrs(iframe)%rmat_ptr(kk,ll,1)
                         end do
-                    end do                    
+                    end do
                 end do
             end do
         end do
@@ -607,14 +578,14 @@ contains
                 call self%align_iso(i,j)%set_mitsref(50)
                 call self%align_iso(i,j)%set_smallshift(1.)
                 call self%align_iso(i,j)%set_rand_init_shifts(.true.)
-                call self%align_iso(i,j)%set_hp_lp(self%hp, self%lp(i,j))                
+                call self%align_iso(i,j)%set_hp_lp(self%hp, self%lp(i,j))
                 call self%align_iso(i,j)%set_trs(self%trs)
                 call self%align_iso(i,j)%set_ftol_gtol(1e-7, 1e-7)
                 call self%align_iso(i,j)%set_shsrch_tol(1e-7)
                 call self%align_iso(i,j)%set_maxits(100)
                 call self%align_iso(i,j)%set_coords(i,j)
                 call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
-                call self%align_iso(i,j)%align(self)                    
+                call self%align_iso(i,j)%align(self)
             end do
         end do
         !$omp end parallel do
@@ -626,7 +597,7 @@ contains
                     self%shifts_patches(2:3,iframe,i,j) = opt_shifts(iframe, 1:2)
                 end do
             end do
-        end do       
+        end do
         do iframe = self%nframes, 1, -1
             self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
         enddo
@@ -653,7 +624,7 @@ contains
         allocate(self%frameweights(nlen), source=frameweights)
         self%has_frameweights = .true.
     end subroutine set_frameweights
-    
+
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
         class(motion_patched), intent(inout) :: self
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
@@ -724,7 +695,7 @@ contains
         call self%set_size_frames_ref()
         ! divide the reference into patches
         call self%set_patches(frames, self%frame_patches)
-        ! determine shifts for patches        
+        ! determine shifts for patches
         call self%det_shifts()
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
@@ -765,9 +736,8 @@ contains
         integer :: nimproved, iter
         real    :: corrfrac, frac_improved
         logical :: didupdateres
-        write (*,*) 'motion_patched_callback: align_iso%iter=', align_iso%get_iter()
+        !write (*,*) 'motion_patched_callback: align_iso%iter=', align_iso%get_iter()
         call align_iso%get_coords(i, j)
-        
         corrfrac      = align_iso%get_corrfrac()
         frac_improved = align_iso%get_frac_improved()
         nimproved     = align_iso%get_nimproved()
@@ -790,7 +760,7 @@ contains
             converged = .false.
         end if
 
-        
+
     contains
         subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
             real,    intent(in) :: thres_corrfrac, thres_frac_improved
@@ -805,7 +775,7 @@ contains
                 ! indicate that reslim was updated
                 didupdateres = .true.
             endif
-        end subroutine update_res        
+        end subroutine update_res
     end subroutine motion_patched_callback
 
     subroutine motion_patched_callback_wrapper(aptr, align_iso, converged)
@@ -819,7 +789,7 @@ contains
             THROW_HARD('error in motion_patched_callback_wrapper: unknown type; simple_motion_patched')
         end select
     end subroutine motion_patched_callback_wrapper
-    
+
     subroutine frameweights_callback( self, align_iso )
         class(motion_patched),   intent(inout) :: self
         class(motion_align_iso), intent(inout) :: align_iso
@@ -838,5 +808,5 @@ contains
             THROW_HARD('error in frameweights_callback_wrapper: unknown type; simple_motion_patched')
         end select
     end subroutine frameweights_callback_wrapper
-    
+
 end module simple_motion_patched
