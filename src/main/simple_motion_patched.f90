@@ -649,13 +649,15 @@ contains
         allocate(self%lp(NX_PATCHED,NY_PATCHED),&
             &self%updateres(NX_PATCHED,NY_PATCHED))
         self%updateres = 0
-        self%lp = params_glob%lpstart
+        self%lp      = -1.
+        self%hp      = -1.
+        self%resstep = -1.
     end subroutine motion_patched_new
 
-    subroutine motion_patched_correct( self, hp, lp, resstep, frames, frames_output, shift_fname, &
+    subroutine motion_patched_correct( self, hp, resstep, frames, frames_output, shift_fname, &
         global_shifts )
         class(motion_patched),         intent(inout) :: self
-        real,                          intent(in)    :: hp, lp, resstep
+        real,                          intent(in)    :: hp, resstep
         type(image),      allocatable, intent(inout) :: frames(:)
         type(image),      allocatable, intent(inout) :: frames_output(:)
         character(len=:), allocatable, intent(in)    :: shift_fname
@@ -663,7 +665,6 @@ contains
         integer :: ldim_frames(3)
         integer :: i
         self%hp = hp
-        !self%lp = lp
         self%lp = params_glob%lpstart
         self%resstep = resstep
         self%updateres = 0

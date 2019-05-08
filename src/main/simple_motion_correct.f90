@@ -3,16 +3,17 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,         only: ft_expanded
-use simple_motion_anisocor,     only: motion_anisocor, POLY_DIM
-use simple_motion_patched,      only: motion_patched
-use simple_motion_anisocor_dbl, only: motion_anisocor_dbl
-use simple_motion_align_iso,    only: motion_align_iso
-use simple_image,               only: image
-use simple_parameters,          only: params_glob
-use simple_estimate_ssnr,       only: acc_dose2filter
-use simple_oris,                only: oris
-use simple_opt_lbfgsb,          only: PRINT_NEVALS
+use simple_ft_expanded,           only: ft_expanded
+use simple_motion_anisocor,       only: motion_anisocor, POLY_DIM
+use simple_motion_patched,        only: motion_patched
+use simple_motion_patched_direct, only: motion_patched_direct
+use simple_motion_anisocor_dbl,   only: motion_anisocor_dbl
+use simple_motion_align_iso,      only: motion_align_iso
+use simple_image,                 only: image
+use simple_parameters,            only: params_glob
+use simple_estimate_ssnr,         only: acc_dose2filter
+use simple_oris,                  only: oris
+use simple_opt_lbfgsb,            only: PRINT_NEVALS
 implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
@@ -46,7 +47,8 @@ integer                          :: updateres
 logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
-type(motion_patched) :: motion_patch
+type(motion_patched)        :: motion_patch
+type(motion_patched_direct) :: motion_patch_direct
 type(image),            allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
 
 ! data structures for anisotropic correction
@@ -88,10 +90,11 @@ logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or 
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 
 ! module global constants
-integer, parameter :: MITSREF       = 30   !< max # iterations of refinement optimisation
-integer, parameter :: MITSREF_ANISO = 9      !< max # iterations of anisotropic refinement optimisation
-real,    parameter :: SMALLSHIFT    = 2.     !< small initial shift to blur out fixed pattern noise
-logical, parameter :: ANISO_DBL     = .true. !< use double-precision for anisotropic motion correct?
+integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF_ANISO  = 9       !< max # iterations of anisotropic refinement optimisation
+real,    parameter :: SMALLSHIFT     = 2.      !< small initial shift to blur out fixed pattern noise
+logical, parameter :: ANISO_DBL      = .true.  !< use double-precision for anisotropic motion correct?
+logical, parameter :: PATCHED_DIRECT = .true.  !< use direct patch-based motion correct (if patch-based motion correct activated)
 
 contains
 
@@ -635,8 +638,13 @@ contains
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
         logical :: didsave, doscale
-        call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
-            motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
+        if (PATCHED_DIRECT) then  ! NOTE: we can make this polymorphic later
+            call motion_patch_direct%new(motion_correct_ftol = params_glob%motion_correctftol, &
+                motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
+        else
+            call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
+                motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
+        endif
         smpd4scale = params_glob%smpd
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -667,8 +675,13 @@ contains
         didsave    = .false.
         PRINT_NEVALS = .false.
         ! apply deformation
-        call motion_patch%set_frameweights( frameweights )
-        call motion_patch%correct( hp, lp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+        if (PATCHED_DIRECT) then
+            call motion_patch_direct%set_frameweights( frameweights )
+            call motion_patch_direct%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+        else
+            call motion_patch%set_frameweights( frameweights )
+            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+        end if
         ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
         ! (see below)
         corr_prev = corr
