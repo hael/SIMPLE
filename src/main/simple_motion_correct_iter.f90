@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 logical,          parameter :: DO_ANISO   = .false.
-logical,          parameter :: DO_PATCHED = .true.
+logical,          parameter :: DO_PATCHED = .false.
 character(len=*), parameter :: speckind   = 'sqrt'
 
 type :: motion_correct_iter
