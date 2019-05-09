@@ -14,7 +14,7 @@ private
 #include "simple_local_flags.inc"
 
 logical,          parameter :: DO_ANISO   = .false.
-logical,          parameter :: DO_PATCHED = .false.
+logical,          parameter :: DO_PATCHED = .true.
 character(len=*), parameter :: speckind   = 'sqrt'
 
 type :: motion_correct_iter
@@ -221,7 +221,7 @@ contains
             endif
         endif
         if(DO_PATCHED) then
-            call motion_correct_patched()
+            call motion_correct_patched
             if( cline%defined('tof') )then
                 call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
                 call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)

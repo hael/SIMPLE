@@ -3,7 +3,7 @@ module simple_motion_patched
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_parameters,      only: params_glob
+use simple_parameters,       only: params_glob
 use simple_opt_factory,      only: opt_factory
 use simple_opt_spec,         only: opt_spec
 use simple_optimizer,        only: optimizer
@@ -41,9 +41,11 @@ type :: motion_patched
     type(motion_align_iso), allocatable :: align_iso(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
-    character(len=:),       allocatable :: shift_fname
+    real,                   allocatable :: lp(:,:)
     real,                   allocatable :: global_shifts(:,:)
     real,                   allocatable :: frameweights(:)
+    integer,                allocatable :: updateres(:,:)
+    character(len=:),       allocatable :: shift_fname
     logical                             :: has_global_shifts
     logical                             :: has_frameweights    = .false.
     integer                             :: nframes
@@ -57,8 +59,6 @@ type :: motion_patched
     real                                :: trs
     real, public                        :: hp
 !    real                                :: lp
-    integer, allocatable                :: updateres(:,:)
-    real, allocatable                   :: lp(:,:)
     real                                :: resstep
 contains
     procedure, private                  :: allocate_fields
@@ -627,6 +627,7 @@ contains
 
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
         class(motion_patched), intent(inout) :: self
+        logical                              :: bfac
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
         real, optional,        intent(in)    :: trs
         call self%kill()

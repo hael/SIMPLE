@@ -335,7 +335,7 @@ contains
         call align_iso%set_smallshift(2.)
         call align_iso%set_rand_init_shifts(.true.)
         call align_iso%set_ftol_gtol(1e-7, 1e-7)
-        call align_iso%set_shsrch_tol(1e-5)
+        call align_iso%set_shsrch_tol(1e-7)
         call align_iso%set_callback( motion_correct_iso_callback )
         call align_iso%align(callback_ptr)
         corr = align_iso%get_corr()
@@ -633,11 +633,10 @@ contains
         ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
    !> patch-based motion_correction of DDD movie
-    subroutine motion_correct_patched()
-        real    :: corr, corr_prev, corrfrac
+    subroutine motion_correct_patched
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
-        logical :: didsave, doscale
+        logical :: doscale
         if (PATCHED_DIRECT) then  ! NOTE: we can make this polymorphic later
             call motion_patch_direct%new(motion_correct_ftol = params_glob%motion_correctftol, &
                 motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
@@ -666,13 +665,7 @@ contains
             call movie_sum_global_threads(iframe)%new(ldim4scale, smpd4scale, wthreads=.false.)
             call movie_frames_shifted_patched(iframe)%copy(movie_frames_shifted(iframe))
         end do
-        ! generate first average
-        call gen_patched_wsum_calc_corrs(0)
-        ! calc avg corr to weighted avg
-        corr = sum(corrs)/real(nframes)
         write(logfhandle,'(a)') '>>> PATCH-BASED REFINEMENT'
-        corr_saved = -1.
-        didsave    = .false.
         PRINT_NEVALS = .false.
         ! apply deformation
         if (PATCHED_DIRECT) then
@@ -682,50 +675,6 @@ contains
             call motion_patch%set_frameweights( frameweights )
             call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
         end if
-        ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
-        ! (see below)
-        corr_prev = corr
-        call gen_patched_wsum_calc_corrs(0)
-        corr = sum(corrs) / real(nframes)
-        if( corr >= corr_saved )then ! save the local optimum
-            corr_saved             = corr
-            frameweights_saved     = frameweights
-            didsave                = .true.
-        endif
-        corrfrac = corr_prev / corr
-
-    contains
-
-        subroutine gen_patched_wsum_calc_corrs( imode )
-            integer, intent(in) :: imode
-            real, allocatable   :: rmat(:,:,:), rmat_sum(:,:,:)
-            real    :: corr
-            allocate( rmat(ldim4scale(1),ldim4scale(2),1), rmat_sum(ldim4scale(1),ldim4scale(2),1), source=0. )
-            ! FIRST LOOP TO OBTAIN WEIGHTED SUM
-            !$omp parallel default(shared) private(iframe,rmat,corr) proc_bind(close)
-            !$omp do schedule(static) reduction(+:rmat_sum)
-            do iframe=1,nframes
-                call movie_frames_shifted_patched(iframe)%get_rmat_sub(rmat)
-                rmat_sum = rmat_sum + rmat * frameweights(iframe)
-            end do
-            !$omp end do
-            ! SECOND LOOP TO UPDATE movie_sum_global_threads AND CALCULATE CORRS
-            !$omp do schedule(static)
-            do iframe=1,nframes
-                ! update array of sums (for future parallel exec)
-                call movie_sum_global_threads(iframe)%set_rmat(rmat_sum)
-                ! subtract the movie frame being correlated to reduce bias
-                call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_patched(iframe), w=frameweights(iframe))
-                ! calc corr
-                if( imode == 0 )then
-                    corrs(iframe) = movie_frames_shifted_patched(iframe)%real_corr(movie_sum_global_threads(iframe))
-                else
-                    corr = movie_frames_shifted_patched(iframe)%real_corr(movie_sum_global_threads(iframe))
-                endif
-            end do
-            !$omp end do
-            !$omp end parallel
-        end subroutine gen_patched_wsum_calc_corrs
     end subroutine motion_correct_patched
 
     subroutine motion_correct_patched_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
@@ -871,7 +820,8 @@ contains
         real, allocatable,                          intent(inout) :: filtarr(:,:)
         type(image), allocatable, target, optional, intent(in)    :: movie_frames(:)
         type(image), pointer :: movie_frames_here(:)
-        integer :: sz, filtsz, iframe
+        real    :: ksum_sq
+        integer :: k, sz, filtsz, iframe
         if( allocated(filtarr) )deallocate(filtarr)
         if( present(movie_frames) ) then
             movie_frames_here => movie_frames
@@ -879,11 +829,16 @@ contains
             movie_frames_here => movie_frames_scaled
         end if
         sz = movie_frames_here(1)%get_filtsz()
-        filtsz = 2*sz ! the filter goes beyond nyquist
+        filtsz = 2*sz ! the filter goes well beyond nyquist so we dont'have to worry about dimensions
         allocate(filtarr(nframes,filtsz))
         do iframe=1,nframes
             filtarr(iframe,:) = acc_dose2filter(movie_frames_here(1), acc_doses(iframe), kV, filtsz)
         end do
+        ! frame normalisation
+        do k = 1,filtsz
+            ksum_sq      = sum(frameweights * filtarr(:,k)**2.)
+            filtarr(:,k) = filtarr(:,k) / sqrt(ksum_sq / sum(frameweights))
+        enddo
     end subroutine gen_dose_weight_filter
 
     ! PRIVATE UTILITY METHODS, ANISO

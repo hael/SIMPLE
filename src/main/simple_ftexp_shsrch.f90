@@ -3,7 +3,7 @@ module simple_ftexp_shsrch
 include 'simple_lib.f08'
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded
+use simple_ft_expanded, only: ft_expanded, ftexp_has_bfacweights, ftexp_get_bfacweights_ptr
 
 implicit none
 
@@ -19,9 +19,9 @@ real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of co
 
 type :: ftexp_shsrch
     type(opt_spec)              :: ospec                     !< optimizer specification object
-    class(optimizer),   pointer :: nlopt     => null()       !< pointer to nonlinear optimizer
-    class(ft_expanded), pointer :: reference => null()       !< reference ft_exp
-    class(ft_expanded), pointer :: particle  => null()       !< particle ft_exp
+    class(optimizer),   pointer :: nlopt        => null()    !< pointer to nonlinear optimizer
+    class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
+    class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
     real                        :: motion_correctftol = 1e-4 !< function error tolerance
     real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
@@ -30,7 +30,6 @@ type :: ftexp_shsrch
     integer                     :: flims(3,2)                !< shifted limits
     integer                     :: ldim(3)                   !< logical dimension
     integer                     :: flims_nyq(3,2)            !< nyquist limits
-    real                        :: ptcl_smpd                 !< sampling distance
     real(dp),    allocatable    :: ftexp_tmpmat_re_2d(:,:)   !< temporary matrix for shift search
     real(dp),    allocatable    :: ftexp_tmpmat_im_2d(:,:)   !< temporary matrix for shift search
     complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
@@ -283,13 +282,25 @@ contains
         real(dp) :: arg
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
+        real, pointer :: bfacweights_here(:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2) !-1
-            do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+        if( ftexp_has_bfacweights() )then
+            call ftexp_get_bfacweights_ptr(bfacweights_here)
+            do kind=self%flims(2,1),self%flims(2,2)
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    self%ftexp_tmpmat_re_2d(hind,kind) = bfacweights_here(hind,kind,1)*&
+                        &real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                end do
             end do
-        end do
+        else
+            do kind=self%flims(2,1),self%flims(2,2) !-1
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                end do
+            end do
+        endif
     end subroutine calc_tmpmat_re
 
     !< calculate tmp matrix for cost function
@@ -299,13 +310,25 @@ contains
         real(dp) :: arg
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
+        real, pointer :: bfacweights_here(:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2) !-1
-            do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+        if( ftexp_has_bfacweights() )then
+            call ftexp_get_bfacweights_ptr(bfacweights_here)
+            do kind=self%flims(2,1),self%flims(2,2) !-1
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    self%ftexp_tmpmat_im_2d(hind,kind) = bfacweights_here(hind,kind,1)*&
+                        &aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                end do
             end do
-        end do
+        else
+            do kind=self%flims(2,1),self%flims(2,2) !-1
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                end do
+            end do
+        endif
     end subroutine calc_tmpmat_im
 
     !< calculate tmp matrix for cost function
@@ -316,15 +339,28 @@ contains
         complex(dp) :: tmp
         integer     :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
+        real, pointer :: bfacweights_here(:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        do kind=self%flims(2,1),self%flims(2,2) !-1
-            do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+        if( ftexp_has_bfacweights() )then
+            call ftexp_get_bfacweights_ptr(bfacweights_here)
+            do kind=self%flims(2,1),self%flims(2,2) !-1
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    tmp  = bfacweights_here(hind,kind,1) * self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
+                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
+                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                end do
             end do
-        end do
+        else
+            do kind=self%flims(2,1),self%flims(2,2) !-1
+                do hind=self%flims(1,1),self%flims(1,2)
+                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                    tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
+                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
+                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                end do
+            end do
+        endif
     end subroutine calc_tmpmat_re_im
 
     !< calculate tmp matrix for cost function

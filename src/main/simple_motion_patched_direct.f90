@@ -1037,7 +1037,6 @@ contains
             end do
         end do
         !$omp end parallel do
-        write (*,*) 'fdfcostfunction: ', f
     end subroutine motion_patched_fdfcostfun_8
 
     subroutine motion_patched_fdfcostfun_wrapper( self, vec, f, grad, D )
