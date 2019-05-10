@@ -132,12 +132,6 @@ contains
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
         ! generate power-spectra
-        !!!!!!!!!!!!!!!!!!!CHIARA!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
-        print *, 'params_glob%pspecsz before', params_glob%pspecsz
-        params_glob%pspecsz = 512
-        print *, 'params_glob%pspecsz after', params_glob%pspecsz
-        print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
         self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
         self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)

@@ -39,7 +39,6 @@ type :: ft_expanded
     procedure          :: get_transfmat_ptr
     ! setters
     procedure          :: set_cmat
-    procedure          :: extract_img
     procedure          :: zero
     ! arithmetics
     procedure          :: add
@@ -132,7 +131,9 @@ contains
                     ll = l * l
                     lcnt = lcnt+1
                     sqarg = hh + kk + ll
-                    if( sqarg <= lplim .and. sqarg >= hplim  )then
+                    if( sqarg < 0.5 )then
+                        cycle ! excludes zero
+                    elseif( sqarg <= lplim .and. sqarg >= hplim  )then
                         phys = img%comp_addr_phys([h,k,l])
                         self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
                         if( fetch_comps ) self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
@@ -196,91 +197,6 @@ contains
         complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
         self%cmat = cmat
     end subroutine set_cmat
-
-    subroutine extract_img( self, img, hp, lp )
-        class(ft_expanded), intent(inout) :: self
-        class(image),       intent(inout) :: img
-        real,               intent(in)    :: hp, lp
-        logical :: didft
-        integer :: hcnt, h, hh, kcnt, k, kk, lcnt, l, ll, sqarg
-        integer :: hplim, lplim
-        integer :: phys(3)
-        if (do_call_new()) then
-            call self%new(img, hp, lp, .true.)
-            return
-        end if
-        hplim = img%get_find(hp)
-        hplim = hplim*hplim
-        lplim = img%get_find(lp)
-        lplim = lplim*lplim
-        ! prepare image
-        didft = .false.
-        if( .not. img%is_ft() )then
-            call img%fft()
-            didft = .true.
-        endif
-        self%cmat = cmplx(0.,0.)
-        hcnt = 0
-        do h=self%lims(1,1),self%lims(1,2)
-            hh   = h * h
-            hcnt = hcnt + 1
-            kcnt = 0
-            do k=self%lims(2,1),self%lims(2,2)
-                kk   = k * k
-                kcnt = kcnt + 1
-                lcnt = 0
-                do l=self%lims(3,1),self%lims(3,2)
-                    ll = l * l
-                    lcnt = lcnt+1
-                    sqarg = hh + kk + ll
-                    if( sqarg <= lplim .and. sqarg >= hplim  )then
-                        phys = img%comp_addr_phys([h,k,l])
-                        self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
-                    end if
-                end do
-            end do
-        end do
-        if( didft ) call img%ifft()
-
-    contains
-
-        function do_call_new() result( res )
-            logical :: res
-            integer :: ldim_here(3)
-            real    :: smpd_here
-            real    :: lp_nyq
-            real    :: lp_here
-            integer :: lims_here(3,2)
-            integer :: flims_nyq_here(3,2)
-            integer :: flims_here(3,2)
-            integer :: i
-            res = .true.
-            if (.not. self%existence)            return
-            if (.not. allocated(self%cmat     )) return
-            if (.not. allocated(self%transfmat)) return
-            ldim_here      = img%get_ldim()
-            if( ldim_here(3) > 1 ) THROW_HARD('only for 2D images; extract_img')
-            if (any(ldim_here(1:2) /= self%ldim(1:2))) return
-            smpd_here      = img%get_smpd()
-            if (smpd_here /= self%smpd) return
-            if (self%hp /= hp) return
-            lp_nyq         = 2.*self%smpd
-            lp_here        = max(lp, lp_nyq)
-            if (lp_here /= self%lp) return
-            lims_here      = img%loop_lims(1,self%lp)
-            if (any(lims_here(:,:) /= self%lims(:,:))) return
-            flims_nyq_here = img%loop_lims(1,lp_nyq)
-            flims_here     = 1
-            do i=1,3
-                flims_here(i,2)     = lims_here(i,2)      - lims_here(i,1)      + 1
-                flims_nyq_here(i,2) = flims_nyq_here(i,2) - flims_nyq_here(i,1) + 1
-            end do
-            if (any(flims_nyq_here(:,:) /= self%flims_nyq(:,:))) return
-            if (any(flims_here(:,:)     /= self%flims(:,:)    )) return
-            res = .false.
-        end function do_call_new
-
-    end subroutine extract_img
 
     pure subroutine zero( self )
         class(ft_expanded), intent(inout) :: self

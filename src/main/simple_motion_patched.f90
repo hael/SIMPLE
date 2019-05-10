@@ -58,7 +58,6 @@ type :: motion_patched
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
     real                                :: trs
     real, public                        :: hp
-!    real                                :: lp
     real                                :: resstep
 contains
     procedure, private                  :: allocate_fields
@@ -472,7 +471,6 @@ contains
     subroutine deallocate_fields( self )
         class(motion_patched), intent(inout) :: self
         integer :: iframe, i, j
-        write (*,*) 'deallocate_fields ' ; call flush(6)
         if (allocated(self%shifts_patches)) deallocate(self%shifts_patches)
         if (allocated(self%shifts_patches_for_fit)) deallocate(self%shifts_patches_for_fit)
         if (allocated(self%frame_patches)) then
@@ -507,10 +505,10 @@ contains
         end do
     end subroutine set_size_frames_ref
 
-    subroutine set_patches( self, stack, patches )
+    subroutine set_patches( self, stack )
         class(motion_patched),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)
-        type(stack_type),  allocatable, intent(inout) :: patches(:,:)
+        real, allocatable :: res(:)
         integer :: i, j, iframe, k, l, kk, ll
         integer :: ip, jp           ! ip, jp: i_patch, j_patch
         integer :: lims_patch(2,2)
@@ -519,7 +517,7 @@ contains
         do j = 1, NY_PATCHED
             do i = 1, NX_PATCHED
                 do iframe=1,self%nframes
-                    call patches(i,j)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
+                    call self%frame_patches(i,j)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
                 end do
             end do
         end do
@@ -530,7 +528,7 @@ contains
         do iframe=1,self%nframes
             do j = 1, NY_PATCHED
                 do i = 1, NX_PATCHED
-                    call patches(i,j)%stack(iframe)%get_rmat_ptr(rmat_patch)
+                    call self%frame_patches(i,j)%stack(iframe)%get_rmat_ptr(rmat_patch)
                     lims_patch(:,:) = self%lims_patches(i,j,:,:)
                     do k = lims_patch(1,1), lims_patch(1,2)
                         kk = k
@@ -556,10 +554,16 @@ contains
             end do
         end do
         !$omp end parallel do
+        ! updates high-pass according to new dimensions
+        res = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp = min(self%hp,res(1))
+        deallocate(res)
+        write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
     end subroutine set_patches
 
     subroutine det_shifts( self )
         class(motion_patched), target, intent(inout) :: self
+        real :: corr_avg
         integer :: iframe, i, j
         real :: interpolated_xshift0(NX_PATCHED,NY_PATCHED), interpolated_yshift0(NX_PATCHED,NY_PATCHED)
         integer :: alloc_stat
@@ -589,6 +593,14 @@ contains
             end do
         end do
         !$omp end parallel do
+        corr_avg = 0.
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                corr_avg = corr_avg + self%align_iso(i,j)%get_corr()
+            enddo
+        enddo
+        corr_avg = corr_avg / real(NX_PATCHED*NY_PATCHED)
+        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         ! Set te first shift to 0.
         do i = 1, NX_PATCHED
             do j = 1, NY_PATCHED
@@ -695,8 +707,8 @@ contains
         end do
         call self%allocate_fields()
         call self%set_size_frames_ref()
-        ! divide the reference into patches
-        call self%set_patches(frames, self%frame_patches)
+        ! divide the reference into patches & updates hig-pass accordingly
+        call self%set_patches(frames)
         ! determine shifts for patches
         call self%det_shifts()
         ! fit the polynomial model against determined shifts

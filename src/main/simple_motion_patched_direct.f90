@@ -464,6 +464,7 @@ contains
         class(motion_patched_direct),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)
         type(stack_type),  allocatable, intent(inout) :: patches(:,:)
+        real, allocatable :: res(:)
         integer :: i, j, iframe, k, l, kk, ll
         integer :: ip, jp           ! ip, jp: i_patch, j_patch
         integer :: lims_patch(2,2)
@@ -509,6 +510,11 @@ contains
             end do
         end do
         ! foo !$omp end parallel do
+        ! updates high-pass according to new dimensions
+        res = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp = min(self%hp,res(1))
+        deallocate(res)
+        write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
     end subroutine set_patches
 
     subroutine det_shifts( self )
