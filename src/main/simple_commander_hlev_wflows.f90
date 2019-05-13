@@ -528,8 +528,6 @@ contains
                 if( .not. se2%has_subgrp(pgrp_init) )&
                     &THROW_HARD('Incompatible symmetry groups; simple_commander_hlev_wflows')
             endif
-            call se1%kill
-            call se2%kill
         endif
         ! read project & update sampling distance
         call spproj%read(params%projfile)
@@ -690,8 +688,8 @@ contains
         call cline_reconstruct3D%set('msk',      orig_msk)
         call cline_reconstruct3D%set('box',      real(orig_box))
         call cline_reconstruct3D%set('projfile', ORIG_WORK_PROJFILE)
-        call cline_postprocess%set('prg',     'postprocess')
-        call cline_postprocess%set('projfile', ORIG_WORK_PROJFILE)
+        call cline_postprocess%set('prg',       'postprocess')
+        call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
         if( do_eo )then
             call cline_reconstruct3D%set('eo', 'yes')
             call cline_postprocess%delete('lp')
@@ -716,6 +714,11 @@ contains
         call xrefine3D_distr%execute(cline_refine3D_init)
         iter = cline_refine3D_init%get_rarg('endit')
         call set_iter_dependencies
+        if( symran_before_refine )then
+            call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
+            call se1%symrandomize(work_proj1%os_ptcl3D)
+            call work_proj1%write_segment_inside('ptcl3D', trim(WORK_PROJFILE))
+        endif
         if( srch4symaxis )then
             write(logfhandle,'(A)') '>>>'
             write(logfhandle,'(A)') '>>> SYMMETRY AXIS SEARCH'
@@ -884,6 +887,8 @@ contains
             call img%write('cavgs_reprojs.mrc',cnt+1)
         enddo
         ! end gracefully
+        call se1%kill
+        call se2%kill
         call img%kill
         call spproj%kill
         if( allocated(WORK_PROJFILE) ) call del_file(WORK_PROJFILE)
