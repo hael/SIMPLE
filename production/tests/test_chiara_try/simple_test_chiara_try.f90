@@ -1,9 +1,23 @@
 module simple_test_chiara_try_mod
+    include 'simple_lib.f08'
+    use simple_aff_prop
+    use simple_commander_distr_wflows
     use simple_powerspec_analysis
+    use gnufor2
+    use simple_ctf
+    use simple_micops
     use simple_image
+    use simple_stackops
     use simple_math
-    use simple_segmentation
     use simple_picker_chiara
+    use simple_segmentation
+    use simple_parameters, only: parameters
+    use simple_cmdline,    only: cmdline
+    use simple_tvfilter
+    use simple_ctf
+    use simple_ppca
+    use simple_stat
+    use simple_lapackblas, only : sgeev
     implicit none
         real, allocatable :: centers(:,:)
         integer :: counter
@@ -186,8 +200,9 @@ end subroutine laplacian_filt
       if(present(r)) r=rmsd
   end subroutine calc_rmsd
 
-  subroutine calc_circ(img)
+  subroutine calc_circ(img, i)
       type(image), intent(inout) :: img
+      integer, optional, intent(in) :: i
       type(image) :: img_cc
       real,    allocatable :: rmat(:,:,:)
       logical, allocatable :: border(:,:,:)
@@ -199,10 +214,10 @@ end subroutine laplacian_filt
       integer, allocatable :: pos(:,:)
       logical, allocatable :: mask_dist(:) !for min and max dist calculation
       integer :: location(1) !location of the farest vxls of the atom from its center
-  integer :: loc_min(1)
+      integer :: loc_min(1)
       real    :: longest_dist
       real :: volume, surface
-      call img%find_connected_comps(img_cc)
+      !call img%find_connected_comps(img_cc)
       ! call img_cc%write('ImgCc.mrc')
       ! rmat = img_cc%get_rmat()
       ! allocate(imat(50,50,50),source = nint(rmat)) !for function get_pixel_pos
@@ -223,68 +238,62 @@ end subroutine laplacian_filt
       ! circularity = (6.*sqrt(pi)*volume)/ sqrt((surface**3))
       ! print *, 'circularity = ',circularity
       ! stop
-      rmat = img_cc%get_rmat()
-      allocate(imat(150,150,150),source = nint(rmat)) !for function get_pixel_pos
+      !rmat = img_cc%get_rmat()
+      rmat = img%get_rmat()
+      allocate(imat(160,160,160),source = nint(rmat)) !for function get_pixel_pos
       v(1) = count(imat == 1) !just count the number of vxls in the cc
-      call img%border_mask(border, 1, .true.)
+      call img%border_mask(border, 1)!, .true.)
       rmat = 0.
       where(border .eqv. .true.) rmat = 1.
       call img%set_rmat(rmat)
+      if(present(i)) then
+        call img%write(int2str(i)//'Border.mrc')
+      else
+          call img%write('Border.mrc')
+      endif
       s(1) = count(border .eqv. .true.)
-      circularity = (6.*sqrt(pi)*real(v(1)))/ sqrt(real(s(1))**3)
-         print*, 'vol = ', v(1), 'surf = ', s(1), 'circ = ', circularity
+      circularity = (6.*sqrt(pi)*real(v(1)))/sqrt(real(s(1))**3)
+      print*, 'vol = ', v(1), 'surf = ', s(1), 'circ = ', circularity
       deallocate(imat, border, rmat)
   end subroutine calc_circ
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
-    !$ use omp_lib
-    !$ use omp_lib_kinds
-  include 'simple_lib.f08'
-  use simple_aff_prop
-  use simple_commander_distr_wflows
-  use simple_test_chiara_try_mod
-  use simple_powerspec_analysis
-  use gnufor2
-  use simple_ctf
-  use simple_micops
-  use simple_image
-  use simple_stackops
+    include 'simple_lib.f08'
+    use simple_image,         only : image
+    use simple_picker_chiara, only : pixels_dist, get_pixel_pos, polish_cc
+    use simple_atoms,         only : atoms
   use simple_math
-  use simple_picker_chiara
-  use simple_segmentation
-  use simple_parameters, only: parameters
-  use simple_cmdline,    only: cmdline
-  use simple_tvfilter
-  use simple_ctf
-  use simple_ppca
+  ! use simple_picker_chiara
+  ! use simple_segmentation
+  ! use simple_parameters, only: parameters
+  ! use simple_cmdline,    only: cmdline
+  ! use simple_tvfilter
+  ! use simple_ctf
+  ! use simple_ppca
   use simple_stat
-  use simple_lapackblas, only : sgeev
+  ! use simple_lapackblas, only : sgeev
+  use simple_test_chiara_try_mod
   type(image)       :: img, img_cc
-  integer           :: i, j, ncls
+  integer           :: i, j, ncls, cnt
   real, allocatable :: rmat(:,:,:), rmat_mask(:,:,:), rmat_prod(:,:,:)
-  real :: centers1(3,4)
-  real :: centers2(3,4)
+  real :: centers1(3,10)
+  real :: centers2(3,10)
+  integer, allocatable :: sz(:)
+  integer, allocatable :: imat(:,:,:)
+  real :: r, avg, d, st, m(3), smpd, tmp_max, coord(3)
+  integer :: N_max
 
-    !!!!!!!!!!!!!!!!!!!!!!!!!!!!calc_rmas test!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!calc_rmsd dtest!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     ! centers1 = reshape([1.,1.,1.,1.5,1.5,1.5,2.3,2.4,2.5,4.1,4.3,4.7],[3,4])
     ! print *, 'centers1(:3,1) = ',centers1(:3,1)
     ! call vis_mat(centers1)
     ! centers2 = reshape([2.1,2.3,2.5,1.,0.7,0.6,1.4,1.3,1.6,4.3,3.9,4.9],[3,4])
     ! print *, 'centers2 = '
     ! call vis_mat(centers2)
-   ! call calc_rmsd(centers1,centers2)
+    ! call calc_rmsd(centers1,centers2)
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    call img%new([160,160,160],0.358)
-    call img%read('particle1.mrc')
-    rmat = img%get_rmat()
-    call img%read('particle1SoftMask.mrc')
-    rmat_mask = img%get_rmat()
-    allocate(rmat_prod(160,160,160), source = 0.)
-    rmat_prod = rmat*rmat_mask
-    call img%set_rmat(rmat_prod)
-    call img%write('particle1SoftMasked.mrc')
-
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    ! vec = reshape([1.,2.,0.,0.,5.,0.,0.,8.,9.,0., 0.,12.,13.,0.,0.,16.,17.,0.,0.,20.], [10,2])
     ! print *, 'Vec Before = '
    ! call vis_mat(vec)

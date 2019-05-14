@@ -5410,6 +5410,16 @@ contains
         i = px(1)
         j = px(2)
         k = px(3)
+        if(i+1<self%ldim(1) .and. i-1>0 .and. j+1<self%ldim(2) .and. j-1>0 .and. k+1<self%ldim(3) .and. k-1>0) then
+            neigh_4(1) = self%rmat(i,j,k+1)
+            neigh_4(2) = self%rmat(i,j,k-1)
+            neigh_4(3) = self%rmat(i,j+1,k)
+            neigh_4(4) = self%rmat(i,j-1,k)
+            neigh_4(5) = self%rmat(i+1,j,k)
+            neigh_4(6) = self%rmat(i-1,j,k)
+            nsz = 6
+            return
+        endif
         if( i == 1 .and. j == 1 .and. k == 1) then
             neigh_4(1) = self%rmat(i,j,k+1)
             neigh_4(2) = self%rmat(i,j+1,k)
@@ -5466,13 +5476,6 @@ contains
             nsz = 4
             return
         endif
-        neigh_4(1) = self%rmat(i,j,k+1)
-        neigh_4(2) = self%rmat(i,j,k-1)
-        neigh_4(3) = self%rmat(i,j+1,k)
-        neigh_4(4) = self%rmat(i,j-1,k)
-        neigh_4(5) = self%rmat(i+1,j,k)
-        neigh_4(6) = self%rmat(i-1,j,k)
-        nsz = 6
     end subroutine calc3D_neigh_4_1
 
     ! Returns 4-neighborhoods (in 3D they are 6) of the pixel position px in self

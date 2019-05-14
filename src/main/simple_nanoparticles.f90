@@ -28,10 +28,9 @@ type :: nanoparticle
     real        :: avg_dist_atoms    = 0.
     real        :: SCALE_FACTOR      = 0.!for oversampling
     integer     :: n_cc              = 0 !number of atoms (connected components)
-    integer     :: dim_over(3)       = 0 !logical dimensions of the oversampled
+    !integer     :: dim_over(3)       = 0 !logical dimensions of the oversampled
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
-    real,    allocatable  :: circularity(:)
     real,    allocatable  :: ang_var(:)
     real,    allocatable  :: dists(:)
     integer, allocatable  :: loc_longest_dist(:,:)   !for indentific of the vxl that determins the longest dim of the atom
@@ -46,20 +45,17 @@ type :: nanoparticle
     procedure          :: set_partname
     ! segmentation and statistics
     procedure          :: binarize => nanopart_binarization
-    !procedure          :: is_center_inside_atom
     procedure          :: size_filtering
     procedure          :: find_centers
     procedure, private :: nanopart_masscen
     procedure, private :: calc_aspect_ratio_private
     procedure          :: calc_aspect_ratio
-    procedure          :: calc_circularity
     procedure          :: discard_outliers
     procedure, private :: distances_distribution
     ! clustering
     procedure          :: cluster => nanopart_cluster
     procedure, private :: affprop_cluster_ar
     procedure, private :: affprop_cluster_ang
-    procedure, private :: affprop_cluster_circ
     procedure, private :: affprop_cluster_dist_distr
     procedure          :: search_polarization
     ! comparison
@@ -92,10 +88,10 @@ contains
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, self%smpd)
         call self%img%new         (self%ldim, self%smpd)
         call self%img_bin%new     (int(real(self%ldim)*self%SCALE_FACTOR), self%smpd/self%SCALE_FACTOR)
-        call self%img_over_smp%new(int(real(self%ldim)*self%SCALE_FACTOR), self%smpd/self%SCALE_FACTOR)
-        self%dim_over(1) = int(real(self%ldim(1))*self%SCALE_FACTOR)
-        self%dim_over(2) = int(real(self%ldim(2))*self%SCALE_FACTOR)
-        self%dim_over(3) = int(real(self%ldim(3))*self%SCALE_FACTOR)
+        !call self%img_over_smp%new(int(real(self%ldim)*self%SCALE_FACTOR), self%smpd/self%SCALE_FACTOR)
+        ! self%dim_over(1) = int(real(self%ldim(1))*self%SCALE_FACTOR)
+        ! self%dim_over(2) = int(real(self%ldim(2))*self%SCALE_FACTOR)
+        ! self%dim_over(3) = int(real(self%ldim(3))*self%SCALE_FACTOR)
         call self%img%read(fname)
     end subroutine new_nanoparticle
 
@@ -158,121 +154,105 @@ contains
     ! correspond to the most consistent one, meaning that the size of the ccs
     ! would have a gaussian distribution.
     subroutine nanopart_binarization( self )
-        use gnufor2
         class(nanoparticle), intent(inout) :: self
-        real, allocatable :: rmat(:,:,:), rmat_t(:,:,:)
-        real    :: step          !histogram disretization step
-        real    :: thresh        !binarization threshold
-        real    :: selected_t(3)  !selected threshold for nanoparticle binarization
+        type(image)       :: img_bin_thresh(N_THRESH-1)
+        type(image)       :: img_ccs_thresh(N_THRESH-1)
+        real,    allocatable :: rmat(:,:,:), rmat_t(:,:,:)
+        integer, allocatable :: rmat_int(:,:,:)
+        integer, allocatable :: sz(:) !size of the ccs and correspondent label
+        real    :: step               !histogram disretization step
+        real    :: thresh             !binarization threshold
+        integer :: ind(3)             !selected indexes corresponding to threshold for nanoparticle binarization
+        integer :: position(1)
         integer :: cent_outside_atom(3)
         real    :: x_thresh(N_THRESH-1), y_med(N_THRESH-1)
-        integer, allocatable :: sz(:) !size of the ccs and correspondent label
         integer ::  i, cc
         logical, allocatable :: yes_no(:)
-        real, allocatable :: rmat_aux(:,:,:)
-        integer, allocatable :: imat_cc(:,:,:)
-        type(image) :: img_aux, img_cc_aux
         real :: avg_sz, stdev_sz
         real :: t
-        integer, allocatable :: rmat_int(:,:,:), rmat_big_cc(:,:,:)
-        type(image) :: img_big_cc
-        integer :: position(1)
         write(logfhandle,*) '****binarization, init'
-        call self%over_sample()
-        rmat = self%img_over_smp%get_rmat()
-        allocate(rmat_t(self%dim_over(1), self%dim_over(2), self%dim_over(3)), source = 0.)
+        !call self%over_sample()
+        rmat = self%img%get_rmat()
+        allocate(rmat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0.)
         step = maxval(rmat)/real(N_THRESH)
         do i = 1, N_THRESH-1
             call progress(i, N_THRESH-1)
+            call img_bin_thresh(i)%new(self%ldim, self%smpd)
             thresh = real(i)*step
             where(rmat > thresh)
                 rmat_t = 1.
             elsewhere
                 rmat_t = 0.
             endwhere
-            call self%img_bin%set_rmat(rmat_t)
-            call self%img_bin%find_connected_comps(self%img_cc)
-            sz          = self%img_cc%size_connected_comps()
+            call img_bin_thresh(i)%set_rmat(rmat_t)
+            call img_bin_thresh(i)%find_connected_comps(img_ccs_thresh(i))
+            sz          = img_ccs_thresh(i)%size_connected_comps()
             x_thresh(i) = thresh
             y_med(i)    = median(real(sz))
         enddo
-        print *, 'Intial threshold selected, starting refinement'
-        selected_t(1:1) = x_thresh(maxloc(y_med))
-        selected_t(2:2) = x_thresh(maxloc(y_med)+1)
-        selected_t(3:3) = x_thresh(maxloc(y_med)+2)
-        where(rmat > selected_t(1))
-            rmat_t = 1.
-        elsewhere
-            rmat_t = 0.
-        endwhere
-        call self%img_bin%set_rmat(rmat_t)
-        call self%img_bin%find_connected_comps(self%img_cc)
-        rmat = self%img_cc%get_rmat()
-        self%n_cc = int(maxval(rmat))
-        call self%find_centers()
-        allocate(yes_no(self%n_cc))
-        yes_no = is_center_inside_atom(self)
-        allocate(imat_cc (self%ldim(1),self%ldim(2),self%ldim(3)), source = 0 )
-        allocate(rmat_aux(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0.)
-        call img_cc_aux%new(self%ldim,self%smpd)
-        cent_outside_atom(1) = count(yes_no .eqv. .false.)
-        print *, 'For', 0, 'thresh', cent_outside_atom(1), 'centers are not inside the atom'
-        deallocate(yes_no)
-        rmat = self%img_over_smp%get_rmat()
-        do i = 1, 2
-            where(rmat > selected_t(i+1))
-                rmat_t = 1.
-            elsewhere
-                rmat_t = 0.
-            endwhere
-            call self%img_bin%set_rmat(rmat_t)
-            call self%img_bin%find_connected_comps(self%img_cc)
-            rmat = self%img_cc%get_rmat()
-            self%n_cc = int(maxval(rmat))
-            call self%find_centers()
+        write(logfhandle,*)'Intial threshold selected, starting refinement'
+        !two consecutive thresholds after the ideal one
+        ind(1:1) = maxloc(y_med)
+        ind(2:2) = ind(1:1)+1
+        ind(3:3) = ind(2:2)+1
+        do i = 1, 3
+            rmat_t = img_ccs_thresh(ind(i))%get_rmat()
+            self%n_cc = int(maxval(rmat_t))
+            call self%find_centers(img_bin_thresh(ind(i)),img_ccs_thresh(ind(i)))
             allocate(yes_no(self%n_cc))
-            yes_no = is_center_inside_atom(self)
-            cent_outside_atom(i+1) = count(yes_no .eqv. .false.)
-            print *, 'For', i, 'thresh', cent_outside_atom(i+1), 'centers are not inside the atom'
+            yes_no = is_center_inside_atom(self,img_bin_thresh(ind(i)))
+            cent_outside_atom(i) = count(yes_no .eqv. .false.)
+            write(logfhandle,*)'For thresh ',trim(int2str(i)),', ', trim(int2str(cent_outside_atom(i))), ' centers are not inside the atom'
             deallocate(yes_no)
         enddo
         position(:) =  minloc(cent_outside_atom)
-        if(DEBUG_HERE) write(logfhandle,*) 'Final threshold', selected_t(position(1))
-        rmat = self%img_over_smp%get_rmat()
-        rmat_t = 0.
-        where(rmat > selected_t(position(1))) rmat_t = 1.
-        call self%img_bin%set_rmat(rmat_t)
-        call self%img_bin%find_connected_comps(self%img_cc)
+        write(logfhandle,*) 'Final threshold for binarization', x_thresh(ind(position(1)))
+        call self%img_bin%copy(img_bin_thresh(ind(position(1))))
+        call self%img_bin%write('BINfinal.mrc')
+        call  self%img_cc%copy(img_ccs_thresh(ind(position(1))))
+        call  self%img_cc%write('CCsfinal.mrc')
+        !kill images
+        do i = 1, N_THRESH-1
+            call img_bin_thresh(i)%kill
+            call img_ccs_thresh(i)%kill
+        enddo
         write(logfhandle,*) 'Final threshold selected, starting connected atoms erosion'
         sz = self%img_cc%size_connected_comps()
-        ! call hist(real(sz),100)
         avg_sz = real(sum(sz))/real(size(sz))
         stdev_sz = 0.
         do cc = 1, size(sz)
             stdev_sz = stdev_sz + (sz(cc) - avg_sz)**2
         enddo
         stdev_sz = sqrt(stdev_sz/(real(size(sz)-1)))
-        print *, 'AVG SZ    = ', avg_sz
-        print *, "STDEV_SZ  = ", stdev_sz
         t = avg_sz + 2.*stdev_sz !assuming Gaussian distrib, 95% is in [-2sigma,2sigma]
-        print *, 'threshold = ', t
-        call img_big_cc%new(self%ldim, self%smpd)
-        allocate(rmat_big_cc(self%ldim(1),self%ldim(2),self%ldim(3)), source = 0)
+        write(logfhandle,*) 'Starting erosion of big atoms'
+        if(DEBUG_HERE) then
+            write(logfhandle,*)'avg   atom size   = ', avg_sz
+            write(logfhandle,*)"stdev atom size   = ", stdev_sz
+            write(logfhandle,*)'Erosion threshold = ', t
+        endif
         rmat_int = int(self%img_cc%get_rmat())
         do cc = 1, size(sz)
             if(sz(cc) > t) then
-                 where(rmat_int == cc) rmat_big_cc = rmat_int
-                call self%img_cc%erosion(cc)
+                 call self%img_cc%erosion(cc)
             endif
         enddo
         ! update
         rmat = 0.
         rmat_int = int(self%img_cc%get_rmat())
         where(rmat_int > 0) rmat = 1.
+        !update img bin
         call self%img_bin%set_rmat(rmat)
+        !update image cc
+        call self%img_bin%find_connected_comps(self%img_cc)
+        !update centers
         call self%find_centers()
-        if(DEBUG_HERE) call self%img_bin%write('Nanopart_binarization.mrc')
-        deallocate(rmat, rmat_t)
+        ! deallocate
+        if(allocated(sz))       deallocate(sz)
+        if(allocated(rmat))     deallocate(rmat)
+        if(allocated(rmat_t))   deallocate(rmat_t)
+        if(allocated(rmat_int)) deallocate(rmat_int)
+        if(allocated(yes_no))   deallocate(yes_no)
         write(logfhandle,*) '****binarization, completed'
     contains
 
@@ -280,12 +260,13 @@ contains
         ! centers lies inside the atom or not. The result is
         ! saved in yes_no(:). The entry of yes_no corresponds
         ! to the connected component label of the atom.
-        function is_center_inside_atom(self) result(yes_no)
+        function is_center_inside_atom(self, img_bin) result(yes_no)
             class(nanoparticle), intent(inout) :: self
+            type(image), intent(in) :: img_bin
             logical :: yes_no(self%n_cc)
             integer :: cc
             integer, allocatable :: imat(:,:,:)
-            imat = int(self%img_bin%get_rmat())
+            imat = int(img_bin%get_rmat())
             do cc = 1, self%n_cc
                 if(imat(nint(self%centers(1,cc)),nint(self%centers(2,cc)),nint(self%centers(3,cc))) > 0.5) then
                     yes_no(cc) = .true.
@@ -301,42 +282,92 @@ contains
     ! components image of the nanoparticle. It calculates the
     ! size of all the connected components, order them and discard
     ! bottom 15%.
+    ! subroutine size_filtering(self)
+    !     class(nanoparticle),          intent(inout) :: self
+    !     real, allocatable :: rmat(:,:,:), rmat_cc(:,:,:)
+    !     integer :: n_discard
+    !     integer, allocatable :: sz(:)
+    !     logical, allocatable :: mask(:)
+    !     integer :: i
+    !     integer :: label(1)
+    !     write(logfhandle, *) '****size filtering, init'
+    !     ! next lines are too expensive, work on that
+    !     rmat_cc = self%img_cc%get_rmat()
+    !     rmat    = self%img_bin%get_rmat()
+    !     self%n_cc = int(maxval(rmat_cc))
+    !     n_discard = self%n_cc*15/100
+    !     sz = self%img_cc%size_connected_comps()
+    !     allocate(mask(size(sz)), source = .true.)
+    !     do i = 1, n_discard
+    !         label(:) = minloc(sz,mask)
+    !         where(abs(rmat_cc-real(label(1))) < TINY)
+    !             rmat_cc = 0.
+    !             rmat    = 0.
+    !         endwhere
+    !     mask(label(1)) = .false.
+    !     enddo
+    !     call self%img_cc%set_rmat(rmat_cc) !connected components clean up
+    !     call self%img_bin%set_rmat(rmat)
+    !     ! re-order ccs
+    !     call self%img_cc%order_cc()
+    !     if(allocated(rmat_cc)) deallocate(rmat_cc)
+    !     rmat_cc   = self%img_cc%get_rmat()
+    !     call self%img_bin%set_rmat(rmat)
+    !     self%n_cc = nint(maxval(rmat_cc))
+    !     !update
+    !     call self%find_centers()
+    !     write(logfhandle, *) '****size filtering, completed'
+    !     deallocate(rmat,rmat_cc,sz,mask)
+    ! end subroutine size_filtering
+
+    ! This subroutine performs size filtering on the connected
+    ! components image of the nanoparticle. It calculates the
+    ! size of all the connected components, the average and the standard
+    ! deviation. It hypothesises gaussian distribution, so it discards
+    ! the connected components which are outside the range [-2sigma,2sigma].
     subroutine size_filtering(self)
-        class(nanoparticle),          intent(inout) :: self
-        real, allocatable :: rmat(:,:,:), rmat_cc(:,:,:)
-        integer :: n_discard
+        class(nanoparticle), intent(inout) :: self
+        real,    allocatable :: rmat(:,:,:)
+        integer, allocatable :: imat_cc(:,:,:)
         integer, allocatable :: sz(:)
-        logical, allocatable :: mask(:)
-        integer :: i
-        integer :: label(1)
+        integer :: cc
+        real    :: avg_sz, stdev_sz
         write(logfhandle, *) '****size filtering, init'
-        ! next lines are too expensive, work on that
-        rmat_cc = self%img_cc%get_rmat()
+        imat_cc = int(self%img_cc%get_rmat())
         rmat    = self%img_bin%get_rmat()
-        self%n_cc = int(maxval(rmat_cc))
-        n_discard = self%n_cc*15/100
         sz = self%img_cc%size_connected_comps()
-        allocate(mask(size(sz)), source = .true.)
-        do i = 1, n_discard
-            label(:) = minloc(sz,mask)
-            where(abs(rmat_cc-label(1)) < TINY)
-                rmat_cc = 0.
-                rmat    = 0.
-            endwhere
-        mask(label(1)) = .false.
+        avg_sz = real(sum(sz))/real(size(sz))
+        stdev_sz = 0.
+        do cc = 1, size(sz)
+            stdev_sz = stdev_sz + (sz(cc) - avg_sz)**2
         enddo
-        call self%img_cc%set_rmat(rmat_cc) !connected components clean up
+        stdev_sz = sqrt(stdev_sz/(real(size(sz)-1)))
+        !assuming Gaussian distrib, 95% is in [-2sigma,2sigma] and 68% is in [-sigma,sigma]
+        !big ccs have already been removed by erosion. Now we need to remove too small
+        !ccs, they usually represent background noise.
+        do cc = 1, size(sz)
+            ! if(sz(cc)>avg_sz+2.*stdev_sz .or. sz(cc)<avg_sz-2.*stdev_sz ) then
+            if(sz(cc)<avg_sz-1.*stdev_sz ) then
+                where(imat_cc==cc)
+                    imat_cc = 0
+                    rmat    = 0.
+                endwhere
+             endif
+        enddo
+        call self%img_cc%set_rmat(real(imat_cc)) !connected components clean up
         call self%img_bin%set_rmat(rmat)
-        ! re-order ccs
+        !update img_cc: re-order ccs
         call self%img_cc%order_cc()
-        if(allocated(rmat_cc)) deallocate(rmat_cc)
-        rmat_cc   = self%img_cc%get_rmat()
+        if(allocated(imat_cc)) deallocate(imat_cc)
+        !update img_bin
         call self%img_bin%set_rmat(rmat)
-        self%n_cc = nint(maxval(rmat_cc))
-        !update
+        imat_cc   = int(self%img_cc%get_rmat())
+        !update n_cc
+        self%n_cc = maxval(imat_cc)
+        !update centers
         call self%find_centers()
         write(logfhandle, *) '****size filtering, completed'
-        deallocate(rmat,rmat_cc,sz,mask)
+        deallocate(rmat,imat_cc,sz)
     end subroutine size_filtering
 
     ! This subroutine takes in input 2 nanoparticle and their
@@ -345,15 +376,25 @@ contains
     subroutine compare_atomic_models(nano1,nano2)
         class(nanoparticle), intent(inout) :: nano1, nano2 !nanoparticles to compare
         real, allocatable :: centers1(:,:), centers2(:,:)
-        real    :: ada  !minimum average dist atoms between nano1 and nano2
+        real    :: ada       ! minimum average dist atoms between nano1 and nano2
         real    :: rmsd
-        real    :: avg_circ
         integer :: i
+        logical :: print_ar ! for printing aspect ratios statistics
+        logical :: print_as ! for printing asymmetric units in c3-sym nanoparticles
+        print_ar = .false.
+        print_as = .false.
+        if(print_as) then
+            call nano1%print_asym_unit()
+            call nano2%print_asym_unit()
+        endif
         call nano1%binarize()
         call nano2%binarize()
-        ! Outliers discarding
+        ! Outliers discarding (and size filtering)
         call nano1%discard_outliers()
         call nano2%discard_outliers()
+        ! Aspect ratios calculations
+        call nano1%calc_aspect_ratio(print_ar)
+        call nano2%calc_aspect_ratio(print_ar)
         ! Ouput file
         open(121, file='CompareAtomicModels') !, position='append')
         write(unit = 121, fmt = '(a)') ''
@@ -362,20 +403,14 @@ contains
         write(unit = 121, fmt = '(a)') 'and'
         write(unit = 121, fmt = '(a)') trim(nano2%fbody)
         write(logfhandle,*) '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
-        ! RMSD calculation
         write(logfhandle,*) 'avg dist between atoms in vol1 = ',nano1%avg_dist_atoms*nano1%smpd,'A'
         write(logfhandle,*) 'avg dist between atoms in vol2 = ',nano2%avg_dist_atoms*nano2%smpd,'A'
+        ! RMSD calculation
         ada = min(nano1%avg_dist_atoms, nano2%avg_dist_atoms)
         call atomic_position_rmsd(nano1,nano2, ada, rmsd)
         write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD = ', rmsd*nano1%smpd, "A"
         write(unit = 121, fmt = '(a)') '***comparison completed'
         close(121)
-        ! Circularities calculation
-        call nano1%calc_circularity(avg_circ)
-        write(logfhandle,*) 'avg circularity in vol1   ', trim(real2str(avg_circ))
-        call nano2%calc_circularity(avg_circ)
-        write(logfhandle,*) 'avg circularity in vol2   ', trim(real2str(avg_circ))
-        ! kill
         call nano1%kill
         call nano2%kill
         if(allocated(centers1)) deallocate(centers1)
@@ -401,8 +436,11 @@ contains
             integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
             integer :: cnt, cnt_zeros
             real    :: sum, rmsd
+            real :: coord(3)
+            real :: avg, stdev, m(3), tmp_max, d !for statistics calculation
             type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
             type(atoms) :: centers_close1, centers_close2
+            type(atoms) :: couples1
             ! If they don't have the same nb of atoms
             if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
                 N_min = size(nano1%centers, dim = 2)
@@ -414,31 +452,44 @@ contains
                 call centers_coupled2%new(N_max, dummy=.true.)
                 call centers_close1%new  (N_max, dummy=.true.)
                 call centers_close2%new  (N_max, dummy=.true.)
-                !call couples1%new        (N_max, dummy=.true.)
+                call couples1%new        (N_max, dummy=.true.)
                 allocate(dist(N_max), dist_sq(N_max), source = 0.)
                 allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
                 allocate(mask(N_min), source = .true.)
                 cnt = 0
                 do i = 1, N_max !compare based on centers2
                     dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
-                    !call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
                     if(dist(i)*nano2%smpd > 2.2) then
                         dist(i) = 0. !it means there is no correspondent atom in the other nano
                         cnt = cnt+1  !to discard them in the rmsd calculation
+                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd < 0.5) then
                         dist_close(i) = dist(i)**2
                         call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd/nano2%SCALE_FACTOR)
                         call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.2 ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                        call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                        call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                        mask(location(1)) = .false. ! not to consider the same atom more than once
+                        ! remove the atoms from the pdb file
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
                     endif
                     dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
                     if(DEBUG_HERE) then
                          write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
                          write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
-                    endif
-                    if(dist(i) > TINY) then !to save the atoms which correspond with a precision in the range [0,220] pm
-                        call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd/nano2%SCALE_FACTOR)
-                        call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano1%SCALE_FACTOR)
-                        mask(location(1)) = .false. ! not to consider the same atom more than once
                     endif
                 enddo
             else
@@ -457,40 +508,99 @@ contains
                 cnt = 0
                 do i = 1, N_max !compare based on centers1
                     dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
-                    !call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano2%SCALE_FACTOR)
                     if(dist(i)*nano2%smpd > 2.2) then ! 2.2 is the biggest lattice spacing they found in the paper
                         dist(i) = 0.
                         cnt = cnt+1
+                        call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano2%SCALE_FACTOR)
+                        ! remove the atoms from the pdb file
+                        call centers_coupled1%set_occupancy(i,0.)
+                        call centers_coupled2%set_occupancy(i,0.)
+                        call centers_close1%set_occupancy(i,0.)
+                        call centers_close2%set_occupancy(i,0.)
+                        call couples1%set_occupancy(i,0.)
                     elseif(dist(i)*nano2%smpd <= 0.5) then
                             dist_close(i) = dist(i)**2
                             call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
                             call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                            ! remove the atoms from the pdb file
+                            call centers_coupled1%set_occupancy(i,0.)
+                            call centers_coupled2%set_occupancy(i,0.)
+                            call couples1%set_occupancy(i,0.)
+                    elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.2 ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                            call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
+                            call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
+                            call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd/nano2%SCALE_FACTOR)
+                            mask(location(1)) = .false. ! not to consider the same atom more than once
+                            ! remove the atoms from the pdb file
+                            call centers_close1%set_occupancy(i,0.)
+                            call centers_close2%set_occupancy(i,0.)
                     endif
                     dist_sq(i) = dist(i)**2 !formula wants them square
                     if(DEBUG_HERE) then
                         write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
                         write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                     endif
-                    if(dist(i) > TINY) then !to save the atoms which correspond with a precision in the range [0,220] pm
-                        call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd/nano1%SCALE_FACTOR)
-                        call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd/nano2%SCALE_FACTOR)
-                        mask(location(1)) = .false. ! not to consider the same atom more than once
-                    endif
                 enddo
             endif
-            call centers_close1%writepdb  ('atom_close_couples_vol1')
-            call centers_close2%writepdb  ('atom_close_couples_vol2')
-            call centers_coupled1%writepdb('atom_couples_vol1')
-            call centers_coupled2%writepdb('atom_couples_vol2')
-            !call couples1%writepdb('couples1')
+            ! remove unused atoms from the pdb file
+            do i = 1, N_max
+                coord(:) = centers_close1%get_coord(i)
+                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close1%set_occupancy(i,0.)
+                coord(:) = centers_close2%get_coord(i)
+                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close2%set_occupancy(i,0.)
+                coord(:) = centers_coupled1%get_coord(i)
+                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled1%set_occupancy(i,0.)
+                coord(:) = centers_coupled2%get_coord(i)
+                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled2%set_occupancy(i,0.)
+            enddo
+            call centers_close1%writepdb  (trim(nano1%fbody)//'_atom_close_couples')
+            call centers_close2%writepdb  (trim(nano2%fbody)//'_atom_close_couples')
+            call centers_coupled1%writepdb(trim(nano1%fbody)//'_atom_couples')
+            call centers_coupled2%writepdb(trim(nano2%fbody)//'_atom_couples')
+            call couples1%writepdb('extra_atoms')
+            !Avg dist and stdev symmetry breaking atoms from the center
+            !Max dist atoms from the center
+            avg = 0.
+            cnt = 0
+            m(:) = nano1%nanopart_masscen()
+            m(:) = (m(:)-1.)*nano1%smpd
+            tmp_max = 0.
+            do i = 1, N_max
+                coord(:) = centers_coupled1%get_coord(i)
+                if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                    cnt = cnt + 1
+                    avg = avg + euclid(coord,m)
+                    if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
+                endif
+            enddo
+            avg = avg/real(cnt)
+            cnt = 0
+            stdev = 0.
+            do i = 1, N_max
+                coord(:) = centers_coupled1%get_coord(i)
+                if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                    cnt = cnt + 1
+                    stdev = stdev + (euclid(coord,m)-avg)**2
+                endif
+            enddo
+            stdev = sqrt(stdev/(real(cnt)-1.))
+            write(logfhandle,*)'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', trim(real2str(avg)), ' A'
+            write(logfhandle,*)'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', trim(real2str(stdev)), ' A'
+            write(logfhandle,*)'MAX_RAD DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', trim(real2str(tmp_max)), ' A'
+            tmp_max = 0. ! reset
+            do i = 1, size(nano1%centers, dim = 2)
+                coord(:) = (nano1%centers(:,i)-1.)*nano1%smpd
+                    d =  euclid(coord,m)
+                    if(d > tmp_max) tmp_max = d
+            enddo
+            write(logfhandle,*)'MAX_RAD C1 MAP: ', trim(real2str(tmp_max)), ' A'
+            ! kill atoms instances
             call centers_close1%kill
             call centers_close2%kill
             call centers_coupled1%kill
             call centers_coupled2%kill
-            !call couples1%kill
-            write(logfhandle,*) '**********'
-            write(logfhandle,*) trim(int2str(cnt-(N_max-N_min))), ' atoms are considered not to correspond since they have error bigger than 220 pm.'
-            write(logfhandle,*) 'They are ', trim(int2str((cnt-N_max+N_min)*100/N_min)), '% of the atoms.'
+            call couples1%kill
+            !RMSD
             rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
             dist_no_zero = pack(dist, dist>TINY)
             dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
@@ -514,8 +624,11 @@ contains
             write(logfhandle,*) '**********'
             write(logfhandle,*) trim(int2str(count(dist_no_zero <= 0.5))),' atoms correspond withing 50 pm.'
             write(logfhandle,*) 'They are ', trim(int2str(count(dist_no_zero <= 0.5)*100/(N_min))), '% of the atoms.'
-            write(logfhandle,*) 'RMSD             = ', trim(real2str(rmsd*nano1%smpd)), ' A'
-            write(logfhandle,*) 'RMSD CLOSE ATOMS = ', trim(real2str((sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd)), ' A'
+            write(logfhandle,*) '**********'
+            write(logfhandle,*) trim(int2str(cnt-(N_max-N_min))), ' atoms are considered not to correspond since they have error bigger than 220 pm.'
+            write(logfhandle,*) 'They are ', trim(int2str((cnt-N_max+N_min)*100/N_min)), '% of the atoms.'
+            write(logfhandle,*) 'RMSD ALL ATOMS                   = ', trim(real2str(rmsd*nano1%smpd)), ' A'
+            write(logfhandle,*) 'RMSD ATOMS IN THE SYMMETRIC CORE = ', trim(real2str((sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd)), ' A'
             if(present(r)) r=rmsd
             deallocate(dist, dist_sq, dist_no_zero, mask)
         end subroutine atomic_position_rmsd
@@ -529,14 +642,18 @@ contains
         use simple_atoms, only : atoms
         class(nanoparticle), intent(inout) :: self
         integer :: i, nsz
-        real    :: neigh_coords(3,6)
+        integer, parameter :: N_NEIGH = 6 !Nb of neighs to consider in the rmsd calculation
+        real    :: neigh_coords(3,N_NEIGH)
         real    :: avg_dist(self%n_cc)
-        logical :: mask(6)
+        logical :: mask(N_NEIGH)
+        real    :: distances(self%n_cc)
         mask = .true.
+        distances = 100.
         do i = 1, self%n_cc
             call find_nearest_neigh(self,i, neigh_coords)
-            avg_dist(i) =  pixels_dist(self%centers(:,i), neigh_coords, 'sum', mask)
-            avg_dist(i) = avg_dist(i)/6. ! average
+            avg_dist(i)  = pixels_dist(self%centers(:,i), neigh_coords, 'sum', mask)
+            avg_dist(i)  = avg_dist(i)/real(N_NEIGH) ! average
+            distances(i) = avg_dist(i)
         enddo
         do i = 1,self%n_cc
             call self%centers_pdb%set_beta(i, avg_dist(i)*self%smpd)
@@ -609,21 +726,28 @@ contains
     ! If coords is present, it saves it also in coords.
     ! It also plot the hist of the interatomic distances
     ! distribution.
-    subroutine find_centers(self, coords)
-       use gnufor2
+    ! SLOWWWW!!
+    subroutine find_centers(self, img_bin, img_cc, coords)
        use simple_atoms, only: atoms
        class(nanoparticle),          intent(inout) :: self
+       type(image), optional,        intent(inout) :: img_bin, img_cc
        real, optional, allocatable,  intent(out)   :: coords(:,:)
        logical, allocatable :: mask(:)
        integer, allocatable :: sz(:) !cc size to discard bottom 10/15%
        real,    allocatable :: rmat_cc(:,:,:)
        real,    allocatable :: rmat(:,:,:)
        integer :: i, n_discard, label(1)
+       ! sanity check
+       if(present(img_bin) .and. .not. present(img_cc)) THROW_HARD('img_bin and img_cc have to be both present in input')
        ! global variables allocation
        if(allocated(self%centers)) deallocate(self%centers)
        allocate(self%centers(3,self%n_cc),source = 0.)     !global variable
        do i=1,self%n_cc
-           self%centers(:,i) = atom_masscen(self,i)
+           if(present(img_bin)) then
+               self%centers(:,i) = atom_masscen(self,i, img_bin, img_cc)
+           else
+               self%centers(:,i) = atom_masscen(self,i)
+           endif
        enddo
        ! saving centers coordinates, optional
        if(present(coords)) allocate(coords(3, self%n_cc), source = self%centers)
@@ -637,7 +761,6 @@ contains
            mask(i) = .false. ! not to consider the pixel itself, but I think its unnecessary
            self%dists(i) = pixels_dist(self%centers(:,i), self%centers,'min', mask)
        enddo
-       ! call hist(self%dists*self%smpd, 30)
        !Output on file, Matlab Compatible
        ! open(113, file=trim(self%fbody)//'DistancesDistr')
        ! write (113,*) 'd=[...'
@@ -656,20 +779,25 @@ contains
        !component (cc) image and the label of the cc that
        !identifies the atom whose center of mass is to be
        !calculated. The result is stored in m.
-       function atom_masscen(self, label) result(m)
-           type(nanoparticle), intent(inout) :: self
-           integer,            intent(in)    :: label
+       function atom_masscen(self, label, img_bin, img_cc) result(m)
+           type(nanoparticle),    intent(inout) :: self
+           integer,               intent(in)    :: label
+           type(image), optional, intent(inout) :: img_bin, img_cc
            real(sp)             :: m(3)  !mass center coords
            real,    allocatable :: rmat_in(:,:,:), rmat_cc_in(:,:,:)
            integer :: i, j, k
            integer :: sz !sz of the cc identified by label
-           rmat_in    = self%img_bin%get_rmat()
-           rmat_cc_in = self%img_cc%get_rmat()
+           if(present(img_bin)) then
+               rmat_in    = img_bin%get_rmat()
+               rmat_cc_in = img_cc%get_rmat()
+           else
+               rmat_in    = self%img_bin%get_rmat()
+               rmat_cc_in = self%img_cc%get_rmat()
+           endif
            where(     abs(rmat_cc_in-real(label)) > TINY) rmat_in = 0.
            sz = count(abs(rmat_cc_in-real(label)) < TINY)
            m = 0.
-           !ASK HOW TO PARALLELISE IT
-           !omp do collapse(3) reduction(+:m) private(i,j,k) reduce schedule(static)
+           !omp do collapse(3) reduction(+:m) private(i,j,k,m) reduce schedule(static)
            do i = 1, int(real(self%ldim(1))*self%SCALE_FACTOR)
                do j = 1, int(real(self%ldim(2))*self%SCALE_FACTOR)
                    do k = 1, int(real(self%ldim(3))*self%SCALE_FACTOR)
@@ -708,7 +836,6 @@ contains
      ! in the sphere centered in A of that radius. Define contact score of A
      ! equal to N. Do it for each atom.
      subroutine discard_outliers(self, radius)
-         use gnufor2
          class(nanoparticle), intent(inout) :: self
          real, optional,      intent(in)    :: radius !radius of the sphere to consider
          real    :: dist
@@ -722,7 +849,7 @@ contains
          integer :: n_discard
          integer :: label(1)
          real    :: rradius  !default
-         ! Size filter, bottom 15%.
+         ! Size filter.
          call self%size_filtering()
          if(DEBUG_HERE) call self%img_bin%write('SizeFiltering.mrc')
          write(logfhandle, *) '****outliers discarding, init'
@@ -783,40 +910,6 @@ contains
          if(self%ldim(3) == 1) m(3) = 0. !for 2D imgs
      end function nanopart_masscen
 
-    ! This function estimates the circularity of each blob
-    ! (atom) in the following way:
-    !    c := 6*pi*V/S.
-    ! c = 1 <=> the blob is a perfect sphere, otherwise it's < 1.
-    ! See circularity definition (in shape factor page) and adapt
-    ! it to 3D volumes.
-    subroutine calc_circularity(self,avg_circ)
-        class(nanoparticle), intent(inout) :: self
-        real, optional,      intent(out)   :: avg_circ
-        real,    allocatable :: rmat_cc(:,:,:)
-        logical, allocatable :: border(:,:,:)
-        integer, allocatable :: imat(:,:,:)
-        integer              :: label
-         integer, allocatable :: v(:), s(:) !volumes and surfaces of each atom
-        real, parameter :: pi = 3.14159265359
-        real            :: avg_circularity
-        allocate(self%circularity(self%n_cc), source = 0.)
-        rmat_cc = self%img_cc%get_rmat()
-        allocate(imat(self%dim_over(1),self%dim_over(2),self%dim_over(3)),source = nint(rmat_cc)) !for function get_pixel_pos
-        allocate(v(self%n_cc), s(self%n_cc), source = 0)
-        avg_circularity = 0.
-        do label = 1, self%n_cc
-             v(label) = count(imat == label) !just count the number of vxls in the cc
-            call self%img_cc%border_mask(border, label) !the subroutine border_mask allocated/deallocates itself matrix border
-            s(label) = count(border .eqv. .true.)
-            self%circularity(label) = (6.*sqrt(pi)*real(v(label)))/sqrt(real(s(label))**3)
-            if(DEBUG_HERE) write(logfhandle,*) 'atom = ', label, 'vol = ', v(label), 'surf = ', s(label), 'circ = ', self%circularity(label)*self%smpd
-            avg_circularity = avg_circularity + self%circularity(label)
-        enddo
-        avg_circularity = avg_circularity / self%n_cc
-        if(present(avg_circ)) avg_circ = avg_circularity
-        deallocate(v, s, imat, border, rmat_cc)
-    end subroutine calc_circularity
-
     ! This subroutine takes in input a connected component (cc) image
     ! and the label of one of its ccs and calculates its aspect ratio, which
     ! is defined as the ratio of the width and the height.
@@ -825,10 +918,11 @@ contains
     ! in order to calculate the width and the height, the min/max
     ! distances between the center and the borders are calculated. The
     ! aspect ratio is the ratio of those 2 distances.
-    subroutine calc_aspect_ratio_private(self, label, ratio)
+    subroutine calc_aspect_ratio_private(self, label, ratio, print_ar)
         class(nanoparticle), intent(inout) :: self
         integer,             intent(in)    :: label
         real,                intent(out)   :: ratio
+        logical, optional,   intent(in)    :: print_ar
         integer, allocatable :: imat(:,:,:)
         integer, allocatable :: pos(:,:)
         real,    allocatable :: rmat_cc(:,:,:)
@@ -838,7 +932,7 @@ contains
         integer :: i
         real    :: shortest_dist, longest_dist
         rmat_cc = self%img_cc%get_rmat()
-        allocate(imat( self%dim_over(1),self%dim_over(2),self%dim_over(3) ),source = nint(rmat_cc)) !for function get_pixel_pos
+        allocate(imat( self%ldim(1),self%ldim(2),self%ldim(3) ),source = nint(rmat_cc)) !for function get_pixel_pos
         call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
         where(border .eqv. .true.)
             imat = 1
@@ -862,18 +956,19 @@ contains
             ratio = 0.
             if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
         endif
-        !if(DEBUG_HERE) then
+        if(present(print_ar) .and. (print_ar .eqv. .true.)) then
             write(logfhandle,*) 'ATOM #          ', label
             write(logfhandle,*) 'shortest dist = ', shortest_dist*self%smpd
             write(logfhandle,*) 'longest  dist = ', longest_dist*self%smpd
             write(logfhandle,*) 'RATIO         = ', ratio
-        !endif
+        endif
         deallocate(rmat_cc, border, imat, pos, mask_dist)
     end subroutine calc_aspect_ratio_private
 
-    subroutine calc_aspect_ratio(self)
+    subroutine calc_aspect_ratio(self, print_ar)
         use gnufor2
         class(nanoparticle), intent(inout) :: self
+        logical, optional,   intent(in)    :: print_ar !print longest/shortest dim and ratio
         integer :: label
         integer, allocatable :: imat_cc(:,:,:)
         call self%img_bin%find_connected_comps(self%img_cc)
@@ -883,7 +978,7 @@ contains
         allocate(self%ratios(self%n_cc),             source = 0.)
         allocate(self%loc_longest_dist(3,self%n_cc), source = 0 )
         do label = 1, self%n_cc
-            call calc_aspect_ratio_private(self, label, self%ratios(label))
+            call calc_aspect_ratio_private(self, label, self%ratios(label), print_ar)
         enddo
         call hist(self%ratios, 20)
         ! To dump some of the analysis on aspect ratios on file compatible
@@ -908,7 +1003,6 @@ contains
     ! For how it is built, self%centers(:3,i) contains the coords of the
     ! center of mass of the i-th cc.
     subroutine make_soft_mask(self) !change the name
-        use gnufor2
         class(nanoparticle), intent(inout) :: self
         call self%img_bin%grow_bins(nint(0.5*self%avg_dist_atoms)+1)
         call self%img_bin%cos_edge(6)
@@ -1140,48 +1234,12 @@ contains
         deallocate(simmat, labels_ap, centers_ap)
     end subroutine affprop_cluster_ang
 
-    !Affinity propagation clustering based on circularity.
-    subroutine affprop_cluster_circ(self)
-      use simple_aff_prop
-      use simple_atoms, only : atoms
-      class(nanoparticle), intent(inout) :: self
-      type(aff_prop)       :: ap_nano
-      real, allocatable    :: simmat(:,:)
-      real                 :: simsum
-      integer, allocatable :: centers_ap(:), labels_ap(:)
-      integer              :: i, j, ncls, nerr
-      integer :: dim
-      dim = self%n_cc
-      allocate(simmat(dim, dim), source = 0.)
-      do i=1,dim-1
-      do j=i+1,dim
-              simmat(i,j) = -sqrt((self%circularity(i)-self%circularity(j))**2)
-              simmat(j,i) = simmat(i,j)
-          end do
-      end do
-      call ap_nano%new(dim, simmat)
-      call ap_nano%propagate(centers_ap, labels_ap, simsum)
-      ncls = size(centers_ap)
-      write(logfhandle,*) 'NR OF CLUSTERS FOUND CIRC:', ncls
-      do i = 1, self%n_cc
-          call self%centers_pdb%set_beta(i, real(labels_ap(i)))
-      enddo
-      write(logfhandle,*) 'CENTERS CIRC'
-      do i=1,ncls
-          write(logfhandle,*) self%ang_var(centers_ap(i))
-      end do
-      call self%centers_pdb%writepdb(trim(self%fbody)//'ClustersWRTcircularity')
-      deallocate(simmat, labels_ap, centers_ap)
-  end subroutine affprop_cluster_circ
-
     subroutine nanopart_cluster(self)
         class(nanoparticle), intent(inout) :: self
         ! clustering wrt to angle longest_dim-vector z=[0,0,1]
         call self%affprop_cluster_ang()
         ! clustering wrt aspect ratio
         call self%affprop_cluster_ar()
-        ! clustering wrt circularity
-        call self%affprop_cluster_circ()
     end subroutine nanopart_cluster
 
     subroutine over_sample(self)
@@ -1200,7 +1258,7 @@ contains
         self%avg_dist_atoms    = 0.
         self%SCALE_FACTOR      = 0.
         self%n_cc              = 0
-        self%dim_over(3)       = 0
+        !self%dim_over(3)       = 0
         call self%img%kill()
         call self%img_bin%kill()
         call self%img_cc%kill()
@@ -1210,7 +1268,6 @@ contains
         if(allocated(self%ratios))           deallocate(self%ratios)
         if(allocated(self%dists))            deallocate(self%dists)
         if(allocated(self%loc_longest_dist)) deallocate(self%loc_longest_dist)
-        if(allocated(self%circularity))      deallocate(self%circularity)
         if(allocated(self%ang_var))          deallocate(self%ang_var)
     end subroutine kill_nanoparticle
 end module simple_nanoparticles_mod

@@ -54,6 +54,7 @@ type :: atoms
     procedure          :: set_num
     procedure          :: set_beta
     procedure          :: set_resnum
+    procedure          :: set_occupancy
     ! I/O
     procedure          :: print_atom
     procedure          :: writepdb
@@ -266,6 +267,14 @@ contains
         if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_resnum')
         self%resnum(i) = resnum
     end subroutine set_resnum
+
+    subroutine set_occupancy( self, i, occupancy )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        real,             intent(in)    :: occupancy
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_occupancy')
+        self%occupancy(i) = occupancy
+    end subroutine set_occupancy
 
     subroutine print_atom( self, i )
         class(atoms), intent(inout) :: self

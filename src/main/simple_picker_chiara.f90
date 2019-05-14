@@ -169,7 +169,7 @@ contains
       call vis_mat(xyz_norep_noagg)
       do n_cc = 1, size(xyz_norep_noagg, dim = 1)
           if( abs(xyz_norep_noagg(n_cc,1)) >  0) then !useless?
-              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,3, 'white')
+              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,5, 'white')
               call   self%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_particle, outside)
               !call img_cc%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_bin, outside)
               if( .not. outside) then

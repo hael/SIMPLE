@@ -526,8 +526,6 @@ contains
         call nano%discard_outliers()
         ! Aspect ratios calculations
         call nano%calc_aspect_ratio()
-        ! Circularities calculation
-        call nano%calc_circularity()
         ! Make soft mask
         call nano%make_soft_mask()
         ! Polarization search
@@ -539,80 +537,4 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
-
-    ! ! for comparison of atomic models of 2nanoparticles
-    ! subroutine exec_compare_nano( self, cline )
-    !     use simple_nanoparticles_mod
-    !     use simple_image, only : image
-    !     class(compare_nano_commander), intent(inout) :: self
-    !     class(cmdline),                intent(inout) :: cline !< command line input
-    !     type(parameters)   :: params
-    !     type(nanoparticle) :: nano1, nano2
-    !     integer :: nptcls
-    !     integer :: ldim1(3), ldim2(3)
-    !     real    :: smpd1,smpd2
-    !     call params%new(cline)
-    !     if( .not. cline%defined('vol1') )then
-    !         THROW_HARD('ERROR! vol1 needs to be present; exec_compare_nano')
-    !     endif
-    !     if( .not. cline%defined('vol2') )then
-    !         THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
-    !     endif
-    !     ! COMPARING
-    !     call nano1%new(params%vols(1))
-    !     call nano2%new(params%vols(2))
-    !     call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
-    !     call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
-    !     if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; exec_compare_nano')
-    !     if(abs(smpd1-smpd2) > TINY) THROW_HARD('Non compatible particles, different smpd; exec_compare_nano')
-    !     ! Nanoparticle binarization
-    !     call nano1%compare_atomic_models(nano2)
-    !     ! kill
-    !     call nano1%kill
-    !     call nano2%kill
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_COMPARE_NANO NORMAL STOP ****')
-    ! end subroutine exec_compare_nano
-    !
-    ! subroutine exec_detect_atoms( self, cline )
-    !     use simple_nanoparticles_mod
-    !     use simple_image, only : image
-    !     class(detect_atoms_commander), intent(inout) :: self
-    !     class(cmdline),                intent(inout) :: cline !< command line input
-    !     type(parameters)   :: params
-    !     type(nanoparticle) :: nano
-    !     integer :: ldim(3), nptcls
-    !     real    :: smpd
-    !     real, parameter :: SCALE_FACTOR = 1.0
-    !     call params%new(cline)
-    !     if( .not. cline%defined('smpd') )then
-    !         THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
-    !     endif
-    !     if( .not. cline%defined('vol1') )then
-    !         THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
-    !     endif
-    !     call nano%new(params%vols(1),SCALE_FACTOR)
-    !     call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
-    !     ! Nanoparticle binarization
-    !     call nano%binarize() !scale factor is for over sampling purposes
-    !     ! Atoms centers identification
-    !     call nano%find_centers()
-    !     ! Outliers discarding
-    !     call nano%discard_outliers()
-    !     ! Aspect ratios calculations
-    !     call nano%calc_aspect_ratio()
-    !     ! Circularities calculation
-    !     call nano%calc_circularity()
-    !     ! Make soft mask
-    !     call nano%make_soft_mask()
-    !     ! Polarization search
-    !     call nano%search_polarization()
-    !     ! Clustering
-    !     call nano%cluster
-    !     ! kill
-    !     call nano%kill
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
-    ! end subroutine exec_detect_atoms
-
 end module simple_commander_tseries
