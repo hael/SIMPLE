@@ -532,24 +532,6 @@ contains
         enddo
     end subroutine set_size_frames_ref
 
-    ! subroutine set_size_frames_ref( self )
-    !     class(motion_patched), intent(inout) :: self
-    !     integer :: i, j
-    !     self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED))
-    !     self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED))
-    !     self%ldim_patch(3) = 1
-    !     do j = 1, NY_PATCHED
-    !         do i = 1, NX_PATCHED
-    !             self%lims_patches(i,j,1,1) = (i-1) * self%ldim_patch(1)  + 1
-    !             self%lims_patches(i,j,1,2) =  i    * self%ldim_patch(1)
-    !             self%lims_patches(i,j,2,1) = (j-1) * self%ldim_patch(2)  + 1
-    !             self%lims_patches(i,j,2,2) =  j    * self%ldim_patch(2)
-    !             self%patch_centers(i,j,1)  = real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
-    !             self%patch_centers(i,j,2)  = real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
-    !         end do
-    !     end do
-    ! end subroutine set_size_frames_ref
-
     subroutine set_patches( self, stack )
         class(motion_patched),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)

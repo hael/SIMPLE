@@ -695,9 +695,8 @@ contains
         use simple_estimate_ssnr, only: fsc2optlp_sub
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
-        real,   parameter :: tau2_fudge = 1.
         real, allocatable :: optlp(:), ssnr(:)
-        real    :: rsum(self%nyq), invtau2(self%nyq), tau2(self%nyq), sig2
+        real    :: rsum(self%nyq), invtau2, tau2(self%nyq), sig2
         integer :: cnt(self%nyq), i,h,k,m, sh, phys(3), sz, reslim_ind
         sz = size(fsc)
         allocate(optlp(sz), ssnr(sz), source=0.)
@@ -720,7 +719,6 @@ contains
         ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal 2002)
         call fsc2optlp_sub(sz, fsc, optlp)
         ssnr = optlp / (1.-optlp)
-        ssnr = ssnr * tau2_fudge
         do k = 1,self%nyq
             i = min(max(1,nint(real(k*sz)/real(self%nyq))), sz)
             sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
@@ -738,12 +736,11 @@ contains
                     if( (sh < reslim_ind) .or. (sh > self%nyq) ) cycle
                     phys = self%comp_addr_phys(h, k, m)
                     if( tau2(k) > TINY )then
-                        self%rho(phys(1),phys(2),phys(3)) =&
-                            &self%rho(phys(1),phys(2),phys(3)) + 1./(tau2_fudge * tau2(k))
+                        invtau2 = 1./ tau2(k)
                     else
-                        self%rho(phys(1),phys(2),phys(3)) =&
-                            &self%rho(phys(1),phys(2),phys(3)) + 1./(0.001*self%rho(phys(1),phys(2),phys(3)))
+                        invtau2 = min(1000.,1000.*self%rho(phys(1),phys(2),phys(3)))
                     endif
+                    self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
                 enddo
             enddo
         enddo
