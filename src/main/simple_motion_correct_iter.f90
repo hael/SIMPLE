@@ -80,16 +80,6 @@ contains
             self%moviename_aniso_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
             &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_aniso_'//INTGMOV_SUFFIX//params_glob%ext
         endif
-        ! patched ones
-        ! self%moviename_patched_intg   = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//INTGMOV_SUFFIX//trim(params_glob%ext)
-        ! self%moviename_patched_forctf = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//FORCTF_SUFFIX//trim(params_glob%ext)
-        ! self%moviename_patched_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//POWSPEC_SUFFIX//trim(params_glob%ext)
-        ! self%moviename_patched_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//'_patched'//THUMBNAIL_SUFFIX//trim(JPG_EXT)
-        ! patched_shift_fname           = trim(dir_out)//trim(adjustl(fbody_here))//'_patched_shifts.eps'
-        ! if( cline%defined('tof') )then
-        !     self%moviename_patched_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//&
-        !     &int2str(params_glob%fromf)//'-'//int2str(params_glob%tof)//'_patched_'//INTGMOV_SUFFIX//params_glob%ext
-        ! endif
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
@@ -140,9 +130,6 @@ contains
             endif
             call motion_correct_aniso_kill
             ! generate power-spectra
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
-            print *, 'params_glob%pspecsz', params_glob%pspecsz
-            print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>.'
             self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
             self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
             call self%pspec_half_n_half%scale_pspec4viz
@@ -178,7 +165,7 @@ contains
         endif
         ! Patch based approach
         if(DO_PATCHED) then
-            patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_patched_shifts.eps'
+            patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
             call motion_correct_patched()
             if( cline%defined('tof') )then
                 call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])

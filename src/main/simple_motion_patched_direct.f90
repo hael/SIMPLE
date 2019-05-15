@@ -190,8 +190,7 @@ contains
 
     subroutine plot_shifts(self)
         class(motion_patched_direct), intent(inout) :: self
-        real, parameter       :: SCALE = 40.
-        real                  :: shift_scale
+        integer, parameter    :: SCALE = 40
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: dataSetStart, dataSet        !!!!!! todo: we don't need this
@@ -201,7 +200,6 @@ contains
         real                  :: xcenter, ycenter
         integer               :: ipx, ipy, iframe, j
         real                  :: loc_shift(2)
-        shift_scale = SCALE
         call CPlot2D__new(plot2D, self%shift_fname)
         call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
@@ -215,8 +213,8 @@ contains
             ycenter = real(self%ldim(2))/2.
             do j = 1, self%nframes
                 call CDataPoint__new2(&
-                    real(xcenter + SCALE * self%global_shifts(j, 1), c_double), &
-                    real(ycenter + SCALE * self%global_shifts(j, 2), c_double), &
+                    real(xcenter + real(SCALE) * self%global_shifts(j, 1), c_double), &
+                    real(ycenter + real(SCALE) * self%global_shifts(j, 2), c_double), &
                     point)
                 call CDataSet__AddDataPoint(dataSet, point)
                 call CDataPoint__delete(point)
@@ -245,8 +243,8 @@ contains
                         self%patch_centers(ipx, ipy, 2), loc_shift)
                     !loc_shift = -1. * loc_shift
                     call CDataPoint__new2(&
-                        real(self%patch_centers(ipx, ipy, 1) + SCALE * loc_shift(1), c_double), &
-                        real(self%patch_centers(ipx, ipy, 2) + SCALE * loc_shift(2) ,c_double), &
+                        real(self%patch_centers(ipx, ipy, 1) + real(SCALE) * loc_shift(1), c_double), &
+                        real(self%patch_centers(ipx, ipy, 2) + real(SCALE) * loc_shift(2) ,c_double), &
                         p_fit)
                     call CDataSet__AddDataPoint(fit, p_fit)
                     if (iframe == 1) then
@@ -260,7 +258,7 @@ contains
                 call CDataSet__delete(fit)
             end do
         end do
-        title%str = 'X (in pixels; trajectory scaled by ' // trim(real2str(SHIFT_SCALE)) // ')' // C_NULL_CHAR
+        title%str = 'X (in pixels; trajectory scaled by ' // trim(int2str(SCALE)) // ')' // C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         title%str(1:1) = 'Y'
         call CPlot2D__SetYAxisTitle(plot2D, title%str)

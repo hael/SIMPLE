@@ -65,15 +65,14 @@ CPlot2D::CPlot2D(std::string title)
     m_bFlipY = false;
     m_dFlipYOffset = 0;
 
-    // Sjors Scheres 22mar2016: changed all fonts to Times
-    m_strXAxisLabelFont="Times";
+    m_strXAxisLabelFont="Courier";
     m_dXAxisLabelFontSize=12.0;
-    m_strYAxisLabelFont="Times";
+    m_strYAxisLabelFont="Courier";
     m_dYAxisLabelFontSize=12.0;
 
-    m_strXAxisTitleFont="Times";
+    m_strXAxisTitleFont="Courier";
     m_dXAxisTitleFontSize=16.0;
-    m_strYAxisTitleFont="Times";
+    m_strYAxisTitleFont="Courier";
     m_dYAxisTitleFontSize=16.0;
     m_dXAxisTitleColor[0]=0.0;
     m_dXAxisTitleColor[1]=0.0;

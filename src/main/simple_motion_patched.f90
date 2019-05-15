@@ -462,9 +462,10 @@ contains
         if (do_allocate) then
             allocate(self%shifts_patches   (3, self%nframes, NX_PATCHED, NY_PATCHED),&
                 self%shifts_patches_for_fit(3, self%nframes, NX_PATCHED, NY_PATCHED),&
-                self%frame_patches         (                 NX_PATCHED, NY_PATCHED),&
-                stat=alloc_stat )
+                self%frame_patches(NX_PATCHED, NY_PATCHED), stat=alloc_stat )
             if (alloc_stat /= 0) call allocchk('allocate_fields 1; simple_motion_patched')
+            self%shifts_patches         = 0.
+            self%shifts_patches_for_fit = 0.
             do i = 1, NX_PATCHED
                 do j = 1, NY_PATCHED
                     allocate( self%frame_patches(i, j)%stack(self%nframes), stat=alloc_stat )
@@ -590,11 +591,9 @@ contains
 
     subroutine det_shifts( self )
         class(motion_patched), target, intent(inout) :: self
-        real :: corr_avg
-        integer :: iframe, i, j
-        real :: interpolated_xshift0(NX_PATCHED,NY_PATCHED), interpolated_yshift0(NX_PATCHED,NY_PATCHED)
-        integer :: alloc_stat
         real, allocatable :: opt_shifts(:,:)
+        real    :: corr_avg
+        integer :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
         allocate( self%align_iso(NX_PATCHED, NY_PATCHED), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
@@ -628,7 +627,7 @@ contains
         enddo
         corr_avg = corr_avg / real(NX_PATCHED*NY_PATCHED)
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        ! Set te first shift to 0.
+        ! Set the first shift to 0.
         do i = 1, NX_PATCHED
             do j = 1, NY_PATCHED
                 call self%align_iso(i,j)%get_opt_shifts(opt_shifts)
@@ -640,12 +639,11 @@ contains
         do iframe = self%nframes, 1, -1
             self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
         enddo
-        interpolated_xshift0(:,:) = -0.5 * self%shifts_patches(2,2,:,:)
-        interpolated_yshift0(:,:) = -0.5 * self%shifts_patches(3,2,:,:)
         do iframe = 1, self%nframes
-            self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:)  - interpolated_xshift0(:,:)
-            self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:)  - interpolated_yshift0(:,:)
+            self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:) + 0.5*self%shifts_patches(2,1,:,:)
+            self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:) + 0.5*self%shifts_patches(3,1,:,:)
         enddo
+        ! cleanup
         do i = 1, NX_PATCHED
             do j = 1, NY_PATCHED
                 call self%align_iso(i,j)%kill

@@ -82,7 +82,7 @@ real    :: smpd_scaled    = 0.       !< sampling distance
 real    :: corr_saved     = 0.       !< opt corr for local opt saved
 real    :: kV             = 300.     !< acceleration voltage
 real    :: dose_rate      = 0.       !< dose rate
-real    :: nsig_here      = 6.0      !< nr of sigmas (for outlier removal)
+real    :: nsig_here      = 5.0      !< nr of sigmas (for outlier removal)
 logical :: do_dose_weight = .false.  !< dose weight or not
 logical :: do_scale       = .false.  !< scale or not
 logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
@@ -324,7 +324,7 @@ contains
         callback_ptr => null()
         ! initialise
         call align_iso%new
-        nsig_here = 6.0
+        nsig_here = 5.0
         if( present(nsig) ) nsig_here = nsig
         call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
         if( err ) return
