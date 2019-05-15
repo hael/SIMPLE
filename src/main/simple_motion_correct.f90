@@ -94,7 +94,7 @@ integer, parameter :: MITSREF        = 30      !< max # iterations of refinement
 integer, parameter :: MITSREF_ANISO  = 9       !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT     = 2.      !< small initial shift to blur out fixed pattern noise
 logical, parameter :: ANISO_DBL      = .true.  !< use double-precision for anisotropic motion correct?
-logical, parameter :: PATCHED_DIRECT = .false.  !< use direct patch-based motion correct (if patch-based motion correct activated)
+logical, parameter :: PATCHED_DIRECT = .false. !< use direct patch-based motion correct (if patch-based motion correct activated)
 
 contains
 
@@ -634,6 +634,7 @@ contains
 
    !> patch-based motion_correction of DDD movie
     subroutine motion_correct_patched
+        real(dp), allocatable :: poly(:,:)
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
         logical :: doscale

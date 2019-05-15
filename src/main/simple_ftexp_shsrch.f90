@@ -3,7 +3,7 @@ module simple_ftexp_shsrch
 include 'simple_lib.f08'
 use simple_opt_spec,    only: opt_spec
 use simple_optimizer,   only: optimizer
-use simple_ft_expanded, only: ft_expanded, ftexp_has_bfacweights, ftexp_get_bfacweights_ptr
+use simple_ft_expanded, only: ft_expanded
 
 implicit none
 
@@ -14,8 +14,9 @@ private
 real,    parameter :: TOL    = 1e-4 !< tolerance parameter
 integer, parameter :: MAXITS = 30   !< maximum number of iterations
 
-complex(dp), parameter   :: J = CMPLX(0.0_dp, 1.0_dp, kind=dp)
+complex(dp), parameter   :: J     = CMPLX(0.0_dp, 1.0_dp, kind=dp)
 real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of cost function
+real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost function
 
 type :: ftexp_shsrch
     type(opt_spec)              :: ospec                     !< optimizer specification object
@@ -33,6 +34,7 @@ type :: ftexp_shsrch
     real(dp),    allocatable    :: ftexp_tmpmat_re_2d(:,:)   !< temporary matrix for shift search
     real(dp),    allocatable    :: ftexp_tmpmat_im_2d(:,:)   !< temporary matrix for shift search
     complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
+    real(dp)                    :: denominator = 0.d0
     logical                     :: existence
 contains
     procedure          :: new            => ftexp_shsrch_new
@@ -219,10 +221,10 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp) :: r
         call self%calc_tmpmat_re( shvec )
-        r =          sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
-        r = r +      sum(self%ftexp_tmpmat_re_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1))
-        r = r + 2. * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
-        r = r / denom
+        r =            sum(self%ftexp_tmpmat_re_2d(                   1,1:self%flims(2,2)-1))
+        r = r +        sum(self%ftexp_tmpmat_re_2d(self%flims(1,2)  ,  1:self%flims(2,2)-1))
+        r = r + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        r = r * num / self%denominator
     end function corr_shifted_cost_8
 
     !< cost function for minimizer, gradient only
@@ -231,21 +233,21 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2)
         real, pointer :: transfmat_here(:,:,:,:)
-        call self%particle%get_transfmat_ptr( transfmat_here )
+        call self%particle%get_transfmat_ptr(transfmat_here)
         call self%calc_tmpmat_im( shvec )
         grad(1) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
             &transfmat_here(                  1,1:self%flims(2,2)-1,1,1))
         grad(1) = grad(1) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
             &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,1))
-        grad(1) = grad(1) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
             &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,1))
         grad(2) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
             &transfmat_here(                  1,1:self%flims(2,2)-1,1,2))
         grad(2) = grad(2) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
             &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,2))
-        grad(2) = grad(2) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
             &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,2))
-        grad = grad / denom
+        grad = grad * num / self%denominator
     end subroutine corr_gshifted_cost_8
 
     !< cost function for minimizer, f and gradient
@@ -254,25 +256,25 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2), f
         real, pointer :: transfmat_here(:,:,:,:)
-        call self%particle%get_transfmat_ptr( transfmat_here )
+        call self%particle%get_transfmat_ptr(transfmat_here)
         call self%calc_tmpmat_re_im( shvec )
-        f =          sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
-        f = f +      sum(self%ftexp_tmpmat_re_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1))
-        f = f + 2. * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
-        f = f / denom
+        f =            sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
+        f = f +        sum(self%ftexp_tmpmat_re_2d(self%flims(1,2)    ,1:self%flims(2,2)-1))
+        f = f + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        f = f * num / self%denominator
         grad(1) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
             &transfmat_here(                  1,1:self%flims(2,2)-1,1,1))
         grad(1) = grad(1) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
             &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,1))
-        grad(1) = grad(1) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
             &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,1))
         grad(2) =              sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1) *&
             &transfmat_here(                  1,1:self%flims(2,2)-1,1,2))
         grad(2) = grad(2) +    sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1) *&
             &transfmat_here(  self%flims(1,2)  ,1:self%flims(2,2)-1,1,2))
-        grad(2) = grad(2) + 2.*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
+        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1) *&
             &transfmat_here(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1,2))
-        grad = grad / denom
+        grad = grad *num / self%denominator
     end subroutine corr_fdfshifted_cost_8
 
     !< calculate tmp matrix for cost function
@@ -282,25 +284,13 @@ contains
         real(dp) :: arg
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
-        real, pointer :: bfacweights_here(:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        if( ftexp_has_bfacweights() )then
-            call ftexp_get_bfacweights_ptr(bfacweights_here)
-            do kind=self%flims(2,1),self%flims(2,2)
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    self%ftexp_tmpmat_re_2d(hind,kind) = bfacweights_here(hind,kind,1)*&
-                        &real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
-                end do
+        do kind=self%flims(2,1),self%flims(2,2) !-1
+            do hind=self%flims(1,1),self%flims(1,2)
+                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
             end do
-        else
-            do kind=self%flims(2,1),self%flims(2,2) !-1
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
-                end do
-            end do
-        endif
+        end do
     end subroutine calc_tmpmat_re
 
     !< calculate tmp matrix for cost function
@@ -310,25 +300,13 @@ contains
         real(dp) :: arg
         integer  :: hind,kind
         real, pointer :: transfmat_here(:,:,:,:)
-        real, pointer :: bfacweights_here(:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        if( ftexp_has_bfacweights() )then
-            call ftexp_get_bfacweights_ptr(bfacweights_here)
-            do kind=self%flims(2,1),self%flims(2,2) !-1
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    self%ftexp_tmpmat_im_2d(hind,kind) = bfacweights_here(hind,kind,1)*&
-                        &aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
-                end do
+        do kind=self%flims(2,1),self%flims(2,2) !-1
+            do hind=self%flims(1,1),self%flims(1,2)
+                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
             end do
-        else
-            do kind=self%flims(2,1),self%flims(2,2) !-1
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
-                end do
-            end do
-        endif
+        end do
     end subroutine calc_tmpmat_im
 
     !< calculate tmp matrix for cost function
@@ -338,40 +316,37 @@ contains
         real(dp)    :: arg
         complex(dp) :: tmp
         integer     :: hind,kind
-        real, pointer :: transfmat_here(:,:,:,:)
-        real, pointer :: bfacweights_here(:,:,:)
+        real(sp), pointer :: transfmat_here(:,:,:,:)
         call self%particle%get_transfmat_ptr(transfmat_here)
-        if( ftexp_has_bfacweights() )then
-            call ftexp_get_bfacweights_ptr(bfacweights_here)
-            do kind=self%flims(2,1),self%flims(2,2) !-1
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    tmp  = bfacweights_here(hind,kind,1) * self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
-                end do
+        do kind=self%flims(2,1),self%flims(2,2) !-1
+            do hind=self%flims(1,1),self%flims(1,2)
+                arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
+                tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
+                self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
+                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
             end do
-        else
-            do kind=self%flims(2,1),self%flims(2,2) !-1
-                do hind=self%flims(1,1),self%flims(1,2)
-                    arg  = dot_product(shvec(:), transfmat_here(hind,kind,1,1:2))
-                    tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
-                end do
-            end do
-        endif
+        end do
     end subroutine calc_tmpmat_re_im
 
     !< calculate tmp matrix for cost function
     subroutine calc_tmp_cmat12( self )
         class(ftexp_shsrch), intent(inout) :: self
         complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
+        real(dp) :: sqsum
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
+        sqsum =             sum(csq(cmat1_ptr(                   1,1:self%flims(2,2)-1,1)))
+        sqsum = sqsum +     sum(csq(cmat1_ptr(  self%flims(1,2)   ,1:self%flims(2,2)-1,1)))
+        sqsum = sqsum + 2.d0*sum(csq(cmat1_ptr(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
+        self%denominator = sqsum
+        sqsum =             sum(csq(cmat2_ptr(                   1,1:self%flims(2,2)-1,1)))
+        sqsum = sqsum +     sum(csq(cmat2_ptr(  self%flims(1,2)   ,1:self%flims(2,2)-1,1)))
+        sqsum = sqsum + 2.d0*sum(csq(cmat2_ptr(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
+        self%denominator = self%denominator * sqsum
+        self%denominator = dsqrt(self%denominator)
         self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &  !-1
-                  cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &  !-1
-            conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))     !-1
+                    cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &  !-1
+              conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))     !-1
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )

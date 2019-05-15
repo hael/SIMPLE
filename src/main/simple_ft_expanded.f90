@@ -6,12 +6,11 @@ include 'simple_lib.f08'
 use simple_image,  only: image
 implicit none
 private
-public :: ft_expanded, ftexp_gen_bfacweights, ftexp_get_bfacweights_ptr, ftexp_has_bfacweights
+public :: ft_expanded
 #include "simple_local_flags.inc"
 
-real(sp), target, allocatable :: bfac_weights(:,:,:) !< 2D b-factor weights matrix
 real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling of cost function
-logical                       :: l_bfac = .false.
+real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 
 type :: ft_expanded
     private
@@ -250,39 +249,20 @@ contains
     function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(in) :: self1, self2
         real :: r,sumasq,sumbsq
-        if( l_bfac )then
-            ! b-factor weighted correlation
-            r = sum(bfac_weights(1,1:self1%flims(2,2)-1,1)*&
-            &    real(self1%cmat(1,1:self1%flims(2,2)-1,1)*&
-            &   conjg(self2%cmat(1,1:self1%flims(2,2)-1,1))) )
-            r = r + sum( bfac_weights(self1%flims(1,2),1:self1%flims(2,2)-1,1)*&
-            &         real(self1%cmat(self1%flims(1,2),1:self1%flims(2,2)-1,1)*&
-            &        conjg(self2%cmat(self1%flims(1,2),1:self1%flims(2,2)-1,1))) )
-            r = r + 2.*sum( bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
-            &            real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
-            &           conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))) )
-            sumasq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        else
-            ! corr is real part of the complex mult btw 1 and 2*
-            r =        sum(real(self1%cmat(                   1,1:self1%flims(2,2)-1,1)*&
-                conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
-            r = r +    sum(real(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*&
-                conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
-            r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
-                conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
-            ! normalisation terms
-            sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        endif
+        ! corr is real part of the complex mult btw 1 and 2*
+        r =        sum(real(self1%cmat(                   1,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
+        r = r +    sum(real(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
+        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
+            conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
+        ! normalisation terms
+        sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
+        sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
+        sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
         ! finalise the correlation coefficient
         if( sumasq > 0. .and. sumbsq > 0. )then
             r = r / sqrt(sumasq * sumbsq)
@@ -291,48 +271,16 @@ contains
         endif
     end function corr
 
-    subroutine corr_normalize_sp( self1, self2, corr )
-        class(ft_expanded), intent(inout) :: self1, self2
+    elemental subroutine corr_normalize_sp( self1, self2, corr )
+        class(ft_expanded), intent(in)    :: self1, self2
         real(sp),           intent(inout) :: corr
-        real(dp) :: sumasq,sumbsq
-        if( l_bfac )then
-            sumasq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        else
-            sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        endif
-        corr   = real(real(corr,dp) * denom / sqrt(sumasq * sumbsq), sp)
+        corr   = corr / real(num,sp)
     end subroutine corr_normalize_sp
 
-    subroutine corr_normalize_dp( self1, self2, corr )
-        class(ft_expanded), intent(inout) :: self1, self2
+    elemental subroutine corr_normalize_dp( self1, self2, corr )
+        class(ft_expanded), intent(in)    :: self1, self2
         real(dp),           intent(inout) :: corr
-        real(dp) :: sumasq,sumbsq
-        if( l_bfac )then
-            sumasq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(bfac_weights(                   1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(bfac_weights(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(bfac_weights(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        else
-            sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-            sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-            sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        endif
-        corr   = corr * denom / sqrt(sumasq * sumbsq)
+        corr   = corr / num
     end subroutine corr_normalize_dp
 
     ! DESTRUCTOR
@@ -345,63 +293,5 @@ contains
             self%existence = .false.
         endif
     end subroutine kill
-
-    ! GLOBAL MODULE ROUTINES
-
-    logical function ftexp_has_bfacweights()
-        ftexp_has_bfacweights = l_bfac
-    end function ftexp_has_bfacweights
-
-    !>   \brief  Initializes B-factor weights
-    subroutine ftexp_gen_bfacweights( img, bfac )
-        class(image),       intent(inout) :: img
-        real,               intent(in)    :: bfac
-        real    :: g2, Ah, Ak, Al, B, smpd
-        integer :: i,h,k,l, alloc_stat, ldim(3), flims_nyq(3,2)
-        smpd = img%get_smpd()
-        ldim = img%get_ldim()
-        flims_nyq = img%loop_lims(1,2.*smpd)
-        do i=1,3
-            flims_nyq(i,2) = flims_nyq(i,2) - flims_nyq(i,1) + 1
-        end do
-        flims_nyq(:,1) = 1
-        Ah = (real(ldim(1))*smpd)**2.
-        Ak = (real(ldim(2))*smpd)**2.
-        Al = (real(ldim(3))*smpd)**2.
-        if( allocated(bfac_weights) ) deallocate(bfac_weights)
-        allocate(bfac_weights(1:flims_nyq(1,2),1:flims_nyq(2,2),1:flims_nyq(3,2)),stat=alloc_stat)
-        B = - bfac / 4.
-        if( ldim(3) == 1 )then
-            ! 2D
-            do k=flims_nyq(2,1),flims_nyq(2,2)
-                do h=flims_nyq(1,1),flims_nyq(1,2)
-                    g2 = real(h*h)/Ah + real(k*k)/Ak
-                    bfac_weights(h,k,1) = max(0., exp(B*g2))
-                end do
-            end do
-        else
-            ! 3D
-            do l=flims_nyq(3,1),flims_nyq(3,2)
-                do k=flims_nyq(2,1),flims_nyq(2,2)
-                    do h=flims_nyq(1,1),flims_nyq(1,2)
-                        g2 = real(h*h)/Ah + real(k*k)/Ak + real(l*l)/Al
-                        bfac_weights(h,k,l) = max(0., exp(B*g2))
-                    enddo
-                end do
-            end do
-        endif
-        l_bfac = .true.
-    end subroutine ftexp_gen_bfacweights
-
-    subroutine ftexp_get_bfacweights_ptr( bfacweights_ptr )
-        real, pointer, intent(out) :: bfacweights_ptr(:,:,:)
-        bfacweights_ptr => bfac_weights
-    end subroutine ftexp_get_bfacweights_ptr
-
-    !>  \brief  is a destructor
-    subroutine ftexp_kill_bfac_weights
-        if(allocated(bfac_weights))deallocate(bfac_weights)
-        l_bfac    = .false.
-    end subroutine ftexp_kill_bfac_weights
 
 end module simple_ft_expanded

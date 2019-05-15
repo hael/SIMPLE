@@ -19,8 +19,6 @@ public :: motion_patched
 ! module global constants
 integer, parameter :: NX_PATCHED     = 5   ! number of patches in x-direction
 integer, parameter :: NY_PATCHED     = 5   !       "      "       y-direction
-integer, parameter :: X_OVERLAP      = 0   ! number of overlapping pixels per patch in x-direction
-integer, parameter :: Y_OVERLAP      = 0   !       "      "        "         "         y-direction
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 7.
 integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
@@ -74,6 +72,7 @@ contains
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
+    procedure, private                  :: pix2polycoords
     procedure                           :: set_frameweights
     procedure                           :: new             => motion_patched_new
     procedure                           :: correct         => motion_patched_correct
@@ -111,8 +110,7 @@ contains
         xy = x * y
         t2 = t * t
         t3 = t2 * t
-        res = 0._dp
-        res = res + c( 1) * t      + c( 2) * t2      + c( 3) * t3
+        res =       c( 1) * t      + c( 2) * t2      + c( 3) * t3
         res = res + c( 4) * t * x  + c( 5) * t2 * x  + c( 6) * t3 * x
         res = res + c( 7) * t * x2 + c( 8) * t2 * x2 + c( 9) * t3 * x2
         res = res + c(10) * t * y  + c(11) * t2 * y  + c(12) * t3 * y
@@ -137,8 +135,7 @@ contains
                     self%patch_centers(i,j,2)= real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
                     idx = (iframe-1) * (NX_PATCHED * NY_PATCHED) + (i-1) * NY_PATCHED + j
                     y(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j),dp)   ! shift in x-direction first
-                    x(1,idx) = real(self%patch_centers(i,j,1),dp) / real(self%ldim(1),dp) - 0.5_dp
-                    x(2,idx) = real(self%patch_centers(i,j,2),dp) / real(self%ldim(2),dp) - 0.5_dp
+                    call self%pix2polycoords(real(self%patch_centers(i,j,1),dp), real(self%patch_centers(i,j,2),dp),x(1,idx),x(2,idx))
                     x(3,idx) = real(iframe,dp) - 0.5_dp
                 end do
             end do
@@ -181,17 +178,18 @@ contains
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         self%poly_coeffs(:,2) = a
         if (DUMP_STUFF) then
-            call self%write_polynomial(self%poly_coeffs(:,1),'X:')
-            call self%write_polynomial(self%poly_coeffs(:,2),'Y:')
+            call self%write_polynomial(self%poly_coeffs(:,1),'X:',1)
+            call self%write_polynomial(self%poly_coeffs(:,2),'Y:',2)
         end if
     end subroutine fit_polynomial
 
     ! write the polynomials to disk for debugging purposes
-    subroutine write_polynomial( self, p, name )
+    subroutine write_polynomial( self, p, name, ind )
         class(motion_patched),    intent(inout) :: self
         real(dp),                 intent(in)    :: p(PATCH_PDIM)
         character(len=*),         intent(in)    :: name
-        integer :: i
+        integer, intent(in) :: ind
+        integer :: i, cnt
         logical :: exist
         inquire(file="polynomial.txt", exist=exist)
         if (exist) then
@@ -199,9 +197,11 @@ contains
         else
             open(123, file="polynomial.txt", status="new", action="write")
         end if
-        write (123,*) 'POLYNOMIAL, ' // name
+        !write (123,*) 'POLYNOMIAL, ' // name
+        cnt = (ind-1)*PATCH_PDIM-1
         do i = 1, PATCH_PDIM
-            write (123,'(A)') 'c' // trim(int2str(i)) // '=' // trim(dbl2str(p(i)))
+            cnt = cnt + 1
+            write (123,'(A)') 'c(' // trim(int2str(cnt)) // ')=' // trim(dbl2str(p(i)))
         end do
         close(123)
     end subroutine write_polynomial
@@ -270,7 +270,7 @@ contains
                         p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
                     call self%get_local_shift(iframe, self%patch_centers(ipx, ipy, 1), &
-                        self%patch_centers(ipy, ipy, 2), loc_shift)
+                        self%patch_centers(ipx, ipy, 2), loc_shift)
                     call CDataPoint__new2(&
                         real(self%patch_centers(ipx, ipy, 1) + SCALE * loc_shift(1), c_double), &
                         real(self%patch_centers(ipx, ipy, 2) + SCALE * loc_shift(2) ,c_double), &
@@ -298,26 +298,33 @@ contains
         call CPlot2D__delete(plot2D)
     end subroutine plot_shifts
 
+    elemental subroutine pix2polycoords( self, xin, yin, x, y )
+        class(motion_patched), intent(in)  :: self
+        real(dp),              intent(in)  :: xin, yin
+        real(dp),              intent(out) :: x, y
+        x = (xin-1.d0) / real(self%ldim(1)-1,dp) - 0.5d0
+        y = (yin-1.d0) / real(self%ldim(2)-1,dp) - 0.5d0
+    end subroutine pix2polycoords
+
     subroutine get_local_shift( self, iframe, x, y, shift )
         class(motion_patched), intent(inout) :: self
         integer,               intent(in)  :: iframe
         real,                  intent(in)  :: x, y
         real,                  intent(out) :: shift(2)
-        real :: t, xx, yy
-        t  = real(iframe - 1)
-        xx = x / real(self%ldim(1)) - 0.5
-        yy = y / real(self%ldim(2)) - 0.5
-        shift(1) = apply_patch_poly(self%poly_coeffs(:,1),real(xx,dp),real(yy,dp),real(t,dp))
-        shift(2) = apply_patch_poly(self%poly_coeffs(:,2),real(xx,dp),real(yy,dp),real(t,dp))
+        real(dp) :: t, xx, yy
+        t  = real(iframe-1, dp)
+        call self%pix2polycoords(real(x,dp),real(y,dp), xx,yy)
+        shift(1) = apply_patch_poly(self%poly_coeffs(:,1), xx,yy,t)
+        shift(2) = apply_patch_poly(self%poly_coeffs(:,2), xx,yy,t)
     end subroutine get_local_shift
 
     subroutine apply_polytransfo( self, frames, frames_output )
         class(motion_patched),    intent(inout) :: self
         type(image), allocatable, intent(inout) :: frames(:)
         type(image), allocatable, intent(inout) :: frames_output(:)
-        integer :: i, j, iframe
-        real    :: x, y, t
-        real    :: x_trafo, y_trafo
+        integer  :: i, j, iframe
+        real(dp) :: x, y, t
+        real     :: x_trafo, y_trafo
         type(rmat_ptr_type) :: rmat_ins(self%nframes), rmat_outs(self%nframes)
         do iframe = 1, self%nframes
             call frames_output(iframe)%new(self%ldim, params_glob%smpd)
@@ -329,11 +336,10 @@ contains
         do iframe = 1, self%nframes
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
-                    t = real(iframe - 1)
-                    x = real(i-1) / real(self%ldim(1)) - 0.5
-                    y = real(j-1) / real(self%ldim(2)) - 0.5
-                    x_trafo = real(i-1) - apply_patch_poly(self%poly_coeffs(:,1),real(x,dp),real(y,dp),real(t,dp))
-                    y_trafo = real(j-1) - apply_patch_poly(self%poly_coeffs(:,2),real(x,dp),real(y,dp),real(t,dp))
+                    t = real(iframe - 1,dp)
+                    call self%pix2polycoords(real(i,dp),real(j,dp), x,y)
+                    x_trafo = real(i-1) - apply_patch_poly(self%poly_coeffs(:,1), x,y,t)
+                    y_trafo = real(j-1) - apply_patch_poly(self%poly_coeffs(:,2), x,y,t)
                     x_trafo = x_trafo + 1.
                     y_trafo = y_trafo + 1.
                     rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x_trafo, y_trafo, iframe, rmat_ins )
@@ -488,22 +494,61 @@ contains
 
     subroutine set_size_frames_ref( self )
         class(motion_patched), intent(inout) :: self
-        integer :: ldim_nooverlap(2)
-        integer :: i, j
-        self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED)) + 2 * X_OVERLAP
-        self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED)) + 2 * Y_OVERLAP
+        integer :: i,j
+        real    :: cen, dist
+        self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED))
+        self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED))
         self%ldim_patch(3) = 1
-        ldim_nooverlap(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED))
-        ldim_nooverlap(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED))
-        do j = 1, NY_PATCHED
-            do i = 1, NX_PATCHED
-                self%lims_patches(i,j,1,1) = (i-1) * ldim_nooverlap(1) - X_OVERLAP + 1
-                self%lims_patches(i,j,1,2) =  i    * ldim_nooverlap(1) + X_OVERLAP
-                self%lims_patches(i,j,2,1) = (j-1) * ldim_nooverlap(2) - Y_OVERLAP + 1
-                self%lims_patches(i,j,2,2) =  j    * ldim_nooverlap(2) + Y_OVERLAP
-            end do
-        end do
+        ! along X
+        ! limits & center first patches
+        self%lims_patches(1,:,1,1) = 1
+        self%lims_patches(1,:,1,2) = self%ldim_patch(1)
+        self%patch_centers(1,:,1)  = sum(self%lims_patches(1,:,1,1:2),dim=2) / 2.
+        ! limits & center last patches
+        self%lims_patches(NX_PATCHED,:,1,1) = self%ldim(1)-self%ldim_patch(1)+1
+        self%lims_patches(NX_PATCHED,:,1,2) = self%ldim(1)
+        self%patch_centers(NX_PATCHED,:,1)  = sum(self%lims_patches(NX_PATCHED,:,1,1:2),dim=2) / 2.
+        ! adjust other patch centers to be evenly spread
+        dist = real(self%patch_centers(NX_PATCHED,1,1)-self%patch_centers(1,1,1)+1) / real(NX_PATCHED-1)
+        do i=2,NX_PATCHED-1
+            cen = self%patch_centers(1,1,1) + real(i-1)*dist
+            self%lims_patches(i,:,1,1) = ceiling(cen) - self%ldim_patch(1)/2
+            self%lims_patches(i,:,1,2) = self%lims_patches(i,:,1,1) + self%ldim_patch(1) - 1
+            self%patch_centers(i,:,1)  = sum(self%lims_patches(i,:,1,1:2),dim=2) / 2.
+        enddo
+        ! along Y
+        self%lims_patches(:,1,2,1) = 1
+        self%lims_patches(:,1,2,2) = self%ldim_patch(2)
+        self%patch_centers(:,1,2)  = sum(self%lims_patches(:,1,2,1:2),dim=2) / 2.
+        self%lims_patches(:,NY_PATCHED,2,1) = self%ldim(2)-self%ldim_patch(2)+1
+        self%lims_patches(:,NY_PATCHED,2,2) = self%ldim(2)
+        self%patch_centers(:,NY_PATCHED,2)  = sum(self%lims_patches(:,NY_PATCHED,2,1:2),dim=2) / 2.
+        dist = real(self%patch_centers(1,NY_PATCHED,2)-self%patch_centers(1,1,2)+1) / real(NY_PATCHED-1)
+        do j=2,NY_PATCHED-1
+            cen = self%patch_centers(1,1,2) + real(j-1)*dist
+            self%lims_patches(:,j,2,1) = ceiling(cen) - self%ldim_patch(2)/2
+            self%lims_patches(:,j,2,2) = self%lims_patches(:,j,2,1) + self%ldim_patch(2) - 1
+            self%patch_centers(:,j,2)  = sum(self%lims_patches(:,j,2,1:2),dim=2) /2.
+        enddo
     end subroutine set_size_frames_ref
+
+    ! subroutine set_size_frames_ref( self )
+    !     class(motion_patched), intent(inout) :: self
+    !     integer :: i, j
+    !     self%ldim_patch(1) = round2even(real(self%ldim(1)) / real(NX_PATCHED))
+    !     self%ldim_patch(2) = round2even(real(self%ldim(2)) / real(NY_PATCHED))
+    !     self%ldim_patch(3) = 1
+    !     do j = 1, NY_PATCHED
+    !         do i = 1, NX_PATCHED
+    !             self%lims_patches(i,j,1,1) = (i-1) * self%ldim_patch(1)  + 1
+    !             self%lims_patches(i,j,1,2) =  i    * self%ldim_patch(1)
+    !             self%lims_patches(i,j,2,1) = (j-1) * self%ldim_patch(2)  + 1
+    !             self%lims_patches(i,j,2,2) =  j    * self%ldim_patch(2)
+    !             self%patch_centers(i,j,1)  = real(self%lims_patches(i,j,1,1) + self%lims_patches(i,j,1,2)) / 2.
+    !             self%patch_centers(i,j,2)  = real(self%lims_patches(i,j,2,1) + self%lims_patches(i,j,2,2)) / 2.
+    !         end do
+    !     end do
+    ! end subroutine set_size_frames_ref
 
     subroutine set_patches( self, stack )
         class(motion_patched),          intent(inout) :: self
@@ -613,8 +658,8 @@ contains
         do iframe = self%nframes, 1, -1
             self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
         enddo
-        interpolated_xshift0(:,:) = -0.5*self%shifts_patches(2,2,:,:)
-        interpolated_yshift0(:,:) = -0.5*self%shifts_patches(3,2,:,:)
+        interpolated_xshift0(:,:) = -0.5 * self%shifts_patches(2,2,:,:)
+        interpolated_yshift0(:,:) = -0.5 * self%shifts_patches(3,2,:,:)
         do iframe = 1, self%nframes
             self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:)  - interpolated_xshift0(:,:)
             self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:)  - interpolated_yshift0(:,:)
@@ -639,7 +684,6 @@ contains
 
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
         class(motion_patched), intent(inout) :: self
-        logical                              :: bfac
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
         real, optional,        intent(in)    :: trs
         call self%kill()
@@ -715,19 +759,6 @@ contains
         call self%fit_polynomial()
         ! apply transformation
         call self%apply_polytransfo(frames, frames_output)
-        if (DUMP_STUFF) then
-            ! write shifts to file
-            call self%write_shifts()
-            call self%write_shifts_for_fit()
-            write (*,*) 'ldim(1:2)=', self%ldim(1:2)
-            write (*,*) 'nframes=', self%nframes
-            do i = 1, self%nframes
-                call frames(i)%write('frame_again_'//trim(int2str(i))//'.mrc')
-            end do
-            do i = 1, self%nframes
-                call frames(i)%write('frame_out_'//trim(int2str(i))//'.mrc')
-            end do
-        end if
         ! report visual results
         call self%plot_shifts()
     end subroutine motion_patched_correct
@@ -750,7 +781,6 @@ contains
         integer :: nimproved, iter
         real    :: corrfrac, frac_improved
         logical :: didupdateres
-        !write (*,*) 'motion_patched_callback: align_iso%iter=', align_iso%get_iter()
         call align_iso%get_coords(i, j)
         corrfrac      = align_iso%get_corrfrac()
         frac_improved = align_iso%get_frac_improved()
