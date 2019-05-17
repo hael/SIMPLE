@@ -1,0 +1,35 @@
+#view3dpane
+	div#litemol
+	div#reprojections
+		if(final)
+			div
+				b="Reprojections"
+			div.thumbnails
+				- var index = 0
+				while index < reprojectionscount
+					div.thumbnail
+						div.dynimgcontainer
+							img.dynimg(
+								data-path=reprojections
+								data-frame=index
+							)
+						div.dynimgcontainer
+							img.dynimg(
+								data-path=reprojections
+								data-frame=index + 1
+							)
+					- index += 2
+	if (fsc50 && fsc143)
+		div.fsc=fsc50
+		div.fsc=fsc143
+	div.viewertoolbar
+		div
+			label(for='sigma') Sigma:
+			input#sigma(
+				type="range"
+				min="0"
+				max="10"
+				step="0.1"
+				value="1"
+				onchange="simple.updateIsoSurface(this.value)"
+			)

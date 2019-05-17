@@ -1,0 +1,104 @@
+.taskselector {
+	width: 36vw;
+	font-size: 11px;
+	position: absolute;
+	left: calc(50vw - 18vw);
+	top: 200px;
+	background-color: white;
+	padding: 10px;
+	z-index: 4;
+	border-radius: 6px;
+}
+
+.taskselector p{
+	display: inline-block;
+	font-weight: bold;
+}
+
+.taskselector h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+.taskselector .tasklist{
+	display: inline-block;
+	vertical-align: top;
+	height: 40vh;
+	width: 15vw;
+}
+
+.taskselector .task {
+	display: none;
+}
+
+.taskselector .tasklist div{
+	color: #58708d;
+}
+
+.taskselector .taskdisplay {
+	color: #58708d;
+}
+
+.taskselector .tasklisttasks div:hover{
+	background-color: lightgrey;
+}
+
+.taskselector .tasklistmodules:hover{
+	background-color: lightgrey;
+}
+
+.taskselector .tasklistmodulesselected{
+	background-color: grey !important;
+	color: white !important;
+}
+
+.taskselector input{
+	width: calc(100% - 30px);
+	padding: 6px 10px;
+	margin: 5px 0;
+	box-sizing: border-box;
+	border-radius: 8px;
+	border-style: solid;
+}
+
+.taskselector button{
+	width: 80px;
+	border-radius: 8px;
+	border-style: none;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}
+
+.taskselector #selectorbuttons{
+	display: flex;
+	justify-content: center;
+}
+
+.taskselector #closebutton {
+	height: 12px;
+	float: right;
+}
+
+.taskselector .taskselected {
+	background-color: grey !important;
+	color: white !important;
+}
+
+.taskselector .tasklisttasks {
+    display: flex;
+    flex-direction: column;
+    height: calc(100% - 25px);
+    overflow-y: auto;
+}
+
+.taskselector #showalltasks {
+	height: 17px;
+	width: 62px;
+	font-size: 11px;
+	color: white;
+}
+
+.taskselector #taskdescription {
+	height : 20px;
+}

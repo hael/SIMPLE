@@ -1,0 +1,44 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/job.css">
+ </head>
+ <body>
+	 
+  <div class=title>
+	<img class=simpleicon src=img/simple_favicon.ico>
+   New Job
+   <div class=modeselector onclick="showHideModeSelect()">
+	<img id=modeimage src=img/simple_workflow_standard.png>
+	<div class=modeimages id=modeimages>
+		<img class=modeimage onclick='document.getElementById("modeimage").src = "img/simple_workflow_standard.png"; showJobs(this, "data-standard")' src=img/simple_workflow_standard.png>
+		<img class=modeimage onclick='document.getElementById("modeimage").src = "img/simple_workflow_pipe.png"; showJobs(this, "data-pipeline")' src=img/simple_workflow_pipe.png>
+		<img class=modeimage onclick='document.getElementById("modeimage").src = "img/simple_workflow_stream.png"; showJobs(this, "data-stream")' src=img/simple_workflow_stream.png>
+		<img class=modeimage onclick='document.getElementById("modeimage").src = "img/simple_workflow_advanced.png"; showJobs(this, "data-advanced")' src=img/simple_workflow_advanced.png>
+	</div>
+   </div>
+   <img src=img/close.png class=closeimage onclick='parent.document.getElementById("mainpaneiframe").src = "projecthistory.html"'>
+  </div>
+  <div class=jobheader>
+		<div class=job data-advanced=yes onclick='showJobPage("external.html")'>External</div>
+		<div class=job data-standard=yes data-pipeline=yes data-stream=yes data-advanced=yes onclick='showJobPage("sync.html")'>Microsope Sync</div>
+		<div class=job data-pipeline=yes data-stream=yes data-advanced=yes onclick='showJobPage("preproc.html")'>Preprocessing Pipeline</div>
+		<div class=job data-standard=yes data-advanced=yes onclick='showJobPage("unblur.html")'>Motion Correction</div>
+		<div class=job data-standard=yes data-advanced=yes onclick='showJobPage("ctffind.html")'>CTF Estimation</div>
+		<div class=job data-standard=yes data-advanced=yes onclick='showJobPage("manualpick.html")'>Manual Picking</div>
+		<div class=job data-standard=yes data-advanced=yes onclick='showJobPage("autopick.html")'>Automated Picking</div>
+		<div class=job data-standard=yes data-advanced=yes onclick='showJobPage("extract.html")'>Particle Extraction</div>
+		<div class=job data-standard=yes data-pipeline=yes data-advanced=yes onclick='showJobPage("prime2d.html")'>2D Clustering</div>
+		<div class=job data-stream=yes data-advanced=yes onclick='showJobPage("prime2d_stream.html")'>Prime 2D Stream</div>
+		<div class=job data-standard=yes data-pipeline=yes data-stream=yes data-advanced=yes onclick='showJobPage("ini3d.html")'>Initial Model Generation</div>
+		<div class=job data-standard=yes data-pipeline=yes data-stream=yes data-advanced=yes onclick='showJobPage("prime3D.html")'>3D Refinement</div>
+		<div class=job data-standard=yes data-pipeline=yes data-stream=yes data-advanced=yes onclick='showJobPage("postprocess.html")'>Post Processing</div>
+	</div>
+	<div class=jobiframe>
+		<iframe id=jobiframe></iframe>
+	</div>
+  <script src="js/job.js"></script>
+  <script>showJobs(document.getElementsByClassName('modeimage')[0], "data-standard")</script>
+  <script>showReRun()</script>
+ </body>
+</html>

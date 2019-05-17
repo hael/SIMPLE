@@ -1,0 +1,19 @@
+div
+	h="View Initial 3D Model"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+
+label="Iteration"
+select
+	each iteration, index in iterations
+		option(
+			onclick="simple.viewIni3dIteration('" + folder + "/" + iteration + "', true)"
+		)=index
+	if final
+		option(
+			onclick="simple.viewIni3dIteration('" + folder + "/rec_final_pproc.mrc', true)"
+		)="Final"
+
+div#inivol

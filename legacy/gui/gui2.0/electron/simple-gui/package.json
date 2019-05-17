@@ -1,0 +1,74 @@
+{
+  "name": "simple-gui",
+  "productName": "simple-gui",
+  "version": "1.0.0",
+  "description": "Graphical user interface for SIMPLE",
+  "main": "index.js",
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make",
+    "publish": "electron-forge publish",
+    "lint": "eslint src --color"
+  },
+  "keywords": [],
+  "author": "Joseph Caesar",
+  "license": "MIT",
+  "config": {
+    "forge": {
+      "make_targets": {
+        "win32": [
+          "squirrel"
+        ],
+        "darwin": [
+          "zip"
+        ],
+        "linux": [
+          "deb",
+          "rpm"
+        ]
+      },
+      "electronPackagerConfig": {
+        "packageManager": "npm"
+      },
+      "electronWinstallerConfig": {
+        "name": "simple_gui"
+      },
+      "electronInstallerDebian": {},
+      "electronInstallerRedhat": {},
+      "github_repository": {
+        "owner": "",
+        "name": ""
+      },
+      "windowsStoreConfig": {
+        "packageName": "",
+        "name": "simplegui"
+      }
+    }
+  },
+  "dependencies": {
+    "@types/node": "^9.6.6",
+    "compression": "^1.7.3",
+    "debug": "^4.1.0",
+    "electron-compile": "^6.4.3",
+    "electron-squirrel-startup": "^1.0.0",
+    "express": "^4.16.4",
+    "find-open-port": "^1.0.2",
+    "http-auth": "^3.2.3",
+    "morgan": "^1.9.1",
+    "pug": "^2.0.3",
+    "require": "^2.4.20"
+  },
+  "devDependencies": {
+    "babel-plugin-transform-async-to-generator": "^6.24.1",
+    "babel-preset-env": "^1.7.0",
+    "babel-preset-react": "^6.24.1",
+    "electron-forge": "^5.2.2",
+    "electron-prebuilt-compile": "3.0.2",
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb": "^15.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jsx-a11y": "^5.1.1",
+    "eslint-plugin-react": "^7.11.1"
+  }
+}

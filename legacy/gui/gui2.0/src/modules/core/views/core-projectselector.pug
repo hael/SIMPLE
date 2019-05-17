@@ -1,0 +1,8 @@
+option="Select Project"
+for project in projects
+	option(
+		onclick="projectselector.showHistory('" + project['history'] + "','" + project['name'] + "','" +  project['folder'] + "','" + project['description'] + "')"
+	)=project['name']
+option(
+	onclick="projectselector.showCreate()"
+)="Create Project"

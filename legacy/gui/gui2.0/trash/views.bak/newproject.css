@@ -1,0 +1,43 @@
+#newproject {
+	width: 36vw;
+	font-size: 11px;
+	position: absolute;
+	left: calc(50vw - 18vw);
+	top: 200px;
+	background-color: white;
+	padding: 10px;
+	z-index: 3;
+	display: none;
+	border-radius: 6px;
+}
+
+#newproject p{
+	display: inline-block;
+	font-weight: bold;
+	width: 80px;
+}
+
+#newproject h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+#newproject input{
+	width: calc(100% - 120px);
+	padding: 6px 10px;
+	margin: 5px 0;
+	box-sizing: border-box;
+	border-radius: 8px;
+	border-style: solid;
+}
+
+#newproject button{
+	width: 80px;
+	border-radius: 8px;
+	background-color: rgb(0, 13, 102);
+	border-style: none;
+	color: white;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}

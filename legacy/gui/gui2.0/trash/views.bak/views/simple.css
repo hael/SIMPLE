@@ -1,0 +1,7 @@
+#headerimage {
+	background-image: url("img/simple_logo_simple.png");
+	background-repeat: no-repeat;
+	display: block;
+	background-size: auto 90%; 
+	background-position: center; 
+}

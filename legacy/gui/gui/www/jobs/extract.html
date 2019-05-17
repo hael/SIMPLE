@@ -1,0 +1,228 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Extract Particles
+  </div>
+  
+  <div class=jobinfo>
+	<p>Extract particles from micrographs</p>
+  </div>
+  
+	<div class=jobpane>
+		<form id=jobform action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=extract>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=extract>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname placeholder="job identifier"></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription placeholder="free text description of job"></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<input data-required=no type=hidden name=dir_target value=output></td>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>List of [motion corrected] micrographs and CTF parameters </td>
+					<td><input data-required=no type=text name=ctffindoutput id=ctffindoutput placeholder="micrographs and parameters file e.g. ctffit_output.simple"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=ctffindoutput data-filter=".simple"></td>
+				</tr>
+			<!--	<tr>
+					<td>
+						<i>or</i>
+					</td>
+				</tr>
+				<tr>
+					<td>Micrographs Directory</td>
+					<td><input data-required=no type=text name=micrographsdirectory id=micrographsdirectory placeholder="micrographs directory"></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
+				</tr>
+				<tr>
+					<td><br></td>
+				</tr>-->
+				<tr>
+					<td>Boxfiles Directory</td>
+					<td><input data-required=no type=text name=boxfilesdirectory id=boxfilesdirectory placeholder="directory containing box files"></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=boxfilesdirectory></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.001 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters For Particle Extraction</b></td>
+				</tr>
+				<tr>
+					<td>New Box Size</td>
+					<td><input data-required=no type=number name=box placeholer="box size for extraction, in pixels" title="Box size, in pixels, to extract particles in if different from size of box used in picking"></td>
+					<td></td>
+					<td>CTF Resolution Limit</td>
+					<td><input data-required=no type=number name=ctfreslim placeholder="use limit on ctfres fit statistic to select" title="Only extract particles from micrographs where ctfres fit statistic is better than this value in Angstroms"></td>
+				</tr>
+				<tr>
+					<td>Particle Contrast</td>
+					<td>
+						<select data-required=no name=pcontrast>
+							<option value=black selected>Cryo</option>
+							<option value=white>Negative Stain</option>
+						</select>	
+					</td>
+					<td></td>
+					<td>Extract Particles Outside Micrograph Area</td>
+					<td>
+						<select data-required=no name=pcontrast title="Option to extract particles where box lies partially outside the area of the micrograph {no}">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+				
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_exec>
+				</tr>
+				<tr>
+					<td>Number of Threads</td>
+					<td><input data-required=no type=number name=nthr placeholder="# shared-memory CPU threads"  title="Number of shared-memory CPU threads available {1}"></td>
+					<td>Submit to Queue</td>
+					<td>
+						<select data-required=no name=queue_submit onchange="showHideQueueOptions()">
+							<option value=yes>Yes</option>
+							<option value=no selected>No</option>
+						</select>
+					</td>
+				</tr>
+					
+				<tr data-queue=yes>	
+					<td>Scheduler Type</td>
+					<td>
+						<select data-required=no name=qsys_name title="Select queueing system type">
+							<option value=slurm selected>Slurm</option>
+						</select>
+					</td>
+					<td></td>
+					<td></td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Maximum Job Time</td>
+					<td>
+						<input data-required=no type=number name=time_per_image placeholder="time allowed in queue per job (s)" title="Maximum time allowed in queue per job, in seconds">
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Memory Per Job</td>
+					<td>
+						<input data-required=no type=number name=job_memory_per_task placeholder="memory allocated per job (bytes)" title="Memory allocated per job in bytes">
+					</td>
+					<td>Queue Partition</td>
+					<td>
+						<input data-required=no type=text name=qsys_partition placeholder="queue name" title="Name of queue to submit distributed jobs to">
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Number of Tasks Per Socket</td>
+					<td>
+						<input data-required=no type=number name=job_ntasks_per_socket placeholder="# jobs per CPU socket" title="Number of simultaneous jobs to run on each CPU socket">
+					</td>
+					<td>Job Identifier</td>
+					<td>
+						<input data-required=no type=text name=job_name placeholder="queue job name" title="Assign a job name to the submitted jobs">
+					</td>
+				</tr>
+				
+				<tr data-queue=yes>
+					<td>Queue QOS</td>
+					<td>
+						<input data-required=no type=text name=qsys_qos>
+					</td>
+				<!--	<td>Submit Master to Queue</td>
+					<td>
+						<select data-required=no name=submitmaster>
+							<option value=yes selected>Yes</option>
+							<option value=no >No</option>
+						</select>
+					</td>-->
+				</tr>
+				<tr>
+					<td colspan=4 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; runJob(this)">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div>
+   
+  <script src="../js/job.js"></script>
+    <script>setReRun()</script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

@@ -1,0 +1,29 @@
+div.viewheader
+	img#simplepagelogo(
+		src="img/square_logo_small.png"
+	)
+	h#simpleviewtitle(
+		title=logfile
+	)="Log File"
+	img#closebutton(
+		src="img/close.png"
+		onclick="taskselector.hide()"
+	)
+
+div.centerview
+	pre#mainpane(
+		style='display:flex;'
+	)=loginfo
+	pre#subpane(
+		style='display:none; width: 100%; flex-direction: column; overflow: auto;'
+	)=subinfo
+	
+div.buttons
+	div(
+		onclick="project.toggleLog(this)"
+	)="Subprocess Log"
+	div(
+		onclick="project.viewLog('" + logfile + "')"
+	)="Refresh"
+	
+

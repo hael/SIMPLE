@@ -1,0 +1,22 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/fileviewer.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+    <div class=headerproject id=headerproject>View</div>
+    <img class=simpleicon id=simpleicon src=img/simple_favicon.ico>
+   Log File Viewer
+   <img src=img/refresh.png onclick="window.location.reload(1)">
+   <img src=img/close.png class=closeimage onclick='showProjectHistory()'>
+  </div>
+
+  <div class=mainpane>
+	<pre class=snapshots id=snapshots></pre>
+  </div>
+ 
+  <script src="js/logfileview.js"></script>
+ </body>
+</html> 

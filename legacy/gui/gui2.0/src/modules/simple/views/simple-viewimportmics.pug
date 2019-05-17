@@ -1,0 +1,88 @@
+div
+	h="View Micrographs"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+
+div#mic
+	div.thumbnails
+		each mic in movies
+			div.thumbnail(
+				data-selected="true"
+				onclick="viewer.toggleSelect(this)"
+			)
+				div.dynimgcontainer
+					img#micrograph.dynimg(
+						data-path=mic[0]
+						data-frame="0"
+						alt=mic[1]
+					)
+	div.scrollmenu#save
+		h="Save"
+		input#savefolder(
+			type="hidden"
+			value=folder
+				)
+		input#saveprojectfile(
+			type="hidden"
+			value=projectfile
+		)
+		label(
+			for="savefilename"
+		)="Filename"
+		input#savefilename(
+			type="text"
+			placeholder="e.g. selected_micrographs.simple"
+		)
+		button(
+			onclick="simple.saveMicsSelection()"
+		)="Save"
+		
+	div.viewertoolbar
+		div
+			label(for='contrast') Contrast:
+			input#contrast(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages('mic')"
+			)
+		div
+			label(for='brightness') Brightness:
+			input#brightness(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages('mic')"
+			)
+		div
+			label(for='zoom') Zoom:
+			input#zoom(
+				type="range"
+				min="0.2"
+				max="2"
+				step="0.1"
+				value="1"
+				oninput="viewer.modifyImages('mic')"
+			)
+		div
+			label(for='scale') Scale:
+			input#scale(
+				type="range"
+				min="50"
+				max="400"
+				step="10"
+				value="200"
+				onchange="viewer.scaleImages('mic')"
+			)
+		div
+			img(
+				src="img/save.png"
+				onclick="viewer.toggleScrollMenu('mic', 'save')"
+				title="Save"
+			)

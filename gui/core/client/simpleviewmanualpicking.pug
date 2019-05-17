@@ -1,0 +1,14 @@
+div.viewmaster
+	h="Micrograph"
+	select#iterationselector(
+		onchange="simpleview.getManualPickMicrograph(this)"
+	)
+		each micrograph in micrographs
+			option(
+				data-intg=micrograph.path
+				data-xdim=micrograph.xdim
+				data-ydim=micrograph.ydim
+			)=micrograph.name
+	h#particlecounter
+div#thumbnails
+	canvas#pickingcanvas.picking

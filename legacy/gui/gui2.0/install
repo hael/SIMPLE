@@ -1,0 +1,47 @@
+if [ -d dist ]; then
+	rm -r dist
+fi
+
+mkdir -p dist
+mkdir -p dist/views
+mkdir -p dist/public
+mkdir -p dist/public/css
+mkdir -p dist/public/img
+mkdir -p dist/public/js
+
+cp -r build/* dist/
+cp -r src/bin dist/
+cp -r src/themes/* dist/public/css/
+cp -r src/server/views dist/server/
+
+for cssfolder in `find src -name "css"`; do
+    cat $cssfolder/*.css >> dist/public/css/index.css
+done
+
+for jsfolder in `find build -name "js"`; do
+    cat $jsfolder/*.js >> dist/public/js/index.js
+done
+
+for imgfolder in `find src -name "img"`; do
+    cp $imgfolder/* dist/public/img
+done
+
+for viewsfolder in `find src -name "views"`; do
+    cp $viewsfolder/*.pug dist/views/
+done
+
+cp src/modules/simple/simple_user_interface.json dist/modules/simple/
+cp users.htpasswd dist/server/
+
+cat external/LiteMol/js/LiteMol-plugin.min.js >> dist/public/js/index.js
+cat external/LiteMol/css/LiteMol-plugin.min.css >> dist/public/css/index.css
+
+cat external/Chartist/dist/chartist.min.js >> dist/public/js/index.js
+cat external/Chartist/dist/chartist.min.css >> dist/public/css/index.css
+
+cp simple.sqlite dist/
+
+#rm -r build
+#rm -r src
+rm simple.sqlite
+rm users.htpasswd

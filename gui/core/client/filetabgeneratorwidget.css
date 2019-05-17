@@ -1,0 +1,94 @@
+.filetabgeneratorwidgetpopup {
+	width: 60vw;
+	height: 70vh;
+	left: 20vw;
+	top: 15vh;
+}
+
+.filetabgeneratorwidgetpopup .taskheader{
+	height: 30px;
+	background-color: #f4f4f4;
+}
+
+.filetabgeneratorwidgetpopup #tasktitle{
+	margin-left: 35px;
+	padding-top: 7px;
+	display: inline-block;
+}
+
+.filetabgeneratorwidgetpopup .inputpage{
+	padding: 5px;
+}
+
+.filetabgeneratorwidgetpopup td{
+	padding-left: 10px;
+}
+
+.filetabgeneratorwidgetpopup td:nth-child(1){
+	width:200px;
+}
+
+.filetabgeneratorwidgetpopup td:nth-child(2){
+	width:300px;
+}
+
+.filetabgeneratorwidgetpopup #filestable{
+	width:100%;
+}
+
+.filetabgeneratorwidgetpopup #filestable td:nth-child(1){
+	width:25px;
+}
+
+.filetabgeneratorwidgetpopup #filestable tr:nth-child(odd){
+	background-color: #f4f4f4;
+}
+
+.filetabgeneratorwidgetpopup p{
+	display: inline-block;
+	font-weight: bold;
+}
+
+.filetabgeneratorwidgetpopup .inputheader h{
+	margin-left: 0px !important;
+	padding-top: 0px !important;
+}
+
+.filetabgeneratorwidgetpopup input{
+	width: 100%;
+	padding: 6px 10px;
+	margin: 5px 0;
+	box-sizing: border-box;
+	border-style: solid;
+	border-width: 1px;
+	border-color: grey;
+}
+
+.filetabgeneratorwidgetpopup .filespage{
+	height: calc(70vh - 350px);
+	overflow-y: auto
+}
+
+
+.filetabgeneratorwidgetpopup .advancedbutton{
+	float: right;
+	padding-right: 10px;
+}
+
+.filetabgeneratorwidgetpopup .inputheader{
+	background-color: #f4f4f4;
+	padding: 5px;
+	margin: 3px;
+}
+
+.filetabgeneratorwidgetpopup .widget{
+	height: 16px;
+}
+
+.filetabgeneratorwidgetpopup #text{
+	padding: 10px;
+}
+
+.filetabgeneratorwidgetpopup .taskfoldericon{
+	height: 22px;
+}

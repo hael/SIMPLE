@@ -1,0 +1,195 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Post Processing
+  </div>
+  
+  <div class=jobinfo>
+	<p>Post process volume</p>
+  </div>
+  
+	<div class=jobpane>
+		<form id=jobform action='../JSONhandler' onsubmit="parent.parent.parent.document.getElementById('mainpaneiframe').src = 'projecthistory.html'">
+			<input type=hidden name=function value=simplejob>
+			<input type=hidden name=program value=postproc_vol>
+			<input type=hidden name=jobstatus value=starting>
+			<input type=hidden name=jobtype value=postprocess>
+			<input type=hidden name=jobpid value=0>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text name=jobname></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no name=jobdescription></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				</tr>
+					<td>Volume</td>
+					<td><input data-required=no type=text name=invol id=invol placeholder="3D volume from prime3D for postprocessing" title="3D Volume to be post-processed from prime3D"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=invol data-filter=".mrc"></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.001 name=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td></td>
+					<td>Mask Radius</td>
+					<td><input data-required=no type=number step=1 name=msk title=""></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page3 style="display:none">
+				<tr>
+					<td colspan=2><b>Estimate B Factor Using Guinier Plot</b></td>
+				</tr>
+				<tr>
+					<td>Low Resolution Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=0.01 name=hpguinier placeholder="low resolution limit (Angstoms)" title="Low resolution limit for Guinier Plot calculation (Angstroms)"></td>
+					<td></td>
+					<td>High Resolution Limit For Guinier Plot</td>
+					<td><input data-required=no type=number step=0.01 name=lpguinier placeholder="high resolution limit (Angstoms)" title="High resolution limit for Guinier Plot calculation (Angstroms)"></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="fitGuinier()" id=estimateguinier>Estimate</button>
+					</td>
+				</tr>
+				<tr>
+					<td>Estimated B Factor : </td>
+					<td id=bfactorguinier></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page3').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page4 style="display:none">
+				<tr>
+					<td colspan=2><b>Optional Parameters</b></td>
+				</tr>
+				<tr>
+					<td>High Resolution Limit</td>
+					<td><input data-required=no type=number step=0.01 name=lp placeholder="high resolution limit (A)" title="high resolution limit (Angstroms)"></td>
+					<td></td>
+					<td>Molecular Weight</td>
+					<td><input data-required=no type=number step=1 name=mw placeholder="molecular weight of particle (kDa)" title="molecular weight of particle (kDa)"></td>
+				</tr>
+				<tr>
+					<td>Threshold</td>
+					<td><input data-required=no type=number step=0.0001 name=thres placeholder="masking threshold from chimera" title="masking threshold determined in chimera"></td>
+					<td></td>
+					<td>B Factor</td>
+					<td><input data-required=no type=number step=1 name=bfac placeholder="B factor to apply" title="B factor to apply from Guinier Plot"></td>
+				</tr>
+				<tr>
+					<td>Envelope Masking</td>
+					<td>
+						<select name=automsk>
+							<option selected></option>
+							<option value=yes>Yes</option>
+							<option value=no>No</option>
+							<option value=cavg>Cavg</option>
+						</select>
+					</td>
+					<td></td>
+					<td>Envelope Mask High Resolution Limit</td>
+					<td><input data-required=no type=number step=1 name=amsklp title=""></td>
+				</tr>
+				<tr>
+					<td>Envelope Mask Layer Width</td>
+					<td><input data-required=no type=number step=1 name=binwidth title=""></td>
+					<td></td>
+					<td>Envelope Edge Size</td>
+					<td><input data-required=no type=number step=1 name=edge title=""></td>
+				</tr>
+				<tr>
+					<td>Mask File</td>
+					<td><input data-required=no type=number step=1 name=mskfile id=mskfile placeholder="apply previously calculated mask to volume" title="apply previously calculated mask to volume"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=mskfile data-filter=".mrc"></td>
+					<td>Inner Mask Radius</td>
+					<td><input data-required=no type=number step=1 name=inner title=""></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page3').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page4').style.display = 'none'; document.getElementById('page5').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page5 style="display:none">
+				<tr>
+					<td colspan=2><b>Run Parameters</b></td>
+					<input type=hidden name=executable value=simple_exec>
+				</tr>
+				<tr>
+					<td>Number of Threads</td>
+					<td><input data-required=no type=number name=nthr title="Number of shared-memory CPU threads available {1}"></td>
+				</tr>
+				<tr>
+					<td colspan=4 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; document.getElementById('page4').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page5').style.display = 'none'; runJob(this)">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		 <input type=hidden id=filefilter>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
+   
+  <script src="../js/job.js"></script>
+    <script>setReRun()</script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

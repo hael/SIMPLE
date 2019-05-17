@@ -1,0 +1,88 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/pipelineview.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+	 <div class=headerproject id=headerproject>Project Name</div>
+   <img class=simpleicon id=simpleicon src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">
+   <div class=headermenu id=headermenu>
+     <div onclick='showHideHeaderMenu(this);showHideSaveSelectionPopup()'>Save Selection</div>
+   </div> 
+   Unblur Viewer
+   <img src=img/close.png class=closeimage onclick='showProjectHistory()'>
+  </div>
+  
+  <input type=hidden id=inputfilename>
+  <input type=hidden id=fileviewerfilename>
+  <input type=hidden id=rootdirectory>
+  
+  <div class=mainpane>
+	<div class=snapshots id=snapshots></div>
+	</div>
+  
+ <div class=gauze id=gauze></div>
+  
+  <div class=controlspopup id=controlspopup>
+	  <div class=header>
+		  <img class=simpleiconpopup src=img/simple_favicon.ico>
+		View Controls
+		<img src=img/close.png class=closeimage onclick='showHideControlsPopup()'>
+	</div>
+	<input type=hidden id=controlstarget>
+	<div class=mainpane>
+		<div class=controlscontrast>
+			Contrast
+			<input type=range min=0.5 max=10 value=8 id=contrast>
+		</div>		
+		<div class=controlsbrightness>
+			Brightness
+			<input type=range min=0 max=254 value=100 id=brightness>
+		</div>
+	</div>
+	<button class=popupbutton onclick='updateControls()'>Update</button>
+  </div>
+    
+  <div class=saveselectionpopup id=saveselectionpopup>
+	 <div class=header>
+		 <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Save Selection
+		<img src=img/close.png class=closeimage onclick='showHideSaveSelectionPopup()'>
+	</div>
+	 <div class=mainpane>
+		 <div class=saveselectionfolder>
+			 Folder
+			<input class=saveselectionfolder id=saveselectionfolder value="" disabled>
+		</div>
+		 <div class=saveselectionfilename>
+			 Filename
+			<input class=saveselectionfilename id=saveselectionfilename value=unblur_out_selected.simple disabled>
+		</div>
+	</div>
+	<button class=popupbutton onclick='saveSelection()'>Save</button>
+  </div>
+  
+    <div class=saveselectionpopup id=saveselectionparticlespopup>
+	 <div class=header>
+		 <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Save Particles From Selection
+		<img src=img/close.png class=closeimage onclick='showHideSaveSelectionParticlesPopup()'>
+	</div>
+	 <div class=mainpane>
+		 <div class=saveselectionfolder>
+			Folder
+			<input class=saveselectionfolder id=saveselectionparticlesfolder>
+		</div>
+		 <div class=saveselectionfilename>
+			Filename
+			<input class=saveselectionfilename id=saveselectionparticlesfilename>
+		</div>
+	</div>
+	<button class=popupbutton onclick='saveParticlesSelection()'>Save</button>
+  </div>
+  
+  <script src="js/unblurview.js"></script>
+ </body>
+</html> 

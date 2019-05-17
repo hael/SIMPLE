@@ -1,0 +1,22 @@
+div.viewmaster
+	h="Iteration"
+	select#iterationselector(
+		onchange="simpleview.getRefine3DIteration(this)"
+	)
+		each iteration in iterations
+			option(
+				data-file=iteration.file
+				data-stats=iteration.stats
+				data-fsc=iteration.fsc
+				data-header=iteration.header
+				data-projections=iteration.projections
+			)=iteration.name
+	h#resolution
+div.viewpanel
+	div#litemol
+	div#reprojections
+		div#reprojectionlabels
+			label="Cluster Average"
+			label="Reprojection"
+		div#thumbnails
+

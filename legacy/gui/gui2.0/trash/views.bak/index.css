@@ -1,0 +1,33 @@
+body{
+	font-family: Verdana, Geneva, sans-serif;
+	margin: 0px;
+	overflow: hidden;
+	background-color: white;
+}
+
+img{
+	margin: auto;
+	display: block;
+	margin-top: 30vh;
+}
+
+div{
+	text-align: center;
+	margin-top : 30px;
+}
+
+@keyframes blink {
+	50% { color: transparent }
+}
+
+.loaderdot { 
+	animation: 1s blink infinite
+}
+
+.loaderdot:nth-child(2) { 
+	animation-delay: 250ms 
+}
+
+.loaderdot:nth-child(3) { 
+	animation-delay: 500ms 
+}

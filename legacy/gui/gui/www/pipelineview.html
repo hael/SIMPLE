@@ -1,0 +1,250 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="css/pipelineview.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+	 <div class=headerproject id=headerproject>Project Name</div>
+   <img class=simpleicon id=simpleicon src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">
+   <div class=headermenu id=headermenu>
+     <div onclick='showHideHeaderMenu(this);showHideSortPopup()'>Sort</div>
+     <div onclick='showHideHeaderMenu(this);showHideSelectionPopup()'>Select</div>
+     <div onclick='showHideHeaderMenu(this);showHideSaveSelectionPopup()'>Save Selection</div>
+     <div onclick='showHideHeaderMenu(this);showHideSaveSelectionParticlesPopup()'>Save Particles From Selection</div>
+     <div onclick='showHideHeaderMenu(this);showHidePickingPopup()'>Manually Pick Particles</div>
+   </div> 
+   Preprocessing Pipeline Viewer
+   <img src=img/close.png class=closeimage onclick='showProjectHistory()'>
+  </div>
+  
+  <input type=hidden id=inputfilename>
+  <input type=hidden id=fileviewerfilename>
+  <input type=hidden id=rootdirectory>
+  
+  <div class=mainpane>
+	<div class=loadergauze>
+		<div class=loader></div>
+	</div>
+	<div class=snapshots id=snapshots>
+	</div>
+  </div>
+  
+ <div class=gauze id=gauze></div>
+ 
+ <div class=boxviewpopup id=boxviewpopup>
+	  <div class=header>
+		<img class=simpleiconpopup src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">
+		<div class=headermenu id=headermenu>
+			<div class=boxcontrast>
+				Contrast
+				<input type=range min=0.5 max=10 value=8 id=boxcontrast onchange="showBoxes()">
+			</div>
+			<div class=boxbrightness>
+				Brightness
+				<input type=range min=0 max=254 value=100 id=boxbrightness onchange="showBoxes()">
+			</div>
+			<div class=boxsize>
+				Box Size
+				<input type=number min=0 max=1000 value=128 id=boxsize onchange="showBoxes()">
+			</div>
+	   </div> 
+		View Boxes
+		<img src=img/close.png class=closeimage onclick='showHideBoxViewPopup()'>
+	</div>
+	<div class=mainpane>
+		<canvas id=boxviewerimage></canvas>
+	</div>
+  </div>
+  
+   <div class=ctfviewpopup id=ctfviewpopup>
+	  <div class=header>
+		<img class=simpleiconpopup src=img/simple_favicon.ico >
+		Micrograph Parameters
+		<img src=img/close.png class=closeimage onclick='showHideCTFViewPopup()'>
+	</div>
+	<div class=mainpane>
+		<div id=ctfattributes class=ctfattributes></div>
+	</div>
+  </div>
+  
+   <div class=pickingpopup id=pickingpopup>
+	  <div class=header>
+		<img class=simpleiconpopup src=img/simple_favicon.ico onclick="showHideHeaderMenu(this)">
+		<div class=headermenu id=headermenu>
+			<div class=boxcontrast>
+				Contrast
+				<input type=range min=0.5 max=10 value=8 id=pickcontrast onchange="showBoxes()">
+			</div>
+			<div class=boxbrightness>
+				Brightness
+				<input type=range min=0 max=254 value=100 id=pickbrightness onchange="showBoxes()">
+			</div>
+	   </div> 
+		View Boxes
+		<img src=img/close.png class=closeimage onclick='showHidePickingPopup()'>
+	</div>
+	<div class=mainpane>
+		<div id=pickingmicrographs class=pickingmicrographs>
+		</div>
+		<canvas id=pickingviewerimage></canvas>
+		<div class=referencecreator>
+			<div>
+				Sampling Distance
+				<input type=number id=smpd>
+			</div>
+			<div>
+				Box Size
+				<input type=number id=referenceboxsize onchange="generatePickref()">
+			</div>
+			<div>
+				Particle Diameter
+				<input type=number id=referencediameter onchange="generatePickref()">
+			</div>
+			<img id=referenceimage>
+			<div>
+				<div>
+					Threshold
+					<input type=number id=thresh>
+				</div>
+				<div>
+					Deviations
+					<input type=number id=ndev>
+				</div>
+				<input type=button id=autopick onclick="autopickSubmit()" value=Pick>
+			</div>
+		</div>
+		
+	</div>
+  </div>
+  
+  
+  <div class=controlspopup id=controlspopup>
+	  <div class=header>
+		  <img class=simpleiconpopup src=img/simple_favicon.ico>
+		View Controls
+		<img src=img/close.png class=closeimage onclick='showHideControlsPopup()'>
+	</div>
+	<input type=hidden id=controlstarget>
+	<div class=mainpane>
+		<div class=controlscontrast>
+			Contrast
+			<input type=range min=0.5 max=10 value=8 id=contrast>
+		</div>		
+		<div class=controlsbrightness>
+			Brightness
+			<input type=range min=0 max=254 value=100 id=brightness>
+		</div>
+		<div class=controlsbrightness>
+			Hide Previously Viewed
+			<select name=hideviewed onchange="showHideViewedSnapshots(this)">
+				<option value=no selected>No</option>
+				<option value=yes>Yes</option>
+			</select>
+		</div>
+		<div class=controlsbrightness>
+			Hide Unselected
+			<select name=hideunselected onchange="showHideUnselectedSnapshots(this)">
+				<option value=no selected>No</option>
+				<option value=yes>Yes</option>
+			</select>
+		</div>
+	</div>
+	<button class=popupbutton onclick='updateControls()'>Update</button>
+  </div>
+  
+  <div class=sortpopup id=sortpopup>
+	  <div class=header>
+		  <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Sort
+		<img src=img/close.png class=closeimage onclick='showHideSortPopup()'>
+	</div>
+	<div class=mainpane>
+		<div class=sortorder>
+			Sort Order
+			<select id=sortorder>
+				<option value=ascending selected>Ascending</option>
+				<option value=descending>Descending</option>
+			</select>
+		</div>
+		<div class=sorton>
+			Sort On
+			<select id=sorton>
+			</select>
+		</div>
+	</div>
+	<button class=popupbutton onclick='sortFileViewer()'>Apply</button>
+  </div>
+  
+  <div class=saveselectionpopup id=saveselectionpopup>
+	 <div class=header>
+		 <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Save Selection
+		<img src=img/close.png class=closeimage onclick='showHideSaveSelectionPopup()'>
+	</div>
+	 <div class=mainpane>
+		 <div class=saveselectionfolder>
+			 Folder
+			<input class=saveselectionfolder id=saveselectionfolder value="" disabled>
+		</div>
+		 <div class=saveselectionfilename>
+			 Filename
+			<input class=saveselectionfilename id=saveselectionfilename value=preproc_out_selected.simple disabled>
+		</div>
+	</div>
+	<button class=popupbutton id=saveselectionbutton onclick='saveSelection()'>Save</button>
+  </div>
+  
+    <div class=saveselectionpopup id=saveselectionparticlespopup>
+	 <div class=header>
+		 <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Save Particles From Selection
+		<img src=img/close.png class=closeimage onclick='showHideSaveSelectionParticlesPopup()'>
+	</div>
+	 <div class=mainpane>
+		 <div class=saveselectionfolder>
+			Folder
+			<input class=saveselectionfolder id=saveselectionparticlesfolder value="" disabled>
+		</div>
+		 <div class=saveselectionfilename>
+			Filename
+			<input class=saveselectionfilename id=saveselectionparticlesfilename value=particles_selected.simple disabled>
+		</div>
+	</div>
+	<button id=saveselectionparticlesbutton class=popupbutton onclick='saveParticlesSelection()'>Save</button>
+  </div>
+  
+   <div class=selectionpopup id=selectionpopup>
+	 <div class=header>
+		 <img class=simpleiconpopup src=img/simple_favicon.ico>
+		Selection
+		<img src=img/close.png class=closeimage onclick='showHideSelectionPopup()'>
+	</div>
+	 <div class=mainpane>
+		<div class=selectionattribute>
+			Select
+			<select id=selectionattribute>
+			</select>
+		</div>
+		<div class=selectioncriteria>
+			Is
+			<select id=selectioncriteria>
+				<option value=lessthan>Less</option>
+				<option value=greaterthan>Greater</option>
+			</select>
+		</div>
+		<div class=selectionvalue>
+			Than
+			<input type=text id=selectionvalue>
+		</div>
+		<div class=selectionappend>
+			Append Selection
+			<input type=checkbox id=selectionappend>
+		</div>
+	</div>
+	<button class=popupbutton onclick='applySelection()'>Select</button>
+  </div> 
+  <script src="js/pipelineview.js"></script>
+ </body>
+</html> 

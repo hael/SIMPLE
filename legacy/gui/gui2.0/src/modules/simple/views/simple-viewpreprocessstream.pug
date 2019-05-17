@@ -1,0 +1,306 @@
+div
+	h="View Preprocessing Output"
+	img#closebutton(
+		src="img/close.png"
+		onclick="viewer.hide()"
+	)
+	
+div#subheader
+	label#micrographcounter
+	img#refresh(
+		onclick="history2.viewOutput('{\"mod\":\"simple\",\"fnc\":\"viewPreprocessStream\"}','" + folder + "','running')"
+		src="../img/refresh.png"
+	)
+	
+div#preproc
+	div.thumbnails
+		each element,index in preproc
+			div.thumbnail(
+				data-class=index
+				data-selected="true"
+				data-dfx=element[2]
+				data-dfy=element[3]
+				data-angast=element[4]
+				data-ctf_estimatecc=element[5]
+				data-dferr=element[6]
+				data-ctfscore=element[7]
+				data-cc90=element[8]
+				onclick="viewer.toggleSelect(this); simple.sumMicrographs('preproc')"
+				title="DFX : " + element[2] + ", DFY : " + element[3] + ", Angast : "+ element[4] + ", CTF Estimate CC : "+ element[5] + ", Defocus Error : "+ element[6] + ", CTF Score : "+ element[7] + ", CC90 : "+ element[8]
+			)
+				
+				div.dynimgcontainer
+					img.dynimg.pspec(
+						data-sprite=element[0]
+						data-spritewidth=2
+						data-spriteid=0
+						data-frame="0"
+					)
+				div.dynimgcontainer
+					img.dynimg.micrograph(
+						data-sprite=element[0]
+						data-spritewidth=2
+						data-spriteid=1
+						data-frame="0"
+					)
+					if boxfiles
+						img.viewptcls(
+							src="../img/eye.png"
+							onclick="event.stopPropagation(); simple.viewBoxes('" + boxfiles[index][0] + "','" + boxfiles[index][1] + "','" + boxfiles[index][2] + "','" + boxfiles[index][3] + "','" + boxfiles[index][4] + "')"
+						)
+				div.dynimgcontainer
+					img.dynimg.ctffit(
+						data-path=element[1]
+						data-frame="0"
+					)
+
+	div.scrollmenu#save
+		h="Save"
+		input#savefolder(
+			type="hidden"
+			value=folder
+				)
+		input#saveprojectfile(
+			type="hidden"
+			value=projectfile
+		)
+		div
+			label(
+				for="savefilename"
+			)="Filename"
+			input#savefilename(
+				type="text"
+				placeholder="e.g. selected_ctf.simple"
+			)
+		button(
+			onclick="simple.saveMicsSelection()"
+		)="Save"
+		
+	div.scrollmenu#view
+		h="View"
+		div
+			label(
+				for="viewpspec"
+			)="Power Spectrum"
+			input#viewpspec(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'pspec')"
+				checked
+			)
+			div
+			label(
+				for="viewmic"
+			)="Micrographs"
+			input#viewmic(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'micrograph')"
+				checked
+			)
+		div
+			label(
+				for="viewctf"
+			)="CTF Fit"
+			input#viewctf(
+				type="checkbox"
+				onchange="viewer.showHideThumbnails(this, 'ctffit')"
+				checked
+			)
+
+	div.scrollmenu#sort
+		h="Sort"
+		div
+			label(
+				for="sortattribute"
+			)="Attribute"
+			select#sortattribute
+				option(
+					value="dfx"
+				)="Defocus X"
+				option(
+					value="dfy"
+				)="Defocus Y"
+				option(
+					value="angast"
+					selected
+				)="Angle of Astigmatism"
+				option(
+					value="ctf_estimatecc"
+				)="CTF Estimate CC"
+				option(
+					value="dferr"
+				)="Defocus Error"
+				option(
+					value="ctfscore"
+				)="CTF Score"
+				option(
+					value="cc90"
+				)="CC90"
+		div
+			label(
+				for="sortorder"
+			)="Order"
+			select#sortorder
+				option(
+					value="ascending"
+				)="Ascending"
+				option(
+					value="descending"
+				)="Descending"
+		button(
+			onclick="viewer.sortThumbnails('preproc')"
+		)="Apply"
+
+	div.scrollmenu#plot
+		h="Plot"
+		div
+			select#plottype
+				option(
+					value="mic:dfx:scatter"
+				)="Micrograph vs X Defocus"
+				option(
+					value="mic:dfy:scatter"
+				)="Micrograph vs Y Defocus"
+				option(
+					value="mic:angast:scatter"
+				)="Micrograph vs Astigmatism Angle"
+				option(
+					value="mic:ctf_estimatecc:scatter"
+				)="Micrograph vs CTF Estimate CC"
+				option(
+					value="mic:dferr:scatter"
+				)="Micrograph vs Defocus Error"
+				option(
+					value="mic:ctfscore:scatter"
+				)="Micrograph vs CTF Score"
+				option(
+					value="mic:cc90:scatter"
+				)="Micrograph vs CC90"
+				option(
+					value="dfx:dfy:scatter"
+				)="X Defocus vs Y Defocus"
+				option(
+					value="cc90:ctf_estimatecc:scatter"
+				)="CC90 vs CTF Estimate CC"
+				option(
+					value="cc90:dferr:scatter"
+				)="CC90 vs Defocus Error"
+				option(
+					value="cc90:ctfscore:scatter"
+				)="CC90 vs CTF Score"
+				option(
+					value="ctfscore:ctf_estimatecc:scatter"
+				)="CTF Score vs CTF Estimate CC"
+				option(
+					value="ctfscore:dferr:scatter"
+				)="CTF Score vs Defocus Error"
+				option(
+					value="ctfscore:cc90:scatter"
+				)="CTF Score vs CC90"
+				option(
+					value="dferr:ctf_estimatecc:scatter"
+				)="Defocus Error vs CTF Estimate CC"
+				option(
+					value="dferr:ctfscore:scatter"
+				)="Defocus Error vs CTF Score"
+				option(
+					value="dferr:cc90:scatter"
+				)="Defocus Error vs CC90"
+				option(
+					value="ctf_estimatecc:dferr:scatter"
+				)="CTF Estimate CC vs Defocus Error"
+				option(
+					value="ctf_estimatecc:ctfscore:scatter"
+				)="CTF Estimate CC vs CTF Score"
+				option(
+					value="ctf_estimatecc:cc90:scatter"
+				)="CTF Estimate CC vs CC90"
+			button(
+				onclick="simple.plot2Dptcls('preproc')"
+			)="Apply"
+		div#ptcls2Dchart
+
+	div.viewertoolbar
+		div
+			label(for='contrast') Target:
+			select#target
+				option(
+					value="micrograph"
+				)="Micrograph"
+				option(
+					value="ctffit"
+				)="CTF Fit"
+		div
+			label(for='contrast') Contrast:
+			input#contrast(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages('preproc')"
+			)
+		div
+			label(for='brightness') Brightness:
+			input#brightness(
+				type="range"
+				min="0"
+				max="200"
+				step="1"
+				value="100"
+				oninput="viewer.modifyImages('preproc')"
+			)
+		div
+			label(for='zoom') Zoom:
+			input#zoom(
+				type="range"
+				min="0.2"
+				max="2"
+				step="0.1"
+				value="1"
+				oninput="viewer.modifyImages('preproc')"
+			)
+		div
+			label(for='scale') Scale:
+			input#scale(
+				type="range"
+				min="50"
+				max="400"
+				step="10"
+				value="200"
+				onchange="viewer.scaleImages('preproc')"
+			)
+		div
+			img.scrollmenubutton(
+				src="../img/eye.png"
+				onclick="viewer.toggleScrollMenu('preproc', 'view', this)"
+				title="Sort"
+			)
+		div
+			img.scrollmenubutton(
+				src="../img/sort.png"
+				onclick="viewer.toggleScrollMenu('preproc', 'sort', this)"
+				title="Sort"
+			)
+		div
+			img.scrollmenubutton(
+				src="img/plot.png"
+				onclick="viewer.toggleScrollMenu('preproc', 'plot', this)"
+				title="Plot"
+			)
+		div
+			img.scrollmenubutton(
+				src="img/save.png"
+				onclick="viewer.toggleScrollMenu('preproc', 'save', this)"
+				title="Save"
+			)
+			
+div#boxesviewer
+	div#boxesviewergauze
+	div
+		h="View Boxes"
+		img#closebutton(
+			src="img/close.png"
+			onclick="simple.hideViewBoxes()"
+		)
+	img#boxviewmicrograph
+

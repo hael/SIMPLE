@@ -1,0 +1,19 @@
+table
+	each task in history
+		tr
+			td=task['id']
+			td="type"
+			td="status"
+			td=task['name']
+			td
+				select
+					option="View Output"
+					option="View Logfile"
+					option(
+						onclick="fileselector.show(true, '/beegfs/users/pemb2292/bgal/1_cluster2D')"
+					)="View Files"
+					option="ReRun"
+					option="Kill"
+					option="Delete"
+			
+

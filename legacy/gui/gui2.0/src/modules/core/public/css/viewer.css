@@ -1,0 +1,140 @@
+.viewer {
+	width: 90vw;
+	height: 80vh;
+	font-size: 11px;
+	position: absolute;
+	left: 5vw;
+	top: 120px;
+	background-color: white;
+	padding: 10px;
+	z-index: 4;
+	border-radius: 6px;
+}
+
+.viewer h{
+	font-weight: bold;
+	font-size: 14px;
+}
+
+.viewer button{
+	width: 80px;
+	border-radius: 8px;
+	border-style: none;
+	font-size: 12px;
+	height: 30px;
+	margin-top: 5px;
+}
+
+.viewer #selectorbuttons{
+	display: flex;
+	justify-content: space-between;
+	margin-left: 20%;
+	margin-right: 20%;
+}
+
+.viewer #closebutton {
+	height: 12px;
+	float: right;
+}
+
+
+.viewer .thumbnail{
+	display: inline-block;
+	background-color: grey;
+	margin: 5px;
+	padding: 5px;
+	background-image: url("../img/cancel.png"); 
+	background-repeat: no-repeat; 
+	background-position: center center; 
+	transition: background-color 0.5s ease;
+}
+
+.viewer .dynimgcontainer {
+	display: inline-block;
+	width: 200px;
+	height: 200px;
+	overflow: hidden;
+}
+
+.viewer .dynimg {
+	width: 100%;
+	height: 100%;
+	display: inline-block;
+	background-color: white;
+	text-align: center;
+}
+
+.viewer .viewertoolbar {
+	background-color: #f4f4f4;
+	height: 42px;
+	width: 100%;
+	position: absolute;
+	bottom: 0px;
+	display: flex;
+	justify-content: space-between;
+	text-align: center;
+	left: 0px;
+	border-bottom-left-radius: 6px;
+	border-bottom-right-radius: 6px;
+	color: #58708d;
+}
+
+.viewer .viewertoolbar div{
+	margin-left: 2vw;
+	margin-right: 2vw;
+}
+
+.viewer .viewertoolbar label{
+	font-weight: bold;
+}
+
+.viewer .viewertoolbar input[type=number] {
+	width: 50px;
+	border-style: solid;
+	border-radius: 8px;
+}
+
+.viewer .viewertoolbar input[type=range] {
+	width: 5vw;
+	vertical-align: middle;
+}
+
+.viewer #subheader{
+	margin-left: 40vw;
+}
+
+.viewer #particlecounter{
+	padding-left: 15vw;
+}
+
+.viewer #frames {
+	height: calc(80vh - 75px);
+	overflow: scroll;
+}
+
+.viewer .lm-plugin {
+	position: relative;
+	width: 90vw;
+	height: calc(80vh - 58px); 
+	}
+	
+.viewer .lm-layout-right {
+	display: none;
+}
+
+.viewer .lm-layout-left {
+	display: none;
+}
+
+.viewer .lm-layout-top {
+	display: none;
+}
+
+.viewer .lm-layout-bottom {
+	display: none;
+}
+
+.viewer .lm-viewport-controls {
+	display: none;
+}
+

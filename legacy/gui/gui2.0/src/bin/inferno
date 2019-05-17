@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+SOURCE="$( dirname "${BASH_SOURCE[0]}" )"
+cd $SOURCE
+cd ..
+node inferno.js inferno

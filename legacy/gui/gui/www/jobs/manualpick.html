@@ -1,0 +1,345 @@
+<DOCTYPE html>
+<html>
+ <head>
+  <link rel="stylesheet" href="../css/job.css">
+  <link rel="stylesheet" href="../css/manualpick.css">
+ </head>
+ <body>
+	 
+  <div class=header>
+   Manual Particle Picking
+  </div>
+  
+  <div class=jobinfo>
+	<p>Manually pick particles from micrographs</p>
+  </div>
+  
+	<div class=jobpane id=jobpane>
+		<form>
+			<input type=hidden id=projecttable name=table value=0>
+			<input type=hidden id=projectfolder name=jobfolder value=0>
+			<input type=hidden id=rootdirectory>
+			<input type=hidden id=jobfolder>
+			
+			<table id=page1>
+				<tr>
+					<td colspan=2><b>Job Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Job Name</td>
+					<td><input data-required=no type=text id=jobname placeholder="job identifier"></td>
+				</tr>
+				<tr data-required=no>
+					<td>Job Description</td>
+					<td><textarea data-required=no id=jobdescription placeholder="free text description of job"></textarea></td>
+				</tr>
+				<tr>
+					<td colspan=2 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page1').style.display = 'none'; document.getElementById('page2').style.display = 'block'">Next</button>
+					</td>
+				</tr>
+			</table>
+			
+			<table id=page2 style="display:none">
+				<tr>
+					<td colspan=2><b>Required Parameters</b></td>
+				</tr>
+				<tr>
+					<td>Micrographs Parameters Table</td>
+					<td><input data-required=no type=text id=unbluroutput placeholder=".simple file with list of micrographs e.g. ctf_out.simple"></td>
+					<td><img src=../img/folder.png onclick="fileSelect(this)" data-target=unbluroutput data-filter=".simple"></td>
+				</tr>
+				<tr>
+					<td><i>or</i></td>
+				</tr>
+				<tr>
+					<td>Micrographs Directory</td>
+					<td><input data-required=no type=text id=micrographsdirectory placeholder="directory containing micrographs"></td>
+					<td><img src=../img/folder.png onclick="folderSelect(this)" data-target=micrographsdirectory></td>
+				</tr>
+				<tr>
+					<td>Sampling Distance</td>
+					<td><input data-required=no type=number step=0.01 id=smpd placeholder="pixel size in Angstroms" title="Size of detector pixels in Angstroms at magnification of data collection"></td>
+					<td></td>
+					<td></td>
+					<td></td>
+				</tr>
+				<tr>
+					<td colspan=5 style="text-align: center">
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; document.getElementById('page1').style.display = 'block'">Back</button>
+						<button type="button" onclick="document.getElementById('page2').style.display = 'none'; showManualPicker()">Run</button>
+					</td>
+				</tr>
+			</table>
+			
+		</form>
+	</div>
+	
+	<div id=pickpane>
+		<div class=headermenu id=headermenu>
+		</div>
+		<div class=pickmicrographs>
+			<div>
+				<b>Micrographs</b>
+				<table id=pickmicrographs></table>
+			</div>
+			<div>
+				<b>View Parameters</b>
+				<table id=viewparameters>
+					<tr>
+						<td>Contrast</td>
+						<td>
+							<input type=range min=0.5 max=10 value=2 id=pickcontrast>
+						</td>
+					</tr>
+					<tr>
+						<td>Brightness</td>
+						<td>
+							<input type=range min=0 max=254 value=128 id=pickbrightness>
+						</td>
+					</tr>
+					<tr>
+						<td>Scale</td>
+						<td>
+							<input type=range min=0.05 max=1 value=0.5 step=0.01 id=scale>
+						</td>
+					</tr>
+					<tr>
+						<td>Show Box Outline</td>
+						<td>
+							<input type=checkbox id=pickbox>
+						</td>
+					</tr>
+					<tr>
+						<td>Show Particle Outline</td>
+						<td>
+							<input type=checkbox id=pickparticle checked>
+						</td>
+					</tr>
+					<tr>
+						<td colspan=2>
+							<input type=button onclick='reloadMicrograph()' value="Refresh" class=popupbutton>
+						</td>
+					</tr>
+	
+				</table>
+			</div>
+		</div>
+		<div class=pickcenter>
+			<div id=particlecount></div>
+			<div class=pickcanvas>
+				<canvas id=pickcanvas></canvas>
+				<div id=pickcanvasgauze class=pickcanvasgauze>
+					<div id=loader class=loader></div>
+				</div>
+			</div>
+		</div>
+		<div class=pickparameters>
+			<div>
+				<b>Picking Parameters</b>
+				<table>
+					<tr>
+						<td>Boxsize</td>
+						<td>
+							<select id=boxsize onchange="clearBoxes()" name=boxsize>
+								<option value=32>32</option>
+								<option value=36>36</option>
+								<option value=40>40</option>
+								<option value=48>48</option>
+								<option value=52>52</option>
+								<option value=56>56</option>
+								<option value=64>64</option>
+								<option value=66>66</option>
+								<option value=70>70</option>
+								<option value=72>72</option>
+								<option value=80>80</option>
+								<option value=84>84</option>
+								<option value=88>88</option>
+								<option value=100>100</option>
+								<option value=104>104</option>
+								<option value=108>108</option>
+								<option value=112>112</option>
+								<option value=120>120</option>
+								<option value=128 selected>128</option>
+								<option value=130>130</option>
+								<option value=132>132</option>
+								<option value=140>140</option>
+								<option value=144>144</option>
+								<option value=150>150</option>
+								<option value=160>160</option>
+								<option value=162>162</option>
+								<option value=168>168</option>
+								<option value=176>176</option>
+								<option value=180>180</option>
+								<option value=182>182</option>
+								<option value=192>192</option>
+								<option value=200>200</option>
+								<option value=208>208</option>
+								<option value=216>216</option>
+								<option value=220>220</option>
+								<option value=224>224</option>
+								<option value=240>240</option>
+								<option value=256>256</option>
+								<option value=264>264</option>
+								<option value=288>288</option>
+								<option value=300>300</option>
+								<option value=308>308</option>
+								<option value=320>320</option>
+								<option value=324>324</option>
+								<option value=336>336</option>
+								<option value=338>338</option>
+								<option value=352>352</option>
+								<option value=364>364</option>
+								<option value=384>384</option>
+								<option value=400>400</option>
+								<option value=420>420</option>
+								<option value=432>432</option>
+								<option value=448>448</option>
+								<option value=450>450</option>
+								<option value=462>462</option>
+								<option value=480>480</option>
+								<option value=486>486</option>
+								<option value=500>500</option>
+								<option value=504>504</option>
+								<option value=512>512</option>
+								<option value=520>520</option>
+								<option value=528>528</option>
+								<option value=546>546</option>
+								<option value=560>560</option>
+								<option value=576>576</option>
+								<option value=588>588</option>
+								<option value=600>600</option>
+								<option value=640>640</option>
+								<option value=648>648</option>
+								<option value=650>650</option>
+								<option value=660>660</option>
+								<option value=672>672</option>
+								<option value=686>686</option>
+								<option value=700>700</option>
+								<option value=702>702</option>
+								<option value=704>704</option>
+								<option value=720>720</option>
+								<option value=726>726</option>
+								<option value=728>728</option>
+								<option value=750>750</option>
+								<option value=768>768</option>
+								<option value=770>770</option>
+								<option value=784>784</option>
+								<option value=800>800</option>
+								<option value=810>810</option>
+								<option value=840>840</option>
+								<option value=882>882</option>
+								<option value=896>896</option>
+								<option value=910>910</option>
+								<option value=924>924</option>
+								<option value=936>936</option>
+								<option value=972>972</option>
+								<option value=980>980</option>
+								<option value=1008>1008</option>
+								<option value=1014>1014</option>
+								<option value=1020>1020</option>
+								<option value=1024>1024</option>
+							</select>
+						</td>
+					</tr>
+					<tr>
+						<td>Particle Radius</td>
+						<td>
+							<input type=number id=particlediameter name=particlediameter value=80>
+						</td>
+					</tr>
+					<tr>
+						<td colspan=2>
+							<input type=button onclick='clearBoxes()' value="Clear Boxes" class=popupbutton>
+						</td>
+					</tr>	
+				</table>
+			</div>
+			<div>
+				<b>Reference Based Picking</b>
+				<table>
+					<tr>
+						<td>2D Clusters</td>
+						<td>
+							<input type=text id=pickrefs name=pickrefs placeholder="file containing clusters from 2D e.g. .mrc">
+						</td>
+						<td>
+							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickrefs data-filter=".mrc">
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<i>or</i>
+						</td>
+					</tr>
+					<tr>
+						<td>Volume</td>
+						<td>
+							<input type=text id=pickvol name=pickvol placeholder="file containing 3D volume e.g. vol.mrc">
+						</td>
+						<td>
+							<img src=../img/folder.png onclick="fileSelect(this)" data-target=pickvol data-filter=".mrc">
+						</td>
+					</tr>
+					<tr>
+						<td>Point Group Symmetry</td>
+						<td>
+							<input type=text id=pgrp name=pgrp value=c1>
+						</td>
+					</tr>
+					<tr>
+						<td>Deviation</td>
+						<td>
+							<input type=number id=ndev name=ndev title="quality of match between references and particles in standard deviations"value=1>
+						</td>
+					</tr>
+					<tr>
+						<td>Box Overlap</td>
+						<td>
+							<input type=number id=thres name=thres title="overlap between boxes, pixels" value=100>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>Negative Stain</td>
+						<td>
+							<input type=checkbox id=pcontrast>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td colspan=3>
+							<input type=button onclick="autoPick()" value="Autopick" class=popupbutton>
+						</td>
+					</tr>
+				</table>
+			</div>
+		</div>
+	</div>
+	
+	<div id=gauze class=gauze></div>
+	
+	<div class=selectfilepopup id=selectfilepopup>
+	 <div class=header id=selectfileheader>
+		<img class=simpleicon id=simpleicon src=../img/simple_favicon.ico>
+		File Browser
+		<img src=../img/close.png class=closeimage onclick='hideFileSelect()'>
+	</div>
+	 <div class=mainpane>
+		 <input type=hidden id=filetarget>
+		  <input type=hidden id=filefilter>
+		<input class=selectfiledirectory id=selectfiledirectory>
+		<div class=selectfiletable>
+			<table id=selectfiletable></table>
+		</div>
+	</div>
+	<button class=selectfilebutton onclick='hideFileSelect()'>Select</button>
+   </div> 
+<!--  <script src="../js/job.js"></script>-->
+   <script src="../js/manualpick.js"></script>
+   <script src="../js/fileselector.js"></script>
+   <script>setReRun()</script>
+  <script>setProjectTable()</script>
+  <script>setProjectFolder()</script>
+ </body>
+</html>

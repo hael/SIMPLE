@@ -1,0 +1,80 @@
+doctype html
+html
+	head
+		title="SIMPLE"
+		style
+			include index.css
+			include taskinput.css
+			include taskselector.css
+			include simpleview.css
+			include browser.css
+			include filetabgeneratorwidget.css
+			include guinierplotwidget.css
+			include ../../external/Chartist/dist/chartist.min.css
+			include ../../external/LiteMol/css/LiteMol-plugin.min.css
+	body
+		div#loader
+			div#loaderpanel
+				img(
+					src="img/simple_logo_simple.png"
+				)
+				div="Loading ..."
+		div#view
+			div#viewheader
+				img#refreshimage(
+					src="img/square_logo.png"
+					onclick="location.reload()"
+				)
+				h#projectnametitle
+				select#projectselector(
+					onchange="project.selectProject(this.options[this.selectedIndex])"
+				)
+			div#viewwindow
+			div#viewfooter
+				img(
+					src="img/view.png"
+					onclick="browser.show({buttons : [{ name : 'view2d', action : 'simpleview.view2D()'}, { name : 'view3d', action : 'simpleview.view3D()'}], path : 'selectedfolder', gauze : true})"
+					title="browse"
+				)
+				img(
+					src="img/task.png"
+					onclick="taskselector.show()"
+					title="task"
+				)
+				img#tutorial(
+					src="img/tutorial.png"
+					onclick="window.open('/tutorial?fnc=listTutorials', '', 'height=800')"
+					title="tutorial"
+				)
+				div#version='version 3.0.0'
+				img#deleteproject(
+					src="img/delete.png"
+					onclick="project.deleteProject()"
+					title="delete project"
+				)
+			div#popup
+				div.gauze
+				div#popupwindow
+			div#widgetpopup
+				div.gauze
+				div#widgetwindow
+			div#browser
+				div.gauze
+				div#browserwindow
+		script="if (typeof module === 'object') {window.module = module; module = undefined;}"
+		script
+			include loader.js
+			include fetcher.js
+			include project.js
+			include task.js
+			include browser.js
+			include simpleview.js
+			include tutorial.js
+			include highlighter.js
+			include filetabgeneratorwidget.js
+			include guinierplotwidget.js
+			include ../../external/LiteMol/js/LiteMol-plugin.min.js
+			include ../../external/Chartist/dist/chartist.js
+			include ../../external/Chartist/dist/chartist-plugin-zoom.js
+			include ../../external/Chartist/dist/chartist-plugin-vertical-line.js
+		script="if (window.module) module = window.module"
