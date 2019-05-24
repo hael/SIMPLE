@@ -2,7 +2,6 @@ program simple_test_chiara_stats
 include 'simple_lib.f08'
 use simple_oris
 use gnufor2
-use simple_picker_chiara
 use simple_micops
 use simple_image
 use simple_stackops

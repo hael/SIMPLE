@@ -125,6 +125,8 @@ contains
       real                       :: tthresh(2),  sigma, m
       real, allocatable          :: grad(:,:,:), vector(:)
       integer                    :: ldim(3)
+      logical :: debug
+      debug = .false.
       ldim = img_in%get_ldim()
       call img_in%scale_pixels([1.,real(ldim(1))*2.+1.]) !to be coherent with the other case
       ! call img_in%scale_pixels([1.,255.])
@@ -145,7 +147,7 @@ contains
       !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
       tthresh(1) = max(1.,                  (1.-sigma)*m) !lower
       tthresh(2) = min(real(ldim(1))*2.+1., (1.+sigma)*m) !upper
-      write(logfhandle,*) 'Selected thresholds: ', tthresh
+      if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
       if (present(lp)) then
           call canny_edge(img_in,tthresh,lp)
       else

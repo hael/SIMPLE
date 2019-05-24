@@ -20,6 +20,13 @@ public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
 public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
 private
+
+
+interface subtr_backgr_imgfile
+    module procedure subtr_backgr_imgfile_1
+    module procedure subtr_backgr_imgfile_2
+end interface
+
 #include "simple_local_flags.inc"
 
 contains
@@ -344,7 +351,7 @@ contains
         call img_resized2%kill
     end subroutine resize_imgfile_double
 
-    subroutine subtr_backgr_imgfile( fname2subtr, fname, smpd, lp )
+    subroutine subtr_backgr_imgfile_1( fname2subtr, fname, smpd, lp )
         character(len=*), intent(in) :: fname2subtr, fname
         real,             intent(in) :: smpd, lp
         type(image) :: img
@@ -361,7 +368,30 @@ contains
             call img%write(fname, i)
         end do
         call img%kill
-    end subroutine subtr_backgr_imgfile
+    end subroutine subtr_backgr_imgfile_1
+
+    subroutine subtr_backgr_imgfile_2( fname2subtr, fname, smpd, lp, mask )
+        character(len=*),  intent(in) :: fname2subtr, fname
+        real,              intent(in) :: smpd, lp
+        logical,           intent(in) :: mask(:) !which imgs of the stack to consider
+        type(image) :: img
+        integer     :: i, n, ldim(3)
+        call find_ldim_nptcls(fname2subtr, ldim, n)
+        ldim(3) = 1
+        if(size(mask) .ne. n) THROW_HARD('Wrong dim in input mask; subtr_backgr_imgfile')
+        call raise_exception_imgfile( n, ldim, 'subtr_backgr_imgfile' )
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> SUBTRACTING BACKGROUND FROM IMAGES'
+        do i=1,n
+            call progress(i,n)
+            call img%read(fname2subtr, i)
+            if(mask(i)) then
+                call img%subtr_backgr(lp)
+            endif
+            call img%write(fname, i)
+        end do
+        call img%kill
+    end subroutine subtr_backgr_imgfile_2
 
     subroutine norm_bin_imgfile( fname2norm, fname, smpd )
         character(len=*), intent(in) :: fname2norm, fname

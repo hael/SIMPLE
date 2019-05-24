@@ -193,6 +193,11 @@ interface otsu
     module procedure otsu_2
 end interface otsu
 
+interface pixels_dist
+   module procedure pixels_dist_1
+   module procedure pixels_dist_2
+end interface
+
 contains
 
     !> \brief nvoxfind_1  to find the volume in number of voxels, given molecular weight
@@ -2274,6 +2279,99 @@ contains
         endwhere
         if(present(thresh)) thresh = threshold
     end subroutine otsu_2
+
+    !>   calculates the euclidean distance between one pixel and a list of other pixels.
+    ! if which == 'max' then distance is the maximum value of the distance between
+    !              the selected pixel and all the others
+    ! if which == 'min' then distance is the minimum value of the distance between
+    !              the selected pixel and all the others
+    ! if which == 'sum' then distance is the sum of the distances between the
+    !              selected pixel and all the others.
+    function pixels_dist_1( px, vec, which, mask, location) result( dist )
+        integer,           intent(in)     :: px(3)
+        integer,           intent(in)     :: vec(:,:)
+        character(len=*),  intent(in)     :: which
+        logical,           intent(inout)  :: mask(:)
+        integer, optional, intent(out)    :: location(1)
+        real    :: dist
+        integer :: i
+        if(size(mask,1) .ne. size(vec, dim = 2)) write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_1'
+        if((any(mask .eqv. .false.)) .and. which .eq. 'sum') write(logfhandle,*) 'Attention! Not considering mask for sum; pixels_dist_1'
+        select case(which)
+        case('max')
+            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location =  maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+        case('min')
+            !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+            do i = 1, size(vec, dim = 2)
+                if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) )then
+                    if(which .ne. 'sum') mask(i) = .false.
+                endif
+            enddo
+            dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+            if(present(location)) location =  minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
+        case('sum')
+            if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_1'
+            dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
+        case DEFAULT
+            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
+            write(logfhandle,*)'Error! Unsupported pixels_dist kind; pixels_dist_1'
+        end select
+    end function pixels_dist_1
+
+    function pixels_dist_2( px, vec, which, mask, location) result( dist )
+        real,              intent(in)     :: px(3)
+        real,              intent(in)     :: vec(:,:)
+        character(len=*),  intent(in)     :: which
+        logical,           intent(inout)  :: mask(:)
+        integer, optional, intent(out)    :: location(1)
+        real    :: dist
+        integer :: i
+        if(size(mask,1) .ne. size(vec, dim = 2))  write(logfhandle,*)'Error! Incompatible sizes mask and input vector; pixels_dist_2'
+        if(any(mask .eqv. .false.) .and. which .eq. 'sum')  write(logfhandle,*)'Attention! Not considering mask for sum; pixels_dist_2'
+        select case(which)
+        case('max')
+            dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+            if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+        case('min')
+            !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
+            do i = 1, size(vec, dim = 2)
+                if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
+                &  .and. abs(px(3)-vec(3,i)) < TINY ) mask(i) = .false.
+            enddo
+            dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+            if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
+        case('sum')
+            if(present(location))   write(logfhandle,*)'Error! Unsupported location parameter with sum mode; pixels_dist_1'
+            dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
+        case DEFAULT
+            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
+            write(logfhandle,*)'Error! Unsupported pixels_dist kind; pixels_dist_2'
+        end select
+    end function pixels_dist_2
+
+    ! This subroutine stores in pos the indexes corresponding to
+    ! the pixels with value > 0 in the binary matrix imat.
+    subroutine get_pixel_pos(imat, pos)
+        integer,              intent(in)  :: imat(:,:,:)
+        integer, allocatable, intent(out) :: pos(:,:)
+        integer ::  i, j, k, cnt
+        integer :: s(3)
+        if(allocated(pos)) deallocate(pos)
+        s = shape(imat)
+        allocate(pos(3,count(imat(:s(1),:s(2),:s(3)) > 0.5)), source = 0)
+        cnt = 0
+        do i = 1, s(1)
+              do j = 1, s(2)
+                  do k = 1, s(3)
+                      if(imat(i,j,k) > 0.5) then
+                          cnt = cnt + 1
+                          pos(:3,cnt) = [i,j,k]
+                      endif
+                  enddo
+              enddo
+          enddo
+      end subroutine get_pixel_pos
 
     ! imported from numerical recipes
     function pythag_sp(a,b)

@@ -37,7 +37,6 @@ program simple_test_chiara_binarize_cavgs
   use simple_image,         only : image
   use simple_parameters,    only: parameters
   use simple_cmdline,       only: cmdline
-  use simple_picker_chiara
   use simple_test_chiara_binarize_cavgs_mod
   type(cmdline)      :: cline
   type(parameters)   :: params

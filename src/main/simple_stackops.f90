@@ -8,6 +8,24 @@ implicit none
 public :: make_pattern_stack, binarize_stack, prepare_stack
 public :: acf_stack, make_avg_stack, stats_imgfile, frameavg_stack
 private
+
+
+interface prepare_stack
+    module procedure prepare_stack_1
+    module procedure prepare_stack_2
+end interface
+
+
+interface apply_tvf_stack
+    module procedure apply_tvf_stack_1
+    module procedure apply_tvf_stack_2
+end interface
+
+interface binarize_stack
+    module procedure binarize_stack_1
+    module procedure binarize_stack_2
+end interface
+
 #include "simple_local_flags.inc"
 
 contains
@@ -203,6 +221,8 @@ contains
     ! This subroutine calculates the logaritm of all the micrographs in a stack.
     ! It is meant to be applied to power spectra images, in order to decrease
     ! the influence of the central pixel.
+    ! It performs the calculations on the images of the stack identified by
+    ! the logical mask.
     subroutine calc_log_stack( fname2process, fname, smpd )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
@@ -219,8 +239,8 @@ contains
             rmat = img%get_rmat()
             rmat = log(rmat)
             call img%set_rmat(rmat)
-            call img%write(fname, i)
             rmat = 0.
+            call img%write(fname, i)
         end do
         call img%kill
         deallocate(rmat)
@@ -232,36 +252,54 @@ contains
     ! Edge detaction is more challenging in close to focus powerspectra
     ! images. There are more appropriate settings for this case, in
     ! order to set them, flag the variable 'close_to_focus'
-    subroutine apply_tvf_stack( fname2process, fname, smpd, lambda, close_to_focus)
+    subroutine apply_tvf_stack_1( fname2process, fname, smpd, lambda)
         use simple_tvfilter
         character(len=*),  intent(in) :: fname2process, fname
         real,              intent(in) :: smpd
         real,              intent(in) :: lambda ! parameter for tv filtering
-        logical, optional, intent(in) :: close_to_focus(:)
         type(image)       :: img
         integer           :: n, ldim(3), i
         type(tvfilter)    :: tvf
-        real              :: llambda !to override var lambda in case of close_to_focus imaging
-        logical, allocatable :: cclose_to_focus(:)
         call find_ldim_nptcls(fname2process, ldim, n)
-        if(present(close_to_focus) .and. size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; apply_tvf_stack')
-        allocate (cclose_to_focus(n), source = .false.)
-        if(present(close_to_focus)) cclose_to_focus = close_to_focus
         ldim(3) = 1
         call tvf%new()
         call raise_exception( n, ldim, 'apply_tvf_imgfile' )
         call img%new(ldim,smpd)
-        llambda = lambda
         do i = 1, n
-            if(cclose_to_focus(i)) llambda = 10.
             call img%read(fname2process, i)
-            !call img%scale_pixels([1.,real(ldim(1))*2.+1.]) !not to have problems in calculating the log
-            call tvf%apply_filter(img, llambda)
+            call tvf%apply_filter(img, lambda)
             call img%write(fname, i)
-            llambda = lambda !restore input
         enddo
         call img%kill
-    end subroutine apply_tvf_stack
+    end subroutine apply_tvf_stack_1
+
+    subroutine apply_tvf_stack_2( fname2process, fname, smpd, close_to_focus)
+        use simple_tvfilter
+        character(len=*),  intent(in) :: fname2process, fname
+        real,              intent(in) :: smpd
+        logical,           intent(in) :: close_to_focus(:)
+        type(image)       :: img
+        integer           :: n, ldim(3), i
+        type(tvfilter)    :: tvf
+        real, parameter   :: lambda = 5.
+        call find_ldim_nptcls(fname2process, ldim, n)
+        if(size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; apply_tvf_stack')
+        ldim(3) = 1
+        call tvf%new()
+        call raise_exception( n, ldim, 'apply_tvf_imgfile' )
+        call img%new(ldim,smpd)
+        do i = 1, n
+                if(close_to_focus(i)) then
+                    call img%read(fname2process, i)
+                    call tvf%apply_filter(img, lambda)
+                else
+                    call img%read('tvf_stk.mrc', i)
+                endif
+                call img%write(fname, i)
+        enddo
+        call img%kill
+    end subroutine apply_tvf_stack_2
+
 
     ! This subroutine takes in input a stack of images and performs
     ! a series of operations on it in order to prepare it to be
@@ -270,51 +308,71 @@ contains
     !                -) logarithm of the image (after pixel scaling)
     !                -) background subtraction
     !                -) median filter
-    subroutine prepare_stack( fname2process, fname, smpd, lp, close_to_focus)
+    subroutine prepare_stack_1(fname2process, fname, smpd, lp)
         use simple_procimgfile,   only : subtr_backgr_imgfile, real_filter_imgfile
         character(len=*),  intent(in) :: fname2process, fname
         real,              intent(in) :: smpd, lp
-        logical, optional, intent(in) :: close_to_focus(:)
+        integer     :: n, ldim(3)
+        real        :: lambda !for tv filtering
+        call find_ldim_nptcls(fname2process, ldim, n)
+        ldim(3) = 1
+        lambda  = 1. !10. for close to focus images
+        call raise_exception( n, ldim, 'calc_log_imgfile' )
+        ! TO REMOVE PARAMETER MASK IN CALC_LOG. PUT IT OPTIONAL
+        call calc_log_stack( fname2process, 'log_stk.mrc', smpd ) !logaritm of the images in the stack
+        call apply_tvf_stack('log_stk.mrc','tvf_stk.mrc',smpd,lambda )
+        ! call subtr_backgr_imgfile( 'tvf_stk.mrc', 'back_sub_stk.mrc', smpd, lp )
+        call subtr_backgr_imgfile( 'tvf_stk.mrc', fname, smpd, lp )
+        write(logfhandle,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
+    end subroutine prepare_stack_1
+
+    ! This subroutine takes in input a stack of images and performs
+    ! a series of operations on it in order to prepare it to be
+    ! binarised. It is written for power spectra stacks.
+    ! Procedure:
+    !                -) logarithm of the image (after pixel scaling)
+    !                -) background subtraction
+    !                -) median filter
+    subroutine prepare_stack_2(fname2process, fname, smpd, lp, close_to_focus)
+        use simple_procimgfile,   only : subtr_backgr_imgfile, real_filter_imgfile
+        character(len=*),  intent(in) :: fname2process, fname
+        real,              intent(in) :: smpd, lp
+        logical,           intent(in) :: close_to_focus(:)
         integer     :: winsz !for median filtering
         integer     :: n, ldim(3), i
         type(image) :: img
-        real        :: lambda !for tv filtering
-        logical, allocatable :: cclose_to_focus(:)
         call find_ldim_nptcls(fname2process, ldim, n)
-        if(present(close_to_focus) .and. size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; prepare_stack')
-        allocate (cclose_to_focus(n), source = .false.)
-        if(present(close_to_focus)) cclose_to_focus = close_to_focus
+        if(size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; prepare_stack')
         ldim(3) = 1
         call img%new(ldim,smpd)
-        lambda  = 1 !10. for close to focus images
-        winsz   = 7 !just for close to focus images
+        winsz   = 3  !just for close to focus images
         call raise_exception( n, ldim, 'calc_log_imgfile' )
-        call calc_log_stack( fname2process, fname, smpd ) !logaritm of the images in the stack
-        call apply_tvf_stack(fname,fname,smpd,lambda,cclose_to_focus)
-        call subtr_backgr_imgfile( fname, fname, smpd, lp )
+        call apply_tvf_stack('log_stk.mrc','tvf_stk.mrc',smpd, close_to_focus)
+        call subtr_backgr_imgfile( 'tvf_stk.mrc', 'back_sub_stk.mrc', smpd, lp, close_to_focus )
         write(logfhandle,'(a)') '>>> REAL-SPACE FILTERING IMAGES'
         do i=1,n
             call progress(i,n)
-            call img%read(fname, i)
-            if(cclose_to_focus(i)) then !otherwise do not median filter
+            call img%read('back_sub_stk.mrc', i)
+            if(close_to_focus(i)) then !otherwise do not median filter
                 call img%real_space_filter(winsz, 'median')
             endif
             call img%write(fname, i)
         end do
         call img%kill
-    end subroutine prepare_stack
+    end subroutine prepare_stack_2
 
     !This subroutine performs Canny automatic edge detection on a stack
     !of images.
     !If discard_borders is set to true, the external frame of the binary
     !image is set to 0, to take care of border effects.
     !default: discard_borders=.false.
-    subroutine binarize_stack(fname2process,fname,smpd,discard_borders)
+    !mask identifies  the images of the stack to be binarized.
+    subroutine binarize_stack_1(fname2process,fname,smpd,discard_borders)
       use simple_segmentation, only : canny
       character(len=*),  intent(in) :: fname2process, fname
       real,              intent(in) :: smpd
       logical, optional, intent(in) :: discard_borders
-      real, allocatable :: rmat_bin(:,:,:)
+      real,    allocatable :: rmat_bin(:,:,:)
       logical     :: ddiscard_borders
       integer     :: n, ldim(3), i
       type(image) :: img
@@ -337,5 +395,68 @@ contains
           call img%write(fname,i)
       enddo
       call img%kill
-    end subroutine binarize_stack
+  end subroutine binarize_stack_1
+
+    subroutine binarize_stack_2(fname2process,fname,smpd,mask,discard_borders)
+      use simple_segmentation, only : canny
+      character(len=*),  intent(in) :: fname2process, fname
+      real,              intent(in) :: smpd
+      logical,           intent(in) :: mask(:)
+      logical, optional, intent(in) :: discard_borders
+      logical, allocatable :: mmask(:)
+      real,    allocatable :: rmat_bin(:,:,:)
+      integer, allocatable :: imat_cc(:,:,:)
+      logical     :: ddiscard_borders
+      integer     :: n, ldim(3), i
+      type(image) :: img, img_cc
+      real :: avg_sz_ccs   !average size of the connected components
+      real :: stdev_sz_ccs
+      integer :: n_cc
+      integer, allocatable :: sz(:)
+      call find_ldim_nptcls(fname2process, ldim, n)
+      if(size(mask) .ne. n) THROW_HARD('Wrong dim in input mask; binarize_stack')
+      ldim(3) = 1
+      ddiscard_borders = .false.
+      if(present(discard_borders)) ddiscard_borders = discard_borders
+      call img%new(ldim,smpd)
+      do i = 1, n
+          if(mask(i)) then
+              call img%read(fname2process, i)
+              call canny(img)
+              if(ddiscard_borders) then
+                  rmat_bin = img%get_rmat()
+                  rmat_bin(1:int(ldim(1)/10), :, 1) = 0.       !bottom horizontal border
+                  rmat_bin(ldim(1)-int(ldim(1)/10):ldim(1),:, 1) = 0. !top horizontal border
+                  rmat_bin(:,1:int(ldim(2)/10), 1) = 0.        !bottom vertical border
+                  rmat_bin(:,ldim(2)-int(ldim(2)/10):ldim(2), 1) = 0.  !top vertical border
+                  call img%set_rmat(rmat_bin)
+              endif
+          else
+              call img%read(fname,i)
+          endif
+          call img%write(fname,i)
+          !calculation of avg and stdev of the sz of the ccs in the image
+          call img%find_connected_comps(img_cc)
+          sz = img_cc%size_connected_comps()
+          avg_sz_ccs = real(sum(sz))/real(size(sz, dim = 1))
+          print *, 'image ', i-1, 'avg sz ccs', avg_sz_ccs
+          imat_cc = int(img_cc%get_rmat())
+          do n_cc = 1, maxval(imat_cc)
+              stdev_sz_ccs = stdev_sz_ccs +(avg_sz_ccs-sz(n_cc))**2
+          enddo
+          stdev_sz_ccs = sqrt(stdev_sz_ccs/real(size(sz)-1))
+          print *, 'stdev_sz_ccs_borders', stdev_sz_ccs, 'threshold = ',avg_sz_ccs-1.*stdev_sz_ccs
+          !discarding too small connected components
+          do n_cc = 1, maxval(imat_cc)
+              if(sz(n_cc) < avg_sz_ccs/2.) then
+                  where(imat_cc == n_cc) imat_cc = 0
+              endif
+          enddo
+          deallocate(sz)
+          call img%set_rmat(real(imat_cc))
+          call img%write('Polished_ccs.mrc',i)
+      enddo
+      call img%kill
+      call img_cc%kill()
+  end subroutine binarize_stack_2
 end module simple_stackops

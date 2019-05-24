@@ -4,61 +4,163 @@ include 'simple_lib.f08'
 use simple_image, only : image
 implicit none
 
- public :: extract_particles, center_cc, discard_borders, pixels_dist, get_pixel_pos, polish_cc !maybe to remove center_cc from public
-
- private
-interface pixels_dist
-    module procedure pixels_dist_1
-    module procedure pixels_dist_2
-end interface
+ public :: extract_particles, preprocess_mic, picker_chiara, print_info
 
 #include "simple_local_flags.inc"
+
+! module global constants
+real, parameter :: SHRINK  = 4.
+
+type :: picker_chiara
+    private
+    type(image) :: img
+    type(image) :: img_cc
+    real, allocatable :: particles_coord(:,:)
+    real    :: part_radius           = 0.
+    real    :: smpd                  = 0.
+    real    :: smpd_shrunken         = 0.
+    real    :: hp_box                = 0.
+    integer :: ldim(3)               = 0
+    integer :: ldim_shrunken(3)      = 0
+    integer :: n_particles           = 0
+    character(len=STDLEN) :: pickername = ''   !fname
+    character(len=STDLEN) :: fbody      = ''   !fbody
+    character(len=STDLEN) :: detector   = ''
+    real     :: lambda ! for tv denoising
+    real     :: lp     ! low pass filtering
+contains
+    ! constructor
+    procedure          :: new => new_picker
+    ! picking functions
+    procedure          :: extract_particles
+    procedure          :: elimin_aggregation
+    procedure          :: center_cc
+    ! preprocess mic prior picking
+    procedure          :: preprocess_mic
+    ! setters/getters
+
+    ! output
+    procedure          :: print_info
+    ! kill
+    procedure          :: kill => kill_picker
+end type picker_chiara
+
+private
+
 contains
 
+    subroutine new_picker(self, fname, radius, smpd)
+        class(picker_chiara),  intent(inout) :: self
+        character(len=*),      intent(in)    :: fname
+        real,                  intent(in)    :: radius
+        real,                  intent(in)    :: smpd
+        integer :: nptcls
+        self%pickername = fname
+        call find_ldim_nptcls(self%pickername, self%ldim, nptcls, self%smpd)
+        self%smpd = smpd
+        self%ldim_shrunken(1) = round2even(real(self%ldim(1))/SHRINK)
+        self%ldim_shrunken(2) = round2even(real(self%ldim(2))/SHRINK)
+        self%ldim_shrunken(3) = 1
+        self%smpd_shrunken = self%smpd*SHRINK
+        self%part_radius = radius
+        self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
+        call self%img%new   (self%ldim_shrunken, self%smpd_shrunken)
+        call self%img_cc%new(self%ldim_shrunken, self%smpd_shrunken)
+        self%n_particles = 0
+        self%lambda      = 5.
+        self%lp          = 20.
+        self%detector    = 'bin'
+    end subroutine new_picker
 
-    ! This function takes in input an image and gives in output another image
-    ! with smaller size in which are discarded about 4% of the borders. It
-    ! is meant to deal with border effects.
-    subroutine discard_borders(img_in, img_out, reduce_ldim)
-        class(image),      intent(in)  :: img_in
-        class(image),      intent(out) :: img_out
-        integer, optional, intent(out) :: reduce_ldim(3)
-        logical :: outside
-        integer :: ldim(3), rreduce_ldim(3), box
-        real    :: smpd
-        outside = .false. !initialization
-        ldim = img_in%get_ldim()
-        smpd = img_in%get_smpd()
-        rreduce_ldim = nint(4.*minval(ldim(:2))/100.)
-        rreduce_ldim(3) = 1
-        if(present(reduce_ldim)) reduce_ldim = rreduce_ldim
-        box = minval(ldim(:2))- 2*rreduce_ldim(1)
-        call img_out%new([box,box,1], smpd)
-        call img_in%window_slim(rreduce_ldim(:2),box, img_out, outside)
-        if(outside) THROW_HARD('It is outside! discard_borders')
-    end subroutine discard_borders
+    subroutine preprocess_mic(self, detector,lp)
+        use simple_tvfilter, only : tvfilter
+        use simple_micops
+        use simple_segmentation, only: sobel, automatic_thresh_sobel
+        class(picker_chiara), intent(inout) :: self
+        character(len= *),    intent(in)    :: detector
+        real, optional,       intent(in)    :: lp
+        real, allocatable :: rmat(:,:,:)
+        real, allocatable :: x(:), x_out(:)
+        type(tvfilter)    :: tvf
+        type(image) :: mic_copy
+        integer     :: box_shrunken, winsz
+        real        :: ave, sdev, maxv, minv
+        real        :: thresh(1)
+        ! 0) Reading and saving original micrograph
+        call read_micrograph(self%pickername, smpd = self%smpd)
+        ! 1) Shrink and high pass filtering
+        call shrink_micrograph(SHRINK, self%ldim_shrunken, self%smpd_shrunken)
+        self%hp_box =  4.*self%part_radius+2.*self%part_radius
+        call set_box(int(SHRINK*(self%hp_box)), box_shrunken)
+        ! To take care of shrinking
+        self%part_radius = self%part_radius/SHRINK ! I am thingking I shouldn't multiply by the smpd cuz I am working in pxls
+        call mic_copy%new(self%ldim_shrunken, self%smpd_shrunken)
+        call self%img%read('shrunken_hpassfiltered.mrc')
+        call mic_copy%read('shrunken_hpassfiltered.mrc')
+        ! 2) Low pass filtering
+        if(present(lp)) self%lp = lp
+        call mic_copy%bp(0.,self%lp)
+        call mic_copy%ifft()
+        ! 2.1) TV denoising
+        call tvf%new()
+        call tvf%apply_filter(mic_copy, self%lambda)
+        call tvf%kill
+        call mic_copy%write(trim(self%fbody)//'_tvfiltered.mrc')
+        ! 2.3) negative image, to obtain a binarization with white particles
+        call mic_copy%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
+        ! 3) Binarization
+        call mic_copy%stats( ave, sdev, maxv, minv )
+        if(detector .eq. 'sobel') then
+            self%detector = 'sobel'
+            thresh(1) = ave+.5*sdev !sobel needs lower thresh not to pick just edges
+            call sobel(mic_copy,thresh)
+        else if (detector .eq. 'bin') then
+            ! default self%detector is bin
+            call mic_copy%bin(ave+.8*sdev)
+        else if (detector .eq. 'otsu') then
+            self%detector = 'otsu'
+            rmat = mic_copy%get_rmat()
+            x = pack(rmat, .true.)
+            call otsu(x,x_out)
+            rmat = reshape(x_out, [self%ldim_shrunken(1),self%ldim_shrunken(2),1])
+            call mic_copy%set_rmat(rmat)
+            deallocate(x,x_out,rmat)
+        else
+            THROW_HARD('Invalid detector; preprocess_mic')
+        endif
+        call mic_copy%write(trim(self%fbody)//'_Bin.mrc')
+        winsz = int(self%part_radius)/2
+        call mic_copy%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
+        call mic_copy%write(trim(self%fbody)//'_BinMedian.mrc')
+        ! 5) Connected components (cc) identification
+        call mic_copy%find_connected_comps(self%img_cc)
+        ! 6) cc filtering
+        call self%img_cc%polish_cc(self%part_radius)
+        call self%img_cc%write(trim(self%fbody)//'_ConnectedComponentsElimin.mrc')
+        call mic_copy%kill
+    end subroutine preprocess_mic
 
-    ! This function tells whether the new_coord of a likely particle
-    ! have already been identified.
-    function is_picked( new_coord, saved_coord, part_radius, saved ) result(yes_no)
-        integer, intent(in) :: new_coord(2)       !Coordinates of a new particle to pick
-        integer, intent(in) :: saved_coord(:,:)   !Coordinates of picked particles
-        integer, intent(in) :: part_radius        !Approximate radius of the particle
-        integer, intent(in), optional :: saved    !How many particles have already been saved
-        logical :: yes_no
-        integer :: iwind, ssaved, s(2)
-        s = shape(saved_coord)
-        if(s(2) /= 2) THROW_HARD('dimension error; is_picked')
-        yes_no = .false.
-        ssaved = s(1)
-        if(present(saved)) ssaved = saved
-        do iwind = 1, ssaved
-            if(  sqrt(real((new_coord(1)-saved_coord(iwind,1))**2 + (new_coord(2)-saved_coord(iwind,2)) **2)) <= real(part_radius)) then
-                yes_no = .true.
-                return
-            endif
-        enddo
-    end function is_picked
+    subroutine print_info(self)
+        class(picker_chiara), intent(inout) :: self
+        open(unit = 17, file = "PickerInfo.txt")
+        write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = "(a,f0.0)")             'Mic Shrunken, fact ', SHRINK
+        write(unit = 17, fmt = "(a,i4,tr1,i4,tr1,i4)") 'Dim before  shrink ', self%ldim
+        write(unit = 17, fmt = "(a,i4,tr1,i4,tr1,i4)") 'Dim after   shrink ', self%ldim_shrunken
+        write(unit = 17, fmt = "(a,f4.2)")             'Smpd before shrink ', self%smpd
+        write(unit = 17, fmt = "(a,f4.2)")             'Smpd after  shrink ', self%smpd_shrunken
+        write(unit = 17, fmt = "(a,a)")                'Hp box              ', trim(int2str(int(self%hp_box)))
+        write(unit = 17, fmt = "(a,i4,tr1,i4)")        'Ccs size filtering ', int(5*self%part_radius), int(2*3.14*(self%part_radius)**2)
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
+        write(unit = 17, fmt = '(a)') ''
+        write(unit = 17, fmt = "(a,f0.0)")  'Lp filter parameter ', self%lp
+        write(unit = 17, fmt = "(a,f0.0)")  'TV filter parameter ', self%lambda
+        write(unit = 17, fmt = "(a,a)")     'part_radius         ', trim(int2str(int(self%part_radius)))
+        write(unit = 17, fmt = "(a,a)")     'detector            ', self%detector
+        close(17, status = "keep")
+    end subroutine print_info
 
     ! This routine is aimed to eliminate aggregations of particles.
     ! It takes in input the list of the coordinates of the identified
@@ -66,27 +168,22 @@ contains
     ! The output is a new list of coordinates where aggregate picked particles
     ! have been deleted
     ! If the dist beetween the 2 particles is in [r,2r] -> delete them.
-    subroutine elimin_aggregation( saved_coord, part_radius, refined_coords )
-        integer,              intent(in)  :: saved_coord(:,:)     !Coordinates of picked particles
-        integer,              intent(in)  :: part_radius          !Approximate radius of the particle
-        integer, allocatable, intent(out) :: refined_coords(:,:)  !New coordinates of not aggregated particles
+    subroutine elimin_aggregation( self, saved_coord, refined_coords )
+        class(picker_chiara),  intent(inout) :: self
+        real,                 intent(in)     :: saved_coord(:,:)     !Coordinates of picked particles
+        real, allocatable,    intent(out)    :: refined_coords(:,:)  !New coordinates of not aggregated particles
         logical, allocatable :: msk(:)
         integer              :: i, j, cnt
-        real :: ppart_radius
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        ! ppart_radius = part_radius*4. !because of shrinking
-        ppart_radius = part_radius
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         allocate(msk(size(saved_coord,dim=1)), source = .true.) !initialise to 'keep all'
         cnt = 0
         do i = 1, size(saved_coord, dim = 1)             !fix one coord
-            do j = 1, size(saved_coord, dim = 1)         !fix another coord to compare
-                if(j > i .and. msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
+            do j = i+1, size(saved_coord, dim = 1)       !fix another coord to compare
+                if(msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
                     if(  sqrt(real((saved_coord(i,1)-saved_coord(j,1))**2 &
-                        & + (saved_coord(i,2)-saved_coord(j,2))**2)) <= real(2*ppart_radius) &
-                        & .and. real(ppart_radius) < &
-                        & real((saved_coord(i,1)-saved_coord(j,1))**2 &
-                        &    + (saved_coord(i,2)-saved_coord(j,2))**2)) then
+                        &        + (saved_coord(i,2)-saved_coord(j,2))**2)) <= 2.*self%part_radius) then !&
+                        !& .and. self%part_radius < &
+                        !& real((saved_coord(i,1)-saved_coord(j,1))**2 &        ! TO CHECK WHAT TO DO
+                        !&    + (saved_coord(i,2)-saved_coord(j,2))**2)) then
                         msk(i) = .false.
                         msk(j) = .false.
                         cnt = cnt + 1                    !number of deleted couples
@@ -94,7 +191,7 @@ contains
                 endif
             enddo
         enddo
-        allocate(refined_coords(size(saved_coord, dim = 1)-cnt,2), source = 0)
+        allocate(refined_coords(size(saved_coord, dim = 1)-cnt,2), source = 0.)
         cnt = 0
         do i = 1, size(saved_coord, dim = 1)
             if(msk(i)) then
@@ -109,111 +206,88 @@ contains
   ! This subroutine takes in input an image, its connected components image,
   ! and extract particles. It doesn't use mass_center.
   ! notation:: cc = connected component.
-  subroutine extract_particles(self, img_cc, part_radius)
-      type(image),  intent(inout) :: self        !original image
-      type(image),  intent(inout) :: img_cc      !connected components image
-      integer,      intent(in)    :: part_radius !extimated particle radius, to discard aggregations
-      type(image)          :: imgwin_particle!, imgwin_bin
-      type(image)          :: self_back
+  subroutine extract_particles(self)
+      class(picker_chiara), intent(inout) :: self
+      type(image)          :: imgwin_particle
+      type(image)          :: img_back
       integer              :: box
-      integer              :: n_cc                            !n_cc  = # cc in the input image
-      integer              :: cnt_particle, cnt_likely        !counters
-      integer              :: xyz(3)                          !mass center coordinates
-      integer :: ldim(3)
-      real    :: pos(3)                                       !central position of each cc
-      real    :: ave, sdev, maxv, minv, med                   !stats
-      real    :: aveB, sdevB, maxvB, minvB, medB      !stats
-      integer, allocatable :: xyz_saved(:,:), xyz_norep_noagg1(:,:),xyz_norep_noagg(:,:)
+      integer              :: n_cc
+      integer              :: cnt
+      real                 :: pos(3)            !center of each cc
+      real, allocatable    :: xyz_saved(:,:), xyz_norep_noagg(:,:)
+      integer, allocatable :: imat_cc(:,:,:)
       integer, allocatable :: imat(:,:,:)
-      real,    allocatable :: rmat(:,:,:)                     !matrix corresponding to the cc image
-      integer, allocatable :: imat_masked(:,:,:)              !to identify each cc
-      logical              :: outside, discard, errout, erroutB
-      real :: vec_tiny(2)
+      logical              :: outside
       ! Initialisations
-      ldim = self%get_ldim()
-      box  = (part_radius)*4 + 2*part_radius !needs to be slightly bigger than the particle
-      rmat = img_cc%get_rmat()
-      call imgwin_particle%new([box,box,1],1.)
-      !call imgwin_bin%new([box,box,1],1.)
-      outside = .false.
-      allocate(xyz_saved(int(maxval(rmat)),2), source = 0) ! int(maxval(rmat)) is the # of cc (likely particles)
-      allocate(imat_masked(1:ldim(1),1:ldim(2),ldim(3)))
+      box     = int(4.*(self%part_radius)+2.*self%part_radius) !needs to be bigger than the particle
+      imat_cc = int(self%img_cc%get_rmat())
+      call imgwin_particle%new([box,box,1],self%smpd)
+      allocate(xyz_saved(maxval(imat_cc),2), source = 0.) ! size of the # of cc (likely particles)
+      allocate(imat(1:self%ldim_shrunken(1),1:self%ldim_shrunken(2),1:self%ldim_shrunken(3)), source = 0)
       ! Copy of the micrograph, to highlight on it the picked particles
-      call self_back%copy(self)
+      call img_back%copy(self%img)
       ! Particle identification, extraction and centering
-      !open(unit = 17, file = "Statistics.txt")
-      allocate(imat(ldim(1),ldim(2),ldim(3)), source = int(rmat)) !rmat is the connected component matrix
-      cnt_likely = 0
-      do n_cc = 1, int(maxval(rmat))   !fix cc
-          imat_masked = 0              !reset
-          if(any(imat == n_cc)) then
-              where(imat == n_cc) imat_masked = 1
-              cnt_likely = cnt_likely + 1
-              pos = center_cc(imat_masked)
-              xyz_saved(cnt_likely,:) = int(pos(:2))
+      where(imat_cc > 0.5) imat = 1
+      do n_cc = 1, maxval(imat_cc)
+          pos(:) = self%center_cc(n_cc)
+          xyz_saved(n_cc,:) = pos(:2)
+      enddo
+      deallocate(imat_cc)
+      call self%elimin_aggregation(xyz_saved, xyz_norep_noagg)      ! x2 not to pick too close particles
+      allocate(self%particles_coord(count(xyz_norep_noagg(:,1)> TINY),2), source = 0.) !TO IMPROVE
+      cnt = 0 !initialise
+      do n_cc = 1,  size(xyz_norep_noagg, dim=1)
+          if(abs(xyz_norep_noagg(n_cc,1)) > TINY .and. abs(xyz_norep_noagg(n_cc,2))> TINY) then
+              cnt = cnt + 1
+              self%particles_coord(cnt,:) = xyz_norep_noagg(n_cc,:)
           endif
       enddo
-      deallocate(imat)
-      !call elimin_aggregation(xyz_saved, 2*part_radius, xyz_norep_noagg)
-      call elimin_aggregation(xyz_saved, part_radius, xyz_norep_noagg1)      ! x2 not to pick too close particles
-      vec_tiny = [TINY, TINY]
-      cnt_likely = 0.
-      do n_cc = 1, size(xyz_norep_noagg1, dim=1)
-          if(xyz_norep_noagg1(n_cc,1) > TINY) cnt_likely = cnt_likely+1
-      enddo
-      allocate(xyz_norep_noagg(cnt_likely,2), source = xyz_norep_noagg1(1:cnt_likely,:))
-      cnt_particle = 0
-      print *, 'xyz_saved = '
-      call vis_mat(xyz_saved)
-      print *, 'xyz_norep_noagg = '
-      call vis_mat(xyz_norep_noagg)
-      do n_cc = 1, size(xyz_norep_noagg, dim = 1)
-          if( abs(xyz_norep_noagg(n_cc,1)) >  0) then !useless?
-              if( abs(xyz_norep_noagg(n_cc,1)) >  0) call self_back%draw_picked( xyz_norep_noagg(n_cc,:),part_radius,5, 'white')
-              call   self%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_particle, outside)
-              !call img_cc%window_slim(xyz_norep_noagg(n_cc,:)-box/2, box, imgwin_bin, outside)
+      self%n_particles = size(self%particles_coord, dim = 1)
+      outside = .false.
+      cnt = 0
+      do n_cc = 1, self%n_particles
+          !if( abs(self%particles_coord(n_cc,1)) > TINY) then !useless?
+              call img_back%draw_picked(nint(self%particles_coord(n_cc,:)),nint(self%part_radius),3, 'white')
+              call self%img%window_slim(nint(self%particles_coord(n_cc,:)-box/2), box, imgwin_particle, outside)
               if( .not. outside) then
-                  cnt_particle = cnt_particle + 1
-                  call imgwin_particle%write('centered_particles.mrc', cnt_particle)
-                  ! call imgwin_bin%write('centered_particles_BIN.mrc',  cnt_particle)
-                  ! BINARY IMAGE STATS
-                  !   TO START AGAIN FROM HEREEEEE
-                  ! write(unit = 17, fmt = "(a,i0,2(a,f0.0))") &
-                  ! &'image=', cnt_particle,' diameter=', part_longest_dim(imgwin_bin), ' nforeground=', imgwin_bin%nforeground()
+                  cnt = cnt + 1
+                  call imgwin_particle%write(trim(self%fbody)//'_centered_particles.mrc', cnt)
+
               endif
-          endif
+          !endif
       end do
-      call self_back%write('picked_particles.mrc')
-      deallocate(xyz_saved, xyz_norep_noagg, rmat)
-    !  close(17, status = "keep")
+      call img_back%write(trim(self%fbody)//'_picked_particles.mrc')
+      deallocate(xyz_saved,xyz_norep_noagg)
   end subroutine extract_particles
 
     ! This function returns the index of a pixel (assuming to have a 2D)
     ! image in a connected component. The pixel identified is the one
     ! that minimizes the distance between itself and all the other pixels of
     ! the connected component. It corresponds to the geometric median.
-    function center_cc(masked_mat) result (px)
-        integer, intent(in) :: masked_mat(:,:,:)
-        integer     :: px(3)               !index of the central px of the cc
+    function center_cc(self,n_cc) result (px)
+        class(picker_chiara),  intent(inout) :: self
+        integer,               intent(in)    :: n_cc
+        real        :: px(3)               !index of the central px of the cc
         integer     :: i, j, k
-        integer     :: s(3)                !shape of the input matrix
         integer     :: n_px                !counter
         integer     :: idx(2)
         real,    allocatable :: dist(:,:)        !to extract the window according to the px which minimize the dist
         logical, allocatable :: mask(:,:)        !to calc the min of an array along a specific dim
         logical, allocatable :: mask_dist(:)     !for sum dist calculation
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
-        s = shape(masked_mat)
-        call get_pixel_pos(masked_mat, pos)
+        integer, allocatable :: imat_cc(:,:,:)
+        imat_cc = int(self%img_cc%get_rmat())
+        where(imat_cc .ne. n_cc) imat_cc = 0
+        call get_pixel_pos(imat_cc,pos)
         allocate(dist(4,   size(pos, dim = 2)), source = 0.)
         allocate(mask(4,   size(pos, dim = 2)), source = .false.)
         allocate(mask_dist(size(pos, dim = 2)), source = .true.)
         mask(4,:) = .true. !to calc the min wrt the dist
         n_px = 0
-        do i = 1, s(1)
-            do j = 1, s(2)
-                do k = 1, s(3)
-                    if(masked_mat(i,j,k) > 0.5) then
+        do i = 1, self%ldim_shrunken(1)
+            do j = 1, self%ldim_shrunken(2)
+                do k = 1, self%ldim_shrunken(3)
+                    if(imat_cc(i,j,k) > 0.5) then
                         n_px = n_px + 1
                         dist( 4, n_px) = pixels_dist([i,j,k], pos, 'sum', mask_dist)
                         dist(:3, n_px) = [real(i),real(j),real(k)]
@@ -222,122 +296,28 @@ contains
             enddo
         enddo
         idx   = minloc(dist, mask)
-        px(:) = int(dist(1:3, idx(2)))
+        px(:) = dist(1:3, idx(2))
         deallocate(pos, mask, dist, mask_dist)
+        if(allocated(imat_cc)) deallocate(imat_cc)
     end function center_cc
 
-  ! This subroutine stores in pos the indeces corresponding to
-  ! the pixels with value > 0 in the binary matrix imat_masked.
-  subroutine get_pixel_pos(imat_masked, pos)
-      integer,              intent(in)  :: imat_masked(:,:,:)
-      integer, allocatable, intent(out) :: pos(:,:)
-      integer :: s(3), i, j, k, cnt
-      s = shape(imat_masked)
-      if(allocated(pos)) deallocate(pos)
-      allocate(pos(3,count(imat_masked(:s(1),:s(2),:s(3)) > 0.5)), source = 0)
-      cnt = 0
-      do i = 1, s(1)
-            do j = 1, s(2)
-                do k = 1, s(3)
-                    if(imat_masked(i,j,k) > 0.5) then
-                        cnt = cnt + 1
-                        pos(:3,cnt) = [i,j,k]
-                    endif
-                enddo
-            enddo
-        enddo
-    end subroutine get_pixel_pos
-
-    !>   calculates the euclidean distance between one pixel and a list of other pixels.
-    ! if which == 'max' then distance is the maximum value of the distance between
-    !              the selected pixel and all the others
-    ! if which == 'min' then distance is the minimum value of the distance between
-    !              the selected pixel and all the others
-    ! if which == 'sum' then distance is the sum of the distances between the
-    !              selected pixel and all the others.
-    function pixels_dist_1( px, vec, which, mask, location) result( dist )
-        integer,           intent(in)     :: px(3)
-        integer,           intent(in)     :: vec(:,:)
-        character(len=*),  intent(in)     :: which
-        logical,           intent(inout)  :: mask(:)
-        integer, optional, intent(out)    :: location(1)
-        real    :: dist
-        integer :: i
-        if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_1')
-        if((any(mask .eqv. .false.)) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_1')
-        !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
-        do i = 1, size(vec, dim = 2)
-            if( px(1)==vec(1,i) .and. px(2)==vec(2,i) .and. px(3)==vec(3,i) )then
-                if(which .ne. 'sum') mask(i) = .false.
-            endif
-        enddo
-        select case(which)
-        case('max')
-            dist =  maxval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-            if(present(location)) location =  maxloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-        case('min')
-            dist =  minval(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-            if(present(location)) location =  minloc(sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2), mask)
-        case('sum')
-            if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
-            dist =  sum   (sqrt((real(px(1)-vec(1,:)))**2+(real(px(2)-vec(2,:)))**2+(real(px(3)-vec(3,:)))**2))
-        case DEFAULT
-            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
-            THROW_HARD('Unsupported pixels_dist kind; pixels_dist_1')
-        end select
-    end function pixels_dist_1
-
-    function pixels_dist_2( px, vec, which, mask, location) result( dist )
-        real,              intent(in)     :: px(3)
-        real,              intent(in)     :: vec(:,:)
-        character(len=*),  intent(in)     :: which
-        logical,           intent(inout)  :: mask(:)
-        integer, optional, intent(out)    :: location(1)
-        real    :: dist
-        integer :: i
-        if(size(mask,1) .ne. size(vec, dim = 2)) THROW_HARD('Incompatible sizes mask and input vector; pixels_dist_2')
-        if(any(mask .eqv. .false.) .and. which .eq. 'sum') THROW_WARN('Not considering mask for sum; pixels_dist_2')
-        !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
-        do i = 1, size(vec, dim = 2)
-            if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
-            &  .and. abs(px(3)-vec(3,i)) < TINY ) mask(i) = .false.
-        enddo
-        select case(which)
-        case('max')
-            dist =  maxval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
-            if(present(location)) location = maxloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
-        case('min')
-            dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
-            if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
-        case('sum')
-            if(present(location))  THROW_HARD('Unsupported location parameter with sum mode; pixels_dist_1')
-            dist =  sum(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2))
-        case DEFAULT
-            write(logfhandle,*) 'Pixels_dist kind: ', trim(which)
-            THROW_HARD('Unsupported pixels_dist kind; pixels_dist_2')
-        end select
-    end function pixels_dist_2
-
-    ! This subroutine takes in input a connected components (cc)
-    ! image and eliminates some of the ccs according to thei size.
-    ! The decision method consists in calculate the avg size of the ccs
-    ! and their standar deviation.
-    ! Elimin ccs which have size: > ave + 0.8*stdev
-    !                             < ave - 0.8*stdev
-    subroutine polish_cc(img_cc)
-        type(image), intent(inout) :: img_cc
-        integer, allocatable :: sz(:)
-        real :: lt, ht !low and high thresh for ccs polising
-        real :: ave, stdev ! avg and stdev of the size od the ccs
-        integer :: n_cc
-        sz = img_cc%size_connected_comps()
-        ave = sum(sz)/size(sz)
-        stdev = 0.
-        do n_cc = 1, size(sz)
-            stdev = stdev + (sz(n_cc)-ave)**2
-         enddo
-        stdev = sqrt(stdev/(size(sz)-1))
-        call img_cc%elim_cc([ floor(ave-0.8*stdev) , ceiling(ave+0.8*stdev) ])
-        call img_cc%order_cc()
-    end subroutine polish_cc
+    subroutine kill_picker(self)
+        class(picker_chiara),  intent(inout) :: self
+        !kill images
+        call self%img%kill
+        call self%img_cc%kill
+        if(allocated(self%particles_coord)) deallocate(self%particles_coord)
+        self%part_radius      = 0.
+        self%smpd             = 0.
+        self%smpd_shrunken    = 0.
+        self%hp_box           = 0.
+        self%ldim(:)          = 0
+        self%ldim_shrunken(:) = 0
+        self%n_particles      = 0
+        self%pickername       = ''   !fname
+        self%fbody            = ''   !fbody
+        self%detector         = ''
+        self%lp               = 0.
+        self%lambda           = 0.
+    end subroutine kill_picker
 end module simple_picker_chiara

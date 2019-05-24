@@ -476,7 +476,7 @@ contains
         if( .not. cline%defined('stk') )then
             THROW_HARD('ERROR!   stk needs to be present; exec_pspec_stats')
         endif
-        call pspec%new(params%stk, 10) !it also create a new instance of the class powerspectrum
+        call pspec%new(params%stk, 8) !it also create a new instance of the class powerspectrum
         call find_ldim_nptcls (params%stk, ldim, nptcls, smpd)
         call pspec%run()
         ! end gracefully

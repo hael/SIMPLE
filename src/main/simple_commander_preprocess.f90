@@ -539,23 +539,14 @@ contains
 
     subroutine exec_pick_chiara( self, cline )
         use simple_picker_chiara
+        use simple_image,    only : image
         use simple_tvfilter, only : tvfilter
-        use simple_micops
-        use simple_image
-        use simple_stackops
-        use simple_segmentation, only: sobel, canny, automatic_thresh_sobel
         class(pick_commander_chiara), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir
-        type(parameters)   :: params
-        type(image)        :: mic_shrunken, mic_copy, mic_bin
-        type(image)        :: imgcc, imgwi
-        integer            :: ldim_shrunken(3), box_shrunken, winsz, min_sz, max_sz
-        real               :: part_radius
-        real,    parameter :: SHRINK = 4.
-        real               :: smpd_shrunken, lp, ave, sdev, maxv, minv, thresh(1)
-        type(tvfilter)     :: tvf !total variation denoising
-        real               :: lambda
+        type(picker_chiara) :: pc
+        type(parameters)    :: params
+        ! sanity checks
         if( .not. cline%defined('fname') )then
             THROW_HARD('ERROR! fname needs to be present; exec_pick_chiara')
         endif
@@ -577,86 +568,17 @@ contains
         endif
         ! output directory
         output_dir = PATH_HERE
-        ! 0) Reading and saving original micrograph
-        call read_micrograph(micfname = params%fname, smpd = params%smpd)
-        print *, 'SELECTED SMPD = ', params%smpd
-        ! 1) Shrink and high pass filtering
-        part_radius = params%part_radius
-        call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-        call set_box(int(SHRINK*( 4*part_radius+10 )), box_shrunken)
-        ! To take care of shrinking
-        part_radius = part_radius/SHRINK
-        call mic_shrunken%new(ldim_shrunken, smpd_shrunken)
-        call mic_shrunken%read('shrunken_hpassfiltered.mrc')
-        call mic_copy%new(ldim_shrunken, smpd_shrunken) !work on a copy not to modify the original mic
-        call mic_copy%read('shrunken_hpassfiltered.mrc')
-        ! 2) Low pass filtering
+        ! particle picking
+        call pc%new(params%fname,params%part_radius,params%smpd)
         if( cline%defined('lp')) then
-            lp = params%lp
+            call pc%preprocess_mic(params%detector, params%lp)
         else
-            lp = 35.
+            call pc%preprocess_mic(params%detector)
         endif
-        call mic_copy%bp(0.,lp)
-        call mic_copy%ifft()
-        ! 2.1) TV denoising
-        call tvf%new()
-        lambda = 5.
-        call tvf%apply_filter(mic_copy, lambda)
-        call mic_copy%write('tvfiltered.mrc')
-        ! 2.3) negative image, otherwise I have a binarization with inverted labels
-        call mic_copy%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
-        ! 3) Edge Detection
-        call mic_copy%stats( ave, sdev, maxv, minv )
-        if(params%detector .eq. 'sobel') then
-            if(cline%defined('thres')) then
-                thresh(1) = params%thres
-                write(logfhandle,*) 'threshold selected = ', thresh
-                call sobel(mic_copy,thresh)
-            elseif(cline%defined('part_concentration')) then
-                call automatic_thresh_sobel(mic_copy, params%part_concentration)
-            else
-                thresh(1) = ave+.8*sdev
-                call sobel(mic_copy,thresh)
-            endif
-        else if (params%detector .eq. 'bin') then
-            call mic_copy%bin(ave+.8*sdev)
-        else if (params%detector .eq. 'canny') then
-            call canny(mic_copy)
-        endif
-        call mic_copy%write('Bin1.mrc')
-        if( cline%defined('winsz')) then
-            winsz = nint(params%winsz)
-        else
-            winsz = 4
-        endif
-        call mic_copy%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
-        call mic_copy%write('Bin1Median.mrc')
-        ! 5) Connected components (cc) identification
-        call imgcc%new(ldim_shrunken, smpd_shrunken)
-        call mic_copy%find_connected_comps(imgcc)
-        call imgcc%write('ConnectedComponents.mrc')
-        ! 6) cc filtering
-        call polish_cc(imgcc)
-        call imgcc%write('ConnectedComponentsElimin.mrc')
-        call extract_particles(mic_shrunken, imgcc, int(part_radius))
-        open(unit = 17, file = "PickerInfo.txt")
-        write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>PARTICLE PICKING>>>>>>>>>>>>>>>>>>'
-        write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = '(a,a)') 'Working Directory ', output_dir
-        write(unit = 17, fmt = "(a,f0.0)")  'Mic Shrunken by factor ', SHRINK
-        write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dim after shrink ', ldim_shrunken
-        write(unit = 17, fmt = "(a,f5.2)")  'Smpd after shrink ', smpd_shrunken
-        write(unit = 17, fmt = "(a,i0)")  'Hp box ', int(SHRINK*( 4*part_radius+10 ))
-        write(unit = 17, fmt = "(a,f0.0)")  'Lp  ', lp
-        write(unit = 17, fmt = "(a,i0,tr1, i0)")  'Connected Components size filtering  ', min_sz, max_sz
-        write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
-        write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a,tr1,f5.2)")  'smpd ', params%smpd
-        write(unit = 17, fmt = "(a,tr1,f0.0)")  'part_radius  ', params%part_radius
-        write(unit = 17, fmt = "(a,a)")  'detector  ', params%detector
-        write(unit = 17, fmt = "(a,f0.0)")  'TVF parameter  ',lambda
-        close(17, status = "keep")
+        call pc%extract_particles()
+        call pc%print_info()
+        ! kill
+        call pc%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick_chiara
@@ -1200,7 +1122,7 @@ contains
         if( params%stream.eq.'yes' )then
             output_dir_picker  = trim(DIR_PICKER)
             output_dir_extract = trim(DIR_EXTRACT)
-            call simple_mkdir(output_dir_picker,errmsg="commander_preprocess :: preprocess; ")
+            call simple_mkdir(output_dir_picker, errmsg="commander_preprocess :: preprocess; ")
             call simple_mkdir(output_dir_extract,errmsg="commander_preprocess :: preprocess; ")
         else
             output_dir_picker  = PATH_HERE

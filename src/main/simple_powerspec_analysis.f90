@@ -14,17 +14,19 @@ private
 
 type :: powerspectrum
     private
-    ! these image objects are part of the instance to avoid excessive memory re-allocations
+
+    character(len=STDLEN)    :: powerspec_name  = ''
+    character(len=STDLEN)    :: fbody           = ''
     type(image), allocatable :: img(:), img_bin(:)
-    integer     :: ldim(3)
-    real        :: smpd
-    integer     :: nstack
     real, allocatable :: res_vec(:,:)
-    integer           :: nn_shells
     type(parameters)  :: p
     type(cmdline)     :: cline
-    ! these strings are part of the instance for reporting purposes
-    character(len=STDLEN) :: powerspec_name
+    integer     :: ldim(3)    = 0
+    real        :: smpd       = 0.
+    integer     :: nstack     = 0
+    integer     :: nn_shells  = 0
+    real        :: avg_wb_ratio_per_shell = 0.
+
   contains
     procedure          :: new => new_powerspectrum
     procedure, private :: build_resolutions_vector
@@ -32,6 +34,7 @@ type :: powerspectrum
     procedure, private :: empty
     procedure, private :: is_close_to_focus
     procedure, private :: process_ps_stack
+    procedure, private :: print_resolutions_vector
     procedure, private :: run_powerspectrum_job
     procedure          :: run
     procedure, private :: kill => kill_powerspectrum
@@ -46,11 +49,12 @@ contains
         integer,              intent(in)    :: n
         integer :: i
         !To set the number of shells in which Fourier space
-        !has to be segmented in during the analysis.
+        !has to be segmented in the analysis.
         self%nn_shells = n
         self%powerspec_name = name
         call find_ldim_nptcls(self%powerspec_name, self%ldim, self%nstack, self%smpd)
-        self%ldim(3) = 1 !do not consider it as a stack
+        self%fbody = get_fbody(trim(self%powerspec_name), trim(fname2ext(self%powerspec_name)))
+        self%ldim(3) = 1 !it's the dim of every img of the stack
         allocate(self%img    (self%nstack))
         allocate(self%img_bin(self%nstack))
         do i = 1, self%nstack
@@ -113,59 +117,53 @@ contains
         end subroutine count_grad_variations
     end subroutine count_visible_continuous_ring
 
-    !This function builds a vector that splits up the images in n_shells shells
+    !This function builds a vector that splits up the images in nn_shells shells
     !and stores the result in res_vec(:,2). In res_vec(:,1) will be saved the
     !number of white pixels in the shell corresponding to res_vec(:,2).
     subroutine build_resolutions_vector(self, box)
         class(powerspectrum), intent(inout) :: self
         integer,              intent(in)    :: box
-        integer :: step, i
+        real    :: step
+        integer :: i
         if(self%nn_shells < 2) THROW_HARD('Too low number of shells; build_resolutions_res_vec')
         if(allocated(self%res_vec)) deallocate(self%res_vec)
-        allocate(self%res_vec(self%nn_shells+1,2), source = 0.)
-        step = box/(2*self%nn_shells)
-        do i = 2, self%nn_shells+1
-            self%res_vec(i,2) = (i-1)*real(step)
+        allocate(self%res_vec(self%nn_shells,2), source = 0.)
+        step = real(box)/real(2*self%nn_shells)
+        do i = 1, self%nn_shells
+            self%res_vec(i,2) = real(i)*step
             !first coumn is left empty, it's going to contain the ratio between white and tot pixel in the shell
         end do
     end subroutine build_resolutions_vector
+
+    subroutine print_resolutions_vector(self)
+        class(powerspectrum), intent(inout) :: self
+        if(.not. allocated(self%res_vec)) THROW_HARD('Resolution vector hasn t been allocated yet; print_resolutions_vector')
+        write(logfhandle,*) 'RESOLUTION VECTOR: '
+        call vis_mat(self%res_vec)
+    end subroutine print_resolutions_vector
 
     !This function uses the ratio (white pxls)/(black pxls) per shell
     !to estimate how far do the detected rings go.
     !The resolution is set to the shell for which the nb of white
     !pxls is less than half of the avg nb of white pxls per shell.
     function find_res(self,n_image, box) result(res)
-        use gnufor2
+      use gnufor2
       class(powerspectrum), intent(in) :: self
       integer,              intent(in) :: n_image
       integer,              intent(in) :: box
       real, allocatable :: rmat_bin(:,:,:)
-      real, allocatable :: x_hist(:)
       real    :: res
       integer :: i, cnt
       if(.not. allocated(self%res_vec)) THROW_HARD ('You have to build the resolution vector first; find_res')
       rmat_bin = self%img_bin(n_image)%get_rmat()
       if(any(rmat_bin>1.001) .or. any(rmat_bin<-0.001)) THROW_HARD('Img has to be binarised first; find_res')!sanity check
-      !White pixels/tot pixel per shell counter
-      allocate(x_hist(size(self%res_vec, dim = 1)), source = 0.)
-      do i = 1, size(self%res_vec, dim = 1)
-          x_hist(i) = self%res_vec(i,1)
-      enddo
-      open(125, file='WhitePxlsShells', position='append')
-      write (125,*) 'ratios'//int2str(n_image-1)//'=[...'
-      do i = 1, size(self%res_vec, dim = 1)
-          write (125,'(A)', advance='no') trim(real2str(x_hist(i)))
-          if(i < size(self%res_vec, dim = 1)) write (125,'(A)', advance='no') ', '
-      end do
-      write (125,*) '];'
-      close(125, status = 'keep')
       do i = 1, size(self%res_vec,dim=1)
-          if(self%res_vec(i,1) <  sum(x_hist(:))/(2*size(x_hist))) then
+          if(self%res_vec(i,1) >  .5*self%avg_wb_ratio_per_shell) then
               res = calc_fourier_index(real(self%res_vec(i,2)), box, self%smpd)
               return
           endif
       enddo
-      deallocate(rmat_bin,x_hist)
+      deallocate(rmat_bin)
     end function find_res
 
     !This subroutine is meant to discard empty power spectra images.
@@ -201,27 +199,28 @@ contains
         real        :: ave                      !mean sz of the connected components
         type(image) :: img, img_cc
         call img%new([self%ldim(1),self%ldim(2),1],self%smpd)
-        call img%read('binarised_stack.mrc',n) !fetch image
-        call img%find_connected_comps(img_cc)
-        sz   = img_cc%size_connected_comps()
-        ave  = real(sum(sz(:)))/real(size(sz))
-        yes_no=.false.
-        if(ave < 20.) yes_no=.true.
-        write(logfhandle, *)  'N_IMAGE = ', n-1, 'avg sz of its ccs = ', ave,'close to focus =', yes_no
-        deallocate(sz)
-        call img%kill
-        call img_cc%kill
+        ! call img%read('binarised_stack.mrc',n) !fetch image
+        ! call img%find_connected_comps(img_cc)
+        ! sz   = img_cc%size_connected_comps()
+        ! ave  = real(sum(sz(:)))/real(size(sz))
+        ! yes_no=.false.
+        ! if(ave < 20.) yes_no=.true.
+        ! write(logfhandle, *)  'N_IMAGE = ', n-1, 'avg sz of its ccs = ', ave,'close to focus =', yes_no
+        ! deallocate(sz)
+        ! call img%kill
+        ! call img_cc%kill
     end subroutine is_close_to_focus
 
+
+
     !This function takes in input the name of a stack of power spectra images (fname2process),
-    !the name of a stack in which store the results (fname), the smpd and a low-pass parameter.
+    !and a low-pass parameter.
     !It binarises all the images in the stack and estimates how far do the detected rings go.
     !It also gives an estimation of the number of countiguous and visible rings.
-    subroutine process_ps_stack(self, fname, lp)
+    subroutine process_ps_stack(self, lp)
       use gnufor2
       use simple_stackops, only : prepare_stack
       class(powerspectrum), intent(inout) :: self
-      character(len=*),     intent(in)    :: fname
       real,                 intent(in)    :: lp
       integer, allocatable :: counter(:) !total number of pixels per shell
       integer, allocatable :: counts(:)  !nb of visible and contiguous rings
@@ -229,7 +228,7 @@ contains
       integer           :: box
       integer           :: sh, ind(2)
       integer           :: h, k, i, j, n_image
-      logical, allocatable :: mask(:,:)
+      logical, allocatable :: mask(:,:)     !for the minloc calculation
       real                 :: res, ax
       type(image)          :: img
       character(len = 100) :: iom
@@ -237,33 +236,49 @@ contains
       integer              :: limit    !to count nb of gradient variations until there
       logical, allocatable :: close_to_focus(:)
       logical, allocatable :: empty(:) !to keep track of empty ps
+      integer, allocatable :: sz(:)
+      real,    allocatable :: avg_sz_ccs(:)
+      type(image) :: img_cc
+      real :: avg_sz_cc_stack
       box = self%ldim(1)
-      write(logfhandle,*) 'Starting analysis with lp = ', lp
-      call prepare_stack(trim(self%powerspec_name), 'prepared_stack.mrc', self%smpd, lp)
+      ! allocations
       allocate(close_to_focus(self%nstack), source = .false.)
       allocate(empty         (self%nstack), source = .false.)
+      allocate(avg_sz_ccs    (self%nstack), source = 0.)
+      call prepare_stack(trim(self%powerspec_name), trim(self%fbody)//'_prepared_stack.mrc', self%smpd, lp)
       write(logfhandle,*) '>>>>>>>>>>>>>STACK PREPARED SUCCESSFULLY>>>>>>>>>>>>>'
-      call binarize_stack('prepared_stack.mrc','binarised_stack.mrc', self%smpd, .true.) !true means set to 0 external frame to manage border effects
+      call binarize_stack(trim(self%fbody)//'_prepared_stack.mrc',trim(self%fbody)//'_binarised_stack.mrc', self%smpd, .true.)!true means set to 0 external frame to manage border effects
       write(logfhandle,*) '>>>>>>>>>>>>>STACK BINARISED SUCCESSFULLY>>>>>>>>>>>>>'
       write(logfhandle,*) '>>>>>>>>>>>>>CLOSE TO FOCUS REFINEMENT>>>>>>>>>>>>>>>>'
+      ! calculation of avg sz of ccs in the stack
       do n_image = 1, self%nstack
-          call self%img_bin(n_image)%read('binarised_stack.mrc', n_image)
-          call self%is_close_to_focus(n_image, box, close_to_focus(n_image))
+          call self%img_bin(n_image)%read(trim(self%fbody)//'_binarised_stack.mrc', n_image)
+          call self%img_bin(n_image)%find_connected_comps(img_cc)
+          sz = img_cc%size_connected_comps()
+          avg_sz_ccs(n_image)  = real(sum(sz(:)))/real(size(sz))
+          deallocate(sz)
           empty(n_image) = self%empty(n_image)
       enddo
-      call prepare_stack(trim(self%powerspec_name), 'prepared_stack.mrc', self%smpd, lp, close_to_focus)
-      call binarize_stack('prepared_stack.mrc','binarised_stack.mrc', self%smpd, .true.) !true means I am gonna set to 0 external frame to manage border effects
+      avg_sz_cc_stack = sum(avg_sz_ccs)/real(self%nstack)
+      print *, '>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>'
+      print *, 'avg_sz_cc_stack = ', avg_sz_cc_stack
+      do n_image = 1, self%nstack
+          if(avg_sz_ccs(n_image) < 0.8*avg_sz_cc_stack) close_to_focus(n_image)=.true.
+          write(logfhandle, *)  'N_IMAGE = ', n_image-1, 'avg sz of its ccs = ', avg_sz_ccs(n_image),'close to focus =', close_to_focus(n_image)
+      enddo
+      call prepare_stack (trim(self%powerspec_name), trim(self%fbody)//'_prepared_stack.mrc', self%smpd, lp,close_to_focus)
+      call binarize_stack(trim(self%fbody)//'_prepared_stack.mrc',trim(self%fbody)//'_binarised_stack.mrc', self%smpd,close_to_focus,.true.) !true means I am gonna set to 0 external frame to manage border effects
       call build_resolutions_vector(self, box)
-      write(logfhandle,*) "Power spectra divided into ", self%nn_shells, ' shells'
-      allocate(counter(self%nn_shells+1), mask(self%nn_shells+1,2))
+      allocate(counter(self%nn_shells), mask(self%nn_shells,2)) !nb of pixels per shell
+      allocate(counts (self%nstack), source = 0)                !nb of visible contiguous
       open(unit = 17, access = 'sequential', action = 'readwrite',file = "PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
       write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>POWER SPECTRA STATISTICS>>>>>>>>>>>>>>>>>>'
       write(unit = 17, fmt = '(a)') ''
-      write(unit = 17, fmt = "(a,a)")  'Input stack  ', self%powerspec_name
-      write(unit = 17, fmt = "(a,a)")  'Output stack ', fname
-      write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Dimensions ', self%img(1)%get_ldim()
-      write(unit = 17, fmt = "(a,f0.2)")  'Smpd ', self%smpd
-      write(unit = 17, fmt = "(a,i0)")  'N images  ', self%nstack
+      write(unit = 17, fmt = "(a,a)")  'Input stack  ', trim(self%fbody)
+      write(unit = 17, fmt = "(a,a)")  'Output stack ', trim(self%fbody)//'_analysed_stack.mrc'
+      write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Logical dim ', self%img(1)%get_ldim()
+      write(unit = 17, fmt = "(a,f0.2)")             'Smpd        ', self%smpd
+      write(unit = 17, fmt = "(a,i0)")               'N images    ', self%nstack
       write(unit = 17, fmt = '(a)') ''
       write(unit = 17, fmt = "(a)")  '-----------SELECTED PARAMETERS------------- '
       write(unit = 17, fmt = '(a)') ''
@@ -276,12 +291,11 @@ contains
       write(unit = 17, fmt = "(a)")  '-----------IMAGE ANALYSIS------------- '
       mask(:,1) = .false.
       mask(:,2) = .true.
-      allocate(counts(self%nstack), source = 0) !nb of visible contiguous
       do n_image = 1, self%nstack
-          if(empty(n_image)) write(unit = 17, fmt = '(a)') 'Empty micrograph ', n_image-1
-          call self%img_bin(n_image)%read('binarised_stack.mrc', n_image)
+          if(empty(n_image)) write(unit = 17, fmt = '(a)')  'Empty micrograph ', n_image-1
+          call self%img_bin(n_image)%read(trim(self%fbody)//'_binarised_stack.mrc', n_image)
           if(.not. empty(n_image)) then
-              rmat = self%img_bin(n_image)%get_rmat()
+              rmat    = self%img_bin(n_image)%get_rmat()
               counter = 0
               do i = 1, self%ldim(1)
                   do j = 1, self%ldim(2)
@@ -289,16 +303,19 @@ contains
                       k   = -int(self%ldim(2)/2) + j - 1
                       sh  = nint(hyp(real(h),real(k)))        !shell to which px (i,j) belongs
                       ind = minloc(abs(self%res_vec-sh),mask) !corresponding shell in res_vec
-                      counter(ind(1)) = counter(ind(1)) + 1   !number of pixels per shell, it is fixed, I could calculate aside
-                      if (rmat(i,j,1) > 0.5 .and. ind(1) <= self%nn_shells) then !binary image
+                      counter(ind(1)) = counter(ind(1)) + 1
+                      if (rmat(i,j,1) > 0.5) then ! .and. ind(1) <= self%nn_shells) then !binary image
                           self%res_vec(ind(1),1) = self%res_vec(ind(1),1) + 1.   !update # of white pixel in the shell
                       endif
                   enddo
               enddo
-              where(counter > 0) self%res_vec(:,1) = self%res_vec(:,1) / counter(:)  ! normalise
+              where(counter > 0) self%res_vec(:,1) = counter(:)/self%res_vec(:,1) ! normalise
+              self%avg_wb_ratio_per_shell = sum(self%res_vec(:,1))/real(size(self%res_vec, dim = 1))
+              print *, 'AVG RATIO >>>>>>>>>>>>>>>>>>>>>>>>>>>> for',n_image-1, 'is', self%avg_wb_ratio_per_shell !overwrite for every img in the stack
               write(unit = 17, fmt = "(a,tr1,i0)") 'Image', n_image-1
-              res = find_res(self,n_image,box)
-              ax = calc_fourier_index(res, box, self%smpd)
+              call self%img_bin(n_image)%write('BinForResCalculation.mrc',n_image)
+              res  = find_res(self,n_image,box)
+              ax   = calc_fourier_index(res, box, self%smpd)
               rmat = self%img(n_image)%get_rmat()   !restore
               rmat(self%ldim(1)/2+nint(ax):self%ldim(1)/2+nint(ax)+1,self%ldim(2)/2-4:self%ldim(2)/2+4,1) = maxval(rmat) !mark on the image
               call self%img(n_image)%set_rmat(rmat)
@@ -306,10 +323,11 @@ contains
               limit = box/2 + nint(ax)
               call count_visible_continuous_ring(self, n_image,limit,counts(n_image))
               write(unit = 17, fmt = "(a,i0.0,a)") 'Nb of contiguous visible rings ', counts(n_image)
-              write(logfhandle, *) 'N_IMAGE = ', n_image-1, 'visib rings until res ', int(res), 'A, # visib cont rings: ', counts(n_image)
-              call self%img(n_image)%write(fname,n_image)
+              write(logfhandle, *) 'N_IMAGE = ', n_image-1, 'visib rings until res ', res, 'A, # visib cont rings: ', counts(n_image)
+              call self%img(n_image)%write(trim(self%fbody)//'_analysed_stack.mrc',n_image)
           endif
       enddo
+      call self%print_resolutions_vector()
       close(17, status = "keep")
       deallocate(mask, counter, counts, close_to_focus, empty)
       if(allocated(rmat)) deallocate(rmat)
@@ -318,7 +336,7 @@ contains
    subroutine run_powerspectrum_job(self, lp)
     class(powerspectrum), intent(inout) :: self
     real,                 intent(in)    :: lp
-    call process_ps_stack(self, 'analysed_stack.mrc', lp)
+    call process_ps_stack(self,lp)
   end subroutine run_powerspectrum_job
 
   subroutine run(self)
@@ -338,7 +356,15 @@ contains
           call self%img(i)%kill()
           call self%img_bin(i)%kill()
       enddo
-      deallocate(self%img, self%img_bin)
-      deallocate(self%res_vec)
+      if(allocated(self%img))     deallocate(self%img)
+      if(allocated(self%img_bin)) deallocate(self%img_bin)
+      if(allocated(self%res_vec)) deallocate(self%res_vec)
+      self%powerspec_name = ''
+      self%fbody          = ''
+      self%ldim      = 0
+      self%smpd      = 0.
+      self%nstack    = 0
+      self%nn_shells = 0
+      self%avg_wb_ratio_per_shell = 0.
   end subroutine kill_powerspectrum
 end module simple_powerspec_analysis

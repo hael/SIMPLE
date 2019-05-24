@@ -211,6 +211,7 @@ contains
     procedure          :: prepare_connected_comps
     procedure          :: elim_cc
     procedure          :: order_cc
+    procedure          :: polish_cc
     procedure          :: dilatation
     procedure          :: erosion
     procedure          :: morpho_closing
@@ -265,8 +266,8 @@ contains
     procedure, private :: calc_neigh_8_1
     procedure, private :: calc_neigh_8_2
     generic            :: calc_neigh_8   =>  calc_neigh_8_1, calc_neigh_8_2
-    procedure          :: calc3D_neigh_8 !which are actually 26 in 3D
-    procedure          :: calc3D_neigh_4_1 !which are actually 6 in 3D
+    procedure          :: calc3D_neigh_8   !which are actually 26 in 3D
+    procedure          :: calc3D_neigh_4_1 !which are actually 6  in 3D
     procedure          :: calc3D_neigh_4_2
     generic            :: calc3D_neigh_4 => calc3D_neigh_4_1, calc3D_neigh_4_2
     procedure          :: comp_addr_phys1
@@ -347,9 +348,9 @@ contains
     procedure          :: img2ft
     procedure          :: cure_outliers
     procedure          :: zero_below
-    ! procedure          :: build_ellipse    !!!!!!!!!!!!!!ADDED BY CHIARA
-    procedure          :: ellipse          !!!!!!!!!!!!!!ADDED BY CHIARA
-    procedure          :: hist_stretching  !!!!!!!!!!!!!!ADDED BY CHIARA
+    ! procedure          :: build_ellipse
+    procedure          :: ellipse
+    procedure          :: hist_stretching
     ! FFTs
     procedure          :: fft  => fwd_ft
     procedure          :: ifft => bwd_ft
@@ -3341,14 +3342,18 @@ contains
         integer,      intent(in)    :: range(2)
         integer, allocatable :: sz(:)
         integer              :: n_cc
+        integer, allocatable :: imat(:,:,:)
         sz = self%size_connected_comps()
+        allocate(imat(self%ldim(1),self%ldim(2),self%ldim(3)))
+        imat = int(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
         do n_cc = 1, size(sz)  !for each cc
             if(sz(n_cc) < range(1) .or. sz(n_cc) > range(2)) then  !if the cc has size < min_sz or > max_sz
-                where(abs(self%rmat - real(n_cc)) < TINY)  !rmat == label
-                    self%rmat = 0.        !set to 0
+                where(imat == n_cc)  !rmat == label
+                    imat = 0         !set to 0
                 endwhere
             endif
         enddo
+        self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = real(imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
         ! re-oder cc
         call self%order_cc()
     end subroutine elim_cc
@@ -3372,6 +3377,37 @@ contains
             endif
         enddo
     end subroutine order_cc
+
+    ! This subroutine takes in input a connected components (cc)
+    ! image and eliminates some of the ccs according to thei size.
+    ! The decision method consists in calculate the avg size of the ccs
+    ! and their standar deviation.
+    ! Elimin ccs which have size: > ave + 2.*stdev
+    !                             < ave - 2.*stdev
+    ! If present part_radius, it cleans up ccs more.
+    subroutine polish_cc(self, part_radius)
+        class(image), intent(inout) :: self
+        real, optional, intent(in) :: part_radius
+        integer, allocatable :: sz(:)
+        real :: lt, ht !low and high thresh for ccs polising
+        real :: ave, stdev ! avg and stdev of the size od the ccs
+        integer :: n_cc
+        ! Assuming gaussian distribution 95% of the particles
+        ! are in [-2sigma, 2sigma]
+        sz = self%size_connected_comps()
+        ave = sum(sz)/size(sz)
+        stdev = 0.
+        do n_cc = 1, size(sz)
+            stdev = stdev + (real(sz(n_cc))-ave)**2
+         enddo
+        stdev = sqrt(stdev/real(size(sz)-1))
+        call self%elim_cc([ floor(ave-2.*stdev) , ceiling(ave+2.*stdev) ])
+        !call img_cc%order_cc() it is already done in the elim_cc subroutine
+        ! Use particle radius. The biggest possible area is when particle is
+        ! circular, the smallest one is when the particle is a 'stick'. Suppose
+        ! the minimum width of the stick is 5 pxls.
+        if(present(part_radius)) call self%elim_cc([ int(5*part_radius) , int(2*3.14*(part_radius)**2) ])
+    end subroutine polish_cc
 
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation dilatation.
@@ -6574,7 +6610,7 @@ contains
          value = maxval(self%rmat(:,:,:))
      endif
      wide = 4*part_radius
-     length = int(part_radius/2)
+     length = int(part_radius)
      if( .not. self%is_2d() ) THROW_HARD('only for 2D images; draw_picked')
      if(part_coords(1)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(1)+wide/2+int((bborder-1)/2) > self%ldim(1) .or. &
      &  part_coords(2)-wide/2-int((bborder-1)/2) < 1 .or. part_coords(2)+wide/2+int((bborder-1)/2) > self%ldim(2) ) then

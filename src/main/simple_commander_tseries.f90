@@ -520,18 +520,8 @@ contains
         endif
         call nano%new(params%vols(1),SCALE_FACTOR)
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
-        ! Nanoparticle binarization
-        call nano%binarize() !scale factor is for over sampling purposes
-        ! Outliers discarding
-        call nano%discard_outliers()
-        ! Aspect ratios calculations
-        call nano%calc_aspect_ratio()
-        ! Make soft mask
-        call nano%make_soft_mask()
-        ! Polarization search
-        call nano%search_polarization()
-        ! Clustering
-        call nano%cluster
+        ! execute
+        call nano%detect_atoms()
         ! kill
         call nano%kill
         ! end gracefully
