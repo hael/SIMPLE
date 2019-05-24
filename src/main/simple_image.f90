@@ -551,12 +551,13 @@ contains
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
-    function mic2spec( self, box, speckind, lp_backgr_subtr ) result( img_out )
+    subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out )
         class(image),     intent(inout) :: self
         integer,          intent(in)    :: box
         character(len=*), intent(in)    :: speckind
         real,             intent(in)    :: lp_backgr_subtr
-        type(image) :: img_out, tmp, tmp2
+        type(image),      intent(inout) :: img_out
+        type(image)                     :: tmp, tmp2
         integer     :: xind, yind, cnt
         logical     :: didft, outside
         if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
@@ -591,7 +592,7 @@ contains
         if( didft ) call self%fft()
         call tmp%kill
         call tmp2%kill
-    end function mic2spec
+    end subroutine mic2spec
 
     subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all, postproc)
         class(image),      intent(inout) :: self
@@ -3210,8 +3211,8 @@ contains
 
     ! Img_in should be a binary image. Img_out is the connected component image.
     subroutine find_connected_comps(img_in, img_out)
-        class(image), intent(in)  :: img_in
-        type(image),  intent(out) :: img_out
+        class(image), intent(in)    :: img_in
+        type(image),  intent(inout) :: img_out
         type(image)       :: img_cc   !in this img will be stored the cc with no specific order
         real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:)
         real              :: tmp, diff
@@ -6223,9 +6224,9 @@ contains
     !! \param noiseimg output image
     !!
     subroutine add_gauran( self, snr, noiseimg )
-        class(image), intent(inout)        :: self
-        real, intent(in)                   :: snr
-        type(image), intent(out), optional :: noiseimg
+        class(image), intent(inout)          :: self
+        real, intent(in)                     :: snr
+        type(image), optional, intent(inout) :: noiseimg
         real    :: noisesdev, ran
         integer :: i, j, k
         logical :: noiseimg_present
@@ -6674,11 +6675,11 @@ contains
     !> before_after to generate a before (left) and after (right) image
     !! \param left,right input images
     !! \return ba output montage
-    function before_after( left, right, mask ) result( ba )
-        class(image),      intent(in) :: left, right
-        logical, optional, intent(in) :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
+    subroutine before_after( left, right, ba, mask )
+        class(image),      intent(in)    :: left, right
+        type(image),       intent(inout) :: ba
+        logical, optional, intent(in)    :: mask(left%ldim(1),left%ldim(2),left%ldim(3))
         integer     :: ldim(3), i, j
-        type(image) :: ba
         if( left.eqdims.right )then
             if( left.eqsmpd.right )then
                 if( left%ft .or. right%ft ) THROW_HARD('not for FTs; before_after')
@@ -6704,7 +6705,7 @@ contains
         else
             THROW_HARD('before (left) and after (right) not of same dim; before_after')
         endif
-    end function before_after
+    end subroutine before_after
 
     !> \brief gauimg  just a Gaussian fun for testing purposes
     !! \param wsz window size
@@ -7953,7 +7954,7 @@ contains
     !particle picking (2003).
     subroutine hist_stretching(self_in, self_out)
         class(image), intent(inout) :: self_in
-        class(image), intent(out)   :: self_out
+        class(image), intent(inout) :: self_out
         real :: m(1)
         real :: stretch_lim(2)
         integer :: npxls_at_mode

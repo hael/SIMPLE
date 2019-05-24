@@ -182,7 +182,7 @@ contains
         call pspec_ctf%norm()
         call ppspec_ref%norm()
         call pspec_ctf%mul(imgmsk)
-        pspec_half_n_half = ppspec_ref%before_after(pspec_ctf, cc_msk)
+        call ppspec_ref%before_after(pspec_ctf, pspec_half_n_half, cc_msk)
         call pspec_half_n_half%scale_pspec4viz
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
         call pspec_half_n_half%kill

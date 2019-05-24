@@ -345,7 +345,7 @@ contains
         use simple_image,      only: image
         use simple_sym,        only: sym
         class(oris),   intent(inout) :: dsym_os
-        class(image),  intent(out)   :: cylinder
+        class(image),  intent(inout) :: cylinder
         type(image)          :: read_img, img_msk, dist_img, roavg_img, topview
         type(sym)            :: se
         real,    allocatable :: corrs(:), forsort(:), e2(:), radii(:)

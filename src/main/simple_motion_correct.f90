@@ -361,7 +361,7 @@ contains
     end subroutine motion_correct_iso
 
     subroutine motion_correct_iso_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(out) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         integer :: iframe
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
@@ -385,8 +385,8 @@ contains
     end subroutine motion_correct_iso_calc_sums_1
 
     subroutine motion_correct_iso_calc_sums_2( movie_sum_corrected, fromto )
-        type(image), intent(out) :: movie_sum_corrected
-        integer,     intent(in)  :: fromto(2)
+        type(image), intent(inout) :: movie_sum_corrected
+        integer,     intent(in)    :: fromto(2)
         logical :: l_tmp
         ! re-calculate the weighted sum with dose_weighting turned off
         l_tmp = do_dose_weight
@@ -400,7 +400,7 @@ contains
     subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter  !< frame counter
         real,        intent(in)    :: time_per_frame !< time resolution
-        type(image), intent(out)   :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
         movie_sum_ctf = movie_sum_global
@@ -592,7 +592,7 @@ contains
     end subroutine motion_correct_aniso
 
     subroutine motion_correct_aniso_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(out) :: movie_sum_corrected, movie_sum_ctf
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         call gen_aniso_sum(scalar_weight=1./real(nframes))
         movie_sum_ctf = movie_sum_global
         ! re-calculate the weighted sum
@@ -601,7 +601,7 @@ contains
     end subroutine motion_correct_aniso_calc_sums_1
 
     subroutine motion_correct_aniso_calc_sums_2( movie_sum_corrected, fromto )
-        type(image), intent(out) :: movie_sum_corrected
+        type(image), intent(inout) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
         logical :: l_tmp
         ! re-calculate the weighted sum with dose_weighting turned off
@@ -679,7 +679,7 @@ contains
     end subroutine motion_correct_patched
 
     subroutine motion_correct_patched_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(out) :: movie_sum_corrected, movie_sum_ctf
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         logical :: l_tmp
         ! scalar weights, no dose-weighting
         l_tmp = do_dose_weight
@@ -693,7 +693,7 @@ contains
     end subroutine motion_correct_patched_calc_sums_1
 
     subroutine motion_correct_patched_calc_sums_2( movie_sum_corrected, fromto )
-        type(image), intent(out) :: movie_sum_corrected
+        type(image), intent(inout) :: movie_sum_corrected
         integer,     intent(in)  :: fromto(2)
         logical :: l_tmp
         ! weighted sum, no dose-weighting

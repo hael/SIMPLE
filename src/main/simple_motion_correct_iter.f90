@@ -130,8 +130,8 @@ contains
             endif
             call motion_correct_aniso_kill
             ! generate power-spectra
-            self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
-            self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+            call self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
+            call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
             call self%pspec_half_n_half%scale_pspec4viz
             ! write output
             if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_aniso_intg_frames)
@@ -176,9 +176,9 @@ contains
             call motion_correct_patched_kill
         endif
         ! generate power-spectra
-        self%pspec_sum = self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
-        self%pspec_ctf = self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR)
-        self%pspec_half_n_half = self%pspec_sum%before_after(self%pspec_ctf)
+        call self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
+        call self%moviesum_ctf%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_ctf)
+        call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         call self%pspec_half_n_half%scale_pspec4viz
         ! write output
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
