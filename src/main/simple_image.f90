@@ -669,25 +669,49 @@ contains
         if( didft ) call self%fft()
     end subroutine mic2eospecs
 
-    !> \brief dampens the central cross of a powerspectrum by median filtering
+    !> \brief dampens the central cross of a powerspectrum by mean filtering
     subroutine dampen_pspec_central_cross( self )
         class(image), intent(inout) :: self
-        integer            :: h,mh,k,mk,lims(3,2),inds(3)
-        integer, parameter :: XDAMPWINSZ=2
-        real, allocatable  :: pixels(:)
+        integer, parameter :: DAMPWINSZ=2
+        integer :: h,mh,k,mk,lims(3,2),ci,cj,i,j,ii,jj,cnt
+        real    :: sum
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)
-        mh = maxval(lims(1,:))
-        mk = maxval(lims(2,:))
-        inds = 1
+        mh   = maxval(lims(1,:))
+        mk   = maxval(lims(2,:))
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 if( h == 0 .or. k == 0 )then
-                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
-                    pixels = self%win2arr(inds(1), inds(2), 1, XDAMPWINSZ)
-                    call self%set(inds, median_nocopy(pixels))
+                    ci = min(max(1,h+mh+1),self%ldim(1))
+                    cj = min(max(1,k+mk+1),self%ldim(2))
+                    cnt = 0
+                    sum = 0.
+                    do i=ci-DAMPWINSZ,ci+DAMPWINSZ
+                        if( i == ci )then
+                            cycle
+                        else if( i <= 0 )then
+                            ii = i+self%ldim(1)
+                        else if( i > self%ldim(1) )then
+                            ii = i-self%ldim(1)
+                        else
+                            ii = i
+                        endif
+                        do j=cj-DAMPWINSZ,cj+DAMPWINSZ
+                            if( j == cj )then
+                                cycle
+                            else if( j <= 0 )then
+                                jj = j+self%ldim(2)
+                            else if( j > self%ldim(2) )then
+                                jj = j-self%ldim(2)
+                            else
+                                jj = j
+                            endif
+                            cnt = cnt+1
+                            sum = sum + self%rmat(ii,jj,1)
+                        enddo
+                    enddo
+                    self%rmat(ci,cj,1) = sum / real(cnt)
                 endif
             end do
         end do
@@ -3167,11 +3191,9 @@ contains
     function bin2logical( self ) result( mask )
         class(image), intent(in) :: self
         logical, allocatable :: mask(:,:,:)
-        allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)))
-        where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > 0.0 )
+        allocate(mask(self%ldim(1),self%ldim(2),self%ldim(3)),source=.false.)
+        where( self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) > TINY )
             mask = .true.
-        else where
-            mask = .false.
         end where
     end function bin2logical
 
@@ -6839,6 +6861,8 @@ contains
         mh = maxval(lims(1,:))
         mk = maxval(lims(2,:))
         ml = maxval(lims(3,:))
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,inds)&
+        !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
@@ -6864,6 +6888,7 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
         if( didft ) call self%ifft()
     end subroutine ft2img
 
@@ -6935,14 +6960,14 @@ contains
         mh = maxval(lims(1,:))
         mk = maxval(lims(2,:))
         inds = 1
-        self%rmat = 1.0
+        self%rmat = 0.0
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                inds(1) = min(max(1,h+mh+1),self%ldim(1))
-                inds(2) = min(max(1,k+mk+1),self%ldim(2))
                 freq = hyp(real(h),real(k))
-                if(freq .lt. hplim_freq .or. freq .gt. lplim_freq )then
-                    call self%set(inds, 0.)
+                if(freq >= hplim_freq .and. freq <= lplim_freq )then
+                    inds(1) = min(max(1,h+mh+1),self%ldim(1))
+                    inds(2) = min(max(1,k+mk+1),self%ldim(2))
+                    call self%set(inds, 1.)
                 endif
             end do
         end do
