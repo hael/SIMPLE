@@ -567,8 +567,6 @@ class SimpleExec {
 				}, 20000)
 			})
 		})
-
-		})
 		.then(() =>{
 				if(arg['savestar']){
 					console.log(`exporting to relion`);
