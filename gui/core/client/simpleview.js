@@ -1644,7 +1644,7 @@ class SimpleView {
 		  cls : "view",
 		  fnc : "saveSimpleSelection",
 		  arg : {
-				type : "report_selection",
+				type : "selection",
 				executable : "simple_exec",
 				projectfolder : project.selectedfolder,
 				projecttable : project.selectedtable,

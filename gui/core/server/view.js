@@ -350,7 +350,7 @@ class View{
 		var selection = false
 		var finalfilename
 		
-		if(jobfolder.includes('_report_selection')){
+		if(jobfolder.includes('_selection')){
 			for(var element of projoutinfovals){
 				if(element['imgkind'] == 'cavg'){
 					finalfilename = this.replaceRelativePath(jobdir, element['stk'])

@@ -410,7 +410,7 @@ class SimpleExec {
 		this.jobid = false
 		return this.getCommandArgs(arg)
 		.then(commandarguments => {
-			sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', 'null')")
+			return sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', 'null')")
 		})
 		.then(rows => {
 			return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
@@ -544,12 +544,30 @@ class SimpleExec {
 			return Promise.all([promise])
 		})
 		.then(output =>{
-			if(arg['saveclusters']){
-					console.log(`writing cavgs`);
-					return this.createCavgs(this.execdir + '/' + path.basename(arg['projfile']))
-			}else{
-				return
-			}
+			return new Promise((resolve, reject) => {
+				var interval = setInterval(() => { 
+					console.log('interval')
+					if(this.execdir){
+						console.log('exwecdir', this.execdir)
+						clearInterval(interval)
+						clearTimeout(timeout)
+						if(arg['saveclusters']){
+							console.log('clusters')
+							resolve (this.createCavgs(this.execdir + '/' + path.basename(arg['projfile'])))
+						}else{
+							resolve
+						}
+					}
+				}, 1000)
+				var timeout = setTimeout(() => {
+					console.log('timeout')
+					clearInterval(interval)
+					clearTimeout(timeout)
+					resolve
+				}, 20000)
+			})
+		})
+
 		})
 		.then(() =>{
 				if(arg['savestar']){
@@ -686,12 +704,28 @@ class SimpleExec {
 			return Promise.all([promise])
 		})
 		.then(output =>{
-			if(arg['saveclusters']){
-					console.log(`writing cavgs`);
-					return this.createCavgs(this.execdir + '/' + path.basename(arg['projfile']))
-			}else{
-				return
-			}
+			return new Promise((resolve, reject) => {
+				var interval = setInterval(() => { 
+					console.log('interval')
+					if(this.execdir){
+						console.log('exwecdir', this.execdir)
+						clearInterval(interval)
+						clearTimeout(timeout)
+						if(arg['saveclusters']){
+							console.log('clusters')
+							resolve (this.createCavgs(this.execdir + '/' + path.basename(arg['projfile'])))
+						}else{
+							resolve
+						}
+					}
+				}, 1000)
+				var timeout = setTimeout(() => {
+					console.log('timeout')
+					clearInterval(interval)
+					clearTimeout(timeout)
+					resolve
+				}, 20000)
+			})
 		})
 		.then(() =>{
 				if(arg['savestar']){

@@ -197,7 +197,7 @@ class Task{
 					clearInterval(interval)
 					clearTimeout(timeout)
 					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET pid='" + executeprocess.pid + "' WHERE id=" + this.jobid)
-					resolve({status:'running'})
+					resolve({status:'running', jobid:this.jobid})
 				}
 			}, 1000)
 			var timeout = setTimeout(() => {

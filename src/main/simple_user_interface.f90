@@ -85,6 +85,7 @@ type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
 type(simple_program), target :: dock_volpair
+type(simple_program), target :: export_relion
 type(simple_program), target :: export_starproject
 type(simple_program), target :: extract
 type(simple_program), target :: filter
@@ -259,6 +260,7 @@ contains
         call new_detect_atoms
         call new_dock_volpair
         call new_extract
+        call new_export_relion
         call new_export_starproject
         call new_filter
         call new_fsc
@@ -340,6 +342,7 @@ contains
         call push2prg_ptr_array(compare_nano)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
+        call push2prg_ptr_array(export_relion)
         call push2prg_ptr_array(export_starproject)
         call push2prg_ptr_array(filter)
         call push2prg_ptr_array(fsc)
@@ -443,6 +446,8 @@ contains
                 ptr2prg => dock_volpair
             case('extract')
                 ptr2prg => extract
+            case('export_relion')
+                ptr2prg => export_relion 
             case('export_starproject')
                 ptr2prg => export_starproject
             case('filter')
@@ -603,6 +608,7 @@ contains
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') dock_volpair%name
+        write(logfhandle,'(A)') export_relion%name
         write(logfhandle,'(A)') export_starproject%name
         write(logfhandle,'(A)') filter%name
         write(logfhandle,'(A)') fsc%name
@@ -1702,7 +1708,30 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_export_starproject
-
+    
+    subroutine new_export_relion
+        ! PROGRAM SPECIFICATION
+        call export_relion%new(&
+        &'export_relion',&                                       ! name
+        &'Export project to relion ',&                                     ! descr_short
+        &'is a program to export simple project to relion',&
+        &'simple_exec',&                                              ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_export_relion
+    
     subroutine new_local_resolution
         ! PROGRAM SPECIFICATION
         call local_resolution%new(&

@@ -15,6 +15,7 @@ use simple_commander_preprocess
 use simple_commander_cluster2D
 use simple_commander_refine3D
 use simple_commander_rec
+use simple_commander_relion
 use simple_commander_sim
 use simple_commander_star
 use simple_commander_volops
@@ -38,6 +39,7 @@ type(replace_project_field_commander) :: xreplace_project_field
 type(export_starproject_commander)    :: xexport_starproject
 type(import_starproject_commander)    :: ximport_starproject
 type(selection_commander)             :: xselection
+type(export_relion_commander)         :: xexport_relion
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(cluster_cavgs_commander)  :: xcluster_cavgs
@@ -143,6 +145,9 @@ select case(prg)
     case( 'replace_project_field' )
         call cline%set('mkdir', 'yes')
         call xreplace_project_field%execute(cline)
+    case( 'export_relion' )
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
+        call xexport_relion%execute(cline)   
     case( 'export_starproject' )
         if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
         if( .not. cline%defined('starfile')) call cline%set('starfile', 'NONE')
