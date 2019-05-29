@@ -212,10 +212,10 @@ contains
         real                  :: shift_scale
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: dataSetStart, dataSet        !!!!!! todo: we don't need this
-        type(CDataSet_type)   :: fit, obs
+        type(CDataSet_type)   :: dataSetStart, dataSet, dataSetglob        !!!!!! todo: we don't need this
+        type(CDataSet_type)   :: fit, obs, obsglob
         type(CDataSet_type)   :: patch_start
-        type(CDataPoint_type) :: point2, p_obs, p_fit, point
+        type(CDataPoint_type) :: point2, p_obs, p_fit, point, p_obsglob
         real                  :: xcenter, ycenter
         integer               :: ipx, ipy, iframe, j
         real                  :: loc_shift(2)
@@ -257,10 +257,13 @@ contains
                 call CDataSet__SetDatasetColor(patch_start,1.0_c_double,0.0_c_double,0.0_c_double)
                 call CDataSet__new(fit)
                 call CDataSet__new(obs)
+                !call CDataSet__new(obsglob)
                 call CDataSet__SetDrawMarker(fit, C_FALSE)
                 call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
                 call CDataSet__SetDrawMarker(obs, C_FALSE)
                 call CDataSet__SetDatasetColor(obs, 0.5_c_double,0.5_c_double,0.5_c_double)
+                !call CDataSet__SetDrawMarker(obsglob, C_FALSE)
+                !call CDataSet__SetDatasetColor(obsglob, 0.5_c_double,0.5_c_double,0.0_c_double)
                 do iframe = 1, self%nframes
                     call CDataPoint__new2(&
                         real(self%patch_centers(ipx, ipy, 1) + &
@@ -269,6 +272,12 @@ contains
                         SCALE * self%shifts_patches_for_fit(3, iframe, ipx, ipy), c_double), &
                         p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
+                    !call CDataPoint__new2(&
+                    !    real(self%patch_centers(ipx, ipy, 1) + &
+                    !    SCALE * (self%global_shifts(iframe, 1)+self%shifts_patches_for_fit(2, iframe, ipx, ipy)), c_double), &
+                    !    real(self%patch_centers(ipx, ipy, 2) + &
+                    !    SCALE * (self%global_shifts(iframe, 2)+self%shifts_patches_for_fit(3, iframe, ipx, ipy)), c_double), p_obsglob)
+                    !call CDataSet__AddDataPoint(obsglob, p_obsglob)
                     call self%get_local_shift(iframe, self%patch_centers(ipx, ipy, 1), &
                         self%patch_centers(ipx, ipy, 2), loc_shift)
                     call CDataPoint__new2(&
@@ -281,13 +290,16 @@ contains
                     end if
                     call CDataPoint__delete(p_fit)
                     call CDataPoint__delete(p_obs)
+                    !call CDataPoint__delete(p_obsglob)
                 end do
                 call CPlot2D__AddDataSet(plot2D, obs)
+                !call CPlot2D__AddDataSet(plot2D, obsglob)
                 call CPlot2D__AddDataSet(plot2D, fit)
                 call CPlot2D__AddDataSet(plot2D, patch_start)
                 call CDataSet__delete(patch_start)
                 call CDataSet__delete(fit)
                 call CDataSet__delete(obs)
+                !call CDataSet__delete(obsglob)
             end do
         end do
         title%str = 'X (in pixels; trajectory scaled by ' // trim(real2str(SHIFT_SCALE)) // ')' // C_NULL_CHAR

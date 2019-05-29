@@ -110,7 +110,7 @@ abstract interface
     end subroutine align_iso_fw_callback
 end interface
 
-real,    parameter :: SMALLSHIFT_DEFAULT = 2.
+real,    parameter :: SMALLSHIFT_DEFAULT = 1.
 integer, parameter :: MITSREF_DEFAULT    = 30
 real,    parameter :: NIMPROVED_TOL      = 1e-7
 
@@ -156,15 +156,14 @@ contains
         self%iter = 0
         call self%create_ftexp_objs
         call self%calc_frameweights( callback_ptr )
+        self%opt_shifts = 0.
         if ( self%rand_init_shifts ) then
             do iframe = 1, self%nframes
+                if( iframe == self%fixed_frame ) cycle
                 self%opt_shifts(iframe,1) = ran3() * 2. * self%smallshift - self%smallshift
                 self%opt_shifts(iframe,2) = ran3() * 2. * self%smallshift - self%smallshift
             end do
-        else
-            self%opt_shifts = 0.
         end if
-        call self%recenter_shifts(self%opt_shifts)
         ! generate movie sum for refinement
         call self%shift_wsum_and_calc_corrs
         self%corr = sum(self%corrs)/real(self%nframes)
@@ -225,7 +224,6 @@ contains
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
                     ! need to re-make the ftexps
                     call self%create_ftexp_objs
-                    call self%recenter_shifts(self%opt_shifts)
                     call self%calc_frameweights( callback_ptr )
                     call self%shift_wsum_and_calc_corrs
                     ! need to destroy all previous knowledge about correlations

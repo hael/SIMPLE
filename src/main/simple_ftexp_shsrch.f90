@@ -335,16 +335,8 @@ contains
         real(dp) :: sqsum
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
-        sqsum =             sum(csq(cmat1_ptr(                   1,1:self%flims(2,2)-1,1)))
-        sqsum = sqsum +     sum(csq(cmat1_ptr(  self%flims(1,2)   ,1:self%flims(2,2)-1,1)))
-        sqsum = sqsum + 2.d0*sum(csq(cmat1_ptr(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
-        self%denominator = sqsum
-        sqsum =             sum(csq(cmat2_ptr(                   1,1:self%flims(2,2)-1,1)))
-        sqsum = sqsum +     sum(csq(cmat2_ptr(  self%flims(1,2)   ,1:self%flims(2,2)-1,1)))
-        sqsum = sqsum + 2.d0*sum(csq(cmat2_ptr(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
-        self%denominator = self%denominator * sqsum
-        self%denominator = dsqrt(self%denominator)
-        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &  !-1
+        self%denominator = dsqrt(real(self%reference%get_sumsq(),dp) * real(self%particle%get_sumsq(),dp))
+        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &    !-1
                     cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &  !-1
               conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))     !-1
     end subroutine calc_tmp_cmat12

@@ -14,16 +14,17 @@ real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling o
 
 type :: ft_expanded
     private
+    complex, allocatable :: cmat(:,:,:)        !< Fourier components
+    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix (TODO: make this global to save memory)
+    real                 :: shconst(3)         !< shift constant
+    real                 :: hp                 !< high-pass limit
+    real                 :: lp                 !< low-pass limit
+    real                 :: smpd  = 0.         !< sampling distance of originating image
+    real                 :: sumsq = 0.         !< sum of squares
     integer              :: lims(3,2)          !< physical limits for the Fourier transform
     integer              :: flims(3,2)         !< shifted limits (2 make transfer 2 GPU painless)
     integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
     integer              :: flims_nyq(3,2)     !< nyquist limits
-    real                 :: shconst(3)         !< shift constant
-    real                 :: hp                 !< high-pass limit
-    real                 :: lp                 !< low-pass limit
-    real                 :: smpd=0.            !< sampling distance of originating image
-    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix (TODO: make this global to save memory)
-    complex, allocatable :: cmat(:,:,:)        !< Fourier components
     logical              :: existence=.false.  !< existence
   contains
     ! constructors
@@ -36,6 +37,7 @@ type :: ft_expanded
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
     procedure          :: get_transfmat_ptr
+    procedure          :: get_sumsq
     ! setters
     procedure          :: set_cmat
     procedure          :: zero
@@ -45,6 +47,7 @@ type :: ft_expanded
     ! modifiers
     procedure          :: shift
     ! calculators
+    procedure, private :: calc_sumsq
     procedure          :: corr
     procedure, private :: corr_normalize_sp
     procedure, private :: corr_normalize_dp
@@ -140,6 +143,7 @@ contains
                 end do
             end do
         end do
+        if( fetch_comps ) call self%calc_sumsq
         if( didft ) call img%ifft()
         ! allocate class variables
         self%existence = .true.
@@ -189,17 +193,24 @@ contains
         transfmat_ptr => self%transfmat
     end subroutine get_transfmat_ptr
 
+    pure real function get_sumsq( self )
+        class(ft_expanded), intent(in) :: self
+        get_sumsq = self%sumsq
+    end function get_sumsq
+
     ! SETTERS
 
     pure subroutine set_cmat( self, cmat )
         class(ft_expanded), intent(inout) :: self
         complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
         self%cmat = cmat
+        call self%calc_sumsq
     end subroutine set_cmat
 
     pure subroutine zero( self )
         class(ft_expanded), intent(inout) :: self
-        self%cmat = cmplx(0.,0.)
+        self%cmat  = cmplx(0.,0.)
+        self%sumsq = 0.
     end subroutine zero
 
     ! ARITHMETICS
@@ -212,6 +223,7 @@ contains
         ww =1.0
         if( present(w) ) ww = w
         if( ww > 0. ) self%cmat = self%cmat + self2add%cmat*ww
+        call self%calc_sumsq
     end subroutine add
 
     subroutine subtr( self, self2subtr, w )
@@ -222,6 +234,7 @@ contains
         ww = 1.0
         if( present(w) ) ww = w
         if( ww > 0. ) self%cmat = self%cmat-ww*self2subtr%cmat
+        call self%calc_sumsq
     end subroutine subtr
 
     ! MODIFIERS
@@ -242,30 +255,31 @@ contains
                 end do
             end do
         end do
+        call self_out%calc_sumsq
     end subroutine shift
 
     ! CALCULATORS
 
-    function corr( self1, self2 ) result( r )
+    pure subroutine calc_sumsq( self )
+        class(ft_expanded), intent(inout) :: self
+        self%sumsq =                 sum(csq(self%cmat(                  1,1:self%flims(2,2)-1,1)))
+        self%sumsq = self%sumsq +    sum(csq(self%cmat(  self%flims(1,2)  ,1:self%flims(2,2)-1,1)))
+        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
+    end subroutine calc_sumsq
+
+    pure function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(in) :: self1, self2
         real :: r,sumasq,sumbsq
         ! corr is real part of the complex mult btw 1 and 2*
         r =        sum(real(self1%cmat(                   1,1:self1%flims(2,2)-1,1)*&
-            conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
+                      conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
         r = r +    sum(real(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*&
-            conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
+                      conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
         r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
-            conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
-        ! normalisation terms
-        sumasq =             sum(csq(self1%cmat(                   1,1:self1%flims(2,2)-1,1)))
-        sumasq = sumasq +    sum(csq(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-        sumasq = sumasq + 2.*sum(csq(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        sumbsq =             sum(csq(self2%cmat(                   1,1:self1%flims(2,2)-1,1)))
-        sumbsq = sumbsq +    sum(csq(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)))
-        sumbsq = sumbsq + 2.*sum(csq(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)))
-        ! finalise the correlation coefficient
-        if( sumasq > 0. .and. sumbsq > 0. )then
-            r = r / sqrt(sumasq * sumbsq)
+                      conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
+        ! normalise the correlation coefficient
+        if( self1%sumsq > 0. .and. self2%sumsq > 0. )then
+            r = r / sqrt(self1%sumsq * self2%sumsq)
         else
             r = 0.
         endif
