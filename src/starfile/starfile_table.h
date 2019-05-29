@@ -269,7 +269,7 @@ public:
     void write(const FileName & fn_out) const;
 
     // Open output file
-    void open_ofile(const std::string& fname);
+    void open_ofile(const std::string& fname, int mode);
 
     // Write to output file
     void write_ofile();
@@ -400,7 +400,7 @@ extern "C"
   void StarFileTable__setValue_string(StarFileTable* This, int EMDL_id, char* avalue);
   void StarFileTable__getValue_string(StarFileTable* This, int EMDL_id, void** str, int* alen, bool* result);
   void StarFileTable__clear(StarFileTable* This);
-  void StarFileTable__open_ofile(StarFileTable* This, char* fname);
+  void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode);
   void StarFileTable__write_ofile(StarFileTable* This);
   void StarFileTable__close_ofile(StarFileTable* This);
   void StarFileTable__setName(StarFileTable* This, char* aname);

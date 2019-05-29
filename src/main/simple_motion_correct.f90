@@ -5,7 +5,7 @@ module simple_motion_correct
 include 'simple_lib.f08'
 use simple_ft_expanded,           only: ft_expanded
 use simple_motion_anisocor,       only: motion_anisocor, POLY_DIM
-use simple_motion_patched,        only: motion_patched
+use simple_motion_patched,        only: motion_patched, PATCH_PDIM
 use simple_motion_patched_direct, only: motion_patched_direct
 use simple_motion_anisocor_dbl,   only: motion_anisocor_dbl
 use simple_motion_align_iso,      only: motion_align_iso
@@ -14,13 +14,15 @@ use simple_parameters,            only: params_glob
 use simple_estimate_ssnr,         only: acc_dose2filter
 use simple_oris,                  only: oris
 use simple_opt_lbfgsb,            only: PRINT_NEVALS
+use simple_starfile_wrappers
 implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
 public :: motion_correct_aniso, motion_correct_aniso_calc_sums, motion_correct_aniso_kill, motion_correct_kill_common
 public :: motion_correct_with_aniso, motion_correct_with_patched
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
-public :: patched_shift_fname
+public :: shifts_toplot, patched_polyn, ldim_orig
+public :: patched_shift_fname, mc_starfile, mc_starfile_fname
 private
 #include "simple_local_flags.inc"
 
@@ -43,6 +45,7 @@ end interface
 type(image), target, allocatable :: movie_frames_scaled(:)            !< scaled movie frames
 real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
 real,                allocatable :: shifts_toplot(:,:)                !< shifts for plotting (in patch-based mc)
+real(dp),            allocatable :: patched_polyn(:)                  !< polynomial from patched-based correction
 integer                          :: updateres
 logical                          :: didupdateres
 
@@ -73,6 +76,7 @@ complex,     allocatable :: cmat(:,:,:), cmat_sum(:,:,:) !< complex matrices for
 integer :: nframes        = 0        !< number of frames
 integer :: fixed_frame    = 0        !< fixed frame of reference (0,0)
 integer :: ldim(3)        = [0,0,0]  !< logical dimension of frame
+integer :: ldim_orig(3)   = [0,0,0]  !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]  !< shrunken logical dimension of frame
 real    :: hp             = 0.       !< high-pass limit
 real    :: lp             = 0.       !< low-pass limit
@@ -88,6 +92,8 @@ logical :: do_scale       = .false.  !< scale or not
 logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
 logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
+character(len=:), allocatable :: mc_starfile_fname      !< file name for starfile rel. to motion correct
+type(starfile_table_type) :: mc_starfile                !< starfile for motion correct output
 
 ! module global constants
 integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
@@ -115,6 +121,7 @@ contains
         logical            :: l_gain
         ! get number of frames & dim from stack
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
+        ldim_orig = ldim
         err = .false.
         if( nframes < 2 )then
             err = .true.
@@ -149,13 +156,15 @@ contains
         allocate( movie_frames(nframes), movie_frames_scaled(nframes), movie_frames_shifted(nframes),&
                   stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 1; simple_motion_correct')
+        allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
         if ( motion_correct_with_aniso ) then
             allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
+            if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
         end if
         if ( motion_correct_with_patched ) then
-            allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
+            allocate( patched_polyn(2*PATCH_PDIM), source=0._dp, stat=alloc_stat )
+            if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         end if
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
@@ -169,7 +178,7 @@ contains
         &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
         &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), &
         &frameweights(nframes), frameweights_saved(nframes), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
+        if(alloc_stat.ne.0)call allocchk('motion_correct_init 5; simple_motion_correct')
         ! init
         cmat               = cmplx(0.,0.)
         cmat_sum           = cmplx(0.,0.)
@@ -423,7 +432,7 @@ contains
             end do
             deallocate(movie_frames_scaled)
         endif
-        if( allocated(opt_shifts) )       deallocate(opt_shifts)
+        if ( allocated(opt_shifts)    )   deallocate(opt_shifts   )
     end subroutine motion_correct_iso_kill
 
     ! PUBLIC METHODS, ANISOTROPIC MOTION CORRECTION
@@ -674,7 +683,7 @@ contains
             call motion_patch_direct%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
         else
             call motion_patch%set_frameweights( frameweights )
-            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn )
         end if
     end subroutine motion_correct_patched
 
@@ -714,7 +723,6 @@ contains
             end do
             deallocate(movie_frames_shifted_patched, movie_sum_global_threads, movie_frames_shifted_saved)
         endif
-        if ( allocated(shifts_toplot) ) deallocate(shifts_toplot)
     end subroutine motion_correct_patched_kill
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

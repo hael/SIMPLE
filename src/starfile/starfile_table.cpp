@@ -1500,9 +1500,16 @@ StarFileTable removeDuplicatedParticles(StarFileTable &MDin, EMDLabel mic_label,
 }
 
 
-void StarFileTable::open_ofile(const std::string& fname)
+void StarFileTable::open_ofile(const std::string& fname, int mode)
 {
-  output_stream.open(fname, std::ofstream::out);
+  if (mode == 0)
+  {
+    output_stream.open(fname, std::ofstream::out);
+  }
+  else
+  {
+    output_stream.open(fname, std::ofstream::out | std::ofstream::app);
+  }
 }
 
 void StarFileTable::write_ofile()
@@ -1601,9 +1608,9 @@ void StarFileTable__clear(StarFileTable* This)
   This->clear();
 }
 
-void StarFileTable__open_ofile(StarFileTable* This, char* fname)
+void StarFileTable__open_ofile(StarFileTable* This, char* fname, int mode)
 {
-  This->open_ofile(fname);
+  This->open_ofile(fname, mode);
 }
 
 void StarFileTable__write_ofile(StarFileTable* This)

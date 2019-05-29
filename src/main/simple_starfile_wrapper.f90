@@ -91,10 +91,11 @@ module simple_starfile_wrappers
             type(C_ptr), value :: this
         end subroutine C_starfile_table__clear
 
-        subroutine C_starfile_table__open_ofile(this, fname) bind(C,name="StarFileTable__open_ofile")
+        subroutine C_starfile_table__open_ofile(this, fname, mode) bind(C,name="StarFileTable__open_ofile")
             import
-            type(C_ptr),       value :: this
-            character(C_char), intent(in) :: fname
+            type(C_ptr),       value             :: this
+            character(C_char),        intent(in) :: fname
+            integer(C_int),    value, intent(in) :: mode
         end subroutine C_starfile_table__open_ofile
 
         subroutine C_starfile_table__write_ofile(this) bind(C,name="StarFileTable__write_ofile")
@@ -213,12 +214,20 @@ contains
         call C_starfile_table__clear(this%object)
     end subroutine starfile_table__clear
 
-    subroutine starfile_table__open_ofile(this, fname)
+    subroutine starfile_table__open_ofile(this, fname, mode_)
         type(starfile_table_type), intent(inout) :: this
         character(len=*),          intent(in)    :: fname
         character(len=:),          allocatable   :: fname2
+        integer,         optional, intent(in)    :: mode_    ! 0: NEW, 1: APPEND
+        integer :: mode
+        if (present(mode_)) then
+            mode = mode_
+        else
+            mode = 0
+        end if
+        write (*,*) 'open ofile, mode=', mode
         fname2 = fname // C_NULL_CHAR
-        call C_starfile_table__open_ofile(this%object, fname2)
+        call C_starfile_table__open_ofile(this%object, fname2, mode)
     end subroutine starfile_table__open_ofile
 
     subroutine starfile_table__write_ofile(this)

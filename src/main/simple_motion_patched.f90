@@ -13,7 +13,7 @@ use simple_motion_align_iso, only: motion_align_iso
 use CPlot2D_wrapper_module
 implicit none
 private
-public :: motion_patched
+public :: motion_patched, PATCH_PDIM
 #include "simple_local_flags.inc"
 
 ! module global constants
@@ -73,6 +73,7 @@ contains
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
     procedure, private                  :: pix2polycoords
+    procedure, private                  :: get_patched_polyn
     procedure                           :: set_frameweights
     procedure                           :: new             => motion_patched_new
     procedure                           :: correct         => motion_patched_correct
@@ -664,6 +665,14 @@ contains
         deallocate(self%align_iso)
     end subroutine det_shifts
 
+    subroutine get_patched_polyn( self, patched_polyn )
+        class(motion_patched), intent(inout) :: self
+        real(dp), allocatable, intent(out)   :: patched_polyn(:)
+        allocate( patched_polyn(2*PATCH_PDIM), source=0._dp )
+        patched_polyn(           1:  PATCH_PDIM) = self%poly_coeffs(1:PATCH_PDIM, 1)
+        patched_polyn(PATCH_PDIM+1:2*PATCH_PDIM) = self%poly_coeffs(1:PATCH_PDIM, 2)
+    end subroutine get_patched_polyn
+
     subroutine set_frameweights( self, frameweights )
         class(motion_patched), intent(inout) :: self
         real, allocatable, intent(in) :: frameweights(:)
@@ -704,13 +713,14 @@ contains
     end subroutine motion_patched_new
 
     subroutine motion_patched_correct( self, hp, resstep, frames, frames_output, shift_fname, &
-        global_shifts )
-        class(motion_patched),         intent(inout) :: self
-        real,                          intent(in)    :: hp, resstep
-        type(image),      allocatable, intent(inout) :: frames(:)
-        type(image),      allocatable, intent(inout) :: frames_output(:)
-        character(len=:), allocatable, intent(in)    :: shift_fname
-        real, optional,   allocatable, intent(in)    :: global_shifts(:,:)
+        global_shifts, patched_polyn )
+        class(motion_patched),           intent(inout) :: self
+        real,                            intent(in)    :: hp, resstep
+        type(image),        allocatable, intent(inout) :: frames(:)
+        type(image),        allocatable, intent(inout) :: frames_output(:)
+        character(len=:),   allocatable, intent(in)    :: shift_fname
+        real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
+        real(dp), optional, allocatable, intent(out)   :: patched_polyn(:)
         integer :: ldim_frames(3)
         integer :: i
         self%hp = hp
@@ -753,6 +763,8 @@ contains
         call self%apply_polytransfo(frames, frames_output)
         ! report visual results
         call self%plot_shifts()
+        ! output polynomial
+        if ( present(patched_polyn) ) call self%get_patched_polyn(patched_polyn)
     end subroutine motion_patched_correct
 
     subroutine motion_patched_kill( self )
