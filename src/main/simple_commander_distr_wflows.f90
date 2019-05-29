@@ -907,7 +907,7 @@ contains
         real    :: corr, corr_prev, smpd
         integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projection_matching, l_switch2euclid, l_continue
+        logical :: l_projection_matching, l_switch2euclid, l_continue, l_eo_ini
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
         l_switch2euclid  = .false.
@@ -921,6 +921,7 @@ contains
         endif
         ! init
         call build%init_params_and_build_spproj(cline, params)
+        l_eo_ini = params%l_eo
         ! sanity check
         fall_over = .false.
         select case(trim(params%oritype))
@@ -1254,7 +1255,7 @@ contains
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
             endif
-            if( l_projection_matching .and. (niters == 1) )then
+            if( l_projection_matching .and. (niters == 1) .and. l_eo_ini )then
                 ! e/o projection matching
                 write(logfhandle,'(A)')'>>>'
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD REFINEMENT'

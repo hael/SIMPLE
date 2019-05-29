@@ -58,6 +58,7 @@ contains
     procedure, private                                :: motion_align_iso_new
     procedure, private                                :: motion_align_iso_align
     procedure, private                                :: motion_align_iso_kill
+    procedure, private                                :: regularize_optshifts              !< to catch unruly shifts
     procedure, private                                :: recenter_shifts                   !< put shifts rel. to fixed frame
     procedure, private                                :: calc_frameweights                 !< compute new frameweights
     procedure, private                                :: corrmat2weights
@@ -141,9 +142,9 @@ contains
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
         integer :: i, iter, iframe, nimproved, maxits_saved
-        real    :: cxy(3)
+        real    :: cxy(3), hp_saved, lp_saved
+        real    :: opt_shifts_bak(self%nframes,2) ! backup of optimized non recentered shifts
         logical :: callback_convgd
-        real    :: hp_saved, lp_saved
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_iso: align')
         end if
@@ -196,6 +197,10 @@ contains
             self%nimproved = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
+            ! shifts regularization
+            ! opt_shifts_bak = self%opt_shifts
+            ! call self%regularize_optshifts(self%opt_shifts)
+            ! updates shifts & weights
             call self%recenter_shifts(self%opt_shifts)
             call self%calc_frameweights( callback_ptr )
             ! build new reference
@@ -204,8 +209,11 @@ contains
             self%corr      = sum(self%corrs) / real(self%nframes)
             if( self%corr >= self%corr_saved ) then ! save the local optimum
                 self%corr_saved         = self%corr
-                self%opt_shifts_saved   = self%opt_shifts
                 self%frameweights_saved = self%frameweights
+                self%opt_shifts_saved   = self%opt_shifts
+                ! restores unregularized shifts
+                ! call self%recenter_shifts(opt_shifts_bak)
+                ! self%opt_shifts_saved   = opt_shifts_bak
             endif
             self%corrfrac = self%corr_prev / self%corr
             if (associated(self%callback)) then
@@ -268,6 +276,31 @@ contains
             self%shifts_toplot(iframe,2) = shifts(iframe, 2)
         end do
     end subroutine recenter_shifts
+
+    !>  For distance based regularization of non-recentered shifts
+    subroutine regularize_optshifts( self, shifts )
+        class(motion_align_iso), intent(inout) :: self
+        real,                    intent(inout) :: shifts(self%nframes,2)
+        real    :: distances(self%nframes), avg, sdev, threshold
+        integer :: iframe
+        do iframe = 1,self%nframes
+            if( iframe == 1 )then
+                distances(1) = sqrt(sum(shifts(1,:)**2.))
+            else
+                distances(iframe) = sqrt(sum((shifts(iframe,:)-shifts(iframe-1,:))**2.))
+            endif
+        enddo
+        avg  = sum(distances) / real(self%nframes)
+        sdev = sqrt(sum((distances-avg)**2.) / real(self%nframes))
+        threshold = avg + 2.*sdev
+        print *,self%iter,avg,sdev,count(distances>threshold)
+        do iframe = 1,self%nframes
+            if( distances(iframe) > threshold )then
+                shifts(iframe:,1) = shifts(iframe:,1) - shifts(iframe,1) + shifts(iframe-1,1) + ran3()-.5
+                shifts(iframe:,2) = shifts(iframe:,2) - shifts(iframe,2) + shifts(iframe-1,2) + ran3()-.5
+            endif
+        enddo
+    end subroutine regularize_optshifts
 
     subroutine calc_frameweights( self, callback_ptr )
         class(motion_align_iso), intent(inout) :: self
