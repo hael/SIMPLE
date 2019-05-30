@@ -864,7 +864,7 @@ contains
         integer,          allocatable :: mic2stk_inds(:)
         character(len=LONGSTRLEN)     :: stack, rel_stack
         integer  :: nframes,imic,iptcl,nmics,prev_box,box_foo,cnt,nmics_tot,nptcls,stk_ind,cnt_stats
-        integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top
+        integer :: prev_pos(2),new_pos(2),center(2),ishift(2),ldim(3),ldim_foo(3),noutside,fromp,top,istk
         real    :: prev_shift(2), shift2d(2), shift3d(2), minv,maxv,meanv,sddevv,stk_stats(4)
         logical :: l_3d, l_err
         call cline%set('mkdir','no')
@@ -897,12 +897,17 @@ contains
             if( .not. o_mic%isthere('intg')    )cycle
             call o_mic%getter('imgkind', imgkind)
             if( trim(imgkind).ne.'mic') cycle
-            ! update index & mask
-            stk_ind = stk_ind+1
-            if( imic>=params%fromp .and. imic<=params%top )then
+            ! find next selected stack
+            do istk=stk_ind,spproj_in%os_stk%get_noris()
+                stk_ind = stk_ind+1
                 if( spproj_in%os_stk%isthere(stk_ind,'state') )then
-                    if( spproj_in%os_stk%get_state(stk_ind) == 0 ) cycle
+                    if( spproj_in%os_stk%get_state(stk_ind) == 1 ) exit
+                else
+                    exit
                 endif
+            enddo
+            ! update index & mask
+            if( imic>=params%fromp .and. imic<=params%top )then
                 mic_mask(imic) = .true.
                 mic2stk_inds(imic) = stk_ind ! index to os_stk
             endif

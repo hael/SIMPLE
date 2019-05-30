@@ -973,6 +973,16 @@ void CPlot2D__SetDrawLegend(CPlot2D* This, bool flag)
   This->SetDrawLegend(flag);
 }
 
+void CPlot2D__SetDrawXAxisGridLines(CPlot2D* This, bool flag)
+{
+  This->SetDrawXAxisGridLines(flag);
+}
+
+void CPlot2D__SetDrawYAxisGridLines(CPlot2D* This, bool flag)
+{
+  This->SetDrawYAxisGridLines(flag);
+}
+
 void CPlot2D__SetFlipY(CPlot2D* This, bool flag)
 {
   This->SetFlipY(flag);

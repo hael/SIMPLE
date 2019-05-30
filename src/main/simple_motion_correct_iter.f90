@@ -181,7 +181,7 @@ contains
             call self%thumbnail%ifft()
             ! jpeg output
             call self%pspec_half_n_half%collage(self%thumbnail, self%img_jpg)
-            call self%img_jpg%write_jpg(self%moviename_aniso_thumb, norm=.true., quality=90)
+            call self%img_jpg%write_jpg(self%moviename_aniso_thumb, norm=.true., quality=92)
             ! report to ori object
             fname = simple_abspath(self%moviename_aniso_intg, errmsg='simple_motion_correct_iter::iterate 6')
             call make_relativepath(CWD_GLOB,fname,rel_fname)

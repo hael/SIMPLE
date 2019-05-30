@@ -1504,6 +1504,8 @@ extern "C"
   CPlot2D* CPlot2D__new(const char* title);
   void CPlot2D__SetXAxisSize(CPlot2D* This, double value);
   void CPlot2D__SetYAxisSize(CPlot2D* This, double value);
+  void CPlot2D__SetDrawXAxisGridLines(CPlot2D* This, bool flag);
+  void CPlot2D__SetDrawYAxisGridLines(CPlot2D* This, bool flag);
   void CPlot2D__SetDrawLegend(CPlot2D* This, bool flag);
   void CPlot2D__SetFlipY(CPlot2D* This, bool flag);
   void CPlot2D__AddDataSet(CPlot2D* This, CDataSet* dataSet);

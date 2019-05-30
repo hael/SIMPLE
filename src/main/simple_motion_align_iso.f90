@@ -293,7 +293,6 @@ contains
         avg  = sum(distances) / real(self%nframes)
         sdev = sqrt(sum((distances-avg)**2.) / real(self%nframes))
         threshold = avg + 2.*sdev
-        print *,self%iter,avg,sdev,count(distances>threshold)
         do iframe = 1,self%nframes
             if( distances(iframe) > threshold )then
                 shifts(iframe:,1) = shifts(iframe:,1) - shifts(iframe,1) + shifts(iframe-1,1) + ran3()-.5

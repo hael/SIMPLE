@@ -341,7 +341,7 @@ contains
         call align_iso%set_hp_lp(hp,lp)
         updateres = 0
         call align_iso%set_trs(params_glob%scale*params_glob%trs)
-        call align_iso%set_smallshift(2.)
+        call align_iso%set_smallshift(1.)
         call align_iso%set_rand_init_shifts(.true.)
         call align_iso%set_ftol_gtol(1e-7, 1e-7)
         call align_iso%set_shsrch_tol(1e-7)

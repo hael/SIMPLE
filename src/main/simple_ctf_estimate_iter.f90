@@ -32,7 +32,7 @@ contains
         type(ctfparams)               :: ctfvars_glob
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname
         real                          :: cc, ctfscore, cc90, scale
         integer                       :: nframes, ldim(3), ldim_thumb(3), i,j, start(2), incr(2), center(2)
         if( .not. file_exists(moviename_forctf) )&
@@ -88,7 +88,10 @@ contains
         ! patch based fitting
         if( L_PATCH )then
             call ctffit%fit_patches
-            call ctffit%plot_parms('test.eps')
+            epsname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
+            epsname = swap_suffix(epsname, '_ctf', FORCTF_SUFFIX)
+            epsname = trim(dir_out)//trim(adjustl(epsname))//'.eps'//C_NULL_CHAR
+            call ctffit%plot_parms(epsname)
         endif
         ! reporting
         call orientation%set('dfx',      ctfvars%dfx)

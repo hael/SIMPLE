@@ -225,7 +225,6 @@ contains
         else
             mode = 0
         end if
-        write (*,*) 'open ofile, mode=', mode
         fname2 = fname // C_NULL_CHAR
         call C_starfile_table__open_ofile(this%object, fname2, mode)
     end subroutine starfile_table__open_ofile

@@ -20,7 +20,7 @@ public :: motion_patched, PATCH_PDIM
 integer, parameter :: NX_PATCHED     = 5   ! number of patches in x-direction
 integer, parameter :: NY_PATCHED     = 5   !       "      "       y-direction
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
-real,    parameter :: TRS_DEFAULT    = 7.
+real,    parameter :: TRS_DEFAULT    = 5.
 integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
 logical, parameter :: DUMP_STUFF     = .false.
 

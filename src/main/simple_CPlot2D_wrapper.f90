@@ -68,6 +68,16 @@ module CPlot2D_wrapper_module
             import
             type(C_ptr) :: this
         end function C_CDataSet__new
+        subroutine C_CPlot2D__SetDrawXAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawXAxisGridLines")
+            import
+            type(C_ptr), value :: this
+            logical(C_bool), value :: flag
+        end subroutine C_CPlot2D__SetDrawXAxisGridLines
+        subroutine C_CPlot2D__SetDrawYAxisGridLines(this, flag) bind(C,name="CPlot2D__SetDrawYAxisGridLines")
+            import
+            type(C_ptr), value :: this
+            logical(C_bool), value :: flag
+        end subroutine C_CPlot2D__SetDrawYAxisGridLines
         subroutine C_CDataSet__SetDrawMarker(this, flag) bind(C,name="CDataSet__SetDrawMarker")
             import
             type(C_ptr), value :: this
@@ -157,6 +167,16 @@ contains
         type(CDataSet_type), intent(out) :: this
         this%object = C_CDataSet__new()
     end subroutine CDataSet__new
+    subroutine CPlot2D__SetDrawYAxisGridLines(this, flag)
+        type(CPlot2D_type), intent(inout) :: this
+        logical(C_bool), intent(in) :: flag
+        call C_CPlot2D__SetDrawYAxisGridLines(this%object, flag)
+    end subroutine CPlot2D__SetDrawYAxisGridLines
+    subroutine CPlot2D__SetDrawXAxisGridLines(this, flag)
+        type(CPlot2D_type), intent(inout) :: this
+        logical(C_bool), intent(in) :: flag
+        call C_CPlot2D__SetDrawXAxisGridLines(this%object, flag)
+    end subroutine CPlot2D__SetDrawXAxisGridLines
     subroutine CDataSet__SetDrawMarker(this, flag)
         type(CDataSet_type), intent(inout) :: this
         logical(C_bool), intent(in) :: flag

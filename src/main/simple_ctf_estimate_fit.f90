@@ -2,8 +2,6 @@ module simple_ctf_estimate_fit
 include 'simple_lib.f08'
 use simple_image,             only: image
 use simple_ctf,               only: ctf
-use simple_opt_spec,          only: opt_spec
-use simple_opt_de,            only: opt_de
 use simple_ctf_estimate_cost, only: ctf_estimate_cost
 use CPlot2D_wrapper_module
 
@@ -13,15 +11,13 @@ public :: ctf_estimate_fit
 private
 #include "simple_local_flags.inc"
 
-character(len=STDLEN), parameter :: SPECKIND     = 'sqrt'
-integer,               parameter :: NPATCH     = 5
-real,    parameter :: FTOL_REFINE = 1.e-4
-integer, parameter :: IARES = 5, NSTEPS = 100
+character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
+integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 100
 
 type ctf_estimate_fit
     private
-    class(image),    pointer :: micrograph              ! all micrograph powerspec
-    type(image), allocatable :: boxes(:,:)
+    class(image),    pointer :: micrograph
+    type(image), allocatable :: boxes(:,:)              ! for storing all boxes used to build power spectra
     type(image)              :: pspec_patch(NPATCH,NPATCH)   ! patches micrograph powerspec
     type(image)              :: pspec                   ! all micrograph powerspec
     type(image)              :: pspec_ctf               ! CTF powerspec
@@ -29,31 +25,29 @@ type ctf_estimate_fit
     type(image)              :: pspec_roavg             ! rotationally averaged all micrograph powerspec
     type(image)              :: imgmsk                  ! mask image
     type(ctf)                :: tfun                    ! transfer function object
-    type(opt_spec)           :: ospec_de                ! optimiser specification differential evolution (DE)
-    type(opt_de)             :: diffevol                ! DE search object
     type(ctfparams)          :: parms                   ! for storing ctf parameters
-    type(ctfparams)          :: parms_patch(NPATCH,NPATCH)            ! for storing ctf parameters
-    type(ctf_estimate_cost)  :: ctf_cost_patch(NPATCH,NPATCH)
-    type(ctf_estimate_cost)  :: ctf_cost
+    type(ctfparams)          :: parms_patch(NPATCH,NPATCH) ! for storing patch ctf parameters
+    type(ctf_estimate_cost)  :: ctf_cost_patch(NPATCH,NPATCH) ! patch optimization objects
+    type(ctf_estimate_cost)  :: ctf_cost                ! optimization object for whole micrograph
+    integer, allocatable     :: inds_msk(:,:)           ! indices of pixels within resolution mask
+    logical, allocatable     :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
+    real                     :: cc_fit_patch(NPATCH,NPATCH) = -1.
     integer                  :: centers(NPATCH,NPATCH,2)
-    integer, allocatable     :: inds_msk(:,:)
-    logical, allocatable     :: cc_msk(:,:,:)           ! corr mask
     real                     :: smpd         = 0.
-    real                     :: df_lims(2)   = [0.3,5.0]
+    real                     :: df_lims(2)   = [0.3,5.0]! defocus range
     real                     :: df_step      = 0.05     ! defocus step for grid search
     real                     :: astigtol     = 0.05     ! tolerated astigmatism
     real                     :: hp           = 0.       ! high-pass limit
     real                     :: lp           = 0.       ! low-pass limit
     real                     :: cc_fit       = -1.
-    real                     :: cc_fit_patch(NPATCH,NPATCH)       = -1.
     real                     :: cc90         = -1.
     real                     :: ctfscore     = -1.
-    integer                  :: box          = 0
-    integer                  :: nbox(2)      = 0
-    integer                  :: flims(3,2)   = 0
-    integer                  :: ldim_box(3)  = 0        ! logical dimensions
+    integer                  :: box          = 0        ! box size
+    integer                  :: nbox(2)      = 0        ! # boxes along x/y
+    integer                  :: flims(3,2)   = 0        ! fourier dimensions
+    integer                  :: ldim_box(3)  = 0        ! box logical dimensions
     integer                  :: ldim_mic(3)  = 0        ! logical dimensions
-    integer                  :: npix_msk     = 0
+    integer                  :: npix_msk     = 0        ! # pixels in non-redudant resolution mask
     logical                  :: exists       = .false.
 contains
     ! constructor
@@ -241,12 +235,13 @@ contains
     !>  Performs patch based refinement
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real    :: limits(2,2),cc
+        real    :: limits(2,2)
         integer :: pi,pj
-        limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.1)
-        limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.1)
-        limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.1)
-        limits(2,2) = min(self%df_lims(2),self%parms%dfy+0.1)
+        limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
+        limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
+        limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
+        limits(2,2) = min(self%df_lims(2),self%parms%dfy+0.5)
+        ! init
         do pi=1,NPATCH
             do pj=1,NPATCH
                 ! transfer global solution
@@ -259,17 +254,26 @@ contains
                 self%parms_patch(pi,pj)%angast  = self%parms%angast
                 self%parms_patch(pi,pj)%phshift = self%parms%phshift
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
-                ! generate |power spectrum|
-                call self%mic2spec_patch(pi,pj)
+            enddo
+        enddo
+        ! generate |power spectra|
+        call self%mic2spec_patch
+        !$omp parallel do collapse(2) default(shared) private(pi,pj) &
+        !$omp schedule(static) proc_bind(close)
+        do pi=1,NPATCH
+            do pj=1,NPATCH
+                ! normalize patch
                 call self%norm_pspec(self%pspec_patch(pi,pj))
                 ! optmizers
                 call self%ctf_cost_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol)
                 ! mininize
-                call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
-                self%cc_fit_patch(pi,pj) = cc
+                call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), self%cc_fit_patch(pi,pj))
+                ! clean
+                call self%ctf_cost_patch(pi,pj)%kill
             enddo
         enddo
+        !$omp end parallel do
     end subroutine fit_patches
 
     !> mic2spec calculates the average powerspectrum over a micrograph
@@ -331,42 +335,52 @@ contains
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
-    subroutine mic2spec_patch( self, pi, pj )
+    subroutine mic2spec_patch( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        integer,                   intent(in)    :: pi,pj
         real        :: dists(product(self%nbox))
-        real        :: dist, dist_thresh
-        integer     :: xind, yind, cnt, center_win(2), i,j, nbox, center(2)
-        self%pspec_patch(pi,pj) = 0.
-        center = self%centers(pi,pj,:)
+        real        :: dist, dist_thresh, w, sumw
+        integer     :: pi,pj, xind,yind, cnt, center_win(2), i,j, nbox
         nbox   = product(self%nbox)
-        cnt = 0
-        do xind=0,self%ldim_mic(1)-self%box,self%box/2
-            do yind=0,self%ldim_mic(2)-self%box,self%box/2
-                cnt = cnt+1
-                center_win = [xind, yind] + self%box/2
-                dists(cnt) = sqrt(real(sum((center-center_win)**2)))
-            end do
-        end do
-        call hpsort(dists)
-        dist_thresh = dists(nint(real(nbox)*0.5))
-        cnt = 0
-        i = 0
-        do xind=0,self%ldim_mic(1)-self%box,self%box/2
-            i = i+1
-            j = 0
-            do yind=0,self%ldim_mic(2)-self%box,self%box/2
-                j = j+1
-                center_win = [xind, yind] + self%box/2
-                dist = sqrt(real(sum((center-center_win)**2)))
-                if( dist > dist_thresh ) cycle
-                cnt = cnt+1
-                call self%pspec_patch(pi,pj)%add(self%boxes(i,j))
-            end do
-        end do
-        call self%pspec%div(real(cnt))
-        call self%pspec%dampen_pspec_central_cross
-        call self%pspec%subtr_backgr(self%hp)
+        !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
+        !$omp private(i,j,pi,pj,cnt,w,sumw,xind,yind,dists,dist_thresh,center_win,dist)
+        do pi = 1,NPATCH
+            do pj = 1,NPATCH
+                self%pspec_patch(pi,pj) = 0.
+                cnt = 0
+                do xind=0,self%ldim_mic(1)-self%box,self%box/2
+                    do yind=0,self%ldim_mic(2)-self%box,self%box/2
+                        cnt = cnt+1
+                        center_win = [xind, yind] + self%box/2
+                        dists(cnt) = sqrt(real(sum((self%centers(pi,pj,:)-center_win)**2)))
+                    end do
+                end do
+                call hpsort(dists)
+                dist_thresh = dists(nint(real(nbox)*0.3))
+                sumw = 0.
+                i = 0
+                do xind=0,self%ldim_mic(1)-self%box,self%box/2
+                    i = i+1
+                    j = 0
+                    do yind=0,self%ldim_mic(2)-self%box,self%box/2
+                        j = j+1
+                        center_win = [xind, yind] + self%box/2
+                        dist = sqrt(real(sum((self%centers(pi,pj,:)-center_win)**2)))
+                        if( dist > dist_thresh ) cycle
+                        w    = exp(-0.25*(dist/self%box)**2.)
+                        sumw = sumw + w
+                        call self%pspec_patch(pi,pj)%add(self%boxes(i,j),w)
+                    end do
+                end do
+                call self%pspec_patch(pi,pj)%div(sumw)
+                call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
+            enddo
+        enddo
+        !$omp end parallel do
+        do pi = 1,NPATCH
+            do pj = 1,NPATCH
+                call self%pspec_patch(pi,pj)%subtr_backgr(self%hp)
+            enddo
+        enddo
     end subroutine mic2spec_patch
 
     !>  \brief  Normalize to zero mean and unit variance the reference power spectrum
@@ -563,14 +577,35 @@ contains
 
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),          intent(in)    :: fname
-        real, parameter       :: SCALE = 50.
+        character(len=*),        intent(in)    :: fname
+        real, parameter       :: SCALE = 200.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: obs, center
+        type(CDataSet_type)   :: ddfx, ddfy, center
         type(CDataPoint_type) :: p1, p2, c
-        integer               :: pi,pj, j
+        real                  :: cx,cy,x,y,dfx,dfy,avgdfx,avgdfy,dfxmin,dfxmax,dfymin,dfymax
+        integer               :: pi,pj
+        avgdfx = 0.
+        avgdfy = 0.
+        dfxmin = 666.
+        dfxmax = -666.
+        dfymin = 666.
+        dfymax = -666.
+        do pi = 1, NPATCH
+            do pj = 1, NPATCH
+                avgdfx = avgdfx + self%parms_patch(pi,pj)%dfx
+                avgdfy = avgdfy + self%parms_patch(pi,pj)%dfy
+                dfxmin = min(dfxmin, self%parms_patch(pi,pj)%dfx)
+                dfxmax = max(dfxmax, self%parms_patch(pi,pj)%dfx)
+                dfymin = min(dfymin, self%parms_patch(pi,pj)%dfy)
+                dfymax = max(dfymax, self%parms_patch(pi,pj)%dfy)
+            enddo
+        enddo
+        avgdfx = avgdfx / real(NPATCH*NPATCH)
+        avgdfy = avgdfy / real(NPATCH*NPATCH)
         call CPlot2D__new(plot2D, fname)
+        call CPlot2D__SetDrawXAxisGridLines(plot2D, C_FALSE)
+        call CPlot2D__SetDrawYAxisGridLines(plot2D, C_FALSE)
         call CPlot2D__SetXAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
@@ -578,33 +613,36 @@ contains
         do pi = 1, NPATCH
             do pj = 1, NPATCH
                 ! center
+                cx = real(self%centers(pi,pj,1))
+                cy = real(self%centers(pi,pj,2))
+
                 call CDataSet__new(center)
                 call CDataSet__SetDrawMarker(center, C_TRUE)
+                call CDataSet__SetMarkerSize(center, real(5., c_double))
                 call CDataSet__SetDatasetColor(center, 1.0_c_double,0.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(self%centers(pi,pj,1), c_double), real(self%centers(pi,pj,2), c_double), c)
-                call CDataSet__AddDataPoint(center, c)
-                call CDataPoint__delete(c)
+                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
+                call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
                 call CDataSet__delete(center)
-                ! defocus
-                call CDataSet__new(obs)
-                call CDataSet__SetDrawMarker(obs, C_FALSE)
-                call CDataSet__SetDatasetColor(obs, 0.0_c_double,0.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(self%centers(pi,pj,1), c_double), real(self%centers(pi,pj,2), c_double), p1)
-                call CDataPoint__new2(real(real(self%centers(pi,pj,1))+ SCALE*self%parms_patch(pi,pj)%dfx, c_double), &
-                                     &real(real(self%centers(pi,pj,2))+ SCALE*self%parms_patch(pi,pj)%dfy, c_double), p2)
-                call CDataSet__AddDataPoint(obs, p1)
-                call CDataSet__AddDataPoint(obs, p2)
+
+                call CDataSet__new(center)
+                call CDataSet__SetDrawMarker(center, C_FALSE)
+                call CDataSet__SetDatasetColor(center, 0.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
-                call CDataPoint__delete(p2)
-                call CPlot2D__AddDataSet(plot2D, obs)
-                call CDataSet__delete(obs)
+                dfx = SCALE * (self%parms_patch(pi,pj)%dfx-dfxmin)/(dfxmax-dfxmin)
+                dfy = SCALE * (self%parms_patch(pi,pj)%dfy-dfymin)/(dfymax-dfymin)
+                call CDataPoint__new2(real(cx+dfx, c_double), real(cy+dfy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
+                call CDataPoint__delete(p1)
+                call CPlot2D__AddDataSet(plot2D, center)
+                call CDataSet__delete(center)
             end do
         end do
-        title%str = 'DFX (in microns x ' // trim(real2str(SCALE)) // ')' // C_NULL_CHAR
+        title%str = 'Delta DF: average(black), X(blue), Y(green); in microns x '//trim(int2str(nint(SCALE)))//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
-        title%str(1:1) = 'DFY (in microns x ' // trim(real2str(SCALE)) // ')' // C_NULL_CHAR
-        call CPlot2D__SetYAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, fname)
         call CPlot2D__delete(plot2D)
     end subroutine plot_parms
@@ -623,8 +661,7 @@ contains
         call self%pspec_ctf_roavg%kill
         call self%pspec_roavg%kill
         call self%imgmsk%kill
-        call self%ospec_de%kill
-        call self%diffevol%kill
+        call self%ctf_cost%kill
         if( allocated(self%cc_msk) ) deallocate(self%cc_msk)
         if( allocated(self%inds_msk) ) deallocate(self%inds_msk)
         if( allocated(self%boxes) )then
@@ -635,6 +672,12 @@ contains
             enddo
             deallocate(self%boxes)
         endif
+        do i = 1,NPATCH
+            do j = 1,NPATCH
+                call self%pspec_patch(i,j)%kill
+                call self%ctf_cost_patch(i,j)%kill
+            enddo
+        enddo
         self%exists = .false.
     end subroutine kill
 
