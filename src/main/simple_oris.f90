@@ -164,7 +164,9 @@ type :: oris
     procedure          :: find_best_classes
     procedure          :: find_closest_proj
     procedure          :: discretize
-    procedure          :: nearest_proj_neighbors
+    procedure, private :: nearest_proj_neighbors_1
+    procedure, private :: nearest_proj_neighbors_2
+    generic            :: nearest_proj_neighbors => nearest_proj_neighbors_1, nearest_proj_neighbors_2
     procedure          :: find_angres
     procedure          :: extremal_bound
     procedure          :: set_extremal_vars
@@ -2609,7 +2611,7 @@ contains
     end subroutine discretize
 
     !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
-    subroutine nearest_proj_neighbors( self, k, nnmat )
+    subroutine nearest_proj_neighbors_1( self, k, nnmat )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: k
         integer, allocatable, intent(inout) :: nnmat(:,:)
@@ -2636,7 +2638,26 @@ contains
             end do
         end do
         call o%kill
-    end subroutine nearest_proj_neighbors
+    end subroutine nearest_proj_neighbors_1
+
+    !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
+    !!          self is search space with finer angular resolution
+    subroutine nearest_proj_neighbors_2( self, o_peaks, k, lnns )
+        class(oris), intent(inout) :: self
+        class(oris), intent(in)    :: o_peaks
+        integer,     intent(in)    :: k
+        logical,     intent(inout) :: lnns(self%n)
+        real, allocatable :: ows(:)
+        integer :: closest, i
+        lnns = .false.
+        ows  = o_peaks%get_all('ow')
+        do i=1,o_peaks%n
+            if( ows(i) <= TINY ) cycle
+            closest = self%find_closest_proj(o_peaks%o(i))
+            lnns(closest) = .true.
+        end do
+        deallocate(ows)
+    end subroutine nearest_proj_neighbors_2
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)
     function find_angres( self ) result( res )

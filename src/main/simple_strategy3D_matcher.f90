@@ -710,6 +710,7 @@ contains
                 ! find threshold
                 call hpsort(weights_glob(:cnt))
                 weight_thres = weights_glob(cnt - nint(real(cnt) * params_glob%globwfrac))
+                if( weight_thres <= TINY ) weight_thres = SMALL
                 ! zero and normalize weights, apply rank-based weighting scheme if so specified
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
