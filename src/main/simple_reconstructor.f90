@@ -309,7 +309,7 @@ contains
         rotmats(1,:,:) = o%get_mat()
         if( nsym > 1 )then
             do isym=2,nsym
-                o_sym = se%apply(o, isym)
+                call se%apply(o, isym, o_sym)
                 rotmats(isym,:,:) = o_sym%get_mat()
             end do
         endif
@@ -380,6 +380,7 @@ contains
             !$omp end do nowait
         end do
         !$omp end parallel
+        call o_sym%kill
     end subroutine insert_fplane_1
 
     !> insert Fourier plane, distribution of orientations (with weights)
@@ -424,14 +425,14 @@ contains
         nsym  = se%get_nsym()
         noris = os%get_noris()
         do iori=1,noris
-            o            = os%get_ori(iori)
+            call os%get_ori(iori, o)
             ows(iori)    = pwght * o%get('ow')
             states(iori) = nint(o%get('state'))
             if( ows(iori) < TINY ) cycle
             rotmats(iori,1,:,:) = o%get_mat()
             if( nsym > 1 )then
                 do isym=2,nsym
-                    o_sym = se%apply(o, isym)
+                    call se%apply(o, isym, o_sym)
                     rotmats(iori,isym,:,:) = o_sym%get_mat()
                 end do
             endif
@@ -500,6 +501,8 @@ contains
             end do
         end do
         !$omp end parallel
+        call o_sym%kill
+        call o%kill
     end subroutine insert_fplane_2
 
     !>  is for uneven distribution of orientations correction
@@ -854,7 +857,7 @@ contains
                 real      :: pw
                 state = o%get_state(i)
                 if( state == 0 ) return
-                orientation = o%get_ori(i)
+                call o%get_ori(i, orientation)
                 ! particle-weight
                 pw = 1.
                 if( orientation%isthere('w') ) pw = orientation%get('w')
@@ -866,6 +869,7 @@ contains
                     call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                     deallocate(stkname)
                 endif
+                call orientation%kill
             end subroutine rec_dens
 
     end subroutine rec

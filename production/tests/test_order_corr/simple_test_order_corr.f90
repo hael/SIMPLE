@@ -14,7 +14,8 @@ do i=1,10
 end do
 order = os%order_corr()
 do i=1,10
-    o = os%get_ori(order(i))
+    call os%get_ori(order(i), o)
     call o%print_ori()
 end do
+call o%kill
 end program simple_test_order_corr

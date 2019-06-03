@@ -37,7 +37,7 @@ contains
 
     subroutine volpft_symsrch_init( vol, pgrp, hp, lp, nrestarts_in )
         use simple_projector,    only: projector
-         use simple_opt_factory, only: opt_factory
+        use simple_opt_factory, only: opt_factory
         class(projector),  intent(in) :: vol
         character(len=*),  intent(in) :: pgrp
         real,              intent(in) :: hp, lp
@@ -61,7 +61,7 @@ contains
         allocate(sym_rmats(nsym,3,3), source=0.0)
         ! extract the rotation matrices for the symops
         do isym=1,nsym
-            o = symobj%get_symori(isym)
+            call symobj%get_symori(isym, o)
             sym_rmats(isym,:,:) = o%get_mat()
         end do
         ! set nrestarts
@@ -84,12 +84,14 @@ contains
         end do
         ! create global symaxis
         call saxis_glob%new
+        call o%kill
+        call symobj%kill
         if( DEBUG_HERE ) write(logfhandle,*) '***DEBUG_HERE(volpft_symsrch)***; volpft_symsrch_init, DONE'
     end subroutine volpft_symsrch_init
 
     subroutine volpft_srch4symaxis( symaxis_best, fromto )
-        class(ori),        intent(out) :: symaxis_best
-        integer, optional, intent(in)  :: fromto(2)
+        class(ori),        intent(inout) :: symaxis_best
+        integer, optional, intent(in)    :: fromto(2)
         real,    allocatable :: inpl_angs(:), rmats(:,:,:,:), corrs(:,:)
         integer, allocatable :: order(:)
         class(*), pointer    :: fun_self => null()
@@ -164,7 +166,7 @@ contains
                     inpl_best  = inpl
                 endif
             end do
-            symaxis = espace%get_ori(iproj_best)
+            call espace%get_ori(iproj_best, symaxis)
             call symaxis%e3set(inpl_angs(inpl_best))
             call symaxis%set('corr', corr_best)
             call cand_axes%set_ori(iproj,symaxis)
@@ -187,9 +189,12 @@ contains
         ! order the local optima according to correlation
         order = cand_axes%order_corr()
         ! update global symaxis
-        saxis_glob = cand_axes%get_ori(order(1))
+        call cand_axes%get_ori(order(1), saxis_glob)
         ! return best
-        symaxis_best = cand_axes%get_ori(order(1))
+        call cand_axes%get_ori(order(1), symaxis_best)
+        call symaxis%kill
+        call espace%kill
+        call cand_axes%kill
     end subroutine volpft_srch4symaxis
 
     function volpft_symsrch_costfun( fun_self, vec, D ) result( cost )

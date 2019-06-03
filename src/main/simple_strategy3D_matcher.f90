@@ -429,6 +429,7 @@ contains
         use simple_cmdline,             only: cmdline
         use simple_strategy2D3D_common, only: calcrefvolshift_and_mapshifts2ptcls, preprefvol, build_pftcc_particles
         class(cmdline), intent(inout) :: cline !< command line
+        type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
         logical   :: do_center, has_been_searched
@@ -462,10 +463,12 @@ contains
                 if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES
                     call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz, .false.)
-                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                    !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
+                        call build_glob%eulspace%get_ori(iref, o_tmp)
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                            &build_glob%eulspace%get_ori(iref), pftcc, iseven=.false.)
+                            &o_tmp, pftcc, iseven=.false.)
+                        call o_tmp%kill
                     end do
                     !$omp end parallel do
                     ! copy odd volume
@@ -474,30 +477,36 @@ contains
                     call build_glob%vol_odd%expand_cmat(params_glob%alpha)
                     ! PREPARE EVEN REFERENCES
                     call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz, .true.)
-                    !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                    !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
+                        call build_glob%eulspace%get_ori(iref, o_tmp)
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                            &build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
+                            &o_tmp, pftcc, iseven=.true.)
+                        call o_tmp%kill
                     end do
                     !$omp end parallel do
                 else
                     call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
-                    !$omp parallel do default(shared) private(iref, ind) schedule(static) proc_bind(close)
+                    !$omp parallel do default(shared) private(iref, ind, o_tmp) schedule(static) proc_bind(close)
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
-                        call build_glob%vol%fproject_polar(ind, build_glob%eulspace%get_ori(iref), &
+                        call build_glob%eulspace%get_ori(iref, o_tmp)
+                        call build_glob%vol%fproject_polar(ind, o_tmp, &
                             &pftcc, iseven=.true.)
                         call pftcc%cp_even2odd_ref(ind)
+                        call o_tmp%kill
                     end do
                     !$omp end parallel do
                 endif
             else
                 ! low-pass set or multiple states
                 call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
-                !$omp parallel do default(shared) private(iref) schedule(static) proc_bind(close)
+                !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
                 do iref=1,params_glob%nspace
+                    call build_glob%eulspace%get_ori(iref, o_tmp)
                     call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                        &build_glob%eulspace%get_ori(iref), pftcc, iseven=.true.)
+                        &o_tmp, pftcc, iseven=.true.)
+                    call o_tmp%kill
                 end do
                 !$omp end parallel do
             endif
@@ -618,7 +627,7 @@ contains
                     do i=batchlims(1),batchlims(2)
                         iptcl       = pinds(i)
                         ibatch      = i - batchlims(1) + 1
-                        orientation = build_glob%spproj_field%get_ori(iptcl)
+                        call build_glob%spproj_field%get_ori(iptcl, orientation)
                         ctfvars     = build_glob%spproj%get_ctfparams(params_glob%oritype, iptcl)
                         if( orientation%isstatezero() ) cycle
                         call eucl_sigma%set_sigma2(iptcl)
@@ -643,7 +652,8 @@ contains
                     call rec_imgs(ibatch)%kill
                 end do
                 deallocate(rec_imgs, build_glob%imgbatch)
-        end select
+       end select
+       call orientation%kill
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks

@@ -14,11 +14,13 @@ contains
     !>  \brief  generates an array of projection images of volume vol in orientations o
     function reproject( vol, o, top ) result( imgs )
         use simple_oris, only: oris
+        use simple_ori,  only: ori
         class(image),      intent(inout) :: vol     !< volume to project
         class(oris),       intent(inout) :: o       !< orientations
         integer, optional, intent(in)    :: top     !< stop index
         type(image),       allocatable :: imgs(:)   !< resulting images
         type(image),       allocatable :: imgs_pad(:)
+        type(ori)        :: o2
         type(projector)  :: vol_pad
         integer          :: n, i, ithr, ldim(3), boxpd, ldim_pd(3), box
         real             :: smpd
@@ -48,7 +50,7 @@ contains
         call vol_pad%expand_cmat(KBALPHA)
         write(logfhandle,'(A)') '>>> GENERATES PROJECTIONS'
         !$omp parallel do schedule(static) default(shared)&
-        !$omp private(i,ithr) proc_bind(close)
+        !$omp private(i,ithr,o2) proc_bind(close)
         do i=1,n
             if(o%isthere('state'))then
                 if(o%get_state(i)==0)cycle
@@ -56,7 +58,9 @@ contains
             ! get thread index
             ithr = omp_get_thread_num() + 1
             ! extract central secion
-            call vol_pad%fproject_serial(o%get_ori(i), imgs_pad(ithr))
+            call o%get_ori(i, o2)
+            call vol_pad%fproject_serial(o2, imgs_pad(ithr))
+            call o2%kill
             ! back FT
             call imgs_pad(ithr)%ifft()
             ! clip

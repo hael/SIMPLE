@@ -425,7 +425,7 @@ contains
         call os_stk%new(n_spprojs)
         do iproj=1,n_spprojs
             call stream_proj%read(spproj_list(iproj))
-            o_stk           = stream_proj%os_stk%get_ori(1)
+            call stream_proj%os_stk%get_ori(1, o_stk)
             ctfvars         = stream_proj%get_ctfparams('ptcl2D', 1)
             ctfvars%smpd    = smpd
             stk             = stream_proj%get_stkname(1)
@@ -559,6 +559,7 @@ contains
         call del_file(PROJFILE_POOL)
         call del_file(PROJFILE_BUFFER)
         call del_file(PROJFILE2D)
+        call o_stk%kill
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER2D_STREAM NORMAL STOP ****')
         contains
@@ -848,6 +849,7 @@ contains
             subroutine classify_pool
                 type(cluster2D_distr_commander)  :: xcluster2D_distr
                 type(sp_project)                 :: spproj2D
+                type(ori)                        :: o_tmp
                 character(len=:), allocatable    :: prev_refs
                 integer :: iptcl, nptcls, nptcls_sel, istk, nstks, nptcls_glob
                 ! transfer from pool
@@ -868,10 +870,12 @@ contains
                 call spproj2D%os_stk%new(nstks)
                 call spproj2D%os_ptcl2D%new(nptcls)
                 do iptcl=1,nptcls
-                    call spproj2D%os_ptcl2D%set_ori(iptcl, pool_proj%os_ptcl2D%get_ori(iptcl))
+                    call pool_proj%os_ptcl2D%get_ori(iptcl, o_tmp)
+                    call spproj2D%os_ptcl2D%set_ori(iptcl, o_tmp)
                 enddo
                 do istk=1,nstks
-                    call spproj2D%os_stk%set_ori(istk, pool_proj%os_stk%get_ori(istk))
+                    call pool_proj%os_stk%get_ori(istk, o_tmp)
+                    call spproj2D%os_stk%set_ori(istk, o_tmp)
                 enddo
                 spproj2D%os_cls2D = pool_proj%os_cls2D
                 spproj2D%os_out   = pool_proj%os_out
@@ -902,10 +906,12 @@ contains
                 ! transfer back to pool
                 call spproj2D%read(PROJFILE2D)
                 do iptcl=1,nptcls
-                    call pool_proj%os_ptcl2D%set_ori(iptcl, spproj2D%os_ptcl2D%get_ori(iptcl))
+                    call spproj2D%os_ptcl2D%get_ori(iptcl, o_tmp)
+                    call pool_proj%os_ptcl2D%set_ori(iptcl, o_tmp)
                 enddo
                 do istk=1,nstks
-                    call pool_proj%os_stk%set_ori(istk, spproj2D%os_stk%get_ori(istk))
+                    call spproj2D%os_stk%get_ori(istk, o_tmp)
+                    call pool_proj%os_stk%set_ori(istk, o_tmp)
                 enddo
                 pool_proj%os_cls2D = spproj2D%os_cls2D
                 pool_proj%os_out   = spproj2D%os_out
@@ -921,6 +927,7 @@ contains
                     endif
                 endif
                 ! cleanup
+                call o_tmp%kill
                 call spproj2D%kill
             end subroutine classify_pool
 
@@ -949,7 +956,7 @@ contains
                         call pool_proj%os_cls2D%reallocate(ncls_here)
                         do icls=1,params%ncls_start
                             ind = ncls_glob+icls
-                            o   = buffer_proj%os_cls2D%get_ori(icls)
+                            call buffer_proj%os_cls2D%get_ori(icls, o)
                             call o%set('class',real(ind))
                             call pool_proj%os_cls2D%set_ori(ind,o)
                         enddo
@@ -957,7 +964,7 @@ contains
                 endif
                 ! transfer particles parameters to pool
                 do iptcl=1,buffer_proj%os_ptcl2D%get_noris()
-                    o = buffer_proj%os_ptcl2D%get_ori(iptcl)
+                    call buffer_proj%os_ptcl2D%get_ori(iptcl, o)
                     ! greedy search
                     call o%set('updatecnt', 1.)
                     ! updates class
@@ -1094,7 +1101,7 @@ contains
                                 call img%read(stkin, ind)
                                 call img%write(stkout, icls)
                             endif
-                            o = buffer_proj%os_cls2D%get_ori(ind)
+                            call buffer_proj%os_cls2D%get_ori(ind, o)
                             call o%set('class',real(icls))
                             call pool_proj%os_cls2D%set_ori(icls,o)
                             ! frcs
@@ -1287,7 +1294,7 @@ contains
                         cnt = cnt + 1
                         ! stk
                         call stream_proj%read(spproj_list(iproj))
-                        o             = stream_proj%os_stk%get_ori(1)
+                        call stream_proj%os_stk%get_ori(1, o)
                         stk_list(cnt) = trim(stream_proj%get_stkname(1))
                         ctfparms      = stream_proj%get_ctfparams('ptcl2D', 1)
                         call o%set_ctfvars(ctfparms)

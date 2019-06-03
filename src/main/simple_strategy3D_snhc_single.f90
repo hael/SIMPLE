@@ -79,7 +79,7 @@ contains
         use simple_ori,  only: ori
         use simple_strategy3D_utils, only: estimate_shift_increment
         class(strategy3D_snhc_single), intent(inout) :: self
-        type(ori)  :: osym
+        type(ori)  :: osym, o1, o2
         real       :: dist_inpl, corr, frac, euldist
         real       :: shwmean, shwstdev
         integer    :: ref, roind
@@ -100,8 +100,9 @@ contains
         ! shift incr stats
         call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
-        call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
-            &s3D%o_peaks(self%s%iptcl)%get_ori(1), osym, euldist, dist_inpl)
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o1)
+        call s3D%o_peaks(self%s%iptcl)%get_ori(1, o2)
+        call build_glob%pgrpsyms%sym_dists( o1, o2, osym, euldist, dist_inpl)
         ! fraction search space
         frac = 100.*real(self%s%nrefs_eval) / real(self%s%nprojs)
         ! set the overlaps
@@ -126,6 +127,9 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         call build_glob%spproj_field%set_euler(self%s%iptcl, s3D%proj_space_euls(self%s%ithr,ref,1,1:3))
         call build_glob%spproj_field%set_shift(self%s%iptcl, [0.,0.]) ! no shift search in snhc
+        call osym%kill
+        call o1%kill
+        call o2%kill
         DebugPrint  '>>> STRATEGY3D_SNHC_SINGLE :: EXECUTED ORIS_ASSIGN_SNHC_SINGLE'
     end subroutine oris_assign_snhc_single
 

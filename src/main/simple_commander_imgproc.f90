@@ -664,6 +664,7 @@ contains
     !> processing routines that are applied to MRC or SPIDER stacks.
     subroutine exec_stackops( self, cline )
         use simple_oris, only: oris
+        use simple_ori,  only: ori
         use simple_stackops
         use simple_procimgfile
         class(stackops_commander), intent(inout) :: self
@@ -672,6 +673,7 @@ contains
         type(builder)                 :: build
         type(ran_tabu)                :: rt
         type(oris)                    :: o_here, os_ran
+        type(ori)                     :: o, o2
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: fname
         integer :: i, s, cnt, nincl
@@ -692,7 +694,9 @@ contains
                 call build%img%read(params%stk, pinds(i))
                 call build%img%write(params%outstk, i)
                 if( cline%defined('oritab') .or. cline%defined('deftab') )then
-                    call os_ran%set_ori(i, build%spproj_field%get_ori(pinds(i)))
+                    call build%spproj_field%get_ori(pinds(i), o)
+                    call os_ran%set_ori(i, o)
+                    call o%kill
                 endif
             end do
             if( cline%defined('oritab') .or. cline%defined('deftab') )then
@@ -732,7 +736,8 @@ contains
                     s = nint(build%spproj_field%get(pinds(i), 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%spproj_field%get_ori(pinds(i)))
+                        call build%spproj_field%get_ori(pinds(i), o2)
+                        call o_here%set_ori(cnt, o2)
                     endif
                 end do
                 allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
@@ -755,7 +760,8 @@ contains
                     s = nint(build%spproj_field%get(pinds(i), 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%spproj_field%get_ori(pinds(i)))
+                        call build%spproj_field%get_ori(pinds(i), o2)
+                        call o_here%set_ori(cnt, o2)
                     endif
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
@@ -765,7 +771,8 @@ contains
                     call progress(i, nincl)
                     call build%img%read(params%stk, pinds(i))
                     call build%img%write(params%outstk, i)
-                    call o_here%set_ori(i, build%spproj_field%get_ori(pinds(i)))
+                    call build%spproj_field%get_ori(pinds(i), o2)
+                    call o_here%set_ori(i, o2)
                 end do
                 allocate(fname, source='extracted_oris'//trim(TXT_EXT))
             endif
@@ -798,7 +805,8 @@ contains
                     s = nint(build%spproj_field%get(i, 'state'))
                     if( s == params%state )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%spproj_field%get_ori(i))
+                        call build%spproj_field%get_ori(i, o2)
+                        call o_here%set_ori(cnt, o2)
                     endif
                 end do
                 allocate(fname, source='extracted_oris_state'//int2str_pad(params%state,2)//trim(TXT_EXT))
@@ -821,7 +829,8 @@ contains
                     s = nint(build%spproj_field%get(i, 'class'))
                     if( s == params%class )then
                         cnt = cnt+1
-                        call o_here%set_ori(cnt, build%spproj_field%get_ori(i))
+                        call build%spproj_field%get_ori(i, o2)
+                        call o_here%set_ori(cnt, o2)
                     endif
                 end do
                 allocate(fname, source='extracted_oris_class'//int2str_pad(params%class,5)//trim(TXT_EXT))
@@ -890,7 +899,11 @@ contains
         ! default
         write(logfhandle,*)'Nothing to do!'
         ! end gracefully
-999     call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
+999     call o_here%kill
+        call os_ran%kill
+        call o%kill
+        call o2%kill
+        call simple_end('**** SIMPLE_STACKOPS NORMAL STOP ****')
     end subroutine exec_stackops
 
 end module simple_commander_imgproc

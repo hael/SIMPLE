@@ -593,6 +593,7 @@ contains
     subroutine preprefvol( pftcc, cline, s, volfname, do_center, xyz, iseven )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_estimate_ssnr,    only: fsc2optlp_sub, subsample_optlp, subsample_filter
+        use simple_ori,              only: ori
         class(polarft_corrcalc), intent(inout) :: pftcc
         class(cmdline),          intent(inout) :: cline
         integer,                 intent(in)    :: s
@@ -601,6 +602,7 @@ contains
         real,                    intent(in)    :: xyz(3)
         logical,                 intent(in)    :: iseven
         type(image)                   :: mskvol
+        type(ori)                     :: o
         character(len=:), allocatable :: fname_vol_filter
         real,             allocatable :: pssnr(:)
         real    :: subfilter(build_glob%img_match%get_filtsz())
@@ -649,7 +651,8 @@ contains
                             iproj = 0
                             do iref = (s-1)*params_glob%nspace+1, s*params_glob%nspace
                                 iproj    = iproj+1
-                                iprojred = build_glob%eulspace_red%find_closest_proj(build_glob%eulspace%get_ori(iproj))
+                                call build_glob%eulspace%get_ori(iproj, o)
+                                iprojred = build_glob%eulspace_red%find_closest_proj(o)
                                 call build_glob%projfrcs%frc_getter(iprojred, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
                                 call fsc2optlp_sub(filtsz, frc, filter)
                                 call subsample_optlp(filtsz, subfiltsz, filter, subfilter)
@@ -727,6 +730,7 @@ contains
         call build_glob%vol%fft()
         ! expand for fast interpolation
         call build_glob%vol%expand_cmat(params_glob%alpha)
+        call o%kill
     end subroutine preprefvol
 
     subroutine norm_struct_facts( which_iter )

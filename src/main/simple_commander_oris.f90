@@ -69,7 +69,7 @@ contains
             call build%spproj_field%new(params%nptcls)
             do i=1,params%nptcls
                 class = irnd_uni(params%ncls)
-                orientation = os_even%get_ori(class)
+                call os_even%get_ori(class, orientation)
                 call build%spproj_field%set_ori(i, orientation)
                 e3 = ran3()*2.*params%angerr-params%angerr
                 x  = ran3()*2.0*params%sherr-params%sherr
@@ -98,6 +98,9 @@ contains
         endif
         if( params%nstates > 1 ) call build%spproj_field%rnd_states(params%nstates)
         call binwrite_oritab(params%outfile, build%spproj, build%spproj_field, [1,build%spproj_field%get_noris()])
+        call orientation%kill
+        call os_even%kill
+        call spiral%kill
         ! end gracefully
         call simple_end('**** SIMPLE_MAKE_ORIS NORMAL STOP ****')
     end subroutine exec_make_oris
@@ -260,7 +263,7 @@ contains
                 call osubspace%write('even_pdirs'//trim(TXT_EXT), [1,NSPACE_REDUCED])
                 do iptcl=1,build%spproj_field%get_noris()
                     if( ptcl_mask(iptcl) )then
-                        o_single = build%spproj_field%get_ori(iptcl)
+                        call build%spproj_field%get_ori(iptcl, o_single)
                         clustering(iptcl) = osubspace%find_closest_proj(o_single)
                     else
                         clustering(iptcl) = 0
@@ -311,6 +314,8 @@ contains
                 write(logfhandle,'(a,1x,f8.2)') 'MAXIMUM SPECSCORE (BEST)       :', maxd
             endif
         endif
+        call osubspace%kill
+        call o_single%kill
         call simple_end('**** SIMPLE_ORISTATS NORMAL STOP ****')
     end subroutine exec_oristats
 
@@ -465,7 +470,7 @@ contains
             ! projection direction attribution
             n = build%spproj_field%get_noris()
             do i = 1, n
-                o = build%spproj_field%get_ori(i)
+                call build%spproj_field%get_ori(i, o)
                 if( o%isstatezero() )cycle
                 call progress(i, n)
                 closest = build%eulspace%find_closest_proj(o)
@@ -521,7 +526,7 @@ contains
             write(funit,'(A)')".translate 0.0 0.0 0.0"
             write(funit,'(A)')".scale 1"
             do i = 1, n
-                o   = build%spproj_field%get_ori(i)
+                call build%spproj_field%get_ori(i, o)
                 xyz = o%get_normal()
                 col = real(i-1)/real(n-1)
                 write(funit,'(A,F6.2,F6.2)')".color 1.0 ", col, col
@@ -547,7 +552,7 @@ contains
             call fopen(funit, status='REPLACE', action='WRITE', file=trim(fname), iostat=io_stat)
             if(io_stat/=0)call fileiochk("simple_commander_oris::exec_vizoris fopen failed "//trim(fname), io_stat)
             do i = 1, n
-                o = build%spproj_field%get_ori(i)
+                call build%spproj_field%get_ori(i, o)
                 if( i==1 )then
                     ang     = 0.
                     geodist = 0.
@@ -570,6 +575,8 @@ contains
             write(logfhandle,'(A,F8.3)')'>>> AVERAGE EULER    DISTANCE: ',avg_euldist
             write(logfhandle,'(A,F8.3)')'>>> AVERAGE GEODESIC DISTANCE: ',avg_geodist
         endif
+        call o%kill
+        call o_prev%kill
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
 

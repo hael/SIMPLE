@@ -71,7 +71,7 @@ contains
         ! retrieve environment variables from file
         call self%qdescr%new(MAXENVKEYS)
         call spproj%read_segment('compenv', params_glob%projfile)
-        compenv_o   = spproj%compenv%get_ori(1)
+        call spproj%compenv%get_ori(1, compenv_o)
         self%qdescr = compenv_o%ori2chash()
         ! deal with time
         if( self%qdescr%isthere('time_per_image') )then
@@ -108,6 +108,7 @@ contains
         call self%qdescr%set('job_cpus_per_task', int2str(params_glob%nthr))   ! overrides env file
         call self%qdescr%set('job_nparts',        int2str(params_glob%nparts)) ! overrides env file
         deallocate(qsnam)
+        call compenv_o%kill
         self%existence = .true.
     end subroutine new
 

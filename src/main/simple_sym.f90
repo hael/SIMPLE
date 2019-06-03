@@ -262,26 +262,34 @@ contains
     end function get_all_subgrps_descr
 
     !>  \brief  is a symmetry adaptor
-    function apply( self, e_in, symop ) result( e_sym )
+    subroutine apply( self, e_in, symop, e_sym )
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: e_in  !< orientation object
         integer,    intent(in)    :: symop !< index of sym operation
-        type(ori)                 :: e_sym, e_symop, e_tmp
+        type(ori),  intent(inout) :: e_sym
+        type(ori)                 :: e_symop, e_tmp
         e_sym   = e_in ! transfer of parameters
-        e_symop = self%e_sym%get_ori(symop)
-        e_tmp   = e_symop.compose.e_in
+        call self%e_sym%get_ori(symop, e_symop)
+        call e_symop%compose(e_in, e_tmp)
         call e_sym%set_euler(e_tmp%get_euler())
-    end function apply
+        call e_symop%kill
+        call e_tmp%kill
+    end subroutine apply
 
     !>  \brief  is a symmetry adaptor
     subroutine apply2all( self, e_in, symop )
         class(sym), intent(inout) :: self
         class(oris), intent(inout):: e_in  !< orientations object
         integer,    intent(in)    :: symop !< index of sym operation
+        type(ori)                 :: o, o2
         integer :: i
         do i=1,e_in%get_noris()
-            call e_in%set_ori(i, self%apply(e_in%get_ori(i),symop))
+            call e_in%get_ori(i, o)
+            call self%apply(o, symop, o2)
+            call e_in%set_ori(i, o2)
         enddo
+        call o%kill
+        call o2%kill
     end subroutine apply2all
 
     ! !>  \brief  rotates any orientation to the asymmetric unit
@@ -294,11 +302,12 @@ contains
             ! already in asymetric unit
         else
             do nsym=2,self%n     ! nsym=1 is the identity operator
-                oasym = self%apply(osym, nsym)
+                call self%apply(osym, nsym, oasym)
                 if( self%within_asymunit(oasym, incl_mirr=.true.) )exit
             enddo
             osym = oasym
         endif
+        call oasym%kill
     end subroutine rot_to_asym
 
     !>  \brief  rotates orientations to the asymmetric unit
@@ -308,10 +317,11 @@ contains
         type(ori) :: o
         integer   :: i
         do i = 1, osyms%get_noris()
-            o = osyms%get_ori(i)
+            call osyms%get_ori(i, o)
             call self%rot_to_asym(o)
             call osyms%set_ori(i, o)
         enddo
+        call o%kill
     end subroutine rotall_to_asym
 
     !>  \brief  determines euler distance and corresponding symmetrized
@@ -320,7 +330,7 @@ contains
         class(sym), intent(inout) :: self
         class(ori), intent(in)    :: oref        !< is the untouched reference
         class(ori), intent(in)    :: oasym       !< is the orientation determined within assymetric unit
-        class(ori), intent(out)   :: osym        !< is the orientatiom that minimises the distance to oref
+        class(ori), intent(inout) :: osym        !< is the orientatiom that minimises the distance to oref
         real,       intent(out)   :: euldist     !< Euler distance
         real,       intent(out)   :: inplrotdist !< in-plane rotational distance
         type(ori) :: o
@@ -333,7 +343,7 @@ contains
         else
             osym = oasym
             do isym=2,self%n
-                o    = self%apply(oasym, isym)
+                call self%apply(oasym, isym, o)
                 dist = o.euldist.oref
                 if( dist < euldist )then
                     euldist = dist
@@ -344,15 +354,16 @@ contains
         endif
         euldist     = rad2deg( euldist )
         inplrotdist = rad2deg( inplrotdist )
+        call o%kill
     end subroutine sym_dists
 
     !>  \brief  is a getter
-    function get_symori( self, symop ) result( e_sym )
+    subroutine get_symori( self, symop, e_sym )
         class(sym), intent(inout) :: self
-        integer, intent(in)       :: symop !< symmetry orientation
-        type(ori) :: e_sym
-        e_sym = self%e_sym%get_ori(symop)
-    end function get_symori
+        integer,    intent(in)    :: symop !< symmetry orientation
+        type(ori),  intent(inout) :: e_sym
+        call self%e_sym%get_ori(symop, e_sym)
+    end subroutine get_symori
 
     !>  \brief  whether or not an orientation falls within the asymetric unit excluding mirror
     logical function within_asymunit( self, o, incl_mirr )
@@ -442,7 +453,7 @@ contains
                 ! transposed rotation to get the correct sign on rotation
                 ! the old fetching versus inserting issue
                 call os%rot_transp(i,symaxis_ori)
-                o = os%get_ori(i)
+                call os%get_ori(i, o)
                 call self%rot_to_asym(o)
                 call os%set_ori(i, o)
             end do
@@ -453,6 +464,7 @@ contains
             call os%rot_transp(symaxis_ori)
             call self%rotall_to_asym(os)
         endif
+        call o%kill
     end subroutine apply_sym_with_shift
 
     !>  \brief  is for retrieving nearest neighbors in symmetric cases
@@ -473,18 +485,18 @@ contains
             if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_sym")
             do i = 1, n_os
                 dists = pi
-                oasym = os_asym_unit%get_ori(i)
+                call os_asym_unit%get_ori(i, oasym)
                 do isym = 1, self%n
                     if(isym == 1)then
                         osym = oasym
                     else
-                        osym = self%apply(oasym, isym)
+                        call self%apply(oasym, isym, osym)
                     endif
                     do j = 1, n_os
                         if( j == i )then
                             dists(j) = 0.
                         else
-                            oj = os_asym_unit%get_ori(j)
+                            call os_asym_unit%get_ori(j, oj)
                             dists(j) = min(dists(j), osym.euldist.oj)
                         endif
                     enddo
@@ -495,6 +507,9 @@ contains
             enddo
             deallocate(inds, dists)
         endif
+        call oasym%kill
+        call osym%kill
+        call oj%kill
     end subroutine nearest_proj_neighbors
 
     !>  \brief  is for retrieving nearest symmetry neighbours in an assymetric set of projection directions
@@ -513,15 +528,15 @@ contains
             allocate( nnmat(n_os,nsym), dists(n_os), stat=alloc_stat )
             if(alloc_stat/=0)call allocchk("In: nearest_proj_neighbors; simple_sym")
             do i = 1, n_os
-                oasym = asym_os%get_ori(i)
+                call asym_os%get_ori(i, oasym)
                 do isym = 1, nsym
                     if( isym == 1 )then
                         osym = oasym
                     else
-                        osym = self%apply(oasym, isym)
+                        call self%apply(oasym, isym, osym)
                     endif
                     do j = 1, n_os
-                        oj = asym_os%get_ori(j)
+                        call asym_os%get_ori(j, oj)
                         dists(j) = osym.euldist.oj
                     enddo
                     loc = minloc(dists)
@@ -530,6 +545,9 @@ contains
             enddo
             deallocate(dists)
         endif
+        call oasym%kill
+        call osym%kill
+        call oj%kill
     end subroutine nearest_sym_neighbors
 
     !>  \brief  is for randomizing over the symmetry operations of the point-group
@@ -544,13 +562,15 @@ contains
         n_os = os_asym_unit%get_noris()
         nsym = self%n
         do i = 1, n_os
-            oasym = os_asym_unit%get_ori(i)
+            call os_asym_unit%get_ori(i, oasym)
             symop = irnd_uni(nsym)
             if( symop > 1 )then
-                osym = self%apply(oasym, symop)
+                call self%apply(oasym, symop, osym)
                 call os_asym_unit%set_ori(i,osym)
             endif
         end do
+        call oasym%kill
+        call osym%kill
     end subroutine symrandomize
 
     !>  \brief  is for building a spiral INCLUDING mirror projections
@@ -626,7 +646,7 @@ contains
 
             subroutine gen_c1
                 integer   :: j, north_pole_ind
-                type(ori) :: o, north_pole
+                type(ori) :: o, o2, o_tmp, north_pole
                 real      :: min_dist, dist
                 if( allocated(avail) )deallocate(avail, stat=alloc_stat)
                 allocate(avail(n), source=.false., stat=alloc_stat)
@@ -637,14 +657,15 @@ contains
                 north_pole_ind = 0
                 min_dist = PI
                 do j=1,n
-                    o    = tmp%get_ori(j)
+                    call tmp%get_ori(j, o)
                     dist = north_pole.euldist.o
                     if(dist < 0.001 )then !in radians
                         ! the north pole shall always be present
                         avail(j) = .true.
                         north_pole_ind = j
                     else
-                        avail(j) = self%within_asymunit(tmp%get_ori(j), incl_mirr=.false.)
+                        call tmp%get_ori(j, o2)
+                        avail(j) = self%within_asymunit(o2, incl_mirr=.false.)
                         if(avail(j)) min_dist = min(dist,min_dist)
                     endif
                 end do
@@ -655,13 +676,16 @@ contains
                     if(north_pole_ind>0)then
                         min_dist = min(0.5,rad2deg(min_dist)/5.)
                         call o%set_euler([min_dist,min_dist,0.])
-                        o = o.compose.north_pole
+                        call o%compose(north_pole, o_tmp)
+                        o_tmp = o
                         call tmp%set_euler(north_pole_ind,o%get_euler())
                     endif
                 case DEFAULT
                     ! all is good
                 end select
                 call o%kill
+                call o2%kill
+                call o_tmp%kill
                 call north_pole%kill
             end subroutine gen_c1
 
@@ -1818,9 +1842,9 @@ contains
         n = 0
         call oj%new
         do i=1,os%get_noris()-1
-            o = os%get_ori(i)
+            call os%get_ori(i, o)
             do j=i+1,os%get_noris()
-                oj = os%get_ori(j)
+                call os%get_ori(j, oj)
                 if( rad2deg(o.euldist.oj) < 0.001 )then
                     n=n+1
                     write(logfhandle,*)i,j,o%get_euler(),oj%get_euler()
@@ -1838,7 +1862,7 @@ contains
         call north_pole%set_euler([0.,0.,0.])
         found = .false.
         do i=1,os%get_noris()
-            o = os%get_ori(i)
+            call os%get_ori(i, o)
             if( (o.euldist.north_pole) < 0.01 )then
                 found = .true.
                 exit

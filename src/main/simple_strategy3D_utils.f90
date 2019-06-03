@@ -174,7 +174,7 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         integer    :: ipeak, jpeak, states(s3D%o_peaks(s%iptcl)%get_noris())
         integer    :: best_state, loc(1), npeaks, cnt, i
-        type(ori)  :: osym
+        type(ori)  :: osym, o1, o2
         real       :: ang_spread, dist, inpl_dist, ws(s3D%o_peaks(s%iptcl)%get_noris()), ave, dev, var, ep
         real       :: dists(s3D%o_peaks(s%iptcl)%get_noris() * (s3D%o_peaks(s%iptcl)%get_noris() - 1) / 2)
         logical    :: multi_states
@@ -216,8 +216,9 @@ contains
                 cnt = cnt + 1
                 ! to minimize the angular distance over the symmetry operations
                 ! this routine takes care of the c1 case
-                call build_glob%pgrpsyms%sym_dists( s3D%o_peaks(s%iptcl)%get_ori(ipeak),&
-                    &s3D%o_peaks(s%iptcl)%get_ori(jpeak), osym, dist, inpl_dist)
+                call s3D%o_peaks(s%iptcl)%get_ori(ipeak, o1)
+                call s3D%o_peaks(s%iptcl)%get_ori(jpeak, o2)
+                call build_glob%pgrpsyms%sym_dists( o1, o2, osym, dist, inpl_dist)
                 dists(cnt) = dist
             enddo
         enddo
@@ -234,6 +235,9 @@ contains
         var = (var - ep * ep / real(cnt))/(real(cnt) - 1.) ! corrected two-pass formula
         ang_spread = 0.
         if( var > 0. ) ang_spread = sqrt(var)
+        call osym%kill
+        call o1%kill
+        call o2%kill
     end function estimate_ang_spread
 
     subroutine estimate_shift_increment( s, shwmean, shwstdev )

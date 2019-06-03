@@ -114,7 +114,7 @@ contains
                 do i=1,nsamp
                     call progress(i, nsamp)
                     ind         = sample(i) + params%fromp - 1
-                    orientation = build%spproj_field%get_ori(ind)
+                    call build%spproj_field%get_ori(ind, orientation)
                     ctfvars     = build%spproj%get_ctfparams(params%oritype, ind)
                     call read_img(ind)
                     call build%img%noise_norm_pad_fft(build%lmsk, build%img_pad)
@@ -138,6 +138,7 @@ contains
                     ! update the spproj on disk
                     call build%spproj%write_segment_inside(params%oritype)
                 endif
+                call orientation%kill
             end subroutine gen_random_model
 
     end subroutine exec_refine3D_init

@@ -92,7 +92,7 @@ type :: ori
     generic            :: operator(.geod.)   => geodesic_dist
     procedure, private :: euldist
     procedure, private :: inplrotdist
-    generic            :: operator(.compose.)     => compeuler
+    procedure          :: compose                 => compeuler
     generic            :: operator(.euldist.)     => euldist
     generic            :: operator(.inplrotdist.) => inplrotdist
     ! DESTRUCTORS
@@ -771,9 +771,9 @@ contains
     !! multiplication of two rotation matrices commute (n>2 not)
     !! the composed rotation matrix is constructed
     !! \param self1,self2 ori class type rotational matrices
-    function compeuler( self1, self2 ) result( self_out )
-        class(ori), intent(in) :: self1, self2
-        type(ori) :: self_out
+    subroutine compeuler( self1, self2, self_out )
+        class(ori), intent(in)    :: self1, self2
+        type(ori),  intent(inout) :: self_out
         real      :: euls(3), euls1(3), euls2(3), rmat(3,3), rmat1(3,3), rmat2(3,3)
         call self_out%new_ori
         euls1 = self1%get_euler()
@@ -785,7 +785,7 @@ contains
         ! convert to euler
         euls = m2euler(rmat)
         call self_out%set_euler(euls)
-    end function compeuler
+    end subroutine compeuler
 
     !>  combines 3d and 2d oris and flags for ptcl mirroring
     !! \param ori3d,ori2d,o_out ori class type rotational matrices
@@ -1240,13 +1240,16 @@ contains
         dist = rad2deg(e1.euldist.e2) ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
         if( dist < 20.00001 .and. dist > 19.99999 ) passed = .true.
         passed = .false.
-        e3 = e1%compeuler(e2)         ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
+        call e1%compeuler(e2, e3)         ! IFORT CANNOT DEAL WITH THE OPERATORS HERE
         euls = e3%get_euler()
         if( euls(1) < 20.0001 .and. euls(1) > 19.9999 .and.&
             euls(2) < 20.0001 .and. euls(2) > 19.9999 .and.&
             euls(3) < 20.0001 .and. euls(3) > 19.9999 ) passed = .true.
         if( .not. passed ) THROW_HARD('Euler composer corrupt!')
         write(logfhandle,'(a)') 'SIMPLE_ORI_UNIT_TEST COMPLETED SUCCESSFULLY ;-)'
+        call e1%kill
+        call e2%kill
+        call e3%kill
     end subroutine test_ori
 
 end module simple_ori

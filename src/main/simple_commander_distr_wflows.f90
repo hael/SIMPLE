@@ -153,7 +153,7 @@ contains
         type(sp_project)                        :: spproj, spproj_part
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
-        type(ori)                               :: o_mic
+        type(ori)                               :: o_mic, o_tmp
         type(oris)                              :: os_stk
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
@@ -201,7 +201,7 @@ contains
         ! sanity checks
         nmics  = 0
         do imic = 1, nmics_tot
-            o_mic = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
             if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
             if( state == 0 ) cycle
@@ -246,7 +246,7 @@ contains
             call spproj_part%read_segment('mic',parts_fname(ipart))
             do imic = 1,spproj_part%os_mic%get_noris()
                 cnt = cnt + 1
-                o_mic = spproj_part%os_mic%get_ori(imic)
+                call spproj_part%os_mic%get_ori(imic, o_mic)
                 call spproj%os_mic%set_ori(cnt,o_mic)
                 if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
             enddo
@@ -262,7 +262,8 @@ contains
                 call spproj_part%read_segment('stk',parts_fname(ipart))
                 do istk = 1,spproj_part%os_stk%get_noris()
                     cnt = cnt + 1
-                    call os_stk%set_ori(cnt,spproj_part%os_stk%get_ori(istk))
+                    call spproj_part%os_stk%get_ori(istk, o_tmp)
+                    call os_stk%set_ori(cnt,o_tmp)
                     stktab(cnt) = os_stk%get_static(cnt,'stk')
                 enddo
                 call spproj_part%kill
@@ -285,6 +286,8 @@ contains
         ! final write
         call spproj%write
         ! clean
+        call o_mic%kill
+        call o_tmp%kill
         call qsys_cleanup
         ! end gracefully
         call simple_end('**** SIMPLE_EXTRACT_DISTR NORMAL STOP ****')
@@ -318,7 +321,7 @@ contains
         type(sp_project),           allocatable :: spproj_parts(:)
         type(qsys_env)                          :: qenv
         type(chash)                             :: job_descr
-        type(ori)                               :: o_mic, o
+        type(ori)                               :: o_mic, o, o_tmp
         type(oris)                              :: os_stk
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind
@@ -339,7 +342,7 @@ contains
         ! sanity checks
         nmics  = 0
         do imic = 1, nmics_tot
-            o_mic = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
             if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
             if( state == 0 ) cycle
@@ -387,7 +390,8 @@ contains
             do ipart = 1,params%nparts
                 do imic = 1,spproj_parts(ipart)%os_mic%get_noris()
                     cnt = cnt + 1
-                    call spproj%os_mic%set_ori(cnt,spproj_parts(ipart)%os_mic%get_ori(imic))
+                    call spproj_parts(ipart)%os_mic%get_ori(imic,o_tmp)
+                    call spproj%os_mic%set_ori(cnt,o_tmp)
                 enddo
                 call spproj_parts(ipart)%kill
                 call spproj_parts(ipart)%read_segment('stk',parts_fname(ipart))
@@ -401,7 +405,8 @@ contains
             do ipart = 1,params%nparts
                 do istk = 1,spproj_parts(ipart)%os_stk%get_noris()
                     cnt = cnt + 1
-                    call os_stk%set_ori(cnt,spproj_parts(ipart)%os_stk%get_ori(istk))
+                    call spproj_parts(ipart)%os_stk%get_ori(istk, o_tmp)
+                    call os_stk%set_ori(cnt,o_tmp)
                     stktab(cnt) = os_stk%get_static(cnt,'stk')
                 enddo
                 call spproj_parts(ipart)%kill
@@ -418,7 +423,7 @@ contains
                     call spproj_parts(ipart)%get_boxcoords(i, boxcoords)
                     call spproj%set_boxcoords(cnt, boxcoords)
                     ! search history & parameters
-                    o = spproj_parts(ipart)%os_ptcl2D%get_ori(i)
+                    call spproj_parts(ipart)%os_ptcl2D%get_ori(i, o)
                     call spproj%os_ptcl2D%transfer_2Dparams(cnt, o)
                 enddo
                 call spproj_parts(ipart)%kill
@@ -429,7 +434,7 @@ contains
                 call spproj_parts(ipart)%read_segment('ptcl3D',parts_fname(ipart))
                 do i = 1,spproj_parts(ipart)%os_ptcl3D%get_noris()
                     cnt = cnt + 1
-                    o   = spproj_parts(ipart)%os_ptcl3D%get_ori(i)
+                    call spproj_parts(ipart)%os_ptcl3D%get_ori(i, o)
                     call spproj%os_ptcl3D%transfer_3Dparams(cnt, o)
                 enddo
                 call spproj_parts(ipart)%kill
@@ -441,6 +446,9 @@ contains
         call spproj%write
         ! clean-up
         call qsys_cleanup
+        call o_mic%kill
+        call o%kill
+        call o_tmp%kill
         ! end gracefully
         call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
 

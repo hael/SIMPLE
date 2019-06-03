@@ -38,8 +38,10 @@ contains
 
     !>  \brief search driver
     subroutine srch_cluster3D( self, ithr )
+        use simple_ori, only: ori
         class(strategy3D_cluster), intent(inout) :: self
         integer,                   intent(in)    :: ithr
+        type(ori) :: o
         self%s%prev_state = build_glob%spproj_field%get_state(self%s%iptcl)
         if( self%s%prev_state > 0 )then
             ! prep
@@ -47,7 +49,8 @@ contains
             call prep_strategy3D_thread(self%s%ithr)
             self%s%prev_roind = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%s%iptcl))
             self%s%prev_corr  = build_glob%spproj_field%get(self%s%iptcl, 'corr') ! score for EO
-            self%s%prev_proj  = build_glob%eulspace%find_closest_proj(build_glob%spproj_field%get_ori(self%s%iptcl))
+            call build_glob%spproj_field%get_ori(self%s%iptcl, o)
+            self%s%prev_proj  = build_glob%eulspace%find_closest_proj(o)
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             self%s%prev_shvec = build_glob%spproj_field%get_2Dshift(self%s%iptcl)
             ! match filter
@@ -65,6 +68,7 @@ contains
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
+        call o%kill
         DebugPrint   '>>> STRATEGY3D_CLUSTER :: FINISHED SRCH_CLUSTER3D'
     end subroutine srch_cluster3D
 

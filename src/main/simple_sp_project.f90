@@ -279,6 +279,7 @@ contains
         class(sp_project), target, intent(inout) :: self, proj
         character(len=*),          intent(in)    :: oritype
         class(oris),          pointer :: os_ptr, os_append_ptr
+        type(ori)                     :: o
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
@@ -317,7 +318,8 @@ contains
                     cnt = n
                     do i=1,n2append
                         cnt = cnt + 1
-                        call os_ptr%set_ori(cnt, os_append_ptr%get_ori(i))
+                        call os_append_ptr%get_ori(i, o)
+                        call os_ptr%set_ori(cnt, o)
                     enddo
                 endif
             case('stk')
@@ -327,6 +329,7 @@ contains
                 call self%add_stk(stk, ctfvar)
         end select
         nullify(os_ptr, os_append_ptr)
+        call o%kill
     end subroutine append_project
 
     subroutine append_job_descr2jobproc( self, exec_dir, job_descr, did_update )
@@ -370,6 +373,7 @@ contains
             ind = 1
         endif
         call self%jobproc%set_ori(ind,o)
+        call o%kill
     end subroutine append_job_descr2jobproc
 
     ! index management
@@ -838,6 +842,7 @@ contains
             call self%os_ptcl2D%set_ori(n_os_ptcl2D+i, o)
             call self%os_ptcl3D%set_ori(n_os_ptcl3D+i, o)
         enddo
+        call o%kill
     end subroutine add_stk
 
     subroutine add_single_stk( self, stk, ctfvars, os )
@@ -937,7 +942,7 @@ contains
             ! full path and existence check
             call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
             stkfnames(istk) = trim(stk_relpath)
-            o_stk = os%get_ori(istk)
+            call os%get_ori(istk, o_stk)
             ! logical dimension management
             call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
             ldim(3) = 1
@@ -991,7 +996,7 @@ contains
         endif
         ! parameters transfer
         do istk=1,nstks
-            o_stk   = os%get_ori(istk)
+            call os%get_ori(istk, o_stk)
             top     = fromp + nptcls_arr(istk) - 1 ! global index
             stk_ind = n_os_stk + istk
             ! updates stk segment
@@ -1021,6 +1026,8 @@ contains
             ! update
             fromp = top + 1 ! global index
         enddo
+        call o_ptcl%kill
+        call o_stk%kill
     end subroutine add_stktab
 
     !>  Only commits to disk when a change to the project is made
@@ -1048,7 +1055,7 @@ contains
             return
         endif
         ! get original simple_parameters
-        orig_stk = self%os_stk%get_ori(1)
+        call self%os_stk%get_ori(1, orig_stk)
         ! copy prep
         nptcls  = self%get_nptcls()
         parts   = split_nobjs_even( nptcls, nparts )
@@ -1111,6 +1118,7 @@ contains
         enddo
         call self%write
         call simple_rmdir(tmp_dir,errmsg="sp_project::split_stk")
+        call orig_stk%kill
     end subroutine split_stk
 
     function get_stkname( self, imic ) result( stkname )
@@ -1927,7 +1935,7 @@ contains
     subroutine get_sp_oris( self, which_imgkind, os )
         class(sp_project), intent(inout) :: self
         character(len=*),  intent(in)    :: which_imgkind
-        class(oris),       intent(out) :: os
+        class(oris),       intent(inout) :: os
         select case(trim(which_imgkind))
             case('mic')
                 os = self%os_mic
@@ -2191,7 +2199,7 @@ contains
             call self%os_ptcl2D%get_pinds(icls, 'class', particles)
             if( allocated(particles) )then
                 ! get 3d ori info
-                o      = self%os_cls3D%get_ori(icls)
+                call self%os_cls3D%get_ori(icls, o)
                 rproj  = o%get('proj')
                 rstate = o%get('state')
                 corr   = o%get('corr')
@@ -2199,9 +2207,9 @@ contains
                     ! get particle index
                     pind  = particles(iptcl)
                     ! get 2d ori
-                    ori2d = self%os_ptcl2D%get_ori(pind)
+                    call self%os_ptcl2D%get_ori(pind, ori2d)
                     ! transfer original parameters in self%os_ptcl2D
-                    ori_comp = self%os_ptcl2D%get_ori(pind)
+                    call self%os_ptcl2D%get_ori(pind, ori_comp)
                     ! compose ori3d and ori2d
                     call o%compose3d2d(ori2d, ori_comp)
                     ! update state in self%os_ptcl2D
@@ -2221,6 +2229,9 @@ contains
             if( .not. self%os_ptcl2D%isthere(iptcl, 'state') ) call self%os_ptcl2D%set(iptcl, 'state', 0.)
             if( .not. self%os_ptcl3D%isthere(iptcl, 'state') ) call self%os_ptcl3D%set(iptcl, 'state', 0.)
         end do
+        call ori2d%kill
+        call ori_comp%kill
+        call o%kill
     end subroutine map2ptcls
 
     ! this map2ptcls routine assumes that any selection of class averages is done
@@ -2301,6 +2312,7 @@ contains
         type(image)          :: img, img_clip
         type(cmdline)        :: cline_tmp
         type(sp_project)     :: self_out
+        type(ori)            :: o
         logical, allocatable :: stks_mask(:), ptcls_mask(:)
         integer, allocatable :: stkinds(:), stk2mic_inds(:)
         real    :: smpd
@@ -2386,13 +2398,16 @@ contains
                         call img%write(newstkname, ptcl_cnt)
                     endif
                     ! update orientations
-                    call self_out%os_ptcl2D%set_ori(top_glob, self_in%os_ptcl2D%get_ori(iptcl))
-                    call self_out%os_ptcl3D%set_ori(top_glob, self_in%os_ptcl3D%get_ori(iptcl))
+                    call self_in%os_ptcl2D%get_ori(iptcl, o)
+                    call self_out%os_ptcl2D%set_ori(top_glob, o)
+                    call self_in%os_ptcl3D%get_ori(iptcl, o)
+                    call self_out%os_ptcl3D%set_ori(top_glob, o)
                     call self_out%os_ptcl2D%set(top_glob, 'stkind', real(stk_cnt))
                     call self_out%os_ptcl3D%set(top_glob, 'stkind', real(stk_cnt))
                 enddo
                 ! update stack
-                call self_out%os_stk%set_ori(stk_cnt, self_in%os_stk%get_ori(istk))
+                call self_in%os_stk%get_ori(istk, o)
+                call self_out%os_stk%set_ori(stk_cnt, o)
                 call make_relativepath(CWD_GLOB, newstkname, relstkname)
                 call self_out%os_stk%set(stk_cnt,'stk',   relstkname)
                 call self_out%os_stk%set(stk_cnt,'fromp', real(fromp_glob))
@@ -2402,7 +2417,8 @@ contains
                 ! update micrograph
                 if( nmics_tot > 0 )then
                     imic = stk2mic_inds(istk)
-                    call self_out%os_mic%set_ori(stk_cnt, self_in%os_mic%get_ori(imic))
+                    call self_in%os_mic%get_ori(imic, o)
+                    call self_out%os_mic%set_ori(stk_cnt, o)
                 endif
             enddo
             ! update other fields & write
@@ -2431,6 +2447,7 @@ contains
             ! cleanup
             call img%kill
             call img_clip%kill
+            call o%kill
         endif
     end subroutine prune_project
 
@@ -2489,8 +2506,8 @@ contains
             if( nstks == 0 ) return
             do istk = 1,nstks
                 err   = .false.
-                o_src = self_src%os_stk%get_ori(istk)
-                o     = self%os_stk%get_ori(istk)
+                call self_src%os_stk%get_ori(istk, o_src)
+                call self%os_stk%get_ori(istk, o)
                 if( nint(o%get('box')) /= nint(o_src%get('box')) )then
                     THROW_HARD('Inconsistent box size')
                 endif
@@ -2535,8 +2552,8 @@ contains
             nmics = self_src%os_mic%get_noris()
             if( nmics == 0 ) return
             do imic = 1,nmics
-                o     = self%os_mic%get_ori(imic)
-                o_src = self_src%os_mic%get_ori(imic)
+                call self%os_mic%get_ori(imic, o)
+                call self_src%os_mic%get_ori(imic, o_src)
                 if(  nint(o%get('xdim')) /= nint(o_src%get('xdim')) .or.&
                     &nint(o%get('ydim')) /= nint(o_src%get('ydim')))then
                     THROW_HARD('Inconsistent dimensions')
@@ -2568,10 +2585,11 @@ contains
                 endif
                 call self%os_mic%set_ori(imic,o_src)
             enddo
-            call o%kill
         case DEFAULT
             THROW_HARD('Invalid ORITYPE!')
         end select
+        call o%kill
+        call o_src%kill
     end subroutine replace_project
 
     ! report state selection to os_stk & os_ptcl2D/3D

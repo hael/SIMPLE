@@ -153,7 +153,7 @@ contains
         ! loop over exposures (movies)
         do imovie = fromto(1),fromto(2)
             ! fetch movie orientation
-            o_mov = spproj%os_mic%get_ori(imovie)
+            call spproj%os_mic%get_ori(imovie, o_mov)
             ! sanity check
             if(.not.o_mov%isthere('imgkind') )cycle
             if(.not.o_mov%isthere('movie') .and. .not.o_mov%isthere('intg'))cycle
@@ -215,6 +215,7 @@ contains
         else
             call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
         endif
+        call o_mov%kill
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_preprocess' )
         call simple_end('**** SIMPLE_PREPROCESS NORMAL STOP ****')
@@ -288,7 +289,7 @@ contains
         frame_counter = 0
         cnt = 0
         do imovie=fromto(1),fromto(2)
-            o = spproj%os_mic%get_ori(imovie)
+            call spproj%os_mic%get_ori(imovie, o)
             if( o%isthere('imgkind').and.o%isthere('movie') )then
                 cnt = cnt + 1
                 call o%getter('imgkind', imgkind)
@@ -306,6 +307,7 @@ contains
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call o%kill
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_motion_correct' )
         call simple_end('**** SIMPLE_MOTION_CORRECT NORMAL STOP ****')
@@ -348,7 +350,7 @@ contains
         ! align
         cnt = 0
         do iintg=fromto(1),fromto(2)
-            o = spproj%os_mic%get_ori(iintg)
+            call spproj%os_mic%get_ori(iintg, o)
             if( o%isthere('imgkind').and.o%isthere('intg') )then
                 cnt = cnt + 1
                 call o%getter('imgkind', imgkind)
@@ -361,6 +363,7 @@ contains
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call o%kill
         ! end gracefully
         call qsys_job_finished('simple_commander_preprocess :: exec_gen_pspecs_and_thumbs')
         call simple_end('**** SIMPLE_GEN_PSPECS_AND_THUMBS NORMAL STOP ****')
@@ -405,7 +408,7 @@ contains
         cnt = 0
         do imic = fromto(1),fromto(2)
             cnt   = cnt + 1
-            o     = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o)
             state = 1
             if( o%isthere('state') ) state = nint(o%get('state'))
             if( state == 0 ) cycle
@@ -428,6 +431,7 @@ contains
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call o%kill
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_ctf_estimate' )
         call simple_end('**** SIMPLE_CTF_ESTIMATE NORMAL STOP ****')
@@ -517,7 +521,7 @@ contains
         cnt = 0
         do imic=fromto(1),fromto(2)
             cnt   = cnt + 1
-            o     = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o)
             state = 1
             if( o%isthere('state') ) state = nint(o%get('state'))
             if( state == 0 ) cycle
@@ -532,6 +536,7 @@ contains
         end do
         ! output
         call binwrite_oritab(params%outfile, spproj, spproj%os_mic, fromto, isegment=MIC_SEG)
+        call o%kill
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick' )
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
@@ -596,7 +601,7 @@ contains
         type(sp_project)                        :: spproj_in, spproj
         type(nrtxtfile)                         :: boxfile
         type(image)                             :: micrograph
-        type(ori)                               :: o_mic
+        type(ori)                               :: o_mic, o_tmp
         type(ctf)                               :: tfun
         type(ctfparams)                         :: ctfparms
         character(len=:),           allocatable :: output_dir, mic_name, imgkind
@@ -636,7 +641,8 @@ contains
             cnt = 0
             do imic = fromto(1),fromto(2)
                 cnt = cnt + 1
-                call spproj%os_mic%set_ori(cnt, spproj_in%os_mic%get_ori(imic))
+                call spproj_in%os_mic%get_ori(imic, o_tmp)
+                call spproj%os_mic%set_ori(cnt, o_tmp)
             enddo
             call spproj_in%kill
         endif
@@ -652,7 +658,7 @@ contains
         nmics  = 0
         nptcls = 0
         do imic = 1,nmics_here
-            o_mic = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o_mic)
             state = 1
             if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
             if( state == 0 ) cycle
@@ -714,7 +720,7 @@ contains
             do imic = 1,nmics_here
                 if( .not.mics_mask(imic) )cycle
                 ! fetch micrograph
-                o_mic = build%spproj_field%get_ori(imic)
+                call build%spproj_field%get_ori(imic, o_mic)
                 call o_mic%getter('imgkind', imgkind)
                 call o_mic%getter('intg', mic_name)
                 boxfile_name = trim(o_mic%get_static('boxfile'))
@@ -825,6 +831,8 @@ contains
             call build%spproj%write
         endif
         ! end gracefully
+        call o_mic%kill
+        call o_tmp%kill
         call qsys_job_finished('simple_commander_preprocess :: exec_extract')
         call simple_end('**** SIMPLE_EXTRACT NORMAL STOP ****')
 
@@ -856,7 +864,7 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_in
         type(image)                   :: micrograph, img, mskimg
-        type(ori)                     :: o_mic, o_stk
+        type(ori)                     :: o_mic, o_stk, o_tmp
         type(ctf)                     :: tfun
         type(ctfparams)               :: ctfparms
         character(len=:), allocatable :: mic_name, imgkind
@@ -889,7 +897,7 @@ contains
         stk_ind = 0
         do imic = 1,nmics_tot
             if( imic > params%top ) exit
-            o_mic = spproj_in%os_mic%get_ori(imic)
+            call spproj_in%os_mic%get_ori(imic, o_mic)
             if( o_mic%isthere('state') )then
                 if( o_mic%get_state() == 0 )cycle
             endif
@@ -919,14 +927,14 @@ contains
             do imic = 1,nmics_tot
                 if( .not.mic_mask(imic) )cycle
                 ! sanity checks
-                o_mic = spproj_in%os_mic%get_ori(imic)
+                call spproj_in%os_mic%get_ori(imic, o_mic)
                 call o_mic%getter('intg', mic_name)
                 if( .not.file_exists(mic_name) )cycle
                 call find_ldim_nptcls(mic_name, ldim_foo, nframes )
                 if( nframes > 1 ) THROW_HARD('multi-frame extraction not supported; exec_reextract')
                 if( any(ldim == 0) ) ldim = ldim_foo
                 stk_ind = mic2stk_inds(imic)
-                o_stk   = spproj_in%os_stk%get_ori(stk_ind)
+                call spproj_in%os_stk%get_ori(stk_ind, o_stk)
                 fromp   = nint(o_stk%get('fromp'))
                 top     = nint(o_stk%get('top'))
                 do iptcl=fromp,top
@@ -950,8 +958,8 @@ contains
             do imic = params%fromp,params%top
                 if( .not.mic_mask(imic) ) cycle
                 stk_ind = mic2stk_inds(imic)
-                o_mic   = spproj_in%os_mic%get_ori(imic)
-                o_stk   = spproj_in%os_stk%get_ori(stk_ind)
+                call spproj_in%os_mic%get_ori(imic, o_mic)
+                call spproj_in%os_stk%get_ori(stk_ind, o_stk)
                 call o_mic%getter('intg', mic_name)
                 ctfparms = o_mic%get_ctfvars()
                 fromp    = nint(o_stk%get('fromp'))
@@ -1060,9 +1068,11 @@ contains
         do imic = params%fromp,params%top
             if( .not.mic_mask(imic) )cycle
             cnt = cnt+1
-            call spproj%os_mic%set_ori(cnt, spproj_in%os_mic%get_ori(imic))
+            call spproj_in%os_mic%get_ori(imic, o_tmp)
+            call spproj%os_mic%set_ori(cnt, o_tmp)
             stk_ind = mic2stk_inds(imic)
-            call spproj%os_stk%set_ori(cnt, spproj_in%os_stk%get_ori(stk_ind))
+            call spproj_in%os_stk%get_ori(stk_ind, o_tmp)
+            call spproj%os_stk%set_ori(cnt, o_tmp)
         enddo
         ! transfer particles
         nptcls = count(ptcl_mask)
@@ -1072,8 +1082,10 @@ contains
         do iptcl = 1,size(ptcl_mask)
             if( .not.ptcl_mask(iptcl) )cycle
             cnt = cnt+1
-            call spproj%os_ptcl2D%set_ori(cnt, spproj_in%os_ptcl2D%get_ori(iptcl))
-            call spproj%os_ptcl3D%set_ori(cnt, spproj_in%os_ptcl3D%get_ori(iptcl))
+            call spproj_in%os_ptcl2D%get_ori(iptcl, o_tmp)
+            call spproj%os_ptcl2D%set_ori(cnt, o_tmp)
+            call spproj_in%os_ptcl3D%get_ori(iptcl, o_tmp)
+            call spproj%os_ptcl3D%set_ori(cnt, o_tmp)
         enddo
         call spproj_in%kill
         ! final write
@@ -1081,6 +1093,9 @@ contains
         write(logfhandle,'(A,I8)')'>>> RE-EXTRACTED  PARTICLES: ', nptcls
         ! end gracefully
         call qsys_job_finished('simple_commander_preprocess :: exec_reextract')
+        call o_mic%kill
+        call o_stk%kill
+        call o_tmp%kill
         call simple_end('**** SIMPLE_REEXTRACT NORMAL STOP ****')
 
         contains
@@ -1156,7 +1171,7 @@ contains
         ! loop over exposures (movies)
         do imic = fromto(1),fromto(2)
             ! fetch movie orientation
-            o_mic = spproj%os_mic%get_ori(imic)
+            call spproj%os_mic%get_ori(imic, o_mic)
             ! sanity check
             state = 1
             if( o_mic%isthere('state') ) state = nint(o_mic%get('state'))
@@ -1182,6 +1197,7 @@ contains
         endif
         ! end gracefully
         call qsys_job_finished(  'simple_commander_preprocess :: exec_pick_extract' )
+        call o_mic%kill
         call simple_end('**** SIMPLE_PICK_EXTRACT NORMAL STOP ****')
     end subroutine exec_pick_extract
 

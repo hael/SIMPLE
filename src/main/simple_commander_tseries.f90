@@ -421,11 +421,13 @@ contains
     end subroutine exec_tseries_ctf_estimate
 
     subroutine exec_tseries_split( self, cline )
+        use simple_ori, only: ori
         class(tseries_split_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         type(oris)       :: os
+        type(ori)        :: o_tmp
         character(len=:), allocatable :: stkname, oriname
         integer :: i, iptcl, numlen, istart, istop, cnt, cnt2, ntot
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
@@ -454,7 +456,8 @@ contains
             cnt2 = 0
             do iptcl=istart,istop
                 cnt2 = cnt2 + 1
-                call os%set_ori(cnt2, build%spproj_field%get_ori(iptcl) )
+                call build%spproj_field%get_ori(iptcl, o_tmp)
+                call os%set_ori(cnt2, o_tmp )
                 call build%img%read(params%stk, iptcl)
                 call build%img%write(stkname,cnt2)
             end do
@@ -462,6 +465,7 @@ contains
             call os%kill
             deallocate(stkname, oriname)
         end do
+        call o_tmp%kill
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
     end subroutine exec_tseries_split

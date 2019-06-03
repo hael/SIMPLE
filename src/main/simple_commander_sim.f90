@@ -119,7 +119,7 @@ contains
             build%img_pad = cmplx(0.,0.)
             build%img = 0.
             ! extract ori
-            orientation = build%spproj_field%get_ori(i)
+            call build%spproj_field%get_ori(i, orientation)
             ! project vol
             call vol_pad%fproject(orientation, build%img_pad)
             ! shift
@@ -146,6 +146,7 @@ contains
             endif
         end do
         call vol_pad%kill_expanded
+        call orientation%kill
         ! end gracefully
         call simple_end('**** SIMLE_SIMULATE_PARTICLES NORMAL STOP ****')
     end subroutine exec_simulate_particles

@@ -75,7 +75,7 @@ contains
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
-        o_prev     = build_glob%spproj_field%get_ori(iptcl)
+        call build_glob%spproj_field%get_ori(iptcl, o_prev)
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
@@ -85,6 +85,7 @@ contains
         specscore = pftcc%specscore(prev_ref, pftcc_pind, prev_roind)
         ! update spproj_field
         call build_glob%spproj_field%set(iptcl, 'specscore',  specscore)
+        call o_prev%kill
         DebugPrint  '>>> STRATEGY3D_SRCH :: set_ptcl_stats'
     end subroutine set_ptcl_stats
 
@@ -98,7 +99,7 @@ contains
         prev_state = build_glob%spproj_field%get_state(iptcl)      ! state index
         if( prev_state == 0 )return
         ! previous parameters
-        o_prev     = build_glob%spproj_field%get_ori(iptcl)
+        call build_glob%spproj_field%get_ori(iptcl, o_prev)
         prev_roind = pftcc%get_roind(360.-o_prev%e3get())          ! in-plane angle index
         prev_proj  = build_glob%eulspace%find_closest_proj(o_prev) ! previous projection direction
         prev_ref   = (prev_state-1)*params_glob%nspace + prev_proj ! previous reference
@@ -119,6 +120,7 @@ contains
         call build_glob%spproj_field%set(iptcl, 'specscore', specscore)
         call build_glob%spproj_field%set(iptcl, 'w',         1.)
         call build_glob%spproj_field%set(iptcl, 'ow',        1.)
+        call o_prev%kill
         DebugPrint  '>>> STRATEGY3D_SRCH :: eval_ptcl'
     end subroutine eval_ptcl
 
@@ -164,7 +166,7 @@ contains
         type(ori) :: o_prev
         real      :: corrs(self%nrots), corr
         ! previous parameters
-        o_prev          = build_glob%spproj_field%get_ori(self%iptcl)
+        call build_glob%spproj_field%get_ori(self%iptcl, o_prev)
         self%prev_state = o_prev%get_state()                                ! state index
         self%prev_roind = pftcc_glob%get_roind(360.-o_prev%e3get())         ! in-plane angle index
         self%prev_shvec = o_prev%get_2Dshift()                              ! shift vector
@@ -202,6 +204,7 @@ contains
             corr = max(0.,maxval(corrs))
         endif
         self%prev_corr = corr
+        call o_prev%kill
         DebugPrint  '>>> STRATEGY3D_SRCH :: PREPARED FOR SIMPLE_STRATEGY3D_SRCH'
     end subroutine prep4srch
 

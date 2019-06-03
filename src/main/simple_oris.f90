@@ -281,17 +281,17 @@ contains
         endif
     end function get_noris
 
-    function get_ori( self, i ) result( o )
+    subroutine get_ori( self, i, o )
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: i
-        type(ori) :: o
+        type(ori),   intent(inout) :: o
         if( self%n == 0 ) THROW_HARD('oris object does not exist; get_ori')
         if( i > self%n .or. i < 1 )then
             write(logfhandle,*) 'trying to get ori: ', i, ' among: ', self%n, ' oris'
             THROW_HARD('i out of range; get_ori')
         endif
         o = self%o(i)
-    end function get_ori
+    end subroutine get_ori
 
     pure function get( self, i, key ) result( val )
         class(oris),      intent(in) :: self
@@ -1749,17 +1749,20 @@ contains
         class(oris), intent(inout) :: self
         integer,     intent(in)    :: nsym
         type(oris)                 :: tmp
+        type(ori)                  :: o
         integer                    :: cnt, i, j
         tmp = oris(self%get_noris()*nsym)
         cnt = 0
         do i=1,self%get_noris()
             do j=1,nsym
                 cnt = cnt+1
-                call tmp%set_ori(cnt, self%get_ori(i))
+                call self%get_ori(i, o)
+                call tmp%set_ori(cnt, o)
             end do
         end do
         self = tmp
         call tmp%kill
+        call o%kill
     end subroutine symmetrize
 
     !>  \brief  for merging two oris objects into one
@@ -2088,9 +2091,10 @@ contains
         type(ori) :: o_tmp
         integer   :: i
         do i=1,self%n
-             o_tmp = e.compose.self%o(i)
+             call e%compose(self%o(i), o_tmp)
              call self%o(i)%set_euler(o_tmp%get_euler())
-        end do
+         end do
+         call o_tmp%kill
     end subroutine rot_1
 
     !>  \brief  is an Euler angle composer
@@ -2099,8 +2103,9 @@ contains
         integer,     intent(in)    :: i
         class(ori),  intent(in)    :: e
         type(ori)                  :: o_tmp
-        o_tmp = e.compose.self%o(i)
+        call e%compose(self%o(i), o_tmp)
         call self%o(i)%set_euler(o_tmp%get_euler())
+        call o_tmp%kill
     end subroutine rot_2
 
     !>  \brief  is an Euler angle composer
@@ -2112,9 +2117,11 @@ contains
         e_transp = e
         call e_transp%transp
         do i=1,self%n
-             o_tmp = e_transp.compose.self%o(i)
+             call e_transp%compose(self%o(i), o_tmp)
              call self%o(i)%set_euler(o_tmp%get_euler())
-        end do
+         end do
+         call o_tmp%kill
+         call e_transp%kill
     end subroutine rot_transp_1
 
     !>  \brief  is an Euler angle composer
@@ -2125,8 +2132,10 @@ contains
         type(ori) :: o_tmp, e_transp
         e_transp = e
         call e_transp%transp
-        o_tmp = e_transp.compose.self%o(i)
+        call e_transp%compose(self%o(i), o_tmp)
         call self%o(i)%set_euler(o_tmp%get_euler())
+        call o_tmp%kill
+        call e_transp%kill
     end subroutine rot_transp_2
 
     !>  \brief  for identifying the median value of parameter which
@@ -2501,6 +2510,7 @@ contains
         real,        intent(in)    :: frac
         integer,     intent(in)    :: ncls
         type(oris)           :: os
+        type(ori)            :: o
         integer, allocatable :: pinds(:)
         integer :: i, icls, pop
         if( frac < 0.99 )then
@@ -2510,7 +2520,8 @@ contains
                 pop = size(pinds)
                 call os%new(pop)
                 do i=1,pop
-                    call os%set_ori(i, self%get_ori(pinds(i)))
+                    call self%get_ori(pinds(i), o)
+                    call os%set_ori(i, o)
                 enddo
                 call os%calc_hard_weights(frac)
                 do i=1,pop
@@ -2521,6 +2532,8 @@ contains
         else
             call self%set_all2single('w', 1.)
         endif
+        call o%kill
+        call os%kill
     end subroutine calc_hard_weights2D
 
     !>  \brief  calculates soft weights based on specscore
@@ -2608,7 +2621,7 @@ contains
         allocate( nnmat(self%n,k), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_oris",alloc_stat)
         do i=1,self%n
-            o = self%get_ori(i)
+            call self%get_ori(i, o)
             do j=1,self%n
                 inds(j) = j
                 if( i == j )then
@@ -2622,6 +2635,7 @@ contains
                 nnmat(i,j) = inds(j)
             end do
         end do
+        call o%kill
     end subroutine nearest_proj_neighbors
 
     !>  \brief  to find angular resolution of an even orientation distribution (in degrees)

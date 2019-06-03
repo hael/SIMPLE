@@ -103,7 +103,7 @@ contains
         use simple_ori,  only: ori
         use simple_oris, only: oris
         class(strategy3D_greedy_multi), intent(inout) :: self
-        type(ori) :: osym
+        type(ori) :: osym, o, o2
         real      :: corrs(self%s%npeaks), ws(self%s%npeaks)
         real      :: wcorr, frac, ang_spread, dist_inpl, euldist
         real      :: shwmean, shwstdev
@@ -117,8 +117,9 @@ contains
         ang_spread = estimate_ang_spread(self%s)
         call estimate_shift_increment(self%s, shwmean, shwstdev)
         ! angular distances
-        call build_glob%pgrpsyms%sym_dists( build_glob%spproj_field%get_ori(self%s%iptcl),&
-            &s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1)), osym, euldist, dist_inpl )
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o)
+        call s3D%o_peaks(self%s%iptcl)%get_ori(best_loc(1), o2)
+        call build_glob%pgrpsyms%sym_dists( o, o2, osym, euldist, dist_inpl )
         ! generate convergence stats
         call set_state_overlap(self%s, best_loc)
         ! fraction of search space scanned
@@ -149,6 +150,9 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'shwmean',   shwmean)
         call build_glob%spproj_field%set(self%s%iptcl, 'shwstdev',  shwstdev)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    real(self%s%npeaks_eff))
+        call osym%kill
+        call o%kill
+        call o2%kill
         DebugPrint  '>>> STRATEGY3D_GREEDY_MULTI :: EXECUTED ORIS_ASSIGN_GREEDY_MULTI'
     end subroutine oris_assign_greedy_multi
 

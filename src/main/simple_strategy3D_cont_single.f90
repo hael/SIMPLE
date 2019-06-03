@@ -52,12 +52,12 @@ contains
             ! initialize
             call self%s%prep4srch
             call self%cont_srch%set_particle(self%s%iptcl)
-            self%o    = build_glob%spproj_field%get_ori(self%s%iptcl)
+            call build_glob%spproj_field%get_ori(self%s%iptcl, self%o)
             cxy       = self%cont_srch%minimize(self%o, NPEAKSATHRES/2.0, params_glob%trs, found_better)
             self%corr = cxy(1)
             if( .not. found_better )then
                 ! put back the original one
-                self%o = build_glob%spproj_field%get_ori(self%s%iptcl)
+                call build_glob%spproj_field%get_ori(self%s%iptcl, self%o)
             endif
             ! prepare weights and orientations
             call self%oris_assign
@@ -71,10 +71,11 @@ contains
     subroutine oris_assign_cont_single( self )
         use simple_ori,  only: ori
         class(strategy3D_cont_single), intent(inout) :: self
-        type(ori) :: osym
+        type(ori) :: osym, o_tmp
         real      :: dist_inpl, euldist, mi_proj, frac
         ! angular distances
-        call build_glob%pgrpsyms%sym_dists(build_glob%spproj_field%get_ori(self%s%iptcl), self%o, osym, euldist, dist_inpl)
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
+        call build_glob%pgrpsyms%sym_dists(o_tmp, self%o, osym, euldist, dist_inpl)
         ! generate convergence stats
         mi_proj  = 0.
         if( euldist < 0.5 ) mi_proj  = 1.
@@ -99,7 +100,9 @@ contains
         call build_glob%spproj_field%set(self%s%iptcl, 'spread',    0.)
         call build_glob%spproj_field%set(self%s%iptcl, 'npeaks',    1.)
         ! transfer data to o_peaks
-        call s3D%o_peaks(self%s%iptcl)%set_ori(1,build_glob%spproj_field%get_ori(self%s%iptcl))
+        call build_glob%spproj_field%get_ori(self%s%iptcl, o_tmp)
+        call s3D%o_peaks(self%s%iptcl)%set_ori(1, o_tmp)
+        call o_tmp%kill
     end subroutine oris_assign_cont_single
 
     subroutine kill_cont_single( self )

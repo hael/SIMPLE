@@ -139,7 +139,7 @@ contains
                 endif
             end do
             ! set local in-plane optimum for iproj
-            orientation = espace%get_ori(iproj_best)
+            call espace%get_ori(iproj_best, orientation)
             call orientation%e3set(inpl_angs(inpl_best))
             call orientation%set('corr', corr_best)
             call cand_oris%set_ori(iproj,orientation)
@@ -147,7 +147,7 @@ contains
         ! refine local optima
         ! order the local optima according to correlation
         order = cand_oris%order_corr()
-        orientation_best = cand_oris%get_ori(order(1))
+        call cand_oris%get_ori(order(1), orientation_best)
         call orientation_best%print_ori
         !$omp parallel do schedule(static) default(shared) private(iloc,ithr) proc_bind(close)
         do iloc=1,NBEST
@@ -161,14 +161,15 @@ contains
         ! order the local optima according to correlation
         order = cand_oris%order_corr()
         ! update global ori
-        e_glob = cand_oris%get_ori(order(1))
+        call cand_oris%get_ori(order(1), e_glob)
         ! return best
-        orientation_best = cand_oris%get_ori(order(1))
+        call cand_oris%get_ori(order(1), orientation_best)
         call orientation_best%print_ori
         ! destruct
         call espace%kill
         call cand_oris%kill
         call orientation%kill
+        call orientation_best%kill
     end function volpft_srch_minimize
 
     function volpft_srch_refine( orientation_start, angres ) result( orientation_best )

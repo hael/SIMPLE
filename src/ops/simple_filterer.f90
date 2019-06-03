@@ -75,9 +75,9 @@ contains
             plane_normals_L2 = 0.0
             filters2D        = 0.0
             do iori=1,noris
-                orientation = e_space%get_ori(iori)
+                call e_space%get_ori(iori, orientation)
                 do isym=1,nsym
-                    o_sym = se%apply(orientation, isym)
+                    call se%apply(orientation, isym, o_sym)
                     ! plane normals & L2 norms
                     plane_normals(isym,iori,:) = o_sym%get_normal()
                     plane_normals_L2(isym,iori) = sum(plane_normals(isym,iori,:) * plane_normals(isym,iori,:))
@@ -128,7 +128,8 @@ contains
             end do
         end do
         !$omp end parallel do
-
+        call orientation%kill
+        call o_sym%kill
         contains
 
             ! index of matching 2D filter

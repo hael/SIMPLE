@@ -550,7 +550,7 @@ contains
                 real      :: pw
                 state = nint(o%get(i, 'state'))
                 if( state == 0 ) return
-                orientation = o%get_ori(i)
+                call o%get_ori(i, orientation)
                 ! eo-flag
                 eo = nint(orientation%get('eo'))
                 ! particle-weight
@@ -564,6 +564,7 @@ contains
                     call self%grid_fplane(se, orientation, ctfvars, img_pad, eo, pw)
                     deallocate(stkname)
                 endif
+                call orientation%kill
             end subroutine rec_dens
 
     end subroutine eorec_distr

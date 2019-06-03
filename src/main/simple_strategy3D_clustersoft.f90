@@ -51,7 +51,7 @@ contains
             ! set thread index
             ! self%s%ithr = ithr
             ! prep
-            o = build_glob%spproj_field%get_ori(self%s%iptcl)
+            call build_glob%spproj_field%get_ori(self%s%iptcl, o)
             self%s%prev_proj  = build_glob%eulspace%find_closest_proj(o)
             self%s%prev_ref   = (self%s%prev_state-1)*self%s%nprojs + self%s%prev_proj
             self%s%prev_roind = pftcc_glob%get_roind(360.-o%e3get())
@@ -99,10 +99,10 @@ contains
             call build_glob%spproj_field%set(self%s%iptcl,'mi_state', mi_state)
             call build_glob%spproj_field%set(self%s%iptcl,'specscore', self%s%specscore)
             call s3D%o_peaks(self%s%iptcl)%set_all2single('state',real(s))
-            call o%kill
         else
             call build_glob%spproj_field%reject(self%s%iptcl)
         endif
+        call o%kill
         DebugPrint  '>>> STRATEGY3D_clustersoft :: FINISHED SEARCH'
         contains
 
@@ -117,7 +117,7 @@ contains
                     do ipeak = 1,npeaks
                         ow = s3D%o_peaks(self%s%iptcl)%get(ipeak,'ow')
                         if( ow < TINY )cycle
-                        o     = s3D%o_peaks(self%s%iptcl)%get_ori(ipeak)
+                        call s3D%o_peaks(self%s%iptcl)%get_ori(ipeak, o)
                         roind = pftcc_glob%get_roind(360.-o%e3get())
                         iproj = build_glob%eulspace%find_closest_proj(o)
                         shvec = s3D%o_peaks(self%s%iptcl)%get_2Dshift(ipeak) - self%s%prev_shvec

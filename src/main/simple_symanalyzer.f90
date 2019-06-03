@@ -45,7 +45,7 @@ contains
         ! extract the rotation matrices for the symops
         allocate(sym_rmats(nsym,3,3))
         do isym=1,nsym
-            o = symobj%get_symori(isym)
+            call symobj%get_symori(isym, o)
             sym_rmats(isym,:,:) = o%get_mat()
         end do
         ! init search object
@@ -234,9 +234,9 @@ contains
                     if( trim(pgrps(isym)%str) .eq. trim(pgrp_sub) ) cnt = cnt + peaks(isym)
                 enddo
             end do
-            call symobj%kill
             write(fnr,'(a)') int2str(cnt)//'/'//int2str(nsub)//' SUBGROUPS OF THE SUGGESTED POINT-GROUP ALSO DETECTED'
         endif
+        call symobj%kill
         call fclose(fnr)
     end subroutine symmetry_tester
 
@@ -340,7 +340,7 @@ contains
             nsym_local = symobj%get_nsym()
             allocate(sym_rmats(nsym_local,3,3))
             do isym=1,nsym_local
-                o = symobj%get_symori(isym)
+                call symobj%get_symori(isym, o)
                 sym_rmats(isym,:,:) = o%get_mat()
             end do
             ! rotate over symmetry related rotations and update vol_sym
@@ -352,6 +352,7 @@ contains
                 call vol_sym%add_workshare(rovol)
             end do
             call vol_sym%div(real(nsym_local))
+            call o%kill
         end subroutine symaverage
 
     end subroutine eval_point_groups

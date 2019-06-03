@@ -443,6 +443,7 @@ contains
         use simple_commander_distr_wflows, only: reconstruct3D_distr_commander
         use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
         use simple_oris,                   only: oris
+        use simple_ori,                    only: ori
         use simple_image,                  only: image
         use simple_commander_volops,       only: reproject_commander, symaxis_search_commander, postprocess_commander
         use simple_parameters,             only: params_glob
@@ -484,6 +485,7 @@ contains
         type(ctfparams)       :: ctfvars ! ctf=no by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
+        type(ori)             :: o_tmp
         type(sym)             :: se1,se2
         type(image)           :: img
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
@@ -851,7 +853,8 @@ contains
         if( do_eo )then
             call spproj%os_cls3D%new(ncavgs)
             do icls=1,ncavgs
-                call spproj%os_cls3D%set_ori(icls, work_proj2%os_ptcl3D%get_ori(icls))
+                call work_proj2%os_ptcl3D%get_ori(icls, o_tmp)
+                call spproj%os_cls3D%set_ori(icls, o_tmp)
             enddo
             call conv_eo(work_proj2%os_ptcl3D)
         else
@@ -891,6 +894,7 @@ contains
         call se2%kill
         call img%kill
         call spproj%kill
+        call o_tmp%kill
         if( allocated(WORK_PROJFILE) ) call del_file(WORK_PROJFILE)
         call del_file(ORIG_WORK_PROJFILE)
         call simple_rmdir(STKPARTSDIR)
@@ -921,7 +925,7 @@ contains
                 do icls=1,ncavgs
                     even_ind = icls
                     odd_ind  = ncavgs+icls
-                    o        = os%get_ori(icls)
+                    call os%get_ori(icls, o)
                     state    = os%get_state(icls)
                     call o%set('class', real(icls)) ! for mapping frcs in 3D
                     call o%set('state', real(state))
@@ -966,10 +970,10 @@ contains
                 avg_euldist = 0.
                 ncls = 0
                 do icls=1,os%get_noris()/2
-                    o_even = os%get_ori(icls)
+                    call os%get_ori(icls, o_even)
                     if( o_even%get_state() == 0 )cycle
                     ncls    = ncls + 1
-                    o_odd   = os%get_ori(ncavgs+icls)
+                    call os%get_ori(ncavgs+icls, o_odd)
                     euldist = rad2deg(o_odd.euldist.o_even)
                     if( se%get_nsym() > 1 )then
                         call o_odd%mirror2d
@@ -1304,6 +1308,7 @@ contains
     !> multi-particle refinement after cluster3D
     subroutine exec_cluster3D_refine( self, cline )
         use simple_oris,                   only: oris
+        use simple_ori,                    only: ori
         use simple_parameters,             only: params_glob
         use simple_commander_distr_wflows, only: refine3D_distr_commander
         class(cluster3D_refine_commander), intent(inout) :: self
@@ -1324,6 +1329,7 @@ contains
         type(ctfparams)          :: ctfparms
         type(sp_project)         :: spproj, spproj_master
         class(oris),     pointer :: pos => null()
+        type(ori)                :: o_tmp
         integer                  :: state, iptcl, nstates, single_state, ncls, istk, nstks
         logical                  :: l_singlestate, cavgs_import, fall_over
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
@@ -1504,7 +1510,8 @@ contains
             call spproj_master%ptr2oritype(params%oritype, pos)
             do iptcl=1,params%nptcls
                 if( master_states(iptcl)==state )then
-                    call pos%set_ori(iptcl, spproj%os_ptcl3D%get_ori(iptcl))
+                    call spproj%os_ptcl3D%get_ori(iptcl, o_tmp)
+                    call pos%set_ori(iptcl, o_tmp)
                     ! reset original states
                     call pos%set(iptcl,'state',real(state))
                 endif
@@ -1526,6 +1533,7 @@ contains
         enddo
         if(params%oritype.eq.'cls3D') call del_file(cls3D_projfile)
         deallocate(master_states, dirs, projfiles)
+        call o_tmp%kill
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER3D_REFINE NORMAL STOP ****')
 
@@ -1607,7 +1615,7 @@ contains
                 do icls=1,ncls
                     even_ind = icls
                     odd_ind  = ncls+icls
-                    o        = spproj%os_cls3D%get_ori(icls)
+                    call spproj%os_cls3D%get_ori(icls, o)
                     state    = spproj%os_cls3D%get_state(icls)
                     call o%set('class', real(icls)) ! for mapping frcs in 3D
                     call o%set('state', real(state))

@@ -76,7 +76,7 @@ contains
         ! generate sampling space
         do ispace=1,self%nspace
             ! get sampling space rotation matrix
-            e    = ico%get_symori(ispace)
+            call ico%get_symori(ispace, e)
             rmat = e%get_mat()
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
@@ -126,7 +126,7 @@ contains
         ! generate sampling space
         do ispace=1,self%nspace
             ! get sampling space rotation matrix
-            e    = ico%get_symori(ispace)
+            call ico%get_symori(ispace, e)
             rmat = e%get_mat()
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
