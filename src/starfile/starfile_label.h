@@ -418,6 +418,9 @@ enum EMDLabel
     EMDL_RESOLUTION_INVPIXEL,
     EMDL_SPECTRAL_IDX,
 
+    EMDL_CTF_MODEL_DEFOCUSU,  ///< Polynomial coeeficients of x-defocus
+    EMDL_CTF_MODEL_DEFOCUSV,
+
     EMDL_LAST_LABEL                       // **** NOTE ****: Do keep this label always at the end
     // it is here for looping purposes
 };//close enum Label
@@ -535,7 +538,6 @@ private:
         EMDL::addLabel(EMDL_CTF_TRANSVERSAL_DISPLACEMENT, EMDL_DOUBLE, "rlnTransversalDisplacement", "Transversal displacement (in Angstroms)");
         EMDL::addLabel(EMDL_CTF_Q0, EMDL_DOUBLE, "rlnAmplitudeContrast", "Amplitude contrast (as a fraction, i.e. 10% = 0.1)");
         EMDL::addLabel(EMDL_CTF_VALUE, EMDL_DOUBLE, "rlnCtfValue", "Value of the Contrast Transfer Function");
-
 
         EMDL::addLabel(EMDL_IMAGE_NAME, EMDL_STRING, "rlnImageName", "Name of an image");
         EMDL::addLabel(EMDL_IMAGE_ORI_NAME, EMDL_STRING, "rlnImageOriginalName", "Original name of an image");
@@ -852,6 +854,8 @@ private:
         EMDL::addLabel(EMDL_RESOLUTION_INVPIXEL, EMDL_DOUBLE, "rlnResolutionInversePixel", "Resolution (in 1/pixel, Nyquist = 0.5)");
         EMDL::addLabel(EMDL_SPECTRAL_IDX, EMDL_INT, "rlnSpectralIndex", "Spectral index (i.e. distance in pixels to the origin in Fourier space) ");
 
+        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSU, EMDL_DOUBLE, "rlnCtfModelDefocusU", "Polynomial coeeficients for Defocus in U-direction");
+        EMDL::addLabel(EMDL_CTF_MODEL_DEFOCUSV, EMDL_DOUBLE, "rlnCtfModelDefocusV", "Polynomial coeeficients for Defocus in V-direction");
 
     }
 

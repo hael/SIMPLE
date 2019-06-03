@@ -42,14 +42,16 @@
  *	e-mail address 'xmipp@cnb.csic.es'
  ***************************************************************************/
 
+#include <iostream>
+#include <algorithm>
+#include <iomanip>
+#include <fstream>
 #include "starfile_filename.h"
 #include "starfile_table.h"
 #include "starfile_error.h"
 #include "starfile_label.h"
 #include "starfile_strings.h"
 #include "starfile_generic.h"
-#include <algorithm>
-#include <iomanip>
 
 StarFileTable::StarFileTable()
     :	objects(0),

@@ -29,12 +29,11 @@ contains
         class(ori),               intent(inout) :: orientation
         character(len=*),         intent(in)    :: dir_out
         logical,                  intent(in)    :: l_gen_thumb
-        type(ctfparams)               :: ctfvars_glob
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname, starname
         real                          :: cc, ctfscore, cc90, scale
-        integer                       :: nframes, ldim(3), ldim_thumb(3), i,j, start(2), incr(2), center(2)
+        integer                       :: nframes, ldim(3), ldim_thumb(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
         call find_ldim_nptcls(trim(adjustl(moviename_forctf)), ldim, nframes)
@@ -91,7 +90,11 @@ contains
             epsname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
             epsname = swap_suffix(epsname, '_ctf', FORCTF_SUFFIX)
             epsname = trim(dir_out)//trim(adjustl(epsname))//'.eps'//C_NULL_CHAR
+            starname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
+            starname = swap_suffix(starname, '_ctf', FORCTF_SUFFIX)
+            starname = trim(dir_out)//trim(adjustl(starname))//'.star'//C_NULL_CHAR
             call ctffit%plot_parms(epsname)
+            call ctffit%write_star(starname)
         endif
         ! reporting
         call orientation%set('dfx',      ctfvars%dfx)

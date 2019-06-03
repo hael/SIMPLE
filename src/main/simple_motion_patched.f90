@@ -8,7 +8,7 @@ use simple_opt_factory,      only: opt_factory
 use simple_opt_spec,         only: opt_spec
 use simple_optimizer,        only: optimizer
 use simple_image,            only: image
-use simple_ft_expanded,      only: ft_expanded
+use simple_ft_expanded,      only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_align_iso, only: motion_align_iso
 use CPlot2D_wrapper_module
 implicit none
@@ -555,6 +555,7 @@ contains
         integer :: lims_patch(2,2)
         type(rmat_ptr_type) :: rmat_ptrs(self%nframes)
         real, pointer :: rmat_patch(:,:,:)
+        ! init
         do j = 1, NY_PATCHED
             do i = 1, NX_PATCHED
                 do iframe=1,self%nframes
@@ -562,6 +563,9 @@ contains
                 end do
             end do
         end do
+        ! initialize transfer matrix to correct dimensions
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
+        ! fill patches
         do iframe=1,self%nframes
             call stack(iframe)%get_rmat_ptr(rmat_ptrs(iframe)%rmat_ptr)
         end do
@@ -753,7 +757,7 @@ contains
         end do
         call self%allocate_fields()
         call self%set_size_frames_ref()
-        ! divide the reference into patches & updates hig-pass accordingly
+        ! divide the reference into patches & updates high-pass accordingly
         call self%set_patches(frames)
         ! determine shifts for patches
         call self%det_shifts()
@@ -775,6 +779,7 @@ contains
         if (allocated(self%lp)) deallocate(self%lp)
         self%has_frameweights = .false.
         self%existence = .false.
+        call ftexp_transfmat_kill
     end subroutine motion_patched_kill
 
     subroutine motion_patched_callback(self, align_iso, converged)

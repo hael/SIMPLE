@@ -3,7 +3,7 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,           only: ft_expanded
+use simple_ft_expanded,           only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_anisocor,       only: motion_anisocor, POLY_DIM
 use simple_motion_patched,        only: motion_patched, PATCH_PDIM
 use simple_motion_patched_direct, only: motion_patched_direct
@@ -337,6 +337,7 @@ contains
         if( present(nsig) ) nsig_here = nsig
         call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
         if( err ) return
+        call ftexp_transfmat_init(movie_frames_scaled(1))
         call align_iso%set_frames(movie_frames_scaled, nframes)
         call align_iso%set_hp_lp(hp,lp)
         updateres = 0
@@ -366,6 +367,7 @@ contains
         write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
+        ! cleanup
         call align_iso%kill
     end subroutine motion_correct_iso
 
@@ -433,6 +435,7 @@ contains
             deallocate(movie_frames_scaled)
         endif
         if ( allocated(opt_shifts)    )   deallocate(opt_shifts   )
+        call ftexp_transfmat_kill
     end subroutine motion_correct_iso_kill
 
     ! PUBLIC METHODS, ANISOTROPIC MOTION CORRECTION
@@ -483,6 +486,7 @@ contains
             call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
             call motion_aniso(iframe)%new
         end do
+        call ftexp_transfmat_init(movie_frames_shifted(1))
         ! generate first average
         call gen_aniso_wsum_calc_corrs(0)
         ! calc avg corr to weighted avg
@@ -635,6 +639,7 @@ contains
         if( allocated(opt_shifts_aniso)       ) deallocate(opt_shifts_aniso)
         if( allocated(opt_shifts_aniso_sp)    ) deallocate(opt_shifts_aniso_sp)
         if( allocated(opt_shifts_aniso_saved) ) deallocate(opt_shifts_aniso_saved)
+        call ftexp_transfmat_kill
     end subroutine motion_correct_aniso_kill
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -723,6 +728,7 @@ contains
             end do
             deallocate(movie_frames_shifted_patched, movie_sum_global_threads, movie_frames_shifted_saved)
         endif
+        call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
 
     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -742,6 +748,7 @@ contains
         if( allocated(acc_doses)          ) deallocate(acc_doses)
         if( allocated(cmat)               ) deallocate(cmat)
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
+        call ftexp_transfmat_kill
     end subroutine motion_correct_kill_common
 
     ! PRIVATE UTILITY METHODS, ISO FIRST THEN ANISO

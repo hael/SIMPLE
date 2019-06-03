@@ -43,6 +43,8 @@
  ***************************************************************************/
 
 #include <math.h>
+#include <stdlib.h>
+#include <iostream>
 #include "starfile_gcc_version.h"
 #if GCC_VERSION < 30300
 #include <strstream>

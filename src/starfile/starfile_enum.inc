@@ -362,5 +362,8 @@
         enumerator :: EMDL_RESOLUTION_INVPIXEL                         = 343
         enumerator :: EMDL_SPECTRAL_IDX                                = 344
 
-        enumerator :: EMDL_LAST_LABEL                                  = 345 ! **** NOTE ****: Do keep this label always at the end
+        enumerator :: EMDL_CTF_MODEL_DEFOCUSU                          = 345 !/<
+        enumerator :: EMDL_CTF_MODEL_DEFOCUSV                          = 346 !/<
+
+        enumerator :: EMDL_LAST_LABEL                                  = 347 ! **** NOTE ****: Do keep this label always at the end
     end enum

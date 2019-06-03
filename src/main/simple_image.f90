@@ -1826,7 +1826,7 @@ contains
             &self%cmat(phys(1),phys(2),phys(3)), logi(1)<0)
     end function get_fcomp
 
-    !>  \brief get_fcomp for getting a Fourier component from the compact representation
+    !>  \brief get_fcomp for getting a 2D only Fourier component from the compact representation
     elemental complex function get_fcomp2D(self, h, k)
         class(image), intent(in) :: self
         integer,      intent(in) :: h,k
@@ -1834,12 +1834,10 @@ contains
         if (h .ge. 0) then
             phys1 = h + 1
             phys2 = k + 1 + merge(self%ldim(2),0, k<0)
-            ! phys3 = l + 1 + merge(self%ldim(3),0, l<0)
             get_fcomp2D = self%cmat(phys1,phys2,1)
         else
             phys1 = -h + 1
             phys2 = -k + 1 + merge(self%ldim(2),0, -k<0)
-            ! phys3 = -l + 1 + merge(self%ldim(3),0, -l<0)
             get_fcomp2D = conjg(self%cmat(phys1,phys2,1))
         endif
     end function get_fcomp2D

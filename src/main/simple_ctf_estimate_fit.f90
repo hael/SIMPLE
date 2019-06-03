@@ -3,6 +3,7 @@ include 'simple_lib.f08'
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost
+use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 
 implicit none
@@ -12,7 +13,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
-integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 100
+integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 100, POLYDIM = 6
 
 type ctf_estimate_fit
     private
@@ -31,6 +32,7 @@ type ctf_estimate_fit
     type(ctf_estimate_cost)  :: ctf_cost                ! optimization object for whole micrograph
     integer, allocatable     :: inds_msk(:,:)           ! indices of pixels within resolution mask
     logical, allocatable     :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
+    real                     :: polyx(POLYDIM), polyy(POLYDIM)
     real                     :: cc_fit_patch(NPATCH,NPATCH) = -1.
     integer                  :: centers(NPATCH,NPATCH,2)
     real                     :: smpd         = 0.
@@ -44,6 +46,7 @@ type ctf_estimate_fit
     real                     :: ctfscore     = -1.
     integer                  :: box          = 0        ! box size
     integer                  :: nbox(2)      = 0        ! # boxes along x/y
+    integer                  :: npatch       = NPATCH*NPATCH
     integer                  :: flims(3,2)   = 0        ! fourier dimensions
     integer                  :: ldim_box(3)  = 0        ! box logical dimensions
     integer                  :: ldim_mic(3)  = 0        ! logical dimensions
@@ -59,7 +62,7 @@ contains
     procedure          :: get_cc90
     procedure          :: get_ctfscore
     procedure          :: get_pspec
-    ! doers
+    ! CTF fitting
     procedure          :: fit
     procedure, private :: mic2spec
     procedure, private :: grid_srch
@@ -68,10 +71,17 @@ contains
     procedure, private :: mic2spec_patch
     procedure, private :: gen_centers
     procedure, private :: norm_pspec
+    ! scoring, display & output
+    procedure          :: plot_parms
+    procedure          :: write_star
     procedure, private :: calc_ctfscore
     procedure, private :: write_diagnostic
     procedure, private :: ctf2pspecimg
-    procedure          :: plot_parms
+    ! polynomial fitting
+    procedure, private :: fit_polynomial
+    procedure, private :: pix2poly
+    procedure, private :: pix2polyvals
+
     ! destructor
     procedure          :: kill
 end type ctf_estimate_fit
@@ -244,7 +254,6 @@ contains
         ! init
         do pi=1,NPATCH
             do pj=1,NPATCH
-                ! transfer global solution
                 self%parms_patch(pi,pj)%kv      = self%parms%kv
                 self%parms_patch(pi,pj)%cs      = self%parms%cs
                 self%parms_patch(pi,pj)%fraca   = self%parms%fraca
@@ -258,22 +267,21 @@ contains
         enddo
         ! generate |power spectra|
         call self%mic2spec_patch
+        ! normalize, minimize, clean
         !$omp parallel do collapse(2) default(shared) private(pi,pj) &
         !$omp schedule(static) proc_bind(close)
         do pi=1,NPATCH
             do pj=1,NPATCH
-                ! normalize patch
                 call self%norm_pspec(self%pspec_patch(pi,pj))
-                ! optmizers
                 call self%ctf_cost_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol)
-                ! mininize
                 call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), self%cc_fit_patch(pi,pj))
-                ! clean
                 call self%ctf_cost_patch(pi,pj)%kill
             enddo
         enddo
         !$omp end parallel do
+        ! polynomial fit
+        call self%fit_polynomial
     end subroutine fit_patches
 
     !> mic2spec calculates the average powerspectrum over a micrograph
@@ -514,7 +522,7 @@ contains
 
     subroutine refine( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real :: limits(4,2),cost, half_range
+        real :: limits(4,2), half_range
         ! re-init limits for local search
         half_range       = max(self%astigtol, self%df_step)
         limits      = 0.
@@ -575,22 +583,88 @@ contains
         !$omp end parallel do
     end subroutine ctf2pspecimg
 
+    subroutine fit_polynomial( self )
+        class(ctf_estimate_fit), intent(inout) :: self
+        real :: x(2,self%npatch), yx(self%npatch), yy(self%npatch), sig(self%npatch)
+        real :: a(POLYDIM), v(POLYDIM,POLYDIM), w(POLYDIM)
+        real :: dfxavg, dfyavg, chi_sq
+        integer :: pi,pj, cnt
+        dfxavg = 0.
+        dfyavg = 0.
+        cnt    = 0
+        do pi=1,NPATCH
+            do pj = 1,NPATCH
+                cnt = cnt + 1
+                dfxavg = dfxavg + self%parms_patch(pi,pj)%dfx
+                dfyavg = dfyavg + self%parms_patch(pi,pj)%dfy
+                call self%pix2poly(real(self%centers(pi,pj,1)), real(self%centers(pi,pj,2)), x(1,cnt), x(2,cnt))
+                yx(cnt) = self%parms_patch(pi,pj)%dfx
+                yy(cnt) = self%parms_patch(pi,pj)%dfy
+            enddo
+        enddo
+        dfxavg = dfxavg / real(self%npatch)
+        dfyavg = dfyavg / real(self%npatch)
+        yx     = yx - dfxavg
+        yy     = yy - dfyavg
+        sig    = 1.
+        call svd_multifit(x,yx,sig,a,v,w,chi_sq,poly)
+        self%polyx(1)  = dfxavg+a(1)
+        self%polyx(2:) = a(2:)
+        call svd_multifit(x,yy,sig,a,v,w,chi_sq,poly)
+        self%polyy(1)  = dfyavg+a(1)
+        self%polyy(2:) = a(2:)
+    end subroutine fit_polynomial
+
+    function poly(p,n) result( res )
+        real,    intent(in)  :: p(:)
+        integer, intent(in)  :: n
+        real :: res(n), x,y
+        x = p(1)
+        y = p(2)
+        res = [1., x, x*x, y, y*y, x*y]
+    end function poly
+
+    subroutine pix2poly( self, xin, yin, xout, yout )
+        class(ctf_estimate_fit), intent(inout) :: self
+        real,                      intent(in)  :: xin,yin
+        real,                      intent(out) :: xout,yout
+        xout = (xin-1.) / (self%ldim_mic(1)-1.) - 0.5
+        yout = (yin-1.) / (self%ldim_mic(2)-1.) - 0.5
+    end subroutine pix2poly
+
+    subroutine pix2polyvals( self, xin, yin, dfx, dfy )
+        class(ctf_estimate_fit), intent(inout) :: self
+        real,                    intent(in)    :: xin,yin
+        real,                    intent(out)   :: dfx,dfy
+        real :: xp,yp
+        call self%pix2poly(real(xin),real(yin), xp,yp)
+        dfx = poly2val(self%polyx,xp,yp)
+        dfy = poly2val(self%polyy,xp,yp)
+        contains
+
+            real function poly2val(p,x,y)
+                real, intent(in) :: p(POLYDIM),x,y
+                poly2val = dot_product(p, [1., x, x*x, y, y*y, x*y])
+            end function poly2val
+
+    end subroutine pix2polyvals
+
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
         real, parameter       :: SCALE = 200.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: ddfx, ddfy, center
-        type(CDataPoint_type) :: p1, p2, c
-        real                  :: cx,cy,x,y,dfx,dfy,avgdfx,avgdfy,dfxmin,dfxmax,dfymin,dfymax
+        type(CDataSet_type)   :: calc, fit, center
+        type(CDataPoint_type) :: p1
+        real                  :: cx,cy,dfx,dfy,avgdfx,avgdfy,dfxmin,dfxmax,dfymin,dfymax
         integer               :: pi,pj
         avgdfx = 0.
         avgdfy = 0.
-        dfxmin = 666.
-        dfxmax = -666.
-        dfymin = 666.
-        dfymax = -666.
+        dfxmin = huge(dfxmin)
+        dfxmax = -huge(dfxmax)
+        dfymin = huge(dfymin)
+        dfymax = -huge(dfymax)
         do pi = 1, NPATCH
             do pj = 1, NPATCH
                 avgdfx = avgdfx + self%parms_patch(pi,pj)%dfx
@@ -601,8 +675,8 @@ contains
                 dfymax = max(dfymax, self%parms_patch(pi,pj)%dfy)
             enddo
         enddo
-        avgdfx = avgdfx / real(NPATCH*NPATCH)
-        avgdfy = avgdfy / real(NPATCH*NPATCH)
+        avgdfx = avgdfx / real(self%npatch)
+        avgdfy = avgdfy / real(self%npatch)
         call CPlot2D__new(plot2D, fname)
         call CPlot2D__SetDrawXAxisGridLines(plot2D, C_FALSE)
         call CPlot2D__SetDrawYAxisGridLines(plot2D, C_FALSE)
@@ -615,7 +689,6 @@ contains
                 ! center
                 cx = real(self%centers(pi,pj,1))
                 cy = real(self%centers(pi,pj,2))
-
                 call CDataSet__new(center)
                 call CDataSet__SetDrawMarker(center, C_TRUE)
                 call CDataSet__SetMarkerSize(center, real(5., c_double))
@@ -625,27 +698,82 @@ contains
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
                 call CDataSet__delete(center)
-
-                call CDataSet__new(center)
-                call CDataSet__SetDrawMarker(center, C_FALSE)
-                call CDataSet__SetDatasetColor(center, 0.0_c_double,0.0_c_double,0.0_c_double)
+                ! calculated
+                call CDataSet__new(calc)
+                call CDataSet__SetDrawMarker(calc, C_FALSE)
+                call CDataSet__SetDatasetColor(calc, 0.0_c_double,0.0_c_double,1.0_c_double)
                 call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(center, p1)
+                call CDataSet__AddDataPoint(calc, p1)
                 call CDataPoint__delete(p1)
                 dfx = SCALE * (self%parms_patch(pi,pj)%dfx-dfxmin)/(dfxmax-dfxmin)
                 dfy = SCALE * (self%parms_patch(pi,pj)%dfy-dfymin)/(dfymax-dfymin)
                 call CDataPoint__new2(real(cx+dfx, c_double), real(cy+dfy, c_double), p1)
-                call CDataSet__AddDataPoint(center, p1)
+                call CDataSet__AddDataPoint(calc, p1)
                 call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, center)
-                call CDataSet__delete(center)
+                call CPlot2D__AddDataSet(plot2D, calc)
+                call CDataSet__delete(calc)
+                ! fit
+                call CDataSet__new(fit)
+                call CDataSet__SetDrawMarker(fit, C_FALSE)
+                call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(fit, p1)
+                call CDataPoint__delete(p1)
+                call self%pix2polyvals(cx,cy,dfx,dfy)
+                dfx = SCALE * (dfx-dfxmin)/(dfxmax-dfxmin)
+                dfy = SCALE * (dfy-dfymin)/(dfymax-dfymin)
+                call CDataPoint__new2(real(cx+dfx, c_double), real(cy+dfy, c_double), p1)
+                call CDataSet__AddDataPoint(fit, p1)
+                call CDataPoint__delete(p1)
+                call CPlot2D__AddDataSet(plot2D, fit)
+                call CDataSet__delete(fit)
             end do
         end do
-        title%str = 'Delta DF: average(black), X(blue), Y(green); in microns x '//trim(int2str(nint(SCALE)))//C_NULL_CHAR
+        title%str = 'Too complicated, just look for trends'//trim(int2str(nint(SCALE)))//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, fname)
         call CPlot2D__delete(plot2D)
     end subroutine plot_parms
+
+    subroutine write_star( self, fname )
+        class(ctf_estimate_fit), intent(inout) :: self
+        character(len=*),        intent(in)    :: fname
+        type(starfile_table_type) :: mc_starfile
+        integer :: i
+        call starfile_table__new( mc_starfile )
+        call starfile_table__open_ofile(mc_starfile, fname)
+        call starfile_table__addObject(mc_starfile)
+        call starfile_table__setIsList(mc_starfile, .true.)
+        call starfile_table__setname(mc_starfile, "general")
+        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_X, self%ldim_mic(1))
+        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Y, self%ldim_mic(2))
+        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Z, self%ldim_mic(3))
+        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_NAME, simple_abspath(fname))
+        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(self%parms%smpd, dp))
+        ! whole micrograph model
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_CS,            real(self%parms%cs, dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE,       real(self%parms%kv, dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_Q0,            real(self%parms%fraca, dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUSU,      real(self%parms%dfx*10000., dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUSV,      real(self%parms%dfy*10000., dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(self%parms%angast,dp))
+        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_PHASESHIFT,    real(self%parms%phshift,dp))
+        call starfile_table__write_ofile(mc_starfile)
+        call starfile_table__clear(mc_starfile)
+        ! local model
+        call starfile_table__setIsList(mc_starfile, .false.)
+        call starfile_table__setName(mc_starfile, "local_ctf_model")
+        do i = 1, POLYDIM
+            call starfile_table__addObject(mc_starfile)
+            call starfile_table__setValue_double(mc_starfile, EMDL_CTF_MODEL_DEFOCUSU, real(self%polyx(i)*10000.,dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_CTF_MODEL_DEFOCUSV, real(self%polyy(i)*10000.,dp))
+        end do
+        call starfile_table__write_ofile(mc_starfile)
+        call starfile_table__clear(mc_starfile)
+        ! close & clean
+        call starfile_table__close_ofile(mc_starfile)
+        call starfile_table__delete(mc_starfile)
+    end subroutine write_star
 
     ! DESTRUCTOR
 

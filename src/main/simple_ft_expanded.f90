@@ -7,16 +7,18 @@ use simple_image,  only: image
 implicit none
 private
 public :: ft_expanded
+public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
 #include "simple_local_flags.inc"
 
 real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling of cost function
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 
+real, allocatable :: ftexp_transfmat(:,:,:)
+integer           :: ftexp_flims(3,2), ftexp_kzero
+
 type :: ft_expanded
     private
     complex, allocatable :: cmat(:,:,:)        !< Fourier components
-    real,    allocatable :: transfmat(:,:,:,:) !< shift transfer matrix (TODO: make this global to save memory)
-    real                 :: shconst(3)         !< shift constant
     real                 :: hp                 !< high-pass limit
     real                 :: lp                 !< low-pass limit
     real                 :: smpd  = 0.         !< sampling distance of originating image
@@ -25,6 +27,7 @@ type :: ft_expanded
     integer              :: flims(3,2)         !< shifted limits (2 make transfer 2 GPU painless)
     integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
     integer              :: flims_nyq(3,2)     !< nyquist limits
+    integer              :: kzero              !< to determine shift index to be applied to access the transfer matrix
     logical              :: existence=.false.  !< existence
   contains
     ! constructors
@@ -36,8 +39,8 @@ type :: ft_expanded
     procedure          :: get_flims_nyq
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
-    procedure          :: get_transfmat_ptr
     procedure          :: get_sumsq
+    procedure          :: get_kind_shift
     ! setters
     procedure          :: set_cmat
     procedure          :: zero
@@ -66,8 +69,8 @@ contains
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
         real    :: lp_nyq
-        integer :: h,k,l,i,hcnt,kcnt,lcnt
-        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(3)
+        integer :: h,k,l,i,hcnt,kcnt,lcnt,k_zero,knyq_zero
+        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(2),lims4transfmat(3)
         logical :: didft
         ! kill pre-existing object
         call self%kill
@@ -92,18 +95,12 @@ contains
         hplim = hplim*hplim
         lplim = img%get_find(lp)
         lplim = lplim*lplim
-        ! set shift constant (shconst)
-        do i=1,3
-            if( self%ldim(i) == 1 )then
-                self%shconst(i) = 0.
-                cycle
-            endif
-            if( is_even(self%ldim(i)) )then
-                self%shconst(i) = PI/real(self%ldim(i)/2.)
-            else
-                self%shconst(i) = PI/real((self%ldim(i)-1)/2.)
-            endif
-        end do
+        ! indexing to transfer matrix
+        kcnt = 0
+        do k=self%lims(2,1),self%lims(2,2)
+            kcnt = kcnt + 1
+            if( k==0 ) self%kzero = kcnt
+        enddo
         ! prepare image
         didft = .false.
         if( .not. img%is_ft() .and. fetch_comps )then
@@ -111,39 +108,29 @@ contains
             didft = .true.
         endif
         ! allocate instance variables
-        allocate(    self%cmat(  self%flims(1,1):self%flims(1,2),&
-                                 self%flims(2,1):self%flims(2,2),&
-                                 self%flims(3,1):self%flims(3,2)),&
-                  self%transfmat(self%flims(1,1):self%flims(1,2),&
-                                 self%flims(2,1):self%flims(2,2),&
-                                 self%flims(3,1):self%flims(3,2), 3), stat=alloc_stat)
+        allocate(self%cmat(self%flims(1,1):self%flims(1,2),&
+                           self%flims(2,1):self%flims(2,2),&
+                           self%flims(3,1):self%flims(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
-        self%cmat      = cmplx(0.,0.)
-        self%transfmat = 0.
-        hcnt = 0
-        do h=self%lims(1,1),self%lims(1,2)
-            hh   = h * h
-            hcnt = hcnt + 1
-            kcnt = 0
-            do k=self%lims(2,1),self%lims(2,2)
-                kk   = k * k
-                kcnt = kcnt + 1
-                lcnt = 0
-                do l=self%lims(3,1),self%lims(3,2)
-                    ll = l * l
-                    lcnt = lcnt+1
-                    sqarg = hh + kk + ll
+        if( fetch_comps )then
+            hcnt = 0
+            do h=self%lims(1,1),self%lims(1,2)
+                hh   = h * h
+                hcnt = hcnt + 1
+                kcnt = 0
+                do k=self%lims(2,1),self%lims(2,2)
+                    kk    = k * k
+                    kcnt  = kcnt + 1
+                    sqarg = hh + kk
                     if( sqarg < 0.5 )then
                         cycle ! excludes zero
                     elseif( sqarg <= lplim .and. sqarg >= hplim  )then
-                        phys = img%comp_addr_phys([h,k,l])
-                        self%transfmat(hcnt,kcnt,lcnt,:) = real([h,k,l])*self%shconst
-                        if( fetch_comps ) self%cmat(hcnt,kcnt,lcnt) = img%get_fcomp([h,k,l],phys)
+                        self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
                     end if
                 end do
             end do
-        end do
-        if( fetch_comps ) call self%calc_sumsq
+            call self%calc_sumsq
+        endif
         if( didft ) call img%ifft()
         ! allocate class variables
         self%existence = .true.
@@ -187,16 +174,15 @@ contains
         cmat_ptr => self%cmat
     end subroutine get_cmat_ptr
 
-    pure subroutine get_transfmat_ptr( self, transfmat_ptr )
-        class(ft_expanded), target,  intent(inout) :: self
-        real,               pointer, intent(out)   :: transfmat_ptr(:,:,:,:)
-        transfmat_ptr => self%transfmat
-    end subroutine get_transfmat_ptr
-
     pure real function get_sumsq( self )
         class(ft_expanded), intent(in) :: self
         get_sumsq = self%sumsq
     end function get_sumsq
+
+    pure integer function get_kind_shift( self )
+        class(ft_expanded), intent(in) :: self
+        get_kind_shift = ftexp_kzero - self%kzero
+    end function
 
     ! SETTERS
 
@@ -243,16 +229,14 @@ contains
         class(ft_expanded), intent(in)    :: self
         real,               intent(in)    :: shvec(3)
         class(ft_expanded), intent(inout) :: self_out
-        integer :: hind,kind,lind
-        real    :: shvec_here(3), arg
-        shvec_here    = shvec
-        shvec_here(3) = 0. ! only for 2D images, see constructor (new_1)
+        integer :: hind,kind,kind_shift
+        real    :: shvec_here(2), arg
+        shvec_here = shvec(1:2) ! only for 2D images, see constructor (new_1)
+        kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
             do kind=self%flims(2,1),self%flims(2,2)
-                do lind=self%flims(3,1),self%flims(3,2)
-                    arg = sum(shvec_here*self%transfmat(hind,kind,lind,:))
-                    self_out%cmat(hind,kind,lind) = self%cmat(hind,kind,lind) * cmplx(cos(arg),sin(arg))
-                end do
+                arg = sum(shvec_here*ftexp_transfmat(hind,kind+kind_shift,:))
+                self_out%cmat(hind,kind,1) = self%cmat(hind,kind,1) * cmplx(cos(arg),sin(arg))
             end do
         end do
         call self_out%calc_sumsq
@@ -303,9 +287,60 @@ contains
     subroutine kill( self )
         class(ft_expanded), intent(inout) :: self
         if( self%existence )then
-            deallocate(self%cmat, self%transfmat)
+            deallocate(self%cmat)
             self%existence = .false.
         endif
     end subroutine kill
+
+
+    ! TRANSFER MATRIX ROUTINES
+
+    subroutine ftexp_transfmat_init( img )
+        class(image), intent(in) :: img
+        real    :: lp_nyq, shconst(2)
+        integer :: h,k,i,hcnt,kcnt
+        integer :: ldim(3),flims(3,2)
+        call ftexp_transfmat_kill
+        ! dimensions
+        ldim = img%get_ldim()
+        if( ldim(3) > 1 ) THROW_HARD('ftexp_transfmat_init')
+        lp_nyq      = 2.*img%get_smpd()
+        flims       = img%loop_lims(1,lp_nyq)
+        ftexp_flims = flims
+        do i=1,3
+            ftexp_flims(i,2) = ftexp_flims(i,2) - ftexp_flims(i,1) + 1
+        end do
+        ftexp_flims(:,1) = 1
+        ! set shift constant
+        do i=1,2
+            if( ldim(i) == 1 )then
+                shconst(i) = 0.
+            else
+                if( is_even(ldim(i)) )then
+                    shconst(i) = PI/(real(ldim(i))/2.)
+                else
+                    shconst(i) = PI/(real(ldim(i)-1)/2.)
+                endif
+            endif
+        end do
+        allocate(ftexp_transfmat(ftexp_flims(1,1):ftexp_flims(1,2),&
+                                 ftexp_flims(2,1):ftexp_flims(2,2), 2), source=0., stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: ftexp_transfmat_init; simple_ft_expanded, 2",alloc_stat)
+        !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt) proc_bind(close) schedule(static)
+        do h=flims(1,1),flims(1,2)
+            do k=flims(2,1),flims(2,2)
+                hcnt = h-flims(1,1)+1
+                kcnt = k-flims(2,1)+1
+                if( k==0 ) ftexp_kzero = kcnt ! for transfer matrix indexing
+                ftexp_transfmat(hcnt,kcnt,:) = real([h,k])*shconst
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine ftexp_transfmat_init
+
+    subroutine ftexp_transfmat_kill
+        if( allocated(ftexp_transfmat) ) deallocate(ftexp_transfmat)
+        ftexp_flims = 0
+    end subroutine ftexp_transfmat_kill
 
 end module simple_ft_expanded

@@ -43,6 +43,7 @@
  ***************************************************************************/
 
 #include <algorithm>
+#include <iostream>
 #include <iomanip>
 
 #include "starfile_label.h"

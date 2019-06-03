@@ -17,6 +17,7 @@
  * source code. Additional authorship citations may be added, but existing
  * author citations must be preserved.
  ***************************************************************************/
+ #include <string>
 #include "starfile_container.h"
 
 StarFileContainer::StarFileContainer()
