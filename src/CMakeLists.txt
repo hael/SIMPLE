@@ -40,7 +40,6 @@ if (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
     )
 endif()
 
-file(GLOB STAR_src "${CMAKE_CURRENT_SOURCE_DIR}/star_export/*.f90" PARENT_SCOPE)
 file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp" PARENT_SCOPE)
 file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOPE)
 message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
@@ -69,10 +68,10 @@ list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
-list(APPEND SIMPLE_src  
+list(APPEND SIMPLE_src
   "${CMAKE_CURRENT_SOURCE_DIR}/main/CPlot2D.cpp")
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${STARFILE_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
 if ( USE_CUDA )
   list(APPEND SIMPLECORELIB ${CUDA_src})
 
@@ -87,7 +86,7 @@ endif()
 #  )
 
 add_custom_target(simple_modules
-  COMMAND  echo Creating simple_module \; ( echo module simple_modules\; for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STAR_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}\; do if \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;fi\;done\;echo contains\;echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90
+  COMMAND  echo Creating simple_module \; ( echo module simple_modules\; for file in ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${JPG_src} ${OPERATORS_src} ${MAIN_src}\; do if \\[ \"\$\$\{file\#\#*.\}\" = \"f90\" \\] &&  test ! \"\$\${file}\" != \"\$\${file%simple_modules*}\" \; then      echo use \$\$\(basename \$\$file .f90\)\;fi\;done\;echo contains\;echo end module ) >> ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90
   COMMAND if \\[ ! -f ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90 \\]\;then mv ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\;else cmp --silent ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90 || cp ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90 ${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90\; rm -f  ${CMAKE_BINARY_DIR}/lib/simple/simple_modules_tmp.f90\;fi
   BYPRODUCTS "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
