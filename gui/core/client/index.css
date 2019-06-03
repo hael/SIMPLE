@@ -287,12 +287,36 @@ font-weight: bold;
 font-size: 14px;
 }
 
+.bubble .topline .maxminicon{
+float:right;
+height:10px;
+width:10px;
+}
+
+.bubble .topline .maxminicon:hover{
+	transform: scale(1.2);
+	background-color: transparent;
+}
+
 .bubble .centerline{
 font-size: 12px;
 }
 
 .bubble .lowerline{
 font-size: 12px;
+}
+
+.bubble .lowerline .statusbar{
+width:100px;
+background-color:#d2d1d1;
+float:right;
+margin:3px;
+height:6px;
+}
+
+.bubble .lowerline .status{
+background-color:#606163;
+height:6px;
 }
 
 .bubble .buttonline{

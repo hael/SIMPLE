@@ -68,10 +68,10 @@ class Project {
 			div.id = element['folder'] + "/" + this.selectedname + ".simple"
 			div.appendChild(createBubble(element))
 			var branch = document.createElement('div')
+			if(localStorage.getItem('branch_' + element.id) != null){
+				branch.style.display = 'none'
+			}
 			branch.className = "branch"
-			//var stalk = document.createElement('div')
-			//stalk.className = "stalk"
-			//div.appendChild(stalk)
 			div.appendChild(branch)
 			viewwindow.appendChild(div)
 			element['included'] = true
@@ -94,12 +94,11 @@ class Project {
 					div.appendChild(stalk)//
 					div.appendChild(createBubble(element))
 					var branch = document.createElement('div')
+					if(localStorage.getItem('branch_' + element.id) != null){
+						branch.style.display = 'none'
+					}
 					branch.className = "branch"
-					//var stalk = document.createElement('div')
-					//stalk.className = "stalk"
-					//div.appendChild(stalk)
 					div.appendChild(branch)
-					//tree.getElementsByClassName('stalk')[0].appendChild(document.createElement('div'))
 					tree.getElementsByClassName('branch')[0].appendChild(div)
 					element['included'] = true
 				}
@@ -107,21 +106,81 @@ class Project {
 		}
 	}
 	
+	var trees = document.getElementsByClassName('tree')
+	for(var tree of trees){
+		var branch = tree.getElementsByClassName('branch')[0]
+		if(branch.getElementsByClassName('tree').length == 0){
+			tree.getElementsByClassName('maxminicon')[0].style.display = 'none'
+		}
+	}
+	
+	
 	function createBubble(element){
 		var bubble = document.createElement('div')
 		var topline = document.createElement('div')
+		var maxminicon = document.createElement('img')
+		
+		bubble.id = 'branch_' + element.id
+		
 		topline.className = "topline"
 		topline.innerHTML = element.id + " " + element.type
+		
+		maxminicon.className = 'maxminicon'
+		maxminicon.title = 'Minimise branch'
+		maxminicon.onclick = ((event) => {
+			var tree = event.target.parentElement.parentElement.parentElement
+			var branches = tree.getElementsByClassName('branch')
+			var bubble = event.target.parentElement.parentElement
+			if(event.target.src.includes('img/minus.png')){
+				branches[0].style.display = 'none'
+				localStorage.setItem('branch_' + element.id, true)
+				event.target.src = 'img/plus.png'
+				bubble.getElementsByClassName('lowerline')[0].style.visibility = 'hidden'
+				bubble.getElementsByClassName('buttonline')[0].style.visibility = 'hidden'
+			}else{
+				branches[0].style.display = 'flex'
+				localStorage.removeItem('branch_' + element.id)
+				event.target.src = 'img/minus.png'
+				bubble.getElementsByClassName('lowerline')[0].style.visibility = 'unset'
+				bubble.getElementsByClassName('buttonline')[0].style.visibility = 'unset'
+			}
+		})
+		topline.appendChild(maxminicon)
+		
 		var centerline = document.createElement('div')
 		centerline.className = "centerline"
 		centerline.innerHTML = element.name
 		centerline.title = element.description
+		
 		var lowerline = document.createElement('div')
 		lowerline.className = "lowerline"
 		lowerline.innerHTML = element.status
+		
+	/*	if(element.status == "running"){
+			var statusbar = document.createElement('div')
+			if(element.view == 'undefined'){
+				element.view = 0
+			}
+			statusbar.title = 'Estimated progress ' + element.view + '%'
+			statusbar.className = 'statusbar'
+			var status = document.createElement('div')
+			status.className = 'status'
+			status.style.width = element.view + 'px'
+			statusbar.appendChild(status)
+			lowerline.appendChild(statusbar)
+		}*/
+		
 		lowerline.title = "PID : " + element.pid
 		var buttonline = document.createElement('div')
 		buttonline.className = "buttonline"
+		
+		if(localStorage.getItem('branch_' + element.id) == null){
+			maxminicon.src = 'img/minus.png'		
+		}else{
+			maxminicon.src = 'img/plus.png'
+			lowerline.style.visibility = 'hidden'
+			buttonline.style.visibility = 'hidden'
+		}
 		
 		var viewimage = document.createElement('img')
 		viewimage.src = "img/view-out.png"
@@ -166,6 +225,12 @@ class Project {
 		bubble.appendChild(centerline)
 		bubble.appendChild(lowerline)
 		bubble.appendChild(buttonline)
+		
+		if(element.status == "Deleted"){
+			buttonline.style.visibility = 'hidden'
+			bubble.style.color = 'grey'
+		}
+		
 		bubble.className = "bubble"
 		return bubble
 	}

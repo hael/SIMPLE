@@ -167,6 +167,11 @@ padding:5px;
 	flex:1;
 }
 
+.simpleview #reprojections{
+height:100%;
+}
+
+
 .simpleview .viewpanel #thumbnails{
 	flex:none !important;
 	display:none;

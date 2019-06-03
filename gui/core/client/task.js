@@ -141,7 +141,7 @@ class TaskSetup {
       return response.json()
     }).then((json) => {
 		if(json.status == 'running'){
-			alert("Job Started")
+			alert("Job queued for execution")
 		}else{
 			alert("There was an error starting your job")
 		}

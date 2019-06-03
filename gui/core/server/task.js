@@ -116,45 +116,7 @@ class Task{
 	})
   }
   
- /* start(arg){
-	  var jobfolder
-	  var jobid
-	  return sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "')")
-	  .then(rows => {
-		  return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
-	  })
-	  .then((rows) => {
-        jobid = rows[0]['seq']
-        arg['jobid'] = jobid
-        arg['userdata'] = global.userdata
-        if(global.exe.includes('simple_multiuser')){
-			var promise = spawn('node', [global.exe, 'execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath +'/core/server'})
-		}else{
-			var promise = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath +'/core/server'})
-		}
-        var executeprocess = promise.childProcess
-        executeprocess.stdout.on('data', data => {
-			console.log('DATA', data.toString())
-		})
-		executeprocess.on('error', data => {
-			console.log('ERROR', data.toString())
-		})
-		executeprocess.on('exit', code => {
-			console.log("EXIT: " , code)
-		})
-        console.log(`Spawned child pid: ${executeprocess.pid}`)
-		return executeprocess.pid
-	  })
-	  .then(pid => {
-		  return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET pid='" + pid + "' WHERE id=" + jobid)
-	  })
-	  .then(() => {
-		  return({jobid:jobid})
-	  })
-  } */
-  
   start(arg){
-		this.jobid = false
         arg['userdata'] = global.userdata
         if(global.exe.includes('simple_multiuser')){
 			var promise = spawn('node', [global.exe, 'execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath +'/core/server'})
@@ -163,49 +125,11 @@ class Task{
 		}
         var executeprocess = promise.childProcess
         executeprocess.stdout.on('data', data => {
-			if(!this.jobid){
-				var lines = data.toString().split("\n")
-				for (var line of lines){
-					if(line.includes("JOBID")){
-						this.jobid = line.split(" ").pop()
-					}
-				}
-			}
 			console.log('DATA', data.toString())
 		})
-/*		executeprocess.on('error', data => {
-			console.log('ERROR', data.toString())
-			setTimeout(() => {
-				sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET pid='" + executeprocess.pid + "' WHERE id=" + this.jobid)
-			}, 3000)
-		})*/
-		executeprocess.on('exit', code => {
-			console.log("EXIT: " , code, this.jobid)
-			setTimeout(() => {
-				if(code !== null && code == 0){
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
-				}else{
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + this.jobid + " AND status!='Killed'")
-				}
-			}, 3000)
+		return new Promise((resolve, reject) => {
+			resolve({status:'running'})
 		})
-		promise.catch((err) => {console.log('Runner failed')})
-        console.log(`Spawned child pid: ${executeprocess.pid}`)
-	    return new Promise((resolve, reject) => {
-			var interval = setInterval(() => { 
-				if(this.jobid){
-					clearInterval(interval)
-					clearTimeout(timeout)
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET pid='" + executeprocess.pid + "' WHERE id=" + this.jobid)
-					resolve({status:'running', jobid:this.jobid})
-				}
-			}, 1000)
-			var timeout = setTimeout(() => {
-				clearInterval(interval)
-				clearTimeout(timeout)
-				resolve({status:'error'})
-			}, 20000)
-	    })
   }
   
   kill(arg){
@@ -215,7 +139,8 @@ class Task{
   }
   
   delete(arg){
-    var query = "DELETE FROM " + arg['history'] + " WHERE id=" + arg['jobid']
+ //   var query = "DELETE FROM " + arg['history'] + " WHERE id=" + arg['jobid']
+	var query = "UPDATE " + arg['history'] + " SET pid='null',status='Deleted' WHERE id=" + arg['jobid']
     return sqlite.sqlQuery(query)
     .then(() => {
 		if(arg['removefolder']){
@@ -223,8 +148,11 @@ class Task{
 			.then(() => {
 				return fs.move(arg['folder'], arg['projectfolder'] + '/Trash/' + path.basename(arg['folder']))
 			})
+			.then(() => {
+				return({})
+			})
 		}else{
-			return
+			return({})
 		}
 	})
   }

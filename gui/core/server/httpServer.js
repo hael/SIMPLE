@@ -4,6 +4,7 @@ const compression = require('compression')
 const debug = require('debug')('inferno:HTTPserver')
 const auth = require('http-auth')
 const pug = require('pug')
+const bodyParser = require('body-parser');
 
 const densityserver = require("../../external/DensityServer/server/web-api")
 
@@ -50,9 +51,15 @@ class HTTPServer {
 
     this.server = express()
 
-    this.server.use(morgan('dev'))
+   
+    
+    var bodyParser = require('body-parser');
+	this.server.use(express.json({limit: "100mb"}));
+	this.server.use(express.urlencoded({limit: "100mb", extended: false, parameterLimit:1000000}))
+	
+	this.server.use(morgan('dev'))
     this.server.use(express.json())
-    this.server.use(express.urlencoded({ extended: false }))
+
     this.server.use(express.static(global.appPath + '/public'))
     this.server.use(compression({ level: 6, memLevel: 9, chunkSize: 16 * 16384, filter: () => { return true; } }))
     
@@ -102,6 +109,7 @@ class HTTPServer {
     })
 
     this.server.post('/', (req, res) => {
+		console.log('here')
       var fnc = req.body.fnc
       var cls = req.body.cls
       var arg = req.body.arg
@@ -119,6 +127,7 @@ class HTTPServer {
 			console.log(err)
           res.send({error : err})
         })
+     
     })
 
     this.server.use(this.errorHandler)

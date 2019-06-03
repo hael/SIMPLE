@@ -195,8 +195,12 @@ contains
                 self%filesparams(i,7) = getreal
             endif
             
-            getreal = spproj%os_mic%get(i,'state')
-            self%filesparams(i,8) = getreal
+            if(spproj%os_mic%isthere(i,'state') ) then
+                getreal = spproj%os_mic%get(i,'state')
+                self%filesparams(i,8) = getreal
+            else
+                self%filesparams(i,8) = 1
+            endif
             
         end do
       

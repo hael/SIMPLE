@@ -493,362 +493,212 @@ class SimpleExec {
 	exec(arg){
 		this.execdir = false
 		this.jobid = false
+		this.buffer = false
+		this.progress = 0
+		this.iteration = 0
 		var commandargs
-		return this.getCommandArgs(arg)
+		
+		return sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','pending', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "')")
+		.then(rows => {
+			return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
+		})
+		.then(rows => {
+			this.jobid = rows[0]['seq']
+			console.log('JOBID', this.jobid)
+		})
+		.then(() => {
+			return this.getCommandArgs(arg)
+		})
 		.then(commandarguments => {
 			commandargs = commandarguments
 			return spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
 		})
 		.then(output => {
 			var promise = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
-			var executeprocess = promise.childProcess
-	/*		executeprocess.on('exit', code => {
-				console.log(`child process exited with code ${code}`);
-				if(code !== null && code == 0){
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
-				}else{
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + this.jobid)
-				}
-			})*/
-		/*	executeprocess.on('error', error => {
-				console.log(`child process exited with error ${error}`)
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', error.toString())
-				}
-				console.log("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + this.jobid)
-				sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + this.jobid)
-			})*/
-			executeprocess.stdout.on('data', data => {
+			var childprocess = promise.childProcess
+			childprocess.stdout.on('data', data => {
 				var lines = data.toString().split("\n")
 				if(!this.execdir){
 					for (var line of lines){
 						if(line.includes("EXECUTION DIRECTORY")){
 							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
-							sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "')")
-							.then(rows => {
-								return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
-							})
-							.then(rows => {
-								this.jobid = rows[0]['seq']
-								console.log('JOBID', this.jobid)
-							})
+							console.log('PID', childprocess.pid)
+							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
+						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
 							break
 						}
 					}
 				}
+				this.updateProgress(lines, arg)
 				if(this.execdir){
+					if(this.buffer != false){
+						fs.appendFile(this.execdir + '/simple.log', this.buffer)
+						this.buffer = false
+					}
 					fs.appendFile(this.execdir + '/simple.log', data.toString())
+				}else{
+					this.buffer = this.buffer + data.toString()
 				}
 			})
-			console.log(`Spawned child pid: ${executeprocess.pid}`)
-			return Promise.all([promise])
+			console.log(`Spawned child pid: ${childprocess.pid}`)
+			return promise
 		})
 		.then(output =>{
-			return new Promise((resolve, reject) => {
-				var interval = setInterval(() => { 
-					console.log('interval')
-					if(this.execdir){
-						console.log('exwecdir', this.execdir)
-						clearInterval(interval)
-						clearTimeout(timeout)
-						if(arg['saveclusters']){
-							console.log('clusters')
-							resolve (this.createCavgs(this.execdir + '/' + path.basename(arg['projfile'])))
-						}else{
-							resolve
-						}
-					}
-				}, 1000)
-				var timeout = setTimeout(() => {
-					console.log('timeout')
-					clearInterval(interval)
-					clearTimeout(timeout)
-					resolve
-				}, 20000)
-			})
-		})
-		.then(() =>{
-				if(arg['savestar']){
-					console.log(`exporting to relion`);
-					return this.relionExport(this.execdir + '/' + path.basename(arg['projfile']))
+			if(output.childProcess.exitCode == 0 && this.execdir && this.jobid){
+				if(arg['saveclusters']){
+					console.log('clusters')
+					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
+					.then(() => {
+						return this.createCavgs(this.execdir + '/' + path.basename(arg['projfile']))
+					})
 				}else{
-					return
+					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
 				}
+			}else{
+				this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+				return fs.ensureDir(this.execdir)
+				.then(() => {
+					return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+				})
+				.then(() => {	
+					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+				})
+			}
 		})
-	/*	.then(() =>{
-			return new Promise(resolve => {
-				var interval = setInterval(() => { 
-					console.log("Hello")
-					if(this.jobid && this.execdir){
-						clearInterval(interval)
-						clearTimeout(timeout)
-						resolve({})
-					}
-				}, 3000)
-				var timeout = setTimeout(() => {
-					console.log("timout")
-					clearInterval(interval)
-					clearTimeout(timeout)
-					resolve({})
-				}, 10000)
-			})
-		})*/
 	}
 	
-/*	
-	distrExec(arg, jobid){
-		this.execdir = false
-		var commandargs
-		return this.getCommandArgs(arg)
-		.then(commandarguments => {
-			commandargs = commandarguments
-			return spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
-		})
-		.then(output => {
-			var promise = spawn("simple_distr_exec", commandargs[0], {cwd: arg['projectfolder']})
-			var executeprocess = promise.childProcess
-			executeprocess.on('exit', code => {
-				console.log(`child process exited with code ${code}`);
-				if(code !== null && code == 0){
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + jobid)
-				}else{
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + jobid)
-				}
-			})
-			executeprocess.on('error', error => {
-				console.log(`child process exited with error ${error}`)
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', error.toString())
-				}
-				sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + jobid)
-			})
-			executeprocess.stdout.on('data', data => {
-				console.log(data.toString())
-				if(!this.execdir){
-					var lines = data.toString().split("\n")
-					for (var line of lines){
-						if(line.includes("EXECUTION DIRECTORY")){
-							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
-							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + arg['projectfolder'] + "/" + line.split(" ").pop() + "' WHERE id=" + jobid)
-							break
-						}
-					}
-				}
-				
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', data.toString())
-				}
-
-			})
-			console.log(`Spawned child pid: ${executeprocess.pid}`)
-			return Promise.all([promise])
-		})
-		.then(() =>{
-			return new Promise(resolve => setTimeout(resolve, 10000))
-		})
-	}
-*/
-
 	distrExec(arg){
 		this.execdir = false
 		this.jobid = false
+		this.buffer = false
+		this.progress = 0
+		this.iteration = 0
 		var commandargs
-		return this.getCommandArgs(arg)
+		
+		return sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','pending', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "')")
+		.then(rows => {
+			return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
+		})
+		.then(rows => {
+			this.jobid = rows[0]['seq']
+			console.log('JOBID', this.jobid)
+		})
+		.then(() => {
+			return this.getCommandArgs(arg)
+		})
 		.then(commandarguments => {
 			commandargs = commandarguments
 			return spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
 		})
 		.then(output => {
 			var promise = spawn("simple_distr_exec", commandargs[0], {cwd: arg['projectfolder']})
-			var executeprocess = promise.childProcess
-	/*		executeprocess.on('exit', code => {
-				console.log(`child process exited with code ${code}`);
-				if(code !== null && code == 0){
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
-				}else{
-					
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + this.jobid)
-				}
-			})*/
-			/*executeprocess.on('error', error => {
-				console.log(`child process exited with error ${error}`)
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', error.toString())
-				}
-			})*/
-			executeprocess.stdout.on('data', data => {
+			var childprocess = promise.childProcess
+			childprocess.stdout.on('data', data => {
 				var lines = data.toString().split("\n")
 				if(!this.execdir){
 					for (var line of lines){
 						if(line.includes("EXECUTION DIRECTORY")){
 							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
-							sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "')")
-							.then(rows => {
-								return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
-							})
-							.then(rows => {
-								this.jobid = rows[0]['seq']
-								console.log('JOBID', this.jobid)
-							})
+							console.log('PID', childprocess.pid)
+							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
+						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
 							break
 						}
 					}
 				}
+				this.updateProgress(lines, arg)
 				if(this.execdir){
+					if(this.buffer != false){
+						fs.appendFile(this.execdir + '/simple.log', this.buffer)
+						this.buffer = false
+					}
 					fs.appendFile(this.execdir + '/simple.log', data.toString())
+				}else{
+					this.buffer = this.buffer + data.toString()
 				}
 			})
-			console.log(`Spawned child pid: ${executeprocess.pid}`)
-			return Promise.all([promise])
+			console.log(`Spawned child pid: ${childprocess.pid}`)
+			return promise
 		})
 		.then(output =>{
-			return new Promise((resolve, reject) => {
-				var interval = setInterval(() => { 
-					console.log('interval')
-					if(this.execdir){
-						console.log('exwecdir', this.execdir)
-						clearInterval(interval)
-						clearTimeout(timeout)
-						if(arg['saveclusters']){
-							console.log('clusters')
-							resolve (this.createCavgs(this.execdir + '/' + path.basename(arg['projfile'])))
-						}else{
-							resolve
+			if(output.childProcess.exitCode == 0 && this.execdir && this.jobid){
+				return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
+			}else{
+				this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+				return fs.ensureDir(this.execdir)
+				.then(() => {
+					return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+				})
+				.then(() => {	
+					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+				})
+			}
+		})
+	}
+	
+	updateProgress(lines, arg){
+		if(arg['type'] == 'cluster2D' || arg['type'] == 'refine3D' ){
+			for (var line of lines){
+				if(line.includes("SEARCH SPACE SCANNED")){
+					line = line.replace(/ +(?= )/g,'');
+					var scan = line.split(" ")
+					var progress = (Number(scan[6]) * Number(scan[6])) / 100
+					
+					this.iteration += 1
+					if(this.iteration == 1){
+						this.progress = 5
+					}else if(this.iteration == 2){
+						this.progress = 10
+					}else if(this.iteration == 3){
+						this.progress = 15
+					}else if(progress > this.progress){
+						this.progress = progress
+					}
+					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
+					console.log('progress', this.progress)
+				}
+			}
+		}else if(arg['type'] == 'cleanup2D'){
+			for (var line of lines){
+				if(line.includes("CLASS OVERLAP")){
+					line = line.replace(/ +(?= )/g,'');
+					var scan = line.split(" ")
+					var progress = (Number(scan[3]) * Number(scan[3])) * 100
+	
+					if(progress > this.progress){
+						this.progress = progress
+					}
+					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
+					console.log('progress', this.progress)
+				}
+			}
+		}else if(arg['type'] == 'initial_3Dmodel'){
+			for (var line of lines){
+				if(line.includes("SEARCH SPACE SCANNED")){
+					line = line.replace(/ +(?= )/g,'');
+					var scan = line.split(" ")
+					var progress = (Number(scan[6]) * Number(scan[6])) / 100
+					this.iteration += 1
+					if(this.iteration <= 30){
+						this.progress += 1
+					}else if(!this.probabilistic){
+						progress = progress * 0.8
+						if(progress > this.progress){
+							this.progress = progress
+						}
+					}else if(this.probabilistic){
+						if(progress > this.progress){
+							this.progress = progress
 						}
 					}
-				}, 1000)
-				var timeout = setTimeout(() => {
-					console.log('timeout')
-					clearInterval(interval)
-					clearTimeout(timeout)
-					resolve
-				}, 20000)
-			})
-		})
-		.then(() =>{
-				if(arg['savestar']){
-					console.log(`exporting to relion`);
-					return this.relionExport(this.execdir + '/' + path.basename(arg['projfile']))
-				}else{
-					return
+					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET view='" + this.progress  + "' WHERE id=" + this.jobid)
+					console.log('progress', this.progress)
+				}else if(line.includes("PROBABILISTIC REFINEMENT")){
+					this.probabilistic = true
 				}
-		})
-	}	
-/*
-  taskSimple(arg, taskinfo, commandargs, compenvargs){
-    var out
-    return new Promise ((resolve, reject) => {
-      if(arg['inputpath'] != "undefined" && arg['inputpath'] != ""){
-        resolve (fs.ensureDir(taskinfo['jobfolder'] + "/project")
-          .then(() => { 
-            return(fs.copyFile(arg['inputpath'], taskinfo['jobfolder'] + "/project/project.simple"))
-          })
-        )
-      } else {
-        resolve (spawn("simple_exec", ["prg=new_project", "projname=project"], {cwd: taskinfo['jobfolder'], stdio: ['ignore', out, out ]}))
-      }
-    })
-    .then(() => {
-      return fs.open(taskinfo['jobfolder'] + '/task.log', 'a')
-    })
-    .then(outfile => {
-      out = outfile
-      return spawn("simple_exec", compenvargs, {cwd: taskinfo['jobfolder'], stdio: ['ignore', out, out ]})
-    })
-    .then(() => {
-      return fs.rename(taskinfo['jobfolder'] + "/project/project.simple", taskinfo['jobfolder'] + "/project.simple")
-    })
-    .then(() => {
-      var promise = spawn(arg['executable'], commandargs, {detached: true, cwd: taskinfo['jobfolder'], stdio: [ 'ignore', out, out ]})
-      var executeprocess = promise.childProcess
-      executeprocess.on('exit', code => {
-        console.log(`child process exited with code ${code}`);
-        if(code !== null && code == 0){
-          global.modules['available']['core']['updateStatus'](arg['projecttable'], taskinfo['jobid'], "Finished")
-        }else{
-          global.modules['available']['core']['updateStatus'](arg['projecttable'], taskinfo['jobid'], "Error")
-        }
-      })
-      executeprocess.on('error', error => {
-        console.log(`child process exited with error ${error}`)
-        global.modules['available']['core']['updateStatus'](arg['projecttable'], taskinfo['jobid'], "Error")
-      })
-      console.log(`Spawned child pid: ${executeprocess.pid}`)
-      return global.modules['available']['core']['updatePid'](arg['projecttable'], taskinfo['jobid'], executeprocess.pid)
-    })
-    .then(() => {
-      return fs.close(out)
-    })
-  }
-
-  taskImport(arg, taskinfo, compenvargs){
-    var out
-    var rootname = path.basename(arg['inputpath'], ".simple")
-    var rootpath = path.dirname(arg['inputpath'])
-    compenvargs.push('projfile=' + rootname + "/" + rootname + ".simple")
-    return fs.rmdir(taskinfo['jobfolder'])
-    .then(() => {
-      return fs.symlink(rootpath, taskinfo['jobfolder'])
-    })
-    .then(() => {
-      return fs.mkdir(taskinfo['jobfolder'] + "/" + rootname)
-    })
-    .then(() => {
-      return fs.copyFile(arg['inputpath'], taskinfo['jobfolder'] + "/" + rootname + "/" + rootname + ".simple")
-    })
-    .then(() => {
-      return fs.open(taskinfo['jobfolder'] + '/task.log', 'a')
-    })
-    .then((outfile) => {
-      out = outfile
-      return spawn("simple_exec", compenvargs, {cwd: taskinfo['jobfolder'], stdio: ['ignore', out, out]})
-    })
-    .then(() => {
-      return fs.close(out)
-    })
-    .then(() => {
-      return fs.rename(taskinfo['jobfolder'] + "/" + rootname + "/project.simple", taskinfo['jobfolder'] + "/project.simple")
-    })
-    .then(() => {
-      return global.modules['available']['core']['updateStatus'](arg['projecttable'], taskinfo['jobid'], "Imported")
-    })
-  }
-
-  execute(arg){
-    var commandargs = ["prg=" + arg['type'], "mkdir=no"]
-    var compenvargs = ['prg=update_project', 'projname=project']
-
-    for(var key of Object.keys(arg['keys'])){
-      if(arg['keys'][key]!= "" && !key.includes('keyenv')){
-        if(arg['keys'][key] == "true"){
-          commandargs.push(key.replace('key', '') + "=yes")
-        }else if(arg['keys'][key] == "false"){
-          commandargs.push(key.replace('key', '') + "=no")
-        }else{
-          commandargs.push(key.replace('key', '') + "=" + arg['keys'][key])
-        }
-      } else if (arg['keys'][key] != "" && key.includes('keyenv')){
-        compenvargs.push(key.replace('keyenv', '') + "=" + arg['keys'][key])
-      }
-    }
-
-    if(arg['type'] == "import"){
-        arg['type'] = arg['keys']['keyjob_type']
-    }
-
-    arg['view'] = this.attachViews(arg['type'])
-
-    return modules['available']['core']['taskCreate'](arg)
-    .then(taskinfo => {
-      if(arg['executable'] == "simple_import"){
-        this.taskImport(arg, taskinfo, compenvargs)
-      } else {
-        this.taskSimple(arg, taskinfo, commandargs, compenvargs)
-      }
-      return{folder: taskinfo['jobfolder']}
-    })
-  }
-*/
+			}
+		}
+	}
 }
 
 module.exports = new SimpleExec()
