@@ -247,7 +247,7 @@ contains
       cnt = 0
       do n_cc = 1, self%n_particles
           !if( abs(self%particles_coord(n_cc,1)) > TINY) then !useless?
-              call img_back%draw_picked(nint(self%particles_coord(n_cc,:)),nint(self%part_radius),3, 'white')
+              call img_back%draw_picked(nint(self%particles_coord(n_cc,:)),nint(self%part_radius),2, 'black')
               call self%img%window_slim(nint(self%particles_coord(n_cc,:)-box/2), box, imgwin_particle, outside)
               if( .not. outside) then
                   cnt = cnt + 1

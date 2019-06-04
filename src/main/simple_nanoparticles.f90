@@ -1,6 +1,8 @@
 !USAGE 1: simple_exec prg=detect_atoms smpd=0.358 vol1='particle1.mrc'
 !USAGE 2: simple_exec prg=compare_nano vol1=vol_c1_aligned2_c3axis.mrc vol2=particle1_c3.mrc
 module simple_nanoparticles_mod
+!$ use omp_lib
+!$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,         only : image
 use simple_atoms,         only : atoms
@@ -180,6 +182,7 @@ contains
         rmat = self%img%get_rmat()
         allocate(rmat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0.)
         step = maxval(rmat)/real(N_THRESH)
+        !$omp do collapse(1) schedule(static) private(i)
         do i = 1, N_THRESH-1
             call progress(i, N_THRESH-1)
             call img_bin_thresh(i)%new(self%ldim, self%smpd)
@@ -195,11 +198,13 @@ contains
             x_thresh(i) = thresh
             y_med(i)    = median(real(sz))
         enddo
+        !$omp end do
         write(logfhandle,*)'Intial threshold selected, starting refinement'
         !two consecutive thresholds after the ideal one
         ind(1:1) = maxloc(y_med)
         ind(2:2) = ind(1:1)+1
         ind(3:3) = ind(2:2)+1
+        !$omp do collapse(1) schedule(static) private(i)
         do i = 1, 3
             rmat_t = img_ccs_thresh(ind(i))%get_rmat()
             self%n_cc = int(maxval(rmat_t))
@@ -207,18 +212,21 @@ contains
             allocate(yes_no(self%n_cc))
             yes_no = is_center_inside_atom(self,img_bin_thresh(ind(i)))
             cent_outside_atom(i) = count(yes_no .eqv. .false.)
-            write(logfhandle,*)'For thresh ',trim(int2str(i)),', ', trim(int2str(cent_outside_atom(i))), ' centers are not inside the atom'
+            write(logfhandle,*)'For thresh ',x_thresh(ind(i)),', ', trim(int2str(cent_outside_atom(i))), ' centers are not inside the atom'
             deallocate(yes_no)
         enddo
+        !$omp end do
         position(:) =  minloc(cent_outside_atom)
         write(logfhandle,*) 'Final threshold for binarization', x_thresh(ind(position(1)))
         call self%img_bin%copy(img_bin_thresh(ind(position(1))))
         call  self%img_cc%copy(img_ccs_thresh(ind(position(1))))
         !kill images
+        !$omp do collapse(1) schedule(static) private(i)
         do i = 1, N_THRESH-1
             call img_bin_thresh(i)%kill
             call img_ccs_thresh(i)%kill
         enddo
+        !$omp end do
         write(logfhandle,*) 'Final threshold selected, starting connected atoms erosion'
         sz = self%img_cc%size_connected_comps()
         avg_sz = real(sum(sz))/real(size(sz))
@@ -235,11 +243,13 @@ contains
             write(logfhandle,*)'Erosion threshold = ', t
         endif
         rmat_int = int(self%img_cc%get_rmat())
+        !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, size(sz)
             if(sz(cc) > t) then
                  call self%img_cc%erosion(cc)
             endif
         enddo
+        !$omp end do
         ! update
         rmat = 0.
         rmat_int = int(self%img_cc%get_rmat())
@@ -270,6 +280,7 @@ contains
             integer :: cc
             integer, allocatable :: imat(:,:,:)
             imat = int(img_bin%get_rmat())
+            !$omp do collapse(1) schedule(static) private(cc)
             do cc = 1, self%n_cc
                 if(imat(nint(self%centers(1,cc)),nint(self%centers(2,cc)),nint(self%centers(3,cc))) > 0.5) then
                     yes_no(cc) = .true.
@@ -277,6 +288,7 @@ contains
                     yes_no(cc) = .false.
                 endif
             enddo
+            !$omp end do
             deallocate(imat)
         end function is_center_inside_atom
     end subroutine nanopart_binarization
@@ -306,6 +318,7 @@ contains
         !assuming Gaussian distrib, 95% is in [-2sigma,2sigma] and 68% is in [-sigma,sigma]
         !big ccs have already been removed by erosion. Now we need to remove too small
         !ccs, they usually represent background noise.
+        !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, size(sz)
             if(sz(cc)<avg_sz-1.*stdev_sz ) then
                 where(imat_cc==cc)
@@ -314,6 +327,7 @@ contains
                 endwhere
              endif
         enddo
+        !$omp end do
         call self%img_cc%set_rmat(real(imat_cc)) !connected components clean up
         call self%img_bin%set_rmat(rmat)
         !update img_cc: re-order ccs
@@ -440,6 +454,7 @@ contains
                 allocate(mask(N_min), source = .true.)
                 cnt = 0
                 cnt2= 0
+                !$omp do collapse(1) schedule(static) private(i)
                 do i = 1, N_max !compare based on centers2
                     dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
                     if(dist(i)*nano2%smpd > 2.2) then
@@ -476,6 +491,7 @@ contains
                          write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                     endif
                 enddo
+                !$omp end do
             else
                 N_min = size(nano2%centers, dim = 2)
                 N_max = size(nano1%centers, dim = 2)
@@ -491,6 +507,7 @@ contains
                 allocate(mask(N_min), source = .true.)
                 cnt = 0
                 cnt2= 0
+                !$omp do collapse(1) schedule(static) private(i)
                 do i = 1, N_max !compare based on centers1
                     dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
                     if(dist(i)*nano2%smpd > 2.2) then ! 2.2 is the biggest lattice spacing they found in the paper
@@ -527,8 +544,10 @@ contains
                         write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
                     endif
                 enddo
+                !$omp end do
             endif
             ! remove unused atoms from the pdb file
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, N_max
                 coord(:) = centers_close1%get_coord(i)
                 if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close1%set_occupancy(i,0.)
@@ -539,6 +558,7 @@ contains
                 coord(:) = centers_coupled2%get_coord(i)
                 if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled2%set_occupancy(i,0.)
             enddo
+            !$omp end do
             call centers_close1%writepdb  (trim(nano1%fbody)//'_atom_close_couples')
             call centers_close2%writepdb  (trim(nano2%fbody)//'_atom_close_couples')
             call centers_coupled1%writepdb(trim(nano1%fbody)//'_atom_couples')
@@ -551,6 +571,7 @@ contains
             m(:) = nano1%nanopart_masscen()
             m(:) = (m(:)-1.)*nano1%smpd
             tmp_max = 0.
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, N_max
                 coord(:) = centers_coupled1%get_coord(i)
                 if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
@@ -559,9 +580,11 @@ contains
                     if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
                 endif
             enddo
+            !$omp end do
             avg = avg/real(cnt3)
             cnt3 = 0
             stdev = 0.
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, N_max
                 coord(:) = centers_coupled1%get_coord(i)
                 if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
@@ -569,16 +592,19 @@ contains
                     stdev = stdev + (euclid(coord,m)-avg)**2
                 endif
             enddo
+            !$omp end do
             stdev = sqrt(stdev/(real(cnt3)-1.))
             write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
             write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
             write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
             tmp_max = 0. ! reset
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, size(nano1%centers, dim = 2)
                 coord(:) = (nano1%centers(:,i)-1.)*nano1%smpd
                     d =  euclid(coord,m)
                     if(d > tmp_max) tmp_max = d
             enddo
+            !$omp end do
             write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL1 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
             ! kill atoms instances
             call centers_close1%kill
@@ -629,8 +655,8 @@ contains
         class(nanoparticle), intent(inout) :: self
         real,    optional,      intent(in) :: coords(:,:)
         integer, optional,      intent(in) :: volume
-        integer :: i, j, n_discard
         real, allocatable :: dist(:)
+        integer :: i, j, n_discard
         real    :: stdev
         real    :: med, robust_stdev
         logical :: mask(self%n_cc)
@@ -640,6 +666,7 @@ contains
         n_discard  = 0
         if(present(coords)) then
             allocate(dist(size(coords,dim=2)), source = 0.)
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, size(coords,dim=2)
                 dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask) !I have to use all the atoms when
                 mask(:) = .true. ! restore
@@ -649,59 +676,66 @@ contains
                     n_discard = n_discard + 1
                 endif
             enddo
+            !$omp end do
             self%avg_dist_atoms = sum(dist)/real(size(coords,dim=2)-n_discard)
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, size(coords,dim=2)
                 if(dist(i)*self%smpd <=3.0) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
             enddo
+            !$omp end do
             stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
             med = median(dist)
             robust_stdev = mad_gau(dist,med)
             if(present(volume)) then
-                write(unit = 11, fmt = '(a,a,f6.3)') 'Average dist atoms vol: ', trim(int2str(volume)), self%avg_dist_atoms*self%smpd
-                write(unit = 11, fmt = '(a,a,f6.3)') 'StDev   dist atoms vol: ', trim(int2str(volume)), stdev*self%smpd
-                write(unit = 11, fmt = '(a,a,f6.3)') 'Median  dist atoms vol: ', trim(int2str(volume)), med*self%smpd
-                write(unit = 11, fmt = '(a,a,f6.3)') 'MadGau  dist atoms vol: ', trim(int2str(volume)), robust_stdev*self%smpd
+                write(unit = 11, fmt = '(a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)), self%avg_dist_atoms*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol', trim(int2str(volume)),':', med*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'MadGau  dist atoms vol ', trim(int2str(volume)),':', robust_stdev*self%smpd, ' A'
             else
-                write(unit = 11, fmt = '(a,f6.3)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd
-                write(unit = 11, fmt = '(a,f6.3)') 'StDev   dist atoms: ', stdev*self%smpd
-                write(unit = 11, fmt = '(a,f6.3)') 'Median  dist atoms: ', med*self%smpd
-                write(unit = 11, fmt = '(a,f6.3)') 'MadGau  dist atoms: ', robust_stdev*self%smpd
+                write(unit = 11, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+                write(unit = 11, fmt = '(a,f6.3,a)') 'MadGau  dist atoms: ', robust_stdev*self%smpd,  ' A'
             endif
+            deallocate(dist)
         else
-            ! Report statistics in dedicated directory
+            ! Report statistics and images in dedicated directory
             !coma back to root folder
             call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: distances_distribution, simple_chdir; ")
-            call simple_mkdir(trim(self%output_dir)//'/DistancesDistribution',errmsg="simple_nanoparticles :: distances_distribution, simple_mkdir; ")
-            call simple_chdir(trim(self%output_dir)//'/DistancesDistribution',errmsg="simple_nanoparticles :: distances_distribution, simple_chdir; ")
+            call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: distances_distribution, simple_mkdir; ")
+            call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: distances_distribution, simple_chdir; ")
             open(15, file='DistancesDistr')
-            allocate(dist(size(self%centers, dim = 2)), source = 0.)
+            allocate(self%dists(size(self%centers, dim = 2)), source = 0.)
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, size(self%centers, dim = 2)
-                dist(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask) !I have to use all the atoms when
+                self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask) !I have to use all the atoms when
                 mask(:) = .true. ! restore
                 !Discard outliers
-                if(dist(i)*self%smpd > 3.0 ) then !2.5 is the average interatomic distance
-                    dist(i) = 0.
+                if(self%dists(i)*self%smpd > 3.0 ) then !2.5 is the average interatomic distance
+                    self%dists(i) = 0.
                     n_discard = n_discard + 1
                 endif
             enddo
-            self%avg_dist_atoms = sum(dist)/real(size(self%centers, dim = 2)-n_discard)
+            !$omp end do
+            self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
+            !$omp do collapse(1) schedule(static) private(i)
             do i = 1, size(self%centers, dim = 2)
-                if(dist(i)*self%smpd <=3.0) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
+                if(self%dists(i)*self%smpd <=3.0) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
             enddo
+            !$omp end do
             stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
-            med = median(dist)
-            robust_stdev = mad_gau(dist,med)
-            write(unit = 15, fmt = '(a,f6.3)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd
-            write(unit = 15, fmt = '(a,f6.3)') 'StDev   dist atoms: ', stdev*self%smpd
-            write(unit = 15, fmt = '(a,f6.3)') 'Median  dist atoms: ', med*self%smpd
-            write(unit = 15, fmt = '(a,f6.3)') 'MadGau  dist atoms: ', robust_stdev*self%smpd
+            med = median(self%dists)
+            robust_stdev = mad_gau(self%dists,med)
+            write(unit = 15, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
+            write(unit = 15, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
+            write(unit = 15, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
+            write(unit = 15, fmt = '(a,f6.3,a)') 'MadGau  dist atoms: ', robust_stdev*self%smpd, ' A'
             do i = 1,self%n_cc
-                call self%centers_pdb%set_beta(i, dist(i)*self%smpd)
+                call self%centers_pdb%set_beta(i, self%dists(i)*self%smpd)
             enddo
             call self%centers_pdb%writepdb('DistancesDistr')
         endif
         close(15)
-        deallocate(dist)
     end subroutine distances_distribution
 
     ! This subroutine has visualization purpose only.
@@ -721,6 +755,7 @@ contains
         x = self%ldim(1)/2 !x-coords of the center
         y = self%ldim(2)/2 !y-coords of the center
         vec1(:)= [0.,1.]   !fixed 2D vector
+        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, self%ldim(1)
             do j = 1, self%ldim(2)
                 vec(:) = real([i-x,j-y])  !translate the vector in the origin
@@ -734,6 +769,7 @@ contains
                 if(ang1 < 120.) rmat3(i,j,:) = 0.
              enddo
         enddo
+        !$omp end do
         call img_asym%new(self%ldim, self%smpd)
         call img_asym%set_rmat(rmat1)
         call img_asym%write(trim(self%fbody)//'FirstAsymUnit.mrc')
@@ -766,6 +802,7 @@ contains
        ! global variables allocation
        if(allocated(self%centers)) deallocate(self%centers)
        allocate(self%centers(3,self%n_cc),source = 0.)     !global variable
+       !$omp do collapse(1) schedule(static) private(i)
        do i=1,self%n_cc
            if(present(img_bin)) then
                self%centers(:,i) = atom_masscen(self,i, img_bin, img_cc)
@@ -773,6 +810,7 @@ contains
                self%centers(:,i) = atom_masscen(self,i)
            endif
        enddo
+       !$omp end do
        ! saving centers coordinates, optional
        if(present(coords)) allocate(coords(3, self%n_cc), source = self%centers)
        !sum_dist_closest_atom = 0. !initialise
@@ -821,7 +859,7 @@ contains
            where(     abs(rmat_cc_in-real(label)) > TINY) rmat_in = 0.
            sz = count(abs(rmat_cc_in-real(label)) < TINY)
            m = 0.
-           !omp do collapse(3) reduction(+:m) private(i,j,k) reduce schedule(static)
+           !$omp do collapse(3) schedule(static) reduction(+:m) private(i,j,k)
            do i = 1, int(real(self%ldim(1))*self%SCALE_FACTOR)
                do j = 1, int(real(self%ldim(2))*self%SCALE_FACTOR)
                    do k = 1, int(real(self%ldim(3))*self%SCALE_FACTOR)
@@ -829,7 +867,7 @@ contains
                    enddo
                enddo
            enddo
-           !omp end do
+           !$omp end do
            m = m/real(sz)
            deallocate(rmat_in, rmat_cc_in)
        end function atom_masscen
@@ -841,9 +879,11 @@ contains
         integer :: cc
         call self%centers_pdb%kill
         call self%centers_pdb%new(self%n_cc, dummy=.true.)
+        !$omp do collapse(1) schedule(static) private(cc)
         do cc=1,self%n_cc
             call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd/self%SCALE_FACTOR)
         enddo
+        !$omp end do
         if(present(fname)) then
             call self%centers_pdb%writepdb(fname)
         else
@@ -888,6 +928,7 @@ contains
          allocate(contact_scores(self%n_cc), source = 0)
          if(allocated(mask)) deallocate(mask)
          allocate(mask(self%n_cc), source = .true.)
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc !fix the atom
              dist = 0.
              mask(1:self%n_cc) = .true.
@@ -900,11 +941,13 @@ contains
              enddo
              contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
          enddo
+         !$omp end do
          n_discard = self%n_cc*5/100 ! discard bottom 10 instead%??
          mask(1:self%n_cc) = .true.
          rmat    = self%img_bin%get_rmat()
          rmat_cc = self%img_cc%get_rmat()
          ! Removing outliers from the binary image and the connected components image
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, n_discard
              label = minloc(contact_scores, mask)
              where(abs(rmat_cc-real(label(1))) < TINY)
@@ -913,6 +956,7 @@ contains
              mask(label(1)) = .false.
              self%centers(:,label) = -1. !identify to discard them
          enddo
+         !$omp end do
          call self%img_bin%set_rmat(rmat)
          call self%img_bin%find_connected_comps(self%img_cc)
          rmat_cc = self%img_cc%get_rmat()
@@ -932,6 +976,7 @@ contains
          cnt9  = 0
          cnt12 = 0
          m = self%nanopart_masscen()
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc
              d = euclid(self%centers(:,cc), m)*self%smpd
             if(d<=5.) then
@@ -954,6 +999,7 @@ contains
                 call radial_atoms12A%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd/self%SCALE_FACTOR)
             endif
          enddo
+         !$omp end do
          ! Report statistics in dedicated directory
          !coma back to root folder
          call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: discard_outliers, simple_chdir; ")
@@ -971,7 +1017,6 @@ contains
              call radial_atoms9A%writepdb('radial_atoms9A')
              call radial_atoms12A%writepdb('radial_atoms12A')
          endif
-
          ! Estimation of avg distance and stdev among atoms in radial dependent shells
          if(present(volume)) then
              write(unit = 11, fmt = '(a,a)') 'Estimation of atom-to-atom statistics in 5A radius shell vol', trim(int2str(volume))
@@ -980,6 +1025,7 @@ contains
          endif
          allocate(coords(3,cnt5), source = 0.)
          cnt = 0
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc
              d = euclid(self%centers(:,cc), m)*self%smpd
              if(d<=5.) then
@@ -987,6 +1033,7 @@ contains
                  coords(:3,cnt) = self%centers(:,cc)
              endif
          enddo
+         !$omp end do
          if(present(volume)) then
              call self%distances_distribution(coords, volume)
          else
@@ -1000,6 +1047,7 @@ contains
          endif
          allocate(coords(3,cnt7), source = 0.)
          cnt = 0
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc
              d = euclid(self%centers(:,cc), m)*self%smpd
              if(d<=7.) then
@@ -1007,6 +1055,7 @@ contains
                  coords(:3,cnt) = self%centers(:,cc)
              endif
          enddo
+         !$omp end do
          if(present(volume)) then
              call self%distances_distribution(coords, volume)
          else
@@ -1020,6 +1069,7 @@ contains
          endif
          allocate(coords(3,cnt9), source = 0.)
          cnt = 0
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc
              d = euclid(self%centers(:,cc), m)*self%smpd
              if(d<=9.) then
@@ -1027,6 +1077,7 @@ contains
                  coords(:3,cnt) = self%centers(:,cc)
              endif
          enddo
+         !$omp end do
          if(present(volume)) then
              call self%distances_distribution(coords, volume)
          else
@@ -1040,6 +1091,7 @@ contains
          endif
          allocate(coords(3,cnt12), source = 0.)
          cnt = 0
+         !$omp do collapse(1) schedule(static) private(cc)
          do cc = 1, self%n_cc
              d = euclid(self%centers(:,cc), m)*self%smpd
              if(d<=12.) then
@@ -1047,6 +1099,7 @@ contains
                  coords(:3,cnt) = self%centers(:,cc)
              endif
          enddo
+         !$omp end do
          if(present(volume)) then
              call self%distances_distribution(coords, volume)
          else
@@ -1072,9 +1125,11 @@ contains
          real    :: m(3)  !mass center coords
          integer :: i, j, k
          m = 0.
+         !$omp do collapse(1) schedule(static) reduction(+:m) private(i)
          do i = 1, self%n_cc
               m = m + 1.*self%centers(:,i)
          enddo
+         !$omp end do
          m = m/real(self%n_cc)
          if(self%ldim(3) == 1) m(3) = 0. !for 2D imgs
      end function nanopart_masscen
@@ -1144,9 +1199,11 @@ contains
         deallocate(imat_cc)
         allocate(self%ratios(self%n_cc),             source = 0.)
         allocate(self%loc_longest_dist(3,self%n_cc), source = 0 )
+        !$omp do collapse(1) schedule(static) private(label)
         do label = 1, self%n_cc
             call calc_aspect_ratio_private(self, label, self%ratios(label), print_ar)
         enddo
+        !$omp end do
         call hist(self%ratios, 20)
         ! To dump some of the analysis on aspect ratios on file compatible
         ! with Matlab.
@@ -1252,7 +1309,6 @@ contains
         integer :: k, i
         real    :: vec_fixed(3)     !vector indentifying z direction
         real    :: theta, mod_1, mod_2, dot_prod
-        logical :: mask(self%n_cc) !printing purposes
         if(allocated(self%ang_var)) deallocate(self%ang_var)
            allocate (self%ang_var(self%n_cc), source = 0.)
         if(allocated(loc_ld_real)) deallocate(loc_ld_real)
@@ -1263,10 +1319,12 @@ contains
         vec_fixed(2) = 0.
         vec_fixed(3) = 1.
         write(logfhandle,*)'>>>>>>>>>>>>>>>> calculating angles wrt the vector [0,0,1]'
+        !$omp do collapse(1) schedule(static) private(k)
         do k = 1, self%n_cc
             self%ang_var(k) = ang3D_vecs(vec_fixed(:),loc_ld_real(:,k))
             if(DEBUG_HERE) write(logfhandle,*) 'ATOM ', k, 'angle between direction longest dim and vec [0,0,1] ', self%ang_var(k)
         enddo
+        !$omp end do
         ! Matlab compatible File
         ! open(129, file='AnglesLongestDims')
         ! write (129,*) 'ang=[...'
@@ -1278,16 +1336,6 @@ contains
         ! end do
         ! write (129,*) '];'
         ! close(129)
-        mask = .true. !not to overprint
-        ! Searching coincident angles
-        do i = 1,  self%n_cc-1
-            do k = i+1, self%n_cc
-                if(abs(self%ang_var(i)-self%ang_var(k))< 1.5 .and. mask(i)) then !1.5 degrees allowed
-                    if(DEBUG_HERE) write(logfhandle,*)'Atoms', i, 'and', k,'have the same ang_var wrt vector [0,0,1]'
-                    mask(k) = .false.
-                endif
-            enddo
-        enddo
         deallocate(loc_ld_real)
     end subroutine search_polarization
 
@@ -1322,12 +1370,13 @@ contains
         call ap_nano%propagate(centers_ap, labels_ap, simsum)
         ncls = size(centers_ap)
         ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir1; ")
+        !call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
         call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir; ")
         allocate(imat      (self%ldim(1),self%ldim(2),self%ldim(3)),        source = int(self%img_cc%get_rmat()))
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
+        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, self%n_cc
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1336,11 +1385,14 @@ contains
                 endif
             enddo
         enddo
+        !$omp end do
+        !$omp do collapse(1) schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterDistDistr.mrc')
             call img_clusters(j)%kill
         enddo
+        !$omp end do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         if(allocated(imat))         deallocate(imat)
@@ -1353,7 +1405,7 @@ contains
         do i=1,ncls
             write(unit = 125, fmt = '(f6.3)') self%dists(centers_ap(i))
         end do
-        call self%centers_pdb%writepdb(trim(self%fbody)//'ClusterWRTDistDistr')
+        call self%centers_pdb%writepdb('ClusterDistDistr')
         close(125)
         write(logfhandle,*) '****clustering wrt distances distribution, completed'
         deallocate(simmat, labels_ap, centers_ap)
@@ -1390,6 +1442,7 @@ contains
         allocate(imat      (self%ldim(1),self%ldim(2),self%ldim(3)),        source = int(self%img_cc%get_rmat()))
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
+        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, self%n_cc
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1398,11 +1451,14 @@ contains
                 endif
             enddo
         enddo
+        !$omp end do
+        !$omp do collapse(1) schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAr.mrc')
             call img_clusters(j)%kill
         enddo
+        !$omp end do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         if(allocated(imat))         deallocate(imat)
@@ -1434,6 +1490,9 @@ contains
         integer              :: dim
         integer,          allocatable :: imat(:,:,:), imat_onecls(:,:,:,:)
         type(image),      allocatable :: img_clusters(:)
+        real                 :: avg, stdev
+        real,    allocatable :: avg_within(:), stdev_within(:)
+        integer, allocatable :: cnt(:)
         dim = self%n_cc
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt direction longest dim, init'
@@ -1453,6 +1512,7 @@ contains
         allocate(imat      (self%ldim(1),self%ldim(2),self%ldim(3)),        source = int(self%img_cc%get_rmat()))
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
+        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, self%n_cc
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
@@ -1461,11 +1521,14 @@ contains
                 endif
             enddo
         enddo
+        !$omp end do
+        !$omp do collapse(1) schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAng.mrc')
             call img_clusters(j)%kill
         enddo
+        !$omp end do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         if(allocated(imat))         deallocate(imat)
@@ -1478,10 +1541,59 @@ contains
         do i=1,ncls
             write(unit = 111,fmt ='(f6.3)') self%ang_var(centers_ap(i))
         end do
+        !standard deviation within each center
+        allocate(  avg_within(ncls), source = 0.)
+        allocate(stdev_within(ncls), source = 0.)
+        allocate(cnt(ncls), source = 0)
+        !$omp do collapse(2) schedule(static) private(i,j)
+        do i = 1, ncls
+            do j = 1, self%n_cc
+                if(labels_ap(j) == i) then
+                    cnt(i) = cnt(i) + 1 !cnt is how many atoms I have in each class
+                    avg_within(i) = avg_within(i) + self%ang_var(j)
+            endif
+            enddo
+        enddo
+        !$omp end do
+        avg_within = avg_within/cnt
+        write(unit = 111,fmt ='(a,i3)')     'number of atoms in each class = ', cnt(1)
+        do i =2, ncls
+            write(unit = 111,fmt ='(a,i3)') '                                ', cnt(i)
+        enddo
+        write(unit = 111,fmt ='(a,i3)')     'total atoms =                   ', sum(cnt)
+        !$omp do collapse(2) schedule(static) private(i,j)
+        do i = 1, ncls
+            do j = 1, self%n_cc
+                if(labels_ap(j) == i) stdev_within(i) = stdev_within(i) + (self%ang_var(j)-avg_within(i))**2
+            enddo
+        enddo
+        !$omp end do
+        stdev_within = stdev_within/(cnt-1.)
+        stdev_within = sqrt(stdev_within)
+        write(unit = 111,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
+        do i = 2, ncls
+            write(unit = 111,fmt ='(a,f5.3)')   '              ', stdev_within(i)
+        enddo
+        !standard deviation among different centers
+        avg = 0.
+        do i = 1, ncls
+            avg = avg + self%ang_var(centers_ap(i))
+        enddo
+        avg = avg/real(ncls)
+        stdev = 0.
+        do i = 1, ncls
+            stdev = stdev + (self%ang_var(centers_ap(i)) - avg)**2
+        enddo
+        stdev = stdev/(real(ncls)-1.)
+        stdev = sqrt(stdev)
+        write(unit = 111,fmt ='(a,f5.3)') 'standard deviation among centers: ', stdev
         call self%centers_pdb%writepdb('ClusterAngLongestDim')
         close(111)
         write(logfhandle,*) '****clustering wrt direction longest dim, completed'
         deallocate(simmat, labels_ap, centers_ap)
+        if(allocated(cnt))          deallocate(cnt)
+        if(allocated(avg_within))   deallocate(avg_within)
+        if(allocated(stdev_within)) deallocate(stdev_within)
     end subroutine affprop_cluster_ang
 
     subroutine nanopart_cluster(self)
@@ -1490,6 +1602,8 @@ contains
         call self%affprop_cluster_ang()
         ! clustering wrt aspect ratio
         call self%affprop_cluster_ar()
+        ! clustering wrt interatomic distances distribution
+        call self%affprop_cluster_dist_distr()
     end subroutine nanopart_cluster
 
     subroutine over_sample(self)

@@ -267,13 +267,15 @@ program simple_test_chiara_try
     use simple_commander_stream_wflows
     use simple_commander_hlev_wflows
     use simple_image, only : image
+    use simple_stackops
   ! use simple_tvfilter
   ! use simple_ctf
   ! use simple_ppca
   ! use simple_stat
   ! use simple_lapackblas, only : sgeev
   ! use simple_test_chiara_try_mod
-  ! type(image)       :: img, img_cc
+  type(image)       :: img
+  logical :: close_to_focus(1)
   ! integer           :: i, j, ncls, cnt
   ! real, allocatable :: rmat(:,:,:), rmat_mask(:,:,:), rmat_prod(:,:,:)
   ! real :: centers1(3,10)
@@ -283,19 +285,12 @@ program simple_test_chiara_try
   ! real :: r, avg, d, st, m(3), smpd, tmp_max, coord(3)
   ! integer :: N_max
 
-     ! type(motion_correct_commander) :: self
-      type(motion_correct_distr_commander)    :: xmotion_correct_distr
-      type(cmdline)                           :: cline !< command line input
-      character(len=:), allocatable :: output_dir
-      type(image) :: img
-
-      !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
-      ! if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
-      ! if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
-      ! call cline%set('oritype', 'mic')
-      ! call xmotion_correct_distr%execute( cline )
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  !call img%read('pspecs_saga_polii.mrc', 71)
+  !call img%write('OnePsCloseToFocus.mrc')
+    close_to_focus = .true.
+    call prepare_stack('OnePsCloseToFocus.mrc', 'OnePsCloseToFocusPrepared.mrc', 1.41, 35., close_to_focus)
+    write(logfhandle,*) '>>>>>>>>>>>>>STACK PREPARED SUCCESSFULLY>>>>>>>>>>>>>'
+    call binarize_stack('OnePsCloseToFocusPrepared.mrc','LambdaBin.mrc', 1.41)
 
     ! ! centers1 = reshape([1.,1.,1.,1.5,1.5,1.5,2.3,2.4,2.5,4.1,4.3,4.7],[3,4])
     ! print *, 'centers1(:3,1) = ',centers1(:3,1)

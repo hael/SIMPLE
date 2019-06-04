@@ -281,7 +281,7 @@ contains
         type(image)       :: img
         integer           :: n, ldim(3), i
         type(tvfilter)    :: tvf
-        real, parameter   :: lambda = 5.
+        real, parameter   :: lambda = 4.
         call find_ldim_nptcls(fname2process, ldim, n)
         if(size(close_to_focus) .ne. n) THROW_HARD('Wrong dim in close_to_focus input; apply_tvf_stack')
         ldim(3) = 1
@@ -441,9 +441,11 @@ contains
           avg_sz_ccs = real(sum(sz))/real(size(sz, dim = 1))
           print *, 'image ', i-1, 'avg sz ccs', avg_sz_ccs
           imat_cc = int(img_cc%get_rmat())
+          stdev_sz_ccs = 0. !initialise
           do n_cc = 1, maxval(imat_cc)
               stdev_sz_ccs = stdev_sz_ccs +(avg_sz_ccs-sz(n_cc))**2
           enddo
+          print *, ' stdev_sz_ccs', stdev_sz_ccs,  'real(size(sz)-1)',real(size(sz)-1)
           stdev_sz_ccs = sqrt(stdev_sz_ccs/real(size(sz)-1))
           print *, 'stdev_sz_ccs_borders', stdev_sz_ccs, 'threshold = ',avg_sz_ccs-1.*stdev_sz_ccs
           !discarding too small connected components
