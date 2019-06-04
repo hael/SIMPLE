@@ -596,6 +596,7 @@ contains
         use simple_ctf,   only: ctf
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
+        logical, parameter :: CTF_PATCH = .false.
         type(builder)                           :: build
         type(parameters)                        :: params
         type(sp_project)                        :: spproj_in, spproj
@@ -824,6 +825,12 @@ contains
                     iptcl_glob = iptcl_glob + 1
                     call build%spproj%set_boxcoords(iptcl_glob, nint(boxdata(iptcl,1:2)))
                 end do
+                ! Patch based ctf
+                if( CTF_PATCH )then
+                    !
+                    ! todo
+                    !
+                endif
                 ! clean
                 call boxfile%kill()
             enddo

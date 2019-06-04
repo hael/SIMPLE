@@ -1,5 +1,6 @@
 module simple_ctf_estimate_fit
 include 'simple_lib.f08'
+use simple_oris,              only: oris
 use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost
@@ -33,7 +34,6 @@ type ctf_estimate_fit
     integer, allocatable     :: inds_msk(:,:)           ! indices of pixels within resolution mask
     logical, allocatable     :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
     real                     :: polyx(POLYDIM), polyy(POLYDIM)
-    real                     :: cc_fit_patch(NPATCH,NPATCH) = -1.
     integer                  :: centers(NPATCH,NPATCH,2)
     real                     :: smpd         = 0.
     real                     :: df_lims(2)   = [0.3,5.0]! defocus range
@@ -55,6 +55,7 @@ type ctf_estimate_fit
 contains
     ! constructor
     procedure          :: new
+    procedure          :: read_doc
     procedure, private :: gen_resmsk
     procedure, private :: gen_boxes
     ! getters
@@ -73,9 +74,11 @@ contains
     procedure, private :: norm_pspec
     ! scoring, display & output
     procedure          :: plot_parms
+    procedure          :: write_doc
     procedure          :: write_star
     procedure, private :: calc_ctfscore
-    procedure, private :: write_diagnostic
+    procedure          :: write_diagnostic
+    procedure          :: write_diagnostic_patch
     procedure, private :: ctf2pspecimg
     ! polynomial fitting
     procedure, private :: fit_polynomial
@@ -116,8 +119,6 @@ contains
         call self%pspec_ctf%new(self%ldim_box, self%smpd)
         call self%pspec_ctf_roavg%new(self%ldim_box, self%smpd)
         self%flims = self%pspec%loop_lims(3)
-        ! generate windows
-        call self%gen_boxes
         ! init patches power spectra images
         call self%gen_centers
         do i=1,NPATCH
@@ -125,6 +126,8 @@ contains
                 call self%pspec_patch(i,j)%new(self%ldim_box, self%smpd)
             enddo
         enddo
+        ! generate windows
+        call self%gen_boxes
         ! search related
         if( dfrange(1) < dfrange(2) )then
             self%df_lims = dfrange
@@ -148,29 +151,59 @@ contains
         self%exists = .true.
     end subroutine new
 
+    ! constructor for reading and evaluating the polynomials only
+    ! with routine pix2polyvals
+    subroutine read_doc( self, fname )
+        class(ctf_estimate_fit), intent(inout) :: self
+        character(len=*),        intent(in)    :: fname
+        type(oris) :: os
+        character(len=STDLEN) :: phaseplate
+        integer    :: i,xdim,ydim
+        if( nlines(fname) /= 3 ) THROW_HARD('Invalid document; read_doc')
+        call os%new(3)
+        call os%read(fname)
+        self%parms%smpd    = os%get(1,'smpd')
+        self%parms%cs      = os%get(1,'cs')
+        self%parms%kv      = os%get(1,'kv')
+        self%parms%fraca   = os%get(1,'fraca')
+        self%parms%dfx     = os%get(1,'dfx')
+        self%parms%dfy     = os%get(1,'dfy')
+        self%parms%angast  = os%get(1,'angast')
+        self%parms%fraca   = os%get(1,'fraca')
+        self%parms%phshift = os%get(1,'phshift')
+        phaseplate         = os%get_static(1,'phaseplate')
+        self%parms%l_phaseplate = trim(phaseplate).eq.'yes'
+        ! micrograph dimensions
+        self%ldim_mic(1) = nint(os%get(1,'xdim'))
+        self%ldim_mic(2) = nint(os%get(1,'ydim'))
+        self%ldim_mic(3) = 1
+        ! polynomes
+        do i = 1,POLYDIM
+            self%polyx(i) = os%get(2,'px'//int2str(i))
+            self%polyy(i) = os%get(3,'py'//int2str(i))
+        enddo
+        ! clean
+        call os%kill
+    end subroutine read_doc
+
+    ! stores tiled windows
     subroutine gen_boxes( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(image) :: tmp
-        integer     :: xind,yind, i,j, nx,ny
+        integer     :: xind,yind, i,j, firstx,lastx, firsty,lasty
         logical     :: outside
         call tmp%new(self%ldim_box, self%smpd)
-        nx = 0
-        do xind=0,self%ldim_mic(1)-self%box,self%box/2
-            nx = nx+1
-        end do
-        self%nbox(1) = nx
-        ny = 0
-        do yind=0,self%ldim_mic(2)-self%box,self%box/2
-            ny = ny+1
-        end do
-        self%nbox(2) = ny
+        self%nbox(1) = floor(real(self%ldim_mic(1))/real(self%box/2))
+        self%nbox(2) = floor(real(self%ldim_mic(2))/real(self%box/2))
         allocate(self%boxes(self%nbox(1),self%nbox(2)))
-        i = 0
-        do xind=0,self%ldim_mic(1)-self%box,self%box/2
-            i = i+1
-            j = 0
-            do yind=0,self%ldim_mic(2)-self%box,self%box/2
-                j = j+1
+        firstx = 1
+        lastx  = self%ldim_mic(1)-self%box+1
+        firsty = 1
+        lasty  = self%ldim_mic(2)-self%box+1
+        do i = 1,self%nbox(1)
+            do j = 1,self%nbox(2)
+                xind = firstx + floor(real((i-1)*(lastx-firstx))/real(self%nbox(1)-1)) - 1
+                yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%nbox(2)-1)) - 1
                 call self%boxes(i,j)%new(self%ldim_box, self%smpd)
                 call self%micrograph%window_slim([xind,yind],self%box,tmp,outside)
                 call tmp%norm
@@ -179,8 +212,8 @@ contains
                 call tmp%ft2img(SPECKIND, self%boxes(i,j))
                 call tmp%zero_and_unflag_ft
                 call self%boxes(i,j)%dampen_pspec_central_cross
-            end do
-        end do
+            enddo
+        enddo
         call tmp%kill
     end subroutine gen_boxes
 
@@ -231,8 +264,6 @@ contains
         call self%grid_srch
         ! 3/4D refinement of grid solution
         call self%refine
-        ! make a half-n-half diagnostic
-        call self%write_diagnostic(diagfname)
         ! calculate CTF score diagnostic
         call self%calc_ctfscore
         parms%dfx          = self%parms%dfx
@@ -245,7 +276,7 @@ contains
     !>  Performs patch based refinement
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real    :: limits(2,2)
+        real    :: limits(2,2), cc, cc_sum
         integer :: pi,pj
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
@@ -265,21 +296,24 @@ contains
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
             enddo
         enddo
-        ! generate |power spectra|
+        ! generate sqrt(power spectra)
         call self%mic2spec_patch
         ! normalize, minimize, clean
-        !$omp parallel do collapse(2) default(shared) private(pi,pj) &
-        !$omp schedule(static) proc_bind(close)
+        cc_sum = 0.
+        !$omp parallel do collapse(2) default(shared) private(pi,pj,cc) &
+        !$omp schedule(static) proc_bind(close) reduction(+:cc_sum)
         do pi=1,NPATCH
             do pj=1,NPATCH
                 call self%norm_pspec(self%pspec_patch(pi,pj))
                 call self%ctf_cost_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol)
-                call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), self%cc_fit_patch(pi,pj))
+                call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
+                cc_sum = cc_sum + cc
                 call self%ctf_cost_patch(pi,pj)%kill
             enddo
         enddo
         !$omp end parallel do
+        self%cc_fit = cc_sum/real(self%npatch)
         ! polynomial fit
         call self%fit_polynomial
     end subroutine fit_patches
@@ -347,8 +381,9 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         real        :: dists(product(self%nbox))
         real        :: dist, dist_thresh, w, sumw
-        integer     :: pi,pj, xind,yind, cnt, center_win(2), i,j, nbox
-        nbox   = product(self%nbox)
+        integer     :: pi,pj, xind,yind, cnt, center_win(2), i,j, nbox, nthresh
+        nbox    = product(self%nbox)
+        nthresh = max(nint(real(nbox)*0.30),min(nbox,15))
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
         !$omp private(i,j,pi,pj,cnt,w,sumw,xind,yind,dists,dist_thresh,center_win,dist)
         do pi = 1,NPATCH
@@ -363,7 +398,7 @@ contains
                     end do
                 end do
                 call hpsort(dists)
-                dist_thresh = dists(nint(real(nbox)*0.3))
+                dist_thresh = dists(nthresh)
                 sumw = 0.
                 i = 0
                 do xind=0,self%ldim_mic(1)-self%box,self%box/2
@@ -435,8 +470,8 @@ contains
         mk   = maxval(self%flims(2,:))
         nr_msk = self%cc_msk
         ! removes symmetry mates
-        nr_msk(1:self%ldim_box(1)/2-1,:,1) = .false.
-        nr_msk(self%ldim_box(1)/2,self%ldim_box(2)/2:,1) = .false.
+        !nr_msk(1:self%ldim_box(1)/2-1,:,1) = .false.
+        !nr_msk(self%ldim_box(1)/2,self%ldim_box(2)/2:,1) = .false.
         ! builds mask indices
         self%npix_msk = count(nr_msk)
         allocate(self%inds_msk(2,self%npix_msk))
@@ -490,6 +525,34 @@ contains
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
         call pspec_half_n_half%kill
     end subroutine write_diagnostic
+
+    ! make & write half-n-half diagnostic
+    subroutine write_diagnostic_patch( self, diagfname )
+        class(ctf_estimate_fit), intent(inout) :: self
+        character(len=*),          intent(in)    :: diagfname
+        type(image) :: pspec_half_n_half, tmp
+        integer     :: pi,pj
+        call tmp%new(self%ldim_box,self%parms%smpd)
+        self%pspec_ctf = 0.
+        do pi = 1,NPATCH
+            do pj = 1,NPATCH
+                tmp = 0.
+                if( self%parms%l_phaseplate )then
+                    call self%ctf2pspecimg(tmp, self%parms_patch(pi,pj)%dfx, self%parms_patch(pi,pj)%dfy, self%parms_patch(pi,pj)%angast, add_phshift=self%parms_patch(pi,pj)%phshift)
+                else
+                    call self%ctf2pspecimg(tmp, self%parms_patch(pi,pj)%dfx, self%parms_patch(pi,pj)%dfy, self%parms_patch(pi,pj)%angast)
+                endif
+                call self%pspec_ctf%add(tmp)
+            enddo
+        enddo
+        call self%pspec_ctf%norm()
+        call self%pspec%norm()
+        call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, self%cc_msk)
+        call pspec_half_n_half%scale_pspec4viz
+        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
+        call pspec_half_n_half%kill
+        call tmp%kill
+    end subroutine write_diagnostic_patch
 
     subroutine grid_srch( self )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -583,6 +646,7 @@ contains
         !$omp end parallel do
     end subroutine ctf2pspecimg
 
+    ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
         class(ctf_estimate_fit), intent(inout) :: self
         real :: x(2,self%npatch), yx(self%npatch), yy(self%npatch), sig(self%npatch)
@@ -624,6 +688,7 @@ contains
         res = [1., x, x*x, y, y*y, x*y]
     end function poly
 
+    ! real space coordinates to polynomial coordinates
     subroutine pix2poly( self, xin, yin, xout, yout )
         class(ctf_estimate_fit), intent(inout) :: self
         real,                      intent(in)  :: xin,yin
@@ -632,6 +697,7 @@ contains
         yout = (yin-1.) / (self%ldim_mic(2)-1.) - 0.5
     end subroutine pix2poly
 
+    ! evaluate fitted defocus
     subroutine pix2polyvals( self, xin, yin, dfx, dfy )
         class(ctf_estimate_fit), intent(inout) :: self
         real,                    intent(in)    :: xin,yin
@@ -729,11 +795,41 @@ contains
                 call CDataSet__delete(fit)
             end do
         end do
-        title%str = 'Too complicated, just look for trends'//trim(int2str(nint(SCALE)))//C_NULL_CHAR
+        title%str = 'Need to simplify. Blue: calculated; black: interpolated'//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, fname)
         call CPlot2D__delete(plot2D)
     end subroutine plot_parms
+
+    subroutine write_doc( self, moviename, fname )
+        class(ctf_estimate_fit), intent(inout) :: self
+        character(len=*),        intent(in)    :: moviename, fname
+        type(oris) :: os
+        integer    :: i
+        call os%new(3)
+        call os%set(1,'smpd',   self%parms%smpd)
+        call os%set(1,'cs',     self%parms%cs)
+        call os%set(1,'kv',     self%parms%kv)
+        call os%set(1,'fraca',  self%parms%fraca)
+        call os%set(1,'dfx',    self%parms%dfx)
+        call os%set(1,'dfy',    self%parms%dfy)
+        call os%set(1,'angast', self%parms%angast)
+        call os%set(1,'phshift',self%parms%phshift)
+        call os%set(1,'forctf',    moviename)
+        call os%set(1,'xdim',   real(self%ldim_mic(1)))
+        call os%set(1,'ydim',   real(self%ldim_mic(2)))
+        if( self%parms%l_phaseplate )then
+            call os%set(1,'phaseplate','yes')
+        else
+            call os%set(1,'phaseplate','no')
+        endif
+        do i = 1, POLYDIM
+            call os%set(2,'px'//int2str(i),self%polyx(i))
+            call os%set(3,'py'//int2str(i),self%polyy(i))
+        enddo
+        call os%write(fname)
+        call os%kill
+    end subroutine write_doc
 
     subroutine write_star( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self

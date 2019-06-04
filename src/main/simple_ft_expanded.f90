@@ -14,11 +14,12 @@ real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 
 real, allocatable :: ftexp_transfmat(:,:,:)
-integer           :: ftexp_flims(3,2), ftexp_kzero
+integer           :: ftexp_transf_flims(3,2), ftexp_transf_kzero
 
 type :: ft_expanded
     private
     complex, allocatable :: cmat(:,:,:)        !< Fourier components
+    logical, allocatable :: bandmsk(:,:)       !< for band-passed correlation
     real                 :: hp                 !< high-pass limit
     real                 :: lp                 !< low-pass limit
     real                 :: smpd  = 0.         !< sampling distance of originating image
@@ -26,7 +27,6 @@ type :: ft_expanded
     integer              :: lims(3,2)          !< physical limits for the Fourier transform
     integer              :: flims(3,2)         !< shifted limits (2 make transfer 2 GPU painless)
     integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
-    integer              :: flims_nyq(3,2)     !< nyquist limits
     integer              :: kzero              !< to determine shift index to be applied to access the transfer matrix
     logical              :: existence=.false.  !< existence
   contains
@@ -36,9 +36,9 @@ type :: ft_expanded
     procedure          :: get_flims
     procedure          :: get_lims
     procedure          :: get_ldim
-    procedure          :: get_flims_nyq
     procedure          :: get_cmat
     procedure          :: get_cmat_ptr
+    procedure          :: get_bandmsk_ptr
     procedure          :: get_sumsq
     procedure          :: get_kind_shift
     ! setters
@@ -69,8 +69,7 @@ contains
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
         real    :: lp_nyq
-        integer :: h,k,l,i,hcnt,kcnt,lcnt,k_zero,knyq_zero
-        integer :: lplim,hplim,hh,kk,ll,sqarg,phys(2),lims4transfmat(3)
+        integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,kk,sqarg
         logical :: didft
         ! kill pre-existing object
         call self%kill
@@ -82,14 +81,11 @@ contains
         lp_nyq         = 2.*self%smpd
         self%lp        = max(lp, lp_nyq)
         self%lims      = img%loop_lims(1,self%lp)
-        self%flims_nyq = img%loop_lims(1,lp_nyq)
         ! shift the limits 2 make transfer 2 GPU painless
         self%flims     = 1
         do i=1,3
-            self%flims(i,2)     = self%lims(i,2)      - self%lims(i,1)      + 1
-            self%flims_nyq(i,2) = self%flims_nyq(i,2) - self%flims_nyq(i,1) + 1
+            self%flims(i,2)= self%lims(i,2) - self%lims(i,1) + 1
         end do
-        self%flims_nyq(:,1) = 1
         ! set the squared filter limits
         hplim = img%get_find(hp)
         hplim = hplim*hplim
@@ -110,27 +106,31 @@ contains
         ! allocate instance variables
         allocate(self%cmat(self%flims(1,1):self%flims(1,2),&
                            self%flims(2,1):self%flims(2,2),&
-                           self%flims(3,1):self%flims(3,2)), source=cmplx(0.,0.), stat=alloc_stat)
+                           self%flims(3,1):self%flims(3,2)),&
+                 &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
+                 &stat=alloc_stat)
+        self%cmat    = cmplx(0.,0.)
+        self%bandmsk = .false.
         if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
-        if( fetch_comps )then
-            hcnt = 0
-            do h=self%lims(1,1),self%lims(1,2)
-                hh   = h * h
-                hcnt = hcnt + 1
-                kcnt = 0
-                do k=self%lims(2,1),self%lims(2,2)
-                    kk    = k * k
-                    kcnt  = kcnt + 1
-                    sqarg = hh + kk
-                    if( sqarg < 0.5 )then
-                        cycle ! excludes zero
-                    elseif( sqarg <= lplim .and. sqarg >= hplim  )then
-                        self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
-                    end if
-                end do
+        ! init matrices
+        hcnt = 0
+        do h=self%lims(1,1),self%lims(1,2)
+            hh   = h * h
+            hcnt = hcnt + 1
+            kcnt = 0
+            do k=self%lims(2,1),self%lims(2,2)
+                kk    = k * k
+                kcnt  = kcnt + 1
+                sqarg = hh + kk
+                if( sqarg < 0.5 )then
+                    cycle ! excludes zero
+                elseif( sqarg <= lplim .and. sqarg >= hplim  )then
+                    if( fetch_comps ) self%cmat(hcnt,kcnt,1)    = img%get_fcomp2D(h,k)
+                    self%bandmsk(hcnt,kcnt) = .true.
+                end if
             end do
-            call self%calc_sumsq
-        endif
+        end do
+        if( fetch_comps )call self%calc_sumsq
         if( didft ) call img%ifft()
         ! allocate class variables
         self%existence = .true.
@@ -156,12 +156,6 @@ contains
         ldim = self%ldim
     end function get_ldim
 
-    pure function get_flims_nyq( self ) result( flims_nyq )
-        class(ft_expanded), intent(in) :: self
-        integer :: flims_nyq(3,2)
-        flims_nyq = self%flims_nyq
-    end function get_flims_nyq
-
     pure subroutine get_cmat( self, cmat )
         class(ft_expanded), intent(in) :: self
         complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
@@ -174,6 +168,12 @@ contains
         cmat_ptr => self%cmat
     end subroutine get_cmat_ptr
 
+    pure subroutine get_bandmsk_ptr( self, bandmsk_ptr )
+        class(ft_expanded), target,  intent(inout) :: self
+        logical,            pointer, intent(out)   :: bandmsk_ptr(:,:)
+        bandmsk_ptr => self%bandmsk
+    end subroutine get_bandmsk_ptr
+
     pure real function get_sumsq( self )
         class(ft_expanded), intent(in) :: self
         get_sumsq = self%sumsq
@@ -181,7 +181,7 @@ contains
 
     pure integer function get_kind_shift( self )
         class(ft_expanded), intent(in) :: self
-        get_kind_shift = ftexp_kzero - self%kzero
+        get_kind_shift = ftexp_transf_kzero - self%kzero
     end function
 
     ! SETTERS
@@ -246,21 +246,18 @@ contains
 
     pure subroutine calc_sumsq( self )
         class(ft_expanded), intent(inout) :: self
-        self%sumsq =                 sum(csq(self%cmat(                  1,1:self%flims(2,2)-1,1)))
-        self%sumsq = self%sumsq +    sum(csq(self%cmat(  self%flims(1,2)  ,1:self%flims(2,2)-1,1)))
-        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2)-1,1:self%flims(2,2)-1,1)))
+        self%sumsq =                 sum(csq(self%cmat(                1,:,1)), mask=self%bandmsk(1,:))
+        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2),:,1)), mask=self%bandmsk(2:self%flims(1,2),:))
     end subroutine calc_sumsq
 
     pure function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(in) :: self1, self2
-        real :: r,sumasq,sumbsq
+        real :: r
         ! corr is real part of the complex mult btw 1 and 2*
-        r =        sum(real(self1%cmat(                   1,1:self1%flims(2,2)-1,1)*&
-                      conjg(self2%cmat(                   1,1:self1%flims(2,2)-1,1))))
-        r = r +    sum(real(self1%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1)*&
-                      conjg(self2%cmat(  self1%flims(1,2)  ,1:self1%flims(2,2)-1,1))))
-        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1)*&
-                      conjg(self2%cmat(2:self1%flims(1,2)-1,1:self1%flims(2,2)-1,1))))
+        r =        sum(real(self1%cmat(                 1,:,1)*conjg(self2%cmat(                 1,:,1))),&
+                       &mask=self1%bandmsk(1,:))
+        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2),:,1)*conjg(self2%cmat(2:self1%flims(1,2),:,1))),&
+                       &mask=self1%bandmsk(2:self1%flims(1,2),:) )
         ! normalise the correlation coefficient
         if( self1%sumsq > 0. .and. self2%sumsq > 0. )then
             r = r / sqrt(self1%sumsq * self2%sumsq)
@@ -287,7 +284,7 @@ contains
     subroutine kill( self )
         class(ft_expanded), intent(inout) :: self
         if( self%existence )then
-            deallocate(self%cmat)
+            deallocate(self%cmat,self%bandmsk)
             self%existence = .false.
         endif
     end subroutine kill
@@ -295,22 +292,24 @@ contains
 
     ! TRANSFER MATRIX ROUTINES
 
-    subroutine ftexp_transfmat_init( img )
-        class(image), intent(in) :: img
-        real    :: lp_nyq, shconst(2)
+    subroutine ftexp_transfmat_init( img, lp )
+        class(image), intent(in)   :: img
+        real, optional, intent(in) :: lp
+        real    :: lp_here, lp_nyq, shconst(2)
         integer :: h,k,i,hcnt,kcnt
         integer :: ldim(3),flims(3,2)
         call ftexp_transfmat_kill
         ! dimensions
         ldim = img%get_ldim()
-        if( ldim(3) > 1 ) THROW_HARD('ftexp_transfmat_init')
+        if( ldim(3) > 1 ) THROW_HARD("In: ftexp_transfmat_init; simple_ft_expanded, 1")
         lp_nyq      = 2.*img%get_smpd()
-        flims       = img%loop_lims(1,lp_nyq)
-        ftexp_flims = flims
+        lp_here     = merge(max(lp_nyq,lp), lp_nyq, present(lp))
+        flims       = img%loop_lims(1,lp_here)
+        ftexp_transf_flims = flims
         do i=1,3
-            ftexp_flims(i,2) = ftexp_flims(i,2) - ftexp_flims(i,1) + 1
+            ftexp_transf_flims(i,2) = ftexp_transf_flims(i,2) - ftexp_transf_flims(i,1) + 1
         end do
-        ftexp_flims(:,1) = 1
+        ftexp_transf_flims(:,1) = 1
         ! set shift constant
         do i=1,2
             if( ldim(i) == 1 )then
@@ -323,15 +322,15 @@ contains
                 endif
             endif
         end do
-        allocate(ftexp_transfmat(ftexp_flims(1,1):ftexp_flims(1,2),&
-                                 ftexp_flims(2,1):ftexp_flims(2,2), 2), source=0., stat=alloc_stat)
+        allocate(ftexp_transfmat(ftexp_transf_flims(1,1):ftexp_transf_flims(1,2),&
+                                 ftexp_transf_flims(2,1):ftexp_transf_flims(2,2), 2), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: ftexp_transfmat_init; simple_ft_expanded, 2",alloc_stat)
         !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt) proc_bind(close) schedule(static)
         do h=flims(1,1),flims(1,2)
             do k=flims(2,1),flims(2,2)
                 hcnt = h-flims(1,1)+1
                 kcnt = k-flims(2,1)+1
-                if( k==0 ) ftexp_kzero = kcnt ! for transfer matrix indexing
+                if( k==0 ) ftexp_transf_kzero = kcnt ! for transfer matrix indexing
                 ftexp_transfmat(hcnt,kcnt,:) = real([h,k])*shconst
             end do
         end do
@@ -340,7 +339,8 @@ contains
 
     subroutine ftexp_transfmat_kill
         if( allocated(ftexp_transfmat) ) deallocate(ftexp_transfmat)
-        ftexp_flims = 0
+        ftexp_transf_flims = 0
+        ftexp_transf_kzero = 0
     end subroutine ftexp_transfmat_kill
 
 end module simple_ft_expanded

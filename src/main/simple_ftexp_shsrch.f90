@@ -30,7 +30,6 @@ type :: ftexp_shsrch
     integer                     :: lims(3,2)                 !< physical limits for the Fourier transform
     integer                     :: flims(3,2)                !< shifted limits
     integer                     :: ldim(3)                   !< logical dimension
-    integer                     :: flims_nyq(3,2)            !< nyquist limits
     integer                     :: kind_shift                !< transfer matrix index shift
     real(dp),    allocatable    :: ftexp_tmpmat_re_2d(:,:)   !< temporary matrix for shift search
     real(dp),    allocatable    :: ftexp_tmpmat_im_2d(:,:)   !< temporary matrix for shift search
@@ -151,8 +150,8 @@ contains
     !< set dimensions from images and allocate tmp matrices
     subroutine set_dims_and_alloc( self )
         class(ftexp_shsrch), intent(inout) :: self
-        integer :: ref_flims (3,2), ref_ldim (3), ref_lims (3,2), ref_flims_nyq (3,2)
-        integer :: ptcl_flims(3,2), ptcl_ldim(3), ptcl_lims(3,2), ptcl_flims_nyq(3,2)
+        integer :: ref_flims (3,2), ref_ldim (3), ref_lims (3,2)!, ref_flims_nyq (3,2)
+        integer :: ptcl_flims(3,2), ptcl_ldim(3), ptcl_lims(3,2)!, ptcl_flims_nyq(3,2)
         logical :: do_alloc
         ref_flims  = self%reference%get_flims()
         ptcl_flims = self%particle %get_flims()
@@ -169,19 +168,13 @@ contains
         if ( any( ref_lims /= ptcl_lims ) ) then
             THROW_HARD('set_dims_and_alloc: ptcl and ref have inconsistens lims; simple_ftexp_shsrch')
         end if
-        ref_flims_nyq  = self%reference%get_flims_nyq()
-        ptcl_flims_nyq = self%particle %get_flims_nyq()
-        if ( any( ref_flims_nyq /= ptcl_flims_nyq ) ) then
-            THROW_HARD('set_dims_and_alloc: ptcl and ref have inconsistens flims_nyq; simple_ftexp_shsrch')
-        end if
         self%flims     = ref_flims
         self%ldim      = ref_ldim
         self%lims      = ref_lims
-        self%flims_nyq = ref_flims_nyq
         do_alloc = .true.
         if ( allocated( self%ftexp_tmpmat_re_2d ) ) then
-            if ( ( ubound( self%ftexp_tmpmat_re_2d, 1 ) == ref_flims_nyq(1,2) ) .and. &
-                 ( ubound( self%ftexp_tmpmat_re_2d, 2 ) == ref_flims_nyq(2,2) ) ) then
+            if ( ( ubound( self%ftexp_tmpmat_re_2d, 1 ) == ref_flims(1,2) ) .and. &
+                 ( ubound( self%ftexp_tmpmat_re_2d, 2 ) == ref_flims(2,2) ) ) then
                 do_alloc = .false.
             else
                 deallocate( self%ftexp_tmpmat_re_2d )
@@ -190,10 +183,12 @@ contains
             end if
         end if
         if ( do_alloc ) then
-            allocate( self%ftexp_tmpmat_re_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
-                      self%ftexp_tmpmat_im_2d( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
-                      self%ftexp_tmp_cmat12  ( 1:ref_flims_nyq(1,2), 1:ref_flims_nyq(2,2) ),&
-                      stat=alloc_stat )
+            allocate( self%ftexp_tmpmat_re_2d( 1:ref_flims(1,2), 1:ref_flims(2,2) ),&
+                      self%ftexp_tmpmat_im_2d( 1:ref_flims(1,2), 1:ref_flims(2,2) ),&
+                      self%ftexp_tmp_cmat12  ( 1:ref_flims(1,2), 1:ref_flims(2,2) ), stat=alloc_stat )
+                      self%ftexp_tmpmat_re_2d = 0.
+                      self%ftexp_tmpmat_im_2d = 0.
+                      self%ftexp_tmp_cmat12   = cmplx(0.,0.)
             if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
         end if
     end subroutine set_dims_and_alloc
@@ -222,11 +217,12 @@ contains
     function corr_shifted_cost_8( self, shvec ) result( r )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
+        logical, pointer :: msk(:,:)
         real(dp) :: r
+        call self%reference%get_bandmsk_ptr(msk)
         call self%calc_tmpmat_re( shvec )
-        r =            sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
-        r = r +        sum(self%ftexp_tmpmat_re_2d(self%flims(1,2)  ,  1:self%flims(2,2)-1))
-        r = r + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        r =            sum(self%ftexp_tmpmat_re_2d(                1,:), mask=msk(1,:))
+        r = r + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2),:), mask=msk(2:self%flims(1,2),:))
         r = r * num / self%denominator
     end function corr_shifted_cost_8
 
@@ -235,16 +231,16 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2)
+        logical, pointer :: msk(:,:)
         integer :: kstart, kstop
         kstart = self%kind_shift + 1
-        kstop  = self%kind_shift + self%flims(2,2) - 1
+        kstop  = self%kind_shift + self%flims(2,2)
+        call self%reference%get_bandmsk_ptr(msk)
         call self%calc_tmpmat_im( shvec )
-        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1)*ftexp_transfmat(                  1,kstart:kstop,1))
-        grad(1) = grad(1) +      sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1)*ftexp_transfmat(  self%flims(1,2)  ,kstart:kstop,1))
-        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1)*ftexp_transfmat(2:self%flims(1,2)-1,kstart:kstop,1))
-        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1)*ftexp_transfmat(                  1,kstart:kstop,2))
-        grad(2) = grad(2) +      sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1)*ftexp_transfmat(  self%flims(1,2)  ,kstart:kstop,2))
-        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1)*ftexp_transfmat(2:self%flims(1,2)-1,kstart:kstop,2))
+        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,1),mask=msk(1,:))
+        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,1),mask=msk(2:self%flims(1,2),:))
+        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,2),mask=msk(1,:))
+        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,2),mask=msk(2:self%flims(1,2),:))
         grad    = grad * num / self%denominator
     end subroutine corr_gshifted_cost_8
 
@@ -253,20 +249,19 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2), f
+        logical, pointer :: msk(:,:)
         integer :: kstart, kstop
         kstart = self%kind_shift + 1
-        kstop  = self%kind_shift + self%flims(2,2) - 1
+        kstop  = self%kind_shift + self%flims(2,2)
+        call self%reference%get_bandmsk_ptr(msk)
         call self%calc_tmpmat_re_im( shvec )
-        f =            sum(self%ftexp_tmpmat_re_2d(                  1,1:self%flims(2,2)-1))
-        f = f +        sum(self%ftexp_tmpmat_re_2d(self%flims(1,2)    ,1:self%flims(2,2)-1))
-        f = f + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1))
+        f =          sum(self%ftexp_tmpmat_re_2d(                1,:),mask=msk(1,:))
+        f = f + 2.d0*sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2),:),mask=msk(2:self%flims(1,2),:))
         f = f * num / self%denominator
-        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1)*ftexp_transfmat(                  1,kstart:kstop,1))
-        grad(1) = grad(1) +      sum(self%ftexp_tmpmat_im_2d(self%flims(1,2)    ,1:self%flims(2,2)-1)*ftexp_transfmat(    self%flims(1,2),kstart:kstop,1))
-        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1)*ftexp_transfmat(2:self%flims(1,2)-1,kstart:kstop,1))
-        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                  1,1:self%flims(2,2)-1)*ftexp_transfmat(                  1,kstart:kstop,2))
-        grad(2) = grad(2) +      sum(self%ftexp_tmpmat_im_2d(  self%flims(1,2)  ,1:self%flims(2,2)-1)*ftexp_transfmat(    self%flims(1,2),kstart:kstop,2))
-        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2)-1,1:self%flims(2,2)-1)*ftexp_transfmat(2:self%flims(1,2)-1,kstart:kstop,2))
+        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,1),mask=msk(1,:))
+        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,1),mask=msk(2:self%flims(1,2),:))
+        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,2),mask=msk(1,:))
+        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,2),mask=msk(2:self%flims(1,2),:))
         grad = grad * num / self%denominator
     end subroutine corr_fdfshifted_cost_8
 
@@ -274,12 +269,16 @@ contains
     subroutine calc_tmpmat_re( self, shvec )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
+        logical, pointer :: msk(:,:)
         real(dp) :: arg
         integer  :: hind,kind
-        do kind=self%flims(2,1),self%flims(2,2) !-1
+        call self%reference%get_bandmsk_ptr(msk)
+        do kind=self%flims(2,1),self%flims(2,2)
             do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                if( msk(hind,kind) )then
+                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
+                    self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                endif
             end do
         end do
     end subroutine calc_tmpmat_re
@@ -288,12 +287,16 @@ contains
     subroutine calc_tmpmat_im( self, shvec )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
+        logical, pointer :: msk(:,:)
         real(dp) :: arg
         integer  :: hind,kind
-        do kind=self%flims(2,1),self%flims(2,2) !-1
+        call self%reference%get_bandmsk_ptr(msk)
+        do kind=self%flims(2,1),self%flims(2,2)
             do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                if( msk(hind,kind) )then
+                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
+                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                endif
             end do
         end do
     end subroutine calc_tmpmat_im
@@ -302,15 +305,19 @@ contains
     subroutine calc_tmpmat_re_im( self, shvec )
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
-        real(dp)    :: arg
+        logical, pointer :: msk(:,:)
         complex(dp) :: tmp
+        real(dp)    :: arg
         integer     :: hind,kind
-        do kind=self%flims(2,1),self%flims(2,2) !-1
+        call self%reference%get_bandmsk_ptr(msk)
+        do kind=self%flims(2,1),self%flims(2,2)
             do hind=self%flims(1,1),self%flims(1,2)
-                arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                if( msk(hind,kind) )then
+                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
+                    tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
+                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
+                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
+                endif
             end do
         end do
     end subroutine calc_tmpmat_re_im
@@ -319,13 +326,19 @@ contains
     subroutine calc_tmp_cmat12( self )
         class(ftexp_shsrch), intent(inout) :: self
         complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
-        real(dp) :: sqsum
+        logical, pointer :: msk(:,:)
+        integer  :: hind,kind
+        call self%reference%get_bandmsk_ptr(msk)
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
         self%denominator = dsqrt(real(self%reference%get_sumsq(),dp) * real(self%particle%get_sumsq(),dp))
-        self%ftexp_tmp_cmat12(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)) = &    !-1
-                    cmat1_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1) * &  !-1
-              conjg(cmat2_ptr(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),1))     !-1
+        do kind=self%flims(2,1),self%flims(2,2)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( msk(hind,kind) )then
+                    self%ftexp_tmp_cmat12(hind,kind) = cmat1_ptr(hind,kind,1) * conjg(cmat2_ptr(hind,kind,1))
+                endif
+            end do
+        end do
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )

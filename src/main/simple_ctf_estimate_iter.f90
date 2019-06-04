@@ -31,8 +31,8 @@ contains
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname, starname
-        real                          :: cc, ctfscore, cc90, scale
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname, docname
+        real                          :: ctfscore, scale
         integer                       :: nframes, ldim(3), ldim_thumb(3)
         if( .not. file_exists(moviename_forctf) )&
         & write(logfhandle,*) 'inputted micrograph does not exist: ', trim(adjustl(moviename_forctf))
@@ -59,10 +59,7 @@ contains
         call ctffit%new(self%micrograph, params_glob%pspecsz, ctfvars, [params_glob%dfmin,params_glob%dfmax],&
             &[params_glob%hp,params_glob%lp], params_glob%astigtol)
         call ctffit%fit( ctfvars, fname_diag )
-        cc       = ctffit%get_ccfit()
-        cc90     = ctffit%get_cc90()
         ctfscore = ctffit%get_ctfscore()
-        call make_relativepath(CWD_GLOB,fname_diag, rel_ctfjpg)
         if( l_gen_thumb )then
             ! generate thumbnail
             scale         = real(params_glob%pspecsz)/real(ldim(1))
@@ -90,21 +87,26 @@ contains
             epsname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
             epsname = swap_suffix(epsname, '_ctf', FORCTF_SUFFIX)
             epsname = trim(dir_out)//trim(adjustl(epsname))//'.eps'//C_NULL_CHAR
-            starname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-            starname = swap_suffix(starname, '_ctf', FORCTF_SUFFIX)
-            starname = trim(dir_out)//trim(adjustl(starname))//'.star'//C_NULL_CHAR
+            docname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
+            docname = swap_suffix(docname, '_ctf', FORCTF_SUFFIX)
+            docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)//C_NULL_CHAR
             call ctffit%plot_parms(epsname)
-            call ctffit%write_star(starname)
+            call ctffit%write_doc(moviename_forctf, docname)
+            call ctffit%write_diagnostic_patch(fname_diag)
+            call orientation%set('ctf_doc', trim(docname))
+        else
+            call ctffit%write_diagnostic(fname_diag)
         endif
+        call make_relativepath(CWD_GLOB,fname_diag, rel_ctfjpg)
         ! reporting
-        call orientation%set('dfx',      ctfvars%dfx)
-        call orientation%set('dfy',      ctfvars%dfy)
-        call orientation%set('angast',   ctfvars%angast)
-        call orientation%set('phshift',  ctfvars%phshift)
-        call orientation%set('ctf_estimatecc', cc)
-        call orientation%set('ctfscore', ctfscore)
-        call orientation%set('cc90',     cc90)
-        call orientation%set('ctfjpg',   rel_ctfjpg)
+        call orientation%set('dfx',            ctfvars%dfx)
+        call orientation%set('dfy',            ctfvars%dfy)
+        call orientation%set('angast',         ctfvars%angast)
+        call orientation%set('phshift',        ctfvars%phshift)
+        call orientation%set('ctf_estimatecc', ctffit%get_ccfit())
+        call orientation%set('ctfscore',       ctfscore)
+        call orientation%set('cc90',           ctffit%get_cc90())
+        call orientation%set('ctfjpg',         rel_ctfjpg)
         ! clean
         call ctffit%kill
     end subroutine iterate
