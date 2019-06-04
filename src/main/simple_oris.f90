@@ -2648,13 +2648,22 @@ contains
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
         real, allocatable :: ows(:)
-        integer :: closest, i
+        real      :: dists(self%n)
+        integer   :: inds(self%n), i, ii, j
+        type(ori) :: o
         lnns = .false.
         ows  = o_peaks%get_all('ow')
         do i=1,o_peaks%n
             if( ows(i) <= TINY ) cycle
-            closest = self%find_closest_proj(o_peaks%o(i))
-            lnns(closest) = .true.
+            do ii=1,self%n
+                inds(ii) = ii
+                call self%get_ori(ii, o)
+                dists(ii) = o.euldist.o_peaks%o(i)
+            end do
+            call hpsort(dists, inds)
+            do j=1,k
+                lnns(inds(j)) = .true.
+            end do
         end do
         deallocate(ows)
     end subroutine nearest_proj_neighbors_2

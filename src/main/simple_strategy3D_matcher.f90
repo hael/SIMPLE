@@ -27,6 +27,8 @@ use simple_strategy3D_multi,         only: strategy3D_multi
 use simple_strategy3D_snhc_single,   only: strategy3D_snhc_single
 use simple_strategy3D_greedy_single, only: strategy3D_greedy_single
 use simple_strategy3D_greedy_multi,  only: strategy3D_greedy_multi
+use simple_strategy3D_neigh_single,  only: strategy3D_neigh_single
+use simple_strategy3D_neigh_multi,   only: strategy3D_neigh_multi
 use simple_strategy3D_cont_single,   only: strategy3D_cont_single
 use simple_strategy3D,               only: strategy3D
 use simple_strategy3D_srch,          only: strategy3D_spec, set_ptcl_stats, eval_ptcl
@@ -209,7 +211,7 @@ contains
                         if( ran3() < GREEDY_FREQ )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                         else
-                            allocate(strategy3D_single        :: strategy3Dsrch(iptcl)%ptr)
+                            allocate(strategy3D_single :: strategy3Dsrch(iptcl)%ptr)
                         endif
                     endif
                 end do
@@ -219,7 +221,7 @@ contains
                 end do
             case('cont_single')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cont_single   :: strategy3Dsrch(iptcl)%ptr)
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_cont_single :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('multi')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -228,13 +230,13 @@ contains
                         if( updatecnt == 1 )then
                             allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
                         else
-                            allocate(strategy3D_multi        :: strategy3Dsrch(iptcl)%ptr)
+                            allocate(strategy3D_multi :: strategy3Dsrch(iptcl)%ptr)
                         endif
                     endif
                 end do
             case('greedy_multi')
                 do iptcl=params_glob%fromp,params_glob%top
-                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_multi  :: strategy3Dsrch(iptcl)%ptr)
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
                 end do
             case('cluster','clustersym')
                 do iptcl=params_glob%fromp,params_glob%top
@@ -249,6 +251,14 @@ contains
                     endif
                 end do
                 call close_o_peaks_io
+            case('neigh_single')
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_neigh_single :: strategy3Dsrch(iptcl)%ptr)
+                end do
+            case('neigh_multi')
+                do iptcl=params_glob%fromp,params_glob%top
+                    if( ptcl_mask(iptcl) ) allocate(strategy3D_neigh_multi :: strategy3Dsrch(iptcl)%ptr)
+                end do
             case('eval')
                 ! nothing to do
             case DEFAULT
@@ -282,6 +292,8 @@ contains
         endif
         ! memoize FFTs
         call pftcc%memoize_ffts
+        ! read o_peaks for neigh refinement modes
+        if( str_has_substr(params_glob%refine, 'neigh') ) call read_o_peaks
 
         ! SEARCH
         select case(trim(params_glob%refine))
@@ -315,7 +327,7 @@ contains
         ! here we read all peaks to allow deriving statistics based on the complete set
         ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
-            case('eval','cluster','clustersym')
+        case('eval','cluster','clustersym','neigh_multi','neigh_single')
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
@@ -657,8 +669,7 @@ contains
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks
-        use simple_strategy3D_utils, only: update_softmax_weights
-        integer :: iptcl, n_nozero, i
+        integer :: i
         ! set npeaks
         npeaks = NPEAKS2REFINE
         ! particle weights
@@ -675,16 +686,22 @@ contains
         ! allocate s3D singleton
         call prep_strategy3D(ptcl_mask, npeaks)
         ! read peaks
+        call read_o_peaks
+    end subroutine setup_weights_read_o_peaks
+
+    subroutine read_o_peaks
+        use simple_strategy3D_utils, only: update_softmax_weights
+        integer :: iptcl, n_nozero
         if( .not. file_exists(trim(params_glob%o_peaks_file)) )then
             THROW_HARD(trim(params_glob%o_peaks_file)//' file does not exist')
         endif
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
             call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            call update_softmax_weights(iptcl, npeaks )
+            call update_softmax_weights(iptcl, npeaks)
         end do
         call close_o_peaks_io
-    end subroutine setup_weights_read_o_peaks
+    end subroutine read_o_peaks
 
     subroutine calc_global_ori_weights
         real, allocatable :: weights_glob(:), weights(:), rank_weights(:)

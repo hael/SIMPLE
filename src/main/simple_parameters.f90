@@ -1381,6 +1381,12 @@ contains
         else
             self%proj_weights_file = PROJ_WEIGHTS_FBODY//int2str(self%part)//BIN_EXT
         endif
+        ! neigh refinement modes
+        if( str_has_substr(self%refine, 'neigh') )then
+            if( .not. cline%defined('nspace')    ) self%nspace = 10000
+            if( .not. cline%defined('nnn')       ) self%nnn    = 3
+            if( .not. cline%defined('globwfrac') ) self%globwfrac = real(self%nnn) * GLOBAL_WEIGHT_FRAC
+        endif
         !>>> END, IMAGE-PROCESSING-RELATED
 
         ! set global pointer to instance
