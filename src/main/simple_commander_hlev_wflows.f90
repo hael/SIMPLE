@@ -8,6 +8,7 @@ use simple_parameters,     only: parameters
 implicit none
 
 public :: cleanup2D_commander
+public :: cleanup2D_nano_commander
 public :: cluster2D_autoscale_commander
 public :: initial_3Dmodel_commander
 public :: cluster3D_commander
@@ -19,6 +20,10 @@ type, extends(commander_base) :: cleanup2D_commander
   contains
     procedure :: execute      => exec_cleanup2D
 end type cleanup2D_commander
+type, extends(commander_base) :: cleanup2D_nano_commander
+  contains
+    procedure :: execute      => exec_cleanup2D_nano
+end type cleanup2D_nano_commander
 type, extends(commander_base) :: cluster2D_autoscale_commander
   contains
     procedure :: execute      => exec_cluster2D_autoscale
@@ -240,6 +245,56 @@ contains
             end subroutine
 
     end subroutine exec_cleanup2D
+
+    !> for distributed cleanup2D optimized for time-series of nanoparticles
+    subroutine exec_cleanup2D_nano( self, cline )
+        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander
+        class(cleanup2D_nano_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        ! commanders
+        type(cluster2D_distr_commander) :: xcluster2D_distr
+        ! other variables
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: orig_projfile
+        character(len=LONGSTRLEN)     :: finalcavgs
+        integer  :: nparts, last_iter_stage2
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        call params%new(cline)
+        nparts = params%nparts
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! read project file
+        call spproj%read(params%projfile)
+        orig_projfile = trim(params%projfile)
+        ! sanity checks
+        if( spproj%get_nptcls() == 0 )then
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_nano')
+        endif
+        ! delete any previous solution
+        if( .not. spproj%is_virgin_field(params%oritype) )then
+            ! removes previous cluster2D solution (states are preserved)
+            call spproj%os_ptcl2D%delete_2Dclustering
+            call spproj%write_segment_inside(params%oritype)
+        endif
+        ! splitting
+        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! no auto-scaling
+        call xcluster2D_distr%execute(cline)
+        last_iter_stage2 = nint(cline%get_rarg('endit'))
+        finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+        ! adding cavgs & FRCs to project
+        params%projfile = trim(orig_projfile)
+        call spproj%read( params%projfile )
+        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        call spproj%write_segment_inside('out')
+        call spproj%kill()
+        ! cleanup
+        call del_file('start2Drefs'//params%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
+    end subroutine exec_cleanup2D_nano
 
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )

@@ -43,6 +43,7 @@ type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 type(tseries_track_distr_commander)         :: xtseries_track_distr
+type(cleanup2D_nano_commander)              :: xcleanup2D_nano
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_distr_commander)         :: xscale_project
@@ -236,6 +237,18 @@ select case(prg)
         if( .not. cline%defined('cenlp')    ) call cline%set('cenlp',    5.0)
         if( .not. cline%defined('ctf')      ) call cline%set('ctf',      'no')
         call xtseries_track_distr%execute( cline )
+    case( 'cleanup2D_nano' )
+        call cline%set('eo',        'no')
+        call cline%set('center',    'yes')
+        call cline%set('autoscale', 'no')
+        call cline%set('refine',    'greedy')
+        call cline%set('tseries',   'yes')
+        if( .not. cline%defined('lp')     ) call cline%set('lp',     1.)
+        if( .not. cline%defined('ncls')   ) call cline%set('ncls',   20.)
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  5.)
+        if( .not. cline%defined('hp')     ) call cline%set('hp',     5.)
+        if( .not. cline%defined('maxits') ) call cline%set('maxits', 10.)
+        call xcleanup2D_nano%execute(cline)
 
     ! SUPPORTING WORKFLOWS
 

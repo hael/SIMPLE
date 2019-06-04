@@ -8,7 +8,7 @@ implicit none
 !! Basic Operations
 public :: copy_imgfile, diff_imgfiles, pad_imgfile, resize_imgfile, clip_imgfile, mirror_imgfile
 public :: random_selection_from_imgfile, resize_and_clip_imgfile, resize_imgfile_double
-public :: subtr_backgr_imgfile, random_cls_from_imgfile
+public :: subtr_backgr_imgfile, random_cls_from_imgfile, selection_from_tseries_imgfile
 !! Normalisation
 public :: norm_bin_imgfile, norm_imgfile, norm_ext_imgfile, noise_norm_imgfile
 public :: shellnorm_imgfile, matchfilt_imgfile
@@ -1031,12 +1031,7 @@ contains
         call img%kill
     end subroutine bin_imgfile
 
-
     !>  random_selection_from_imgfile
-    !! \param fname2selfrom  output filename
-    !! \param fname  input filename
-    !! \param nran number of random samples
-    !! \param smpd sampling distance
     subroutine random_selection_from_imgfile( spproj, fname, box, nran )
         use simple_sp_project, only: sp_project
         class(sp_project), intent(inout) :: spproj
@@ -1097,6 +1092,58 @@ contains
         call img%kill
         call img_scaled%kill
     end subroutine random_selection_from_imgfile
+
+    !>  selection from imgfile of time series
+    subroutine selection_from_tseries_imgfile( spproj, fname, box, nsel )
+        use simple_sp_project, only: sp_project
+        class(sp_project), intent(inout) :: spproj
+        character(len=*),  intent(in)    :: fname
+        integer,           intent(in)    :: nsel, box
+        type(image)                      :: img, img_scaled
+        character(len=:), allocatable    :: stkname
+        logical,          allocatable    :: mask(:)
+        real    :: smpd
+        integer :: nptcls, box_ori, ldim(3), i
+        integer :: ldim_scaled(3), ind, cnt, stepsz
+        logical :: doscale
+        ! dimensions
+        nptcls      = spproj%get_nptcls()
+        smpd        = spproj%os_stk%get(1,'smpd')
+        box_ori     = nint(spproj%os_stk%get(1,'box'))
+        ldim        = [box_ori,box_ori,1]
+        ldim_scaled = [box,box,1]
+        doscale     = box /= box_ori
+        if( doscale )call img_scaled%new(ldim_scaled,smpd) ! this sampling distance will be overwritten
+        call raise_exception_imgfile( nptcls, ldim, 'selection_from_tseries_imgfile' )
+        call img%new(ldim,smpd)
+        ! copy
+        write(logfhandle,'(a)') '>>> SELECTING IMAGES FROM TIME-SERIES'
+        stepsz = nptcls / nsel
+        cnt = 0
+        do i = 1,nptcls,stepsz
+            cnt = cnt + 1
+            if( cnt > nsel ) exit
+            call progress(i, nsel)
+            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind)
+            call img%read(stkname, ind)
+            call img%norm()
+            if( doscale )then
+                call img%fft()
+                if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2)&
+                     .and. ldim_scaled(3) <= ldim(3) )then
+                    call img%clip(img_scaled)
+                else
+                    call img%pad(img_scaled)
+                endif
+                call img_scaled%ifft()
+                call img_scaled%write(fname, cnt)
+            else
+                call img%write(fname, cnt)
+            endif
+        end do
+        call img%kill
+        call img_scaled%kill
+    end subroutine selection_from_tseries_imgfile
 
     !>  random_selection_from_imgfile
     !! \param fname2selfrom  output filename

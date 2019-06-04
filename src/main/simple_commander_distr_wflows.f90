@@ -703,7 +703,7 @@ contains
     end subroutine exec_make_cavgs_distr
 
     subroutine exec_cluster2D_distr( self, cline )
-        use simple_procimgfile,         only: random_selection_from_imgfile, copy_imgfile
+        use simple_procimgfile
         use simple_commander_cluster2D, only: check_2Dconv_commander
         class(cluster2D_distr_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
@@ -765,7 +765,11 @@ contains
             params%refs_even = 'start2Drefs_even'//params%ext
             params%refs_odd  = 'start2Drefs_odd'//params%ext
             if( build%spproj%is_virgin_field('ptcl2D') .or. params%startit == 1 )then
-                call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                if( params%tseries .eq. 'yes' )then
+                    call selection_from_tseries_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                else
+                    call random_selection_from_imgfile(build%spproj, params%refs, params%box, params%ncls)
+                endif
                 call copy_imgfile(trim(params%refs), trim(params%refs_even), params%smpd, [1,params%ncls])
                 call copy_imgfile(trim(params%refs), trim(params%refs_odd),  params%smpd, [1,params%ncls])
             else
