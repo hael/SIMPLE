@@ -41,6 +41,7 @@ if (NOT ${CMAKE_Fortran_COMPILER_ID} STREQUAL "Intel")
 endif()
 
 file(GLOB STARFILE_src "${CMAKE_CURRENT_SOURCE_DIR}/starfile/*.cpp" PARENT_SCOPE)
+file(GLOB CPLOT2D_src "${CMAKE_CURRENT_SOURCE_DIR}/CPlot2D/*.cpp" PARENT_SCOPE)
 file(GLOB CUDA_src "${CMAKE_CURRENT_SOURCE_DIR}/cuda/*.[Ff][90][08]" PARENT_SCOPE)
 message(STATUS "SIMPLE CUDA LIBRARY ${CUDA_src}")
 
@@ -68,10 +69,8 @@ list(APPEND SIMPLE_src
   "${CMAKE_BINARY_DIR}/lib/simple/simple_args.f90"
   "${CMAKE_BINARY_DIR}/lib/simple/simple_modules.f90"
   )
-list(APPEND SIMPLE_src
-  "${CMAKE_CURRENT_SOURCE_DIR}/main/CPlot2D.cpp")
 #set(CORELIB_src  ${DEFS_src} ${UTILS_src} ${SIMPLE_src})
-list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
+list(APPEND SIMPLECORELIB  ${DEFS_src} ${UTILS_src} ${FILEIO_src} ${STARFILE_src} ${CPLOT2D_src} ${JPG_src} ${OPERATORS_src} ${SIMPLE_src})
 if ( USE_CUDA )
   list(APPEND SIMPLECORELIB ${CUDA_src})
 
