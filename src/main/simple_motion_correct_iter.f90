@@ -214,7 +214,7 @@ contains
             call starfile_table__setName(mc_starfile, "local_motion_model")
             do i = 1, size(patched_polyn,1)
                 call starfile_table__addObject(mc_starfile)
-                call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFFS_IDX, i)
+                call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFFS_IDX, i-1)
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, patched_polyn(i))
             end do
             call starfile_table__write_ofile(mc_starfile)
