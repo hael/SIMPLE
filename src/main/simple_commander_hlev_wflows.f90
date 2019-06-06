@@ -280,6 +280,7 @@ contains
         ! splitting
         call spproj%split_stk(params%nparts, dir=PATH_PARENT)
         ! no auto-scaling
+        call cline%set('prg', 'cluster2D')
         call xcluster2D_distr%execute(cline)
         last_iter_stage2 = nint(cline%get_rarg('endit'))
         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
@@ -288,8 +289,10 @@ contains
         call spproj%read( params%projfile )
         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
         call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
-        call spproj%write_segment_inside('out')
-        call spproj%kill()
+        ! transfer 2D shifts to 3D field
+        call spproj%map2Dshifts23D
+        call spproj%write
+        call spproj%kill
         ! cleanup
         call del_file('start2Drefs'//params%ext)
         ! end gracefully

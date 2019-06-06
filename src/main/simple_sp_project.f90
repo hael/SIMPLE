@@ -90,6 +90,7 @@ contains
     procedure          :: set_sp_oris
     procedure          :: scale_projfile
     procedure          :: merge_algndocs
+    procedure          :: map2Dshifts23D
     procedure          :: map2ptcls
     procedure          :: map2ptcls_state
     procedure          :: prune_project
@@ -2168,6 +2169,33 @@ contains
         ! no need to update header (taken care of in binoris object)
         call self%bos%close
     end subroutine merge_algndocs
+
+    ! map shifts obtained by cluster2D to the 3D field for cases where an external
+    ! starting model is used for initializing 3D refinement (nanoparticles)
+    subroutine map2Dshifts23D( self )
+        class(sp_project), intent(inout) :: self
+        integer :: noris_ptcl3D, noris_ptcl2D
+        real, allocatable :: shifts(:)
+        if( self%is_virgin_field('ptcl2D') )then
+            return
+        endif
+        ! ensure ptcl3D field congruent with ptcl2D field
+        noris_ptcl3D = self%os_ptcl3D%get_noris()
+        noris_ptcl2D = self%os_ptcl2D%get_noris()
+        if( noris_ptcl3D /= noris_ptcl2D )then
+            ! preserve defocus parameters, stack indices
+            self%os_ptcl3D = self%os_ptcl2D
+            call self%os_ptcl3D%delete_2Dclustering(keepshifts=.true.)
+        else
+            ! transfer shifts
+            shifts = self%os_ptcl2D%get_all('x')
+            call self%os_ptcl3D%set_all('x', shifts)
+            deallocate(shifts)
+            shifts = self%os_ptcl2D%get_all('y')
+            call self%os_ptcl3D%set_all('y', shifts)
+            deallocate(shifts)
+        endif
+    end subroutine map2Dshifts23D
 
     ! this map2ptcls routine assumes that any selection of class averages is done
     ! exclusively by state=0 flagging without any physical deletion

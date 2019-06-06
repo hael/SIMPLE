@@ -74,6 +74,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 ! declare protected program specifications here
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
+type(simple_program), target :: cleanup2D_nano
 type(simple_program), target :: cluster2D
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
@@ -248,6 +249,7 @@ contains
         call set_prg_ptr_array
         call new_center
         call new_cleanup2D
+        call new_cleanup2D_nano
         call new_cluster2D
         call new_cluster2D_stream
         call new_cluster3D
@@ -330,6 +332,7 @@ contains
         n_prg_ptrs = 0
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
+        call push2prg_ptr_array(cleanup2D_nano)
         call push2prg_ptr_array(cluster2D)
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster3D)
@@ -422,6 +425,8 @@ contains
                 ptr2prg => center
             case('cleanup2D')
                 ptr2prg => cleanup2D
+            case('cleanup2D_nano')
+                ptr2prg => cleanup2D_nano
             case('cluster2D')
                 ptr2prg => cluster2D
             case('cluster2D_stream')
@@ -447,7 +452,7 @@ contains
             case('extract')
                 ptr2prg => extract
             case('export_relion')
-                ptr2prg => export_relion 
+                ptr2prg => export_relion
             case('export_starproject')
                 ptr2prg => export_starproject
             case('filter')
@@ -577,6 +582,7 @@ contains
 
     subroutine list_distr_prgs_in_ui
         write(logfhandle,'(A)') cleanup2D%name
+        write(logfhandle,'(A)') cleanup2D_nano%name
         write(logfhandle,'(A)') cluster2D%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
@@ -879,6 +885,41 @@ contains
         call cleanup2D%set_input('comp_ctrls', 1, nparts)
         call cleanup2D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cleanup2D
+
+    subroutine new_cleanup2D_nano
+        ! PROGRAM SPECIFICATION
+        call cleanup2D_nano%new(&
+        &'cleanup2D_nano',&                                                     ! name
+        &'Simultaneous 2D alignment and clustering of nanoparticle images',&    ! descr_short
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm&
+        & suitable for the first pass of cleanup after time-series tracking',&  ! descr_long
+        &'simple_distr_exec',&                                                  ! executable
+        &0, 0, 0, 3, 3, 1, 2, .true.)                                           ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cleanup2D_nano%set_input('srch_ctrls', 1, ncls)
+        cleanup2D_nano%srch_ctrls(1)%required = .false.
+        call cleanup2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call cleanup2D_nano%set_input('srch_ctrls', 3, maxits)
+        ! filter controls
+        call cleanup2D_nano%set_input('filt_ctrls', 1, hp)
+        call cleanup2D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        call cleanup2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 1.)
+        ! mask controls
+        call cleanup2D_nano%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call cleanup2D_nano%set_input('comp_ctrls', 1, nparts)
+        call cleanup2D_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cleanup2D_nano
 
     subroutine new_cluster2D
         ! PROGRAM SPECIFICATION
@@ -1708,7 +1749,7 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_export_starproject
-    
+
     subroutine new_export_relion
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
@@ -1731,7 +1772,7 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_export_relion
-    
+
     subroutine new_local_resolution
         ! PROGRAM SPECIFICATION
         call local_resolution%new(&

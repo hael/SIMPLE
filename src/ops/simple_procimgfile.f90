@@ -1123,7 +1123,6 @@ contains
         do i = 1,nptcls,stepsz
             cnt = cnt + 1
             if( cnt > nsel ) exit
-            call progress(i, nsel)
             call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind)
             call img%read(stkname, ind)
             call img%norm()

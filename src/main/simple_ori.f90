@@ -175,12 +175,18 @@ contains
         endif
     end subroutine delete_entry
 
-    subroutine delete_2Dclustering( self )
-        class(ori), intent(inout) :: self
+    subroutine delete_2Dclustering( self, keepshifts )
+        class(ori),        intent(inout) :: self
+        logical, optional, intent(in)    :: keepshifts
+        logical :: kkeepshifts
+        kkeepshifts = .false.
+        if( present(keepshifts) ) kkeepshifts = keepshifts
         call self%htab%delete('class')
         call self%htab%delete('e3')
-        call self%htab%delete('x')
-        call self%htab%delete('y')
+        if( .not. kkeepshifts )then
+            call self%htab%delete('x')
+            call self%htab%delete('y')
+        endif
         call self%htab%delete('corr')
         call self%htab%delete('frac')
     end subroutine delete_2Dclustering
