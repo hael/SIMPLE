@@ -672,8 +672,7 @@ contains
         call set_param(stktab,        'stktab',        'file',   'List of per-micrograph particle stacks', 'List of per-micrograph particle stacks', 'stktab.txt file containing file names', .false., 'stktab.txt')
         call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
         &'(yes|no|flip){no}', .true., 'no')
-        call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}',&
-        &'(yes|no|flip){yes}', .true., 'yes')
+        call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
@@ -1618,7 +1617,6 @@ contains
         call import_movies%set_input('parm_ios', 4, fraca)
         import_movies%parm_ios(4)%required = .true.
         call import_movies%set_input('parm_ios', 5, ctf_yes)
-        import_movies%parm_ios(5)%required = .true.
         call import_movies%set_input('parm_ios', 6, phaseplate)
         call import_movies%set_input('parm_ios', 7, 'boxtab', 'file', 'List of box files', 'List of per-micrograph box files (*.box) to import', 'e.g. boxes.txt', .false., '')
         call import_movies%set_input('parm_ios', 8, 'deftab', 'file','Pre-determined per-micrograph CTF parameters',&
@@ -1655,7 +1653,6 @@ contains
         call import_particles%set_input('parm_ios', 4, fraca)
         import_particles%parm_ios(4)%required = .true.
         call import_particles%set_input('parm_ios', 5, ctf_yes)
-        import_particles%parm_ios(5)%required = .true.
         call import_particles%set_input('parm_ios', 6, phaseplate)
         call import_particles%set_input('parm_ios', 7, oritab)
         call import_particles%set_input('parm_ios', 8, deftab)
@@ -1700,7 +1697,6 @@ contains
         call import_starproject%set_input('parm_ios', 6, cs)
         call import_starproject%set_input('parm_ios', 7, fraca)
         call import_starproject%set_input('parm_ios', 8, ctf_yes)
-        import_starproject%parm_ios(7)%required = .false.
         call import_starproject%set_input('parm_ios', 9, phaseplate)
         call import_starproject%set_input('parm_ios', 10, oritab)
         call import_starproject%set_input('parm_ios', 11, deftab)
