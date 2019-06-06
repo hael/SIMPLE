@@ -602,6 +602,7 @@ class SimpleExec {
 							console.log('PID', childprocess.pid)
 							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
 						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
+							//this.startProgressWatcher(arg['projfile'], )
 							break
 						}
 					}
@@ -635,6 +636,8 @@ class SimpleExec {
 			}
 		})
 	}
+	
+//	startProgressWatcher(projfile)
 	
 	updateProgress(lines, arg){
 		if(arg['type'] == 'cluster2D' || arg['type'] == 'refine3D' ){

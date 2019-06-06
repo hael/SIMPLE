@@ -145,8 +145,11 @@ class TaskSetup {
 		}else{
 			alert("There was an error starting your job")
 		}
-      taskselector.hide()
-      project.refreshHistory()
+      setTimeout(() => { 
+		  project.refreshHistory()
+		  taskselector.hide()
+	  }, 2000);
+      
       if(request['arg']['type'] == "manualpick"){
 		  var projfile = request['arg']['projectfolder'] + '/' + json['jobid'] + '_manualpick/' + project.selectedname + '.simple'
 		  project.viewSimple(projfile)

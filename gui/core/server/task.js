@@ -127,8 +127,12 @@ class Task{
         executeprocess.stdout.on('data', data => {
 			console.log('DATA', data.toString())
 		})
-		return new Promise((resolve, reject) => {
-			resolve({status:'running'})
+	//	return new Promise((resolve, reject) => {
+	//		resolve({status:'running', jobid:})
+	//	})
+		return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
+		.then(rows => {
+			return({status:'running', jobid: rows[0]['seq'] + 1})
 		})
   }
   
@@ -147,6 +151,9 @@ class Task{
 			return fs.ensureDir(arg['projectfolder'] + '/Trash')
 			.then(() => {
 				return fs.move(arg['folder'], arg['projectfolder'] + '/Trash/' + path.basename(arg['folder']))
+			})
+			.then(() => {
+				return fs.ensureDir(arg['folder'])
 			})
 			.then(() => {
 				return({})

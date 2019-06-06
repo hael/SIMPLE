@@ -15,6 +15,7 @@ use simple_commander_preprocess
 use simple_commander_cluster2D
 use simple_commander_refine3D
 use simple_commander_rec
+use simple_commander_relion
 use simple_commander_sim
 use simple_commander_volops
 use simple_commander_tseries
@@ -35,6 +36,7 @@ type(import_cavgs_commander)          :: ximport_cavgs
 type(prune_project_commander)         :: xprune_project
 type(replace_project_field_commander) :: xreplace_project_field
 type(selection_commander)             :: xselection
+type(export_relion_commander)         :: xexport_relion
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(cluster_cavgs_commander)  :: xcluster_cavgs
@@ -143,7 +145,9 @@ select case(prg)
     case( 'selection', 'report_selection' )
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call xselection%execute(cline)
-
+    case( 'export_relion' )
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir',     'yes')
+        call xexport_relion%execute(cline) 
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 
     case('cluster_cavgs')

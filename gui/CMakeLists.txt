@@ -87,7 +87,8 @@ if(${BUILD_GUI} AND ${GUI})
 			COMMAND ${NPM_PATH} install > ${CMAKE_BINARY_DIR}/bin/gui/install.log
 			COMMAND ${NPM_PATH} rebuild > ${CMAKE_BINARY_DIR}/bin/gui/install.log
 			COMMAND ${NPM_PATH} run build > ${CMAKE_BINARY_DIR}/bin/gui/install.log
-			COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_SOURCE_DIR}/dist/simple_gui.mac ${CMAKE_BINARY_DIR}/bin/simple
+			
+			COMMAND ${CMAKE_COMMAND} -E create_symlink ${CMAKE_CURRENT_SOURCE_DIR}/dist/simple_gui.mac ${CMAKE_BINARY_DIR}/bin/simple
 		)
 	elseif(${UNIX})
 		add_custom_target(

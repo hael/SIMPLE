@@ -10,597 +10,480 @@ public :: relion_project
 
 type relion_project
 
-    character(len=LONGSTRLEN), allocatable :: filestab(:,:) ! 1-movie, 2-intg, 3-forctf, 4-pspec
-    character(len=LONGSTRLEN), allocatable :: stktab(:,:) ! 1-stk, 2-written
-    real, allocatable :: filesparams(:,:) ! 1-smpd, 2-kv, 3-cs, 4-dfx, 5-dfy, 6-angast, 7-fraca, 8-state
-    real, allocatable :: stkparams(:,:) ! 1-smpd, 2-kv, 3-cs, 4-dfx, 5-dfy, 6-angast, 7-fraca, 8-count, 9-box
-    real, allocatable :: ptclparams(:,:) ! 1-xpos, 2-ypos, 3-stkind, 4-state, 5-e1, 6-e2, 7-e3, 8-x, 9-y
-    logical :: fmovie, fintg, fforctf, fpspec, fsmpd, fkv, fcs, fdf, fangast, ffraca, fstate
-    logical :: sstk, ssmpd, skv, scs, sdf, sangast, sfraca, sbox
-    logical :: pxpos, pypos, pstkind, pstate, p3d
+    character(len=8),   allocatable     :: mickey(:)
+    logical,            allocatable     :: miclogical(:)
+    character(len=8),   allocatable     :: stkkey(:)
+    logical,            allocatable     :: stklogical(:)
+    character(len=8),   allocatable     :: ptcl2Dkey(:)
+    logical,            allocatable     :: ptcl2Dlogical(:)
+    character(len=8),   allocatable     :: ptcl3Dkey(:)
+    logical,            allocatable     :: ptcl3Dlogical(:) 
 
 contains
 
     procedure :: create
-    procedure :: get_files
-    procedure :: get_file_parameters
-    procedure :: get_stacks
-    procedure :: get_stack_parameters
-    procedure :: get_particles2D_parameters
-    procedure :: get_particles3D_parameters
+    procedure :: test_mic_params
+    procedure :: test_stk_params
+    procedure :: test_ptcl2D_params
+    procedure :: test_ptcl3D_params
+    procedure :: write_corrected_micrographs_star
     procedure :: write_micrographs_star
     procedure :: write_particles2D_star
-    procedure :: find_intg
+    !procedure :: write_particles3D_star
 
 end type relion_project
 
 contains
 
-    subroutine create(self, spproj)
+    subroutine test_mic_params(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        integer                                 :: i
+        integer                                 :: j
+        
+        if(.NOT. allocated(self%mickey)) then
+            allocate(self%mickey(12))
+        end if
+        
+        if(.NOT. allocated(self%miclogical)) then
+            allocate(self%miclogical(size(self%mickey)))
+        end if
+        
+        self%mickey(1) = 'movie'
+        self%miclogical(1) = .TRUE.
+        self%mickey(2) = 'intg'
+        self%miclogical(2) = .TRUE.
+        self%mickey(3) = 'forctf'
+        self%miclogical(3) = .TRUE.
+        self%mickey(4) = 'pspec'
+        self%miclogical(4) = .TRUE.
+        self%mickey(5) = 'smpd'
+        self%miclogical(5) = .TRUE.
+        self%mickey(6) = 'kv'
+        self%miclogical(6) = .TRUE.
+        self%mickey(7) = 'cs'
+        self%miclogical(7) = .TRUE.
+        self%mickey(8) = 'dfx'
+        self%miclogical(8) = .TRUE.
+        self%mickey(9) = 'dfy'
+        self%miclogical(9) = .TRUE.
+        self%mickey(10) = 'angast'
+        self%miclogical(10) = .TRUE.
+        self%mickey(11) = 'fraca'
+        self%miclogical(11) = .TRUE.
+        self%mickey(12) = 'state'
+        self%miclogical(12) = .TRUE.
 
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        self%fmovie = .TRUE.
-        self%fintg = .TRUE.
-        self%fforctf = .TRUE.
-        self%fpspec = .TRUE.
-        self%fsmpd = .TRUE.
-        self%fkv = .TRUE.
-        self%fcs = .TRUE.
-        self%fdf = .TRUE.
-        self%fangast = .TRUE.
-        self%ffraca = .TRUE.
-        self%fstate = .TRUE.
-        self%sstk = .TRUE.
-        self%ssmpd = .TRUE.
-        self%skv = .TRUE.
-        self%scs = .TRUE.
-        self%sdf = .TRUE.
-        self%sangast = .TRUE.
-        self%sfraca = .TRUE.
-        self%sbox = .TRUE.
-        self%pxpos = .TRUE.
-        self%pypos = .TRUE.
-        self%pstkind = .TRUE.
-        self%pstate = .TRUE.
-        self%p3d = .FALSE.
-
-        call self%get_files(spproj)
-        call self%get_file_parameters(spproj)
-        call self%get_stacks(spproj)
-        call self%get_stack_parameters(spproj)
-        call self%get_particles2D_parameters(spproj)
-        call self%get_particles3D_parameters(spproj)
-        call self%write_micrographs_star(spproj)
-        call self%write_particles2D_star(spproj)
-
-        if(allocated(self%filesparams))deallocate(self%filesparams)
-        if(allocated(self%filestab))deallocate(self%filestab)
-        if(allocated(self%stkparams))deallocate(self%stkparams)
-        if(allocated(self%stktab))deallocate(self%stktab)
-        if(allocated(self%ptclparams))deallocate(self%ptclparams)
-
-    end subroutine create
-
-    subroutine get_files(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        character(len=:), allocatable :: getstring
-        integer :: i, lines
-
-        lines = spproj%os_mic%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%filestab))) then
-            allocate(self%filestab(lines, 4))
-        endif
-
-        do i=1, lines
-            call spproj%os_mic%getter(i,'movie',getstring)
-            if(len(getstring) == 0)then
-                self%fmovie = .FALSE.
+        do i=1, spproj%os_mic%get_noris()
+            if(spproj%os_mic%isthere(i, 'state')) then
+                if(spproj%os_mic%get(i,'state') .GT. 0) then
+                    do j=1, size(self%mickey)
+                        if(.NOT. spproj%os_mic%isthere(i,trim(self%mickey(j)))) then
+                            self%miclogical(j) = .FALSE.
+                        endif
+                    end do
+                endif
             else
-                self%filestab(i,1) = getstring
+                do j=1, size(self%mickey)
+                    if(.NOT. spproj%os_mic%isthere(i,trim(self%mickey(j)))) then
+                        self%miclogical(j) = .FALSE.
+                    endif
+                end do
             endif
-
-            call spproj%os_mic%getter(i,'intg',getstring)
-            if(len(getstring) == 0)then
-                self%fintg = .FALSE.
+        end do
+        
+    end subroutine test_mic_params
+        
+    subroutine test_stk_params(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        integer                                 :: i
+        integer                                 :: j
+        
+        if(.NOT. allocated(self%stkkey)) then
+            allocate(self%stkkey(9))
+        end if
+        
+        if(.NOT. allocated(self%stklogical)) then
+            allocate(self%stklogical(size(self%stkkey)))
+        end if
+        
+        self%stkkey(1) = 'smpd'
+        self%stklogical(1) = .TRUE.
+        self%stkkey(2) = 'kv'
+        self%stklogical(2) = .TRUE.
+        self%stkkey(3) = 'cs'
+        self%stklogical(3) = .TRUE.
+        self%stkkey(4) = 'dfx'
+        self%stklogical(4) = .TRUE.
+        self%stkkey(5) = 'dfy'
+        self%stklogical(5) = .TRUE.
+        self%stkkey(6) = 'angast'
+        self%stklogical(6) = .TRUE.
+        self%stkkey(7) = 'fraca'
+        self%stklogical(7) = .TRUE.
+        self%stkkey(8) = 'box'
+        self%stklogical(8) = .TRUE.
+        self%stkkey(9) = 'stk'
+        self%stklogical(9) = .TRUE.
+        
+        do i=1, spproj%os_stk%get_noris()
+            if(spproj%os_stk%isthere(i, 'state')) then
+                if(spproj%os_stk%get(i,'state') .GT. 0) then
+                    do j=1, size(self%stkkey)
+                        if(.NOT. spproj%os_stk%isthere(i,trim(self%stkkey(j)))) then
+                            self%stklogical(j) = .FALSE.
+                        endif
+                    end do
+                endif
             else
-                self%filestab(i,2) = getstring
+                do j=1, size(self%stkkey)
+                    if(.NOT. spproj%os_stk%isthere(i,trim(self%stkkey(j)))) then
+                        self%stklogical(j) = .FALSE.
+                    endif
+                end do
             endif
-
-            call spproj%os_mic%getter(i,'forctf',getstring)
-            if(len(getstring) == 0)then
-                self%fforctf = .FALSE.
+        end do
+        
+    end subroutine test_stk_params
+    
+    subroutine test_ptcl2D_params(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        integer                                 :: i
+        integer                                 :: j
+        
+        if(.NOT. allocated(self%ptcl2Dkey)) then
+            allocate(self%ptcl2Dkey(4))
+        end if
+        
+        if(.NOT. allocated(self%ptcl2Dlogical)) then
+            allocate(self%ptcl2Dlogical(size(self%ptcl2Dkey)))
+        end if
+        
+        self%ptcl2Dkey(1) = 'xpos'
+        self%ptcl2Dlogical(1) = .TRUE.
+        self%ptcl2Dkey(2) = 'ypos'
+        self%ptcl2Dlogical(2) = .TRUE.
+        self%ptcl2Dkey(3) = 'stkind'
+        self%ptcl2Dlogical(3) = .TRUE.
+        self%ptcl2Dkey(4) = 'state'
+        self%ptcl2Dlogical(4) = .TRUE.
+        
+        do i=1, spproj%os_ptcl2D%get_noris()
+            if(spproj%os_ptcl2D%isthere(i, 'state')) then
+                if(spproj%os_ptcl2D%get(i,'state') .GT. 0) then
+                    do j=1, size(self%ptcl2Dkey)
+                        if(.NOT. spproj%os_ptcl2D%isthere(i,trim(self%ptcl2Dkey(j)))) then
+                            self%ptcl2Dlogical(j) = .FALSE.
+                        endif
+                    end do
+                endif
             else
-                self%filestab(i,3) = getstring
+                do j=1, size(self%ptcl2Dkey)
+                    if(.NOT. spproj%os_ptcl2D%isthere(i,trim(self%ptcl2Dkey(j)))) then
+                        self%ptcl2Dlogical(j) = .FALSE.
+                    endif
+                end do
             endif
-
-            call spproj%os_mic%getter(i,'pspec',getstring)
-            if(len(getstring) == 0)then
-                self%fpspec = .FALSE.
-            else
-                self%filestab(i,4) = getstring
-            endif
-       end do
-
-       if(allocated(getstring))deallocate(getstring)
-
-    end subroutine get_files
-
-    subroutine get_file_parameters(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        real :: getreal
-        integer :: i, lines
-
-        lines = spproj%os_mic%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%filesparams))) then
-            allocate(self%filesparams(lines, 8))
-        endif
-
-        do i=1, lines
-            getreal = spproj%os_mic%get(i,'smpd')
-            if(getreal == 0)then
-                self%fsmpd = .FALSE.
-            else
-                self%filesparams(i,1) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'kv')
-            if(getreal == 0)then
-                self%fkv = .FALSE.
-            else
-                self%filesparams(i,2) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'cs')
-            if(getreal == 0)then
-                self%fcs = .FALSE.
-            else
-                self%filesparams(i,3) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'dfx')
-            if(getreal == 0)then
-                self%fdf = .FALSE.
-            else
-                self%filesparams(i,4) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'dfy')
-            if(getreal == 0)then
-                self%fdf = .FALSE.
-            else
-                self%filesparams(i,5) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'angast')
-            if(getreal == 0)then
-                self%fangast = .FALSE.
-            else
-                self%filesparams(i,6) = getreal
-            endif
-
-            getreal = spproj%os_mic%get(i,'fraca')
-            if(getreal == 0)then
-                self%ffraca = .FALSE.
-            else
-                self%filesparams(i,7) = getreal
-            endif
-
-            if(spproj%os_mic%isthere(i,'state') ) then
-                getreal = spproj%os_mic%get(i,'state')
-                self%filesparams(i,8) = getreal
-            else
-                self%filesparams(i,8) = 1
-            endif
-
         end do
 
-    end subroutine get_file_parameters
-
-    subroutine get_stacks(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        character(len=:), allocatable :: getstring
-        integer :: i, lines
-
-        lines = spproj%os_stk%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%stktab))) then
-            allocate(self%stktab(lines, 2))
-        endif
-
-        do i=1, lines
-            call spproj%os_stk%getter(i,'stk',getstring)
-            if(len(getstring) == 0)then
-                self%sstk = .FALSE.
+    end subroutine test_ptcl2D_params
+    
+    subroutine test_ptcl3D_params(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        integer                                 :: i
+        integer                                 :: j
+        
+        if(.NOT. allocated(self%ptcl3Dkey)) then
+            allocate(self%ptcl3Dkey(9))
+        end if
+        
+        if(.NOT. allocated(self%ptcl3Dlogical)) then
+            allocate(self%ptcl3Dlogical(size(self%ptcl3Dkey)))
+        end if
+        
+        self%ptcl3Dkey(1) = 'state'
+        self%ptcl3Dlogical(1) = .TRUE.
+        self%ptcl3Dkey(2) = 'e1'
+        self%ptcl3Dlogical(2) = .TRUE.
+        self%ptcl3Dkey(3) = 'e2'
+        self%ptcl3Dlogical(3) = .TRUE.
+        self%ptcl3Dkey(4) = 'e3'
+        self%ptcl3Dlogical(4) = .TRUE.
+        self%ptcl3Dkey(5) = 'x'
+        self%ptcl3Dlogical(5) = .TRUE.
+        self%ptcl3Dkey(6) = 'y'
+        self%ptcl3Dlogical(6) = .TRUE.
+        self%ptcl3Dkey(7) = 'xpos'
+        self%ptcl3Dlogical(7) = .TRUE.
+        self%ptcl3Dkey(8) = 'ypos'
+        self%ptcl3Dlogical(8) = .TRUE.
+        self%ptcl3Dkey(9) = 'stkind'
+        self%ptcl3Dlogical(9) = .TRUE.
+              
+        do i=1, spproj%os_ptcl3D%get_noris()
+            if(spproj%os_ptcl3D%isthere(i, 'state')) then
+                if(spproj%os_ptcl3D%get(i,'state') .GT. 0) then
+                    do j=1, size(self%ptcl3Dkey)
+                        if(.NOT. spproj%os_ptcl3D%isthere(i,trim(self%ptcl3Dkey(j)))) then
+                            self%ptcl3Dlogical(j) = .FALSE.
+                        endif
+                    end do
+                endif
             else
-                self%stktab(i,1) = getstring
-                self%stktab(i,2) = 'false'
+                do j=1, size(self%ptcl3Dkey)
+                    if(.NOT. spproj%os_ptcl3D%isthere(i,trim(self%ptcl3Dkey(j)))) then
+                        self%ptcl3Dlogical(j) = .FALSE.
+                    endif
+                end do
             endif
-       end do
-
-       if(allocated(getstring))deallocate(getstring)
-
-    end subroutine get_stacks
-
-    subroutine get_stack_parameters(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        real :: getreal
-        integer :: i, lines
-
-        lines = spproj%os_stk%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%stkparams))) then
-            allocate(self%stkparams(lines, 9))
-        endif
-
-        do i=1, lines
-            getreal = spproj%os_stk%get(i,'smpd')
-            if(getreal == 0)then
-                self%ssmpd = .FALSE.
-            else
-                self%stkparams(i,1) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'kv')
-            if(getreal == 0)then
-                self%skv = .FALSE.
-            else
-                self%stkparams(i,2) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'cs')
-            if(getreal == 0)then
-                self%scs = .FALSE.
-            else
-                self%stkparams(i,3) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'dfx')
-            if(getreal == 0)then
-                self%sdf = .FALSE.
-            else
-                self%stkparams(i,4) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'dfy')
-            if(getreal == 0)then
-                self%sdf = .FALSE.
-            else
-                self%stkparams(i,5) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'angast')
-            if(getreal == 0)then
-                self%sangast = .FALSE.
-            else
-                self%stkparams(i,6) = getreal
-            endif
-
-            getreal = spproj%os_stk%get(i,'fraca')
-            if(getreal == 0)then
-                self%sfraca = .FALSE.
-            else
-                self%stkparams(i,7) = getreal
-            endif
-
-            self%stkparams(i,8) = 1
-
-            getreal = spproj%os_stk%get(i,'box')
-            if(getreal == 0)then
-                self%sbox = .FALSE.
-            else
-                self%stkparams(i,9) = getreal
-            endif
-
-
         end do
 
-    end subroutine get_stack_parameters
-
-    subroutine get_particles2D_parameters(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        real :: getreal
-        integer :: i, lines
-
-        lines = spproj%os_ptcl2D%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%ptclparams))) then
-            allocate(self%ptclparams(lines, 9))
-        endif
-
-        do i=1, lines
-            getreal = spproj%os_ptcl2D%get(i,'xpos')
-            self%ptclparams(i,1) = getreal
-
-            getreal = spproj%os_ptcl2D%get(i,'ypos')
-            self%ptclparams(i,2) = getreal
-
-            getreal = spproj%os_ptcl2D%get(i,'stkind')
-            if(getreal == 0)then
-                self%pstkind = .FALSE.
-            else
-                self%ptclparams(i,3) = getreal
-            endif
-
-            getreal = spproj%os_ptcl2D%get(i,'state')
-            self%ptclparams(i,4) = getreal
-
-        end do
-
-    end subroutine get_particles2D_parameters
-
-    subroutine get_particles3D_parameters(self, spproj)
-
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
-
-        real :: getreal
-        integer :: i, lines
-
-        lines = spproj%os_ptcl3D%get_noris()
-
-        if(lines > 0 .AND. (.NOT. allocated(self%ptclparams))) then
-            allocate(self%ptclparams(lines, 9))
-        endif
-
-        do i=1, lines
-            self%p3d = .TRUE.
-            getreal = spproj%os_ptcl3D%get(i,'e1')
-            self%ptclparams(i,5) = getreal
-
-            getreal = spproj%os_ptcl3D%get(i,'e2')
-            self%ptclparams(i,6) = getreal
-
-            getreal = spproj%os_ptcl3D%get(i,'e3')
-            self%ptclparams(i,7) = getreal
-
-            getreal = spproj%os_ptcl3D%get(i,'x')
-            self%ptclparams(i,8) = getreal
-
-            getreal = spproj%os_ptcl3D%get(i,'y')
-            self%ptclparams(i,9) = getreal
-
-        end do
-
-    end subroutine get_particles3D_parameters
-
-    subroutine write_micrographs_star(self, spproj)
-        class(relion_project), intent(inout) :: self
-        class(sp_project),     intent(inout) :: spproj
-        type(starfile_table_type) :: mic_starfile
-        integer :: i, lines
-
-        lines = spproj%os_mic%get_noris()
-
-        if(lines == 0)then
+    end subroutine test_ptcl3D_params 
+    
+    subroutine write_corrected_micrographs_star(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        character(len=:),       allocatable     :: getstring
+        type(starfile_table_type)               :: mic_starfile
+        integer                                 :: i
+        logical                                 :: exists
+        
+        if(spproj%os_mic%get_noris() == 0) then
             return
         endif
+        
+        if(.NOT. self%miclogical(1)) then
+            return
+        endif
+        
+        if(.NOT. self%miclogical(2)) then
+            return
+        endif
+        
+        write(logfhandle, *) 'Generating micrographs_corrected.star ... '
 
-        if(self%fintg) write(logfhandle,*) 'Exporting micrographs with the following fields'
-        if(self%fintg) write(logfhandle,*) ' - intg'
-        if(self%fmovie) write(logfhandle,*) ' - movie'
-        if(self%fforctf) write(logfhandle,*) ' - forctf'
-        if(self%fpspec) write(logfhandle,*) ' - pspec'
-        if(self%fsmpd) write(logfhandle,*) ' - smpd'
-        if(self%fkv) write(logfhandle,*) ' - kv'
-        if(self%fcs) write(logfhandle,*) ' - cs'
-        if(self%fdf) write(logfhandle,*) ' - dfx'
-        if(self%fdf) write(logfhandle,*) ' - dfy'
-        if(self%fangast) write(logfhandle,*) ' - angast'
-        if(self%ffraca) write(logfhandle,*) ' - fraca'
-
-        if(self%fintg) call simple_mkdir('micrographs', errmsg= "simple_relion:: create micrographs directory")
-        if(self%fmovie) call simple_mkdir('movies', errmsg= "simple_relion:: create movies directory")
-
+        call simple_mkdir('micrographs', errmsg= "simple_relion:: create micrographs directory")
+        
+        call simple_mkdir('movies', errmsg= "simple_relion:: create movies directory")
+        
         call starfile_table__new(mic_starfile)
         call starfile_table__setcomment(mic_starfile, "SIMPLE 3.0; export_relion")
-
-        do i=1, lines
-            if(self%fstate .AND. (self%filesparams(i,8) > 0)) then
-                call starfile_table__addObject(mic_starfile)
-                if(self%fintg) then
-                    call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME, &
-                        'micrographs/' // basename(self%filestab(i, 2)))
-                    call syslib_symlink('../' // self%filestab(i, 2), 'micrographs/' // basename(self%filestab(i, 2)), 'Failed to generate symlink')
-                endif
-                if(self%fmovie) then
-                    call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_MOVIE_NAME, &
-                        'movies/' // basename(self%filestab(i, 1)))
-                    call syslib_symlink(self%filestab(i, 1), 'movies/' // basename(self%filestab(i, 1)), 'Failed to generate symlink')
-                endif
-                if(self%fforctf) then
-                    call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME_WODOSE, &
-                        'micrographs/' // basename(self%filestab(i, 3)))
-                    call syslib_symlink('../' // self%filestab(i, 3), 'micrographs/' // basename(self%filestab(i, 3)), 'Failed to generate symlink')
-                endif
-
-                if(self%fpspec) then
-                    call starfile_table__setValue_string(mic_starfile, EMDL_CTF_IMAGE, &
-                        'micrographs/' // basename(self%filestab(i, 4)))
-                    call syslib_symlink('../' // self%filestab(i, 4), 'micrographs/' // basename(self%filestab(i, 4)), 'Failed to generate symlink')
-                endif
-
-                if(self%fsmpd) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DETECTOR_PIXEL_SIZE, &
-                        real(self%filesparams(i, 1), dp))
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_MAGNIFICATION, real(10000, dp))
-                end if
-                if(self%fkv) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_VOLTAGE, &
-                        real(int(self%filesparams(i, 2)), dp))
-                end if
-                if(self%fcs) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_CS, &
-                        real(self%filesparams(i, 3), dp))
-                end if
-                if(self%fdf) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_ASTIGMATISM, &
-                        real(abs(self%filesparams(i, 4) * 10000) - (self%filesparams(i, 5) * 10000),dp))
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUSU, &
-                        real(self%filesparams(i, 4) * 10000, dp))
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUSV, &
-                        real(self%filesparams(i, 5) * 10000, dp))
-                end if
-                if(self%fangast) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUS_ANGLE, &
-                        real(self%filesparams(i, 6), dp))
-                end if
-                if(self%ffraca) then
-                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_Q0, &
-                        real(self%filesparams(i, 7), dp))
-                end if
-            end if
+        
+        !STAR data
+        do i=1, spproj%os_mic%get_noris()
+            call starfile_table__addObject(mic_starfile)
+            call spproj%os_mic%getter(i, 'intg', getstring)
+            call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME, 'micrographs/' // trim(adjustl(basename(getstring))))
+            inquire(file='micrographs/' // trim(adjustl(basename(getstring))), exist=exists)
+            if(.NOT. exists) then
+                call syslib_symlink('../' // trim(adjustl(getstring)), 'micrographs/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
+            endif
+            call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_METADATA_NAME, 'micrographs/' // trim(adjustl(basename(getstring(1 : len(getstring) - 9)))) // '.star')
+            inquire(file='micrographs/' // trim(adjustl(basename(getstring(1 : len(getstring) - 9)))) // '.star', exist=exists)
+            if(.NOT. exists) then
+                call syslib_symlink('../' // trim(adjustl(getstring(1 : len(getstring) - 9))) // '.star ', 'micrographs/' // trim(adjustl(basename(getstring(1 : len(getstring) - 9)))) // '.star ', 'Failed to generate symlink')
+            endif
+            call spproj%os_mic%getter(i, 'movie', getstring)
+            inquire(file='movies/' // trim(adjustl(basename(getstring))) // ' ', exist=exists)
+            if(.NOT. exists) then
+                call syslib_symlink(trim(adjustl(getstring)), 'movies/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
+            endif
         end do
 
-        call starfile_table__open(mic_starfile, 'micrographs.star')
-        call starfile_table__write(mic_starfile)
-        call starfile_table__close(mic_starfile)
+        call starfile_table__open_ofile(mic_starfile, 'micrographs_corrected.star')
+        call starfile_table__write_ofile(mic_starfile)
+        call starfile_table__close_ofile(mic_starfile)
 
         call starfile_table__delete(mic_starfile)
+        
+        if(allocated(getstring))deallocate(getstring)
 
-    end subroutine write_micrographs_star
-
-    subroutine write_particles2D_star(self, spproj)
-        class(relion_project), intent(inout) :: self
-        class(sp_project),     intent(inout) :: spproj
-        type(starfile_table_type) :: ptcl2D_starfile
-        integer :: i, lines
-        character(len=LONGSTRLEN) :: imgfilename
-        character(len=LONGSTRLEN) :: intgname
-
-        lines = spproj%os_ptcl2D%get_noris()
-
-        if(lines == 0)then
+    end subroutine write_corrected_micrographs_star
+    
+    subroutine write_micrographs_star(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        character(len=:),       allocatable     :: getstring
+        type(starfile_table_type)               :: mic_starfile
+        integer                                 :: i
+        logical                                 :: exists
+        
+        if(spproj%os_mic%get_noris() == 0) then
             return
         endif
-
-        if(self%sstk) write(logfhandle,*) 'Exporting particles with the following fields'
-        if(self%sstk) write(logfhandle,*) ' - stk'
-        if(self%ssmpd) write(logfhandle,*) ' - smpd'
-        if(self%skv) write(logfhandle,*) ' - kv'
-        if(self%scs) write(logfhandle,*) ' - cs'
-        if(self%sdf) write(logfhandle,*) ' - dfx'
-        if(self%sdf) write(logfhandle,*) ' - dfy'
-        if(self%sangast) write(logfhandle,*) ' - angast'
-        if(self%sfraca) write(logfhandle,*) ' - fraca'
-        if(self%pxpos) write(logfhandle,*) ' - xpos'
-        if(self%pypos) write(logfhandle,*) ' - ypos'
-        if(self%p3d) then
-            write(logfhandle,*) ' - e1'
-            write(logfhandle,*) ' - e2'
-            write(logfhandle,*) ' - e3'
-            write(logfhandle,*) ' - x'
-            write(logfhandle,*) ' - y'
+        
+        if(.NOT. self%miclogical(2)) then
+            return
         endif
+        
+        write(logfhandle, *) 'Generating micrographs.star ... '
 
-        if(self%sstk) call simple_mkdir('particles', errmsg= "simple_relion:: create particles directory")
-
-        call starfile_table__new(ptcl2D_starfile)
-        call starfile_table__setcomment(ptcl2D_starfile, "SIMPLE 3.0; export_relion")
+        call simple_mkdir('micrographs', errmsg= "simple_relion:: create micrographs directory")
+        
+        call starfile_table__new(mic_starfile)
+        call starfile_table__setcomment(mic_starfile, "SIMPLE 3.0; export_relion")
+        
 
         !STAR data
-        do i=1, lines
-            if(self%pstate .AND. (self%ptclparams(i,4) > 0)) then
-                call starfile_table__addObject(ptcl2D_starfile)
-                if(self%sstk) then
-                    imgfilename = trim(int2str(int(self%stkparams(int(self%ptclparams(i, 3)), 8))))
-                    imgfilename = imgfilename // '@'
-                    imgfilename = imgfilename // 'particles/' // basename(self%stktab(int(self%ptclparams(i, 3)), 1)) // 's   '
-                    call starfile_table__setValue_string(ptcl2D_starfile, EMDL_IMAGE_NAME, &
-                        imgfilename)
-                    if(self%stktab(int(self%ptclparams(i, 3)), 2) == 'false') then
-                        call syslib_symlink('../' // self%stktab(int(self%ptclparams(i, 3)), 1), 'particles/' // basename(self%stktab(int(self%ptclparams(i, 3)), 1)) // 's', 'Failed to generate symlink')
-                        self%stktab(int(self%ptclparams(i, 3)), 2) = 'true'
-                    endif
-                    if(self%fintg) then
-                      intgname = basename(self%stktab(int(self%ptclparams(i, 3)), 1))
-                      call self%find_intg(intgname)
-                      call starfile_table__setCValue_string(ptcl2D_starfile, EMDL_MICROGRAPH_NAME, &
-                          'micrographs/' // trim(intgname))
+        do i=1, spproj%os_mic%get_noris()
+            if((self%miclogical(12) .AND. (spproj%os_mic%get(i,'state') .GT. 0)) .OR. (.NOT. self%miclogical(12))) then
+                call starfile_table__addObject(mic_starfile)
+                call spproj%os_mic%getter(i, 'intg', getstring)
+                call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME, 'micrographs/' // trim(adjustl(basename(getstring))))
+                inquire(file='micrographs/' // trim(adjustl(basename(getstring))), exist=exists)
+                if(.NOT. exists) then
+                    call syslib_symlink('../' // trim(adjustl(getstring)), 'micrographs/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
+                endif
+                if(self%miclogical(3)) then
+                    call spproj%os_mic%getter(i, 'forctf', getstring)
+                    call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME_WODOSE, 'micrographs/' // trim(adjustl(basename(getstring))))
+                    inquire(file='micrographs/' // trim(adjustl(basename(getstring))), exist=exists)
+                    if(.NOT. exists) then
+                        call syslib_symlink('../' // trim(adjustl(getstring)), 'micrographs/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
                     endif
                 endif
-                if(self%pxpos .AND. self%pypos .AND. self%sbox ) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_IMAGE_COORD_X, &
-                        real(int(self%ptclparams(i, 1) + (self%stkparams(int(self%ptclparams(i, 3)), 9) / 2)), dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_IMAGE_COORD_Y, &
-                        real(int(self%ptclparams(i, 2) + (self%stkparams(int(self%ptclparams(i, 3)), 9) / 2)), dp))
+                if(self%miclogical(4)) then
+                    call spproj%os_mic%getter(i, 'pspec', getstring)
+                    call starfile_table__setValue_string(mic_starfile, EMDL_CTF_IMAGE, 'micrographs/' // trim(adjustl(basename(getstring))))
+                    inquire(file='micrographs/' // trim(adjustl(basename(getstring))), exist=exists)
+                    if(.NOT. exists) then
+                        call syslib_symlink('../' // trim(adjustl(getstring)), 'micrographs/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
+                    endif
                 endif
-                if(self%ssmpd) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_DETECTOR_PIXEL_SIZE, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 1), dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_MAGNIFICATION, &
-                        real(10000, dp))
-                end if
-                if(self%skv) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_VOLTAGE, &
-                        real(int(self%stkparams(int(self%ptclparams(i, 3)), 2)), dp))
-                end if
-                if(self%scs) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_CS, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 3), dp))
-                end if
-                if(self%sdf) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_DEFOCUSU, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 4) * 10000, dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_DEFOCUSV, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 5) * 10000, dp))
-                end if
-                if(self%sangast) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_DEFOCUS_ANGLE, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 6), dp))
-                end if
-                if(self%sfraca) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_CTF_Q0, &
-                        real(self%stkparams(int(self%ptclparams(i, 3)), 7), dp))
-                end if
-                if(self%p3d) then
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_ORIENT_ROT, &
-                        real(self%ptclparams(i, 5), dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_ORIENT_TILT, &
-                        real(self%ptclparams(i, 6),dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_ORIENT_PSI, &
-                        real(self%ptclparams(i, 7), dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_ORIENT_ORIGIN_X, &
-                        real(self%ptclparams(i, 8), dp))
-                    call starfile_table__setValue_double(ptcl2D_starfile, EMDL_ORIENT_ORIGIN_Y, &
-                        real(self%ptclparams(i, 9), dp))
+                if(self%miclogical(5)) then
+                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DETECTOR_PIXEL_SIZE, real(spproj%os_mic%get(i, 'smpd'), dp))
+                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_MAGNIFICATION, real(10000, dp))
                 endif
+                if(self%miclogical(6)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_VOLTAGE, real(spproj%os_mic%get(i, 'kv'), dp))
+                if(self%miclogical(7)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_CS, real(spproj%os_mic%get(i, 'cs'), dp))
+                if(self%miclogical(8) .AND. self%miclogical(9)) then
+                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_ASTIGMATISM, real(abs((spproj%os_mic%get(i, 'dfx') * 10000) - (spproj%os_mic%get(i, 'dfy') * 10000)), dp))
+                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUSU, real(spproj%os_mic%get(i, 'dfx') * 10000, dp))
+                    call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get(i, 'dfy') * 10000, dp))
+                endif
+                if(self%miclogical(10)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
+                if(self%miclogical(11)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))              
             endif
-            self%stkparams(int(self%ptclparams(i, 3)), 8) = self%stkparams(int(self%ptclparams(i, 3)), 8) + 1
+        end do
+        
+        call starfile_table__open_ofile(mic_starfile, 'micrographs.star')
+        call starfile_table__write_ofile(mic_starfile)
+        call starfile_table__close_ofile(mic_starfile)
+
+        call starfile_table__delete(mic_starfile)
+        
+        if(allocated(getstring))deallocate(getstring)
+        
+    end subroutine write_micrographs_star
+  
+    subroutine write_particles2D_star(self, spproj)
+    
+        class(relion_project),  intent(inout)   :: self
+        class(sp_project),      intent(inout)   :: spproj
+        character(len=:),       allocatable     :: getstring
+        type(starfile_table_type)               :: ptcl_starfile
+        integer,                allocatable     :: ptclcount(:)
+        integer                                 :: i, stkind
+        logical                                 :: exists
+        
+        if(spproj%os_ptcl2D%get_noris() == 0) then
+            return
+        endif
+        
+        if(.NOT. self%ptcl2Dlogical(3)) then
+            return
+        endif
+        
+        if(.NOT. allocated(ptclcount)) then
+            allocate(ptclcount(spproj%os_stk%get_noris())) 
+            do i=1, spproj%os_stk%get_noris()
+               ptclcount(i) = 0 
+            end do
+        end if
+        
+        write(logfhandle, *) 'Generating particles2D.star ... '
+
+        call simple_mkdir('particles', errmsg= "simple_relion:: create micrographs directory")
+        
+        call starfile_table__new(ptcl_starfile)
+        call starfile_table__setcomment(ptcl_starfile, "SIMPLE 3.0; export_relion")
+        
+        !STAR data
+        do i=1, spproj%os_ptcl2D%get_noris()
+            stkind = int(spproj%os_ptcl2D%get(i, 'stkind'))
+            ptclcount(stkind) = ptclcount(stkind) + 1
+            if((self%ptcl2Dlogical(4) .AND. (spproj%os_ptcl2D%get(i,'state') .GT. 0)) .OR. (.NOT. self%ptcl2Dlogical(4))) then
+                call starfile_table__addObject(ptcl_starfile)
+                call spproj%os_stk%getter(stkind, 'stk', getstring)
+                call starfile_table__setValue_string(ptcl_starfile, EMDL_IMAGE_NAME,trim(int2str(int(ptclcount(stkind), 4))) // '@particles/' // trim(adjustl(basename(getstring))) // 's')
+                inquire(file='particles/' // trim(adjustl(basename(getstring))) // 's', exist=exists)
+                if(.NOT. exists) then
+                    call syslib_symlink('../' // trim(adjustl(getstring)), 'particles/' // trim(adjustl(basename(getstring))) // 's', 'Failed to generate symlink')
+                endif
+                getstring = trim(adjustl(basename(getstring)))
+                call starfile_table__setValue_string(ptcl_starfile, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring(12 : len(getstring)))
+                if(self%ptcl2Dlogical(1) .AND. self%ptcl2Dlogical(2) .AND. self%stklogical(8)) then
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_IMAGE_COORD_X, real(int(spproj%os_ptcl2D%get(i,'xpos') + (spproj%os_stk%get(stkind,'box') / 2)), dp))
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_IMAGE_COORD_Y, real(int(spproj%os_ptcl2D%get(i,'ypos') + (spproj%os_stk%get(stkind,'box') / 2)), dp))
+                endif
+                if(self%stklogical(1)) then
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DETECTOR_PIXEL_SIZE, real(spproj%os_stk%get(stkind,'smpd'), dp))
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_MAGNIFICATION, real(10000, dp))
+                endif
+                if(self%stklogical(2)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(stkind,'kv'), dp))
+                if(self%stklogical(3)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_CS, real(spproj%os_stk%get(stkind,'cs'), dp))
+                if(self%stklogical(4) .AND. self%stklogical(5)) then
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSU, real(spproj%os_stk%get(stkind,'dfx') * 10000, dp))
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get(stkind,'dfy') * 10000, dp))
+                endif
+                if(self%stklogical(6)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkind,'angast'), dp))
+                if(self%stklogical(7)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_Q0, real(spproj%os_stk%get(stkind,'fraca'), dp))
+            endif
         end do
 
-        call starfile_table__open(ptcl2D_starfile, 'particles.star')
-        call starfile_table__write(ptcl2D_starfile)
-        call starfile_table__close(ptcl2D_starfile)
+        call starfile_table__open_ofile(ptcl_starfile, 'particles2D.star')
+        call starfile_table__write_ofile(ptcl_starfile)
+        call starfile_table__close_ofile(ptcl_starfile)
 
-        call starfile_table__delete(ptcl2D_starfile)
-
+        call starfile_table__delete(ptcl_starfile)
+        
+        if(allocated(getstring))deallocate(getstring)
+        if(allocated(ptclcount))deallocate(ptclcount)
+        
     end subroutine write_particles2D_star
-
-    subroutine find_intg(self, intgname)
+  
+    subroutine create(self, spproj)
+    
         class(relion_project), intent(inout) :: self
-
-        character(*) :: intgname
-
-        intgname = intgname(12:len(intgname))
-    end subroutine find_intg
-
+        class(sp_project), intent(inout) :: spproj
+        
+        call self%test_mic_params(spproj)
+        call self%test_stk_params(spproj)
+        call self%test_ptcl2D_params(spproj)
+        call self%test_ptcl3D_params(spproj)
+        call self%write_corrected_micrographs_star(spproj)
+        call self%write_micrographs_star(spproj)
+        call self%write_particles2D_star(spproj)
+       ! call self%write_particles3D_star(spproj) !Disabled as not fully tested
+        
+        if(allocated(self%mickey))deallocate(self%mickey)
+        if(allocated(self%miclogical))deallocate(self%miclogical)
+        if(allocated(self%stkkey))deallocate(self%stkkey)
+        if(allocated(self%stklogical))deallocate(self%stklogical)
+        if(allocated(self%ptcl2Dkey))deallocate(self%ptcl2Dkey)
+        if(allocated(self%ptcl2Dlogical))deallocate(self%ptcl2Dlogical)
+        if(allocated(self%ptcl3Dkey))deallocate(self%ptcl3Dkey)
+        if(allocated(self%ptcl3Dlogical))deallocate(self%ptcl3Dlogical)
+    
+    end subroutine create
+    
 end module simple_relion
