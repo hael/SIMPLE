@@ -721,24 +721,25 @@ contains
         write(logfhandle,'(A,I6)')'>>> TOTAL NUMBER OF MICROGRAPHS:',ntot
     end subroutine add_intgs
 
+    ! returns list of movies regardless of 'imgkind' key as it overrides movies
     subroutine get_movies_table( self, moviestab )
         class(sp_project),                      intent(inout) :: self
         character(len=LONGSTRLEN), allocatable, intent(out)   :: moviestab(:)
         character(len=:), allocatable :: imgkind, mov
         integer :: i,n,cnt
         if(allocated(moviestab))deallocate(moviestab)
-        n = self%get_nmovies()
+        n = 0
+        do i=1,self%os_mic%get_noris()
+            if(self%os_mic%isthere(i,'movie')) n = n+1
+        enddo
         if( n==0 )return
         allocate(moviestab(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
-            if(self%os_mic%isthere('imgkind'))then
-                call self%os_mic%getter(i,'imgkind',imgkind)
-                if( trim(imgkind).eq.'movie' )then
-                    cnt = cnt + 1
-                    call self%os_mic%getter(i,'movie',mov)
-                    moviestab(cnt) = trim(mov)
-                endif
+            if(self%os_mic%isthere(i,'movie'))then
+                cnt = cnt + 1
+                call self%os_mic%getter(i,'movie',mov)
+                moviestab(cnt) = trim(mov)
             endif
         enddo
     end subroutine get_movies_table
@@ -754,7 +755,7 @@ contains
         allocate(micstab(n))
         cnt = 0
         do i=1,self%os_mic%get_noris()
-            if(self%os_mic%isthere('imgkind'))then
+            if(self%os_mic%isthere(i,'imgkind'))then
                 call self%os_mic%getter(i,'imgkind',imgkind)
                 if( trim(imgkind).eq.'mic' )then
                     cnt = cnt + 1

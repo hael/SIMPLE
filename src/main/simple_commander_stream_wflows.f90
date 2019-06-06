@@ -64,8 +64,6 @@ contains
         ! picking
         l_pick = .false.
         if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
-        ! check for previously processed movies
-        call spproj%get_movies_table(prev_movies)
         ! output directories
         output_dir = PATH_HERE
         output_dir_ctf_estimate   = filepath(trim(output_dir), trim(DIR_CTF_ESTIMATE))

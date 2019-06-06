@@ -142,6 +142,7 @@ contains
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
+        character(len=LONGSTRLEN)              :: abs_fname
         integer :: n
         if( .not.allocated(self%history) )then
             n = 0
@@ -158,7 +159,8 @@ contains
             self%history(:n) = tmp_farr
             deallocate(tmp_farr)
         endif
-        self%history(n+1) = trim(adjustl(fname))
+        abs_fname = simple_abspath(fname)
+        self%history(n+1) = trim(adjustl(abs_fname))
         self%n_history    = self%n_history + 1
     end subroutine add2history
 
