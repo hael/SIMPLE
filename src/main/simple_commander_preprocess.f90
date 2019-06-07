@@ -604,7 +604,7 @@ contains
         type(image)                             :: micrograph
         type(ori)                               :: o_mic, o_tmp
         type(ctf)                               :: tfun
-        type(ctfparams)                         :: ctfparms
+        type(ctfparams)                         :: ctfparms, ctfparms_ptcl
         character(len=:),           allocatable :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)

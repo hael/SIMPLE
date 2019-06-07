@@ -125,7 +125,7 @@ contains
                 if( sqarg < 0.5 )then
                     cycle ! excludes zero
                 elseif( sqarg <= lplim .and. sqarg >= hplim  )then
-                    if( fetch_comps ) self%cmat(hcnt,kcnt,1)    = img%get_fcomp2D(h,k)
+                    if( fetch_comps ) self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
                     self%bandmsk(hcnt,kcnt) = .true.
                 end if
             end do

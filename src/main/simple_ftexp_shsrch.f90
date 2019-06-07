@@ -19,10 +19,13 @@ real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of co
 real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost function
 
 type :: ftexp_shsrch
-    type(opt_spec)              :: ospec                     !< optimizer specification object
+    private
+    type(opt_spec), public      :: ospec                     !< optimizer specification object
     class(optimizer),   pointer :: nlopt        => null()    !< pointer to nonlinear optimizer
     class(ft_expanded), pointer :: reference    => null()    !< reference ft_exp
     class(ft_expanded), pointer :: particle     => null()    !< particle ft_exp
+    complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
+    real(dp)                    :: denominator        = 0.d0
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
     real                        :: motion_correctftol = 1e-4 !< function error tolerance
     real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
@@ -31,11 +34,7 @@ type :: ftexp_shsrch
     integer                     :: flims(3,2)                !< shifted limits
     integer                     :: ldim(3)                   !< logical dimension
     integer                     :: kind_shift                !< transfer matrix index shift
-    real(dp),    allocatable    :: ftexp_tmpmat_re_2d(:,:)   !< temporary matrix for shift search
-    real(dp),    allocatable    :: ftexp_tmpmat_im_2d(:,:)   !< temporary matrix for shift search
-    complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
-    real(dp)                    :: denominator = 0.d0
-    logical                     :: existence
+    logical                     :: existence = .false.
 contains
     procedure          :: new            => ftexp_shsrch_new
     procedure          :: minimize       => ftexp_shsrch_minimize
@@ -46,9 +45,6 @@ contains
     procedure          :: corr_shifted_cost_8                !< cost function for minimizer, f only
     procedure          :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
     procedure          :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
-    procedure, private :: calc_tmpmat_re                     !< calculate tmp matrix for cost function
-    procedure, private :: calc_tmpmat_im                     !< calculate tmp matrix for cost function
-    procedure, private :: calc_tmpmat_re_im                  !< calculate tmp matrix for cost function
     procedure          :: calc_tmp_cmat12                    !< calculate tmp matrix for cost function
 end type ftexp_shsrch
 
@@ -112,8 +108,8 @@ contains
             self%ospec%x = prev_shift
         else
             self%ospec%x   = 0.
-            self%ospec%x_8 = 0._dp
         end if
+        self%ospec%x_8 = real(self%ospec%x,dp)
         self%kind_shift = self%reference%get_kind_shift()
         call self%set_dims_and_alloc()
         call self%calc_tmp_cmat12()
@@ -140,8 +136,6 @@ contains
             end if
             if ( associated( self%reference ) ) self%reference => null()
             if ( associated( self%particle )  ) self%particle  => null()
-            if ( allocated( self%ftexp_tmpmat_re_2d ) ) deallocate( self%ftexp_tmpmat_re_2d )
-            if ( allocated( self%ftexp_tmpmat_im_2d ) ) deallocate( self%ftexp_tmpmat_im_2d )
             if ( allocated( self%ftexp_tmp_cmat12   ) ) deallocate( self%ftexp_tmp_cmat12   )
             self%existence = .false.
         end if
@@ -172,23 +166,16 @@ contains
         self%ldim      = ref_ldim
         self%lims      = ref_lims
         do_alloc = .true.
-        if ( allocated( self%ftexp_tmpmat_re_2d ) ) then
-            if ( ( ubound( self%ftexp_tmpmat_re_2d, 1 ) == ref_flims(1,2) ) .and. &
-                 ( ubound( self%ftexp_tmpmat_re_2d, 2 ) == ref_flims(2,2) ) ) then
+        if ( allocated( self%ftexp_tmp_cmat12 ) ) then
+            if ( ( ubound( self%ftexp_tmp_cmat12, 1 ) == ref_flims(1,2) ) .and. &
+                 ( ubound( self%ftexp_tmp_cmat12, 2 ) == ref_flims(2,2) ) ) then
                 do_alloc = .false.
             else
-                deallocate( self%ftexp_tmpmat_re_2d )
-                deallocate( self%ftexp_tmpmat_im_2d )
                 deallocate( self%ftexp_tmp_cmat12 )
             end if
         end if
         if ( do_alloc ) then
-            allocate( self%ftexp_tmpmat_re_2d( 1:ref_flims(1,2), 1:ref_flims(2,2) ),&
-                      self%ftexp_tmpmat_im_2d( 1:ref_flims(1,2), 1:ref_flims(2,2) ),&
-                      self%ftexp_tmp_cmat12  ( 1:ref_flims(1,2), 1:ref_flims(2,2) ), stat=alloc_stat )
-                      self%ftexp_tmpmat_re_2d = 0.
-                      self%ftexp_tmpmat_im_2d = 0.
-                      self%ftexp_tmp_cmat12   = cmplx(0.,0.)
+            allocate(self%ftexp_tmp_cmat12(1:ref_flims(1,2),1:ref_flims(2,2)), stat=alloc_stat )
             if (alloc_stat /= 0) call allocchk('In: set_dims_and_alloc; simple_ftexp_shsrch')
         end if
     end subroutine set_dims_and_alloc
@@ -218,12 +205,28 @@ contains
         class(ftexp_shsrch), intent(inout) :: self
         real(dp),            intent(in)    :: shvec(2)
         logical, pointer :: msk(:,:)
-        real(dp) :: r
+        real(dp) :: r, r1, r2, arg
+        integer  :: hind,kind,kkind
         call self%reference%get_bandmsk_ptr(msk)
-        call self%calc_tmpmat_re( shvec )
-        r =            sum(self%ftexp_tmpmat_re_2d(                1,:), mask=msk(1,:))
-        r = r + 2.d0 * sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2),:), mask=msk(2:self%flims(1,2),:))
-        r = r * num / self%denominator
+        r1 = 0.d0
+        r2 = 0.d0
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+self%kind_shift
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( msk(hind,kind) )then
+                    arg = dot_product(shvec, real(ftexp_transfmat(hind,kkind,:),dp))
+                    if( hind == 1 )then
+                        ! h = 0
+                        r1  = r1 + real(self%ftexp_tmp_cmat12(1,kind) * exp(-J * arg),kind=dp)
+                    else
+                        ! h > 0
+                        r2  = r2 + real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
+                    endif
+                endif
+            end do
+        enddo
+        ! finalize
+        r = (r1 + 2.d0*r2) * num / self%denominator
     end function corr_shifted_cost_8
 
     !< cost function for minimizer, gradient only
@@ -232,17 +235,32 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2)
         logical, pointer :: msk(:,:)
-        integer :: kstart, kstop
+        real(dp)    :: g1(2),g2(2),arg, transf_vec(2)
+        integer     :: kstart, kstop,hind,kind,kkind
         kstart = self%kind_shift + 1
         kstop  = self%kind_shift + self%flims(2,2)
         call self%reference%get_bandmsk_ptr(msk)
-        call self%calc_tmpmat_im( shvec )
-        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,1),mask=msk(1,:))
-        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,1),mask=msk(2:self%flims(1,2),:))
-        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,2),mask=msk(1,:))
-        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,2),mask=msk(2:self%flims(1,2),:))
-        grad    = grad * num / self%denominator
+        g1 = 0.d0
+        g2 = 0.d0
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+self%kind_shift
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( msk(hind,kind) )then
+                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
+                    arg        = dot_product(shvec, transf_vec)
+                    if( hind == 1 )then ! h = 0
+                        g1(:) = g1(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))*real(transf_vec,dp)
+                    else ! h > 0
+                        g2(:) = g2(:) + dimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))*real(transf_vec,dp)
+                    endif
+                endif
+            end do
+        enddo
+        ! finalize
+        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / self%denominator
+        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / self%denominator
     end subroutine corr_gshifted_cost_8
+
 
     !< cost function for minimizer, f and gradient
     subroutine corr_fdfshifted_cost_8( self, shvec, f, grad )
@@ -250,95 +268,49 @@ contains
         real(dp),            intent(in)    :: shvec(2)
         real(dp),            intent(out)   :: grad(2), f
         logical, pointer :: msk(:,:)
-        integer :: kstart, kstop
+        complex(dp) :: tmp
+        real(dp)    :: f1,f2,g1(2),g2(2),arg, transf_vec(2)
+        integer     :: kstart, kstop,hind,kind,kkind
         kstart = self%kind_shift + 1
         kstop  = self%kind_shift + self%flims(2,2)
         call self%reference%get_bandmsk_ptr(msk)
-        call self%calc_tmpmat_re_im( shvec )
-        f =          sum(self%ftexp_tmpmat_re_2d(                1,:),mask=msk(1,:))
-        f = f + 2.d0*sum(self%ftexp_tmpmat_re_2d(2:self%flims(1,2),:),mask=msk(2:self%flims(1,2),:))
-        f = f * num / self%denominator
-        grad(1) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,1),mask=msk(1,:))
-        grad(1) = grad(1) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,1),mask=msk(2:self%flims(1,2),:))
-        grad(2) =                sum(self%ftexp_tmpmat_im_2d(                1,:)*ftexp_transfmat(                1,kstart:kstop,2),mask=msk(1,:))
-        grad(2) = grad(2) + 2.d0*sum(self%ftexp_tmpmat_im_2d(2:self%flims(1,2),:)*ftexp_transfmat(2:self%flims(1,2),kstart:kstop,2),mask=msk(2:self%flims(1,2),:))
-        grad = grad * num / self%denominator
+        f1 = 0.d0
+        f2 = 0.d0
+        g1 = 0.d0
+        g2 = 0.d0
+        do kind=self%flims(2,1),self%flims(2,2)
+            kkind = kind+self%kind_shift
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( msk(hind,kind) )then
+                    transf_vec = real(ftexp_transfmat(hind,kkind,:),dp)
+                    arg        = dot_product(shvec, transf_vec)
+                    tmp        = dcmplx(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
+                    if( hind == 1 )then ! h = 0
+                        f1    = f1    + real(tmp,dp)
+                        g1(:) = g1(:) + dimag(tmp) * transf_vec
+                    else ! h > 0
+                        f2    = f2    + real(tmp,dp)
+                        g2(:) = g2(:) + dimag(tmp) * transf_vec
+                    endif
+                endif
+            end do
+        enddo
+        ! finalize
+        f       = (f1   + 2.d0*f2)    * num / self%denominator
+        grad(1) = (g1(1)+ 2.d0*g2(1)) * num / self%denominator
+        grad(2) = (g1(2)+ 2.d0*g2(2)) * num / self%denominator
     end subroutine corr_fdfshifted_cost_8
-
-    !< calculate tmp matrix for cost function
-    subroutine calc_tmpmat_re( self, shvec )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        logical, pointer :: msk(:,:)
-        real(dp) :: arg
-        integer  :: hind,kind
-        call self%reference%get_bandmsk_ptr(msk)
-        do kind=self%flims(2,1),self%flims(2,2)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
-                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                    self%ftexp_tmpmat_re_2d(hind,kind) = real(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg),kind=dp)
-                endif
-            end do
-        end do
-    end subroutine calc_tmpmat_re
-
-    !< calculate tmp matrix for cost function
-    subroutine calc_tmpmat_im( self, shvec )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        logical, pointer :: msk(:,:)
-        real(dp) :: arg
-        integer  :: hind,kind
-        call self%reference%get_bandmsk_ptr(msk)
-        do kind=self%flims(2,1),self%flims(2,2)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
-                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg))
-                endif
-            end do
-        end do
-    end subroutine calc_tmpmat_im
-
-    !< calculate tmp matrix for cost function
-    subroutine calc_tmpmat_re_im( self, shvec )
-        class(ftexp_shsrch), intent(inout) :: self
-        real(dp),            intent(in)    :: shvec(2)
-        logical, pointer :: msk(:,:)
-        complex(dp) :: tmp
-        real(dp)    :: arg
-        integer     :: hind,kind
-        call self%reference%get_bandmsk_ptr(msk)
-        do kind=self%flims(2,1),self%flims(2,2)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
-                    arg  = dot_product(shvec(:), real(ftexp_transfmat(hind,kind+self%kind_shift,1:2),dp))
-                    tmp  = self%ftexp_tmp_cmat12(hind,kind) * exp(-J * arg)
-                    self%ftexp_tmpmat_re_2d(hind,kind) = real(tmp,kind=dp)
-                    self%ftexp_tmpmat_im_2d(hind,kind) = aimag(tmp)
-                endif
-            end do
-        end do
-    end subroutine calc_tmpmat_re_im
 
     !< calculate tmp matrix for cost function
     subroutine calc_tmp_cmat12( self )
         class(ftexp_shsrch), intent(inout) :: self
         complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
         logical, pointer :: msk(:,:)
-        integer  :: hind,kind
         call self%reference%get_bandmsk_ptr(msk)
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
         self%denominator = dsqrt(real(self%reference%get_sumsq(),dp) * real(self%particle%get_sumsq(),dp))
-        do kind=self%flims(2,1),self%flims(2,2)
-            do hind=self%flims(1,1),self%flims(1,2)
-                if( msk(hind,kind) )then
-                    self%ftexp_tmp_cmat12(hind,kind) = cmat1_ptr(hind,kind,1) * conjg(cmat2_ptr(hind,kind,1))
-                endif
-            end do
-        end do
+        self%ftexp_tmp_cmat12 = merge(cmat1_ptr(:,:,1)*conjg(cmat2_ptr(:,:,1)), cmplx(0.,0.), msk)
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )

@@ -161,8 +161,8 @@ contains
         if ( self%rand_init_shifts ) then
             do iframe = 1, self%nframes
                 if( iframe == self%fixed_frame ) cycle
-                self%opt_shifts(iframe,1) = ran3() * 2. * self%smallshift - self%smallshift
-                self%opt_shifts(iframe,2) = ran3() * 2. * self%smallshift - self%smallshift
+                self%opt_shifts(iframe,1) = (ran3()-.5) * self%smallshift
+                self%opt_shifts(iframe,2) = (ran3()-.5) * self%smallshift
             end do
         end if
         ! generate movie sum for refinement
@@ -183,11 +183,11 @@ contains
         do iter=1,self%mitsref
             self%iter = iter
             nimproved = 0
+            PRINT_NEVALS = .false.
             !$omp parallel do default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe=1,self%nframes
                 call self%movie_sum_global_ftexp_threads(iframe)%subtr(&
                     self%movie_frames_ftexp_sh(iframe), w=self%frameweights(iframe))
-                PRINT_NEVALS = .false.
                 cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), self%opt_shifts(iframe,:))
                 if( cxy(1) - self%corrs(iframe) > NIMPROVED_TOL ) nimproved = nimproved + 1
                 self%opt_shifts(iframe,:) = cxy(2:3)
