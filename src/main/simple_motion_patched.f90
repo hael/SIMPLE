@@ -17,12 +17,11 @@ public :: motion_patched, PATCH_PDIM
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: NX_PATCHED     = 5   ! number of patches in x-direction
-integer, parameter :: NY_PATCHED     = 5   !       "      "       y-direction
+integer, parameter :: NX_PATCHED     = 5    ! number of patches in x-direction
+integer, parameter :: NY_PATCHED     = 5    !       "      "       y-direction
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 5.
-integer, parameter :: PATCH_PDIM     = 18  ! dimension of fitted polynomial
-logical, parameter :: DUMP_STUFF     = .false.
+integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 
 type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
@@ -44,8 +43,6 @@ type :: motion_patched
     real,                   allocatable :: frameweights(:)
     integer,                allocatable :: updateres(:,:)
     character(len=:),       allocatable :: shift_fname
-    logical                             :: has_global_shifts
-    logical                             :: has_frameweights    = .false.
     integer                             :: nframes
     integer                             :: ldim(3)       ! size of entire frame, reference
     integer                             :: ldim_patch(3) ! size of one patch
@@ -57,6 +54,10 @@ type :: motion_patched
     real                                :: trs
     real, public                        :: hp
     real                                :: resstep
+    logical                             :: has_global_shifts
+    logical                             :: has_frameweights  = .false.
+    logical                             :: fitshifts         = .false.
+
 contains
     procedure, private                  :: allocate_fields
     procedure, private                  :: deallocate_fields
@@ -72,9 +73,11 @@ contains
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
+    procedure, private                  :: motion_patchedfit_callback
     procedure, private                  :: pix2polycoords
     procedure, private                  :: get_patched_polyn
     procedure                           :: set_frameweights
+    procedure                           :: set_fitshifts
     procedure                           :: new             => motion_patched_new
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: kill            => motion_patched_kill
@@ -142,27 +145,6 @@ contains
             end do
         end do
         sig = 1.
-        ! dump the shifts for debugging purposes
-        if (DUMP_STUFF) then
-            open(unit=123,file='for_fitting.txt')
-            write (123,'(A)',advance='no') 'y=['
-            do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
-                write (123,'(A)',advance='no') trim(dbl2str(y(k1)))
-                if (k1 < self%nframes*NX_PATCHED*NY_PATCHED) write (123,'(A)',advance='no') ', '
-            end do
-            write (123,*) '];'
-
-            do k2 = 1,3
-
-                write (123,'(A)',advance='no') 'x' // trim(int2str(k2)) // '=['
-                do k1 = 1, self%nframes*NX_PATCHED*NY_PATCHED
-                    write (123,'(A)',advance='no') trim(dbl2str(x(k2,k1)))
-                    if (k1 < self%nframes*NX_PATCHED*NY_PATCHED) write (123,'(A)',advance='no') ', '
-                end do
-                write (123,*) '];'
-            end do
-            close(123)
-        end if
         ! fit polynomial for shifts in x-direction
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         ! store polynomial coefficients
@@ -178,10 +160,6 @@ contains
         ! fit polynomial for shifts in y-direction
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         self%poly_coeffs(:,2) = a
-        if (DUMP_STUFF) then
-            call self%write_polynomial(self%poly_coeffs(:,1),'X:',1)
-            call self%write_polynomial(self%poly_coeffs(:,2),'Y:',2)
-        end if
     end subroutine fit_polynomial
 
     ! write the polynomials to disk for debugging purposes
@@ -619,7 +597,7 @@ contains
             do j = 1, NY_PATCHED
                 call self%align_iso(i,j)%new
                 call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
-                if ((.true.).and.(self%has_frameweights)) then
+                if( self%has_frameweights )then
                     call self%align_iso(i,j)%set_frameweights_callback(frameweights_callback_wrapper)
                 end if
                 call self%align_iso(i,j)%set_mitsref(50)
@@ -627,10 +605,11 @@ contains
                 call self%align_iso(i,j)%set_rand_init_shifts(.true.)
                 call self%align_iso(i,j)%set_hp_lp(self%hp, self%lp(i,j))
                 call self%align_iso(i,j)%set_trs(self%trs)
-                call self%align_iso(i,j)%set_ftol_gtol(1e-7, 1e-7)
-                call self%align_iso(i,j)%set_shsrch_tol(1e-7)
+                call self%align_iso(i,j)%set_ftol_gtol(TOL, TOL)
+                call self%align_iso(i,j)%set_shsrch_tol(TOL)
                 call self%align_iso(i,j)%set_maxits(100)
                 call self%align_iso(i,j)%set_coords(i,j)
+                call self%align_iso(i,j)%set_fitshifts(self%fitshifts)
                 call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
                 call self%align_iso(i,j)%align(self)
             end do
@@ -687,6 +666,12 @@ contains
         self%has_frameweights = .true.
     end subroutine set_frameweights
 
+    subroutine set_fitshifts( self, fitshifts )
+        class(motion_patched), intent(inout) :: self
+        logical,                  intent(in) :: fitshifts
+        self%fitshifts = fitshifts
+    end subroutine set_fitshifts
+
     subroutine motion_patched_new( self, motion_correct_ftol, motion_correct_gtol, trs )
         class(motion_patched), intent(inout) :: self
         real, optional,        intent(in)    :: motion_correct_ftol, motion_correct_gtol
@@ -727,10 +712,11 @@ contains
         real(dp), optional, allocatable, intent(out)   :: patched_polyn(:)
         integer :: ldim_frames(3)
         integer :: i
-        self%hp = hp
-        self%lp = params_glob%lpstart
-        self%resstep = resstep
-        self%updateres = 0
+        ! prep
+        self%hp          = hp
+        self%lp          = params_glob%lpstart
+        self%resstep     = resstep
+        self%updateres   = 0
         self%shift_fname = shift_fname // C_NULL_CHAR
         if (allocated(self%global_shifts)) deallocate(self%global_shifts)
         if (present(global_shifts)) then
@@ -742,13 +728,6 @@ contains
         end if
         self%nframes = size(frames,dim=1)
         self%ldim   = frames(1)%get_ldim()
-        if (DUMP_STUFF) then
-            write (*,*) 'ldim(1:2)=', self%ldim(1:2)
-            write (*,*) 'nframes=', self%nframes
-            do i = 1, self%nframes
-                call frames(i)%write('frame_'//trim(int2str(i))//'.mrc')
-            end do
-        end if
         do i = 1,self%nframes
             ldim_frames = frames(i)%get_ldim()
             if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
@@ -782,6 +761,52 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_patched_kill
 
+    ! callback with correlation criterion only
+    subroutine motion_patchedfit_callback(self, align_iso, converged)
+        class(motion_patched),   intent(inout) :: self
+        class(motion_align_iso), intent(inout) :: align_iso
+        logical,                 intent(out)   :: converged
+        integer :: i, j
+        integer :: iter
+        real    :: corrfrac
+        logical :: didupdateres
+        call align_iso%get_coords(i, j)
+        corrfrac      = align_iso%get_corrfrac()
+        iter          = align_iso%get_iter()
+        didupdateres  = .false.
+        select case(self%updateres(i,j))
+        case(0)
+            call update_res( 0.99, self%updateres(i,j) )
+        case(1)
+            call update_res( 0.995, self%updateres(i,j) )
+        case(2)
+            call update_res( 0.999, self%updateres(i,j) )
+        case DEFAULT
+            ! nothing to do
+        end select
+        if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+            if( iter > 10 .and. corrfrac > 0.9999 )  converged = .true.
+        else
+            converged = .false.
+        end if
+
+    contains
+        subroutine update_res( thres_corrfrac, which_update )
+            real,    intent(in) :: thres_corrfrac
+            integer, intent(in) :: which_update
+            if( corrfrac > thres_corrfrac .and. self%updateres(i,j) == which_update )then
+                self%lp(i,j) = self%lp(i,j) - self%resstep
+                call align_iso%set_hp_lp(self%hp, self%lp(i,j))
+                write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
+                ! need to indicate that we updated resolution limit
+                self%updateres(i,j)  = self%updateres(i,j) + 1
+                ! indicate that reslim was updated
+                didupdateres = .true.
+            endif
+        end subroutine update_res
+    end subroutine motion_patchedfit_callback
+
+    !>  callback with correlation & # of improving frames
     subroutine motion_patched_callback(self, align_iso, converged)
         class(motion_patched),   intent(inout) :: self
         class(motion_align_iso), intent(inout) :: align_iso
@@ -813,8 +838,8 @@ contains
             converged = .false.
         end if
 
-
     contains
+
         subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
             real,    intent(in) :: thres_corrfrac, thres_frac_improved
             integer, intent(in) :: which_update
@@ -829,6 +854,7 @@ contains
                 didupdateres = .true.
             endif
         end subroutine update_res
+
     end subroutine motion_patched_callback
 
     subroutine motion_patched_callback_wrapper(aptr, align_iso, converged)
@@ -837,7 +863,11 @@ contains
         logical,                 intent(out)   :: converged
         select type(aptr)
         class is (motion_patched)
-            call aptr%motion_patched_callback(align_iso, converged)
+            if( aptr%fitshifts )then
+                call aptr%motion_patchedfit_callback(align_iso, converged)
+            else
+                call aptr%motion_patched_callback(align_iso, converged)
+            endif
         class default
             THROW_HARD('error in motion_patched_callback_wrapper: unknown type; simple_motion_patched')
         end select

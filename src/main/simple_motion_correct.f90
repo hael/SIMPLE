@@ -98,9 +98,10 @@ type(starfile_table_type) :: mc_starfile                !< starfile for motion c
 ! module global constants
 integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
 integer, parameter :: MITSREF_ANISO  = 9       !< max # iterations of anisotropic refinement optimisation
-real,    parameter :: SMALLSHIFT     = 2.      !< small initial shift to blur out fixed pattern noise
+real,    parameter :: SMALLSHIFT     = 1.      !< small initial shift to blur out fixed pattern noise
 logical, parameter :: ANISO_DBL      = .true.  !< use double-precision for anisotropic motion correct?
 logical, parameter :: PATCHED_DIRECT = .false. !< use direct patch-based motion correct (if patch-based motion correct activated)
+logical, parameter :: FITSHIFTS      = .false.  !< whether to fit optimized shifts at each iteration
 
 contains
 
@@ -272,6 +273,51 @@ contains
         deallocate(rmat, rmat_sum, rmat_pad, win, outliers, movie_frames)
     end subroutine motion_correct_init
 
+    ! callback with correlation only criterion
+    subroutine motion_correct_isofit_callback( aPtr, align_iso, converged )
+        class(*), pointer,       intent(inout) :: aPtr
+        class(motion_align_iso), intent(inout) :: align_iso
+        logical,                 intent(out)   :: converged
+        integer :: iter
+        real    :: corrfrac
+        corrfrac      = align_iso%get_corrfrac()
+        iter          = align_iso%get_iter()
+        didupdateres  = .false.
+        select case(updateres)
+        case(0)
+            call update_res( 0.995, updateres )
+        case(1)
+            call update_res( 0.998, updateres )
+        case(2)
+            call update_res( 0.999, updateres )
+        case DEFAULT
+            ! nothing to do
+        end select
+        if( updateres > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+            if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
+        else
+            converged = .false.
+        end if
+
+    contains
+
+        subroutine update_res( thres_corrfrac, which_update )
+            real,    intent(in) :: thres_corrfrac
+            integer, intent(in) :: which_update
+            if( corrfrac > thres_corrfrac .and. updateres == which_update )then
+                lp = lp - resstep
+                call align_iso%set_hp_lp(hp, lp)
+                write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
+                ! need to indicate that we updated resolution limit
+                updateres  = updateres + 1
+                ! indicate that reslim was updated
+                didupdateres = .true.
+            endif
+        end subroutine update_res
+
+    end subroutine motion_correct_isofit_callback
+
+    ! callback taking into account # of improving frames
     subroutine motion_correct_iso_callback( aPtr, align_iso, converged )
         class(*), pointer,       intent(inout) :: aPtr
         class(motion_align_iso), intent(inout) :: align_iso
@@ -283,6 +329,7 @@ contains
         nimproved     = align_iso%get_nimproved()
         iter          = align_iso%get_iter()
         didupdateres  = .false.
+
         select case(updateres)
         case(0)
             call update_res( 0.96, 70., updateres )
@@ -342,11 +389,16 @@ contains
         call align_iso%set_hp_lp(hp,lp)
         updateres = 0
         call align_iso%set_trs(params_glob%scale*params_glob%trs)
-        call align_iso%set_smallshift(1.)
+        call align_iso%set_smallshift(SMALLSHIFT)
         call align_iso%set_rand_init_shifts(.true.)
-        call align_iso%set_ftol_gtol(1e-7, 1e-7)
-        call align_iso%set_shsrch_tol(1e-7)
-        call align_iso%set_callback( motion_correct_iso_callback )
+        call align_iso%set_ftol_gtol(1e-6, 1e-6)
+        call align_iso%set_shsrch_tol(1e-6)
+        call align_iso%set_fitshifts(FITSHIFTS)
+        if( FITSHIFTS )then
+            call align_iso%set_callback( motion_correct_isofit_callback )
+        else
+            call align_iso%set_callback( motion_correct_iso_callback )
+        endif
         call align_iso%align(callback_ptr)
         corr = align_iso%get_corr()
         if( corr < 0. )then
@@ -434,7 +486,7 @@ contains
             end do
             deallocate(movie_frames_scaled)
         endif
-        if ( allocated(opt_shifts)    )   deallocate(opt_shifts   )
+        if (allocated(opt_shifts))deallocate(opt_shifts)
         call ftexp_transfmat_kill
     end subroutine motion_correct_iso_kill
 
@@ -688,6 +740,7 @@ contains
             call motion_patch_direct%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
         else
             call motion_patch%set_frameweights( frameweights )
+            call motion_patch%set_fitshifts( FITSHIFTS )
             call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn )
         end if
     end subroutine motion_correct_patched
