@@ -56,8 +56,8 @@ contains
         allocate(opt_eul(nthr_glob))
         do ithr=1,nthr_glob
             ! optimiser spec
-            call opt_eul(ithr)%ospec%specify('simplex', 3, ftol=1e-4,&
-            &gtol=1e-4, limits=lims_eul, nrestarts=nrestarts, maxits=100)
+            call opt_eul(ithr)%ospec%specify('simplex', 3, ftol=1d-4,&
+                &gtol=1d-4, limits=lims_eul, nrestarts=nrestarts, maxits=100)
             ! point to costfun
             call opt_eul(ithr)%ospec%set_costfun(volpft_srch_costfun)
             ! generate optimizer object with the factory

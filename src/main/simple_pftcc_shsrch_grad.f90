@@ -58,7 +58,7 @@ contains
         self%opt_angle = .true.
         if( present(opt_angle) ) self%opt_angle = opt_angle
         ! make optimizer spec
-        call self%ospec%specify('lbfgsb', 2, ftol=1e-1, gtol=1e-3, limits=lims,&
+        call self%ospec%specify('lbfgsb', 2, ftol=1d-1, gtol=1d-3, limits=lims,&
             max_step=0.01, limits_init=lims_init, maxits=self%maxits)
         ! generate the optimizer object
         call opt_fact%new(self%ospec, self%nlopt)

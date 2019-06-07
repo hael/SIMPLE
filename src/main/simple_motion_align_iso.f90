@@ -26,8 +26,8 @@ type :: motion_align_iso
     integer                                           :: mitsref                           !< maximum iteration number
     integer                                           :: fixed_frame = 1                   !< fixed (non-shifted) frame
     real                                              :: trs                               !< size of box constraint
-    real                                              :: ftol                              !< tolerance parameter for minimizer
-    real                                              :: gtol                              !< tolerance parameter for minimizer
+    real(dp)                                          :: ftol                              !< tolerance parameter for minimizer
+    real(dp)                                          :: gtol                              !< tolerance parameter for minimizer
     integer                                           :: nimproved                         !< number of improved frames
     real                                              :: frac_improved                     !< fraction of improved frames
     real                                              :: smallshift                        !< range for initial random shift

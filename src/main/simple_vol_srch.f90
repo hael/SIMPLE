@@ -35,8 +35,8 @@ contains
         vtarg => vol_target
         lims(1:3,1) = -trs_in
         lims(1:3,2) =  trs_in
-        call ospec%specify('simplex', 3, ftol=1e-4,&
-        &gtol=1e-4, limits=lims, nrestarts=nrestarts, maxits=100)
+        call ospec%specify('simplex', 3, ftol=1d-4,&
+            &gtol=1d-4, limits=lims, nrestarts=nrestarts, maxits=100)
         call ospec%set_costfun(vol_shsrch_costfun)
         call nlopt%new(ospec)
     end subroutine vol_srch_init

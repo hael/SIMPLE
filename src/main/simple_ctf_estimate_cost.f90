@@ -10,7 +10,7 @@ public :: ctf_estimate_cost
 private
 #include "simple_local_flags.inc"
 
-real, parameter :: FTOL_REFINE = 1.e-4
+real(dp), parameter :: FTOL_REFINE = 1.d-4
 
 type ctf_estimate_cost
     private

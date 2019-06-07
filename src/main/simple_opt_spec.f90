@@ -19,7 +19,10 @@ type :: opt_spec
     character(len=STDLEN)     :: str_opt=''                           !< string descriptor (of optimization routine to be used)
     character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
     integer                   :: ndim=0, ldim=0                       !< dimension parameters
-    real                      :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
+    real(dp)                  :: ftol=1d-5, gtol=1d-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
+    real(dp)                  :: ftol_lbfgsb=1.0d-3
+    real(dp)                  :: gtol_lbfgsb=0.9d0
+    real(dp)                  :: xtol_lbfgsb=0.1d0
     real                      :: eps=0.5                              !< learning rate
     real                      :: cfac=0.1                             !< convergence factor bfgs
     real                      :: yb                                   !< best cost obtained so far
@@ -156,8 +159,8 @@ contains
         integer,                    intent(in)    :: ndim                !< problem dimensionality
         character(len=*), optional, intent(in)    :: mode                !< mode string descriptor
         integer,          optional, intent(in)    :: ldim                !< second problem dimensionality
-        real,             optional, intent(in)    :: ftol                !< fractional convergence tolerance to be achieved in costfun
-        real,             optional, intent(in)    :: gtol                !< fractional convergence tolerance to be achieved in gradient
+        real(dp),         optional, intent(in)    :: ftol                !< fractional convergence tolerance to be achieved in costfun
+        real(dp),         optional, intent(in)    :: gtol                !< fractional convergence tolerance to be achieved in gradient
         integer,          optional, intent(in)    :: maxits              !< maximum number of iterations
         integer,          optional, intent(in)    :: nbest               !< nr of best solutions used to update the CE model
         integer,          optional, intent(in)    :: nrestarts           !< number of restarts

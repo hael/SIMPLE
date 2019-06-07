@@ -27,8 +27,8 @@ type :: ftexp_shsrch
     complex(dp), allocatable    :: ftexp_tmp_cmat12(:,:)     !< temporary matrix for shift search
     real(dp)                    :: denominator        = 0.d0
     real                        :: maxHWshift         = 0.   !< maximum half-width of shift
-    real                        :: motion_correctftol = 1e-4 !< function error tolerance
-    real                        :: motion_correctgtol = 1e-4 !< gradient error tolerance
+    real(dp)                    :: motion_correctftol = 1d-4 !< function error tolerance
+    real(dp)                    :: motion_correctgtol = 1d-4 !< gradient error tolerance
     real                        :: shsrch_tol         = TOL
     integer                     :: lims(3,2)                 !< physical limits for the Fourier transform
     integer                     :: flims(3,2)                !< shifted limits
@@ -56,7 +56,7 @@ contains
         class(ftexp_shsrch),        intent(inout) :: self
         class(ft_expanded), target, intent(in)    :: ref, ptcl
         real,                       intent(in)    :: trs
-        real,             optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
+        real(dp),         optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
         type(opt_factory) :: ofac
         real              :: opt_lims(2,2)
         call self%kill()

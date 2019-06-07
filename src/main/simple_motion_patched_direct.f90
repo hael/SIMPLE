@@ -64,8 +64,8 @@ type :: motion_patched_direct
     integer                              :: ldim_patch(3) ! size of one patch
     integer                              :: lims_patches (NX_PATCHED,NY_PATCHED,2,2) ! corners of the patches
     real                                 :: patch_centers(NX_PATCHED,NY_PATCHED,2)
-    real                                 :: motion_correct_ftol
-    real                                 :: motion_correct_gtol
+    real(dp)                             :: motion_correct_ftol
+    real(dp)                             :: motion_correct_gtol
     real(dp)                             :: poly_coeffs(PATCH_PDIM,2) = 0.d0 ! coefficients of fitted polynomial
     real                                 :: trs
     real                                 :: hp

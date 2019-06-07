@@ -594,7 +594,7 @@ contains
     !> Initialise  ftexp_shsrch
     subroutine motion_anisocor_dbl_new( self, motion_correct_ftol, motion_correct_gtol )
         class(motion_anisocor_dbl), intent(inout) :: self
-        real,         optional,     intent(in)    :: motion_correct_ftol, motion_correct_gtol
+        real(dp),     optional,     intent(in)    :: motion_correct_ftol, motion_correct_gtol
         type(opt_factory) :: ofac !< optimizer factory
         integer           :: i
         real              :: lims(POLY_DIM,2)
