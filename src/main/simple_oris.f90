@@ -75,6 +75,7 @@ type :: oris
     procedure          :: delete_entry_1
     procedure          :: delete_entry_2
     procedure          :: delete_2Dclustering
+    procedure          :: delete_3Dalignment
     procedure          :: transfer_2Dparams
     procedure          :: transfer_3Dparams
     procedure          :: set_euler
@@ -1301,6 +1302,15 @@ contains
             call self%o(i)%delete_2Dclustering(keepshifts)
         end do
     end subroutine delete_2Dclustering
+
+    subroutine delete_3Dalignment( self, keepshifts )
+        class(oris),       intent(inout) :: self
+        logical, optional, intent(in)    :: keepshifts
+        integer :: i
+        do i=1,self%n
+            call self%o(i)%delete_3Dalignment(keepshifts)
+        end do
+    end subroutine delete_3Dalignment
 
     subroutine set_euler( self, i, euls )
         class(oris), intent(inout) :: self

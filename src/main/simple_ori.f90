@@ -26,6 +26,7 @@ type :: ori
     procedure          :: copy => copy_ori
     procedure          :: delete_entry
     procedure          :: delete_2Dclustering
+    procedure          :: delete_3Dalignment
     procedure          :: transfer_2Dparams
     procedure          :: transfer_3Dparams
     procedure          :: set_euler
@@ -190,6 +191,24 @@ contains
         call self%htab%delete('corr')
         call self%htab%delete('frac')
     end subroutine delete_2Dclustering
+
+    subroutine delete_3Dalignment( self, keepshifts )
+        class(ori),        intent(inout) :: self
+        logical, optional, intent(in)    :: keepshifts
+        logical :: kkeepshifts
+        kkeepshifts = .false.
+        if( present(keepshifts) ) kkeepshifts = keepshifts
+        call self%htab%delete('proj')
+        call self%htab%delete('e1')
+        call self%htab%delete('e2')
+        call self%htab%delete('e3')
+        if( .not. kkeepshifts )then
+            call self%htab%delete('x')
+            call self%htab%delete('y')
+        endif
+        call self%htab%delete('corr')
+        call self%htab%delete('frac')
+    end subroutine delete_3Dalignment
 
     subroutine transfer_2Dparams( self_out, self_in )
         class(ori), intent(inout) :: self_out
@@ -584,8 +603,10 @@ contains
         if(.not. is_zero(self%e2get())      )return
         if(.not. is_zero(self%e3get())      )return
         if(.not. is_zero(self%get('corr'))  )return
-        if(.not. is_zero(self%get('x'))     )return
-        if(.not. is_zero(self%get('y'))     )return
+        ! removed shifts from here as we may want to keep shifts from ini3D
+        ! but restart the refinement (not initialize with the class oris)
+        ! if(.not. is_zero(self%get('x'))     )return
+        ! if(.not. is_zero(self%get('y'))     )return
         has_been_searched = .false.
     end function has_been_searched
 

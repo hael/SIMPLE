@@ -1052,7 +1052,7 @@ contains
             call build%spproj%write_segment_inside(params%oritype)
         endif
         l_projection_matching = .false.
-        if( have_oris .and. .not.vol_defined )then
+        if( have_oris .and. .not. vol_defined )then
             ! reconstructions needed
             call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
             do state = 1,params%nstates
@@ -1072,15 +1072,17 @@ contains
                     iostat =  simple_rename( trim(vol_odd), trim(str) )
                 endif
             enddo
-        else if( .not.have_oris .and. vol_defined )then
+        else if( vol_defined )then
             ! projection matching
             l_projection_matching = .true.
-            select case( params%neigh )
-                case( 'yes' )
-                    THROW_HARD('refinement method requires input orientations')
-                case DEFAULT
-                    ! all good
-            end select
+            if( .not. have_oris )then
+                select case( params%neigh )
+                    case( 'yes' )
+                        THROW_HARD('refinement method requires input orientations')
+                    case DEFAULT
+                        ! all good
+                end select
+            endif
             if( params%l_eo )then
                 if( .not.cline%defined('lp')) THROW_HARD('LP needs be defined for the first step of projection matching!')
                 call cline%set('eo','no')
@@ -1089,7 +1091,12 @@ contains
                 params%l_eo = .false.
                 call cline%delete('update_frac')
             endif
-            call cline%set('refine','greedy_single')
+            if( params%neigh .ne. 'yes' )then
+                ! this forces the first round of alignment on the starting model(s)
+                ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
+                call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
         endif
         ! EXTREMAL DYNAMICS
         if( cline%defined('extr_iter') )then

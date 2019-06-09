@@ -42,6 +42,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter              :: L_BENCH = .false., DEBUG_HERE = .false.
+logical                         :: has_been_searched
 type(polarft_corrcalc),  target :: pftcc
 type(polarizer),    allocatable :: match_imgs(:)
 integer,            allocatable :: pinds(:), prev_states(:)
@@ -91,6 +92,9 @@ contains
         else
             call build_glob%spproj_field%set_all2single('eo', -1.)
         endif
+
+        ! CHECK WHETHER WE HAVE PREVIOUS 3D ORIENTATIONS
+        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
 
         ! SET FOURIER INDEX RANGE
         call set_bp_range(cline)
@@ -208,7 +212,7 @@ contains
             case('single')
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
-                        if( ran3() < GREEDY_FREQ )then
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. ran3() < GREEDY_FREQ )then
                             allocate(strategy3D_greedy_single :: strategy3Dsrch(iptcl)%ptr)
                         else
                             allocate(strategy3D_single :: strategy3Dsrch(iptcl)%ptr)
@@ -227,7 +231,7 @@ contains
                 do iptcl=params_glob%fromp,params_glob%top
                     if( ptcl_mask(iptcl) )then
                         updatecnt = nint(build_glob%spproj_field%get(iptcl,'updatecnt'))
-                        if( updatecnt == 1 )then
+                        if( .not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt == 1 )then
                             allocate(strategy3D_greedy_multi :: strategy3Dsrch(iptcl)%ptr)
                         else
                             allocate(strategy3D_multi :: strategy3Dsrch(iptcl)%ptr)
@@ -444,9 +448,8 @@ contains
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
-        logical   :: do_center, has_been_searched
-        nrefs             = params_glob%nspace * params_glob%nstates
-        has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
+        logical   :: do_center
+        nrefs = params_glob%nspace * params_glob%nstates
         ! must be done here since params_glob%kfromto is dynamically set
         if( params_glob%l_eo )then
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask,&
