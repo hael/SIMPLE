@@ -20,9 +20,8 @@ type :: opt_spec
     character(len=STDLEN)     :: str_mode=''                          !< mode string descriptor
     integer                   :: ndim=0, ldim=0                       !< dimension parameters
     real                      :: ftol=1e-5, gtol=1e-5                 !< fractional convergence tolerance to be achieved in costfun/gradient
-    real(dp)                  :: ftol_lbfgsb=1.0d-3
-    real(dp)                  :: gtol_lbfgsb=0.9d0
-    real(dp)                  :: xtol_lbfgsb=0.1d0
+    real(dp)                  :: factr=1.0d+7                         !< f-tolerance for lbfgsb
+    real(dp)                  :: pgtol=1.0d-5                         !< g-tolerance for lbfgsb
     real                      :: eps=0.5                              !< learning rate
     real                      :: cfac=0.1                             !< convergence factor bfgs
     real                      :: yb                                   !< best cost obtained so far
@@ -153,7 +152,7 @@ contains
     !>  \brief  specifies the optimization parameters
     subroutine specify( self, str_opt, ndim, mode, ldim, ftol, gtol, maxits,&
     &nrestarts, limits, limits_init, cyclic, verbose_arg, debug_arg, npop,&
-    &cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step )
+    &cfac, warn_arg, nbest, nstates, stepsz, npeaks, nnn, max_step, factr, pgtol )
         class(opt_spec),            intent(inout) :: self                !< instance
         character(len=*),           intent(in)    :: str_opt             !< string descriptor (of optimization routine to be used)
         integer,                    intent(in)    :: ndim                !< problem dimensionality
@@ -177,6 +176,8 @@ contains
         real,             optional, intent(in)    :: cfac                !< convergence factor (bfgs)
         real,             optional, intent(in)    :: stepsz(ndim)        !< step sizes for brute force search
         real,             optional, intent(in)    :: max_step            !< initial step size
+        real(dp),         optional, intent(in)    :: factr               !< factr (f-tolerance) for lbfgsb optimizer
+        real(dp),         optional, intent(in)    :: pgtol               !< pgtol (g-tolerance) for lbfgsb optimizer
         integer :: alloc_stat
         call self%kill
         ! take care of optimizer specifics
@@ -221,8 +222,10 @@ contains
         if(present(mode))        self%str_mode  = mode
         if(present(npop))        self%npop      = npop
         if(present(ldim))        self%ldim      = ldim
-        if(present(ftol))        self%ftol      = ftol
+        if(present(ftol))        self%ftol      = ftol        
         if(present(gtol))        self%gtol      = gtol
+        if(present(factr))       self%factr     = factr
+        if(present(pgtol))       self%pgtol     = pgtol
         if(present(maxits))      self%maxits    = maxits
         if(present(nbest))       self%nbest     = nbest
         if(present(npeaks))      self%npeaks    = npeaks
