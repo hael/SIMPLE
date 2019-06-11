@@ -2,7 +2,6 @@ module simple_test_chiara_try_mod
     include 'simple_lib.f08'
     use simple_aff_prop
     use simple_commander_distr_wflows
-    use simple_powerspec_analysis
     use gnufor2
     use simple_ctf
     use simple_micops
@@ -255,10 +254,39 @@ end subroutine laplacian_filt
       deallocate(imat, border, rmat)
   end subroutine calc_circ
 
+
+  ! function entropy(X,n) result(e)
+  !     use simple_math
+  !     real, intent(in)    :: X(:)
+  !     integer, intent(in) :: N
+  !     real                :: e !entropy value
+  !     real,    allocatable :: xhist(:) !discretization of the values
+  !     integer, allocatable :: yhist(:) !number of occurences
+  !     real,    allocatable :: p(:), p_no_zero(:)
+  !     integer :: i, cnt
+  !     call create_hist_vector(X,n,xhist,yhist)
+  !     allocate(p(size(yhist)), source = 0.)
+  !     p =  real(yhist)/real(sum(yhist)) !probabilities
+  !     print *, 'p = ', p
+  !     cnt = count(p>TINY)
+  !     print *, 'cnt = ', cnt
+  !     allocate(p_no_zero(cnt), source = 0.)
+  !     cnt = 0 !reset
+  !     do i = 1, size(p)
+  !         if(p(i) > TINY) then
+  !             cnt = cnt + 1
+  !             print *, 'i = ', i, 'p(i) = ', p(i)
+  !             p_no_zero(cnt) = p(i)
+  !         endif
+  !     enddo
+  !     e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
+  !     deallocate(xhist,yhist)
+  ! end function entropy
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
     include 'simple_lib.f08'
+    use simple_math
     use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
     use simple_cmdline,        only: cmdline, cmdline_err
     use simple_commander_base, only: execute_commander
@@ -274,9 +302,6 @@ program simple_test_chiara_try
   ! use simple_stat
   ! use simple_lapackblas, only : sgeev
   ! use simple_test_chiara_try_mod
-  type(image)       :: img
-  logical :: close_to_focus(1)
-  ! integer           :: i, j, ncls, cnt
   ! real, allocatable :: rmat(:,:,:), rmat_mask(:,:,:), rmat_prod(:,:,:)
   ! real :: centers1(3,10)
   ! real :: centers2(3,10)
@@ -284,14 +309,15 @@ program simple_test_chiara_try
   ! integer, allocatable :: imat(:,:,:)
   ! real :: r, avg, d, st, m(3), smpd, tmp_max, coord(3)
   ! integer :: N_max
-
-  !call img%read('pspecs_saga_polii.mrc', 71)
-  !call img%write('OnePsCloseToFocus.mrc')
-    close_to_focus = .true.
-    call prepare_stack('OnePsCloseToFocus.mrc', 'OnePsCloseToFocusPrepared.mrc', 1.41, 35., close_to_focus)
-    write(logfhandle,*) '>>>>>>>>>>>>>STACK PREPARED SUCCESSFULLY>>>>>>>>>>>>>'
-    call binarize_stack('OnePsCloseToFocusPrepared.mrc','LambdaBin.mrc', 1.41)
-
+    real, allocatable :: X(:), rmat(:,:,:)
+    real :: e
+    type(image) :: img
+    call img%new([512,512,1], 1.41)
+    call img%read('pspecs_saga_polii.mrc', 71)
+    rmat = img%get_rmat()
+    X = reshape(rmat, [512*512])
+    e = entropy(X,512)
+    print *, 'e = ', e ! USE SCALE IMAGE???
     ! ! centers1 = reshape([1.,1.,1.,1.5,1.5,1.5,2.3,2.4,2.5,4.1,4.3,4.7],[3,4])
     ! print *, 'centers1(:3,1) = ',centers1(:3,1)
     ! call vis_mat(centers1)

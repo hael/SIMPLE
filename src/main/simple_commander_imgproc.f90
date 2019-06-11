@@ -462,22 +462,22 @@ contains
     !> for online power spectra analysis through statistic calculation
     !! to perform prior ctf estimation.
     subroutine exec_pspec_stats( self, cline )
-        use simple_powerspec_analysis, only: powerspectrum
+        use simple_genpspec_and_statistics, only: pspec_statistics
         class(pspec_stats_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
-        type(parameters)    :: params
-        type(powerspectrum) :: pspec
+        type(parameters)       :: params
+        type(pspec_statistics) :: pspec
         integer :: ldim(3), nptcls
         real    :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_pspec_stats')
         endif
-        if( .not. cline%defined('stk') )then
-            THROW_HARD('ERROR!   stk needs to be present; exec_pspec_stats')
+        if( .not. cline%defined('fname') )then
+            THROW_HARD('ERROR! fname needs to be present; exec_pspec_stats')
         endif
-        call pspec%new(params%stk, 8) !it also create a new instance of the class powerspectrum
-        call find_ldim_nptcls (params%stk, ldim, nptcls, smpd)
+        call pspec%new(params%fname,8) !it also create a new instance of the class powerspectrum
+        call find_ldim_nptcls (params%fname,ldim, nptcls, smpd)
         call pspec%run()
         ! end gracefully
         call simple_end('**** SIMPLE_PSPEC_STATS NORMAL STOP ****')

@@ -158,6 +158,7 @@ type :: parameters
     character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny|bin)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
+    character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
     character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
@@ -357,6 +358,8 @@ type :: parameters
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpthresh=30.
+    real    :: max_rad =0.         !< particle longest  dim (in pixels)
+    real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
     real    :: msk=0.              !< mask radius(in pixels)
@@ -367,7 +370,6 @@ type :: parameters
     real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
     real    :: part_concentration  !< concentration of particles in the micrograph
-    real    :: part_radius         !< particle   radius(in pixels)
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -495,6 +497,7 @@ contains
         call check_carg('dihedral',       self%dihedral)
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
+        call check_carg('draw_color',     self%draw_color)
         call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
@@ -756,6 +759,8 @@ contains
         call check_rarg('lpstart',        self%lpstart)
         call check_rarg('lpstop',         self%lpstop)
         call check_rarg('lpthresh',       self%lpthresh)
+        call check_rarg('max_rad',        self%max_rad)
+        call check_rarg('min_rad',        self%min_rad)
         call check_rarg('moldiam',        self%moldiam)
         call check_rarg('msk',            self%msk)
         call check_rarg('mul',            self%mul)
@@ -764,7 +769,6 @@ contains
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
         call check_rarg('part_concentration', self%part_concentration)
-        call check_rarg('part_radius',    self%part_radius)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)

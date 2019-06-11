@@ -3405,14 +3405,16 @@ contains
     ! and their standar deviation.
     ! Elimin ccs which have size: > ave + 2.*stdev
     !                             < ave - 2.*stdev
-    ! If present part_radius, it cleans up ccs more.
-    subroutine polish_cc(self, part_radius)
-        class(image), intent(inout) :: self
-        real, optional, intent(in) :: part_radius
+    ! If present min_rad and max_rad, it cleans up ccs more.
+    subroutine polish_cc(self, min_rad, max_rad)
+        class(image),   intent(inout) :: self
+        real, optional, intent(in)    :: min_rad, max_rad
         integer, allocatable :: sz(:)
-        real :: lt, ht !low and high thresh for ccs polising
-        real :: ave, stdev ! avg and stdev of the size od the ccs
+        real    :: lt, ht !low and high thresh for ccs polising
+        real    :: ave, stdev ! avg and stdev of the size od the ccs
         integer :: n_cc
+        if(present(min_rad) .and. .not. present(max_rad)) THROW_HARD('Both min_rad and max_rad need to be defined! polish_cc')
+        if(present(max_rad) .and. .not. present(min_rad)) THROW_HARD('Both min_rad and max_rad need to be defined! polish_cc')
         ! Assuming gaussian distribution 95% of the particles
         ! are in [-2sigma, 2sigma]
         sz = self%size_connected_comps()
@@ -3424,10 +3426,9 @@ contains
         stdev = sqrt(stdev/real(size(sz)-1))
         call self%elim_cc([ floor(ave-2.*stdev) , ceiling(ave+2.*stdev) ])
         !call img_cc%order_cc() it is already done in the elim_cc subroutine
-        ! Use particle radius. The biggest possible area is when particle is
-        ! circular, the smallest one is when the particle is a 'stick'. Suppose
-        ! the minimum width of the stick is 5 pxls.
-        if(present(part_radius)) call self%elim_cc([ int(5*part_radius) , int(2*3.14*(part_radius)**2) ])
+        ! Use particle radius. Hypothesise the biggest possible area is when
+        ! particle is circular, the smallest one is when the particle is rectangular
+        if(present(min_rad)) call self%elim_cc([ int(min_rad*max_rad) , int(2*3.14*(max_rad)**2) ])
     end subroutine polish_cc
 
      ! This subroutine is ment for 2D binary images. It implements

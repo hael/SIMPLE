@@ -1572,7 +1572,7 @@ contains
         stdev_within = sqrt(stdev_within)
         write(unit = 111,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
         do i = 2, ncls
-            write(unit = 111,fmt ='(a,f5.3)')   '              ', stdev_within(i)
+            write(unit = 111,fmt ='(a,f5.3)')   '               ', stdev_within(i)
         enddo
         !standard deviation among different centers
         avg = 0.

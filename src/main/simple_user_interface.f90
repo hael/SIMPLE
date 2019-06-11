@@ -2457,7 +2457,7 @@ contains
         &1, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pspec_stats%set_input('img_ios', 1, 'stk', 'file', 'Stack of powerspectra images', 'Stack of powerspectra images', 'e.g. pspec_stk.mrc', .true., '')
+        call pspec_stats%set_input('img_ios', 1, 'fname', 'file', 'Stack of powerspectra images', 'Stack of powerspectra images', 'e.g. xxx.mrc file', .true., '')
         ! parameter input/output
         call pspec_stats%set_input('parm_ios',   1, smpd)
         ! search controls

@@ -28,9 +28,9 @@ contains
         character(len=*),        intent(in)    :: moviename_intg, dir_out
         character(len=:), allocatable :: fbody_here, ext
         character(len=LONGSTRLEN) :: rel_fname
-        type(image) :: img_jpg
-        integer     :: ldim(3), ldim_thumb(3), nframes
-        real        :: scale, smpd
+        type(image)    :: img_jpg
+        integer        :: ldim(3), ldim_thumb(3), nframes
+        real           :: scale, smpd
         ! check, increment counter & print
         if( .not. file_exists(moviename_intg) )then
             write(logfhandle,*) 'inputted integrated movie does not exist: ', trim(moviename_intg)

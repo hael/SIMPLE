@@ -549,6 +549,7 @@ contains
         class(pick_commander_chiara), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir
+        character(len=:), allocatable :: detector
         type(picker_chiara) :: pc
         type(parameters)    :: params
         ! sanity checks
@@ -558,27 +559,28 @@ contains
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_pick_chiara')
         endif
-        if( .not. cline%defined('part_radius') )then
-            THROW_HARD('ERROR! part_radius to be present; exec_pick_chiara')
+        if( .not. cline%defined('min_rad') .or.  .not. cline%defined('max_rad'))then
+            THROW_HARD('ERROR! min_rad and max_rad need to be present; exec_pick_chiara')
         endif
         call params%new(cline)
         if( cline%defined('thres') .and. params%detector .ne. 'sobel')then
             THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_pick_chiara')
         endif
-        if( cline%defined('part_concentration') .and. params%detector .ne. 'sobel')then
-            THROW_HARD('ERROR! part_concentration is compatible only with sobel detector; exec_pick_chiara')
-        endif
-        if( cline%defined('thres') .and. cline%defined('part_concentration'))then
-            THROW_HARD('ERROR! thres and part_concentration are not compatible; exec_pick_chiara')
-        endif
+        ! set default
+        detector = 'bin'
+        if(cline%defined('detector')) detector=params%detector
         ! output directory
         output_dir = PATH_HERE
         ! particle picking
-        call pc%new(params%fname,params%part_radius,params%smpd)
-        if( cline%defined('lp')) then
-            call pc%preprocess_mic(params%detector, params%lp)
+        if(cline%defined('draw_color')) then
+            call pc%new(params%fname,params%min_rad,params%max_rad,params%smpd,params%draw_color)
         else
-            call pc%preprocess_mic(params%detector)
+            call pc%new(params%fname,params%min_rad,params%max_rad,params%smpd)
+        endif
+        if( cline%defined('lp')) then
+            call pc%preprocess_mic(detector, params%lp)
+        else
+            call pc%preprocess_mic(detector)
         endif
         call pc%extract_particles()
         call pc%print_info()

@@ -306,14 +306,15 @@ select case(prg)
         ! for image segmentation-based particle picking
         keys_required(1) = 'fname' ! micrograph
         keys_required(2) = 'smpd'
-        keys_required(3) = 'part_radius'
-        keys_required(4) = 'detector'
+        keys_required(3) = 'min_rad'
+        keys_required(4) = 'max_rad'
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'winsz'
         keys_optional(3) = 'thres'
-        keys_optional(4) = 'part_concentration'
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:4))
+        keys_optional(4) = 'detector'
+        keys_optional(5) = 'draw_color'
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:5))
         call xpickchiara%execute(cline)
 
     ! CLUSTER2D PROGRAMS

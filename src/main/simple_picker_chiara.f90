@@ -1,4 +1,4 @@
-! USAGE: simple_private_exec prg=pick_chiara detector=bin smpd=1. part_radius=15 fname='/home/chiara/Desktop/Chiara/ParticlePICKING/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc'
+! USAGE: simple_private_exec prg=pick_chiara detector=bin smpd=1. min_rad=15 max_rad=22 draw_color=white fname='/home/chiara/Desktop/Chiara/ParticlePICKING/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc'
 module simple_picker_chiara
 include 'simple_lib.f08'
 use simple_image, only : image
@@ -16,13 +16,15 @@ type :: picker_chiara
     type(image) :: img
     type(image) :: img_cc
     real, allocatable :: particles_coord(:,:)
-    real    :: part_radius           = 0.
+    real    :: min_rad               = 0.
+    real    :: max_rad               = 0.
     real    :: smpd                  = 0.
     real    :: smpd_shrunken         = 0.
     real    :: hp_box                = 0.
     integer :: ldim(3)               = 0
     integer :: ldim_shrunken(3)      = 0
     integer :: n_particles           = 0
+    character(len=STDLEN) :: color      = ''   !color in which to draw on the mic to identify picked particles
     character(len=STDLEN) :: pickername = ''   !fname
     character(len=STDLEN) :: fbody      = ''   !fbody
     character(len=STDLEN) :: detector   = ''
@@ -35,6 +37,7 @@ contains
     procedure          :: extract_particles
     procedure          :: elimin_aggregation
     procedure          :: center_cc
+    procedure          :: center_mass_cc
     ! preprocess mic prior picking
     procedure          :: preprocess_mic
     ! setters/getters
@@ -49,11 +52,13 @@ private
 
 contains
 
-    subroutine new_picker(self, fname, radius, smpd)
-        class(picker_chiara),  intent(inout) :: self
-        character(len=*),      intent(in)    :: fname
-        real,                  intent(in)    :: radius
-        real,                  intent(in)    :: smpd
+    subroutine new_picker(self, fname, min_rad, max_rad, smpd, color)
+        class(picker_chiara),       intent(inout) :: self
+        character(len=*),           intent(in)    :: fname
+        real,                       intent(in)    :: min_rad
+        real,                       intent(in)    :: max_rad
+        real,                       intent(in)    :: smpd
+        character(len=*), optional, intent(in)    :: color
         integer :: nptcls
         self%pickername = fname
         call find_ldim_nptcls(self%pickername, self%ldim, nptcls, self%smpd)
@@ -62,7 +67,8 @@ contains
         self%ldim_shrunken(2) = round2even(real(self%ldim(2))/SHRINK)
         self%ldim_shrunken(3) = 1
         self%smpd_shrunken = self%smpd*SHRINK
-        self%part_radius = radius
+        self%min_rad = min_rad
+        self%max_rad = max_rad
         self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
         call self%img%new   (self%ldim_shrunken, self%smpd_shrunken)
         call self%img_cc%new(self%ldim_shrunken, self%smpd_shrunken)
@@ -70,6 +76,8 @@ contains
         self%lambda      = 5.
         self%lp          = 20.
         self%detector    = 'bin'
+        self%color       = 'white' !default
+        if(present(color)) self%color = color
     end subroutine new_picker
 
     subroutine preprocess_mic(self, detector,lp)
@@ -90,10 +98,11 @@ contains
         call read_micrograph(self%pickername, smpd = self%smpd)
         ! 1) Shrink and high pass filtering
         call shrink_micrograph(SHRINK, self%ldim_shrunken, self%smpd_shrunken)
-        self%hp_box =  4.*self%part_radius+2.*self%part_radius
+        self%hp_box =  4.*self%max_rad+2.*self%max_rad
         call set_box(int(SHRINK*(self%hp_box)), box_shrunken)
         ! To take care of shrinking
-        self%part_radius = self%part_radius/SHRINK ! I am thingking I shouldn't multiply by the smpd cuz I am working in pxls
+        self%min_rad = self%min_rad/SHRINK ! I am thingking I shouldn't multiply by the smpd cuz I am working in pxls
+        self%max_rad = self%max_rad/SHRINK
         call mic_copy%new(self%ldim_shrunken, self%smpd_shrunken)
         call self%img%read('shrunken_hpassfiltered.mrc')
         call mic_copy%read('shrunken_hpassfiltered.mrc')
@@ -129,13 +138,13 @@ contains
             THROW_HARD('Invalid detector; preprocess_mic')
         endif
         call mic_copy%write(trim(self%fbody)//'_Bin.mrc')
-        winsz = int(self%part_radius)/2
+        winsz = int(self%min_rad+self%max_rad)/4 !half of the avg between the dimensions of the particles
         call mic_copy%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
         call mic_copy%write(trim(self%fbody)//'_BinMedian.mrc')
         ! 5) Connected components (cc) identification
         call mic_copy%find_connected_comps(self%img_cc)
         ! 6) cc filtering
-        call self%img_cc%polish_cc(self%part_radius)
+        call self%img_cc%polish_cc(self%min_rad,self%max_rad)
         call self%img_cc%write(trim(self%fbody)//'_ConnectedComponentsElimin.mrc')
         call mic_copy%kill
     end subroutine preprocess_mic
@@ -151,13 +160,13 @@ contains
         write(unit = 17, fmt = "(a,f4.2)")             'Smpd before shrink ', self%smpd
         write(unit = 17, fmt = "(a,f4.2)")             'Smpd after  shrink ', self%smpd_shrunken
         write(unit = 17, fmt = "(a,a)")                'Hp box              ', trim(int2str(int(self%hp_box)))
-        write(unit = 17, fmt = "(a,i4,tr1,i4)")        'Ccs size filtering ', int(5*self%part_radius), int(2*3.14*(self%part_radius)**2)
+        write(unit = 17, fmt = "(a,i4,tr1,i4)")        'Ccs size filtering ', int(self%min_rad*self%max_rad), int(2*3.14*(self%max_rad)**2)
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a)")  'SELECTED PARAMETERS '
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a,f0.0)")  'Lp filter parameter ', self%lp
         write(unit = 17, fmt = "(a,f0.0)")  'TV filter parameter ', self%lambda
-        write(unit = 17, fmt = "(a,a)")     'part_radius         ', trim(int2str(int(self%part_radius)))
+        write(unit = 17, fmt = "(a,a,a,a)") 'particle dimensions ', trim(int2str(int(self%min_rad))),' ', trim(int2str(int(self%max_rad)))
         write(unit = 17, fmt = "(a,a)")     'detector            ', self%detector
         close(17, status = "keep")
     end subroutine print_info
@@ -180,8 +189,8 @@ contains
             do j = i+1, size(saved_coord, dim = 1)       !fix another coord to compare
                 if(msk(i) .and. msk(j)) then !not compare twice ,and if the particles haven t been deleted yet
                     if(  sqrt(real((saved_coord(i,1)-saved_coord(j,1))**2 &
-                        &        + (saved_coord(i,2)-saved_coord(j,2))**2)) <= 2.*self%part_radius) then !&
-                        !& .and. self%part_radius < &
+                        &        + (saved_coord(i,2)-saved_coord(j,2))**2)) <= 2.*self%min_rad) then!&
+                        !& .and. self%min_rad < &
                         !& real((saved_coord(i,1)-saved_coord(j,1))**2 &        ! TO CHECK WHAT TO DO
                         !&    + (saved_coord(i,2)-saved_coord(j,2))**2)) then
                         msk(i) = .false.
@@ -219,7 +228,7 @@ contains
       integer, allocatable :: imat(:,:,:)
       logical              :: outside
       ! Initialisations
-      box     = int(4.*(self%part_radius)+2.*self%part_radius) !needs to be bigger than the particle
+      box     = int(4.*(self%max_rad)+2.*self%max_rad) !needs to be bigger than the particle
       imat_cc = int(self%img_cc%get_rmat())
       call imgwin_particle%new([box,box,1],self%smpd)
       allocate(xyz_saved(maxval(imat_cc),2), source = 0.) ! size of the # of cc (likely particles)
@@ -229,7 +238,8 @@ contains
       ! Particle identification, extraction and centering
       where(imat_cc > 0.5) imat = 1
       do n_cc = 1, maxval(imat_cc)
-          pos(:) = self%center_cc(n_cc)
+          ! pos(:) = self%center_cc(n_cc)
+          pos(:) = self%center_mass_cc(n_cc)
           xyz_saved(n_cc,:) = pos(:2)
       enddo
       deallocate(imat_cc)
@@ -247,7 +257,7 @@ contains
       cnt = 0
       do n_cc = 1, self%n_particles
           !if( abs(self%particles_coord(n_cc,1)) > TINY) then !useless?
-              call img_back%draw_picked(nint(self%particles_coord(n_cc,:)),nint(self%part_radius),2, 'black')
+              call img_back%draw_picked(nint(self%particles_coord(n_cc,:)),nint((self%min_rad+self%max_rad)/2),2, self%color)
               call self%img%window_slim(nint(self%particles_coord(n_cc,:)-box/2), box, imgwin_particle, outside)
               if( .not. outside) then
                   cnt = cnt + 1
@@ -301,19 +311,39 @@ contains
         if(allocated(imat_cc)) deallocate(imat_cc)
     end function center_cc
 
+    ! This function returns the index of a pixel (assuming to have a 2D)
+    ! image in a connected component. The pixel identified is the one
+    ! center of mass of the cc.
+    function center_mass_cc(self,n_cc) result (px)
+        class(picker_chiara),  intent(inout) :: self
+        integer,               intent(in)    :: n_cc
+        real        :: px(3)               !index of the central px of the cc
+        integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
+        integer, allocatable :: imat_cc(:,:,:)
+        imat_cc = int(self%img_cc%get_rmat())
+        where(imat_cc .ne. n_cc) imat_cc = 0
+        call get_pixel_pos(imat_cc,pos)
+        px(1) = sum(pos(1,:))/real(size(pos,dim = 2))
+        px(2) = sum(pos(2,:))/real(size(pos,dim = 2))
+        px(3) = 1.
+        if(allocated(imat_cc)) deallocate(imat_cc)
+    end function center_mass_cc
+
     subroutine kill_picker(self)
         class(picker_chiara),  intent(inout) :: self
         !kill images
         call self%img%kill
         call self%img_cc%kill
         if(allocated(self%particles_coord)) deallocate(self%particles_coord)
-        self%part_radius      = 0.
+        self%min_rad          = 0.
+        self%max_rad          = 0.
         self%smpd             = 0.
         self%smpd_shrunken    = 0.
         self%hp_box           = 0.
         self%ldim(:)          = 0
         self%ldim_shrunken(:) = 0
         self%n_particles      = 0
+        self%color            = ''
         self%pickername       = ''   !fname
         self%fbody            = ''   !fbody
         self%detector         = ''

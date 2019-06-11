@@ -2157,7 +2157,7 @@ contains
         end do
         do i=1,size(x)
             j=nint((x(i)-xmin)/dx)+1
-            yhist(j)=yhist(j)+1
+            if(j <= size(yhist)) yhist(j)=yhist(j)+1
         end do
     end subroutine create_hist_vector
 
@@ -2376,6 +2376,30 @@ contains
               enddo
           enddo
       end subroutine get_pixel_pos
+
+      function entropy(X,n) result(e)
+          real, intent(in)    :: X(:)
+          integer, intent(in) :: N
+          real                :: e !entropy value
+          real,    allocatable :: xhist(:) !discretization of the values
+          integer, allocatable :: yhist(:) !number of occurences
+          real,    allocatable :: p(:), p_no_zero(:)
+          integer :: i, cnt
+          call create_hist_vector(X,n,xhist,yhist)
+          allocate(p(size(yhist)), source = 0.)
+          p =  real(yhist)/real(sum(yhist)) !probabilities
+          cnt = count(p>TINY)
+          allocate(p_no_zero(cnt), source = 0.)
+          cnt = 0 !reset
+          do i = 1, size(p)
+              if(p(i) > TINY) then
+                  cnt = cnt + 1
+                  p_no_zero(cnt) = p(i) !remove zeroes occurrencies
+              endif
+          enddo
+          e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
+          deallocate(xhist,yhist)
+      end function entropy
 
     ! imported from numerical recipes
     function pythag_sp(a,b)
