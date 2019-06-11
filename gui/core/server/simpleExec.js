@@ -397,6 +397,7 @@ class SimpleExec {
 				environmentargs.push(key.replace('keyenv', '') + "=" + arg['keys'][key])
 			  }
 			}
+			
 			if(arg['projfile']){
 				commandargs.push("projfile=" + arg['projfile'])
 				environmentargs.push("projfile=" + arg['projfile'])
@@ -431,64 +432,7 @@ class SimpleExec {
 			return fs.copyFile(arg['projfile'], arg['projectfolder'] + '/' + this.jobid + '_' + arg['type'] + '/' + arg['projfile'].split('/').pop())
 		})
 	}
-	
-/*	exec(arg, jobid){
-		this.execdir = false
-		var commandargs
-		return this.getCommandArgs(arg)
-		.then(commandarguments => {
-			commandargs = commandarguments
-			return spawn("simple_exec", commandargs[1], {cwd: arg['projectfolder']})
-		})
-		.then(output => {
-			var promise = spawn("simple_exec", commandargs[0], {cwd: arg['projectfolder']})
-			var executeprocess = promise.childProcess
-			executeprocess.on('exit', code => {
-				console.log(`child process exited with code ${code}`);
-				if(arg['saveclusters']){
-					console.log(`writing cavgs`);
-					this.createCavgs(this.execdir + '/' + path.basename(arg['projfile']))
-				}
-				if(arg['savestar']){
-					console.log(`exporting to relion`);
-					this.relionExport(this.execdir + '/' + path.basename(arg['projfile']))
-				}
-				if(code !== null && code == 0){
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + jobid)
-				}else{
-					sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + jobid)
-				}
-			})
-			executeprocess.on('error', error => {
-				console.log(`child process exited with error ${error}`)
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', error.toString())
-				}
-				sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error' WHERE id=" + jobid)
-			})
-			executeprocess.stdout.on('data', data => {
-				if(!this.execdir){
-					var lines = data.toString().split("\n")
-					for (var line of lines){
-						if(line.includes("EXECUTION DIRECTORY")){
-							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
-							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + arg['projectfolder'] + "/" + line.split(" ").pop() + "' WHERE id=" + jobid)
-							break
-						}
-					}
-				}
-				if(this.execdir){
-					fs.appendFile(this.execdir + '/simple.log', data.toString())
-				}
 
-			})
-			console.log(`Spawned child pid: ${executeprocess.pid}`)
-			return Promise.all([promise])
-		})
-		.then(() =>{
-			return new Promise(resolve => setTimeout(resolve, 10000))
-		})
-	}*/
 	
 	exec(arg){
 		this.execdir = false
@@ -522,6 +466,7 @@ class SimpleExec {
 					for (var line of lines){
 						if(line.includes("EXECUTION DIRECTORY")){
 							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
+							this.startProgressWatcher(this.execdir, arg['projfile'], arg['projecttable'], this.jobid)
 							console.log('PID', childprocess.pid)
 							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
 						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
@@ -599,6 +544,7 @@ class SimpleExec {
 					for (var line of lines){
 						if(line.includes("EXECUTION DIRECTORY")){
 							this.execdir = arg['projectfolder'] + "/" + line.split(" ").pop()
+							this.startProgressWatcher(this.execdir, arg['projfile'], arg['projecttable'], this.jobid)
 							console.log('PID', childprocess.pid)
 							sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET folder='" + this.execdir  + "', pid='" + childprocess.pid + "', status='running' WHERE id=" + this.jobid)
 						//	sqlite.sqlQuery("INSERT into " + arg['projecttable'] + " (name, description, arguments, status, view, type, parent, folder, pid) VALUES ('" + arg['name'] + "','" + arg['description'] + "','" + JSON.stringify(arg) + "','running', '" + JSON.stringify(arg['view']) + "', '" + arg['type'] + "', '" + arg['projfile'] + "', '" + this.execdir + "', '" + childprocess.pid + "')")
@@ -622,6 +568,7 @@ class SimpleExec {
 			return promise
 		})
 		.then(output =>{
+			
 			if(output.childProcess.exitCode == 0 && this.execdir && this.jobid){
 				return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Finished' WHERE id=" + this.jobid)
 			}else{
@@ -637,7 +584,106 @@ class SimpleExec {
 		})
 	}
 	
-//	startProgressWatcher(projfile)
+	startProgressWatcher(execdir, projfile, projecttable, jobid){
+		var folder = path.basename(execdir);
+		var count = 0
+		if(folder.includes('motion_correct') || folder.includes('ctf_estimate') || folder.includes('extract') || folder.includes('preprocess') || folder.includes('pick') ){
+			var promise = spawn("simple_exec", ['prg=print_project_field', 'oritype=mic', 'projfile=' + projfile ], {cwd:execdir})
+			var childprocess = promise.childProcess
+			childprocess.stdout.on('data', data => {
+				var lines = data.toString().split("\n")
+				console.log(lines)
+				for (var line of lines) {
+					if ( !line.includes("state=0") && line.length > 0 ){
+						count++
+					}
+				}
+			})
+			promise.then(() => {
+				if ( count < 50 && count > 0 ){
+					this.watcher = setInterval(() => {this.progressWatch(execdir, count, projecttable, jobid)}, 10000);
+				} else {
+					this.watcher = setInterval(() => {this.progressWatch(execdir, count, projecttable, jobid)}, 60000);
+				}
+			})
+		}
+	}
+	
+	progressWatch(execdir, count, projecttable, jobid){
+		console.log('watch', execdir, count)
+		var files = []
+		var donefiles = 0
+		
+		fs.readdirSync(execdir).forEach(file => {
+			files.push(file);
+		});
+		
+		if ( execdir.includes("motion_correct") ){
+			for (var i = 0 ; i < files.length ; i++){
+				if (files[i].includes(".eps")){
+					donefiles++
+				}
+			}
+		} else if ( execdir.includes("preprocess_stream") ){
+			count = 0
+			for (var i = 0 ; i < files.length ; i++){
+				if (files[i].includes("preprocess") && files[i].includes(".simple")){
+					count++
+				}
+			}
+			
+			files = []
+			
+			
+			if ( fs.existsSync(execdir + "/extract") ) {
+				fs.readdirSync(execdir + "/extract").forEach(file => {
+					if (file.includes("ptcls_from")){
+						donefiles++
+					}
+				});
+			} else if ( fs.existsSync(execdir + "/picker") ) {
+				fs.readdirSync(execdir + "/picker").forEach(file => {
+					if (file.includes(".box")){
+						donefiles++
+					}
+				});
+			} else if ( fs.existsSync(execdir + "/motion_correct") ){
+				fs.readdirSync(execdir + "/motion_correct").forEach(file => {
+					if (file.includes(".eps")){
+						donefiles++
+					}
+				});
+			}
+			
+			
+		} else if ( execdir.includes("ctf_estimate") || execdir.includes("preprocess") ){
+			for (var i = 0 ; i < files.length ; i++){
+				if (files[i].includes("diag.jpg")){
+					donefiles++
+				}
+			}
+		} else if ( execdir.includes("extract") ){
+			for (var i = 0 ; i < files.length ; i++){
+				if (files[i].includes("ptcls_from")){
+					donefiles++
+				}
+			}
+		} else if ( execdir.includes("pick") ){
+			for (var i = 0 ; i < files.length ; i++){
+				if (files[i].includes(".box")){
+					donefiles++
+				}
+			}
+		}
+		
+		this.progress = Math.round(100 * donefiles / count)
+		
+		console.log(this.progress)
+		
+		sqlite.sqlQuery("UPDATE " + projecttable + " SET view='" + this.progress  + "' WHERE id=" + jobid)
+		
+	}
+	
 	
 	updateProgress(lines, arg){
 		if(arg['type'] == 'cluster2D' || arg['type'] == 'refine3D' ){

@@ -156,7 +156,7 @@ class Project {
 		lowerline.className = "lowerline"
 		lowerline.innerHTML = element.status
 		
-	/*	if(element.status == "running"){
+		if(element.status == "running"){
 			var statusbar = document.createElement('div')
 			if(element.view == 'undefined'){
 				element.view = 0
@@ -168,7 +168,7 @@ class Project {
 			status.style.width = element.view + 'px'
 			statusbar.appendChild(status)
 			lowerline.appendChild(statusbar)
-		}*/
+		}
 		
 		lowerline.title = "PID : " + element.pid
 		var buttonline = document.createElement('div')
