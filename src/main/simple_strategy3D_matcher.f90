@@ -19,7 +19,7 @@ use simple_builder,                  only: build_glob
 use simple_polarizer,                only: polarizer
 use simple_polarft_corrcalc,         only: polarft_corrcalc
 use simple_strategy2D3D_common,      only: killrecvols, set_bp_range, preprecvols,&
-    prepimgbatch, grid_ptcl, read_imgbatch, eonorm_struct_facts,norm_struct_facts
+    prepimgbatch, grid_ptcl, read_imgbatch, norm_struct_facts
 use simple_strategy3D_cluster,       only: strategy3D_cluster
 use simple_strategy3D_clustersoft,   only: strategy3D_clustersoft
 use simple_strategy3D_single,        only: strategy3D_single
@@ -86,12 +86,7 @@ contains
         endif
 
         ! CHECK THAT WE HAVE AN EVEN/ODD PARTITIONING
-        if( params_glob%eo .ne. 'no' )then
-            if( build_glob%spproj_field%get_nevenodd() == 0 ) &
-                THROW_HARD('no eo partitioning available; refine3D_exec')
-        else
-            call build_glob%spproj_field%set_all2single('eo', -1.)
-        endif
+        if( build_glob%spproj_field%get_nevenodd() == 0 ) THROW_HARD('no eo partitioning available; refine3D_exec')
 
         ! CHECK WHETHER WE HAVE PREVIOUS 3D ORIENTATIONS
         has_been_searched = .not.build_glob%spproj%is_virgin_field(params_glob%oritype)
@@ -448,14 +443,15 @@ contains
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
-        logical   :: do_center
+        logical   :: do_center, l_lpset
         nrefs = params_glob%nspace * params_glob%nstates
+        l_lpset = cline%defined('lp')
         ! must be done here since params_glob%kfromto is dynamically set
-        if( params_glob%l_eo )then
+        if( l_lpset )then
+            call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
+        else
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask,&
                 &nint(build_glob%spproj_field%get_all('eo', [params_glob%fromp,params_glob%top])))
-        else
-            call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         endif
         if ( params_glob%l_needs_sigma ) then
             call eucl_sigma%new(SIGMA2_FBODY//int2str_pad(params_glob%part,params_glob%numlen)//'.dat')
@@ -474,7 +470,18 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            if( params_glob%eo .ne. 'no' )then
+            if( l_lpset )then
+                ! low-pass set or multiple states
+                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
+                !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
+                do iref=1,params_glob%nspace
+                    call build_glob%eulspace%get_ori(iref, o_tmp)
+                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
+                        &o_tmp, pftcc, iseven=.true.)
+                    call o_tmp%kill
+                end do
+                !$omp end parallel do
+            else
                 if( params_glob%nstates.eq.1 )then
                     ! PREPARE ODD REFERENCES
                     call preprefvol(pftcc, cline, s, params_glob%vols_odd(s), do_center, xyz, .false.)
@@ -513,20 +520,8 @@ contains
                     end do
                     !$omp end parallel do
                 endif
-            else
-                ! low-pass set or multiple states
-                call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
-                !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)
-                do iref=1,params_glob%nspace
-                    call build_glob%eulspace%get_ori(iref, o_tmp)
-                    call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                        &o_tmp, pftcc, iseven=.true.)
-                    call o_tmp%kill
-                end do
-                !$omp end parallel do
             endif
         end do
-
         ! PREPARATION OF PARTICLES IN PFTCC
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)
@@ -614,11 +609,7 @@ contains
             case DEFAULT
                 c1_symop = sym('c1')
                 ! make the gridding prepper
-                if( params_glob%eo .ne. 'no' )then
-                    kbwin = build_glob%eorecvols(1)%get_kbwin()
-                else
-                    kbwin = build_glob%recvols(1)%get_kbwin()
-                endif
+                kbwin = build_glob%eorecvols(1)%get_kbwin()
                 ! init volumes
                 call preprecvols
                 ! prep rec imgs
@@ -656,11 +647,7 @@ contains
                     end do
                 end do
                 ! normalise structure factors
-                if( params_glob%eo .ne. 'no' )then
-                    call eonorm_struct_facts( cline, which_iter)
-                else
-                    call norm_struct_facts( which_iter )
-                endif
+                call norm_struct_facts( cline, which_iter)
                 ! destruct
                 call killrecvols()
                 do ibatch=1,MAXIMGBATCHSZ

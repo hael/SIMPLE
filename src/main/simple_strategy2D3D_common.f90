@@ -8,7 +8,7 @@ use simple_parameters, only: params_glob
 implicit none
 
 public :: read_img, read_imgbatch, set_bp_range, set_bp_range2D, grid_ptcl, prepimg4align,&
-&eonorm_struct_facts, norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
+&norm_struct_facts, calcrefvolshift_and_mapshifts2ptcls, preprefvol,&
 &prep2Dref, preprecvols, killrecvols, gen_projection_frcs, prepimgbatch,&
 &build_pftcc_particles
 private
@@ -82,99 +82,96 @@ contains
         logical               :: fsc_bin_exists(params_glob%nstates), all_fsc_bin_exist
         ! Nyqvist index
         k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
-        select case(params_glob%eo)
-            case('yes','aniso')
-                ! check all fsc_state*.bin exist
-                all_fsc_bin_exist = .true.
-                fsc_bin_exists    = .false.
-                do s=1,params_glob%nstates
-                    if( params_glob%nstates > 1 )then
-                        fsc_fname = trim(CLUSTER3D_FSC)
-                    else
-                        fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                    endif
-                    fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
-                    if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
-                        & all_fsc_bin_exist = .false.
-                enddo
-                if(build_glob%spproj%is_virgin_field(params_glob%oritype)) &
-                    all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
-                ! set low-pass Fourier index limit
-                if( all_fsc_bin_exist )then
-                    resarr = build_glob%img%get_res()
-                    do s=1,params_glob%nstates
-                        if( fsc_bin_exists(s) )then
-                            ! these are the 'classical' resolution measures
-                            if( params_glob%nstates > 1 )then
-                                fsc_fname = trim(CLUSTER3D_FSC) ! mixed model FSC
-                            else
-                                fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
-                            endif
-                            fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
-                            build_glob%fsc(s,:) = fsc_arr(:)
-                            deallocate(fsc_arr)
-                            call get_resolution(build_glob%fsc(s,:), resarr, fsc05, fsc0143)
-                            mapres(s) = fsc0143
-                        else
-                            ! empty state
-                            mapres(s)           = 0.
-                            build_glob%fsc(s,:) = 0.
-                        endif
-                    end do
-                    loc = maxloc(mapres) ! worst resolved
-                    if( params_glob%nstates == 1 )then
-                        ! get median updatecnt
-                        if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
-                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), &
-                                params_glob%lplim_crit)
-                        else
-                            lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5) ! more conservative limit @ start
-                        endif
-                    else
-                        lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
-                    endif
-                    ! interpolation limit is NOT Nyqvist in correlation search
-                    params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), &
-                        params_glob%boxmatch, params_glob%smpd)
-                else if( cline%defined('lp') )then
-                    params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
-                        params_glob%boxmatch, params_glob%smpd)
-                else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
-                    params_glob%kfromto(2) = calc_fourier_index(&
-                        build_glob%spproj_field%get(params_glob%fromp,'lp'), &
-                        params_glob%boxmatch, params_glob%smpd)
+        if( params_glob%l_lpset )then
+            ! set Fourier index range
+            params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, &
+                params_glob%boxmatch, params_glob%smpd))
+            params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
+                params_glob%boxmatch, params_glob%smpd)
+            if( cline%defined('lpstop') )then
+                params_glob%kfromto(2) = min(params_glob%kfromto(2), &
+                    calc_fourier_index(params_glob%lpstop, &
+                    params_glob%boxmatch, params_glob%smpd))
+            endif
+            params_glob%kstop = params_glob%kfromto(2)
+        else
+            ! check all fsc_state*.bin exist
+            all_fsc_bin_exist = .true.
+            fsc_bin_exists    = .false.
+            do s=1,params_glob%nstates
+                if( params_glob%nstates > 1 )then
+                    fsc_fname = trim(CLUSTER3D_FSC)
                 else
-                    THROW_HARD('no method available for setting the low-pass limit. Need fsc file or lp find; set_bp_range')
+                    fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
                 endif
-                ! lpstop overrides any other method for setting the low-pass limit
-                if( cline%defined('lpstop') )then
-                    params_glob%kfromto(2) = min(params_glob%kfromto(2), &
-                        calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
+                fsc_bin_exists( s ) = file_exists(trim(adjustl(fsc_fname)))
+                if( build_glob%spproj_field%get_pop(s, 'state') > 0 .and. .not.fsc_bin_exists(s))&
+                    & all_fsc_bin_exist = .false.
+            enddo
+            if(build_glob%spproj%is_virgin_field(params_glob%oritype)) &
+                all_fsc_bin_exist = (count(fsc_bin_exists)==params_glob%nstates)
+            ! set low-pass Fourier index limit
+            if( all_fsc_bin_exist )then
+                resarr = build_glob%img%get_res()
+                do s=1,params_glob%nstates
+                    if( fsc_bin_exists(s) )then
+                        ! these are the 'classical' resolution measures
+                        if( params_glob%nstates > 1 )then
+                            fsc_fname = trim(CLUSTER3D_FSC) ! mixed model FSC
+                        else
+                            fsc_fname = trim(FSC_FBODY)//int2str_pad(s,2)//BIN_EXT
+                        endif
+                        fsc_arr = file2rarr(trim(adjustl(fsc_fname)))
+                        build_glob%fsc(s,:) = fsc_arr(:)
+                        deallocate(fsc_arr)
+                        call get_resolution(build_glob%fsc(s,:), resarr, fsc05, fsc0143)
+                        mapres(s) = fsc0143
+                    else
+                        ! empty state
+                        mapres(s)           = 0.
+                        build_glob%fsc(s,:) = 0.
+                    endif
+                end do
+                loc = maxloc(mapres) ! worst resolved
+                if( params_glob%nstates == 1 )then
+                    ! get median updatecnt
+                    if( build_glob%spproj_field%median('updatecnt') > 1.0 )then ! more than half have been updated
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), &
+                            params_glob%lplim_crit)
+                    else
+                        lp_ind = get_lplim_at_corr(build_glob%fsc(1,:), 0.5) ! more conservative limit @ start
+                    endif
+                else
+                    lp_ind = get_lplim_at_corr(build_glob%fsc(loc(1),:), params_glob%lplim_crit)
                 endif
-                ! low-pass limit equals interpolation limit for correlation search
-                params_glob%kstop = params_glob%kfromto(2)
-                if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
-                ! set high-pass Fourier index limit
-                params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, &
-                    params_glob%boxmatch, params_glob%smpd))
-                ! re-set the low-pass limit
-                params_glob%lp = calc_lowpass_lim(params_glob%kstop, &
+                ! interpolation limit is NOT Nyqvist in correlation search
+                params_glob%kfromto(2) = calc_fourier_index(resarr(lp_ind), &
                     params_glob%boxmatch, params_glob%smpd)
-            case('no')
-                ! set Fourier index range
-                params_glob%kfromto(1) = max(2, calc_fourier_index( params_glob%hp, &
-                    params_glob%boxmatch, params_glob%smpd))
+            else if( params_glob%l_lpset )then
                 params_glob%kfromto(2) = calc_fourier_index(params_glob%lp, &
                     params_glob%boxmatch, params_glob%smpd)
-                if( cline%defined('lpstop') )then
-                    params_glob%kfromto(2) = min(params_glob%kfromto(2), &
-                        calc_fourier_index(params_glob%lpstop, &
-                        params_glob%boxmatch, params_glob%smpd))
-                endif
-                params_glob%kstop = params_glob%kfromto(2)
-            case DEFAULT
-                THROW_HARD('Unsupported eo flag')
-        end select
+            else if( build_glob%spproj_field%isthere(params_glob%fromp,'lp') )then
+                params_glob%kfromto(2) = calc_fourier_index(&
+                    build_glob%spproj_field%get(params_glob%fromp,'lp'), &
+                    params_glob%boxmatch, params_glob%smpd)
+            else
+                THROW_HARD('no method available for setting the low-pass limit. Need fsc file or lp find; set_bp_range')
+            endif
+            ! lpstop overrides any other method for setting the low-pass limit
+            if( cline%defined('lpstop') )then
+                params_glob%kfromto(2) = min(params_glob%kfromto(2), &
+                    calc_fourier_index(params_glob%lpstop, params_glob%boxmatch, params_glob%smpd))
+            endif
+            ! low-pass limit equals interpolation limit for correlation search
+            params_glob%kstop = params_glob%kfromto(2)
+            if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
+            ! set high-pass Fourier index limit
+            params_glob%kfromto(1) = max(2,calc_fourier_index( params_glob%hp, &
+                params_glob%boxmatch, params_glob%smpd))
+            ! re-set the low-pass limit
+            params_glob%lp = calc_lowpass_lim(params_glob%kstop, &
+                params_glob%boxmatch, params_glob%smpd)
+        endif
         call build_glob%spproj_field%set_all2single('lp',params_glob%lp)
         DebugPrint '*** simple_strategy2D3D_common ***: did set Fourier index range'
     end subroutine set_bp_range
@@ -229,8 +226,7 @@ contains
         s = o%get_state()
         if( s == 0 ) return
         ! eo flag
-        eo = 0
-        if( params_glob%l_eo ) eo = nint(o%get('eo'))
+        eo = nint(o%get('eo'))
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
@@ -238,11 +234,7 @@ contains
             ! fwd ft
             call img%fft()
             ! gridding
-            if( params_glob%l_eo )then
-                call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
-            else
-                call build_glob%recvols(s)%insert_fplane(se, o, ctfvars, img, pwght=pw)
-            endif
+            call build_glob%eorecvols(s)%grid_fplane(se, o, ctfvars, img, eo, pwght=pw)
         endif
     end subroutine grid_ptcl_1
 
@@ -260,8 +252,7 @@ contains
         real    :: pw
         integer :: s, eo
         ! eo flag
-        eo = 0
-        if( params_glob%l_eo ) eo = nint(o%get('eo'))
+        eo = nint(o%get('eo'))
         ! particle-weight
         pw = 1.0
         if( o%isthere('w') ) pw = o%get('w')
@@ -270,20 +261,12 @@ contains
             call img%fft()
             ! gridding
             if( params_glob%nstates == 1 )then
-                if( params_glob%l_eo )then
-                    call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
-                else
-                    call build_glob%recvols(1)%insert_fplane(se, os, ctfvars, img, pwght=pw)
-                endif
+                call build_glob%eorecvols(1)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw)
             else
                 states = os%get_all('state')
                 do s=1,params_glob%nstates
                     if( count(nint(states) == s) > 0 )then
-                        if( params_glob%l_eo )then
-                            call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
-                        else
-                            call build_glob%recvols(s)%insert_fplane(se, os, ctfvars, img, pwght=pw, state=s)
-                        endif
+                        call build_glob%eorecvols(s)%grid_fplane(se, os, ctfvars, img, eo, pwght=pw, state=s)
                     endif
                 end do
             endif
@@ -455,77 +438,40 @@ contains
         integer :: istate
         allocate(part_str, source=int2str_pad(params_glob%part,params_glob%numlen))
         call build_glob%spproj_field%get_pops(pops, 'state')
-        select case(params_glob%eo)
-            case('yes','aniso')
-                lplim_rec = huge(lplim_rec)
-                resarr    = build_glob%img%get_res()
-                do istate = 1, params_glob%nstates
-                    if( pops(istate) > 0)then
-                        call build_glob%eorecvols(istate)%new( build_glob%spproj)
-                        call build_glob%eorecvols(istate)%reset_all
-                        if( params_glob%l_frac_update )then
-                            call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
-                                int2str_pad(istate,2)//'_part'//part_str)
-                            call build_glob%eorecvols(istate)%expand_exp
-                            call build_glob%eorecvols(istate)%apply_weight(1.0 - &
-                                params_glob%update_frac)
-                        endif
-                        ! determining resolution for low-pass limited reconstruction
-                        if( any(build_glob%fsc(istate,:) > 0.143) )then
-                            call get_resolution(build_glob%fsc(istate,:), resarr, fsc05, fsc0143)
-                            lplim_rec = min(lplim_rec, fsc0143)
-                        endif
-                    endif
-                end do
-                !!!!!!!! TAKE THIS OUT TO TURN OFF LOW-PASS LIMITED REC !!!!!!!!!!!!!!!!!
-                ! do istate = 1, params_glob%nstates
-                !     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
-                ! end do
-                !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                deallocate(resarr)
-            case DEFAULT
-                lplim_rec = params_glob%lp
-                do istate = 1, params_glob%nstates
-                    if( pops(istate) > 0)then
-                        call build_glob%recvols(istate)%new([params_glob%boxpd, &
-                            params_glob%boxpd, params_glob%boxpd], params_glob%smpd)
-                        call build_glob%recvols(istate)%alloc_rho(build_glob%spproj)
-                        call build_glob%recvols(istate)%reset
-                        call build_glob%recvols(istate)%reset_exp
-                        call build_glob%recvols(istate)%set_lplim(lplim_rec)
-                        if( params_glob%l_frac_update )then
-                            allocate(recname, source=trim(VOL_FBODY)//int2str_pad(istate,2)//&
-                                '_part'//part_str//params_glob%ext)
-                            allocate(rhoname, source='rho_'//trim(VOL_FBODY)//&
-                                int2str_pad(istate,2)//'_part'//part_str//params_glob%ext)
-                            if( file_exists(recname) .and. file_exists(rhoname) )then
-                                call build_glob%recvols(istate)%read(recname)
-                                call build_glob%recvols(istate)%read_rho(rhoname)
-                                call build_glob%recvols(istate)%expand_exp
-                                call build_glob%recvols(istate)%apply_weight(1.0 - &
-                                    params_glob%update_frac)
-                            endif
-                            deallocate(recname, rhoname)
-                        endif
-                    endif
-                end do
-        end select
-        deallocate(pops)
+        lplim_rec = huge(lplim_rec)
+        resarr    = build_glob%img%get_res()
+        do istate = 1, params_glob%nstates
+            if( pops(istate) > 0)then
+                call build_glob%eorecvols(istate)%new( build_glob%spproj)
+                call build_glob%eorecvols(istate)%reset_all
+                if( params_glob%l_frac_update )then
+                    call build_glob%eorecvols(istate)%read_eos(trim(VOL_FBODY)//&
+                        int2str_pad(istate,2)//'_part'//part_str)
+                    call build_glob%eorecvols(istate)%expand_exp
+                    call build_glob%eorecvols(istate)%apply_weight(1.0 - &
+                        params_glob%update_frac)
+                endif
+                ! determining resolution for low-pass limited reconstruction
+                if( any(build_glob%fsc(istate,:) > 0.143) )then
+                    call get_resolution(build_glob%fsc(istate,:), resarr, fsc05, fsc0143)
+                    lplim_rec = min(lplim_rec, fsc0143)
+                endif
+            endif
+        end do
+        !!!!!!!! TAKE THIS OUT TO TURN OFF LOW-PASS LIMITED REC !!!!!!!!!!!!!!!!!
+        ! do istate = 1, params_glob%nstates
+        !     if( pops(istate) > 0)call build_glob%eorecvols(istate)%set_lplim(lplim_rec)
+        ! end do
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        deallocate(pops,resarr)
     end subroutine preprecvols
 
     !>  \brief  destructs all volumes for reconstruction
     subroutine killrecvols
         integer :: istate
-        if( params_glob%l_eo )then
-            do istate = 1, params_glob%nstates
-                call build_glob%eorecvols(istate)%kill
-            end do
-        else
-            do istate = 1, params_glob%nstates
-                call build_glob%recvols(istate)%dealloc_rho
-                call build_glob%recvols(istate)%kill
-            end do
-        endif
+        do istate = 1, params_glob%nstates
+            call build_glob%eorecvols(istate)%kill
+        end do
     end subroutine killrecvols
 
     !>  \brief  prepares a batch of image
@@ -615,8 +561,12 @@ contains
             call build_glob%vol%fft()
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
+        !
+        print *,'params_glob%l_lpset     :',params_glob%l_lpset
+        print *,'params_glob%l_match_filt:',params_glob%l_match_filt
+
         ! Volume filtering
-        if( params_glob%l_eo )then
+        if( .not.params_glob%l_lpset )then
             filtsz    = build_glob%projfrcs%get_filtsz()
             subfiltsz = build_glob%img_match%get_filtsz()
             if( params_glob%l_match_filt )then
@@ -733,58 +683,7 @@ contains
         call o%kill
     end subroutine preprefvol
 
-    subroutine norm_struct_facts( which_iter )
-        integer, optional, intent(in)    :: which_iter
-        integer :: s
-        character(len=:), allocatable :: fbody
-        character(len=STDLEN) :: pprocvol
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box],params_glob%smpd)
-        do s=1,params_glob%nstates
-            if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
-                ! empty space
-                cycle
-            endif
-            if( params_glob%l_distr_exec )then
-                allocate(fbody, source='recvol_state'//int2str_pad(s,2)//'_part'//&
-                    int2str_pad(params_glob%part,params_glob%numlen))
-                params_glob%vols(s) = trim(adjustl(fbody))//params_glob%ext
-                call build_glob%recvols(s)%compress_exp
-                call build_glob%recvols(s)%write(params_glob%vols(s), del_if_exists=.true.)
-                call build_glob%recvols(s)%write_rho('rho_'//trim(adjustl(fbody))//params_glob%ext)
-                deallocate(fbody)
-            else
-                if( params_glob%refine .eq. 'snhc' )then
-                     params_glob%vols(s) = trim(SNHCVOL)//int2str_pad(s,2)//params_glob%ext
-                else
-                    if( present(which_iter) )then
-                        params_glob%vols(s) = 'recvol_state'//int2str_pad(s,2)//'_iter'//&
-                            int2str_pad(which_iter,3)//params_glob%ext
-                    else
-                        params_glob%vols(s) = 'startvol_state'//int2str_pad(s,2)//params_glob%ext
-                    endif
-                endif
-                call build_glob%recvols(s)%compress_exp
-                call build_glob%recvols(s)%sampl_dens_correct
-                call build_glob%recvols(s)%ifft()
-                call build_glob%recvols(s)%clip(build_glob%vol)
-                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
-                if( present(which_iter) )then
-                    ! post-process volume
-                    pprocvol = add2fbody(trim(params_glob%vols(s)), params_glob%ext, PPROC_SUFFIX)
-                    call build_glob%vol%fft()
-                    ! low-pass filter
-                    call build_glob%vol%bp(0., params_glob%lp)
-                    call build_glob%vol%ifft()
-                    ! mask
-                    call build_glob%vol%mask(params_glob%msk, 'soft')
-                    call build_glob%vol%write(pprocvol)
-                endif
-            endif
-        end do
-        call build_glob%vol%kill
-    end subroutine norm_struct_facts
-
-    subroutine eonorm_struct_facts( cline, which_iter )
+    subroutine norm_struct_facts( cline, which_iter )
         use simple_filterer, only: gen_anisotropic_optlp
         class(cmdline),    intent(inout) :: cline
         integer, optional, intent(in)    :: which_iter
@@ -864,7 +763,7 @@ contains
         endif
         call build_glob%vol%kill
         call build_glob%vol2%kill
-    end subroutine eonorm_struct_facts
+    end subroutine norm_struct_facts
 
     !>  \brief generate projection FRCs from even/odd pairs
     subroutine gen_projection_frcs( cline, ename, oname, resmskname, state, projfrcs )

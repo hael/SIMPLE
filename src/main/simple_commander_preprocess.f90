@@ -7,6 +7,9 @@ use simple_cmdline,        only: cmdline
 use simple_qsys_funs,      only: qsys_job_finished
 use simple_sp_project,     only: sp_project
 use simple_commander_base, only: commander_base
+use simple_ori,            only: ori
+use simple_oris,           only: oris
+use simple_image,          only: image
 implicit none
 
 public :: preprocess_commander
@@ -71,7 +74,6 @@ end type make_pickrefs_commander
 contains
 
     subroutine exec_preprocess( self, cline )
-        use simple_ori,                 only: ori
         use simple_sp_project,          only: sp_project
         use simple_motion_correct_iter, only: motion_correct_iter
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
@@ -224,7 +226,6 @@ contains
     subroutine exec_motion_correct( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_binoris_io,          only: binwrite_oritab
-        use simple_ori,                 only: ori
         use simple_motion_correct_iter, only: motion_correct_iter
         class(motion_correct_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline !< command line input
@@ -316,7 +317,6 @@ contains
     subroutine exec_gen_pspecs_and_thumbs( self, cline )
         use simple_sp_project,       only: sp_project
         use simple_binoris_io,       only: binwrite_oritab
-        use simple_ori,              only: ori
         use simple_pspec_thumb_iter, only: pspec_thumb_iter
         class(gen_pspecs_and_thumbs_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline !< command line input
@@ -372,7 +372,6 @@ contains
     subroutine exec_ctf_estimate( self, cline )
         use simple_sp_project,          only: sp_project
         use simple_binoris_io,          only: binwrite_oritab
-        use simple_ori,                 only: ori
         use simple_ctf_estimate_iter,   only: ctf_estimate_iter
         class(ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline  !< command line input
@@ -438,7 +437,6 @@ contains
     end subroutine exec_ctf_estimate
 
     subroutine exec_map_cavgs_selection( self, cline )
-        use simple_image,               only: image
         use simple_corrmat,             only: calc_cartesian_corrmat
         class(map_cavgs_selection_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline !< command line input
@@ -482,9 +480,7 @@ contains
 
     subroutine exec_pick( self, cline )
         use simple_binoris_io,     only: binwrite_oritab
-        use simple_ori,            only: ori
         use simple_picker_iter,    only: picker_iter
-        use simple_image,          only: image
         class(pick_commander), intent(inout) :: self
         class(cmdline),        intent(inout) :: cline !< command line input
         type(parameters)              :: params
@@ -544,7 +540,6 @@ contains
 
     subroutine exec_pick_chiara( self, cline )
         use simple_picker_chiara
-        use simple_image,    only : image
         use simple_tvfilter, only : tvfilter
         class(pick_commander_chiara), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline !< command line input
@@ -592,13 +587,10 @@ contains
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )
-        use simple_image, only: image
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
-        use simple_ctf,   only: ctf
+        use simple_ctf,              only: ctf
+        use simple_ctf_estimate_fit, only: ctf_estimate_fit
         class(extract_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
-        logical, parameter :: CTF_PATCH = .false.
         type(builder)                           :: build
         type(parameters)                        :: params
         type(sp_project)                        :: spproj_in, spproj
@@ -606,15 +598,16 @@ contains
         type(image)                             :: micrograph
         type(ori)                               :: o_mic, o_tmp
         type(ctf)                               :: tfun
-        type(ctfparams)                         :: ctfparms, ctfparms_ptcl
+        type(ctfparams)                         :: ctfparms
+        type(ctf_estimate_fit)                  :: ctffit
         character(len=:),           allocatable :: output_dir, mic_name, imgkind
         real,                       allocatable :: boxdata(:,:)
         logical,                    allocatable :: oris_mask(:), mics_mask(:)
-        character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname
+        character(len=LONGSTRLEN) :: stack, boxfile_name, box_fname, ctfdoc
         integer                   :: nframes, imic, iptcl, ldim(3), nptcls,nmics,nmics_here,box, box_first, fromto(2)
         integer                   :: cnt, nmics_tot, lfoo(3), ifoo, noutside, state, iptcl_glob, cnt_stats
-        real                      :: particle_position(2), meanv,sddevv,minv,maxv,stk_stats(4)
-        logical                   :: l_err
+        real                      :: ptcl_pos(2), meanv,sddevv,minv,maxv,stk_stats(4), dfx,dfy
+        logical                   :: l_err, l_ctfpatch
         call cline%set('oritype', 'mic')
         call cline%set('mkdir',   'no')
         call params%new(cline)
@@ -799,8 +792,8 @@ contains
                     if( oris_mask(iptcl) )then
                         cnt = cnt + 1
                         ! extract the window
-                        particle_position = boxdata(iptcl,1:2)
-                        call micrograph%window(nint(particle_position), params%box, build%img, noutside)
+                        ptcl_pos = boxdata(iptcl,1:2)
+                        call micrograph%window(nint(ptcl_pos), params%box, build%img, noutside)
                         if( params%pcontrast .eq. 'black' ) call build%img%neg()
                         call build%img%noise_norm(build%lmsk)
                         ! keep track of stats
@@ -821,18 +814,33 @@ contains
                 call build%img%update_header_stats(trim(adjustl(stack)), stk_stats)
                 ! IMPORT INTO PROJECT
                 call build%spproj%add_stk(trim(adjustl(stack)), ctfparms)
-                ! add box coordinates to ptcl2D field only
+                ! add box coordinates to ptcl2D field only & updates patch-based defocus
+                l_ctfpatch = .false.
+                if( o_mic%isthere('ctfdoc') )then
+                    ctfdoc = o_mic%get_static('ctfdoc')
+                    if( file_exists(ctfdoc) )then
+                        call ctffit%read_doc(ctfdoc)
+                        l_ctfpatch = .true.
+                    endif
+                endif
+                l_ctfpatch = .false. ! deactivating for now
                 do iptcl=1,nptcls
                     if( .not.oris_mask(iptcl) )cycle
+                    ! update global counter
                     iptcl_glob = iptcl_glob + 1
-                    call build%spproj%set_boxcoords(iptcl_glob, nint(boxdata(iptcl,1:2)))
+                    ptcl_pos   = boxdata(iptcl,1:2)
+                    ! updates particle position
+                    call build%spproj%set_boxcoords(iptcl_glob, nint(ptcl_pos))
+                    ! updates particle defocus
+                    if( l_ctfpatch )then
+                        ptcl_pos = ptcl_pos+real(params%box/2) ! provides center
+                        call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
+                        call build%spproj%os_ptcl2D%set(iptcl_glob,'dfx',dfx)
+                        call build%spproj%os_ptcl3D%set(iptcl_glob,'dfx',dfx)
+                        call build%spproj%os_ptcl2D%set(iptcl_glob,'dfy',dfy)
+                        call build%spproj%os_ptcl3D%set(iptcl_glob,'dfy',dfy)
+                    endif
                 end do
-                ! Patch based ctf
-                if( CTF_PATCH )then
-                    !
-                    ! todo
-                    !
-                endif
                 ! clean
                 call boxfile%kill()
             enddo
@@ -864,9 +872,6 @@ contains
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_reextract( self, cline )
-        use simple_image, only: image
-        use simple_oris,  only: oris
-        use simple_ori,   only: ori
         use simple_ctf,   only: ctf
         class(reextract_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline !< command line input
@@ -1121,7 +1126,6 @@ contains
     end subroutine exec_reextract
 
     subroutine exec_pick_extract( self, cline )
-        use simple_ori,                 only: ori
         use simple_sp_project,          only: sp_project
         use simple_picker_iter,         only: picker_iter
         use simple_binoris_io,          only: binwrite_oritab
@@ -1211,9 +1215,7 @@ contains
     end subroutine exec_pick_extract
 
     subroutine exec_make_pickrefs( self, cline )
-        use simple_oris,                only: oris
         use simple_sym,                 only: sym
-        use simple_image,               only: image
         use simple_projector_hlev,      only: reproject
         class(make_pickrefs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline

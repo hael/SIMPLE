@@ -43,14 +43,12 @@ type(export_cavgs_commander)          :: xexport_cavgs
 
 ! REFINE3D PROGRAMS
 type(nspace_commander)                :: xnspace
-type(refine3D_init_commander)         :: xrefine3D_init
 type(refine3D_commander)              :: xprime3D
 type(check_3Dconv_commander)          :: xcheck_3Dconv
 
 ! RECONSTRUCTION PROGRAMS
 type(volassemble_eo_commander)        :: xvolassemble_eo
 type(reconstruct3D_commander)         :: xreconstruct3D
-type(volassemble_commander)           :: xvolassemble
 
 ! CHECKER PROGRAMS
 type(check_box_commander)             :: xcheck_box
@@ -409,20 +407,6 @@ select case(prg)
         keys_required(1)  = 'moldiam'
         call cline%parse_oldschool(keys_required=keys_required(:1))
         call xnspace%execute(cline)
-    case( 'refine3D_init' )
-        ! initialization of 3D refinement
-        keys_required(1) = 'msk'
-        keys_required(2) = 'pgrp'
-        keys_required(3) = 'projfile'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'inner'
-        keys_optional(3) = 'nspace'
-        keys_optional(4) = 'nran'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
-        ! set defaults
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
-        call xrefine3D_init%execute(cline)
     case( 'refine3D' )
         ! set required keys
         keys_required(1)  = 'vol1'
@@ -440,23 +424,22 @@ select case(prg)
         keys_optional(8) = 'objfun'
         keys_optional(9) = 'lpstop'
         keys_optional(10) = 'lplim_crit'
-        keys_optional(11) = 'eo'
-        keys_optional(12) = 'refine'
-        keys_optional(13) = 'frac'
-        keys_optional(14) = 'mskfile'
-        keys_optional(15) = 'inner'
-        keys_optional(16) = 'width'
-        keys_optional(17) = 'nspace'
-        keys_optional(18) = 'nstates'
-        keys_optional(19) = 'startit'
-        keys_optional(20) = 'maxits'
-        keys_optional(21) = 'shbarrier'
-        keys_optional(22) = 'noise'
-        keys_optional(23) = 'nnn'
-        keys_optional(24) = 'rrate'
-        keys_optional(25) = 'update_frac'
-        keys_optional(26) = 'clsfrcs'
-        call cline%parse_oldschool(keys_required(:4), keys_optional(:26))
+        keys_optional(11) = 'refine'
+        keys_optional(12) = 'frac'
+        keys_optional(13) = 'mskfile'
+        keys_optional(14) = 'inner'
+        keys_optional(15) = 'width'
+        keys_optional(16) = 'nspace'
+        keys_optional(17) = 'nstates'
+        keys_optional(18) = 'startit'
+        keys_optional(19) = 'maxits'
+        keys_optional(20) = 'shbarrier'
+        keys_optional(21) = 'noise'
+        keys_optional(22) = 'nnn'
+        keys_optional(23) = 'rrate'
+        keys_optional(24) = 'update_frac'
+        keys_optional(25) = 'clsfrcs'
+        call cline%parse_oldschool(keys_required(:4), keys_optional(:25))
         ! set defaults
         if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('refine') )then
@@ -466,7 +449,6 @@ select case(prg)
                 THROW_HARD('refine=MULTI requires specification of NSTATES')
             endif
         endif
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xprime3D%execute(cline)
     case( 'check_3Dconv' )
         ! for convergence checking and run-time stats printing (3D)
@@ -475,11 +457,10 @@ select case(prg)
         ! set optional keys
         keys_optional(1) = 'lp'
         keys_optional(2) = 'nstates'
-        keys_optional(3) = 'eo'
-        keys_optional(4) = 'nspace'
-        keys_optional(5) = 'refine'
+        keys_optional(3) = 'nspace'
+        keys_optional(4) = 'refine'
         ! parse command line
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:5))
+        call cline%parse_oldschool(keys_required(:2), keys_optional(:4))
         ! set defaults
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! execute
@@ -493,13 +474,11 @@ select case(prg)
         keys_required(3)  = 'msk'
         ! set optional keys
         keys_optional(1)  = 'nthr'
-        keys_optional(2)  = 'eo'
-        keys_optional(3)  = 'frac'
-        keys_optional(4)  = 'mskfile'
-        call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
+        keys_optional(2)  = 'frac'
+        keys_optional(3)  = 'mskfile'
+        call cline%parse_oldschool(keys_required(:3), keys_optional(:3))
         ! set defaults
         if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
-        if( .not. cline%defined('eo')  ) call cline%set('eo', 'no')
         call xreconstruct3D%execute(cline)
     case( 'volassemble_eo' )
         keys_required(1) = 'nparts'
@@ -512,15 +491,6 @@ select case(prg)
         keys_optional(4) = 'mskfile'
         call cline%parse_oldschool(keys_required(:3), keys_optional(:4))
         call xvolassemble_eo%execute(cline)
-    case( 'volassemble' )
-        keys_required(1) = 'nparts'
-        keys_required(2) = 'projfile'
-        ! set optional keys
-        keys_optional(1) = 'nthr'
-        keys_optional(2) = 'state'
-        keys_optional(3) = 'nstates'
-        call cline%parse_oldschool(keys_required(:2), keys_optional(:3))
-        call xvolassemble%execute(cline)
 
     ! CHECKER PROGRAMS
 

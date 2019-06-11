@@ -33,7 +33,6 @@ type(cleanup2D_commander)                   :: xcleanup2D_distr
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
-type(refine3D_init_distr_commander)         :: xrefine3D_init_distr
 type(refine3D_distr_commander)              :: xprime3D_distr
 type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 
@@ -194,24 +193,16 @@ select case(prg)
 
     case( 'initial_3Dmodel' )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('eo')        ) call cline%set('eo',        'yes')
         call execute_commander(xinitial_3Dmodel, cline)
 
     ! REFINE3D WORKFLOWS
 
-    case( 'refine3D_init' )
-        call xrefine3D_init_distr%execute( cline )
     case( 'refine3D' )
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       20.)
         if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
-        if( .not. cline%defined('eo')     ) call cline%set('eo',         'no')
-        if( cline%get_carg('eo').eq.'no' .and. .not.cline%defined('lp') )then
-            THROW_HARD('The resolution limit should be set with LP=XX or EO=YES')
-        endif
         call execute_commander(xprime3D_distr, cline)
     case( 'reconstruct3D' )
-        if( .not. cline%defined('trs')  ) call cline%set('trs',      5.) ! to assure that shifts are being used
-        if( .not. cline%defined('eo')   ) call cline%set('eo',     'no')
+        if( .not. cline%defined('trs')  ) call cline%set('trs', 5.) ! to assure that shifts are being used
         call xreconstruct3D_distr%execute( cline )
 
     ! CLUSTER3D WORKFLOWS

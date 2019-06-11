@@ -6,50 +6,13 @@ use simple_parameters, only: params_glob
 use simple_qsys_funs,  only: qsys_job_finished
 implicit none
 
-public :: exec_rec_master, exec_rec_soft
+public :: exec_rec, exec_rec_soft
 private
 #include "simple_local_flags.inc"
 
 contains
 
-    subroutine exec_rec_master
-        select case(params_glob%eo)
-            case( 'no' )
-                call exec_rec
-            case DEFAULT
-                call exec_eorec_distr
-        end select
-    end subroutine exec_rec_master
-
     subroutine exec_rec
-        character(len=:), allocatable :: fbody
-        character(len=STDLEN)         :: rho_name
-        integer                       :: s
-        ! rebuild build_glob%vol according to box size (beacuse it is otherwise boxmatch)
-        call build_glob%vol%new([params_glob%box,params_glob%box,params_glob%box], params_glob%smpd)
-        do s=1,params_glob%nstates
-            if( build_glob%spproj_field%get_pop(s, 'state') == 0 ) cycle ! empty state
-            if( params_glob%l_distr_exec )then ! embarrasingly parallel rec
-                fbody = 'recvol_state'//int2str_pad(s,2)//'_part'//int2str_pad(params_glob%part,params_glob%numlen)
-                params_glob%vols(s) = fbody//params_glob%ext
-                rho_name = 'rho_'//fbody//params_glob%ext
-                call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s, part=params_glob%part)
-                call build_glob%recvol%compress_exp
-                call build_glob%recvol%write(params_glob%vols(s), del_if_exists=.true.)
-                call build_glob%recvol%write_rho(trim(rho_name))
-            else ! shared-mem parallel rec
-                fbody = 'recvol_state'
-                params_glob%vols(s) = fbody//int2str_pad(s,2)//params_glob%ext
-                call build_glob%recvol%rec( build_glob%spproj, build_glob%spproj_field, build_glob%pgrpsyms, s)
-                call build_glob%recvol%clip(build_glob%vol)
-                call build_glob%vol%write(params_glob%vols(s), del_if_exists=.true.)
-            endif
-        end do
-        write(logfhandle,'(a)') "GENERATED VOLUMES: reconstruct3D*.ext"
-        call qsys_job_finished(  'simple_rec_master :: exec_rec')
-    end subroutine exec_rec
-
-    subroutine exec_eorec_distr
         character(len=:), allocatable :: fbody
         integer :: s
         if( .not. params_glob%l_distr_exec ) THROW_HARD('eo .ne. no not supported here, use simple_distr_exec!')
@@ -62,7 +25,7 @@ contains
         end do
         call qsys_job_finished( 'simple_rec_master :: exec_eorec')
         write(logfhandle,'(a,1x,a)') "GENERATED VOLUMES: reconstruct3D*.ext"
-    end subroutine exec_eorec_distr
+    end subroutine exec_rec
 
     subroutine exec_rec_soft( cline, which_iter )
         use simple_strategy3D_matcher

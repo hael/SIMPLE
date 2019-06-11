@@ -83,7 +83,7 @@ contains
     ! polynomial fitting
     procedure, private :: fit_polynomial
     procedure, private :: pix2poly
-    procedure, private :: pix2polyvals
+    procedure          :: pix2polyvals
 
     ! destructor
     procedure          :: kill
@@ -469,9 +469,6 @@ contains
         mh   = maxval(self%flims(1,:))
         mk   = maxval(self%flims(2,:))
         nr_msk = self%cc_msk
-        ! removes symmetry mates
-        !nr_msk(1:self%ldim_box(1)/2-1,:,1) = .false.
-        !nr_msk(self%ldim_box(1)/2,self%ldim_box(2)/2:,1) = .false.
         ! builds mask indices
         self%npix_msk = count(nr_msk)
         allocate(self%inds_msk(2,self%npix_msk))

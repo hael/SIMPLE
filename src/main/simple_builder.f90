@@ -43,9 +43,7 @@ type :: builder
     type(image),            allocatable :: ref_imgs(:,:)          !< array of reference images
     ! RECONSTRUCTION TOOLBOX
     type(reconstructor_eo)              :: eorecvol               !< object for eo reconstruction
-    type(reconstructor)                 :: recvol                 !< object for reconstruction
     ! STRATEGY3D TOOLBOX
-    type(reconstructor),    allocatable :: recvols(:)             !< array of volumes for reconstruction
     type(reconstructor_eo), allocatable :: eorecvols(:)           !< array of volumes for eo-reconstruction
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
@@ -68,16 +66,12 @@ type :: builder
     procedure, private                  :: build_spproj
     procedure                           :: build_general_tbox
     procedure                           :: kill_general_tbox
-    procedure                           :: build_rec_tbox
-    procedure, private                  :: kill_rec_tbox
     procedure                           :: build_rec_eo_tbox
     procedure, private                  :: kill_rec_eo_tbox
     procedure                           :: build_strategy3D_tbox
     procedure, private                  :: kill_strategy3D_tbox
     procedure, private                  :: build_strategy2D_tbox
     procedure, private                  :: kill_strategy2D_tbox
-    procedure                           :: build_extremal3D_tbox
-    procedure, private                  :: kill_extremal3D_tbox
 end type builder
 
 class(builder), pointer :: build_glob  => null()
@@ -280,27 +274,6 @@ contains
         endif
     end subroutine kill_general_tbox
 
-    subroutine build_rec_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        call self%kill_rec_tbox
-        call self%recvol%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
-        call self%recvol%alloc_rho(self%spproj)
-        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        if( .not. associated(build_glob) ) build_glob => self
-        self%rec_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING RECONSTRUCTION TOOLBOX'
-    end subroutine build_rec_tbox
-
-    subroutine kill_rec_tbox( self )
-        class(builder), intent(inout) :: self
-        if( self%rec_tbox_exists )then
-            call self%recvol%dealloc_rho
-            call self%recvol%kill
-            self%rec_tbox_exists = .false.
-        endif
-    end subroutine kill_rec_tbox
-
     subroutine build_rec_eo_tbox( self, params )
         class(builder), target, intent(inout) :: self
         class(parameters),      intent(inout) :: params
@@ -354,13 +327,8 @@ contains
         class(parameters),      intent(inout) :: params
         integer :: nnn
         call self%kill_strategy3D_tbox
-        if( params%eo .ne. 'no' )then
-            allocate( self%eorecvols(params%nstates), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)
-        else
-            allocate( self%recvols(params%nstates), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 2', alloc_stat)
-        endif
+        allocate( self%eorecvols(params%nstates), stat=alloc_stat )
+        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 1', alloc_stat)
         if( params%neigh.eq.'yes' ) then
             nnn = params%nnn
             call self%pgrpsyms%nearest_proj_neighbors(self%eulspace, nnn, self%nnmat)
@@ -386,41 +354,10 @@ contains
                 end do
                 deallocate(self%eorecvols)
             endif
-            if( allocated(self%recvols) )then
-                do i=1,size(self%recvols)
-                    call self%recvols(i)%dealloc_rho
-                    call self%recvols(i)%kill
-                end do
-                deallocate(self%recvols)
-            endif
             if( allocated(self%nnmat) ) deallocate(self%nnmat)
             call self%projfrcs%kill
             self%strategy3D_tbox_exists = .false.
         endif
     end subroutine kill_strategy3D_tbox
-
-    subroutine build_extremal3D_tbox( self, params )
-        class(builder), target, intent(inout) :: self
-        class(parameters),      intent(inout) :: params
-        call self%kill_extremal3D_tbox
-        allocate( self%recvols(1), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk('build_strategy3D_tbox; simple_builder, 2', alloc_stat)
-        call self%recvols(1)%new([params%boxpd,params%boxpd,params%boxpd],params%smpd)
-        call self%recvols(1)%alloc_rho(self%spproj)
-        if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
-        if( .not. associated(build_glob) ) build_glob => self
-        self%extremal3D_tbox_exists = .true.
-        write(logfhandle,'(A)') '>>> DONE BUILDING EXTREMAL3D TOOLBOX'
-    end subroutine build_extremal3D_tbox
-
-    subroutine kill_extremal3D_tbox( self )
-        class(builder), intent(inout) :: self
-        if( self%extremal3D_tbox_exists )then
-            call self%recvols(1)%dealloc_rho
-            call self%recvols(1)%kill
-            deallocate(self%recvols)
-            self%extremal3D_tbox_exists = .false.
-        endif
-    end subroutine kill_extremal3D_tbox
 
 end module simple_builder

@@ -126,7 +126,6 @@ type(simple_program), target :: pspec_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
-type(simple_program), target :: refine3D_init
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: selection
 type(simple_program), target :: reproject
@@ -302,7 +301,6 @@ contains
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
-        call new_refine3D_init
         call new_replace_project_field
         call new_selection
         call new_scale
@@ -385,7 +383,6 @@ contains
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
-        call push2prg_ptr_array(refine3D_init)
         call push2prg_ptr_array(replace_project_field)
         call push2prg_ptr_array(selection)
         call push2prg_ptr_array(scale)
@@ -531,8 +528,6 @@ contains
                 ptr2prg => reextract
             case('refine3D')
                 ptr2prg => refine3D
-            case('refine3D_init')
-                ptr2prg => refine3D_init
             case('replace_project_field')
                 ptr2prg => replace_project_field
             case('selection')
@@ -601,7 +596,6 @@ contains
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
-        write(logfhandle,'(A)') refine3D_init%name
         write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') tseries_track%name
     end subroutine list_distr_prgs_in_ui
@@ -1516,7 +1510,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 0, 0, 7, 6, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1539,13 +1533,10 @@ contains
         call initial_3Dmodel%set_input('filt_ctrls', 1, hp)
         call initial_3Dmodel%set_input('filt_ctrls', 2, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit for the first stage of ab-initio model generation',&
             &'low-pass limit in Angstroms', .false., 0.)
-        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit',   'Final low-pass limit',   'low-pass limit in Angstroms', .false., 8.)
-        call initial_3Dmodel%set_input('filt_ctrls', 4, eo)
-        initial_3Dmodel%filt_ctrls(4)%descr_long        = 'Gold-standard FSC for filtering and resolution estimation(yes|no){yes}'
-        initial_3Dmodel%filt_ctrls(4)%descr_placeholder = '(yes|no){yes}'
-        initial_3Dmodel%filt_ctrls(4)%cval_default      = 'yes'
-        call initial_3Dmodel%set_input('filt_ctrls', 5, rankw)
-        call initial_3Dmodel%set_input('filt_ctrls', 6, ptclw)
+        call initial_3Dmodel%set_input('filt_ctrls', 3, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
+            &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
+        call initial_3Dmodel%set_input('filt_ctrls', 4, rankw)
+        call initial_3Dmodel%set_input('filt_ctrls', 5, ptclw)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -2732,7 +2723,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 15, 10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 16, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2761,6 +2752,7 @@ contains
         call refine3D%set_input('srch_ctrls', 13, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         call refine3D%set_input('srch_ctrls', 14, nrestarts)
         call refine3D%set_input('srch_ctrls', 15, sigma2_fudge)
+        call refine3D%set_input('srch_ctrls', 16, 'lp_iters', 'num', '# iterations lp refinement', '# iterations lp refinement', '# of iterations for low-pass limited refinement', .false., 20.)
         ! filter controls
         call refine3D%set_input('filt_ctrls', 1, hp)
         call refine3D%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
@@ -2771,10 +2763,9 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call refine3D%set_input('filt_ctrls', 5, lplim_crit)
         call refine3D%set_input('filt_ctrls', 6, lp_backgr)
-        call refine3D%set_input('filt_ctrls', 7, eo)
-        call refine3D%set_input('filt_ctrls', 8, projw)
-        call refine3D%set_input('filt_ctrls', 9, rankw)
-        call refine3D%set_input('filt_ctrls',10, ptclw)
+        call refine3D%set_input('filt_ctrls', 7, projw)
+        call refine3D%set_input('filt_ctrls', 8, rankw)
+        call refine3D%set_input('filt_ctrls', 9, ptclw)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)
@@ -2785,36 +2776,6 @@ contains
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D
-
-    subroutine new_refine3D_init
-        ! PROGRAM SPECIFICATION
-        call refine3D_init%new(&
-        &'refine3D_init',&                                                                                     ! name
-        &'Random initialisation of 3D refinement',&                                                            ! descr_short
-        &'is a distributed workflow for generating a random initial 3D model for initialisation of refine3D',& ! descr_long
-        &'simple_distr_exec',&                                                                                 ! executable
-        &0, 0, 0, 3, 1, 2, 2, .true.)                                                                          ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        ! <empty>
-        ! parameter input/output
-        ! <empty>
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        call refine3D_init%set_input('srch_ctrls', 1, nspace)
-        call refine3D_init%set_input('srch_ctrls', 2, pgrp)
-        call refine3D_init%set_input('srch_ctrls', 3, 'nran', 'num', 'Number of random samples', 'Number of images to randomly sample for 3D reconstruction',&
-        &'# random samples', .false., 0.)
-        ! filter controls
-        call refine3D_init%set_input('filt_ctrls', 1, eo)
-        ! mask controls
-        call refine3D_init%set_input('mask_ctrls', 1, msk)
-        call refine3D_init%set_input('mask_ctrls', 2, inner)
-        ! computer controls
-        call refine3D_init%set_input('comp_ctrls', 1, nparts)
-        call refine3D_init%set_input('comp_ctrls', 2, nthr)
-    end subroutine new_refine3D_init
 
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION

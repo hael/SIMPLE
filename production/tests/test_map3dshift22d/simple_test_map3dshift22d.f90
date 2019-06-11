@@ -6,7 +6,7 @@ use simple_projector_hlev, only: reproject
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_parameters,     only: parameters, params_glob
-use simple_rec_master,     only: exec_rec_master
+use simple_rec_master,     only: exec_rec
 
 implicit none
 
@@ -62,8 +62,8 @@ call build%vol%shift(shvec)
 call build%vol%write('shifted.mrc')
 call build%spproj_field%map3dshift22d(-shvec)
 call build%spproj_field%write('shifted.txt')
-call build%build_rec_tbox(params)    ! reconstruction objects built
-call exec_rec_master
+call build%build_rec_eo_tbox(params)    ! reconstruction objects built
+call exec_rec
 
 
 

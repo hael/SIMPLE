@@ -550,7 +550,7 @@ contains
         real                  :: iter, smpd_target, lplims(2), msk, orig_msk, orig_smpd
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
-        logical               :: srch4symaxis, do_autoscale, do_eo, symran_before_refine
+        logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
         ! auto-scaling prep
@@ -558,9 +558,9 @@ contains
         ! now, remove autoscale flag from command line, since no scaled partial stacks
         ! will be produced (this program used shared-mem paralllelisation of scale)
         call cline%delete('autoscale')
+        ! whether to perform perform ab-initio reconstruction with e/o class averages
+        l_lpset = cline%defined('lpstart') .and. cline%defined('lpstop')
         ! make master parameters
-        do_eo = trim(cline%get_carg('eo')) .eq. 'yes'
-        call cline%set('eo','no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -608,7 +608,9 @@ contains
         endif
         ! SANITY CHECKS
         ! e/o
-        if( do_eo )then
+        if( l_lpset )then
+            ! no filtering
+        else
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
             if( .not.file_exists(frcs_fname) )then
                 THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
@@ -616,16 +618,20 @@ contains
         endif
         ! set lplims
         lplims(1) = 20.
-        lplims(2) = 10.
-        if( cline%defined('lpstop') ) lplims(2) = params%lpstop
-        if( do_eo )then
-            tmp_rarr  = spproj%os_cls2D%get_all('res')
-            tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
-            res       = pack(tmp_rarr, mask=(tmp_iarr>0))
-            lplims(1) = max(median_nocopy(res), lplims(2))
-            deallocate(res, tmp_iarr, tmp_rarr)
+        lplims(2) = 8.
+        if( l_lpset )then
+            lplims(1) = params%lpstart
+            lplims(2) = params%lpstop
         else
-            if( cline%defined('lpstart') ) lplims(1) = params%lpstart
+            if( cline%defined('lpstart') )then
+                lplims(1) = params%lpstart
+            else
+                tmp_rarr  = spproj%os_cls2D%get_all('res')
+                tmp_iarr  = nint(spproj%os_cls2D%get_all('state'))
+                res       = pack(tmp_rarr, mask=(tmp_iarr>0))
+                lplims(1) = max(median_nocopy(res), lplims(2))
+                deallocate(res, tmp_iarr, tmp_rarr)
+            endif
         endif
         ! prepare a temporary project file for the class average processing
         allocate(WORK_PROJFILE, source=trim(ORIG_WORK_PROJFILE))
@@ -730,15 +736,14 @@ contains
         call cline_refine3D_refine%set('maxits',   real(MAXITS_REFINE))
         call cline_refine3D_refine%set('refine',   'single')
         call cline_refine3D_refine%set('trs',      real(MINSHIFT)) ! activates shift search
-        if( do_eo )then
+        if( l_lpset )then
+            call cline_refine3D_refine%set('lp', lplims(2))
+        else
             call cline_refine3D_refine%delete('lp')
-            call cline_refine3D_refine%set('eo',          'yes')
             call cline_refine3D_refine%set('lplim_crit',  0.5)
             call cline_refine3D_refine%set('lpstop',      lplims(2))
             call cline_refine3D_refine%set('clsfrcs',    'yes')
             call cline_refine3D_refine%set('match_filt', 'yes')
-        else
-            call cline_refine3D_refine%set('lp', lplims(2))
         endif
         if( .not. cline_refine3D_refine%defined('nspace') )then
             call cline_refine3D_refine%set('nspace', real(NSPACE_REFINE))
@@ -750,11 +755,10 @@ contains
         call cline_reconstruct3D%set('projfile', ORIG_WORK_PROJFILE)
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
-        if( do_eo )then
-            call cline_reconstruct3D%set('eo', 'yes')
-            call cline_postprocess%delete('lp')
-        else
+        if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
+        else
+            call cline_postprocess%delete('lp')
         endif
         call cline_reproject%set('prg',   'reproject')
         call cline_reproject%set('pgrp',   trim(pgrp_refine))
@@ -811,15 +815,13 @@ contains
         work_proj2%projinfo = spproj%projinfo
         work_proj2%compenv  = spproj%compenv
         if( spproj%jobproc%get_noris()  > 0 ) work_proj2%jobproc = spproj%jobproc
-        if( do_eo )then
-            call prep_eo_stks_refine
-            params_glob%eo     = 'yes'
-            params_glob%l_eo   = .true.
-            params_glob%nptcls = work_proj2%get_nptcls()
-        else
+        if( l_lpset )then
             call work_proj2%add_stk(trim(orig_stk), ctfvars)
             work_proj2%os_ptcl3D = os
             call work_proj2%os_ptcl3D%set_all('state', real(states))
+        else
+            call prep_eo_stks_refine
+            params_glob%nptcls = work_proj2%get_nptcls()
         endif
         call os%kill
         ! renaming
@@ -831,9 +833,7 @@ contains
         call work_proj2%update_projinfo(cline)
         call work_proj2%write
         ! split
-        if( do_eo )then
-            ! all good
-        else
+        if( l_lpset )then
             if(params%nparts == 1)then
                 ! all good
             else
@@ -853,7 +853,7 @@ contains
                 call xscale_distr%execute( cline_scale2 )
                 call work_proj2%os_ptcl3D%mul_shifts(scale_factor2)
                 call work_proj2%write
-                if( do_eo ) call rescale_2Dfilter
+                if( .not.l_lpset ) call rescale_2Dfilter
             else
                 do_autoscale = .false.
                 box = orig_box
@@ -888,7 +888,7 @@ contains
             ! because postprocess only updates project file when mkdir=yes
             call work_proj2%read_segment('out', ORIG_WORK_PROJFILE)
             call work_proj2%add_vol2os_out(vol_iter, params%smpd, 1, 'vol')
-            if( do_eo )then
+            if( .not.l_lpset )then
                 call work_proj2%add_fsc2os_out(FSC_FBODY//str_state//trim(BIN_EXT), 1, orig_box)
                 call work_proj2%add_vol2os_out(ANISOLP_FBODY//str_state//params%ext, orig_smpd, 1, 'vol_filt', box=orig_box)
             endif
@@ -908,15 +908,15 @@ contains
         call work_proj2%os_ptcl3D%delete_entry('stkind')
         call work_proj2%os_ptcl3D%delete_entry('eo')
         params_glob%nptcls = ncavgs
-        if( do_eo )then
+        if( l_lpset )then
+            spproj%os_cls3D = work_proj2%os_ptcl3D
+        else
             call spproj%os_cls3D%new(ncavgs)
             do icls=1,ncavgs
                 call work_proj2%os_ptcl3D%get_ori(icls, o_tmp)
                 call spproj%os_cls3D%set_ori(icls, o_tmp)
             enddo
             call conv_eo(work_proj2%os_ptcl3D)
-        else
-            spproj%os_cls3D = work_proj2%os_ptcl3D
         endif
         call work_proj2%kill
         ! revert splitting

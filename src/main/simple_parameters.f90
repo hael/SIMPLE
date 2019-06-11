@@ -230,6 +230,7 @@ type :: parameters
     integer :: kfromto(2)
     integer :: kstop=0
     integer :: ldim(3)=0
+    integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
     integer :: minp=10             !< minimum cluster population
@@ -401,6 +402,7 @@ type :: parameters
     logical :: l_dose_weight    = .false.
     logical :: l_doshift        = .false.
     logical :: l_eo             = .false.
+    logical :: l_lpset          = .false.
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
     logical :: l_innermsk       = .false.
@@ -650,6 +652,7 @@ contains
         call check_iarg('iares',          self%iares)
         call check_iarg('ind',            self%ind)
         call check_iarg('jumpsz',         self%jumpsz)
+        call check_iarg('lp_iters',       self%lp_iters)
         call check_iarg('maxits',         self%maxits)
         call check_iarg('maxp',           self%maxp)
         call check_iarg('minp',           self%minp)
@@ -1171,6 +1174,8 @@ contains
         else
             self%l_innermsk = .false.
         endif
+        ! set lpset flag
+        self%l_lpset  = cline%defined('lp')
         ! set eo flag
         self%l_eo     = self%eo     .ne. 'no'
         ! set projw flag
@@ -1351,7 +1356,7 @@ contains
                 self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. self%l_eo
+                self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. (.not.self%l_lpset)
                 self%l_pssnr       = (trim(self%pssnr).eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
