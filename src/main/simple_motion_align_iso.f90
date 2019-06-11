@@ -36,8 +36,8 @@ type :: motion_align_iso
     real,                             allocatable     :: frameweights_saved(:)             !< array of frameweights
     real,                             allocatable     :: corrs(:)                          !< per-frame correlations
     real(dp)                                          :: polyx(POLYDIM), polyy(POLYDIM)    !< polynomial coefficients
-    real(dp)                                          :: ftol                              !< tolerance parameter for minimizer
-    real(dp)                                          :: gtol                              !< tolerance parameter for minimizer
+    real                                              :: ftol                              !< tolerance parameter for minimizer
+    real                                              :: gtol                              !< tolerance parameter for minimizer
     real                                              :: trs                               !< size of box constraint
     real                                              :: frac_improved                     !< fraction of improved frames
     real                                              :: smallshift                        !< range for initial random shift

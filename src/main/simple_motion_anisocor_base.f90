@@ -20,8 +20,8 @@ type, abstract, public :: motion_anisocor
     class(image),       pointer     :: frame      => null() !< particle image ptr
     integer                         :: ldim(2)              !< dimensions of reference, particle
     integer                         :: ldim_out(2)          !< dimensions of output image
-    real(kind=8)                    :: motion_correctftol
-    real(kind=8)                    :: motion_correctgtol
+    real                            :: motion_correctftol
+    real                            :: motion_correctgtol
 contains
     procedure(motion_anisocor_calc_T_out), deferred :: calc_T_out
     procedure(motion_anisocor_new       ), deferred :: new
@@ -41,7 +41,7 @@ interface
     subroutine motion_anisocor_new( self, motion_correct_ftol, motion_correct_gtol )
         import motion_anisocor
         class(motion_anisocor), intent(inout) :: self
-        real(kind=8), optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
+        real        , optional, intent(in)    :: motion_correct_ftol, motion_correct_gtol
     end subroutine motion_anisocor_new
 
     subroutine motion_anisocor_kill( self )

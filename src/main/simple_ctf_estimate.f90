@@ -116,7 +116,7 @@ contains
             limits(4,1) = 0.
             limits(4,2) = 3.15
         endif
-        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1d-4)
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-4)
         if( l_phaseplate )then
             call ospec_de%set_costfun(ctf_estimate_cost_phaseplate)
         else
@@ -271,7 +271,7 @@ contains
             limits(4,2) = 3.15
         endif
         ! re-init minimizer
-        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1d-4)
+        call ospec_de%specify('de', ndim, limits=limits(1:ndim,:), maxits=400, ftol=1e-4)
         if( l_phaseplate )then
             call ospec_de%set_costfun(ctf_estimate_cost_phaseplate)
             ospec_de%x = [dfx,dfy,angast,phshift]

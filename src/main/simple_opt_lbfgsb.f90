@@ -15,7 +15,7 @@ real(dp), parameter :: xtrapl=1.1d0,xtrapu=4.0d0
 real(dp), parameter :: big=1.0d+10
 real(dp), parameter :: ftol_lbfgsb=1.0d-3,gtol_lbfgsb=0.9d0,xtol_lbfgsb=0.1d0
 real(dp), parameter :: two=2.0d0,three=3.0d0
-!real(dp), parameter :: factr  = 1.0d+7, pgtol  = 1.0d-5
+real(dp), parameter :: factr  = 1.0d+7, pgtol  = 1.0d-5
 
 type, extends(optimizer) :: opt_lbfgsb
     private
@@ -25,7 +25,7 @@ type, extends(optimizer) :: opt_lbfgsb
     real(dp)               :: f
     real(dp)               :: dsave(24)
     integer,  allocatable  :: nbd(:), iwa(:)
-    real(dp), allocatable  :: l(:), u(:), g(:), wa(:)
+    real(dp), allocatable  ::  l(:), u(:), g(:), wa(:)
     logical                :: exists=.false.
 contains
     procedure :: new      => new_opt_lbfgsb
@@ -100,38 +100,14 @@ contains
 
         !>  \brief  nonlinear conjugate gradient minimizer
         subroutine lbfgsbmin
-            real(dp) :: factr
-            real(dp) :: epsmch
-            epsmch = epsilon(one)
-            factr = spec%ftol / epsmch
-            self%f = 0._dp
             self%task = 'START'
             do while(self%task(1:2) .eq. 'FG' .or. self%task .eq. 'NEW_X' .or. &
                 &    self%task .eq. 'START')
                 !     This is the call to the L-BFGS-B code.
                 call setulb ( spec%ndim, spec%lbfgsb_m, spec%x_8, self%l, self%u, self%nbd, self%f, self%g, &
-                    &         factr, spec%gtol, self%wa, self%iwa, self%task,  &
+                    &         factr, pgtol, self%wa, self%iwa, self%task,  &
                     &         self%csave, self%lsave, self%isave, self%dsave      )
-                if (.false.) then
-                    write (*,*) 'spec%ndim=', spec%ndim
-                    write (*,*) 'spec%lbfgsb_m=', spec%lbfgsb_m
-                    write (*,*) 'spec%x_8=', spec%x_8
-                    write (*,*) 'self%l=',self%l
-                    write (*,*) 'self%u=',self%u
-                    write (*,*) 'self%nbd=',self%nbd
-                    write (*,*) 'self%f=',self%f
-                    write (*,*) 'self%g=',self%g
-                    write (*,*) 'factr=',factr
-                    write (*,*) 'pgtol=',spec%gtol
-                    !write (*,*) 'self%wa=',self%wa
-                    !write (*,*) 'self%iwa=',self%iwa
-                    write (*,*) 'self%task=',self%task
-                    write (*,*) 'self%csave=',self%csave
-                    write (*,*) 'self%lsave=',self%lsave
-                    write (*,*) 'self%isave=',self%isave
-                    write (*,*) 'self%dsave=',self%dsave
-                    stop 1
-                end if
+
                 if (self%task(1:2) .eq. 'FG') then
                     call spec%eval_fdf_8( fun_self, spec%x_8, self%f, self%g )
                 else if (self%task(1:5) .eq. 'NEW_X') then
@@ -626,8 +602,7 @@ contains
                 nfree  = n
                 ifun   = 0
                 ! for stopping tolerance:
-                !tol    = factr*epsmch
-                tol     = spec%ftol     ! prevent round-off error
+                tol    = factr*epsmch
                 ! 'word' records the status of subspace solutions.
                 word   = '---'
                 ! 'info' records the termination information.
@@ -2239,7 +2214,7 @@ contains
                     return
                 end if
             end if
-            call dcsrch(f,gd,stp,spec%ftol_lbfgsb,spec%gtol_lbfgsb,spec%xtol_lbfgsb,zero,stpmx,csave,isave,dsave)
+            call dcsrch(f,gd,stp,real(spec%ftol,dp),real(spec%gtol,dp),xtol_lbfgsb,zero,stpmx,csave,isave,dsave)
             xstep = stp*dnorm
             if (csave(1:4) .ne. 'CONV' .and. csave(1:4) .ne. 'WARN') then
                 task = 'FG_LNSRCH'

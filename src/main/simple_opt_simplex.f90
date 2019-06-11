@@ -82,7 +82,7 @@ contains
                 call init( spec%limits )
             endif
             ! run the amoeba routine
-            call amoeba(self%p,self%y,self%pb,self%yb,real(spec%ftol),spec%costfun,fun_self,niters(i),spec%maxits,spec%nevals)
+            call amoeba(self%p,self%y,self%pb,self%yb,spec%ftol,spec%costfun,fun_self,niters(i),spec%maxits,spec%nevals)
             if( allocated(spec%limits_init) )then
                 ! movie the shift limits to around the best point
                 ! left limit
