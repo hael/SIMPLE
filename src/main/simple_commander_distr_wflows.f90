@@ -1020,7 +1020,7 @@ contains
                 str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
                 iostat =  simple_rename( trim(vol_odd), trim(str) )
             enddo
-        else if( vol_defined )then
+        else if( vol_defined .and. params%continue .ne. 'yes' )then
             ! projection matching
             l_projection_matching = .true.
             if( .not. have_oris )then
@@ -1031,7 +1031,7 @@ contains
                         ! all good
                 end select
             endif
-            if( .not.cline%defined('lp')) THROW_HARD('LP needs be defined for the first step of projection matching!')
+            if( .not.cline%defined('lp') ) THROW_HARD('LP needs be defined for the first step of projection matching!')
             call cline%delete('update_frac')
             if( params%neigh .ne. 'yes' )then
                 ! this forces the first round of alignment on the starting model(s)
