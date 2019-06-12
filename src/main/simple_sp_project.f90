@@ -284,7 +284,7 @@ contains
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
-        integer                       :: i, cnt, n, n2append
+        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls_prev,nptcls
         select case(trim(oritype))
             case('mic')
                 os_ptr => self%os_mic
@@ -327,7 +327,16 @@ contains
                 ! this assumes there's only one stack in the project to append
                 call os_append_ptr%getter(1, 'stk', stk)
                 ctfvar = proj%get_ctfparams('ptcl2D', 1)
+                cnt    = self%os_ptcl2D%get_noris()
                 call self%add_stk(stk, ctfvar)
+                nptcls = proj%os_ptcl2D%get_noris()
+                do iptcl=1,nptcls
+                    cnt = cnt + 1
+                    if( proj%has_boxcoords(iptcl) )then
+                        call proj%get_boxcoords(iptcl, boxcoords)
+                        call self%set_boxcoords(cnt, boxcoords)
+                    endif
+                enddo
         end select
         nullify(os_ptr, os_append_ptr)
         call o%kill

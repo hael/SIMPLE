@@ -54,6 +54,7 @@ contains
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call cline%set('numlen', real(5))
         call cline%set('stream','yes')
+        ! master parameters
         call params%new(cline)
         params_glob%split_mode = 'stream'
         params_glob%ncunits    = params%nparts
@@ -90,10 +91,8 @@ contains
         endif
         ! movie watcher init
         movie_buff = moviewatcher(LONGTIME)
-        call spproj%get_movies_table(prev_movies)
-        call movie_buff%add_to_history(prev_movies)
-        call spproj%get_mics_table(prev_movies)
-        call movie_buff%add_to_history(prev_movies)
+        ! import previous runs
+        call import_prev_streams
         ! start watching
         prev_stacksz = 0
         nmovies      = 0
@@ -138,15 +137,6 @@ contains
                     call spproj%append_project(stream_spproj, 'mic')
                     if( l_pick )then
                         call spproj%append_project(stream_spproj, 'stk')
-                        ! transfer ptcl2D box coordinates
-                        do i=1,stream_spproj%os_ptcl2D%get_noris()
-                            cnt = spproj%os_ptcl2D%get_noris()-stream_spproj%os_ptcl2D%get_noris()+i
-                            ! picking coordinates
-                            if( stream_spproj%has_boxcoords(i) )then
-                                call stream_spproj%get_boxcoords(i, box_coords)
-                                call spproj%set_boxcoords(cnt, box_coords)
-                            endif
-                        enddo
                     endif
                     call stream_spproj%kill()
                     deallocate(stream_spprojfile)
@@ -232,6 +222,97 @@ contains
                 call cline%set('projname', trim(projname))
                 call cline%set('projfile', trim(projfile))
             end subroutine create_individual_project
+
+            !>  import previous run to the current project based on past single project files
+            subroutine import_prev_streams
+                use simple_ori, only: ori
+                type(ori) :: o
+                character(len=LONGSTRLEN), allocatable :: sp_files(:)
+                character(len=:), allocatable :: mic, mov
+                integer :: iproj,nprojs,nptcls,cnt
+                logical :: err
+                if( .not.cline%defined('dir_prev') ) return
+                if( .not.file_exists(params%dir_prev) ) return
+                call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)
+                nprojs = size(sp_files)
+                cnt    = 0
+                do iproj = 1,nprojs
+                    err = .false.
+                    call stream_spproj%read( sp_files(iproj) )
+                    if( stream_spproj%os_mic%get_noris() /= 1 )then
+                        THROW_WARN('Ignoring previous project'//trim(sp_files(iproj)))
+                        cycle
+                    endif
+                    call stream_spproj%os_mic%get_ori(1, o)
+                    ! import mic segment
+                    call movefile2folder('intg', output_dir_motion_correct, o, err)
+                    if( err ) cycle
+                    call movefile2folder('forctf', output_dir_motion_correct, o, err)
+                    call movefile2folder('thumb', output_dir_motion_correct, o, err)
+                    call movefile2folder('pspec', output_dir_motion_correct, o, err)
+                    call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
+                    call movefile2folder('mceps', output_dir_motion_correct, o, err)
+                    call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)
+                    call movefile2folder('ctfdoc', output_dir_ctf_estimate, o, err)
+                    ! import mic segment
+                    call stream_spproj%os_mic%set_ori(1, o)
+                    call spproj%append_project(stream_spproj, 'mic')
+                    ! import stk segment
+                    if( l_pick )then
+                        call movefile2folder('boxfile', output_dir_picker, o, err)
+                        if( .not.err )then
+                            call movefile2folder('stk', output_dir_extract, o, err)
+                            if( .not.err )then
+                                call stream_spproj%os_mic%set_ori(1, o)
+                                call spproj%append_project(stream_spproj, 'stk')
+                            endif
+                        endif
+                    endif
+                    ! add to history
+                    call o%getter('movie', mov)
+                    call o%getter('intg', mic)
+                    call movie_buff%add2history(mov)
+                    call movie_buff%add2history(mic)
+                    ! write updated individual project file
+                    call stream_spproj%write(basename(sp_files(iproj)))
+                    ! count
+                    cnt = cnt + 1
+                    ! cleanup
+                    call stream_spproj%kill
+                enddo
+                write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', cnt
+            end subroutine import_prev_streams
+
+            subroutine movefile2folder(key, folder, o, err)
+                use simple_ori, only: ori
+                character(len=*), intent(in)    :: key, folder
+                class(ori),       intent(inout) :: o
+                logical,          intent(out)   :: err
+                character(len=:), allocatable :: src
+                character(len=LONGSTRLEN) :: dest,reldest
+                integer :: iostat
+                err = .false.
+                if( .not.o%isthere(key) )then
+                    err = .true.
+                    return
+                endif
+                call o%getter(key,src)
+                if( .not.file_exists(src) )then
+                    err = .true.
+                    return
+                endif
+                dest = trim(folder)//'/'//basename(src)
+                !iostat = rename(src,dest)
+                call simple_copy_file(src,dest)
+                ! should move files rather than copy after full test
+                ! if( iostat /= 0 )then
+                !     THROW_WARN('Ignoring '//trim(src))
+                !     err = .true.
+                !     return
+                ! endif
+                call make_relativepath(CWD_GLOB,dest,reldest)
+                call o%set(key,reldest)
+            end subroutine movefile2folder
 
     end subroutine exec_preprocess_stream
 

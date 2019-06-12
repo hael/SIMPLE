@@ -76,5 +76,4 @@ character(len=*), parameter :: STDERR2STDOUT        = '2>&1'
 ! character constants
 character(len=*), parameter :: NEWLINE              = new_line('a')
 character(len=*), parameter :: SUPPRESS_MSG         = '2>/dev/null'
-
 end module simple_defs_fname

@@ -69,6 +69,7 @@ contains
         call chdict%push('dfstep',        'step size for defocus grid search(in microns){0.05}')
         call chdict%push('dir',           'directory')
         call chdict%push('dir_movies',    'grab .mrc/.mrcs files from here')
+        call chdict%push('dir_prev',      'grab previous project info & files')
         call chdict%push('dir_ptcls',     'grab pre-micrograph stacks and docs from here')
         call chdict%push('dir_refine',    'directory with oridistributions_part*.bin; e.g. 1_refine3D')
         call chdict%push('dir_reject',    'move rejected files to here{rejected}')

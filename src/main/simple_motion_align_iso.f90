@@ -211,11 +211,15 @@ contains
             endif
             ! updates shifts & weights
             if( self%fitshifts )then
-                call self%recenter_shifts(self%opt_shifts)
-                call self%fit_polynomial
-                do iframe = 1,self%nframes
-                    call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
-                enddo
+                if( (self%lp-params_glob%lpstop < 0.01) )then
+                    self%trs = self%smallshift
+                else
+                    call self%recenter_shifts(self%opt_shifts)
+                    call self%fit_polynomial
+                    do iframe = 1,self%nframes
+                        call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
+                    enddo
+                endif
             endif
             call self%recenter_shifts(self%opt_shifts)
             call self%calc_frameweights( callback_ptr )

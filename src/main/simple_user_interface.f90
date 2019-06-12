@@ -2270,13 +2270,15 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &4, 11, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 11, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
         call preprocess_stream%set_input('img_ios', 2, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
         call preprocess_stream%set_input('img_ios', 3, 'refs', 'file', 'References images for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
         call preprocess_stream%set_input('img_ios', 4, 'vol1', 'file', 'Reference volume for picking', 'Reference volume for picking', 'e.g. vol.mrc', .false., '')
+        call preprocess_stream%set_input('img_ios', 5, 'dir_prev', 'file', 'Previous run directory',&
+            &'Directory where a previous preprocess_stream application was run', 'e.g. 2_preprocess_stream', .false., '')
         ! parameter input/output
         call preprocess_stream%set_input('parm_ios', 1, 'dose_rate', 'num', 'Dose rate', 'Dose rate in e/Ang^2/sec', 'in e/Ang^2/sec', .false., 6.0)
         call preprocess_stream%set_input('parm_ios', 2, 'exp_time', 'num', 'Exposure time', 'Exposure time in seconds', 'in seconds', .false., 10.)
@@ -2298,21 +2300,20 @@ contains
         ! <empty>
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
-        call preprocess_stream%set_input('srch_ctrls', 2, startit)
+        call preprocess_stream%set_input('srch_ctrls', 2, nsig)
         call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls', 4, fromf)
         call preprocess_stream%set_input('srch_ctrls', 5, tof)
-        call preprocess_stream%set_input('srch_ctrls', 6, nsig)
-        call preprocess_stream%set_input('srch_ctrls', 7, dfmin)
-        call preprocess_stream%set_input('srch_ctrls', 8, dfmax)
-        call preprocess_stream%set_input('srch_ctrls', 9, dfstep)
-        call preprocess_stream%set_input('srch_ctrls',10, astigtol)
-        call preprocess_stream%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        call preprocess_stream%set_input('srch_ctrls', 6, dfmin)
+        call preprocess_stream%set_input('srch_ctrls', 7, dfmax)
+        call preprocess_stream%set_input('srch_ctrls', 8, dfstep)
+        call preprocess_stream%set_input('srch_ctrls', 9, astigtol)
+        call preprocess_stream%set_input('srch_ctrls',10, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',11, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess_stream%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls', 14, pgrp)
-        preprocess_stream%srch_ctrls(14)%required = .false.
+        call preprocess_stream%set_input('srch_ctrls',12, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls',13, pgrp)
+        preprocess_stream%srch_ctrls(13)%required = .false.
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)

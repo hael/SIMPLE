@@ -23,9 +23,10 @@ type moviewatcher
 contains
     ! doers
     procedure          :: watch
-    procedure          :: add_to_history
+    procedure, private :: add2history_1
+    procedure, private :: add2history_2
+    generic            :: add2history => add2history_1, add2history_2
     procedure, private :: is_past
-    procedure, private :: add2history
     ! destructor
     procedure          :: kill
 end type
@@ -54,18 +55,6 @@ contains
         self%ext         = trim(adjustl(params_glob%ext))
         self%fbody       = trim(adjustl(params_glob%fbody))
     end function constructor
-
-    !>  \brief  append to history of previously processed movies/micrographs
-    subroutine add_to_history(self, list)
-        class(moviewatcher),                    intent(inout) :: self
-        character(len=LONGSTRLEN), allocatable, intent(in)    :: list(:)
-        integer :: i
-        if( allocated(list) )then
-            do i=1,size(list)
-                call self%add2history(trim(list(i)))
-            enddo
-        endif
-    end subroutine add_to_history
 
     !>  \brief  is the watching procedure
     subroutine watch( self, n_movies, movies )
@@ -136,9 +125,22 @@ contains
         endif
     end subroutine watch
 
+    !>  \brief  append to history of previously processed movies/micrographs
+    subroutine add2history_1(self, list)
+        class(moviewatcher),                    intent(inout) :: self
+        character(len=LONGSTRLEN), allocatable, intent(in)    :: list(:)
+        integer :: i
+        if( allocated(list) )then
+            do i=1,size(list)
+                call self%add2history_2(trim(list(i)))
+            enddo
+        endif
+    end subroutine add2history_1
+
+
     !>  \brief  is for adding to the history of already reported files
     !>          absolute path is implied
-    subroutine add2history( self, fname )
+    subroutine add2history_2( self, fname )
         class(moviewatcher), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
@@ -162,7 +164,7 @@ contains
         abs_fname = simple_abspath(fname)
         self%history(n+1) = trim(adjustl(abs_fname))
         self%n_history    = self%n_history + 1
-    end subroutine add2history
+    end subroutine add2history_2
 
     !>  \brief  is for checking a file has already been reported
     !>          absolute path is implied

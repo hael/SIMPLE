@@ -99,6 +99,7 @@ type :: parameters
     character(len=LONGSTRLEN) :: deftab=''            !< file with CTF info(.txt|.simple)
     character(len=LONGSTRLEN) :: dir=''               !< directory
     character(len=LONGSTRLEN) :: dir_movies=''        !< grab mrc mrcs files from here
+    character(len=LONGSTRLEN) :: dir_prev=''          !< grab previous projects for streaming
     character(len=LONGSTRLEN) :: dir_refine=''        !< grab oridistributions_part*.bin from here
     character(len=LONGSTRLEN) :: dir_reject='rejected'!< move rejected files to here{rejected}
     character(len=LONGSTRLEN) :: dir_select='selected'!< move selected files to here{selected}
@@ -623,6 +624,7 @@ contains
         call check_dir('dir',            self%dir)
         call check_dir('dir_box',        self%dir_box)
         call check_dir('dir_movies',     self%dir_movies)
+        call check_dir('dir_prev',       self%dir_prev)
         call check_dir('dir_ptcls',      self%dir_ptcls)
         call check_dir('dir_refine',     self%dir_refine)
         call check_dir('dir_reject',     self%dir_reject)
