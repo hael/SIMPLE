@@ -19,7 +19,7 @@ contains
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(out)   :: corrs(s%npeaks)
         logical, optional,      intent(in)    :: multistates
-        integer :: ipeak, cnt, ref, inpl, state
+        integer :: ipeak, ref, inpl, state
         real    :: shvec(2), shvec_incr(2)
         logical :: l_multistates
         if( present(multistates) )then
@@ -27,20 +27,14 @@ contains
         else
             l_multistates = .false.
         endif
-        cnt = 0
         do ipeak = 1, s%npeaks
             ref = s3D%proj_space_refinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
-            if( ref < 1 .or. ref > s%nrefs )then
-                THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peaks')
-            endif
+            if( ref < 1 .or. ref > s%nrefs ) THROW_HARD('ref index: '//int2str(ref)//' out of bound; extract_peaks')
             if( l_multistates )then
                 state = s3D%proj_space_state(ref)
-                if( .not. s3D%state_exists(state) )then
-                    THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
-                endif
+                if( .not. s3D%state_exists(state) ) THROW_HARD('empty state: '//int2str(state)//'; extract_peaks')
             endif
             inpl = s3D%proj_space_inplinds_sorted(s%ithr, s%nrefsmaxinpl - s%npeaks + ipeak)
-            cnt = cnt + 1
             ! add shift
             shvec      = s%prev_shvec
             shvec_incr = 0.
@@ -50,21 +44,21 @@ contains
             end if
             where( abs(shvec) < 1e-6 ) shvec = 0.
             ! transfer to solution set
-            corrs(cnt) = s3D%proj_space_corrs(s%ithr,ref,inpl)
+            corrs(ipeak) = s3D%proj_space_corrs(s%ithr,ref,inpl)
             if( params_glob%cc_objfun /= OBJFUN_EUCLID )then
-                if( corrs(cnt) < 0. ) corrs(cnt) = 0.
+                if( corrs(ipeak) < 0. ) corrs(ipeak) = 0.
             end if
             if( l_multistates )then
-                call s3D%o_peaks(s%iptcl)%set(cnt, 'state', real(state))
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', real(state))
             else
-                call s3D%o_peaks(s%iptcl)%set(cnt, 'state', 1.)
+                call s3D%o_peaks(s%iptcl)%set(ipeak, 'state', 1.)
             endif
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'proj',  real(s3D%proj_space_proj(ref)))
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'inpl',  real(inpl))
-            call s3D%o_peaks(s%iptcl)%set(cnt, 'corr',  corrs(cnt))
-            call s3D%o_peaks(s%iptcl)%set_euler(cnt, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
-            call s3D%o_peaks(s%iptcl)%set_shift(cnt, shvec)
-            call s3D%o_peaks(s%iptcl)%set_shift_incr(cnt, shvec_incr)
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'proj',  real(s3D%proj_space_proj(ref)))
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'inpl',  real(inpl))
+            call s3D%o_peaks(s%iptcl)%set(ipeak, 'corr',  corrs(ipeak))
+            call s3D%o_peaks(s%iptcl)%set_euler(ipeak, s3D%proj_space_euls(s%ithr,ref,inpl,1:3))
+            call s3D%o_peaks(s%iptcl)%set_shift(ipeak, shvec)
+            call s3D%o_peaks(s%iptcl)%set_shift_incr(ipeak, shvec_incr)
         enddo
     end subroutine extract_peaks
 

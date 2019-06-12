@@ -2623,16 +2623,13 @@ contains
 
     !>  \brief  to identify the indices of the k nearest projection neighbors (inclusive)
     subroutine nearest_proj_neighbors_1( self, k, nnmat )
-        class(oris),          intent(inout) :: self
-        integer,              intent(in)    :: k
-        integer, allocatable, intent(inout) :: nnmat(:,:)
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: k
+        integer,     intent(inout) :: nnmat(self%n,k)
         real      :: dists(self%n)
         integer   :: inds(self%n), i, j
         type(ori) :: o
         if( k >= self%n ) THROW_HARD('need to identify fewer nearest_proj_neighbors')
-        if( allocated(nnmat) ) deallocate(nnmat)
-        allocate( nnmat(self%n,k), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk("In: nearest_proj_neighbors; simple_oris",alloc_stat)
         do i=1,self%n
             call self%get_ori(i, o)
             do j=1,self%n
@@ -2653,17 +2650,19 @@ contains
 
     !>  \brief  to identify the k nearest projection neighbors (exclusive), returned as logical array
     !!          self is search space with finer angular resolution
-    subroutine nearest_proj_neighbors_2( self, o_peaks, k, lnns )
+    subroutine nearest_proj_neighbors_2( self, o_peaks, k, lnns, nnmat )
         class(oris), intent(inout) :: self
         class(oris), intent(in)    :: o_peaks
         integer,     intent(in)    :: k
         logical,     intent(inout) :: lnns(self%n)
+        integer,     intent(inout) :: nnmat(o_peaks%n,k)
         real, allocatable :: ows(:)
         real      :: dists(self%n)
         integer   :: inds(self%n), i, ii, j
         type(ori) :: o
-        lnns = .false.
-        ows  = o_peaks%get_all('ow')
+        lnns  = .false.
+        nnmat = 0
+        ows   = o_peaks%get_all('ow')
         do i=1,o_peaks%n
             if( ows(i) <= TINY ) cycle
             do ii=1,self%n
@@ -2674,6 +2673,7 @@ contains
             call hpsort(dists, inds)
             do j=1,k
                 lnns(inds(j)) = .true.
+                nnmat(i,j)    = inds(j)
             end do
         end do
         deallocate(ows)

@@ -48,12 +48,12 @@ contains
             ! prep
             call self%s%prep4srch
             nrefs = self%s%nrefs
-            call build_glob%eulspace%nearest_proj_neighbors(s3D%o_peaks(self%s%iptcl), params_glob%nnn, lnns)
+            call build_glob%eulspace%nearest_proj_neighbors(s3D%o_peaks(self%s%iptcl), params_glob%nnn, lnns, build_glob%nnmat)
             ! search
             do iproj=1,params_glob%nspace
                 if( .not. lnns(iproj) ) cycle
                 iref = (self%s%prev_state - 1)*params_glob%nspace + iproj
-                call per_ref_srch                           ! actual search
+                call per_ref_srch
             end do
             self%s%nrefs_eval = nrefs
             call sort_corrs(self%s) ! sort in correlation projection direction space

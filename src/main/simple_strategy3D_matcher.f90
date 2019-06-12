@@ -326,7 +326,7 @@ contains
         ! here we read all peaks to allow deriving statistics based on the complete set
         ! this is needed for deriving projection direction weights
         select case(trim(params_glob%refine))
-        case('eval','cluster','clustersym','neigh_multi','neigh_single')
+        case('eval','cluster','clustersym') ! 'neigh_multi','neigh_single'
                 ! nothing to do
             case DEFAULT
                 if( .not. file_exists(trim(params_glob%o_peaks_file)) )then

@@ -561,10 +561,6 @@ contains
             call build_glob%vol%fft()
             call build_glob%vol%shift([xyz(1),xyz(2),xyz(3)])
         endif
-        !
-        print *,'params_glob%l_lpset     :',params_glob%l_lpset
-        print *,'params_glob%l_match_filt:',params_glob%l_match_filt
-
         ! Volume filtering
         if( .not.params_glob%l_lpset )then
             filtsz    = build_glob%projfrcs%get_filtsz()
