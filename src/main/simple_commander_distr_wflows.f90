@@ -945,6 +945,7 @@ contains
         if( params%continue .eq. 'yes' )then
             ! we are continuing from a previous refinement round,
             ! i.e. projfile is fetched from a X_refine3D dir
+            ! set starting volume(s), iteration number & previous refinement path
             do state=1,params%nstates
                 vol = 'vol' // int2str(state)
                 if( trim(params%oritype).eq.'cls3D' )then
@@ -963,19 +964,27 @@ contains
                 endif
             end do
             prev_refine_path = get_fpath(vol_fname)
+            ! carry over the oridistributions_part* files
+            call simple_list_files(prev_refine_path//'oridistributions_part*', list)
+            nfiles = size(list)
+            err    = params%nparts /= nfiles
+            if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
+            do i=1,nfiles
+                target_name = PATH_HERE//basename(trim(list(i)))
+                call simple_copy_file(trim(list(i)), target_name)
+            end do
+            deallocate(list)
             ! if we are doing fractional volume update, partial reconstructions need to be carried over
             if( params%l_frac_update )then
                 call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
                 nfiles = size(list)
-                err    = .false.
-                if( params%nparts * 4 /= nfiles ) err = .true.
-                if( err )then
-                    THROW_HARD('# partitions not consistent with previous refinement round')
-                endif
+                err = params%nparts * 4 /= nfiles
+                if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
                 do i=1,nfiles
                     target_name = PATH_HERE//basename(trim(list(i)))
                     call simple_copy_file(trim(list(i)), target_name)
                 end do
+                deallocate(list)
             endif
             ! if we are doing objfun=euclid the sigm estimates need to be carried over
             if( trim(params%objfun) .eq. 'euclid' )then
@@ -986,6 +995,7 @@ contains
                     target_name = PATH_HERE//basename(trim(list(i)))
                     call simple_copy_file(trim(list(i)), target_name)
                 end do
+                deallocate(list)
             endif
         endif
         vol_defined = .false.

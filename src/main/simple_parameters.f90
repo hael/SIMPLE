@@ -248,11 +248,11 @@ type :: parameters
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
     integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
-    integer :: nnn=200             !< # nearest neighbors{200}
+    integer :: nnn=NPEAKS2REFINE   !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
-    integer :: npeaks=1
+    integer :: npeaks=NPEAKS2REFINE
     integer :: npix=0              !< # pixles/voxels in binary representation
     integer :: nptcls=1            !< # images in stk/# orientations in oritab
     integer :: nptcls_per_cls=400  !< # images in stk/# orientations in oritab
@@ -1330,10 +1330,6 @@ contains
             endif
             self%l_dose_weight = .true.
         endif
-        ! set default nnn value to 10% of the search space
-        if( .not. cline%defined('nnn') )then
-            self%nnn = nint(0.1 * real(self%nspace))
-        endif
         ! objective function used in prime2D/3D
         select case(trim(self%objfun))
             case('cc')
@@ -1395,9 +1391,16 @@ contains
             if( .not. cline%defined('nspace')    ) self%nspace = 10000
             if( .not. cline%defined('nnn')       ) self%nnn    = 3
             if( .not. cline%defined('globwfrac') ) self%globwfrac = real(self%nnn) * GLOBAL_WEIGHT_FRAC
+        else if( self%neigh .eq. 'yes' )then
+            if( cline%defined('nnn') )then
+                ! must be at least NPEAKS2REFINE nnn:s
+                self%nnn = max(self%nnn, NPEAKS2REFINE)
+            else
+                ! set default nnn value to 10% of the search space
+                self%nnn = max(nint(0.1 * real(self%nspace)), NPEAKS2REFINE)
+            endif
         endif
         !>>> END, IMAGE-PROCESSING-RELATED
-
         ! set global pointer to instance
         ! first touch policy here
         if( .not. associated(params_glob) ) params_glob => self
