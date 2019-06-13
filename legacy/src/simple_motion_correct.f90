@@ -4,8 +4,10 @@ module simple_motion_correct
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_ft_expanded,           only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_motion_anisocor,       only: motion_anisocor, POLY_DIM
 use simple_motion_patched,        only: motion_patched, PATCH_PDIM
 use simple_motion_patched_direct, only: motion_patched_direct
+use simple_motion_anisocor_dbl,   only: motion_anisocor_dbl
 use simple_motion_align_iso,      only: motion_align_iso
 use simple_image,                 only: image
 use simple_parameters,            only: params_glob
@@ -16,7 +18,8 @@ use simple_starfile_wrappers
 implicit none
 
 public :: motion_correct_iso, motion_correct_iso_calc_sums, motion_correct_iso_calc_sums_tomo, motion_correct_iso_kill
-public :: motion_correct_with_patched, motion_correct_kill_common
+public :: motion_correct_aniso, motion_correct_aniso_calc_sums, motion_correct_aniso_kill, motion_correct_kill_common
+public :: motion_correct_with_aniso, motion_correct_with_patched
 public :: motion_correct_patched, motion_correct_patched_calc_sums, motion_correct_patched_kill
 public :: shifts_toplot, patched_polyn, ldim_orig
 public :: patched_shift_fname, mc_starfile, mc_starfile_fname
@@ -26,6 +29,11 @@ private
 interface motion_correct_iso_calc_sums
     module procedure motion_correct_iso_calc_sums_1
     module procedure motion_correct_iso_calc_sums_2
+end interface
+
+interface motion_correct_aniso_calc_sums
+    module procedure motion_correct_aniso_calc_sums_1
+    module procedure motion_correct_aniso_calc_sums_2
 end interface
 
 interface motion_correct_patched_calc_sums
@@ -46,9 +54,16 @@ type(motion_patched)        :: motion_patch
 type(motion_patched_direct) :: motion_patch_direct
 type(image),            allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
 
+! data structures for anisotropic correction
+class(motion_anisocor), allocatable :: motion_aniso(:)
+type(image),            allocatable :: movie_frames_shifted_aniso(:) !< shifted movie frames
+type(image),            allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
+type(image),            allocatable :: movie_sum_global_threads(:)   !< array of global movie sums for parallel refinement (image)
+real(dp),               allocatable :: opt_shifts_aniso(:,:)         !< optimal anisotropic shifts identified
+real,                   allocatable :: opt_shifts_aniso_sp(:,:)      !< optimal anisotropic shifts identified, single precision
+real(dp),               allocatable :: opt_shifts_aniso_saved(:,:)   !< optimal anisotropic shifts for local opt saved
+
 ! data structures used by both isotropic, anisotropic & patch-based correction
-type(image), allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
-type(image), allocatable :: movie_sum_global_threads(:)   !< array of global movie sums for parallel refinement
 type(image), allocatable :: movie_frames_shifted(:)      !< shifted movie frames
 type(image)              :: movie_sum_global             !< global movie sum for output
 real,        allocatable :: corrs(:)                     !< per-frame correlations
@@ -72,16 +87,19 @@ real    :: corr_saved     = 0.       !< opt corr for local opt saved
 real    :: kV             = 300.     !< acceleration voltage
 real    :: dose_rate      = 0.       !< dose rate
 real    :: nsig_here      = 5.0      !< nr of sigmas (for outlier removal)
-logical :: do_dose_weight              = .false.  !< dose weight or not
-logical :: do_scale                    = .false.  !< scale or not
-logical :: motion_correct_with_patched = .false.  !< run patch-based aniso or not
+logical :: do_dose_weight = .false.  !< dose weight or not
+logical :: do_scale       = .false.  !< scale or not
+logical :: motion_correct_with_aniso     = .false.  !< run aniso or not
+logical :: motion_correct_with_patched   = .false.  !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
 character(len=:), allocatable :: mc_starfile_fname      !< file name for starfile rel. to motion correct
-type(starfile_table_type)     :: mc_starfile            !< starfile for motion correct output
+type(starfile_table_type) :: mc_starfile                !< starfile for motion correct output
 
 ! module global constants
 integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
+integer, parameter :: MITSREF_ANISO  = 9       !< max # iterations of anisotropic refinement optimisation
 real,    parameter :: SMALLSHIFT     = 1.      !< small initial shift to blur out fixed pattern noise
+logical, parameter :: ANISO_DBL      = .true.  !< use double-precision for anisotropic motion correct?
 logical, parameter :: PATCHED_DIRECT = .false. !< use direct patch-based motion correct (if patch-based motion correct activated)
 logical, parameter :: FITSHIFTS      = .false.  !< whether to fit optimized shifts at each iteration
 
@@ -127,6 +145,7 @@ contains
         smpd        = ctfvars%smpd
         smpd_scaled = ctfvars%smpd/params_glob%scale
         ! set fixed frame (all others are shifted by reference to this at 0,0)
+        ! fixed_frame = nint(real(nframes)/2.) align the frames wrt the central one
         fixed_frame = 1                       !align the frames wrt the first one
         ! set reslims
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
@@ -140,9 +159,11 @@ contains
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 1; simple_motion_correct')
         allocate( shifts_toplot(nframes, 2), source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 2; simple_motion_correct')
-        if ( motion_correct_with_patched ) then
+        if ( motion_correct_with_aniso ) then
             allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
+        end if
+        if ( motion_correct_with_patched ) then
             allocate( patched_polyn(2*PATCH_PDIM), source=0._dp, stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         end if
@@ -415,7 +436,7 @@ contains
         ! save the isotropically corrected movie stack to disk for anisotropic movie alignment
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%ifft
-            if (motion_correct_with_patched) then
+            if (motion_correct_with_aniso) then
                 movie_frames_shifted_saved(iframe) = movie_frames_shifted(iframe)
             end if
         end do
@@ -469,10 +490,215 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_correct_iso_kill
 
+    ! PUBLIC METHODS, ANISOTROPIC MOTION CORRECTION
 
-    ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
+    !> anisotropic motion_correction of DDD movie
+    subroutine motion_correct_aniso( shifts )
+        real, allocatable, intent(out) :: shifts(:,:) !< the nframes polynomial models identifie
+        real    :: corr, cxy(POLY_DIM + 1), ave, sdev, var, minw, maxw, corr_prev, frac_improved, corrfrac
+        real    :: scale, smpd4scale
+        integer :: iframe, nimproved, i, ldim4scale(3)
+        logical :: didsave, err_stat, doscale
+        real(dp):: acorr, aregu
+        smpd4scale = params_glob%lpstop / 3.
+        doscale = .false.
+        if( smpd4scale > params_glob%smpd )then
+            doscale = .true.
+            scale   = smpd_scaled / smpd4scale
+            ldim4scale(1) = round2even(scale * real(ldim_scaled(1)))
+            ldim4scale(2) = round2even(scale * real(ldim_scaled(2)))
+            ldim4scale(3) = 1
+        else
+            ldim4scale = ldim_scaled
+            smpd4scale = smpd_scaled
+        endif
+        if( allocated(shifts) ) deallocate(shifts)
+        ! construct
+        if (ANISO_DBL) then
+            allocate(motion_anisocor_dbl :: motion_aniso(nframes))
+        else
+            !allocate(motion_anisocor_sgl :: motion_aniso(nframes))
+        end if
+        allocate(movie_frames_shifted_aniso(nframes), movie_sum_global_threads(nframes),&
+            &opt_shifts_aniso(nframes,POLY_DIM), opt_shifts_aniso_sp(nframes,POLY_DIM), &
+            &opt_shifts_aniso_saved(nframes,POLY_DIM), shifts(nframes,POLY_DIM))
+        opt_shifts_aniso       = 0._dp
+        opt_shifts_aniso_sp    = 0.
+        opt_shifts_aniso_saved = 0._dp
+        shifts                 = 0.
+        ! prepare the images for anisotropic correction by scaling & band-pass filtering & create motion_aniso objs
+        do iframe=1,nframes
+            call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
+            call movie_frames_shifted(iframe)%copy(movie_frames_shifted_saved(iframe))
+            call movie_frames_shifted(iframe)%fft
+            if( doscale ) call movie_frames_shifted(iframe)%clip_inplace(ldim4scale)
+            call movie_frames_shifted(iframe)%bp(hp, lp)
+            call movie_frames_shifted(iframe)%ifft
+            call movie_sum_global_threads(iframe)%new(ldim4scale, smpd4scale, wthreads=.false.)
+            call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted(iframe))
+            call motion_aniso(iframe)%new
+        end do
+        call ftexp_transfmat_init(movie_frames_shifted(1))
+        ! generate first average
+        call gen_aniso_wsum_calc_corrs(0)
+        ! calc avg corr to weighted avg
+        corr = sum(corrs)/real(nframes)
+        write(logfhandle,'(a)') '>>> ANISOTROPIC REFINEMENT'
+        corr_saved = -1.
+        didsave    = .false.
+        PRINT_NEVALS = .false.
+        do i=1,MITSREF_ANISO
+            nimproved = 0
+            !$omp parallel do schedule(static) default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
+            do iframe=1,nframes
+                ! subtract the movie frame being correlated to reduce bias
+                call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
+                ! optimise deformation
+                cxy = real(motion_aniso(iframe)%minimize(ref=movie_sum_global_threads(iframe), &
+                    frame=movie_frames_shifted(iframe), corr=acorr, regu=aregu))
+                ! update parameter arrays
+                opt_shifts_aniso(iframe,:) = cxy(2:POLY_DIM + 1)
+                ! apply deformation
+                call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
+                    frame_in=movie_frames_shifted(iframe), frame_out=movie_frames_shifted_aniso(iframe)) !revisit this
+                ! no need to add the frame back to the weighted sum since the sum will be updated after the loop
+                ! (see below)
+            end do
+            !$omp end parallel do
+            corr_prev = corr
+            call gen_aniso_wsum_calc_corrs(i)
+            frac_improved = real(nimproved) / real(nframes) * 100.
+            write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', frac_improved
+            corr = sum(corrs) / real(nframes)
+            if( corr >= corr_saved )then ! save the local optimum
+                corr_saved             = corr
+                opt_shifts_aniso_saved = opt_shifts_aniso
+                frameweights_saved     = frameweights
+                didsave                = .true.
+            endif
+            corrfrac = corr_prev / corr
+            if( nimproved == 0 .and. i > 2 )  exit
+            if( i > 5 .and. corrfrac > 0.9999 ) exit
+        end do
+        PRINT_NEVALS = .false.
+        ! put the best local optimum back
+        corr             = corr_saved
+        opt_shifts_aniso = opt_shifts_aniso_saved
+        frameweights     = frameweights_saved
+        ! output shifts
+        if( allocated(shifts) ) deallocate(shifts)
+        opt_shifts_aniso_sp = real(opt_shifts_aniso)
+        allocate(shifts(nframes,POLY_DIM), source=opt_shifts_aniso_sp)
+        ! print
+        if( corr < 0. )then
+            write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+            THROW_WARN('OPTIMAL CORRELATION < 0.0')
+        endif
+        call moment(frameweights, ave, sdev, var, err_stat)
+        minw = minval(frameweights)
+        maxw = maxval(frameweights)
+        write(logfhandle,'(a,7x,f7.4)') '>>> AVERAGE WEIGHT :', ave
+        write(logfhandle,'(a,7x,f7.4)') '>>> SDEV OF WEIGHTS:', sdev
+        write(logfhandle,'(a,7x,f7.4)') '>>> MIN WEIGHT     :', minw
+        write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
+        ! put back the unfiltered isotropically corrected frames for final anisotropic sum generation
+        do iframe=1,nframes
+            call movie_frames_shifted_aniso(iframe)%copy(movie_frames_shifted_saved(iframe))
+        end do
+        ! apply nonlinear transformations
+        !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
+        do iframe=1,nframes
+            call motion_aniso(iframe)%calc_T_out(opt_shifts_aniso(iframe,:), &
+                frame_in=movie_frames_shifted_saved(iframe), frame_out=movie_frames_shifted_aniso(iframe))
+        end do
+        !$omp end parallel do
+        ! we do not destruct search objects here (needed for sum production)
 
-    !> patch-based motion_correction of DDD movie
+    contains
+
+        subroutine gen_aniso_wsum_calc_corrs( imode )
+            integer, intent(in) :: imode
+            real, allocatable   :: rmat(:,:,:), rmat_sum(:,:,:)
+            real    :: corr
+            allocate( rmat(ldim4scale(1),ldim4scale(2),1), rmat_sum(ldim4scale(1),ldim4scale(2),1), source=0. )
+            nimproved = 0
+            ! FIRST LOOP TO OBTAIN WEIGHTED SUM
+            !$omp parallel default(shared) private(iframe,rmat,corr) proc_bind(close)
+            !$omp do schedule(static) reduction(+:rmat_sum)
+            do iframe=1,nframes
+                call movie_frames_shifted_aniso(iframe)%get_rmat_sub(rmat)
+                rmat_sum = rmat_sum + rmat * frameweights(iframe)
+            end do
+            !$omp end do
+            ! SECOND LOOP TO UPDATE movie_sum_global_threads AND CALCULATE CORRS
+            !$omp do schedule(static) reduction(+:nimproved)
+            do iframe=1,nframes
+                ! update array of sums (for future parallel exec)
+                call movie_sum_global_threads(iframe)%set_rmat(rmat_sum)
+                ! subtract the movie frame being correlated to reduce bias
+                call movie_sum_global_threads(iframe)%subtr(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
+                ! calc corr
+                if( imode == 0 )then
+                    corrs(iframe) = movie_frames_shifted_aniso(iframe)%real_corr(movie_sum_global_threads(iframe))
+                else
+                    corr = movie_frames_shifted_aniso(iframe)%real_corr(movie_sum_global_threads(iframe))
+                    if( corr > corrs(iframe) ) nimproved = nimproved + 1
+                    corrs(iframe) = corr
+                endif
+                ! add the subtracted movie frame back to the weighted sum
+                call movie_sum_global_threads(iframe)%add(movie_frames_shifted_aniso(iframe), w=frameweights(iframe))
+            end do
+            !$omp end do
+            !$omp end parallel
+            ! update frame weights
+            frameweights = corrs2weights(corrs)
+        end subroutine gen_aniso_wsum_calc_corrs
+
+    end subroutine motion_correct_aniso
+
+    subroutine motion_correct_aniso_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
+        call gen_aniso_sum(scalar_weight=1./real(nframes))
+        movie_sum_ctf = movie_sum_global
+        ! re-calculate the weighted sum
+        call gen_aniso_sum
+        movie_sum_corrected = movie_sum_global
+    end subroutine motion_correct_aniso_calc_sums_1
+
+    subroutine motion_correct_aniso_calc_sums_2( movie_sum_corrected, fromto )
+        type(image), intent(inout) :: movie_sum_corrected
+        integer,     intent(in)  :: fromto(2)
+        logical :: l_tmp
+        ! re-calculate the weighted sum with dose_weighting turned off
+        l_tmp = do_dose_weight
+        do_dose_weight = .false.
+        call gen_aniso_sum(fromto=fromto)
+        movie_sum_corrected = movie_sum_global
+        do_dose_weight = l_tmp
+    end subroutine motion_correct_aniso_calc_sums_2
+
+    subroutine motion_correct_aniso_kill
+        integer :: iframe
+        if( allocated(movie_frames_shifted_aniso) )then
+            do iframe=1,size(movie_frames_shifted_aniso)
+                call motion_aniso(iframe)%kill
+                call movie_frames_shifted_aniso(iframe)%kill
+                call movie_sum_global_threads(iframe)%kill
+                call movie_frames_shifted_saved(iframe)%kill
+            end do
+            deallocate(motion_aniso, movie_frames_shifted_aniso, movie_sum_global_threads, movie_frames_shifted_saved)
+        endif
+        if( allocated(opt_shifts_aniso)       ) deallocate(opt_shifts_aniso)
+        if( allocated(opt_shifts_aniso_sp)    ) deallocate(opt_shifts_aniso_sp)
+        if( allocated(opt_shifts_aniso_saved) ) deallocate(opt_shifts_aniso_saved)
+        call ftexp_transfmat_kill
+    end subroutine motion_correct_aniso_kill
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
+
+   !> patch-based motion_correction of DDD movie
     subroutine motion_correct_patched
         real(dp), allocatable :: poly(:,:)
         real    :: scale, smpd4scale
@@ -499,7 +725,7 @@ contains
             smpd4scale = smpd_scaled
         endif
         allocate(movie_frames_shifted_patched(nframes), movie_sum_global_threads(nframes))
-        ! prepare the images for patch-based correction by scaling & band-pass filtering
+        ! prepare the images for patch-based correction by scaling & band-pass filtering & create motion_aniso objs
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%new(ldim_scaled, smpd_scaled)
             call movie_frames_shifted(iframe)%copy(movie_frames_shifted_saved(iframe))
@@ -558,8 +784,7 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
 
-
-    ! PUBLIC COMMON DESTRUCTOR
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     subroutine motion_correct_kill_common
         integer :: iframe
@@ -579,8 +804,7 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_correct_kill_common
 
-
-    ! PRIVATE UTILITY METHODS, ISO
+    ! PRIVATE UTILITY METHODS, ISO FIRST THEN ANISO
 
     subroutine sum_movie_frames( shifts )
         real, intent(in), optional :: shifts(nframes,2)
@@ -685,6 +909,41 @@ contains
             filtarr(:,k) = filtarr(:,k) / sqrt(ksum_sq / sum(frameweights))
         enddo
     end subroutine gen_dose_weight_filter
+
+    ! PRIVATE UTILITY METHODS, ANISO
+
+    subroutine gen_aniso_sum( fromto, scalar_weight )
+        integer, optional, intent(in) :: fromto(2)
+        real,    optional, intent(in) :: scalar_weight
+        real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:), filtarr(:,:)
+        integer :: iframe, ffromto(2)
+        logical :: l_w_scalar
+        ffromto(1) = 1
+        ffromto(2) = nframes
+        if( present(fromto) ) ffromto = fromto
+        l_w_scalar = present(scalar_weight)
+        call movie_sum_global%new(ldim_scaled, smpd_scaled)
+        if( do_dose_weight )then
+            call gen_dose_weight_filter(filtarr)
+        endif
+        allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
+        !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
+        do iframe=ffromto(1),ffromto(2)
+            if( do_dose_weight )then
+                call movie_frames_shifted_aniso(iframe)%fft
+                call movie_frames_shifted_aniso(iframe)%apply_filter_serial(filtarr(iframe,:))
+                call movie_frames_shifted_aniso(iframe)%ifft
+            endif
+            call movie_frames_shifted_aniso(iframe)%get_rmat_sub(rmat)
+            if( l_w_scalar )then
+                rmat_sum = rmat_sum + rmat * scalar_weight
+            else
+                rmat_sum = rmat_sum + rmat * frameweights(iframe)
+            endif
+        end do
+        !$omp end parallel do
+        call movie_sum_global%set_rmat(rmat_sum)
+    end subroutine gen_aniso_sum
 
     ! PRIVATE UTILITY METHODS, PATCH-BASED
 

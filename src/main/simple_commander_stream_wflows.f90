@@ -52,7 +52,7 @@ contains
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
         logical                                :: l_pick
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
-        call cline%set('numlen', real(5))
+        call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! master parameters
         call params%new(cline)

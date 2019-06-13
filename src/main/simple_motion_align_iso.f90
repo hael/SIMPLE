@@ -212,7 +212,7 @@ contains
             ! updates shifts & weights
             if( self%fitshifts )then
                 if( (self%lp-params_glob%lpstop < 0.01) )then
-                    self%trs = self%smallshift
+                    ! turns off fitting
                 else
                     call self%recenter_shifts(self%opt_shifts)
                     call self%fit_polynomial
