@@ -226,7 +226,7 @@ contains
             !>  import previous run to the current project based on past single project files
             subroutine import_prev_streams
                 use simple_ori, only: ori
-                type(ori) :: o
+                type(ori) :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
                 integer :: iproj,nprojs,nptcls,cnt
@@ -254,17 +254,23 @@ contains
                     call movefile2folder('mceps', output_dir_motion_correct, o, err)
                     call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)
                     call movefile2folder('ctfdoc', output_dir_ctf_estimate, o, err)
-                    ! import mic segment
-                    call stream_spproj%os_mic%set_ori(1, o)
-                    call spproj%append_project(stream_spproj, 'mic')
-                    ! import stk segment
-                    if( l_pick )then
+                    if( .not.l_pick )then
+                        ! import mic segment
+                        call stream_spproj%os_mic%set_ori(1, o)
+                        call spproj%append_project(stream_spproj, 'mic')
+                    else
+                        ! import mic & stk segment
                         call movefile2folder('boxfile', output_dir_picker, o, err)
+                        call stream_spproj%os_mic%set_ori(1, o)
+                        call spproj%append_project(stream_spproj, 'mic')
                         if( .not.err )then
-                            call movefile2folder('stk', output_dir_extract, o, err)
-                            if( .not.err )then
-                                call stream_spproj%os_mic%set_ori(1, o)
-                                call spproj%append_project(stream_spproj, 'stk')
+                            if( stream_spproj%os_stk%get_noris() == 1 )then
+                                call stream_spproj%os_stk%get_ori(1, o_stk)
+                                call movefile2folder('stk', output_dir_extract, o_stk, err)
+                                if( .not.err )then
+                                    call stream_spproj%os_stk%set_ori(1, o_stk)
+                                    call spproj%append_project(stream_spproj, 'stk')
+                                endif
                             endif
                         endif
                     endif
@@ -280,6 +286,8 @@ contains
                     ! cleanup
                     call stream_spproj%kill
                 enddo
+                call o%kill
+                call o_stk%kill
                 write(*,'(A,I3)')'>>> IMPORTED PREVIOUS PROCESSED MOVIES: ', cnt
             end subroutine import_prev_streams
 
@@ -301,15 +309,12 @@ contains
                     err = .true.
                     return
                 endif
-                dest = trim(folder)//'/'//basename(src)
-                !iostat = rename(src,dest)
-                call simple_copy_file(src,dest)
-                ! should move files rather than copy after full test
-                ! if( iostat /= 0 )then
-                !     THROW_WARN('Ignoring '//trim(src))
-                !     err = .true.
-                !     return
-                ! endif
+                dest   = trim(folder)//'/'//basename(src)
+                iostat = rename(src,dest)
+                if( iostat /= 0 )then
+                    THROW_WARN('Ignoring '//trim(src))
+                    return
+                endif
                 call make_relativepath(CWD_GLOB,dest,reldest)
                 call o%set(key,reldest)
             end subroutine movefile2folder

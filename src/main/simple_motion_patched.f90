@@ -67,8 +67,6 @@ contains
     procedure, private                  :: fit_polynomial
     procedure, private                  :: get_local_shift
     procedure, private                  :: apply_polytransfo
-    procedure, private                  :: write_shifts
-    procedure, private                  :: write_shifts_for_fit
     procedure, private                  :: write_polynomial
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
@@ -385,57 +383,6 @@ contains
         end function interp_bilin
 
     end subroutine apply_polytransfo
-
-    ! write the shifts to disk
-    subroutine write_shifts( self )
-        class(motion_patched), intent(inout) :: self
-        integer :: i,j
-        open(123, file='shifts.txt')
-        write (123,*) 'shifts_x=[...'
-        do i = 1, NX_PATCHED
-            do j = 1, NY_PATCHED
-                write (123,'(A)',advance='no') real2str(self%shifts_patches(2,1,i,j))
-                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
-            end do
-            if (i < NX_PATCHED) write (123,*) '; ...'
-        end do
-        write (123,*) '];'
-        write (123,*) 'shifts_y=[...'
-        do i = 1, NX_PATCHED
-            do j = 1, NY_PATCHED
-                write (123,'(A)',advance='no') real2str(self%shifts_patches(3,1,i,j))
-                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
-            end do
-            if (i < NX_PATCHED) write (123,*) '; ...'
-        end do
-        write (123,*) '];'
-        close(123)
-    end subroutine write_shifts
-
-    subroutine write_shifts_for_fit( self )
-        class(motion_patched), intent(inout) :: self
-        integer :: i,j
-        open(123, file='shifts_for_fit.txt')
-        write (123,*) 'shiftsff_x=[...'
-        do i = 1, NX_PATCHED
-            do j = 1, NY_PATCHED
-                write (123,'(A)',advance='no') real2str(self%shifts_patches_for_fit(2,1,i,j))
-                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
-            end do
-            if (i < NX_PATCHED) write (123,*) '; ...'
-        end do
-        write (123,*) '];'
-        write (123,*) 'shiftsff_y=[...'
-        do i = 1, NX_PATCHED
-            do j = 1, NY_PATCHED
-                write (123,'(A)',advance='no') real2str(self%shifts_patches_for_fit(3,1,i,j))
-                if (j < NY_PATCHED) write (123,'(A)',advance='no') ', '
-            end do
-            if (i < NX_PATCHED) write (123,*) '; ...'
-        end do
-        write (123,*) '];'
-        close(123)
-    end subroutine write_shifts_for_fit
 
     subroutine allocate_fields( self )
         class(motion_patched), intent(inout) :: self

@@ -161,6 +161,7 @@ contains
                 call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, patched_polyn(i))
             end do
             call starfile_table__write_ofile(mc_starfile)
+            ! cleanup
             call motion_correct_patched_kill
         endif
         ! generate power-spectra
@@ -207,6 +208,10 @@ contains
         call starfile_table__delete(mc_starfile)
         call make_relativepath(CWD_GLOB,mc_starfile_fname,rel_fname)
         call orientation%set("mc_starfile",rel_fname)
+        if( DO_PATCHED )then
+            call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
+            call orientation%set('mceps', rel_fname)
+        endif
         call motion_correct_kill_common
         ! deallocate
         if( allocated(shifts_toplot)) deallocate(shifts_toplot)

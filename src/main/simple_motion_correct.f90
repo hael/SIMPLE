@@ -44,7 +44,7 @@ logical                          :: didupdateres
 ! data structures for patch-based motion correction
 type(motion_patched)        :: motion_patch
 type(motion_patched_direct) :: motion_patch_direct
-type(image),            allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
+type(image),    allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
 
 ! data structures used by both isotropic, anisotropic & patch-based correction
 type(image), allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
