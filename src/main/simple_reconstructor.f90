@@ -509,16 +509,18 @@ contains
     !>  from Pipe & Menon 1999
     subroutine sampl_dens_correct( self, do_gridcorr )
         use simple_gridding, only: mul_w_instr
-        class(reconstructor), intent(inout) :: self
-        logical, optional,    intent(in)    :: do_gridcorr
+        class(reconstructor),    intent(inout) :: self
+        logical, optional,       intent(in)    :: do_gridcorr
+        complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
+        complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
+        complex, parameter :: one   = cmplx(1.,0.)
+        complex, parameter :: zero  = cmplx(0.,0.)
         type(kbinterpol)   :: kbwin
         type(image)        :: W_img, Wprev_img
         real, allocatable  :: antialw(:)
         real               :: winsz, val_prev, val, invrho, rsh_sq, w
-        integer            :: h, k, m, phys(3), iter, sh
-        complex, parameter :: one   = cmplx(1.,0.)
-        complex, parameter :: zero  = cmplx(0.,0.)
-        logical            :: l_gridcorr
+        integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
+        logical            :: l_gridcorr, l_lastiter
         ! kernel
         winsz   = max(1., 2.*self%kbwin%get_winsz())
         kbwin   = kbinterpol(winsz, self%alpha)
@@ -527,64 +529,59 @@ contains
         if( present(do_gridcorr) ) l_gridcorr = do_gridcorr
         l_gridcorr = l_gridcorr .and. (GRIDCORR_MAXITS > 0)
         if( l_gridcorr )then
+            cmat_shape = self%get_array_shape()
             call W_img%new(self%ldim_img, self%get_smpd())
             call Wprev_img%new(self%ldim_img, self%get_smpd())
             call W_img%set_ft(.true.)
             call Wprev_img%set_ft(.true.)
-            ! redundant parallel initialisation because the First Touch policy of OpenMP
-            ! distributes the pages over the memory of the system to allow better cache
-            ! utilisation
+            call W_img%get_cmat_ptr(cmatW)
+            call Wprev_img%get_cmat_ptr(cmatWprev)
             !$omp parallel do collapse(3) default(shared) schedule(static)&
-            !$omp private(h,k,m,phys) proc_bind(close)
-            do h = self%lims(1,1),self%lims(1,2)
-                do k = self%lims(2,1),self%lims(2,2)
-                    do m = self%lims(3,1),self%lims(3,2)
-                        phys  = W_img%comp_addr_phys(h,k,m )
-                        call W_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
-                        call Wprev_img%set_cmat_at(phys(1),phys(2),phys(3), zero)
+            !$omp private(i,j,l) proc_bind(close)
+            do l = 1,cmat_shape(3)
+                do j = 1,cmat_shape(2)
+                    do i = 1,cmat_shape(1)
+                        ! init
+                        cmatWprev(i,j,l) = one
+                        ! W <- W * rho
+                        cmatW(i,j,l) = cmplx(self%rho(i,j,l),0.)
                     end do
                 end do
             end do
             !$omp end parallel do
-            W_img = one ! weights init to 1.
             do iter = 1, GRIDCORR_MAXITS
-                Wprev_img = W_img
-                ! W <- W * rho
-                !$omp parallel do collapse(3) default(shared) schedule(static)&
-                !$omp private(h,k,m,phys) proc_bind(close)
-                do h = self%lims(1,1),self%lims(1,2)
-                    do k = self%lims(2,1),self%lims(2,2)
-                        do m = self%lims(3,1),self%lims(3,2)
-                            phys  = W_img%comp_addr_phys( h,k,m )
-                            call W_img%mul_cmat_at(phys(1),phys(2),phys(3), self%rho(phys(1),phys(2),phys(3)))
-                        end do
-                    end do
-                end do
-                !$omp end parallel do
+                l_lastiter = (iter == GRIDCORR_MAXITS)
                 ! W <- (W / rho) x kernel
                 call W_img%ifft()
                 call mul_w_instr(W_img, kbwin)
                 call W_img%fft()
-                ! W <- Wprev / ((W/ rho) x kernel)
-                !$omp parallel do collapse(3) default(shared) schedule(static)&
-                !$omp private(h,k,m,phys,val,val_prev) proc_bind(close)
-                do h = self%lims(1,1),self%lims(1,2)
-                    do k = self%lims(2,1),self%lims(2,2)
-                        do m = self%lims(3,1),self%lims(3,2)
-                            phys     = W_img%comp_addr_phys(h, k, m)
-                            val      = mycabs(W_img%get_cmat_at(phys(1), phys(2), phys(3)))   !! ||C|| == ||C*||
-                            val_prev = real(Wprev_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
+                !$omp parallel do default(shared) private(i,j,l,val,val_prev) proc_bind(close)&
+                !$omp collapse(3) schedule(static)
+                do l = 1,cmat_shape(3)
+                    do j = 1,cmat_shape(2)
+                        do i = 1,cmat_shape(1)
+                            ! W <- Wprev / ((W / rho) x kernel)
+                            val      = mycabs(cmatW(i,j,l))
                             if( val > 1.0e38 )then
-                                val = 0.
+                                cmatW(i,j,l) = zero
                             else
-                                val = min(val_prev/val, 1.e20)
+                                val_prev     = real(cmatWprev(i,j,l))
+                                cmatW(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
                             endif
-                            call W_img%set_cmat_at( phys(1),phys(2),phys(3), cmplx(val, 0.))
+                            if( l_lastiter )then
+                                cycle
+                            else
+                                ! W <- W * rho
+                                cmatWprev(i,j,l) = cmatW(i,j,l)
+                                cmatW(i,j,l)     = self%rho(i,j,l)*cmatW(i,j,l)
+                            endif
                         end do
                     end do
                 end do
                 !$omp end parallel do
             enddo
+            nullify(cmatW)
+            nullify(cmatWprev)
             call Wprev_img%kill
             ! Fourier comps / rho
             !$omp parallel do collapse(3) default(shared) schedule(static)&
