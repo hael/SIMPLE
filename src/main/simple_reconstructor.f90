@@ -628,6 +628,130 @@ contains
         endif
     end subroutine sampl_dens_correct
 
+    !>  is for uneven distribution of orientations correction
+    !>  from Pipe & Menon 1999
+    subroutine sampl_dens_correct_hans( self, do_gridcorr )
+        use simple_gridding, only: mul_w_instr
+        class(reconstructor),    intent(inout) :: self
+        logical, optional,       intent(in)    :: do_gridcorr
+        complex(kind=c_float_complex), pointer :: cmatW(:,:,:)    =>null()
+        complex(kind=c_float_complex), pointer :: cmatWprev(:,:,:)=>null()
+        complex, parameter :: one   = cmplx(1.,0.)
+        complex, parameter :: zero  = cmplx(0.,0.)
+        type(kbinterpol)   :: kbwin
+        type(image)        :: W_img, Wprev_img
+        real, allocatable  :: antialw(:)
+        real               :: winsz, val_prev, val, invrho, rsh_sq, w
+        integer            :: h,k,m, phys(3), iter, sh, cmat_shape(3), i,j,l
+        logical            :: l_gridcorr, l_lastiter
+        ! kernel
+        winsz   = max(1., 2.*self%kbwin%get_winsz())
+        kbwin   = kbinterpol(winsz, self%alpha)
+        antialw = self%hannw()
+        l_gridcorr = .true.
+        if( present(do_gridcorr) ) l_gridcorr = do_gridcorr
+        l_gridcorr = l_gridcorr .and. (GRIDCORR_MAXITS > 0)
+        if( l_gridcorr )then
+            cmat_shape = self%get_array_shape()
+            call W_img%new(self%ldim_img, self%get_smpd())
+            call Wprev_img%new(self%ldim_img, self%get_smpd())
+            call W_img%set_ft(.true.)
+            call Wprev_img%set_ft(.true.)
+            call W_img%get_cmat_ptr(cmatW)
+            call Wprev_img%get_cmat_ptr(cmatWprev)
+            !$omp parallel default(shared) private(i,j,l,val,val_prev,h,k,m,phys,rsh_sq,sh,invrho,w) proc_bind(close)
+            !$omp do collapse(3) schedule(static)
+            do l = 1,cmat_shape(3)
+                do j = 1,cmat_shape(2)
+                    do i = 1,cmat_shape(1)
+                        ! init
+                        cmatWprev(i,j,l) = one
+                        ! W <- W * rho
+                        cmatW(i,j,l) = cmplx(self%rho(i,j,l),0.)
+                    end do
+                end do
+            end do
+            !$omp end do nowait
+            do iter = 1, GRIDCORR_MAXITS
+                !$omp single
+                l_lastiter = (iter == GRIDCORR_MAXITS)
+                ! W <- (W / rho) x kernel
+                call W_img%ifft()
+                call mul_w_instr(W_img, kbwin)
+                call W_img%fft()
+                !$omp end single nowait
+                !$omp do collapse(3) schedule(static)
+                do l = 1,cmat_shape(3)
+                    do j = 1,cmat_shape(2)
+                        do i = 1,cmat_shape(1)
+                            ! W <- Wprev / ((W / rho) x kernel)
+                            val      = mycabs(cmatW(i,j,l))
+                            if( val > 1.0e38 )then
+                                cmatW(i,j,l) = zero
+                            else
+                                val_prev     = real(cmatWprev(i,j,l))
+                                cmatW(i,j,l) = cmplx(min(val_prev/val, 1.e20),0.)
+                            endif
+                            if( l_lastiter )then
+                                cycle
+                            else
+                                ! W <- W * rho
+                                cmatWprev(i,j,l) = cmatW(i,j,l)
+                                cmatW(i,j,l)     = self%rho(i,j,l)*cmatW(i,j,l)
+                            endif
+                        end do
+                    end do
+                end do
+                !$omp end do nowait
+            enddo
+            ! Fourier comps / rho
+            !$omp do collapse(3) schedule(static)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        rsh_sq = real(h*h + k*k + m*m)
+                        sh     = nint(sqrt(rsh_sq))
+                        phys   = W_img%comp_addr_phys(h, k, m)
+                        if( sh > self%sh_lim )then
+                            ! outside Nyqvist, zero
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                        else
+                            w = antialw(max(1,abs(h)))*antialw(max(1,abs(k)))*antialw(max(1,abs(m)))
+                            invrho = real(W_img%get_cmat_at(phys(1), phys(2), phys(3))) !! Real(C) == Real(C*)
+                            call self%mul_cmat_at(phys(1),phys(2),phys(3),invrho * w)
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end do nowait
+            !$omp end parallel
+            ! cleanup
+            nullify(cmatW)
+            nullify(cmatWprev)
+            call Wprev_img%kill
+            call W_img%kill
+        else
+            ! division by rho
+            !$omp parallel do collapse(3) default(shared) schedule(static)&
+            !$omp private(h,k,m,phys,sh) proc_bind(close)
+            do h = self%lims(1,1),self%lims(1,2)
+                do k = self%lims(2,1),self%lims(2,2)
+                    do m = self%lims(3,1),self%lims(3,2)
+                        sh   = nint(sqrt(real(h*h + k*k + m*m)))
+                        phys = self%comp_addr_phys(h, k, m )
+                        if( sh > self%sh_lim )then
+                            ! outside Nyqvist, zero
+                            call self%set_cmat_at(phys(1),phys(2),phys(3), zero)
+                        else
+                            call self%div_cmat_at(phys, self%rho(phys(1),phys(2),phys(3)))
+                        endif
+                    end do
+                end do
+            end do
+            !$omp end parallel do
+        endif
+    end subroutine sampl_dens_correct_hans
+
     subroutine compress_exp( self )
         class(reconstructor), intent(inout) :: self
         integer :: phys(3), h, k, m
