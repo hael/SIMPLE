@@ -397,7 +397,6 @@ contains
         ! init command-lines
         call cline%delete('lp')
         call cline%delete('refine')
-        call cline%delete('eo')
         cline_cluster2D         = cline
         cline_cluster2D_buffer  = cline
         cline_make_cavgs        = cline
@@ -415,12 +414,10 @@ contains
         call cline_cluster2D_buffer%set('ptclw',     'no')
         call cline_cluster2D_buffer%delete('update_frac')
         if( l_greedy )then
-            call cline_cluster2D_buffer%set('eo',     'no')
             call cline_cluster2D_buffer%set('maxits', 10.)
             call cline_cluster2D_buffer%set('refine', 'greedy')
             call cline_cluster2D_buffer%set('lp',     GREEDY_TARGET_LP)
         else
-            call cline_cluster2D_buffer%set('eo','yes')
             call cline_cluster2D_buffer%set('maxits',    12.) ! guaranties 3 iterations with withdrawal
         endif
         ! pool classification
@@ -435,23 +432,15 @@ contains
         call cline_cluster2D%set('objfun',    'cc')
         if( .not.cline%defined('match_filt') ) call cline_cluster2D%set('match_filt','no')
         if( l_greedy )then
-            call cline_cluster2D%set('eo',     'no')
             call cline_cluster2D%set('center', 'no')
             call cline_cluster2D%set('refine', 'greedy')
             call cline_cluster2D%set('lp',     lp_greedy)
-        else
-            call cline_cluster2D%set('eo','yes')
         endif
         call cline_cluster2D%delete('update_frac')
         ! final averaging
         call cline_make_cavgs%set('prg', 'make_cavgs')
         call cline_make_cavgs%delete('autoscale')
         call cline_make_cavgs%delete('remap_cls')
-        if( l_greedy )then
-            call cline_make_cavgs%set('eo','no')
-        else
-            call cline_make_cavgs%set('eo','yes')
-        endif
         ! WAIT FOR FIRST STACKS
         nptcls_glob = 0
         do
@@ -661,7 +650,7 @@ contains
                 ncls_here       = buffer_proj%os_cls2D%get_noris()
                 boxmatch        = find_boxmatch(box, msk)
                 endit           = nint(cline_cluster2D_buffer%get_rarg('endit'))
-                refs_buffer     = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
+                refs_buffer     = trim(buffer_dir)//'/'//trim(CAVGS_ITER_FBODY)//int2str_pad(endit,3)//params%ext
                 allocate(cls_mask(ncls_here), source=.true.)
                 if( debug_here )then
                     ! variance
@@ -1080,7 +1069,7 @@ contains
                 enddo
                 ! transfer references to pool
                 endit       = nint(cline_cluster2D_buffer%get_rarg('endit'))
-                refs_buffer = trim(buffer_dir)//'/cavgs_iter'//int2str_pad(endit,3)//params%ext
+                refs_buffer = trim(buffer_dir)//'/'//trim(CAVGS_ITER_FBODY)//int2str_pad(endit,3)//params%ext
                 if( .not.l_maxed )then
                     if( ncls_glob == 0 )then
                         ! first time

@@ -139,9 +139,9 @@ contains
         call cavger_transf_oridat( build%spproj )
         call cavger_assemble_sums_from_parts()
         if( cline%defined('which_iter') )then
-            params%refs      = 'cavgs_iter'//int2str_pad(params%which_iter,3)//params%ext
-            params%refs_even = 'cavgs_iter'//int2str_pad(params%which_iter,3)//'_even'//params%ext
-            params%refs_odd  = 'cavgs_iter'//int2str_pad(params%which_iter,3)//'_odd'//params%ext
+            params%refs      = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//params%ext
+            params%refs_even = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_even'//params%ext
+            params%refs_odd  = trim(CAVGS_ITER_FBODY)//int2str_pad(params%which_iter,3)//'_odd'//params%ext
         else if( .not. cline%defined('refs') )then
             params%refs      = 'start2Drefs'//params%ext
             params%refs_even = 'start2Drefs_even'//params%ext

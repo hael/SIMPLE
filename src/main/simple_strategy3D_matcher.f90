@@ -443,11 +443,10 @@ contains
         type(ori) :: o_tmp
         real      :: xyz(3)
         integer   :: cnt, s, ind, iref, nrefs, imatch
-        logical   :: do_center, l_lpset
+        logical   :: do_center
         nrefs = params_glob%nspace * params_glob%nstates
-        l_lpset = cline%defined('lp')
         ! must be done here since params_glob%kfromto is dynamically set
-        if( l_lpset )then
+        if( params_glob%l_lpset )then
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask)
         else
             call pftcc%new(nrefs, [params_glob%fromp,params_glob%top], ptcl_mask,&
@@ -470,7 +469,7 @@ contains
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)
-            if( l_lpset )then
+            if( params_glob%l_lpset )then
                 ! low-pass set or multiple states
                 call preprefvol(pftcc, cline, s, params_glob%vols(s), do_center, xyz, .true.)
                 !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)

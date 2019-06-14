@@ -102,7 +102,6 @@ contains
         call cline_cluster2D1%set('center',     'no')
         call cline_cluster2D1%set('autoscale',  'no')
         call cline_cluster2D1%set('ptclw',      'no')
-        call cline_cluster2D1%set('eo',         'no')
         call cline_cluster2D1%delete('update_frac')
         ! second stage
         ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
@@ -113,7 +112,6 @@ contains
         call cline_cluster2D2%set('autoscale',  'no')
         call cline_cluster2D2%set('trs',         MINSHIFT)
         call cline_cluster2D2%set('objfun',     'cc')
-        call cline_cluster2D2%set('eo',         'no')
         if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
         if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
         ! Scaling

@@ -186,7 +186,7 @@ contains
         k_nyq = calc_fourier_index(2.*params_glob%smpd, params_glob%boxmatch, params_glob%smpd)
         ! High-pass index
         params_glob%kfromto(1) = max(2, calc_fourier_index(params_glob%hp, params_glob%boxmatch, params_glob%smpd))
-        if( cline%defined('lp') )then
+        if( params_glob%l_lpset )then
             lplim = params_glob%lp
             params_glob%kfromto(2) = calc_fourier_index(lplim, params_glob%boxmatch, params_glob%smpd)
         else
@@ -400,7 +400,7 @@ contains
                 if( present(xyz_out) ) xyz_out = xyz
             endif
         endif
-        ! anisotropic filter
+        ! filter
         call build_glob%projfrcs%frc_getter(icls, params_glob%hpind_fsc, params_glob%l_phaseplate, frc)
         if( any(frc > 0.143) )then
             call fsc2optlp_sub(build_glob%projfrcs%get_filtsz(), frc, filter)

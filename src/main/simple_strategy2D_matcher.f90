@@ -345,7 +345,7 @@ contains
                 do_center = (has_been_searched .and. (pop > MINCLSPOPLIM) .and. (which_iter > 2)&
                     &.and. .not.params_glob%l_frac_update)
                 call prep2Dref(pftcc, cavgs_merged(icls), match_imgs(icls), icls, center=do_center, xyz_out=xyz)
-                if( params_glob%l_eo )then
+                if( .not.params_glob%l_lpset )then
                     if( pop_even >= MINCLSPOPLIM .and. pop_odd >= MINCLSPOPLIM )then
                         ! here we are passing in the shifts and do NOT map them back to classes
                         call prep2Dref(pftcc, cavgs_even(icls), match_imgs(icls), icls, center=do_center, xyz_in=xyz)

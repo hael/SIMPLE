@@ -2690,7 +2690,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 4, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 3, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2705,10 +2705,9 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 3, objfun)
         call reconstruct3D%set_input('srch_ctrls', 4, sigma2_fudge)
         ! filter controls
-        call reconstruct3D%set_input('filt_ctrls', 1, eo)
-        call reconstruct3D%set_input('filt_ctrls', 2, projw)
-        call reconstruct3D%set_input('filt_ctrls', 3, rankw)
-        call reconstruct3D%set_input('filt_ctrls', 4, ptclw)
+        call reconstruct3D%set_input('filt_ctrls', 1, projw)
+        call reconstruct3D%set_input('filt_ctrls', 2, rankw)
+        call reconstruct3D%set_input('filt_ctrls', 3, ptclw)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)

@@ -67,7 +67,6 @@ contains
     procedure, private                  :: fit_polynomial
     procedure, private                  :: get_local_shift
     procedure, private                  :: apply_polytransfo
-    procedure, private                  :: write_polynomial
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
@@ -159,29 +158,6 @@ contains
         call svd_multifit(x,y,sig,a,v,w,chisq,patch_poly)
         self%poly_coeffs(:,2) = a
     end subroutine fit_polynomial
-
-    ! write the polynomials to disk for debugging purposes
-    subroutine write_polynomial( self, p, name, ind )
-        class(motion_patched),    intent(inout) :: self
-        real(dp),                 intent(in)    :: p(PATCH_PDIM)
-        character(len=*),         intent(in)    :: name
-        integer, intent(in) :: ind
-        integer :: i, cnt
-        logical :: exist
-        inquire(file="polynomial.txt", exist=exist)
-        if (exist) then
-            open(123, file="polynomial.txt", status="old", position="append", action="write")
-        else
-            open(123, file="polynomial.txt", status="new", action="write")
-        end if
-        !write (123,*) 'POLYNOMIAL, ' // name
-        cnt = (ind-1)*PATCH_PDIM-1
-        do i = 1, PATCH_PDIM
-            cnt = cnt + 1
-            write (123,'(A)') 'c(' // trim(int2str(cnt)) // ')=' // trim(dbl2str(p(i)))
-        end do
-        close(123)
-    end subroutine write_polynomial
 
     subroutine plot_shifts(self)
         class(motion_patched), intent(inout) :: self

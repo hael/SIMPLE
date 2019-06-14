@@ -83,7 +83,7 @@ type(starfile_table_type)     :: mc_starfile            !< starfile for motion c
 integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
 real,    parameter :: SMALLSHIFT     = 1.      !< small initial shift to blur out fixed pattern noise
 logical, parameter :: PATCHED_DIRECT = .false. !< use direct patch-based motion correct (if patch-based motion correct activated)
-logical, parameter :: FITSHIFTS      = .false.  !< whether to fit optimized shifts at each iteration
+logical, parameter :: FITSHIFTS      = .false. !< whether to fit optimized shifts at each iteration
 
 contains
 

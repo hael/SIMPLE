@@ -62,47 +62,48 @@ type :: motion_align_iso
     logical, public                                   :: existence        = .false.
 
 contains
-    procedure, private                                :: motion_align_iso_new
-    procedure, private                                :: motion_align_iso_align
-    procedure, private                                :: motion_align_iso_kill
-    procedure, private                                :: recenter_shifts                   !< put shifts rel. to fixed frame
-    procedure, private                                :: calc_frameweights                 !< compute new frameweights
-    procedure, private                                :: corrmat2weights
-    procedure, private                                :: allocate_fields
-    procedure, private                                :: deallocate_fields
-    procedure, private                                :: create_ftexp_objs
-    procedure, private                                :: fit_polynomial
-    procedure, private                                :: polynomial2shift
-    procedure                                         :: shift_wsum_and_calc_corrs         !< shift, sum and calculate new correlatons
-    procedure                                         :: new                  => motion_align_iso_new
-    procedure                                         :: align                => motion_align_iso_align
-    procedure                                         :: kill                 => motion_align_iso_kill
-    procedure                                         :: set_shsrch_tol       => motion_align_iso_set_shsrch_tol
-    procedure                                         :: set_frames           => motion_align_iso_set_frames
-    procedure                                         :: set_hp_lp            => motion_align_iso_set_hp_lp
-    procedure                                         :: set_trs              => motion_align_iso_set_trs
-    procedure                                         :: set_ftol_gtol        => motion_align_iso_set_ftol_gtol
-    procedure                                         :: set_smallshift       => motion_align_iso_set_smallshift
-    procedure                                         :: get_iter             => motion_align_iso_get_iter
-    procedure                                         :: set_weights          => motion_align_iso_set_weights
-    procedure                                         :: set_even_weights     => motion_align_iso_set_even_weights
-    procedure                                         :: get_weights          => motion_align_iso_get_weights
-    procedure                                         :: set_rand_init_shifts => motion_align_iso_set_rand_init_shifts
-    procedure                                         :: get_corr             => motion_align_iso_get_corr
-    procedure                                         :: get_corrs            => motion_align_iso_get_corrs
-    procedure                                         :: get_opt_shifts       => motion_align_iso_get_opt_shifts
-    procedure                                         :: get_shifts_toplot    => motion_align_iso_get_shifts_toplot
-    procedure                                         :: set_mitsref          => motion_align_iso_set_mitsref
-    procedure                                         :: set_fixed_frame      => motion_align_iso_set_fixed_frame
-    procedure                                         :: set_fitshifts        => motion_align_iso_set_fitshifts
-    procedure                                         :: get_frac_improved    => motion_align_iso_get_frac_improved
-    procedure                                         :: get_nimproved        => motion_align_iso_get_nimproved
-    procedure                                         :: get_corrfrac         => motion_align_iso_get_corrfrac
-    procedure                                         :: set_maxits           => motion_align_iso_set_maxits
-    procedure                                         :: set_coords           => motion_align_iso_set_coords
-    procedure                                         :: get_coords           => motion_align_iso_get_coords
-    procedure                                         :: set_callback         => motion_align_iso_set_callback
-    procedure                                         :: set_frameweights_callback => motion_align_iso_set_frameweights_callback
+    procedure, private :: motion_align_iso_new
+    procedure, private :: motion_align_iso_align
+    procedure, private :: motion_align_iso_kill
+    procedure, private :: recenter_shifts                   !< put shifts rel. to fixed frame
+    procedure, private :: calc_frameweights                 !< compute new frameweights
+    procedure, private :: corrmat2weights
+    procedure, private :: allocate_fields
+    procedure, private :: deallocate_fields
+    procedure, private :: create_ftexp_objs
+    procedure, private :: fit_polynomial
+    procedure, private :: polynomial2shift
+    procedure          :: shift_wsum_and_calc_corrs         !< shift, sum and calculate new correlatons
+    procedure          :: new                  => motion_align_iso_new
+    procedure          :: align                => motion_align_iso_align
+    procedure          :: kill                 => motion_align_iso_kill
+    procedure          :: set_shsrch_tol       => motion_align_iso_set_shsrch_tol
+    procedure          :: set_frames           => motion_align_iso_set_frames
+    procedure          :: set_hp_lp            => motion_align_iso_set_hp_lp
+    procedure          :: set_trs              => motion_align_iso_set_trs
+    procedure          :: set_ftol_gtol        => motion_align_iso_set_ftol_gtol
+    procedure          :: set_smallshift       => motion_align_iso_set_smallshift
+    procedure          :: get_iter             => motion_align_iso_get_iter
+    procedure          :: set_weights          => motion_align_iso_set_weights
+    procedure          :: set_even_weights     => motion_align_iso_set_even_weights
+    procedure          :: get_weights          => motion_align_iso_get_weights
+    procedure          :: set_rand_init_shifts => motion_align_iso_set_rand_init_shifts
+    procedure          :: get_corr             => motion_align_iso_get_corr
+    procedure          :: get_corrs            => motion_align_iso_get_corrs
+    procedure          :: get_opt_shifts       => motion_align_iso_get_opt_shifts
+    procedure          :: get_shifts_toplot    => motion_align_iso_get_shifts_toplot
+    procedure          :: set_mitsref          => motion_align_iso_set_mitsref
+    procedure          :: set_fixed_frame      => motion_align_iso_set_fixed_frame
+    procedure          :: set_fitshifts        => motion_align_iso_set_fitshifts
+    procedure          :: get_frac_improved    => motion_align_iso_get_frac_improved
+    procedure          :: get_nimproved        => motion_align_iso_get_nimproved
+    procedure          :: get_corrfrac         => motion_align_iso_get_corrfrac
+    procedure          :: set_maxits           => motion_align_iso_set_maxits
+    procedure          :: set_coords           => motion_align_iso_set_coords
+    procedure          :: get_coords           => motion_align_iso_get_coords
+    procedure          :: set_callback         => motion_align_iso_set_callback
+    procedure          :: set_frameweights_callback => motion_align_iso_set_frameweights_callback
+    procedure          :: is_fitshifts
 end type motion_align_iso
 
 abstract interface
@@ -147,7 +148,7 @@ contains
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2)
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        integer :: i, iter, iframe, nimproved, maxits_saved
+        integer :: i, iter, iframe, nimproved, maxits_saved, lpcnt
         real    :: cxy(3), hp_saved, lp_saved
         logical :: callback_convgd
         if ( .not. self%existence ) then
@@ -188,6 +189,7 @@ contains
             if (self%maxits > 0) ftexp_srch(iframe)%ospec%maxits = self%maxits
         end do
         ! main loop
+        lpcnt = 0
         self%corr_saved = -1.
         do iter=1,self%mitsref
             self%iter = iter
@@ -211,8 +213,9 @@ contains
             endif
             ! updates shifts & weights
             if( self%fitshifts )then
-                if( (self%lp-params_glob%lpstop < 0.01) )then
+                if( lpcnt >= 2 )then
                     ! turns off fitting
+                    self%fitshifts = .false.
                 else
                     call self%recenter_shifts(self%opt_shifts)
                     call self%fit_polynomial
@@ -247,6 +250,7 @@ contains
                 if (callback_convgd) exit
                 if ((abs(hp_saved-self%hp) > epsilon(hp_saved)) .or. &
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
+                    lpcnt = lpcnt + 1
                     ! need to re-make the ftexps
                     call self%create_ftexp_objs
                     call self%calc_frameweights( callback_ptr )
@@ -609,6 +613,11 @@ contains
         procedure(align_iso_fw_callback)       :: frameweights_callback
         self%frameweights_callback => frameweights_callback
     end subroutine motion_align_iso_set_frameweights_callback
+
+    logical function is_fitshifts( self )
+            class(motion_align_iso), intent(in) :: self
+            is_fitshifts = self%fitshifts
+    end function is_fitshifts
 
     ! FITTING RELATED
 
