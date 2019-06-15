@@ -543,7 +543,7 @@ contains
         type(oris)            :: os
         type(ori)             :: o_tmp
         type(sym)             :: se1,se2
-        type(image)           :: img
+        type(image)           :: img, vol
         character(len=STDLEN) :: vol_iter, pgrp_init, pgrp_refine
         real                  :: iter, smpd_target, lplims(2), msk, orig_msk, orig_smpd
         real                  :: scale_factor1, scale_factor2
@@ -797,13 +797,15 @@ contains
         call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
         os = work_proj1%os_ptcl3D
         ! modulate shifts
-        if( do_autoscale )call os%mul_shifts( 1./scale_factor1 )
-        ! clean stacks & project file & o_peaks on disc
-        call work_proj1%read_segment('stk', trim(WORK_PROJFILE))
-        do istk=1,work_proj1%os_stk%get_noris()
-            call work_proj1%os_stk%getter(istk, 'stk', stk)
-            call del_file(trim(stk))
-        enddo
+        if( do_autoscale )then
+            call os%mul_shifts( 1./scale_factor1 )
+            ! clean stacks & project file & o_peaks on disc
+            call work_proj1%read_segment('stk', trim(WORK_PROJFILE))
+            do istk=1,work_proj1%os_stk%get_noris()
+                call work_proj1%os_stk%getter(istk, 'stk', stk)
+                call del_file(trim(stk))
+            enddo
+        endif
         call work_proj1%kill()
         call del_file(WORK_PROJFILE)
         deallocate(WORK_PROJFILE)
@@ -896,6 +898,11 @@ contains
         else
             iter = cline_refine3D_refine%get_rarg('endit')
             call set_iter_dependencies
+            call vol%new([orig_box,orig_box,orig_box],orig_smpd)
+            call vol%read(vol_iter)
+            call vol%mirror('x')
+            call vol%write(add2fbody(vol_iter,params%ext,trim(PPROC_SUFFIX)//trim(MIRR_SUFFIX)))
+            call vol%kill
         endif
         status = simple_rename(vol_iter, trim(REC_FBODY)//params%ext)
         status = simple_rename(add2fbody(vol_iter,params%ext,PPROC_SUFFIX),&
