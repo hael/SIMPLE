@@ -811,6 +811,7 @@ contains
             !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
+                if( .not. params_glob%l_mskfsc ) return
                 ! masking
                 if( cline%defined('mskfile') )then
                     ! mask provided

@@ -101,7 +101,6 @@ type(simple_program), target :: info_image
 type(simple_program), target :: info_stktab
 type(simple_program), target :: initial_3Dmodel
 type(simple_program), target :: local_resolution
-type(simple_program), target :: local_resolution2D
 type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: mask
@@ -181,6 +180,7 @@ type(simple_input_param) :: maxits
 type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
+type(simple_input_param) :: mskfsc
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
 type(simple_input_param) :: neg
@@ -275,7 +275,6 @@ contains
         call new_import_particles
         call new_import_starproject
         call new_local_resolution
-        call new_local_resolution2D
         call new_make_cavgs
         call new_make_oris
         call new_mask
@@ -357,7 +356,6 @@ contains
         call push2prg_ptr_array(import_particles)
         call push2prg_ptr_array(import_starproject)
         call push2prg_ptr_array(local_resolution)
-        call push2prg_ptr_array(local_resolution2D)
         call push2prg_ptr_array(make_cavgs)
         call push2prg_ptr_array(make_oris)
         call push2prg_ptr_array(mask)
@@ -476,8 +474,6 @@ contains
                 ptr2prg => import_starproject
             case('local_resolution')
                 ptr2prg => local_resolution
-            case('local_resolution2D')
-                ptr2prg => local_resolution2D
             case('make_cavgs')
                 ptr2prg => make_cavgs
             case('make_oris')
@@ -620,7 +616,6 @@ contains
         write(logfhandle,'(A)') import_particles%name
         write(logfhandle,'(A)') import_starproject%name
         write(logfhandle,'(A)') local_resolution%name
-        write(logfhandle,'(A)') local_resolution2D%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') mask%name
         write(logfhandle,'(A)') mkdir_%name
@@ -762,6 +757,7 @@ contains
         call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp|no){sum}',  '(sum|cen|exp|no){sum}',  .false., 'sum')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
+        call set_param(mskfsc,         'mskfsc',       'binary', 'Mask e/o maps for FSC', 'Mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1031,7 +1027,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 1, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 8, 7, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1058,6 +1054,7 @@ contains
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
         call cluster3D%set_input('filt_ctrls', 5, eo)
         call cluster3D%set_input('filt_ctrls', 6, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
+        call cluster3D%set_input('filt_ctrls', 7, mskfsc)
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
@@ -1077,7 +1074,7 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_distr_exec',&                                               ! executable
-        &2, 1, 0, 11, 6, 3, 2, .true.)                                       ! # entries in each group
+        &2, 1, 0, 11, 7, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
@@ -1110,6 +1107,7 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
         call cluster3D_refine%set_input('filt_ctrls', 6, eo)
+        call cluster3D_refine%set_input('filt_ctrls', 7, mskfsc)
         ! mask controls
         call cluster3D_refine%set_input('mask_ctrls', 1, msk)
         call cluster3D_refine%set_input('mask_ctrls', 2, inner)
@@ -1362,7 +1360,7 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 2, 0, 12, 0, 1, .false.)               ! # entries in each group, requires sp_project
+        &2, 1, 2, 0, 13, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
@@ -1390,6 +1388,7 @@ contains
         call filter%set_input('filt_ctrls',10, frcs)
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|no){no}', 'Filter type(tv|no){no}', '(tv|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda','Strength of noise reduction', '{0.1}', .false., 0.1)
+        call filter%set_input('filt_ctrls',13, mskfsc)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1403,7 +1402,7 @@ contains
         &'Calculate FSC between the two input volumes',&                        ! descr_short
         &'is a program for calculating the FSC between the two input volumes',& ! descr_long
         &'simple_exec',&                                                        ! executable
-        &2, 1, 0, 0, 0, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 2, 1, .false.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call fsc%set_input('img_ios', 1, 'vol1', 'file', 'Odd volume',  'Odd volume',  'vol1.mrc file', .true., '')
@@ -1415,7 +1414,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        ! <empty>
+        call fsc%set_input('filt_ctrls', 1, mskfsc)
         ! mask controls
         call fsc%set_input('mask_ctrls', 1, msk)
         call fsc%set_input('mask_ctrls', 2, mskfile)
@@ -1510,7 +1509,7 @@ contains
         &'is a distributed workflow for generating an initial 3D model from class&
         & averages obtained with cluster2D',&                                        ! descr_long
         &'simple_distr_exec',&                                                        ! executable
-        &0, 0, 0, 7, 5, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
+        &0, 0, 0, 7, 6, 3, 2, .true.)                                                 ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1537,6 +1536,7 @@ contains
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, rankw)
         call initial_3Dmodel%set_input('filt_ctrls', 5, ptclw)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, mskfsc)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -1787,33 +1787,6 @@ contains
         ! computer controls
         call local_resolution%set_input('comp_ctrls', 1, nthr)
     end subroutine new_local_resolution
-
-    subroutine new_local_resolution2D
-        ! PROGRAM SPECIFICATION
-        call local_resolution2D%new(&
-        &'local_resolution2D',&                                         ! name
-        &'Estimate local resolution in class averages',&                ! descr_short
-        &'is a program for estimating local resolution based on neighbourhood correlation analysis in e/o cavgs',& ! descr_long
-        &'simple_exec',&                                                ! executable
-        &3, 1, 0, 0, 1, 1, 1, .false.)                                  ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call local_resolution2D%set_input('img_ios', 1, 'stk',  'file', 'Odd cavgs',  'Odd cavgs',  'cavgs_odd.mrc file', .true., '')
-        call local_resolution2D%set_input('img_ios', 2, 'stk2', 'file', 'Even cavgs', 'Even cavgs', 'cavgs_even.mrc file', .true., '')
-        call local_resolution2D%set_input('img_ios', 3, 'stk3', 'file', 'Cavgs to filter', 'Cavgs to filter', 'cavgs2filter.mrc file', .false., '')
-        ! parameter input/output
-        call local_resolution2D%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! search controls
-        ! <empty>
-        ! filter controls
-        call local_resolution2D%set_input('filt_ctrls', 1, lplim_crit)
-        ! mask controls
-        call local_resolution2D%set_input('mask_ctrls', 1, msk)
-        ! computer controls
-        call local_resolution2D%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_local_resolution2D
 
     subroutine new_make_cavgs
         ! PROGRAM SPECIFICATION
@@ -2690,7 +2663,7 @@ contains
         & given input orientations and state assignments. The algorithm is based on direct Fourier inversion&
         & with a Kaiser-Bessel (KB) interpolation kernel',&
         &'simple_distr_exec',&                                                 ! executable
-        &0, 1, 0, 4, 3, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &0, 1, 0, 4, 4, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2708,6 +2681,7 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 1, projw)
         call reconstruct3D%set_input('filt_ctrls', 2, rankw)
         call reconstruct3D%set_input('filt_ctrls', 3, ptclw)
+        call reconstruct3D%set_input('filt_ctrls', 4, mskfsc)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2723,7 +2697,7 @@ contains
         &'3D refinement',&                                                                          ! descr_short
         &'is a distributed workflow for 3D refinement based on probabilistic projection matching',& ! descr_long
         &'simple_distr_exec',&                                                                      ! executable
-        &1, 0, 0, 16, 9, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
+        &1, 0, 0, 16, 10, 5, 2, .true.)                                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call refine3D%set_input('img_ios', 1, 'vol1', 'file', 'Reference volume', 'Reference volume for creating polar 2D central &
@@ -2761,11 +2735,12 @@ contains
         call refine3D%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
         call refine3D%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
-        call refine3D%set_input('filt_ctrls', 5, lplim_crit)
-        call refine3D%set_input('filt_ctrls', 6, lp_backgr)
-        call refine3D%set_input('filt_ctrls', 7, projw)
-        call refine3D%set_input('filt_ctrls', 8, rankw)
-        call refine3D%set_input('filt_ctrls', 9, ptclw)
+        call refine3D%set_input('filt_ctrls', 5,  lplim_crit)
+        call refine3D%set_input('filt_ctrls', 6,  lp_backgr)
+        call refine3D%set_input('filt_ctrls', 7,  projw)
+        call refine3D%set_input('filt_ctrls', 8,  rankw)
+        call refine3D%set_input('filt_ctrls', 9,  ptclw)
+        call refine3D%set_input('filt_ctrls', 10, mskfsc)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

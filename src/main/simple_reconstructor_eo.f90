@@ -358,19 +358,21 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
-            if( self%automsk )then
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
-            else
-                ! spherical masking
-                if( self%inner > 1. )then
-                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+            if( params_glob%l_mskfsc )then
+                if( self%automsk )then
+                    call even%zero_background
+                    call odd%zero_background
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
                 else
-                    call even%mask(self%msk, 'soft')
-                    call odd%mask(self%msk, 'soft')
+                    ! spherical masking
+                    if( self%inner > 1. )then
+                        call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                        call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    else
+                        call even%mask(self%msk, 'soft')
+                        call odd%mask(self%msk, 'soft')
+                    endif
                 endif
             endif
             ! forward FT

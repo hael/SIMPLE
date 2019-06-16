@@ -49,6 +49,7 @@ type :: parameters
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
+    character(len=3)      :: mskfsc='yes'         !< mask even/odd pairs for FSC calculation(yes|no){yes}
     character(len=3)      :: needs_sigma='no'     !< invert contrast of images(yes|no)
     character(len=3)      :: neg='no'             !< invert contrast of images(yes|no)
     character(len=3)      :: neigh='no'           !< neighbourhood refinement(yes|no){no}
@@ -409,6 +410,7 @@ type :: parameters
     logical :: l_innermsk       = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
+    logical :: l_mskfsc         = .true.
     logical :: l_pssnr          = .false.
     logical :: l_ptclw          = .true.
     logical :: l_needs_sigma    = .false.
@@ -524,6 +526,7 @@ contains
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
+        call check_carg('mskfsc',         self%mskfsc)
         call check_carg('msktype',        self%msktype)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
@@ -1180,6 +1183,8 @@ contains
         self%l_lpset  = cline%defined('lp')
         ! set eo flag
         self%l_eo     = self%eo     .ne. 'no'
+        ! set mskfsc flag
+        self%l_mskfsc = self%mskfsc .ne. 'no'
         ! set projw flag
         self%l_projw  = self%projw  .ne. 'no'
         ! set particle weighting scheme
