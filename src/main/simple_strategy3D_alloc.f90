@@ -67,7 +67,14 @@ contains
         if(alloc_stat/=0)call allocchk("strategy3D_alloc failed")
         ! states existence
         if( .not.build_glob%spproj%is_virgin_field(params_glob%oritype) )then
-            s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
+            if( str_has_substr(params_glob%refine,'greedy') )then
+                allocate(s3D%state_exists(params_glob%nstates), source=.true.)
+                do istate = 1,params_glob%nstates
+                    s3D%state_exists(istate) = file_exists(params_glob%vols(istate))
+                enddo
+            else
+                s3D%state_exists = build_glob%spproj_field%states_exist(params_glob%nstates)
+            endif
         else
             allocate(s3D%state_exists(params_glob%nstates), source=.true.)
         endif

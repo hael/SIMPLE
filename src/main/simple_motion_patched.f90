@@ -70,7 +70,6 @@ contains
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
-    procedure, private                  :: motion_patchedfit_callback
     procedure, private                  :: pix2polycoords
     procedure, private                  :: get_patched_polyn
     procedure                           :: set_frameweights
@@ -684,52 +683,7 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_patched_kill
 
-    ! callback with correlation criterion only
-    subroutine motion_patchedfit_callback(self, align_iso, converged)
-        class(motion_patched),   intent(inout) :: self
-        class(motion_align_iso), intent(inout) :: align_iso
-        logical,                 intent(out)   :: converged
-        integer :: i, j
-        integer :: iter
-        real    :: corrfrac
-        logical :: didupdateres
-        call align_iso%get_coords(i, j)
-        corrfrac      = align_iso%get_corrfrac()
-        iter          = align_iso%get_iter()
-        didupdateres  = .false.
-        select case(self%updateres(i,j))
-        case(0)
-            call update_res( 0.99, self%updateres(i,j) )
-        case(1)
-            call update_res( 0.995, self%updateres(i,j) )
-        case(2)
-            call update_res( 0.999, self%updateres(i,j) )
-        case DEFAULT
-            ! nothing to do
-        end select
-        if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-            if( iter > 10 .and. corrfrac > 0.9999 )  converged = .true.
-        else
-            converged = .false.
-        end if
-
-    contains
-        subroutine update_res( thres_corrfrac, which_update )
-            real,    intent(in) :: thres_corrfrac
-            integer, intent(in) :: which_update
-            if( corrfrac > thres_corrfrac .and. self%updateres(i,j) == which_update )then
-                self%lp(i,j) = self%lp(i,j) - self%resstep
-                call align_iso%set_hp_lp(self%hp, self%lp(i,j))
-                write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
-                ! need to indicate that we updated resolution limit
-                self%updateres(i,j)  = self%updateres(i,j) + 1
-                ! indicate that reslim was updated
-                didupdateres = .true.
-            endif
-        end subroutine update_res
-    end subroutine motion_patchedfit_callback
-
-    !>  callback with correlation & # of improving frames
+    !>  convergence callback
     subroutine motion_patched_callback(self, align_iso, converged)
         class(motion_patched),   intent(inout) :: self
         class(motion_align_iso), intent(inout) :: align_iso
@@ -744,40 +698,71 @@ contains
         nimproved     = align_iso%get_nimproved()
         iter          = align_iso%get_iter()
         didupdateres  = .false.
-        select case(self%updateres(i,j))
-        case(0)
-            call update_res( 0.96, 40., self%updateres(i,j) )
-        case(1)
-            call update_res( 0.97, 30., self%updateres(i,j) )
-        case(2)
-            call update_res( 0.98, 20., self%updateres(i,j) )
-        case DEFAULT
-            ! nothing to do
-        end select
-        if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-            if( nimproved == 0 .and. iter > 2 )     converged = .true.
-            if( iter > 10 .and. corrfrac > 0.9999 )  converged = .true.
+        if( align_iso%is_fitshifts() )then
+            select case(self%updateres(i,j))
+            case(0)
+                call update_res_fitshifts( 0.99, self%updateres(i,j) )
+            case(1)
+                call update_res_fitshifts( 0.995, self%updateres(i,j) )
+            case(2)
+                call update_res_fitshifts( 0.999, self%updateres(i,j) )
+            case DEFAULT
+                ! nothing to do
+            end select
+            if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
+            else
+                converged = .false.
+            end if
         else
-            converged = .false.
-        end if
+            select case(self%updateres(i,j))
+                case(0)
+                    call update_res( 0.96, 40., self%updateres(i,j) )
+                case(1)
+                    call update_res( 0.97, 30., self%updateres(i,j) )
+                case(2)
+                    call update_res( 0.98, 20., self%updateres(i,j) )
+                case DEFAULT
+                    ! nothing to do
+            end select
+            if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
+                if( nimproved == 0 .and. iter > 2 )     converged = .true.
+                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
+            else
+                converged = .false.
+            end if
+        endif
 
-    contains
+        contains
 
-        subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
-            real,    intent(in) :: thres_corrfrac, thres_frac_improved
-            integer, intent(in) :: which_update
-            if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
-                .and. self%updateres(i,j) == which_update )then
-                self%lp(i,j) = self%lp(i,j) - self%resstep
-                call align_iso%set_hp_lp(self%hp, self%lp(i,j))
-                write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', self%lp(i,j)
-                ! need to indicate that we updated resolution limit
-                self%updateres(i,j)  = self%updateres(i,j) + 1
-                ! indicate that reslim was updated
-                didupdateres = .true.
-            endif
-        end subroutine update_res
+            subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
+                real,    intent(in) :: thres_corrfrac, thres_frac_improved
+                integer, intent(in) :: which_update
+                if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
+                    .and. self%updateres(i,j) == which_update )then
+                    self%lp(i,j) = self%lp(i,j) - self%resstep
+                    call align_iso%set_hp_lp(self%hp, self%lp(i,j))
+                    write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', self%lp(i,j)
+                    ! need to indicate that we updated resolution limit
+                    self%updateres(i,j)  = self%updateres(i,j) + 1
+                    ! indicate that reslim was updated
+                    didupdateres = .true.
+                endif
+            end subroutine update_res
 
+            subroutine update_res_fitshifts( thres_corrfrac, which_update )
+                real,    intent(in) :: thres_corrfrac
+                integer, intent(in) :: which_update
+                if( corrfrac > thres_corrfrac .and. self%updateres(i,j) == which_update )then
+                    self%lp(i,j) = self%lp(i,j) - self%resstep
+                    call align_iso%set_hp_lp(self%hp, self%lp(i,j))
+                    write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
+                    ! need to indicate that we updated resolution limit
+                    self%updateres(i,j)  = self%updateres(i,j) + 1
+                    ! indicate that reslim was updated
+                    didupdateres = .true.
+                endif
+            end subroutine update_res_fitshifts
     end subroutine motion_patched_callback
 
     subroutine motion_patched_callback_wrapper(aptr, align_iso, converged)
@@ -786,11 +771,7 @@ contains
         logical,                 intent(out)   :: converged
         select type(aptr)
         class is (motion_patched)
-            if( aptr%fitshifts )then
-                call aptr%motion_patchedfit_callback(align_iso, converged)
-            else
-                call aptr%motion_patched_callback(align_iso, converged)
-            endif
+            call aptr%motion_patched_callback(align_iso, converged)
         class default
             THROW_HARD('error in motion_patched_callback_wrapper: unknown type; simple_motion_patched')
         end select

@@ -119,7 +119,13 @@ contains
         if( params_glob%nstates.eq.1 )then
             if( file_exists(params_glob%frcs) ) call build_glob%projfrcs%read(params_glob%frcs)
         else
-            if( file_exists(CLUSTER3D_FRCS) ) call build_glob%projfrcs%read(CLUSTER3D_FRCS)
+            if( file_exists(CLUSTER3D_FRCS) )then
+                call build_glob%projfrcs%read(CLUSTER3D_FRCS)
+            else
+                if( file_exists(params_glob%frcs) )then
+                    call build_glob%projfrcs%read(params_glob%frcs)
+                endif
+            endif
         endif
 
         ! PARTICLE INDEX SAMPLING FOR FRACTIONAL UPDATE (OR NOT)
@@ -460,12 +466,20 @@ contains
         ! read reference volumes and create polar projections
         cnt = 0
         do s=1,params_glob%nstates
-            if( has_been_searched )then
-                if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
-                    ! empty state
+            if( str_has_substr(params_glob%refine,'greedy') )then
+                if( .not.file_exists(params_glob%vols(s)) )then
                     cnt = cnt + params_glob%nspace
                     call progress(cnt, nrefs)
                     cycle
+                endif
+            else
+                if( has_been_searched )then
+                    if( build_glob%spproj_field%get_pop(s, 'state') == 0 )then
+                        ! empty state
+                        cnt = cnt + params_glob%nspace
+                        call progress(cnt, nrefs)
+                        cycle
+                    endif
                 endif
             endif
             call calcrefvolshift_and_mapshifts2ptcls( cline, s, params_glob%vols(s), do_center, xyz)

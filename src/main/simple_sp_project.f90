@@ -1333,7 +1333,7 @@ contains
             call self%os_out%new(n_os_out)
         else
             select case(trim(which_imgkind))
-                case('vol_msk','vol_cavg')
+                case('vol_msk')
                     ! one volume type for all states
                     ind = 0
                     do i=1,n_os_out
@@ -1481,7 +1481,7 @@ contains
         ind = 0
         cnt = 0
         select case(trim(imgkind))
-            case('vol_cavg', 'vol_msk')
+        case('vol_msk')
                 do i=1,self%os_out%get_noris()
                     if( self%os_out%isthere(i,'imgkind') )then
                         call self%os_out%getter(i,'imgkind',imgkind_here)
