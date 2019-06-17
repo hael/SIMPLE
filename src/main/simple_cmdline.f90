@@ -85,6 +85,7 @@ contains
         self%argcnt  = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
+        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
         call get_command_argument(0,exec_cmd)
         ! parse program name
         call get_command_argument(1, arg, cmdlen, cmdstat)
@@ -152,44 +153,15 @@ contains
     end subroutine parse
 
     !> \brief for parsing the command line arguments passed as key=val
-    subroutine parse_oldschool( self, keys_required, keys_optional )
+    subroutine parse_oldschool( self )
         use simple_args, only: args
-        class(cmdline),             intent(inout) :: self
-        character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
-        character(len=STDLEN)     :: exec_name
-        character(len=LONGSTRLEN) :: arg
-        type(args)                :: allowed_args
-        integer                   :: i, cmdstat, cmdlen, ikey
-        integer                   :: nreq, cmdargcnt
-        logical                   :: distr_exec
-        call get_command_argument(0,exec_name)
-        distr_exec = str_has_substr(exec_name,'distr')
-        cmdargcnt = command_argument_count()
+        class(cmdline), intent(inout) :: self
+        character(len=LONGSTRLEN)     :: arg
+        integer :: i, cmdstat, cmdlen
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
-        if( present(keys_required) )then
-            if( str_has_substr(self%entire_line,'prg=') )then
-                nreq = size(keys_required) + 1 ! +1 because prg part of command line
-            else
-                nreq = size(keys_required)
-            endif
-            if( cmdargcnt < nreq )then
-                call print_cmdline(keys_required, keys_optional, distr=distr_exec)
-                call exit(EXIT_FAILURE5)
-            else
-                ! indicate which variables are required
-                do ikey=1,size(keys_required)
-                    call self%checkvar(keys_required(ikey), ikey)
-                end do
-            endif
-        else
-            if( cmdargcnt < 2 )then
-                call print_cmdline(keys_required, keys_optional, distr=distr_exec)
-                call exit(EXIT_FAILURE5)
-            endif
-        endif
-        allowed_args = args()
-        self%argcnt  = command_argument_count()
+        if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
+        self%argcnt = command_argument_count()
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
@@ -199,27 +171,28 @@ contains
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
                 call exit(EXIT_FAILURE5)
             endif
-            call self%parse_command_line_value(i, arg, allowed_args)
+            call self%parse_command_line_value(i, arg)
         end do
-        if( present(keys_required) ) call self%check
     end subroutine parse_oldschool
 
     subroutine parse_command_line_value( self, i, arg, allowed_args )
         use simple_args, only: args
-        class(cmdline),   intent(inout) :: self
-        integer,          intent(in)    :: i
-        character(len=*), intent(in)    :: arg
-        class(args),      intent(in)    :: allowed_args
-        character(len=:), allocatable   :: form
+        class(cmdline),        intent(inout) :: self
+        integer,               intent(in)    :: i
+        character(len=*),      intent(in)    :: arg
+        class(args), optional, intent(in)    :: allowed_args
+        character(len=:), allocatable :: form
         integer :: pos1, io_stat, ri
         pos1 = index(arg, '=') ! position of '='
         ! parse everyting containing '='
         if( pos1 /= 0 )then
             self%cmds(i)%key = arg(:pos1-1) ! KEY
-            if( .not. allowed_args%is_present(self%cmds(i)%key) )then
-                write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
-                write(logfhandle,'(a)') 'Perhaps you have misspelled?'
-                call exit(EXIT_FAILURE4)
+            if( present(allowed_args) )then
+                if( .not. allowed_args%is_present(self%cmds(i)%key) )then
+                    write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
+                    write(logfhandle,'(a)') 'Perhaps you have misspelled?'
+                    call exit(EXIT_FAILURE4)
+                endif
             endif
             form = str2format(arg(pos1+1:))
             select case(form)

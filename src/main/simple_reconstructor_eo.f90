@@ -339,7 +339,8 @@ contains
         type(image)           :: even, odd
         complex, allocatable  :: cmat(:,:,:)
         character(len=STDLEN) :: fsc_fname
-        integer               :: j, find_plate
+        integer               :: j, find_plate, ldim(3)
+        real                  :: mskrad
         if( (params_glob%cc_objfun == OBJFUN_EUCLID) .or. params_glob%l_pssnr )then
             ! even
             cmat = self%even%get_cmat()
@@ -358,21 +359,20 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
-            if( params_glob%l_mskfsc )then
-                if( self%automsk )then
-                    call even%zero_background
-                    call odd%zero_background
-                    call even%mul(self%envmask)
-                    call odd%mul(self%envmask)
+            if( params_glob%l_envfsc .and. self%automsk )then
+                ! mask provided
+                call even%zero_env_background(self%envmask)
+                call odd%zero_env_background(self%envmask)
+                call even%mul(self%envmask)
+                call odd%mul(self%envmask)
+            else
+                ! spherical masking
+                if( self%inner > 1. )then
+                    call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
+                    call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
                 else
-                    ! spherical masking
-                    if( self%inner > 1. )then
-                        call even%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                        call odd%mask(self%msk, 'soft', inner=self%inner, width=self%width)
-                    else
-                        call even%mask(self%msk, 'soft')
-                        call odd%mask(self%msk, 'soft')
-                    endif
+                    call even%mask(self%msk, 'soft')
+                    call odd%mask(self%msk, 'soft')
                 endif
             endif
             ! forward FT

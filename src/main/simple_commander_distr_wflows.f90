@@ -947,6 +947,7 @@ contains
             ! i.e. projfile is fetched from a X_refine3D dir
             ! set starting volume(s), iteration number & previous refinement path
             do state=1,params%nstates
+                ! volume(s)
                 vol = 'vol' // int2str(state)
                 if( trim(params%oritype).eq.'cls3D' )then
                     call build%spproj%get_vol('vol_cavg', state, vol_fname, smpd, box)
@@ -964,6 +965,15 @@ contains
                 endif
             end do
             prev_refine_path = get_fpath(vol_fname)
+            ! carry over FRCs/FSCs
+            ! one FSC file per state
+            do state=1,params%nstates
+                str_state = int2str_pad(state,2)
+                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
+            end do
+            ! one FRC file for all states
+            call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
             ! carry over the oridistributions_part* files
             call simple_list_files(prev_refine_path//'oridistributions_part*', list)
             nfiles = size(list)
@@ -1102,7 +1112,7 @@ contains
             if( cline%defined('frcs') )then
                 ! all good
             else
-                call job_descr%set('frcs', trim(FRCS_FBODY)//'01'//BIN_EXT)
+                call job_descr%set('frcs', trim(FRCS_FILE))
             endif
             ! schedule
             call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))

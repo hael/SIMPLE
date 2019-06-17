@@ -180,7 +180,7 @@ type(simple_input_param) :: maxits
 type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
-type(simple_input_param) :: mskfsc
+type(simple_input_param) :: envfsc
 type(simple_input_param) :: mw
 type(simple_input_param) :: ncls
 type(simple_input_param) :: neg
@@ -757,7 +757,7 @@ contains
         call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp|no){sum}',  '(sum|cen|exp|no){sum}',  .false., 'sum')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
-        call set_param(mskfsc,         'mskfsc',       'binary', 'Mask e/o maps for FSC', 'Mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
+        call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1054,7 +1054,7 @@ contains
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
         call cluster3D%set_input('filt_ctrls', 5, eo)
         call cluster3D%set_input('filt_ctrls', 6, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
-        call cluster3D%set_input('filt_ctrls', 7, mskfsc)
+        call cluster3D%set_input('filt_ctrls', 7, envfsc)
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
@@ -1107,7 +1107,7 @@ contains
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
         call cluster3D_refine%set_input('filt_ctrls', 6, eo)
-        call cluster3D_refine%set_input('filt_ctrls', 7, mskfsc)
+        call cluster3D_refine%set_input('filt_ctrls', 7, envfsc)
         ! mask controls
         call cluster3D_refine%set_input('mask_ctrls', 1, msk)
         call cluster3D_refine%set_input('mask_ctrls', 2, inner)
@@ -1388,7 +1388,7 @@ contains
         call filter%set_input('filt_ctrls',10, frcs)
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|no){no}', 'Filter type(tv|no){no}', '(tv|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda','Strength of noise reduction', '{0.1}', .false., 0.1)
-        call filter%set_input('filt_ctrls',13, mskfsc)
+        call filter%set_input('filt_ctrls',13, envfsc)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1414,7 +1414,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call fsc%set_input('filt_ctrls', 1, mskfsc)
+        call fsc%set_input('filt_ctrls', 1, envfsc)
         ! mask controls
         call fsc%set_input('mask_ctrls', 1, msk)
         call fsc%set_input('mask_ctrls', 2, mskfile)
@@ -1536,7 +1536,7 @@ contains
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, rankw)
         call initial_3Dmodel%set_input('filt_ctrls', 5, ptclw)
-        call initial_3Dmodel%set_input('filt_ctrls', 6, mskfsc)
+        call initial_3Dmodel%set_input('filt_ctrls', 6, envfsc)
         ! mask controls
         call initial_3Dmodel%set_input('mask_ctrls', 1, msk)
         call initial_3Dmodel%set_input('mask_ctrls', 2, inner)
@@ -2681,7 +2681,7 @@ contains
         call reconstruct3D%set_input('filt_ctrls', 1, projw)
         call reconstruct3D%set_input('filt_ctrls', 2, rankw)
         call reconstruct3D%set_input('filt_ctrls', 3, ptclw)
-        call reconstruct3D%set_input('filt_ctrls', 4, mskfsc)
+        call reconstruct3D%set_input('filt_ctrls', 4, envfsc)
         ! mask controls
         call reconstruct3D%set_input('mask_ctrls', 1, msk)
         call reconstruct3D%set_input('mask_ctrls', 2, mskfile)
@@ -2740,7 +2740,7 @@ contains
         call refine3D%set_input('filt_ctrls', 7,  projw)
         call refine3D%set_input('filt_ctrls', 8,  rankw)
         call refine3D%set_input('filt_ctrls', 9,  ptclw)
-        call refine3D%set_input('filt_ctrls', 10, mskfsc)
+        call refine3D%set_input('filt_ctrls', 10, envfsc)
         ! mask controls
         call refine3D%set_input('mask_ctrls', 1, msk)
         call refine3D%set_input('mask_ctrls', 2, inner)

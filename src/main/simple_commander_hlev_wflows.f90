@@ -1272,7 +1272,7 @@ contains
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_even'//params%ext, trim(CLUSTER3D_VOL)//'_even'//params%ext)
             rename_stat = simple_rename(trim(VOL_FBODY)//one//'_odd'//params%ext,  trim(CLUSTER3D_VOL)//'_odd'//params%ext)
             rename_stat = simple_rename(trim(FSC_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FSC))
-            rename_stat = simple_rename(trim(FRCS_FBODY)//one//BIN_EXT, trim(CLUSTER3D_FRCS))
+            rename_stat = simple_rename(FRCS_FILE, trim(CLUSTER3D_FRCS))
             rename_stat = simple_rename(trim(ANISOLP_FBODY)//one//params%ext, trim(CLUSTER3D_ANISOLP)//params%ext)
         endif
 
@@ -1648,7 +1648,7 @@ contains
                         call spproj_master%add_fsc2os_out(trim(src), s, params%box)
                         src  = trim(ANISOLP_FBODY)//str_state//params%ext
                         call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol_filt', box=params%box)
-                        src  = trim(FRCS_FBODY)//str_state//BIN_EXT
+                        src  = FRCS_FILE
                         call  spproj_master%add_frcs2os_out(trim(src),'frc3D')
                     endif
                 endif
