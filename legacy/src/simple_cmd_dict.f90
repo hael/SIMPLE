@@ -3,7 +3,7 @@ module simple_cmd_dict
 include 'simple_lib.f08'
 implicit none
 
-public :: print_cmdline, test_cmd_dict, print_cmd_key_descr
+public :: print_cmd_key_descr ! print_cmdline, test_cmd_dict
 private
 #include "simple_local_flags.inc"
 integer, parameter :: NMAX=300
@@ -306,70 +306,70 @@ contains
         call chdict%write(fname)
     end subroutine print_cmd_key_descr
 
-    subroutine print_cmdline( keys_required, keys_optional, distr )
-        character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
-        logical,               optional, intent(in) :: distr
-        character(len=KEYLEN), allocatable :: sorted_keys(:)
-        integer :: nreq, nopt
-        logical :: ddistr
-        ddistr = .false.
-        if( present(distr) ) ddistr = distr
-        ! initialise if needed
-        if( .not. initialised ) call init_cmd_dict
-        write(logfhandle,'(a)') 'USAGE:'
-        if( ddistr )then
-            write(logfhandle,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
-        else
-            write(logfhandle,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
-        endif
-        ! print required
-        if( present(keys_required) )then
-            nreq =  size(keys_required)
-            DebugPrint  '# required keys provided: ', nreq
-            if( nreq > 0 )then
-                write(logfhandle,'(a)') ''
-                write(logfhandle,'(a)') 'REQUIRED'
-                allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
-                if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
-                call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(logfhandle, sorted_keys)
-                deallocate(sorted_keys)
-            endif
-        endif
-        ! print optionals
-        if( present(keys_optional) )then
-            nopt = size(keys_optional)
-            DebugPrint  '# optional keys provided: ', nopt
-            if( nopt > 0 )then
-                write(logfhandle,'(a)') ''
-                write(logfhandle,'(a)') 'OPTIONAL'
-                allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
-                if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
-                call lexSort(sorted_keys)
-                call chdict%print_key_val_pairs(logfhandle, sorted_keys)
-                deallocate(sorted_keys)
-            endif
-        endif
-        write(logfhandle,'(a)') ''
-    end subroutine print_cmdline
+    ! subroutine print_cmdline( keys_required, keys_optional, distr )
+    !     character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
+    !     logical,               optional, intent(in) :: distr
+    !     character(len=KEYLEN), allocatable :: sorted_keys(:)
+    !     integer :: nreq, nopt
+    !     logical :: ddistr
+    !     ddistr = .false.
+    !     if( present(distr) ) ddistr = distr
+    !     ! initialise if needed
+    !     if( .not. initialised ) call init_cmd_dict
+    !     write(logfhandle,'(a)') 'USAGE:'
+    !     if( ddistr )then
+    !         write(logfhandle,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
+    !     else
+    !         write(logfhandle,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
+    !     endif
+    !     ! print required
+    !     if( present(keys_required) )then
+    !         nreq =  size(keys_required)
+    !         DebugPrint  '# required keys provided: ', nreq
+    !         if( nreq > 0 )then
+    !             write(logfhandle,'(a)') ''
+    !             write(logfhandle,'(a)') 'REQUIRED'
+    !             allocate(sorted_keys(nreq), source=keys_required, stat=alloc_stat)
+    !             if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 1",alloc_stat)
+    !             call lexSort(sorted_keys)
+    !             call chdict%print_key_val_pairs(logfhandle, sorted_keys)
+    !             deallocate(sorted_keys)
+    !         endif
+    !     endif
+    !     ! print optionals
+    !     if( present(keys_optional) )then
+    !         nopt = size(keys_optional)
+    !         DebugPrint  '# optional keys provided: ', nopt
+    !         if( nopt > 0 )then
+    !             write(logfhandle,'(a)') ''
+    !             write(logfhandle,'(a)') 'OPTIONAL'
+    !             allocate(sorted_keys(nopt), source=keys_optional, stat=alloc_stat)
+    !             if(alloc_stat /= 0)call allocchk("simple_cmd_dict::print_cmdline  sorted_keys 2",alloc_stat)
+    !             call lexSort(sorted_keys)
+    !             call chdict%print_key_val_pairs(logfhandle, sorted_keys)
+    !             deallocate(sorted_keys)
+    !         endif
+    !     endif
+    !     write(logfhandle,'(a)') ''
+    ! end subroutine print_cmdline
 
-    subroutine test_cmd_dict
-        character(len=32) :: keys_required(5), keys_optional(5)
-        keys_required(1) = 'vol1'
-        keys_required(2) = 'stk'
-        keys_required(3) = 'smpd'
-        keys_required(4) = 'msk'
-        keys_required(5) = 'oritab'
-        keys_optional(1) = 'refine'
-        keys_optional(2) = 'automsk'
-        keys_optional(3) = 'trs'
-        keys_optional(4) = 'ctf'
-        keys_optional(5) = 'pgrp'
-        call print_cmdline
-        call print_cmdline( keys_required )
-        call print_cmdline( keys_optional=keys_optional )
-        call print_cmdline( keys_required, keys_optional )
-        call print_cmd_key_descr('cmd_key_descr_from_test_cmd_dict.txt')
-    end subroutine test_cmd_dict
+    ! subroutine test_cmd_dict
+    !     character(len=32) :: keys_required(5), keys_optional(5)
+    !     keys_required(1) = 'vol1'
+    !     keys_required(2) = 'stk'
+    !     keys_required(3) = 'smpd'
+    !     keys_required(4) = 'msk'
+    !     keys_required(5) = 'oritab'
+    !     keys_optional(1) = 'refine'
+    !     keys_optional(2) = 'automsk'
+    !     keys_optional(3) = 'trs'
+    !     keys_optional(4) = 'ctf'
+    !     keys_optional(5) = 'pgrp'
+    !     call print_cmdline
+    !     call print_cmdline( keys_required )
+    !     call print_cmdline( keys_optional=keys_optional )
+    !     call print_cmdline( keys_required, keys_optional )
+    !     call print_cmd_key_descr('cmd_key_descr_from_test_cmd_dict.txt')
+    ! end subroutine test_cmd_dict
 
 end module simple_cmd_dict

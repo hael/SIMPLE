@@ -1,7 +1,6 @@
 program simple_test_units
 include 'simple_lib.f08'
 use simple_testfuns      ! use all in there
-use simple_cmd_dict,     only: test_cmd_dict
 use simple_ftiter,       only: test_ftiter
 use simple_ori,          only: test_ori
 use simple_oris,         only: test_oris
@@ -22,7 +21,6 @@ call date_and_time(date=datestr)
 folder = './SIMPLE_TEST_UNITS_'//datestr
 call simple_mkdir(folder)
 call simple_chdir(folder)
-call test_cmd_dict
 call test_args
 call test_online_var
 call test_imghead

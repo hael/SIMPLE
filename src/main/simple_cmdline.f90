@@ -1,7 +1,6 @@
 ! command line parser
 module simple_cmdline
 include 'simple_lib.f08'
-use simple_cmd_dict ! use all in there
 implicit none
 private
 public :: cmdarg, cmdline, cmdline_err
