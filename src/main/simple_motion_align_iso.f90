@@ -380,11 +380,13 @@ contains
     subroutine create_ftexp_objs( self )
         class(motion_align_iso), intent(inout) :: self
         integer :: iframe
+        !$omp parallel do default(shared) private(iframe) schedule(static) proc_bind(close)
         do iframe=1,self%nframes
             call self%movie_frames_ftexp(iframe)%new(self%frames(iframe), self%hp, self%lp, .true.)
             call self%movie_frames_ftexp_sh(iframe)%new(self%frames(iframe), self%hp, self%lp, .false.)
             call self%movie_sum_global_ftexp_threads(iframe)%new(self%frames(iframe), self%hp, self%lp, .false.)
         end do
+        !$omp end parallel do
     end subroutine create_ftexp_objs
 
     subroutine shift_wsum_and_calc_corrs( self )

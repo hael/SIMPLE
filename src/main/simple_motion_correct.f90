@@ -384,16 +384,16 @@ contains
         call align_iso%kill
     end subroutine motion_correct_iso
 
-    subroutine motion_correct_iso_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf )
+    subroutine motion_correct_iso_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf, need_movie_sum_ctf )
         type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        integer :: iframe
+        logical,     intent(in)    :: need_movie_sum_ctf
+        integer :: iframe        
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
         call movie_sum%ifft()
         ! calculate the sum for CTF estimation
         call sum_movie_frames(opt_shifts)
-        movie_sum_ctf = movie_sum_global
         ! save the isotropically corrected movie stack to disk for anisotropic movie alignment
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%ifft
@@ -401,11 +401,14 @@ contains
                 movie_frames_shifted_saved(iframe) = movie_frames_shifted(iframe)
             end if
         end do
-        call movie_sum_ctf%ifft()
-        ! re-calculate the weighted sum
-        call wsum_movie_frames(opt_shifts)
-        movie_sum_corrected = movie_sum_global
-        call movie_sum_corrected%ifft()
+        if (need_movie_sum_ctf) then
+            movie_sum_ctf = movie_sum_global
+            call movie_sum_ctf%ifft()
+            ! re-calculate the weighted sum
+            call wsum_movie_frames(opt_shifts)
+            movie_sum_corrected = movie_sum_global
+            call movie_sum_corrected%ifft()
+        end if
     end subroutine motion_correct_iso_calc_sums_1
 
     subroutine motion_correct_iso_calc_sums_2( movie_sum_corrected, fromto )
