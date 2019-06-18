@@ -105,6 +105,7 @@ type(simple_program), target :: make_cavgs
 type(simple_program), target :: make_oris
 type(simple_program), target :: mask
 type(simple_program), target :: mkdir_
+type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
 type(simple_program), target :: new_project
@@ -278,6 +279,7 @@ contains
         call new_make_cavgs
         call new_make_oris
         call new_mask
+        call new_merge_stream_projects
         call new_mkdir_
         call new_motion_correct
         call new_motion_correct_tomo
@@ -480,6 +482,8 @@ contains
                 ptr2prg => make_oris
             case('mask')
                 ptr2prg => mask
+            case('merge_stream_projects')
+                ptr2prg => merge_stream_projects
             case('mkdir')
                 ptr2prg => mkdir_
             case('motion_correct')
@@ -618,6 +622,7 @@ contains
         write(logfhandle,'(A)') local_resolution%name
         write(logfhandle,'(A)') make_oris%name
         write(logfhandle,'(A)') mask%name
+        write(logfhandle,'(A)') merge_stream_projects%name
         write(logfhandle,'(A)') mkdir_%name
         write(logfhandle,'(A)') new_project%name
         write(logfhandle,'(A)') normalize_%name
@@ -1905,6 +1910,32 @@ contains
         ! computer controls
         call mask%set_input('comp_ctrls', 1, nthr)
     end subroutine new_mask
+
+    subroutine new_merge_stream_projects
+        ! PROGRAM SPECIFICATION
+        call merge_stream_projects%new(&
+        &'merge_stream_projects',&                   ! name
+        &'merge stream two projects',&               ! descr_short
+        &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
+        &'simple_exec',&                             ! executable
+        &0, 2, 0, 0, 0, 0, 0, .false.)               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        call merge_stream_projects%set_input('parm_ios', 1, projfile)
+        call merge_stream_projects%set_input('parm_ios', 2, projfile_target)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_merge_stream_projects
 
     subroutine new_mkdir_
         ! PROGRAM SPECIFICATION

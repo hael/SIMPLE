@@ -260,7 +260,6 @@ contains
                     if( err ) cycle
                     call movefile2folder('forctf', output_dir_motion_correct, o, err)
                     call movefile2folder('thumb', output_dir_motion_correct, o, err)
-                    call movefile2folder('pspec', output_dir_motion_correct, o, err)
                     call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
                     call movefile2folder('mceps', output_dir_motion_correct, o, err)
                     call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)

@@ -95,6 +95,7 @@ contains
     procedure          :: map2ptcls_state
     procedure          :: prune_project
     procedure          :: replace_project
+    procedure          :: merge_stream_projects
     procedure          :: report_state2stk
     procedure          :: set_boxcoords
     ! I/O
@@ -284,7 +285,7 @@ contains
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
-        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls_prev,nptcls
+        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls
         select case(trim(oritype))
             case('mic')
                 os_ptr => self%os_mic
@@ -2513,7 +2514,7 @@ contains
                 if( self_src%os_ptcl2D%get_noris() == 0 ) return
                 self%os_ptcl2D = self_src%os_ptcl2D
                 ! proagates state and eo flags
-                states = self%os_ptcl2D%get_all('state')
+                states = nint(self%os_ptcl2D%get_all('state'))
                 call self%os_ptcl3D%set_all('state', real(states))
                 if( .not.self%os_ptcl2D%isthere('eo') .and. self_src%os_ptcl3D%isthere('eo') )then
                     do iptcl=1,self_src%os_ptcl3D%get_noris()
@@ -2524,7 +2525,7 @@ contains
                 if( self_src%os_ptcl3D%get_noris() == 0 ) return
                 self%os_ptcl3D = self_src%os_ptcl3D
                 ! proagates state and eo flags
-                states = self%os_ptcl3D%get_all('state')
+                states = nint(self%os_ptcl3D%get_all('state'))
                 call self%os_ptcl2D%set_all('state', real(states))
                 if( .not.self%os_ptcl3D%isthere('eo') .and. self_src%os_ptcl2D%isthere('eo') )then
                     do iptcl=1,self_src%os_ptcl2D%get_noris()
@@ -2629,6 +2630,190 @@ contains
         call o%kill
         call o_src%kill
     end subroutine replace_project
+
+    ! projects are assumed read in
+    subroutine merge_stream_projects( self, self2merge )
+        use simple_ori, only: ori
+        class(sp_project), intent(inout) :: self, self2merge
+        type(ctfparams)                  :: ctfvars, ctfvars2merge
+        type(ori)                        :: o
+        character(len=:),    allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker, fname
+        character(len=:),    allocatable :: output_dir_motion_correct, output_dir_extract
+        integer                          :: nptcls, nptcls2merge, fromp, top, top_prev, iptcl, stkind
+        integer                          :: imic, nmics, nmics2merge, cnt, istk, nstks, nstks2merge, stkind_prev
+        logical                          :: l_pick, l_mc, l_ctf, l_extr, err
+        output_dir = PATH_HERE
+        ! determines what has been done & consistency
+        if( self%os_mic%get_noris() == 0 ) THROW_HARD('Source project is empty!')
+        if( self2merge%os_mic%get_noris() == 0 ) THROW_HARD('Target project is empty!')
+        ! motion correction
+        l_mc = self%os_mic%isthere('intg') .and. self2merge%os_mic%isthere('intg')
+        if( .not.l_mc )then
+            THROW_HARD('One project does not contain micrographs!')
+        endif
+        ! ctf estimation
+        ctfvars       = self%os_mic%get_ctfvars(1)
+        ctfvars2merge = self2merge%os_mic%get_ctfvars(1)
+        if( ctfvars%ctfflag /= ctfvars2merge%ctfflag )then
+            THROW_HARD('Inconsistent CTF states between projects!')
+        endif
+        if( .not.is_equal(ctfvars%smpd,ctfvars2merge%smpd) )then
+            THROW_HARD('Inconsistent SMPD between projects!')
+        endif
+        l_ctf = ctfvars%ctfflag /= CTFFLAG_NO
+        ! picking
+        l_pick = self%os_mic%isthere('boxfile') .or. self2merge%os_mic%isthere('boxfile')
+        ! particles extraction
+        l_extr = (self%os_stk%get_noris() > 0) .and. (self2merge%os_stk%get_noris() > 0)
+        if( .not.l_extr )then
+            THROW_WARN('Inconsistent particles extraction between projects! stacks will not be imported')
+        endif
+        ! folders
+        output_dir_motion_correct = filepath(trim(output_dir), trim(DIR_MOTION_CORRECT))
+        call simple_mkdir(output_dir_motion_correct,errmsg="commander_stream_wflows :: exec_merge_stream;  ")
+        if( l_ctf )then
+            output_dir_ctf_estimate = filepath(trim(output_dir), trim(DIR_CTF_ESTIMATE))
+            call simple_mkdir(output_dir_ctf_estimate,errmsg="commander_stream_wflows :: exec_merge_stream;  ")
+        endif
+        if( l_pick )then
+            output_dir_picker = filepath(trim(output_dir), trim(DIR_PICKER))
+            call simple_mkdir(output_dir_picker,errmsg="commander_stream_wflows :: exec_merge_stream;  ")
+        endif
+        if( l_extr )then
+            output_dir_extract = filepath(trim(output_dir), trim(DIR_EXTRACT))
+            call simple_mkdir(output_dir_extract,errmsg="commander_stream_wflows :: exec_merge_stream;  ")
+        endif
+        ! micrographs segment
+        nmics       = self%os_mic%get_noris()
+        nmics2merge = self2merge%os_mic%get_noris()
+        do imic = 1,nmics
+            call self%os_mic%get_ori(imic,o)
+            call movefile2folder('intg', output_dir_motion_correct, o, err)
+            if( err )then
+                call o%getter('intg',fname)
+                THROW_HARD('Micrograph '//trim(fname)//' could not be found')
+            endif
+            call movefile2folder('thumb',  output_dir_motion_correct, o, err)
+            call movefile2folder('forctf', output_dir_motion_correct, o, err)
+            call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
+            call movefile2folder('mceps',  output_dir_motion_correct, o, err)
+            if( l_ctf )then
+                call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)
+                call movefile2folder('ctfdoc', output_dir_ctf_estimate, o, err)
+            endif
+            if( l_pick )then
+                call movefile2folder('boxfile',  output_dir_picker, o, err)
+            endif
+            call self%os_mic%set_ori(imic,o)
+        enddo
+        call self%os_mic%reallocate(nmics+nmics2merge)
+        cnt    = nmics
+        do imic = 1,nmics2merge
+            cnt = cnt + 1
+            call self2merge%os_mic%get_ori(imic,o)
+            call movefile2folder('intg', output_dir_motion_correct, o, err)
+            if( err )then
+                call o%getter('intg',fname)
+                THROW_HARD('Micrograph '//trim(fname)//' could not be found')
+            endif
+            call movefile2folder('thumb',  output_dir_motion_correct, o, err)
+            call movefile2folder('forctf', output_dir_motion_correct, o, err)
+            call movefile2folder('mc_starfile', output_dir_motion_correct, o, err)
+            call movefile2folder('mceps',  output_dir_motion_correct, o, err)
+            if( l_ctf )then
+                call movefile2folder('ctfjpg', output_dir_ctf_estimate, o, err)
+                call movefile2folder('ctfdoc', output_dir_ctf_estimate, o, err)
+            endif
+            if( l_pick )then
+                call movefile2folder('boxfile',  output_dir_picker, o, err)
+            endif
+            call self%os_mic%set_ori(cnt,o)
+        enddo
+        if( l_extr )then
+            ! stacks
+            nstks        = self%os_stk%get_noris()
+            nstks2merge  = self2merge%os_stk%get_noris()
+            nptcls       = self%os_ptcl2D%get_noris()
+            nptcls2merge = self2merge%os_ptcl2D%get_noris()
+            do istk = 1,nstks
+                call self%os_stk%get_ori(istk,o)
+                call movefile2folder('stk', output_dir_extract, o, err)
+                if( err )then
+                    call o%getter('stk',fname)
+                    THROW_HARD('Stack '//trim(fname)//' could not be found')
+                endif
+                call self%os_stk%set_ori(istk,o)
+            enddo
+            call self%os_stk%reallocate(nstks+nstks2merge)
+            top_prev = nint(self%os_stk%get(nstks,'top'))
+            cnt      = nstks
+            do istk = 1,nstks2merge
+                cnt = cnt + 1
+                call self2merge%os_stk%get_ori(istk,o)
+                fromp = nint(o%get('fromp')) + top_prev
+                top   = nint(o%get('top'))   + top_prev
+                call o%set('fromp',real(fromp))
+                call o%set('top',  real(top))
+                call movefile2folder('stk', output_dir_extract, o, err)
+                if( err )then
+                    call o%getter('stk',fname)
+                    THROW_HARD('Stack '//trim(fname)//' could not be found')
+                endif
+                call self%os_stk%set_ori(cnt,o)
+            enddo
+            ! particles
+            call self%os_ptcl2D%reallocate(nptcls+nptcls2merge)
+            call self%os_ptcl3D%reallocate(nptcls+nptcls2merge)
+            stkind_prev = nint(self%os_ptcl2D%get(nptcls,'stkind'))
+            cnt    = nptcls
+            do iptcl = 1,nptcls2merge
+                cnt = cnt + 1
+                call self2merge%os_ptcl2D%get_ori(iptcl,o)
+                stkind = nint(o%get('stkind')) + stkind_prev
+                call o%set('stkind',real(stkind))
+                call self%os_ptcl2D%set_ori(cnt,o)
+                call self2merge%os_ptcl3D%get_ori(iptcl,o)
+                call o%set('stkind',real(stkind))
+                call self%os_ptcl3D%set_ori(cnt,o)
+            enddo
+        endif
+        ! the end
+        call self2merge%kill
+        call self%write
+        call o%kill
+
+        contains
+
+            subroutine movefile2folder(key, folder, o, err)
+                use simple_ori, only: ori
+                character(len=*), intent(in)    :: key, folder
+                class(ori),       intent(inout) :: o
+                logical,          intent(out)   :: err
+                character(len=:), allocatable :: src
+                character(len=LONGSTRLEN) :: dest,reldest
+                integer :: iostat
+                err = .false.
+                if( .not.o%isthere(key) )then
+                    err = .true.
+                    return
+                endif
+                call o%getter(key,src)
+                if( .not.file_exists(src) )then
+                    err = .true.
+                    return
+                endif
+                dest   = trim(folder)//'/'//basename(src)
+                call simple_copy_file(src,dest)
+                !iostat = rename(src,dest)
+                ! if( iostat /= 0 )then
+                !     THROW_WARN('Ignoring '//trim(src))
+                !     return
+                ! endif
+                call make_relativepath(CWD_GLOB,dest,reldest)
+                call o%set(key,reldest)
+            end subroutine movefile2folder
+
+    end subroutine merge_stream_projects
 
     ! report state selection to os_stk & os_ptcl2D/3D
     subroutine report_state2stk( self, states )

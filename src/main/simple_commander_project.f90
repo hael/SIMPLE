@@ -23,6 +23,7 @@ public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
 public :: prune_project_commander
+public :: merge_stream_projects_commander
 public :: replace_project_field_commander
 private
 #include "simple_local_flags.inc"
@@ -83,6 +84,10 @@ type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project
 end type prune_project_commander
+type, extends(commander_base) :: merge_stream_projects_commander
+  contains
+    procedure :: execute      => exec_merge_stream_projects
+end type merge_stream_projects_commander
 type, extends(commander_base) :: replace_project_field_commander
   contains
     procedure :: execute      => exec_replace_project_field
@@ -817,7 +822,7 @@ contains
     !> for purging of a project of state=0
     subroutine exec_prune_project( self, cline )
         class(prune_project_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                 intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
         call cline%set('mkdir', 'yes')
@@ -826,6 +831,22 @@ contains
         call spproj%prune_project(cline)
         call simple_end('**** PRUNE_PROJECT NORMAL STOP ****')
     end subroutine exec_prune_project
+
+    !> for appending one project from preprocess_stream to another
+    subroutine exec_merge_stream_projects( self, cline )
+        class(merge_stream_projects_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj, spproj2merge
+        call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        ! projfile <- projfile_target
+        call spproj%read(params%projfile)
+        call spproj2merge%read(params%projfile_target)
+        call spproj%merge_stream_projects(spproj2merge)
+        call spproj%kill
+        call simple_end('**** MERGE_STREAMS_PROJECTS NORMAL STOP ****')
+    end subroutine exec_merge_stream_projects
 
     !> for substituting one project field for another, for dev only
     subroutine exec_replace_project_field( self, cline )
