@@ -246,7 +246,6 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
-        ! call init_cmd_dict !!!!!!!!!!!!!
         call new_center
         call new_cleanup2D
         call new_cleanup2D_nano
@@ -323,7 +322,6 @@ contains
         call new_update_project
         call new_vizoris
         call new_volops
-        ! ...
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -3710,8 +3708,6 @@ contains
     subroutine print_ui_latex
         integer :: i
         type(simple_program), pointer :: ptr => null()
-        ! init UI descriptions
-        call make_user_interface
         do i=1,n_prg_ptrs
             ptr => prg_ptr_array(i)%ptr2prg
             write(logfhandle, '(a)') '\subsection{' // str2latex(ptr%name) // '}'
@@ -3839,8 +3835,6 @@ contains
         type(json_core)           :: json
         type(json_value), pointer :: program_entry, program, all_programs
         integer :: iprg
-        ! init UI descriptions
-        call make_user_interface
         ! JSON init
         call json%initialize()
         ! create array of program entries

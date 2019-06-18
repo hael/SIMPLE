@@ -2,7 +2,9 @@ module simple_private_prgs
 include 'simple_lib.f08'
 implicit none
 
-public :: make_private_user_interface, print_cmdline_private
+public :: make_private_user_interface, print_private_cmdline, get_private_keys_required, get_n_private_keys_required
+private
+#include "simple_local_flags.inc"
 
 ! private program instance
 type simple_private_prg
@@ -19,6 +21,7 @@ end type simple_private_prg
 
 ! array of simple_private_exec program specifications
 integer, parameter       :: NMAX_PRIVATE_PRGS = 100
+integer                  :: n_private_prgs    = 0
 type(simple_private_prg) :: private_prgs(NMAX_PRIVATE_PRGS)
 
 ! old-school cmd_dict (command line dictionary), used by simple_private_exec
@@ -56,38 +59,115 @@ contains
         call new_private_prgs
     end subroutine make_private_user_interface
 
-    subroutine print_cmdline_private( keys_required, keys_optional )
-        character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
+    function get_n_private_keys_required( prg ) result( nreq )
+        character(len=*), intent(in)  :: prg
+        integer :: nreq, iprg, i
+        nreq = 0
+        iprg = 0
+        do i=1,n_private_prgs
+            if( trim(prg) .eq. private_prgs(i)%name )then
+                iprg = i
+                exit
+            endif
+        end do
+        if( iprg == 0 ) return
+        nreq = private_prgs(iprg)%nreq
+    end function get_n_private_keys_required
+
+    function get_private_keys_required( prg ) result( keys_required )
+        character(len=*), intent(in)  :: prg
+        type(str4arr), allocatable    :: keys_required(:)
+        integer :: iprg, i, nreq
+        iprg = 0
+        do i=1,n_private_prgs
+            if( trim(prg) .eq. private_prgs(i)%name )then
+                iprg = i
+                exit
+            endif
+        end do
+        if( iprg == 0 ) return
+        nreq = private_prgs(iprg)%nreq
+        if( nreq == 0 ) return
+        allocate(keys_required(nreq))
+        do i=1,nreq
+            allocate(keys_required(i)%str, source=trim(private_prgs(iprg)%keys_required(i)))
+        end do
+    end function get_private_keys_required
+
+    function get_n_private_keys_optional( prg ) result( nopt )
+        character(len=*), intent(in)  :: prg
+        integer :: nopt, iprg, i
+        iprg = 0
+        do i=1,n_private_prgs
+            if( trim(prg) .eq. private_prgs(i)%name )then
+                iprg = i
+                exit
+            endif
+        end do
+        if( iprg == 0 ) return
+        nopt = private_prgs(iprg)%nopt
+    end function get_n_private_keys_optional
+
+    function get_private_keys_optional( prg, nopt ) result( keys_optional )
+        character(len=*), intent(in)  :: prg
+        integer,          intent(out) :: nopt
+        type(str4arr), allocatable    :: keys_optional(:)
+        integer :: iprg, i
+        iprg = 0
+        do i=1,n_private_prgs
+            if( trim(prg) .eq. private_prgs(i)%name )then
+                iprg = i
+                exit
+            endif
+        end do
+        if( iprg == 0 ) return
+        nopt = private_prgs(iprg)%nopt
+        if( nopt == 0 ) return
+        allocate(keys_optional(nopt))
+        do i=1,nopt
+            allocate(keys_optional(i)%str, source=trim(private_prgs(iprg)%keys_optional(i)))
+        end do
+    end function get_private_keys_optional
+
+    subroutine print_private_cmdline( prg )
+        character(len=*), intent(in) :: prg
         character(len=KEYLEN), allocatable :: sorted_keys(:)
-        integer :: nreq, nopt
+        integer :: iprg, i, nreq, nopt
+        iprg = 0
+        do i=1,n_private_prgs
+            if( trim(prg) .eq. private_prgs(i)%name )then
+                iprg = i
+                exit
+            endif
+        end do
+        if( iprg == 0 )then
+            THROW_WARN(trim(prg)//' lacks description in the private_prgs class')
+            return
+        endif
         write(logfhandle,'(a)') 'USAGE:'
         write(logfhandle,'(a)') 'bash-3.2$ simple_private_exec prg=simple_program key1=val1 key2=val2 ...'
         ! print required
-        if( present(keys_required) )then
-            nreq =  size(keys_required)
-            if( nreq > 0 )then
-                write(logfhandle,'(a)') ''
-                write(logfhandle,'(a)') 'REQUIRED'
-                allocate(sorted_keys(nreq), source=keys_required)
-                call lexSort(sorted_keys)
-                call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
-                deallocate(sorted_keys)
-            endif
+        nreq = private_prgs(iprg)%nreq
+        if( nreq > 0 )then
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'REQUIRED'
+            allocate(sorted_keys(nreq), source=private_prgs(iprg)%keys_required(:nreq))
+            call lexSort(sorted_keys)
+            call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
+            deallocate(sorted_keys)
         endif
         ! print optionals
-        if( present(keys_optional) )then
-            nopt = size(keys_optional)
-            if( nopt > 0 )then
-                write(logfhandle,'(a)') ''
-                write(logfhandle,'(a)') 'OPTIONAL'
-                allocate(sorted_keys(nopt), source=keys_optional)
-                call lexSort(sorted_keys)
-                call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
-                deallocate(sorted_keys)
-            endif
+        nopt = private_prgs(iprg)%nopt
+        if( nopt > 0 )then
+            write(logfhandle,'(a)') ''
+            write(logfhandle,'(a)') 'OPTIONAL'
+            allocate(sorted_keys(nopt), source=private_prgs(iprg)%keys_optional(:nopt))
+            call lexSort(sorted_keys)
+            call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
+            deallocate(sorted_keys)
         endif
         write(logfhandle,'(a)') ''
-    end subroutine print_cmdline_private
+    end subroutine print_private_cmdline
 
     subroutine init_cmd_dict
         call cmd_dict%new(NMAX_CMD_DICT)
@@ -585,6 +665,8 @@ contains
         call private_prgs(22)%push_opt_key('state')
         call private_prgs(22)%push_opt_key('nstates')
         call private_prgs(22)%push_opt_key('mskfile')
+
+        n_private_prgs = 22
     end subroutine new_private_prgs
 
 end module simple_private_prgs

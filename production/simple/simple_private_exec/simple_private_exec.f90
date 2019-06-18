@@ -3,6 +3,7 @@ program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_user_interface, only: make_user_interface, write_ui_json, print_ui_latex
+use simple_private_prgs,   only: make_private_user_interface
 use simple_symanalyzer,    only: print_subgroups
 use simple_commander_project
 use simple_commander_checks
@@ -88,8 +89,9 @@ call get_command_argument(1, xarg, cmdlen, cmdstat)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
-! make UI
+! make UIs
 call make_user_interface
+call make_private_user_interface
 ! this parses all key=value pairs on the command line
 call cline%parse_private
 

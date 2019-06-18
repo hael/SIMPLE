@@ -2,6 +2,7 @@
 module simple_cmdline
 include 'simple_lib.f08'
 use simple_user_interface ! use all in there
+use simple_private_prgs   ! use all in there
 use simple_args, only: args
 implicit none
 private
@@ -153,9 +154,11 @@ contains
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse_private( self )
         class(cmdline), intent(inout) :: self
+        type(str4arr), allocatable    :: keys_required(:)
+        type(args)                    :: allowed_args
         character(len=LONGSTRLEN)     :: arg
         type(simple_program), pointer :: ptr2prg => null()
-        integer :: i, pos, cmdstat, cmdlen
+        integer :: i, ikey, pos, cmdstat, cmdlen, sz_keys_req, nargs_required
         ! parse command line
         self%argcnt = command_argument_count()
         call get_command(self%entire_line)
@@ -169,18 +172,53 @@ contains
         call get_prg_ptr(arg(pos+1:), ptr2prg)
         ! decide wether to print the command line instructions or not
         select case(trim(arg(pos+1:)))
-        case('write_ui_json','print_ui_latex','print_sym_subgroups','nspace')
+            case('write_ui_json','print_ui_latex','print_sym_subgroups')
                 ! no command line arguments
+                return
             case DEFAULT
-                if( self%argcnt == 1 )then ! only program name given
-                    if( associated(ptr2prg) )then
+                if( associated(ptr2prg) )then
+                    ! get required keys
+                    sz_keys_req = ptr2prg%get_nrequired_keys()
+                    if( sz_keys_req > 0 )then
+                        keys_required  = ptr2prg%get_required_keys()
+                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+                    else
+                        nargs_required = 1
+                    endif
+                    if( self%argcnt < nargs_required )then
                         call ptr2prg%print_cmdline()
                         call exit(EXIT_FAILURE2)
                     else
-                        THROW_WARN(trim(arg(pos+1:))//' lacks description in the user_interface class')
+                        ! indicate which variables are required
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( allocated(keys_required(ikey)%str) ) call self%checkvar(keys_required(ikey)%str, ikey)
+                            end do
+                        endif
+                    endif
+                else
+                    ! get required keys
+                    sz_keys_req = get_n_private_keys_required(trim(arg(pos+1:)))
+                    if( sz_keys_req > 0 )then
+                        keys_required  = get_private_keys_required(trim(arg(pos+1:)))
+                        nargs_required = sz_keys_req + 1 ! +1 because prg part of command line
+                    else
+                        nargs_required = 1
+                    endif
+                    if( self%argcnt < nargs_required .or. (sz_keys_req == 0 .and. self%argcnt == 1) )then
+                        call print_private_cmdline(arg(pos+1:))
+                        call exit(EXIT_FAILURE2)
+                    else
+                        ! indicate which variables are required
+                        if( sz_keys_req > 0 )then
+                            do ikey=1,sz_keys_req
+                                if( allocated(keys_required(ikey)%str) ) call self%checkvar(keys_required(ikey)%str, ikey)
+                            end do
+                        endif
                     endif
                 endif
         end select
+        allowed_args = args()
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
@@ -188,29 +226,28 @@ contains
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
-                call exit(EXIT_FAILURE5)
+                call exit(EXIT_FAILURE3)
             endif
-            call self%parse_command_line_value(i, arg)
+            call self%parse_command_line_value(i, arg, allowed_args)
         end do
+        if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
 
     subroutine parse_command_line_value( self, i, arg, allowed_args )
-        class(cmdline),        intent(inout) :: self
-        integer,               intent(in)    :: i
-        character(len=*),      intent(in)    :: arg
-        class(args), optional, intent(in)    :: allowed_args
+        class(cmdline),   intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=*), intent(in)    :: arg
+        class(args),      intent(in)    :: allowed_args
         character(len=:), allocatable :: form
         integer :: pos1, io_stat, ri
         pos1 = index(arg, '=') ! position of '='
         ! parse everyting containing '='
         if( pos1 /= 0 )then
             self%cmds(i)%key = arg(:pos1-1) ! KEY
-            if( present(allowed_args) )then
-                if( .not. allowed_args%is_present(self%cmds(i)%key) )then
-                    write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
-                    write(logfhandle,'(a)') 'Perhaps you have misspelled?'
-                    call exit(EXIT_FAILURE4)
-                endif
+            if( .not. allowed_args%is_present(self%cmds(i)%key) )then
+                write(logfhandle,'(a,a)') trim(self%cmds(i)%key), ' argument is not allowed'
+                write(logfhandle,'(a)') 'Perhaps you have misspelled?'
+                call exit(EXIT_FAILURE4)
             endif
             form = str2format(arg(pos1+1:))
             select case(form)
