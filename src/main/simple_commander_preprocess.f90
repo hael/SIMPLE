@@ -18,7 +18,7 @@ public :: gen_pspecs_and_thumbs_commander
 public :: ctf_estimate_commander
 public :: map_cavgs_selection_commander
 public :: pick_commander
-public :: pick_commander_chiara
+public :: segpick_commander
 public :: extract_commander
 public :: reextract_commander
 public :: pick_extract_commander
@@ -50,10 +50,10 @@ type, extends(commander_base) :: pick_commander
   contains
     procedure :: execute      => exec_pick
 end type pick_commander
-type, extends(commander_base) :: pick_commander_chiara
+type, extends(commander_base) :: segpick_commander
   contains
-    procedure :: execute      => exec_pick_chiara
-end type pick_commander_chiara
+    procedure :: execute      => exec_segpick
+end type segpick_commander
 type, extends(commander_base) :: extract_commander
   contains
     procedure :: execute      => exec_extract
@@ -538,28 +538,28 @@ contains
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
     end subroutine exec_pick
 
-    subroutine exec_pick_chiara( self, cline )
-        use simple_picker_chiara
+    subroutine exec_segpick( self, cline )
+        use simple_segpicker, only: segpicker
         use simple_tvfilter, only : tvfilter
-        class(pick_commander_chiara), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline !< command line input
+        class(segpick_commander), intent(inout) :: self
+        class(cmdline),           intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir
         character(len=:), allocatable :: detector
-        type(picker_chiara) :: pc
-        type(parameters)    :: params
+        type(segpicker)  :: pc
+        type(parameters) :: params
         ! sanity checks
         if( .not. cline%defined('fname') )then
-            THROW_HARD('ERROR! fname needs to be present; exec_pick_chiara')
+            THROW_HARD('ERROR! fname needs to be present; exec_segpick')
         endif
         if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_pick_chiara')
+            THROW_HARD('ERROR! smpd needs to be present; exec_segpick')
         endif
         if( .not. cline%defined('min_rad') .or.  .not. cline%defined('max_rad'))then
-            THROW_HARD('ERROR! min_rad and max_rad need to be present; exec_pick_chiara')
+            THROW_HARD('ERROR! min_rad and max_rad need to be present; exec_segpick')
         endif
         call params%new(cline)
         if( cline%defined('thres') .and. params%detector .ne. 'sobel')then
-            THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_pick_chiara')
+            THROW_HARD('ERROR! thres is compatible only with sobel detector; exec_segpick')
         endif
         ! set default
         detector = 'bin'
@@ -583,7 +583,7 @@ contains
         call pc%kill
         ! end gracefully
         call simple_end('**** SIMPLE_PICK NORMAL STOP ****')
-    end subroutine exec_pick_chiara
+    end subroutine exec_segpick
 
     !> for extracting particle images from integrated DDD movies
     subroutine exec_extract( self, cline )

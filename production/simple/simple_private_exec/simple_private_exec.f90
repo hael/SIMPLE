@@ -31,7 +31,7 @@ type(map_cavgs_selection_commander)   :: xmap_cavgs_selection
 type(pick_extract_commander)          :: xpick_extract
 type(pick_commander)                  :: xpick
 type(make_pickrefs_commander)         :: xmake_pickrefs
-type(pick_commander_chiara)           :: xpickchiara
+type(segpick_commander)               :: xsegpick
 
 ! CLUSTER2D PROGRAMS
 type(make_cavgs_commander)            :: xmake_cavgs
@@ -136,8 +136,8 @@ select case(prg)
         call xpick%execute(cline)
     case( 'make_pickrefs' )       ! LACKS DESCRIPTION
         call xmake_pickrefs%execute(cline)
-    case ('pick_chiara')          ! LACKS DESCRIPTION
-        call xpickchiara%execute(cline)
+    case ('segpick')          ! LACKS DESCRIPTION
+        call xsegpick%execute(cline)
 
     ! CLUSTER2D PROGRAMS
     case( 'make_cavgs' )

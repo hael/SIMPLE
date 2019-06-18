@@ -2803,12 +2803,11 @@ contains
                     return
                 endif
                 dest   = trim(folder)//'/'//basename(src)
-                call simple_copy_file(src,dest)
-                !iostat = rename(src,dest)
-                ! if( iostat /= 0 )then
-                !     THROW_WARN('Ignoring '//trim(src))
-                !     return
-                ! endif
+                iostat = rename(src,dest)
+                if( iostat /= 0 )then
+                    THROW_WARN('Ignoring '//trim(src))
+                    return
+                endif
                 call make_relativepath(CWD_GLOB,dest,reldest)
                 call o%set(key,reldest)
             end subroutine movefile2folder

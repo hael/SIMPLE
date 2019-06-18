@@ -25,7 +25,7 @@ type :: motion_correct_iter
     type(image) :: pspec_half_n_half, thumbnail
     ! these strings are part of the instance for reporting purposes
     character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
-    character(len=STDLEN) :: moviename_forctf, moviename_thumb, moviename_pspec
+    character(len=STDLEN) :: moviename_forctf, moviename_thumb
   contains
     procedure :: iterate
     procedure :: get_moviename
@@ -41,8 +41,8 @@ contains
         integer,                    intent(inout) :: frame_counter
         character(len=*),           intent(in)    :: moviename, fbody, dir_out
         character(len=*), optional, intent(in)    :: gainref_fname
-        character(len=:), allocatable :: fbody_here, ext, fname
-        real,             allocatable :: shifts(:,:)!, aniso_shifts(:,:)
+        character(len=:), allocatable :: fbody_here, ext
+        real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
         integer :: ldim(3), ldim_thumb(3)
@@ -67,7 +67,6 @@ contains
         ! isotropic ones
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
-        self%moviename_pspec  = trim(dir_out)//trim(adjustl(fbody_here))//POWSPEC_SUFFIX//trim(params_glob%ext)
         self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
         if( cline%defined('tof') )then
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
@@ -173,7 +172,6 @@ contains
         if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
         call self%moviesum_corrected%write(self%moviename_intg)
         call self%moviesum_ctf%write(self%moviename_forctf)
-        call self%pspec_ctf%write(self%moviename_pspec)
         ! generate thumbnail
         ldim          = self%moviesum_corrected%get_ldim()
         scale         = real(params_glob%pspecsz)/real(ldim(1))
