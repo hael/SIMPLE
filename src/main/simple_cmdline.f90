@@ -169,7 +169,7 @@ contains
         call get_prg_ptr(arg(pos+1:), ptr2prg)
         ! decide wether to print the command line instructions or not
         select case(trim(arg(pos+1:)))
-        case('write_ui_json','print_ui_latex','print_sym_subgroups','nspace','print_dose_weights')
+        case('write_ui_json','print_ui_latex','print_sym_subgroups','nspace')
                 ! no command line arguments
             case DEFAULT
                 if( self%argcnt == 1 )then ! only program name given

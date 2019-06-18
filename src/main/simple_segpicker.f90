@@ -1,4 +1,3 @@
-! USAGE: simple_private_exec prg=pick_chiara detector=bin smpd=1. min_rad=15 max_rad=22 draw_color=white fname='/home/chiara/Desktop/Chiara/ParticlePICKING/PickingResults/SomeExamples/NegativeSTORIGINAL.mrc'
 module simple_segpicker
 include 'simple_lib.f08'
 use simple_image, only : image

@@ -9,8 +9,6 @@ use simple_binoris_io,     only: binread_nlines, binread_oritab
 use simple_parameters,     only: parameters
 implicit none
 
-public :: project2txt_commander
-public :: txt2project_commander
 public :: print_project_info_commander
 public :: selection_commander
 public :: print_project_vals_commander
@@ -28,14 +26,6 @@ public :: replace_project_field_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: project2txt_commander
-  contains
-    procedure :: execute      => exec_project2txt
-end type project2txt_commander
-type, extends(commander_base) :: txt2project_commander
-  contains
-    procedure :: execute      => exec_txt2project
-end type txt2project_commander
 type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
@@ -93,47 +83,6 @@ type, extends(commander_base) :: replace_project_field_commander
     procedure :: execute      => exec_replace_project_field
 end type replace_project_field_commander
 contains
-
-    !> convert text (.txt) oris doc to binary (.simple)
-    subroutine exec_txt2project( self, cline )
-        class(txt2project_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        type(oris)       :: os
-        type(sp_project) :: spproj
-        integer          :: noris
-        logical          :: projfile_existed
-        call params%new(cline)
-        noris = nlines(params%oritab)
-        call os%new(noris)
-        call os%read(params%oritab)
-        projfile_existed = .false.
-        if( file_exists(params%projfile) )then
-            call spproj%read(params%projfile)
-            projfile_existed = .true.
-        endif
-        call spproj%set_sp_oris(params%oritype, os)
-        if( projfile_existed )then
-            call spproj%write_segment_inside(params%oritype, params%projfile)
-        else
-            call spproj%write(params%projfile)
-        endif
-        call spproj%kill
-        call simple_end('**** TXT2PROJECT NORMAL STOP ****')
-    end subroutine exec_txt2project
-
-    !> convert binary (.simple) oris doc to text (.txt)
-    subroutine exec_project2txt( self, cline )
-        class(project2txt_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        call params%new(cline)
-        call spproj%read_segment(params%oritype, params%projfile)
-        call spproj%write_segment2txt(params%oritype, params%outfile)
-        call spproj%kill
-        call simple_end('**** PROJECT2TXT NORMAL STOP ****')
-    end subroutine exec_project2txt
 
     !> convert binary (.simple) oris doc to text (.txt)
     subroutine exec_print_project_info( self, cline )

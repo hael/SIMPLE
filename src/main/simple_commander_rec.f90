@@ -10,8 +10,7 @@ use simple_strategy2D3D_common, only: gen_projection_frcs
 implicit none
 
 public :: reconstruct3D_commander
-public :: volassemble_eo_commander
-!public :: volassemble_commander
+public :: volassemble_commander
 private
 #include "simple_local_flags.inc"
 
@@ -19,14 +18,10 @@ type, extends(commander_base) :: reconstruct3D_commander
   contains
     procedure :: execute      => exec_reconstruct3D
 end type reconstruct3D_commander
-type, extends(commander_base) :: volassemble_eo_commander
+type, extends(commander_base) :: volassemble_commander
   contains
-    procedure :: execute      => exec_volassemble_eo
-end type volassemble_eo_commander
-! type, extends(commander_base) :: volassemble_commander
-!   contains
-!     procedure :: execute      => exec_volassemble
-! end type volassemble_commander
+    procedure :: execute      => exec_volassemble
+end type volassemble_commander
 
 contains
 
@@ -50,11 +45,11 @@ contains
     end subroutine exec_reconstruct3D
 
     !> for assembling even/odd volumes generated with distributed execution
-    subroutine exec_volassemble_eo( self, cline )
+    subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
-        class(volassemble_eo_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(volassemble_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
         type(parameters)              :: params
         type(builder)                 :: build
         type(reconstructor_eo)        :: eorecvol_read
@@ -171,17 +166,17 @@ contains
         write(logfhandle,'(a,1x,F6.2)') '>>> LOW-PASS LIMIT:', params%lp
         call eorecvol_read%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_VOLASSEMBLE_EO NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
         ! indicate completion (when run in a qsys env)
         if( cline%defined('state') )then
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2))
         else
             allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
         endif
-        call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble_eo')
+        call simple_touch( finished_fname , errmsg='In: commander_rec::volassemble')
         if( L_BENCH )then
             rt_tot     = toc(t_tot)
-            benchfname = 'VOLASSEMBLE_EO_BENCH.txt'
+            benchfname = 'volassemble_BENCH.txt'
             call fopen(fnr, FILE=trim(benchfname), STATUS='REPLACE', action='WRITE')
             write(fnr,'(a)') '*** TIMINGS (s) ***'
             write(fnr,'(a,1x,f9.2)') 'initialisation           : ', rt_init
@@ -208,86 +203,6 @@ contains
             &rt_gen_anisotropic_optlp+rt_sampl_dens_correct_sum+rt_eoavg)/rt_tot) * 100.
             call fclose(fnr)
         endif
-    end subroutine exec_volassemble_eo
-
-    ! !> for assembling a volume generated with distributed execution
-    ! subroutine exec_volassemble( self, cline )
-    !     use simple_reconstructor, only: reconstructor
-    !     class(volassemble_commander), intent(inout) :: self
-    !     class(cmdline),               intent(inout) :: cline
-    !     character(len=:), allocatable :: fbody, finished_fname
-    !     type(parameters)              :: params
-    !     type(builder)                 :: build
-    !     character(len=STDLEN)         :: recvolname, rho_name
-    !     integer                       :: part, s, ss, state
-    !     type(reconstructor)           :: recvol_read
-    !     call build%init_params_and_build_general_tbox(cline,params,boxmatch_off=.true.)
-    !     call build%build_rec_tbox(params) ! reconstruction toolbox built
-    !     call recvol_read%new([params%boxpd,params%boxpd,params%boxpd], params%smpd)
-    !     call recvol_read%alloc_rho( build%spproj)
-    !     do ss=1,params%nstates
-    !         if( cline%defined('state') )then
-    !             s     = 1             ! index in reconstruct3D
-    !             state = params%state  ! actual state
-    !         else
-    !             s     = ss
-    !             state = ss
-    !         endif
-    !         call build%recvol%reset
-    !         do part=1,params%nparts
-    !             allocate(fbody, source=trim(VOL_FBODY)//int2str_pad(state,2)//'_part'//int2str_pad(part,params%numlen))
-    !             params%vols(s) = fbody//params%ext
-    !             rho_name      = 'rho_'//fbody//params%ext
-    !             call assemble(params%vols(s), trim(rho_name))
-    !             deallocate(fbody)
-    !         end do
-    !         if( params%nstates == 1 .and. cline%defined('outvol') )then
-    !             recvolname = trim(params%outvol)
-    !         else
-    !             recvolname = 'recvol_state'//int2str_pad(state,2)//params%ext
-    !         endif
-    !         call correct_for_sampling_density(trim(recvolname))
-    !         if( cline%defined('state') )exit
-    !     end do
-    !     call recvol_read%dealloc_rho
-    !     call recvol_read%kill
-    !     ! end gracefully
-    !     call simple_end('**** SIMPLE_VOLASSEMBLE NORMAL STOP ****', print_simple=.false.)
-    !     ! indicate completion (when run in a qsys env)
-    !     if( cline%defined('state') )then
-    !         allocate( finished_fname, source='VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2) )
-    !     else
-    !         allocate( finished_fname, source='VOLASSEMBLE_FINISHED' )
-    !     endif
-    !     call simple_touch( finished_fname, errmsg='In: commander_rec :: volassemble')
-    !
-    !     contains
-    !
-    !         subroutine assemble( recnam, kernam )
-    !             character(len=*), intent(in) :: recnam
-    !             character(len=*), intent(in) :: kernam
-    !             logical                      :: here(2)
-    !             here(1)=file_exists(recnam)
-    !             here(2)=file_exists(kernam)
-    !             if( all(here) )then
-    !                 call recvol_read%read(recnam)
-    !                 call recvol_read%read_rho(kernam)
-    !                 call build%recvol%sum_reduce(recvol_read)
-    !             else
-    !                 if( .not. here(1) ) THROW_WARN(adjustl(trim(recnam))//' missing')
-    !                 if( .not. here(2) ) THROW_WARN(adjustl(trim(kernam))//' missing')
-    !                 return
-    !             endif
-    !         end subroutine assemble
-    !
-    !         subroutine correct_for_sampling_density( recname )
-    !             character(len=*), intent(in) :: recname
-    !             call build%recvol%sampl_dens_correct
-    !             call build%recvol%ifft()
-    !             call build%recvol%clip(build%vol)
-    !             call build%vol%write(recname, del_if_exists=.true.)
-    !         end subroutine correct_for_sampling_density
-    !
-    ! end subroutine exec_volassemble
+    end subroutine exec_volassemble
 
 end module simple_commander_rec

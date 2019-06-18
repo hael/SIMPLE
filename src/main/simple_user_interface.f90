@@ -66,12 +66,12 @@ type simple_prg_ptr
     type(simple_program), pointer :: ptr2prg => null()
 end type simple_prg_ptr
 
-! array of pointers to all programs
+! array of pointers to all simple_exec and simple_distr_exec programs
 integer, parameter   :: NMAX_PTRS  = 200
 integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
-! declare protected program specifications here
+! declare simple_exec and simple_distr_exec program specifications here
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: cleanup2D_nano
@@ -234,7 +234,6 @@ type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
 
-
 interface set_param
     module procedure set_param_1
     module procedure set_param_2
@@ -247,6 +246,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        ! call init_cmd_dict !!!!!!!!!!!!!
         call new_center
         call new_cleanup2D
         call new_cleanup2D_nano
@@ -3734,28 +3734,20 @@ contains
             write(logfhandle,'(a)') format_str('bash-3.2$ simple_exec prg='       //self%name // ' key1=val1 key2=val2 ...', C_ITALIC)
         endif
         write(logfhandle,'(a)') 'Required input parameters in ' // format_str('bold', C_BOLD) // ' (ensure terminal support)'
-
         if( allocated(self%img_ios) )    write(logfhandle,'(a)') format_str('IMAGE INPUT/OUTPUT',     C_UNDERLINED)
         call print_param_hash(self%img_ios)
-
         if( allocated(self%parm_ios) )   write(logfhandle,'(a)') format_str('PARAMETER INPUT/OUTPUT', C_UNDERLINED)
         call print_param_hash(self%parm_ios)
-
         if( allocated(self%alt_ios) )    write(logfhandle,'(a)') format_str('ALTERNATIVE INPUTS',     C_UNDERLINED)
         call print_param_hash(self%alt_ios)
-
         if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') format_str('SEARCH CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%srch_ctrls)
-
         if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') format_str('FILTER CONTROLS',        C_UNDERLINED)
         call print_param_hash(self%filt_ctrls)
-
         if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') format_str('MASK CONTROLS',          C_UNDERLINED)
         call print_param_hash(self%mask_ctrls)
-
         if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') format_str('COMPUTER CONTROLS',      C_UNDERLINED)
         call print_param_hash(self%comp_ctrls)
-
     end subroutine print_cmdline
 
     subroutine print_cmdline_latex( self )
@@ -3771,28 +3763,20 @@ contains
             write(logfhandle,'(a)') '+textit[bash-3.2$ simple_exec prg='       // self%name // ' key1=val1 key2=val2 ...]'
         endif
         write(logfhandle,'(a)') 'Required input parameters in ' // '+textbf[bold]' // ' (ensure terminal support)'
-
         if( allocated(self%img_ios) )    write(logfhandle,'(a)') '+underline[IMAGE INPUT/OUTPUT]'
         call print_param_hash(self%img_ios,   latex=.true.)
-
         if( allocated(self%parm_ios) )   write(logfhandle,'(a)') '+underline[PARAMETER INPUT/OUTPUT]'
         call print_param_hash(self%parm_ios,  latex=.true.)
-
         if( allocated(self%alt_ios) )    write(logfhandle,'(a)') '+underline[ALTERNATIVE INPUTS]'
         call print_param_hash(self%alt_ios,   latex=.true.)
-
         if( allocated(self%srch_ctrls) ) write(logfhandle,'(a)') '+underline[SEARCH CONTROLS]'
         call print_param_hash(self%srch_ctrls, latex=.true.)
-
         if( allocated(self%filt_ctrls) ) write(logfhandle,'(a)') '+underline[FILTER CONTROLS]'
         call print_param_hash(self%filt_ctrls, latex=.true.)
-
         if( allocated(self%mask_ctrls) ) write(logfhandle,'(a)') '+underline[MASK CONTROLS]'
         call print_param_hash(self%mask_ctrls, latex=.true.)
-
         if( allocated(self%comp_ctrls) ) write(logfhandle,'(a)') '+underline[COMPUTER CONTROLS]'
         call print_param_hash(self%comp_ctrls, latex=.true.)
-
         write(logfhandle,'(a)') '\end{Verbatim}'
     end subroutine print_cmdline_latex
 

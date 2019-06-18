@@ -1179,7 +1179,7 @@ contains
             case('eval')
                 ! nothing to do
             case DEFAULT
-                call cline_volassemble%set( 'prg', 'volassemble_eo' ) ! required for cmdline exec
+                call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
                     volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
@@ -1382,7 +1382,7 @@ contains
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
         cline_volassemble = cline
-        call cline_volassemble%set('prg', 'volassemble_eo')
+        call cline_volassemble%set('prg', 'volassemble')
         call cline_volassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! parallel assembly
         do state = 1,params%nstates

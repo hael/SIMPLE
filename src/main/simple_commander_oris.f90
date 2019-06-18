@@ -17,7 +17,6 @@ public :: oristats_commander
 public :: o_peaksstats_commander
 public :: rotmats2oris_commander
 public :: vizoris_commander
-public :: multivariate_zscore_commander
 private
 #include "simple_local_flags.inc"
 
@@ -45,10 +44,6 @@ type, extends(commander_base) :: vizoris_commander
   contains
     procedure :: execute      => exec_vizoris
 end type vizoris_commander
-type, extends(commander_base) :: multivariate_zscore_commander
-  contains
-    procedure :: execute      => exec_multivariate_zscore
-end type  multivariate_zscore_commander
 
 contains
 
@@ -580,61 +575,5 @@ contains
         call o_prev%kill
         call simple_end('**** VIZORIS NORMAL STOP ****')
     end subroutine exec_vizoris
-
-    subroutine exec_multivariate_zscore( self, cline )
-        use gnufor2
-        class(multivariate_zscore_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        type(sp_project), target      :: spproj
-        type(parameters)              :: params
-        character(len=:), allocatable :: keys
-        real,             allocatable :: vals(:,:), zscores(:)
-        character(len=STDLEN)         :: args(32)
-        class(oris),      pointer     :: os_ptr => null()
-        integer :: nargs, iarg, iptcl, nptcls
-        ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! parse commad-line
-        call params%new(cline)
-        ! read project segment
-        call spproj%read_segment(params%oritype, params%projfile)
-        ! parse the keys for which to generate multivariate Z-scores
-        keys = cline%get_carg('keys')
-        if( str_has_substr(keys, ',') )then
-            call parsestr(keys, ',', args, nargs)
-        else
-            args(1) = keys
-            nargs   = 1
-        endif
-        ! extract the values
-        select case(trim(params%oritype))
-            case('ptcl3D')
-                os_ptr => spproj%os_ptcl3D
-            case DEFAULT
-                THROW_HARD('oritype: '//trim(params%oritype)//' not supported! exec_multivariate_zscore')
-        end select
-        nptcls = os_ptr%get_noris()
-        allocate(vals(nargs,nptcls), zscores(nptcls), source=0.)
-        ! do robust normalization of each variable independently
-        do iarg=1,nargs
-            if( os_ptr%isthere(trim(args(iarg))) )then
-                vals(iarg,:) = os_ptr%get_all(trim(args(iarg)))
-                call robust_normalization(vals(iarg,:))
-            else
-                THROW_HARD('inputted keys argument: '//trim(args(iarg))//' not present in spproj field: '//trim(params%oritype))
-            endif
-        end do
-        ! calculate the multivariate Z-score
-        do iptcl=1,nptcls
-            ! Since the average vector would be 0,0,...,0 by definition, the argument of
-            ! an individual vector is equivalent to the Mahalanobis distance to the mean
-            ! in # standard deviations. This is the multivariate Z-score
-            zscores(iptcl) = sqrt(sum(vals(:,iptcl) * vals(:,iptcl)))
-            call os_ptr%set(iptcl, 'zscore', zscores(iptcl))
-        end do
-        call plot(zscores,vals(1,:))
-        ! update project file
-        call spproj%write_segment_inside(trim(params%oritype), trim(params%projfile))
-    end subroutine exec_multivariate_zscore
 
 end module simple_commander_oris

@@ -16,10 +16,8 @@ implicit none
 
 public :: cluster_smat_commander
 public :: masscen_commander
-public :: print_dose_weights_commander
 public :: print_fsc_commander
 public :: print_magic_boxes_commander
-public :: res_commander
 public :: shift_commander
 public :: stk_corr_commander
 public :: kstest_commander
@@ -35,10 +33,6 @@ type, extends(commander_base) :: masscen_commander
   contains
     procedure :: execute      => exec_masscen
 end type masscen_commander
-type, extends(commander_base) :: print_dose_weights_commander
-  contains
-    procedure :: execute       => exec_print_dose_weights
-end type print_dose_weights_commander
 type, extends(commander_base) :: print_fsc_commander
   contains
     procedure :: execute       => exec_print_fsc
@@ -47,10 +41,6 @@ type, extends(commander_base) :: print_magic_boxes_commander
   contains
     procedure :: execute       => exec_print_magic_boxes
 end type print_magic_boxes_commander
-type, extends(commander_base) :: res_commander
-  contains
-    procedure :: execute       => exec_res
-end type res_commander
 type, extends(commander_base) :: shift_commander
   contains
     procedure :: execute       => exec_shift
@@ -164,33 +154,6 @@ contains
         call simple_end('**** SIMPLE_MASSCEN NORMAL STOP ****')
     end subroutine exec_masscen
 
-    !> for printing the dose weights applied to individual frames
-    subroutine exec_print_dose_weights( self, cline )
-        use simple_estimate_ssnr, only: acc_dose2filter
-        class(print_dose_weights_commander), intent(inout) :: self
-        class(cmdline),                      intent(inout) :: cline
-        type(parameters)  :: params
-        real, allocatable :: filter(:)
-        type(image)       :: dummy_img
-        real              :: time_per_frame, current_time, acc_dose
-        integer           :: iframe, find, filtsz
-        call params%new(cline)
-        call dummy_img%new([params%box,params%box,1], params%smpd)
-        time_per_frame = params%exp_time/real(params%nframes)
-        filtsz = dummy_img%get_filtsz()
-        do iframe=1,params%nframes
-            current_time = real(iframe)*time_per_frame
-            acc_dose     = params%dose_rate*current_time
-            filter       = acc_dose2filter(dummy_img, acc_dose, params%kv, filtsz)
-            write(logfhandle,'(a)') '>>> PRINTING DOSE WEIGHTS'
-            do find=1,size(filter)
-                write(logfhandle,'(A,1X,F8.2,1X,A,1X,F6.2)') '>>> RESOLUTION:', dummy_img%get_lp(find), 'WEIGHT: ', filter(find)
-            end do
-        end do
-        call dummy_img%kill
-        call simple_end('**** SIMPLE_PRINT_DOSE_WEIGHTS NORMAL STOP ****')
-    end subroutine exec_print_dose_weights
-
     !>  for printing the binary FSC files produced by PRIME3D
     subroutine exec_print_fsc( self, cline )
         class(print_fsc_commander), intent(inout) :: self
@@ -225,18 +188,6 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_PRINT_MAGIC_BOXES NORMAL STOP ****')
     end subroutine exec_print_magic_boxes
-
-    !> find the resolution of a Fourier index
-    subroutine exec_res( self, cline )
-        class(res_commander), intent(inout) :: self
-        class(cmdline),       intent(inout) :: cline
-        type(parameters) :: params
-        real :: lp
-        call params%new(cline)
-        lp = (real(params%box-1)*params%smpd)/real(params%find)
-        write(logfhandle,'(A,1X,f7.2)') '>>> LOW-PASS LIMIT:', lp
-        call simple_end('**** SIMPLE_RES NORMAL STOP ****')
-    end subroutine exec_res
 
     !> for shifting a stack according to shifts in oritab
     subroutine exec_shift( self, cline )

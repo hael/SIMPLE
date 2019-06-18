@@ -52,7 +52,7 @@ contains
     !> FOPEN enforce F2008 style open
     !!
     !! Usage: if(.not.fopen(fnr, fname, STATUS='REPLACE', action='WRITE', iostat=file_stat))&
-    !!        call fileiochk('In: commander_rec :: eo_volassemble', file_stat )
+    !!        call fileiochk('In: commander_rec :: volassemble', file_stat )
     !!
     subroutine fopen(funit, file, status, action, iostat, access, form, recl, async, pad,&
         &decimal, round, delim, blank, convert, iomsg, position, errmsg)
