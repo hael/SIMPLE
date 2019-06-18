@@ -396,8 +396,10 @@ contains
                 call self%kill()
             else
                 do_allocate = .false.
+                !$omp critical
                 call fftwf_destroy_plan(self%plan_fwd)
                 call fftwf_destroy_plan(self%plan_bwd)
+                !$omp end critical
             endif
         else
             do_allocate = .true.
@@ -428,6 +430,7 @@ contains
         ! init
         self%rmat = 0.
         self%ft   = .false.
+        !$omp critical
         ! make fftw plans
         if( self%wthreads .and. (any(ldim >= 200) .or. ldim(3) >= 100) )then
             rc = fftwf_init_threads()
@@ -444,6 +447,7 @@ contains
             ! disable threads for subsequent plans
             call fftwf_plan_with_nthreads(1)
         endif
+        !$omp end critical
         ! set shift constant (shconst)
         do i=1,3
             if( self%ldim(i) == 1 )then
