@@ -14,7 +14,7 @@ program simple_test_chiara_NLmean
       write(*,'(a)',advance='no') 'simple_test_chiara_NLmean smpd=<sampling distance(in A)> [fname = file name]'
       stop
   endif
-  call cline%parse_oldschool
+  call cline%parse_private
   call cline%checkvar('fname', 1)
   call cline%checkvar('smpd', 2)
   !Set defaults

@@ -78,6 +78,8 @@ contains
         type(builder)     :: build
         real, allocatable :: shvec(:,:)
         integer           :: istate
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('cenlp') ) call cline%set('cenlp',   20.)
         call build%init_params_and_build_general_tbox(cline,params)
         ! center volume(s)
         allocate(shvec(params%nstates,3))
@@ -108,7 +110,8 @@ contains
         real              :: fsc0143, fsc05, smpd, mskfile_smpd
         integer           :: state, box, fsc_box, mskfile_box, ldim(3)
         logical           :: has_fsc, has_vol_filt, has_mskfile
-        ! set oritype
+        ! set defaults
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'out')
         ! parse commad-line
         call params%new(cline)
@@ -272,6 +275,10 @@ contains
         type(builder)            :: build
         type(image), allocatable :: imgs(:)
         integer                  :: i
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('wfun')  ) call cline%set('wfun',   'kb')
+        if( .not. cline%defined('winsz') ) call cline%set('winsz',   1.5)
+        if( .not. cline%defined('alpha') ) call cline%set('alpha',    2.)
         if( .not. cline%defined('oritab') )then
             if( .not. cline%defined('nspace') ) THROW_HARD('need nspace (for number of projections)!')
         endif
@@ -491,6 +498,7 @@ contains
         type(ori)        :: orientation, orientation_best
         real             :: cxyz(4), cxyz2(4)
         integer          :: i
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! prep vols
         call read_and_prep_vol(params%vols(1), vol1)
@@ -579,6 +587,9 @@ contains
         type(sym)             :: syme
         character(len=STDLEN) :: fbody
         real                  :: shvec(3)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 20.)
+        if( .not. cline%defined('center')  ) call cline%set('center', 'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'cls3D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         call build%vol%read(params%vols(1))
@@ -637,7 +648,9 @@ contains
         integer            :: ldim(3)
         integer, parameter :: MAXBOX = 128
         character(len=:), allocatable :: fbody
-        ! init
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         if( .not. cline%defined('outvol') ) params%outvol = 'symmetrized_map'//params%ext
         call build%vol%read(params%vols(1))
@@ -689,7 +702,9 @@ contains
         real                  :: shvec(3), scale, smpd
         integer               :: ldim(3)
         integer, parameter    :: MAXBOX = 128
-        ! init
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',    20.)
+        if( .not. cline%defined('center') ) call cline%set('center', 'yes')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
         call build%vol%read(params%vols(1))
         ! possible downscaling of input vol

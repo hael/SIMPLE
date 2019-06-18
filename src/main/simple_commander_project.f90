@@ -245,6 +245,7 @@ contains
         integer,            allocatable :: states(:)
         integer(kind=kind(ENUM_ORISEG)) :: iseg
         integer                         :: n_lines,fnr,noris,i,nstks
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline, silent=.true.)
         ! read the state-flags
         n_lines = nlines(trim(params%infile))
@@ -371,6 +372,9 @@ contains
         character(len=LONGSTRLEN)              :: boxfname
         logical :: inputted_boxtab, inputted_deftab, first_import
         integer :: nmovf, nboxf, i, nprev_movies, nprev_intgs
+        ! set defaults
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call params%new(cline)
         ! parameter input management
         inputted_boxtab = cline%defined('boxtab')
@@ -483,6 +487,7 @@ contains
         integer          :: nos_mic, nboxf, i
         character(len=LONGSTRLEN), allocatable :: boxfnames(:)
         character(len=LONGSTRLEN)              :: boxfname
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! project file management
         if( .not. file_exists(trim(params%projfile)) )then
@@ -527,6 +532,8 @@ contains
         logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
         integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
         call params%new(cline)
         ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
@@ -750,6 +757,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         if( file_exists(trim(params%projfile)) ) call spproj%read(params%projfile)
         call spproj%add_cavgs2os_out(params%stk, params%smpd)
@@ -774,6 +782,7 @@ contains
         logical,          allocatable :: lstates(:)
         integer :: ldim(3), icls, ncls, ncavgs, cnt
         real    :: smpd, smpd_phys
+        call cline%set('oritype', 'cls2D')
         call params%new(cline)
         ! read files and sanity checks
         if( .not.file_exists(trim(params%projfile)) ) THROW_HARD('Project file does not exist!')
@@ -811,6 +820,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        call cline%set('mkdir', 'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
         call spproj%prune_project(cline)
@@ -823,6 +833,7 @@ contains
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
+        call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! projfile <- projfile_target
         call spproj%read(params%projfile)

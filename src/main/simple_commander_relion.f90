@@ -10,7 +10,6 @@ use simple_parameters,     only: parameters, params_glob
 implicit none
 
 public :: export_relion_commander
-
 private
 
 type, extends(commander_base) :: export_relion_commander
@@ -24,16 +23,14 @@ contains
     subroutine exec_export_relion( self, cline )
         class(export_relion_commander), intent(inout) :: self
         class(cmdline), intent(inout) :: cline
-        type(parameters)  :: params
-        type(sp_project)  :: spproj
-        type(relion_project):: relionproj
-
+        type(parameters)     :: params
+        type(sp_project)     :: spproj
+        type(relion_project) :: relionproj
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
-
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)
         endif
-
         call relionproj%create(spproj)
         call spproj%kill
         call simple_end('**** export_relion NORMAL STOP ****')

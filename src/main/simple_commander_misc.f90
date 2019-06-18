@@ -245,6 +245,7 @@ contains
         class(cmdline),         intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         call shift_imgfile(params%stk, params%outstk, build%spproj_field, params%smpd, params%mul)
         call build%spproj_field%zero_shifts
@@ -475,6 +476,7 @@ contains
         class(mkdir_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
+        call cline%set('mkdir', 'yes')
         call params%new(cline)
     end subroutine exec_mkdir
 

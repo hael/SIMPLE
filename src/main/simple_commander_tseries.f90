@@ -62,7 +62,16 @@ contains
         character(len=LONGSTRLEN)              :: outfname
         integer          :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
         integer          :: iframe, jframe, nfiles, endit
+        if( cline%defined('ctf') )then
+            select case(trim(cline%get_carg('ctf')))
+            case('no','flip')
+                ! all good
+            case DEFAULT
+                THROW_HARD('Only CTF=NO|FLIP are allowed!')
+            end select
+        endif
         call cline%set('oritype','mic')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         ! check input
         if( cline%defined('nframesgrp') )then
             if( nint(cline%get_rarg('nframesgrp')) < 3 )then
@@ -349,6 +358,9 @@ contains
         real    :: cc90, dfx, dfy, angast, phshift, dferr, cc, ctfscore
         integer :: nmics, imic, dims(3), nselmics
         call cline%set('oritype','mic')
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('hp') )    call cline%set('hp', 10.)
+        if( .not. cline%defined('lp') )    call cline%set('lp', 2.5)
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! generates ave
         dims(1) = nint(build%spproj_field%get(1,'xdim'))

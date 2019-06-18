@@ -12,7 +12,7 @@ if( command_argument_count() < 3 )then
     stop
 endif
 call seed_rnd
-call cline%parse_oldschool
+call cline%parse_private
 call cline%checkvar('vol1', 1)
 call cline%checkvar('msk',  2)
 call cline%checkvar('smpd', 3)

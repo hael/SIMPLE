@@ -240,6 +240,7 @@ contains
         class(cmdline),                 intent(inout) :: cline
         type(parameters)     :: params
         type(builder)        :: build
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'ptcl2D')
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         call cluster_cavgs_exec( )

@@ -33,7 +33,7 @@ keys_required(2) = 'smpd'
 call cline%set('nptcls',100.)
 call cline%set('eo','no')
 call cline%set('lp','4.')
-call cline%parse_oldschool
+call cline%parse_private
 call cline%set('oritype','ptcl3D')
 call build%init_params_and_build_general_tbox(cline, params)
 

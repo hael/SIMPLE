@@ -1,6 +1,8 @@
 ! command line parser
 module simple_cmdline
 include 'simple_lib.f08'
+use simple_user_interface ! use all in there
+use simple_args, only: args
 implicit none
 private
 public :: cmdarg, cmdline, cmdline_err
@@ -26,7 +28,7 @@ type cmdline
     integer               :: argcnt=0, ncheck=0 !! max system args `getconf ARG_MAX`
 contains
     procedure          :: parse
-    procedure          :: parse_oldschool
+    procedure          :: parse_private
     procedure          :: parse_command_line_value
     procedure, private :: copy
     procedure, private :: assign
@@ -70,8 +72,6 @@ contains
 
     !> \brief for parsing the command line arguments passed as key=val
     subroutine parse( self )
-        use simple_args, only: args
-        use simple_user_interface ! use all in there
         class(cmdline), intent(inout) :: self
         type(str4arr), allocatable    :: keys_required(:)
         type(args)                    :: allowed_args
@@ -81,7 +81,7 @@ contains
         character(len=:), allocatable :: exec
         integer :: i, cmdstat, cmdlen, ikey, pos, nargs_required, sz_keys_req
         ! parse command line
-        self%argcnt  = command_argument_count()
+        self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
         if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
@@ -90,7 +90,6 @@ contains
         call get_command_argument(1, arg, cmdlen, cmdstat)
         pos = index(arg, '=') ! position of '='
         call cmdline_err(cmdstat, cmdlen, arg, pos)
-        if( str_has_substr(arg(pos+1:), 'simple_') ) THROW_HARD('giving program names with simple_* prefix is depreciated')
         if( str_has_substr(arg(pos+1:), 'report_selection') ) arg(pos+1:) = 'selection' ! FIX4NOW
         ! obtain pointer to the program in the simple_user_interface specification
         call get_prg_ptr(arg(pos+1:), ptr2prg)
@@ -152,19 +151,40 @@ contains
     end subroutine parse
 
     !> \brief for parsing the command line arguments passed as key=val
-    subroutine parse_oldschool( self )
-        use simple_args, only: args
+    subroutine parse_private( self )
         class(cmdline), intent(inout) :: self
         character(len=LONGSTRLEN)     :: arg
-        integer :: i, cmdstat, cmdlen
+        type(simple_program), pointer :: ptr2prg => null()
+        integer :: i, pos, cmdstat, cmdlen
+        ! parse command line
+        self%argcnt = command_argument_count()
         call get_command(self%entire_line)
         cmdline_glob = trim(self%entire_line)
         if( .not. str_has_substr(self%entire_line,'prg=') ) THROW_HARD('prg= flag must be set on command line')
-        self%argcnt = command_argument_count()
+        ! parse program name
+        call get_command_argument(1, arg, cmdlen, cmdstat)
+        pos = index(arg, '=') ! position of '='
+        call cmdline_err(cmdstat, cmdlen, arg, pos)
+        ! obtain pointer to the program in the simple_user_interface specification
+        call get_prg_ptr(arg(pos+1:), ptr2prg)
+        ! decide wether to print the command line instructions or not
+        select case(trim(arg(pos+1:)))
+        case('write_ui_json','print_ui_latex','print_sym_subgroups','nspace','print_dose_weights')
+                ! no command line arguments
+            case DEFAULT
+                if( self%argcnt == 1 )then ! only program name given
+                    if( associated(ptr2prg) )then
+                        call ptr2prg%print_cmdline()
+                        call exit(EXIT_FAILURE2)
+                    else
+                        THROW_WARN(trim(arg(pos+1:))//' lacks description in the user_interface class')
+                    endif
+                endif
+        end select
         do i=1,self%argcnt
             call get_command_argument(i, arg, cmdlen, cmdstat)
             if( cmdstat == -1 )then
-                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
+                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_private'
                 write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
                 write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
                 write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
@@ -172,10 +192,9 @@ contains
             endif
             call self%parse_command_line_value(i, arg)
         end do
-    end subroutine parse_oldschool
+    end subroutine parse_private
 
     subroutine parse_command_line_value( self, i, arg, allowed_args )
-        use simple_args, only: args
         class(cmdline),        intent(inout) :: self
         integer,               intent(in)    :: i
         character(len=*),      intent(in)    :: arg

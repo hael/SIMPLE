@@ -51,7 +51,18 @@ contains
         integer                                :: box_coords(2), nmovies, imovie, stacksz, prev_stacksz, iter, icline
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
         logical                                :: l_pick
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
+        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            6.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
         call cline%set('numlen', 5.)
         call cline%set('stream','yes')
         ! master parameters
@@ -362,11 +373,22 @@ contains
         integer :: nptcls_glob_prev, n_spprojs, orig_nparts, last_injection, nparts, box_coords(2)
         integer :: origproj_time, max_ncls, nptcls_per_buffer, buffer_ptcls_range(2), pool_iter, i
         logical :: do_autoscale, l_maxed, buffer_exists, do_wait, l_greedy
-        ! seed the random number generator
-        call seed_rnd
-        ! set oritype
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( cline%defined('refine') )then
+            if( trim(cline%get_carg('refine')).ne.'greedy' )then
+                if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
+            endif
+        else
+            if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
+        endif
+        if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       20.)
+        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
+        if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         call cline%set('stream','yes') ! only for parameters determination
+        call seed_rnd
         call params%new(cline)
         ! sanity
         if( .not.file_exists(params%projfile) )then
@@ -1449,6 +1471,13 @@ contains
         character(len=:),       allocatable :: spproj_list_fname, output_dir, output_dir_picker, output_dir_extract, projfname
         integer :: iter, origproj_time, tnow, iproj, icline, nptcls, prev_stacksz, stacksz
         integer :: last_injection, n_spprojs, n_spprojs_prev, n_newspprojs, nmics
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
+            THROW_HARD('one of REFS and VOL1 must be provided!')
+        endif
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         ! output command line executed
         write(logfhandle,'(a)') '>>> COMMAND LINE EXECUTED'
         write(logfhandle,*) trim(cmdline_glob)

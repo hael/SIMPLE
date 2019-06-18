@@ -96,7 +96,19 @@ contains
         type(chash)                   :: job_descr
         type(sp_project)              :: spproj
         logical                       :: l_pick
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
+        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            6.)
+        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
+        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
+        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
+        if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -154,10 +166,18 @@ contains
         character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
+        if( .not. cline%defined('outside')   ) call cline%set('outside',   'no')
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('stream')    ) call cline%set('stream',    'no')
+        if( cline%defined('ctf') )then
+            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
+                THROW_HARD('Only CTF=NO/FLIP are allowed')
+            endif
+        endif
+        call cline%set('nthr', 1.)
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        call cline%set('nthr',  1.)
         ! read in integrated movies
         call spproj%read(params%projfile)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
@@ -322,10 +342,16 @@ contains
         character(len=:),           allocatable :: mic_name, imgkind
         integer :: boxcoords(2)
         integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
+        if( cline%defined('ctf') )then
+            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
+                THROW_HARD('Only CTF=NO/FLIP are allowed')
+            endif
+        endif
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        call cline%set('nthr',1.)
         call cline%set('oritype', 'mic')
         call params%new(cline)
         call cline%set('mkdir', 'no')
-        call cline%set('nthr',  1.)
         ! read in integrated movies
         call spproj%read(params%projfile)
         if( spproj%get_nintgs() == 0 ) THROW_HARD('No integrated micrograph to process!')
@@ -472,6 +498,9 @@ contains
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
+        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
@@ -549,8 +578,12 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
-        call cline%set('prg', 'motion_correct')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
+        if( .not. cline%defined('tomo')    ) call cline%set('tomo',    'yes')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
+        call cline%set('prg', 'motion_correct')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
@@ -601,6 +634,9 @@ contains
         type(sp_project)              :: spproj
         type(chash)                   :: job_descr
         type(qsys_env)                :: qenv
+        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check
@@ -631,12 +667,19 @@ contains
     subroutine exec_pick_distr( self, cline )
         class(pick_distr_commander), intent(inout) :: self
         class(cmdline),              intent(inout) :: cline
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        type(cmdline)                 :: cline_make_pickrefs
-        type(qsys_env)                :: qenv
-        type(chash)                   :: job_descr
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(cmdline)    :: cline_make_pickrefs
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
+            THROW_HARD('one of REFS and VOL1 must be provided!')
+        endif
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
@@ -718,7 +761,12 @@ contains
         type(chash)               :: job_descr
         real                      :: frac_srch_space
         logical                   :: l_stream
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         ! streaming gets its own logics because it is an exception to rules in parameters
         l_stream = .false.
         if( cline%defined('stream') ) l_stream = trim(cline%get_carg('stream')).eq.'yes'
@@ -872,6 +920,14 @@ contains
         integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
         logical :: l_projection_matching, l_switch2euclid, l_continue, l_matchfilt_ini
+        if( .not. cline%defined('refine') )then
+            call cline%set('refine',  'single')
+        else
+            if( cline%get_carg('refine').eq.'multi' .and. .not. cline%defined('nstates') )then
+                THROW_HARD('refine=MULTI requires specification of NSTATES')
+            endif
+        endif
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 30.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! objfun=euclid logics, part 1
         l_switch2euclid  = .false.
@@ -1265,6 +1321,7 @@ contains
         type(chash)      :: job_descr
         integer          :: state, ipart
         logical          :: fall_over
+        if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call cline%delete('refine')
         call build%init_params_and_build_spproj(cline, params)
@@ -1278,9 +1335,7 @@ contains
         case DEFAULT
             THROW_HARD('unsupported ORITYPE')
         end select
-        if( fall_over )then
-            THROW_HARD('No images found!')
-        endif
+        if( fall_over ) THROW_HARD('No images found!')
         ! soft reconstruction from o_peaks in dir_refine?
         if( params%l_rec_soft )then
             call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
@@ -1374,6 +1429,14 @@ contains
         real,        allocatable      :: boxdata(:,:)
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('neg')      ) call cline%set('neg',     'yes')
+        if( .not. cline%defined('lp')       ) call cline%set('lp',       2.0)
+        if( .not. cline%defined('lp_backgr')) call cline%set('lp_backgr',1.1)
+        if( .not. cline%defined('hp')       ) call cline%set('hp',       5.0)
+        if( .not. cline%defined('width')    ) call cline%set('width',    1.1)
+        if( .not. cline%defined('cenlp')    ) call cline%set('cenlp',    5.0)
+        if( .not. cline%defined('ctf')      ) call cline%set('ctf',      'no')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')

@@ -2,7 +2,7 @@
 program simple_private_exec
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline, cmdline_err
-use simple_user_interface, only: write_ui_json, print_ui_latex
+use simple_user_interface, only: make_user_interface, write_ui_json, print_ui_latex
 use simple_symanalyzer,    only: print_subgroups
 use simple_commander_project
 use simple_commander_checks
@@ -55,13 +55,12 @@ type(check_box_commander)             :: xcheck_box
 type(check_nptcls_commander)          :: xcheck_nptcls
 
 ! VOLOPS PROGRAMS
-type(postprocess_commander)           :: xpostprocess   ! DUPLICATED
-type(reproject_commander)             :: xreproject     ! DUPLICATED
+type(postprocess_commander)           :: xpostprocess
 type(volume_smat_commander)           :: xvolume_smat
 type(automask_commander)              :: xautomask
 
 ! GENERAL IMAGE PROCESSING PROGRAMS
-type(scale_commander)                 :: xscale         ! DUPLICATED
+type(scale_commander)                 :: xscale
 type(binarise_commander)              :: xbinarise
 type(edge_detector_commander)         :: xdetector
 
@@ -92,232 +91,146 @@ type(split_pairs_commander)          :: xsplit_pairs
 type(split_commander)                :: xsplit
 
 ! OTHER DECLARATIONS
-character(len=KEYLEN) :: keys_required(MAXNKEYS)='', keys_optional(MAXNKEYS)=''
-character(len=STDLEN) :: xarg, prg, entire_line
+character(len=STDLEN) :: xarg, prg
 type(cmdline)         :: cline
 integer               :: cmdstat, cmdlen, pos
 
 ! parse command-line
 call get_command_argument(1, xarg, cmdlen, cmdstat)
-call get_command(entire_line)
 pos = index(xarg, '=') ! position of '='
 call cmdline_err( cmdstat, cmdlen, xarg, pos )
 prg = xarg(pos+1:)     ! this is the program name
-call cline%parse_oldschool
+! make UI
+call make_user_interface
+! this parses all key=value pairs on the command line
+call cline%parse_private
 
 select case(prg)
 
-    ! not bona fide simple programs
-    case( 'write_ui_json')
+    ! PRIVATE UTILITY PROGRAMS
+    case( 'write_ui_json' )
         call write_ui_json
-    case( 'print_ui_latex')
+    case( 'print_ui_latex' )
         call print_ui_latex
-    case( 'print_sym_subgroups')
+    case( 'print_sym_subgroups' )
         call print_subgroups
 
     ! PRE-PROCESSING PROGRAMS
-
     case( 'preprocess' )
-        ! set defaults
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',         15.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',           8.)
-        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate', 30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',  5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',         20.)
-        if( .not. cline%defined('outfile')         ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',   'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
         call xpreprocess%execute(cline)
     case( 'extract' )
-        ! set defaults
-        call cline%set('nthr',1.)
-        if( .not. cline%defined('outside')         ) call cline%set('outside',   'no')
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast', 'black')
-        if( .not. cline%defined('stream')          ) call cline%set('stream', 'no')
-        if( cline%defined('stream') )then
-            if( cline%get_carg('stream').eq.'no' .and. .not.cline%defined('outfile') )then
-                THROW_HARD('OUTFILE must be defined with STREAM=NO')
-            endif
-        endif
         call xextract%execute(cline)
     case( 'reextract' )
-        ! set defaults
-        call cline%set('nthr',1.)
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         call xreextract%execute(cline)
     case( 'motion_correct' )
-        ! set defaults
-        if( .not. cline%defined('trs')     ) call cline%set('trs',      5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart', 15.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',   8.)
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'simple_unidoc'//METADATA_EXT)
         call xmotion_correct%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         call xgen_pspecs_and_thumbs%execute(cline)
     case( 'ctf_estimate' )
-        ! set defaults
-        if( .not. cline%defined('hp') ) call cline%set('hp', 30.)
-        if( .not. cline%defined('lp') ) call cline%set('lp',  5.)
         call xctf_estimate%execute(cline)
-    case( 'map_cavgs_selection' )
+    case( 'map_cavgs_selection' ) ! LACKS DESCRIPTION
         call xmap_cavgs_selection%execute(cline)
-    case( 'pick_extract' )
+    case( 'pick_extract' )        ! LACKS DESCRIPTION
         call xpick_extract%execute(cline)
     case( 'pick' )
         call xpick%execute(cline)
-    case( 'make_pickrefs' )
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
-            THROW_HARD('One of REFS, VOL1 & PROJFILE must be informed!')
-        endif
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')
+    case( 'make_pickrefs' )       ! LACKS DESCRIPTION
         call xmake_pickrefs%execute(cline)
-    case ('pick_chiara')
+    case ('pick_chiara')          ! LACKS DESCRIPTION
         call xpickchiara%execute(cline)
 
     ! CLUSTER2D PROGRAMS
-
     case( 'make_cavgs' )
         call xmake_cavgs%execute(cline)
     case( 'cluster2D' )
-        ! set defaults
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',   15.)
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',     8.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',     30.)
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',    30.)
         call xcluster2D%execute(cline)
-    case( 'cavgassemble' )
+    case( 'cavgassemble' )       ! LACKS DESCRIPTION
         call xcavgassemble%execute(cline)
-    case( 'check_2Dconv' )
-        ! set defaults
-        call cline%set('oritype', 'ptcl2D')
+    case( 'check_2Dconv' )       ! LACKS DESCRIPTION
         call xcheck_2Dconv%execute(cline)
-    case( 'rank_cavgs' )
-        ! set defaults
-        call cline%set('oritype', 'cls2D')
+    case( 'rank_cavgs' )         ! LACKS DESCRIPTION
         call xrank_cavgs%execute(cline)
-    case( 'export_cavgs' )
-        ! set defaults
-        call cline%set('oritype', 'cls2D')
+    case( 'export_cavgs' )       ! LACKS DESCRIPTION
         call xexport_cavgs%execute(cline)
 
     ! REFINE3D PROGRAMS
-
     case( 'nspace' )
         call xnspace%execute(cline)
     case( 'refine3D' )
-        ! set defaults
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 30.)
-        if( .not. cline%defined('refine') )then
-            call cline%set('refine',  'single')
-        else
-            if( cline%get_carg('refine').eq.'multi' .and. .not. cline%defined('nstates') )then
-                THROW_HARD('refine=MULTI requires specification of NSTATES')
-            endif
-        endif
         call xprime3D%execute(cline)
-    case( 'check_3Dconv' )
-        ! set defaults
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
-        ! execute
+    case( 'check_3Dconv' )      ! LACKS DESCRIPTION
         call xcheck_3Dconv%execute(cline)
 
     ! RECONSTRUCTION PROGRAMS
-
     case( 'reconstruct3D' )
-        ! set defaults
-        if( .not. cline%defined('trs') ) call cline%set('trs', 5.) ! to assure that shifts are being used
         call xreconstruct3D%execute(cline)
-    case( 'volassemble_eo' )
+    case( 'volassemble_eo' )    ! LACKS DESCRIPTION
         call xvolassemble_eo%execute(cline)
 
     ! CHECKER PROGRAMS
-
-    case( 'check_box' )
+    case( 'check_box' )         ! LACKS DESCRIPTION
         call xcheck_box%execute(cline)
-    case( 'check_nptcls' )
+    case( 'check_nptcls' )      ! LACKS DESCRIPTION
         call xcheck_nptcls%execute(cline)
 
     ! VOLOPS PROGRAMS
-
     case( 'postprocess' )
         call xpostprocess%execute(cline)
-    case( 'reproject' )
-        ! set defaults
-        if( .not. cline%defined('wfun')  ) call cline%set('wfun', 'kb')
-        if( .not. cline%defined('winsz') ) call cline%set('winsz', 1.5)
-        if( .not. cline%defined('alpha') ) call cline%set('alpha', 2.)
-        call xreproject%execute(cline)
-    case( 'volume_smat' )
+    case( 'volume_smat' )       ! LACKS DESCRIPTION
         call xvolume_smat%execute(cline)
-    case( 'automask' )
+    case( 'automask' )          ! LACKS DESCRIPTION
         call xautomask%execute(cline)
 
     ! GENERAL IMAGE PROCESSING PROGRAMS
-
     case( 'scale' )
         call xscale%execute(cline)
-    case( 'binarise' )
+    case( 'binarise' )         ! LACKS DESCRIPTION
         call xbinarise%execute(cline)
-    case('edge_detect')
+    case('edge_detect')        ! LACKS DESCRIPTION
         call xdetector%execute(cline)
 
     ! MISCELLANOUS PROGRAMS
-
-    case( 'masscen' )
+    case( 'masscen' )          ! LACKS DESCRIPTION
         call xmasscen%execute(cline)
-    case( 'cluster_smat' )
+    case( 'cluster_smat' )     ! LACKS DESCRIPTION
         call xcluster_smat%execute(cline)
-    case( 'print_dose_weights' )
+    case( 'print_dose_weights' ) ! DOESN'T DO ANYTHING
         call xprint_dose_weights%execute(cline)
-    case( 'res' )
+    case( 'res' )              ! LACKS DESCRIPTION
         call xres%execute(cline)
-    case( 'stk_corr' )
+    case( 'stk_corr' )         ! LACKS DESCRIPTION
         call xstk_corr%execute(cline)
-    case( 'kstest' )
+    case( 'kstest' )           ! LACKS DESCRIPTION
         call xkstst%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
-
-    case( 'rotmats2oris' )
-        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
+    case( 'rotmats2oris' )        ! LACKS DESCRIPTION
         call xrotmats2oris%execute(cline)
-    case( 'txt2project' )
+    case( 'txt2project' )         ! LACKS DESCRIPTION
         call xtxt2project%execute(cline)
-    case( 'project2txt' )
+    case( 'project2txt' )         ! LACKS DESCRIPTION
         call xproject2txt%execute(cline)
-    case( 'print_project_vals' )
+    case( 'print_project_vals' )  ! LACKS DESCRIPTION
         call xprint_project_vals%execute(cline)
-    case( 'multivariate_zscore' )
+    case( 'multivariate_zscore' ) ! LACKS DESCRIPTION
         call xmultizscore%execute(cline)
-    case( 'o_peaksstats')
+    case( 'o_peaksstats')         ! LACKS DESCRIPTION
         call xo_peaksstats%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
-
     case( 'tseries_track' )
-        ! set defaults
-        if( .not. cline%defined('neg')   ) call cline%set('neg', 'yes')
-        if( .not. cline%defined('lp')    ) call cline%set('lp',    2.0)
-        if( .not. cline%defined('cenlp') ) call cline%set('cenlp', 5.0)
         call xtseries_track%execute(cline)
-    case( 'tseries_split' )
+    case( 'tseries_split' )      ! LACKS DESCRIPTION
         call xtseries_split%execute(cline)
 
     ! PARALLEL PROCESSING PROGRAMS
-
-    case( 'merge_nnmat' )
+    case( 'merge_nnmat' )        ! LACKS DESCRIPTION
         call xmerge_nnmat%execute(cline)
-    case( 'merge_similarities' )
+    case( 'merge_similarities' ) ! LACKS DESCRIPTION
         call xmerge_similarities%execute(cline)
-    case( 'split_pairs' )
+    case( 'split_pairs' )        ! LACKS DESCRIPTION
         call xsplit_pairs%execute(cline)
-    case( 'split' )
+    case( 'split' )              ! LACKS DESCRIPTION
         call xsplit%execute(cline)
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')

@@ -45,7 +45,7 @@ if( command_argument_count() < 1 )then
         & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
     stop
 endif
-call cline%parse_oldschool
+call cline%parse_private
 call cline%checkvar('smpd', 1)       !<Set the required variable
 call cline%check                     !<check if the required variable is is_present
 !Set defaults
@@ -94,7 +94,7 @@ end program simple_chiara_ctf
 !                                & of amplitude{0.1}>] [cs=<spherical aberration constant(in mm){2.7}>]'
 !    stop
 !endif
-!call cline%parse_oldschool
+!call cline%parse_private
 !call cline%checkvar('smpd', 1)       !<Set the required variable
 !call cline%check                     !<check if the required variable is is_present
 !Set defaults

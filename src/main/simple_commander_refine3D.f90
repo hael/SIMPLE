@@ -76,6 +76,7 @@ contains
         real, allocatable :: maplp(:)
         integer           :: istate, loc(1)
         logical           :: converged, update_res
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         update_res = .false.
         allocate( maplp(params%nstates), stat=alloc_stat)

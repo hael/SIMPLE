@@ -1228,8 +1228,16 @@ contains
         real    :: ang, rot, smpd_here
         integer :: nrots, iref, irot, ldim(3), ldim_here(3), ifoo, ncavgs, icavg
         integer :: cnt, norefs
-        ! set oritype
+        ! error check
+        if( cline%defined('refs') .and. cline%defined('vol1') )then
+            THROW_HARD('REFS and VOL1 cannot be both provided!')
+        endif
+        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
+            THROW_HARD('One of REFS, VOL1 & PROJFILE must be informed!')
+        endif
+        ! set defaults
         call cline%set('oritype', 'mic')
+        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast','black')
         ! parse parameters
         call params%new(cline)
         if( params%stream.eq.'yes' ) THROW_HARD('not a streaming application')

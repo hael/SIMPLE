@@ -43,6 +43,7 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         integer :: i, cnt, ntot
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_noise'//params%ext
         cnt  = 0
@@ -74,8 +75,18 @@ contains
         type(projector)  :: vol_pad
         real             :: snr_pink, snr_detector, bfac, bfacerr
         integer          :: i, cnt, ntot
+        if( .not. cline%defined('mkdir')    ) call cline%set('mkdir', 'yes')
+        call cline%set('nspace', cline%get_rarg('nptcls'))
+        if( .not. cline%defined('sherr') .and. .not. cline%defined('oritab') ) call cline%set('sherr', 2.)
+        if( .not. cline%defined('ctf')      ) call cline%set('ctf',    'yes')
+        if( .not. cline%defined('dferr')    ) call cline%set('dferr',    1.5)
+        if( .not. cline%defined('astigerr') ) call cline%set('astigerr', 0.5)
+        if( .not. cline%defined('bfacerr')  ) call cline%set('bfacerr',  0.0)
+        call cline%set('wfun', 'kb')
+        call cline%set('winsz', 1.5)
+        call cline%set('alpha',  2.)
+        call cline%set('eo', '  no')
         call build%init_params_and_build_general_tbox(cline,params)
-        tfun  = ctf(params%smpd, params%kv, params%cs, params%fraca)
         if( .not. cline%defined('outstk') ) params%outstk = 'simulated_particles'//params%ext
         if( cline%defined('part') )then
             if( .not. cline%defined('outfile') ) THROW_HARD('need unique output file for parallel jobs')
@@ -83,6 +94,7 @@ contains
             if( .not. cline%defined('outfile') ) params%outfile = 'simulated_oris'//trim(TXT_EXT)
         endif
         if( params%box == 0 ) THROW_HARD('box=0, something is fishy! Perhaps forgotten to input volume or stack?')
+        tfun = ctf(params%smpd, params%kv, params%cs, params%fraca)
         ! generate orientation/CTF parameters
         if( cline%defined('ndiscrete') )then
             if( params%ndiscrete > 0 )then
@@ -162,7 +174,16 @@ contains
         integer              :: i, ptclarea, mgrapharea, fixed_frame
         integer, allocatable :: ptcl_positions(:,:)
         real,    allocatable :: shifts(:,:)
+        if( .not. cline%defined('mkdir')   ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',      3.)
+        if( .not. cline%defined('ctf')     ) call cline%set('ctf',   'yes')
+        if( .not. cline%defined('bfac')    ) call cline%set('bfac',   200.)
+        if( .not. cline%defined('nframes') ) call cline%set('nframes', 30.)
         call cline%set('oritype', 'stk')
+        call cline%set('wfun', 'kb')
+        call cline%set('winsz', 1.5)
+        call cline%set('alpha',  2.)
+        call cline%set('eo',   'no')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.)
         tfun = ctf(params%smpd, params%kv, params%cs, params%fraca)
         ! set fixed frame
@@ -335,6 +356,7 @@ contains
         type(image)      :: vol_rot
         type(ori)        :: o
         integer          :: iptcl, numlen
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call build%init_params_and_build_general_tbox(cline,params)
         call vol_rot%new([params%box,params%box,params%box], params%smpd)
         call build%vol%new([params%box,params%box,params%box],   params%smpd)

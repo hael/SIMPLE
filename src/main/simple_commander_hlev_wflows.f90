@@ -72,7 +72,14 @@ contains
         real,    parameter    :: MINITS      = 5.
         real,    parameter    :: MAXITS      = 15.
         real                  :: SMPD_TARGET = 4.
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
+        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
+        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     15. )
+        if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         orig_projfile = params%projfile
         ! set mkdir to no (to avoid nested directory structure)
@@ -257,6 +264,15 @@ contains
         character(len=:), allocatable :: orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
+        call cline%set('center',    'yes')
+        call cline%set('autoscale', 'no')
+        call cline%set('refine',    'greedy')
+        call cline%set('tseries',   'yes')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
+        if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',     5.)
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 10.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         nparts = params%nparts
@@ -549,6 +565,7 @@ contains
         real                  :: scale_factor1, scale_factor2
         integer               :: icls, ncavgs, orig_box, box, istk, status, cnt
         logical               :: srch4symaxis, do_autoscale, symran_before_refine, l_lpset
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
         ! auto-scaling prep
@@ -1087,8 +1104,10 @@ contains
         integer  :: i, iter, startit, rename_stat, ncls, boxfoo, iptcl, ipart
         integer  :: nptcls_part, istate, n_nozero
         logical  :: fall_over, cavgs_import
-        ! sanity check
-        if(nint(cline%get_rarg('nstates')) <= 1) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
+        if( nint(cline%get_rarg('nstates')) <= 1 ) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
+        if( .not. cline%defined('refine') )  call cline%set('refine', 'cluster')
+        if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
+        if( cline%defined('lp') )            call cline%set('eo','no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
@@ -1395,6 +1414,7 @@ contains
         type(ori)                :: o_tmp
         integer                  :: state, iptcl, nstates, single_state, ncls, istk, nstks
         logical                  :: l_singlestate, cavgs_import, fall_over
+        if( .not. cline%defined('eo') )      call cline%set('eo', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call params%new(cline)
         ! set mkdir to no

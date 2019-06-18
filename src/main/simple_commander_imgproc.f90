@@ -273,11 +273,12 @@ contains
         class(cmdline),          intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( cline%defined('oritab') .or. cline%defined('deftab') )then
         else
             THROW_HARD('oritab/deftab with CTF info needed for phase flipping/multiplication/CTF image generation')
         endif
+        if( .not. cline%defined('stk') ) call cline%set('box', 256.)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         if( params%ctf .ne. 'no' )then
             select case( params%ctf )
                 case( 'flip' )
@@ -312,6 +313,7 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: width, fsc05, fsc0143
         integer           :: find
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         width = 10.
         if( cline%defined('stk') )then
             ! 2D
@@ -418,6 +420,7 @@ contains
         type(parameters)  :: params
         type(builder)     :: build
         real, allocatable :: spec(:)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk')  .and. cline%defined('vol1') )THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
@@ -498,6 +501,7 @@ contains
         !integer          :: ldims_scaled(2,3)
         character(len=:), allocatable :: fname
         character(len=LONGSTRLEN), allocatable :: filenames(:)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
         if( cline%defined('stk') )then
             ! 2D
@@ -623,6 +627,7 @@ contains
         integer          :: lfoo(3), nimgs, iimg
         type(image)      :: tmp
         real             :: mm(2)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('lp') )then
             if( .not. cline%defined('smpd') ) THROW_HARD('smpd (sampling distance) needs to be defined if lp is')
         endif
@@ -677,6 +682,7 @@ contains
         integer,          allocatable :: pinds(:)
         character(len=:), allocatable :: fname
         integer :: i, s, cnt, nincl
+        if( .not. cline%defined('outfile') ) call cline%set('outfile', 'outfile.txt')
         call build%init_params_and_build_general_tbox(cline,params,do3d=.false.,boxmatch_off=.true.)
         ! random selection
         if( cline%defined('nran') )then

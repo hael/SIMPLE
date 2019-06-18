@@ -72,174 +72,60 @@ if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
 select case(prg)
 
     ! PRE-PROCESSING WORKFLOWS
-
     case( 'preprocess' )
-        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            6.)
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
-        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         call xpreprocess%execute(cline)
     case( 'preprocess_stream' )
-        call cline%set('stream','yes')
-        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            6.)
-        if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
-        if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
-        if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
-        if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
-        if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
-        if( .not. cline%defined('stream')          ) call cline%set('stream',         'yes')
         call xpreprocess_stream%execute(cline)
     case( 'extract' )
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        call cline%set('nthr',1.)
-        if( cline%defined('ctf') )then
-            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
-                THROW_HARD('Only CTF=NO/FLIP are allowed')
-            endif
-        endif
         call xextract_distr%execute(cline)
     case( 'reextract' )
-        call cline%set('nthr',1.)
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( cline%defined('ctf') )then
-            if( cline%get_carg('ctf').ne.'flip' .and. cline%get_carg('ctf').ne.'no' )then
-                THROW_HARD('Only CTF=NO/FLIP are allowed')
-            endif
-        endif
         call xreextract_distr%execute(cline)
     case( 'motion_correct' )
-        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
         call xmotion_correct_distr%execute(cline)
     case( 'gen_pspecs_and_thumbs' )
         call xgen_pspecs_and_thumbs%execute(cline)
     case( 'motion_correct_tomo' )
-        if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
-        if( .not. cline%defined('tomo')    ) call cline%set('tomo',    'yes')
         call xmotion_correct_tomo_distr%execute(cline)
     case( 'ctf_estimate' )
-        if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
         call xctf_estimate_distr%execute(cline)
     case( 'pick' )
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
-            THROW_HARD('one of REFS and VOL1 must be provided!')
-        endif
         call xpick_distr%execute(cline)
     case( 'pick_extract_stream' )
-        if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
-        if( cline%defined('refs') .and. cline%defined('vol1') )then
-            THROW_HARD('REFS and VOL1 cannot be both provided!')
-        endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
-            THROW_HARD('one of REFS and VOL1 must be provided!')
-        endif
         call xpick_extract_stream_distr%execute(cline)
 
     ! CLUSTER2D WORKFLOWS
-
     case( 'make_cavgs' )
         call xmake_cavgs_distr%execute(cline)
     case( 'cleanup2D' )
-        if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
-        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
-        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     15. )
-        if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call xcleanup2D_distr%execute(cline)
     case( 'cluster2D' )
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
-        if( .not. cline%defined('lp')        ) call cline%set('lp',          15.)
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',       20.)
-        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('lpthresh')  ) call cline%set('lpthresh',    30.)
-        if( .not. cline%defined('ndev')      ) call cline%set('ndev',        1.5)
-        if( cline%defined('refine') )then
-            if( trim(cline%get_carg('refine')).ne.'greedy' )then
-                if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
-            endif
-        else
-            if( .not.cline%defined('msk') ) THROW_HARD('MSK must be defined!')
-        endif
         call xcluster2D_stream_distr%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
-
     case( 'initial_3Dmodel' )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         call execute_commander(xinitial_3Dmodel, cline)
 
     ! REFINE3D WORKFLOWS
-
     case( 'refine3D' )
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       20.)
-        if( .not. cline%defined('refine') ) call cline%set('refine', 'single')
         call execute_commander(xprime3D_distr, cline)
     case( 'reconstruct3D' )
-        if( .not. cline%defined('trs')  ) call cline%set('trs', 5.) ! to assure that shifts are being used
         call xreconstruct3D_distr%execute( cline )
 
     ! CLUSTER3D WORKFLOWS
-
     case( 'cluster3D' )
-        if( .not. cline%defined('refine') )  call cline%set('refine', 'cluster')
-        if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
-        if( cline%defined('lp') )            call cline%set('eo','no')
         call xcluster3D%execute( cline )
     case( 'cluster3D_refine' )
-        if( .not. cline%defined('eo') ) call cline%set('eo', 'no')
         call xcluster3D_refine%execute( cline )
 
     ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
-
     case( 'tseries_track' )
-        call cline%set('nthr', 1.0)
-        if( .not. cline%defined('neg')      ) call cline%set('neg',     'yes')
-        if( .not. cline%defined('lp')       ) call cline%set('lp',       2.0)
-        if( .not. cline%defined('lp_backgr')) call cline%set('lp_backgr',1.1)
-        if( .not. cline%defined('hp')       ) call cline%set('hp',       5.0)
-        if( .not. cline%defined('width')    ) call cline%set('width',    1.1)
-        if( .not. cline%defined('cenlp')    ) call cline%set('cenlp',    5.0)
-        if( .not. cline%defined('ctf')      ) call cline%set('ctf',      'no')
         call xtseries_track_distr%execute( cline )
     case( 'cleanup2D_nano' )
-        call cline%set('center',    'yes')
-        call cline%set('autoscale', 'no')
-        call cline%set('refine',    'greedy')
-        call cline%set('tseries',   'yes')
-        if( .not. cline%defined('lp')     ) call cline%set('lp',     1.)
-        if( .not. cline%defined('ncls')   ) call cline%set('ncls',   20.)
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',  5.)
-        if( .not. cline%defined('hp')     ) call cline%set('hp',     5.)
-        if( .not. cline%defined('maxits') ) call cline%set('maxits', 10.)
         call xcleanup2D_nano%execute(cline)
 
     ! SUPPORTING WORKFLOWS
-
     case( 'scale_project' )
         call xscale_project%execute(cline )
     case DEFAULT

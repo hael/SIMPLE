@@ -35,6 +35,7 @@ contains
         integer           :: j, find_plate
         real              :: res_fsc05, res_fsc0143
         real, allocatable :: res(:), corrs(:)
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         call params%new(cline)
         ! read even/odd pair
         call even%new([params%box,params%box,params%box], params%smpd)
@@ -97,6 +98,7 @@ contains
         logical              :: have_mask_file
         integer, allocatable :: locres_finds(:,:,:)
         real,    allocatable :: res(:), corrs(:)
+        if( .not. cline%defined('mkdir') )      call cline%set('mkdir', 'yes')
         if( .not. cline%defined('lplim_crit') ) call cline%set('lplim_crit', 0.5)
         call params%new(cline)
         ! read even/odd pair
