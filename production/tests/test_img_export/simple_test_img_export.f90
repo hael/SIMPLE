@@ -19,7 +19,7 @@ character(len=STDLEN) :: folder, command, olddir
 if( command_argument_count() > 0 )then
    write(logfhandle,'(a)',advance='no') 'simple_test_img_export vol1=<volume.mrc> msk=<mask radius(in pixels)>'
    write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
-   call cline%parse_private
+   call cline%parse_oldschool
    call cline%check
    if( cline%defined('vol1') )then
       if( trim(cline%get_carg('vol1')) .eq. '' )then

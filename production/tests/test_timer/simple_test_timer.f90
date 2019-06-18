@@ -24,19 +24,7 @@ logical           :: be_verbose=.false.
 character(STDLEN) :: timestr
 call date_and_time(TIME=timestr)
 starttime = str2real(timestr)
-!if( command_argument_count() < 0 )then
-!    write(logfhandle,'(a)') 'simple_test_timer [verbose=<yes|no{no}>]'
-!    stop
-!endif
-!call cline%parse
-! call cline%checkvar('nthr', 1)
-! call cline%check
 be_verbose = .true.
-!if( cline%defined('verbose') )then
-!    if( trim(cline%get_carg('verbose')) .eq. 'yes' )then
-!        be_verbose = .true.
-!    endif
-!endif
 write(logfhandle,'(a)') '------------- Basic timer test ----------------- '
 call exec_timertest(be_verbose)
 call date_and_time(TIME=timestr)

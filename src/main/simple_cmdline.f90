@@ -30,6 +30,7 @@ type cmdline
 contains
     procedure          :: parse
     procedure          :: parse_private
+    procedure          :: parse_oldschool
     procedure          :: parse_command_line_value
     procedure, private :: copy
     procedure, private :: assign
@@ -232,6 +233,59 @@ contains
         end do
         if( sz_keys_req > 0 ) call self%check
     end subroutine parse_private
+
+    !> \brief for parsing the command line arguments passed as key=val
+    subroutine parse_oldschool( self, keys_required, keys_optional )
+        use simple_args, only: args
+        class(cmdline),             intent(inout) :: self
+        character(len=*), optional, intent(in)    :: keys_required(:), keys_optional(:)
+        character(len=STDLEN)     :: exec_name
+        character(len=LONGSTRLEN) :: arg
+        type(args)                :: allowed_args
+        integer                   :: i, cmdstat, cmdlen, ikey
+        integer                   :: nreq, cmdargcnt
+        logical                   :: distr_exec
+        call get_command_argument(0,exec_name)
+        distr_exec = str_has_substr(exec_name,'distr')
+        cmdargcnt = command_argument_count()
+        call get_command(self%entire_line)
+        cmdline_glob = trim(self%entire_line)
+        if( present(keys_required) )then
+            if( str_has_substr(self%entire_line,'prg=') )then
+                nreq = size(keys_required) + 1 ! +1 because prg part of command line
+            else
+                nreq = size(keys_required)
+            endif
+            if( cmdargcnt < nreq )then
+                call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
+                call exit(EXIT_FAILURE5)
+            else
+                ! indicate which variables are required
+                do ikey=1,size(keys_required)
+                    call self%checkvar(keys_required(ikey), ikey)
+                end do
+            endif
+        else
+            if( cmdargcnt < 2 )then
+                call print_cmdline_oldschool(keys_required, keys_optional, distr=distr_exec)
+                call exit(EXIT_FAILURE5)
+            endif
+        endif
+        allowed_args = args()
+        self%argcnt  = command_argument_count()
+        do i=1,self%argcnt
+            call get_command_argument(i, arg, cmdlen, cmdstat)
+            if( cmdstat == -1 )then
+                write(logfhandle,*) 'ERROR! while parsing the command line: simple_cmdline :: parse_oldschool'
+                write(logfhandle,*) 'The string length of argument: ', arg, 'is: ', cmdlen
+                write(logfhandle,*) 'which likely exceeds the length limit LONGSTRLEN'
+                write(logfhandle,*) 'Create a symbolic link with shorter name in the cwd'
+                call exit(EXIT_FAILURE5)
+            endif
+            call self%parse_command_line_value(i, arg, allowed_args)
+        end do
+        if( present(keys_required) ) call self%check
+    end subroutine parse_oldschool
 
     subroutine parse_command_line_value( self, i, arg, allowed_args )
         class(cmdline),   intent(inout) :: self

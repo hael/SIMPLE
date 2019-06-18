@@ -2,7 +2,7 @@ module simple_private_prgs
 include 'simple_lib.f08'
 implicit none
 
-public :: make_private_user_interface, print_private_cmdline, get_private_keys_required, get_n_private_keys_required
+public :: make_private_user_interface, print_private_cmdline, get_private_keys_required, get_n_private_keys_required, print_cmdline_oldschool
 private
 #include "simple_local_flags.inc"
 
@@ -27,6 +27,7 @@ type(simple_private_prg) :: private_prgs(NMAX_PRIVATE_PRGS)
 ! old-school cmd_dict (command line dictionary), used by simple_private_exec
 integer, parameter :: NMAX_CMD_DICT = 300
 type(chash)        :: cmd_dict
+logical            :: cmd_dict_initialised = .false.
 
 contains
 
@@ -168,6 +169,49 @@ contains
         endif
         write(logfhandle,'(a)') ''
     end subroutine print_private_cmdline
+
+    subroutine print_cmdline_oldschool( keys_required, keys_optional, distr )
+        character(len=KEYLEN), optional, intent(in) :: keys_required(:), keys_optional(:)
+        logical,               optional, intent(in) :: distr
+        character(len=KEYLEN), allocatable :: sorted_keys(:)
+        integer :: nreq, nopt
+        logical :: ddistr
+        ddistr = .false.
+        if( present(distr) ) ddistr = distr
+        ! initialise if needed
+        if( .not. cmd_dict_initialised ) call init_cmd_dict
+        write(logfhandle,'(a)') 'USAGE:'
+        if( ddistr )then
+            write(logfhandle,'(a)') 'bash-3.2$ simple_distr_exec prg=simple_program key1=val1 key2=val2 ...'
+        else
+            write(logfhandle,'(a)') 'bash-3.2$ simple_exec prg=simple_program key1=val1 key2=val2 ...'
+        endif
+        ! print required
+        if( present(keys_required) )then
+            nreq =  size(keys_required)
+            if( nreq > 0 )then
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'REQUIRED'
+                allocate(sorted_keys(nreq), source=keys_required)
+                call lexSort(sorted_keys)
+                call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
+                deallocate(sorted_keys)
+            endif
+        endif
+        ! print optionals
+        if( present(keys_optional) )then
+            nopt = size(keys_optional)
+            if( nopt > 0 )then
+                write(logfhandle,'(a)') ''
+                write(logfhandle,'(a)') 'OPTIONAL'
+                allocate(sorted_keys(nopt), source=keys_optional)
+                call lexSort(sorted_keys)
+                call cmd_dict%print_key_val_pairs(logfhandle, sorted_keys)
+                deallocate(sorted_keys)
+            endif
+        endif
+        write(logfhandle,'(a)') ''
+    end subroutine print_cmdline_oldschool
 
     subroutine init_cmd_dict
         call cmd_dict%new(NMAX_CMD_DICT)

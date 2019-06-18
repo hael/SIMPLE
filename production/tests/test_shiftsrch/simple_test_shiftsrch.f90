@@ -22,7 +22,7 @@ if( command_argument_count() < 3 )then
     write(logfhandle,'(a)') ' smpd=<sampling distance(in A)> [nthr=<number of threads{1}>] [verbose=<yes|no{no}>]'
     stop
 endif
-call cline%parse_private
+call cline%parse_oldschool
 call cline%checkvar('stk',  1)
 call cline%checkvar('msk',  2)
 call cline%checkvar('smpd', 3)
