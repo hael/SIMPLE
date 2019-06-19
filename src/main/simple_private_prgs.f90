@@ -493,6 +493,7 @@ contains
         call cmd_dict%push('ysh',           'y shift(in pixels){0}')
         call cmd_dict%push('zero',          'zeroing(yes|no){no}')
         call cmd_dict%push('zsh',           'z shift(in pixels){0}')
+        cmd_dict_initialised = .true.
     end subroutine init_cmd_dict
 
     subroutine new_private_prgs

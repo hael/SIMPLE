@@ -760,7 +760,7 @@ contains
         call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp|no){sum}',  '(sum|cen|exp|no){sum}',  .false., 'sum')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
-        call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
+        call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 

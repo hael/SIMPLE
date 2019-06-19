@@ -129,7 +129,7 @@ contains
             endif
             call gen_projection_frcs( cline, eonames(1), eonames(2), resmskname, s, build%projfrcs)
             if( L_BENCH ) rt_gen_projection_frcs = rt_gen_projection_frcs + toc(t_gen_projection_frcs)
-            call build%projfrcs%write('frcs_state'//int2str_pad(state,2)//'.bin')
+            call build%projfrcs%write(FRCS_FILE)
             if( L_BENCH ) t_gen_anisotropic_optlp = tic()
             call gen_anisotropic_optlp(build%vol2, build%projfrcs, build%eulspace_red, s, &
                 &params%pgrp, params%hpind_fsc, params%l_phaseplate)

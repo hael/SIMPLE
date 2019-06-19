@@ -716,7 +716,7 @@ contains
                     &params_glob%vols_odd(s), find4eoavg)
                 call gen_projection_frcs(cline,  params_glob%vols_even(s), params_glob%vols_odd(s), &
                     params_glob%mskfile, s, build_glob%projfrcs)
-                call build_glob%projfrcs%write('frcs_state'//int2str_pad(s,2)//'.bin')
+                call build_glob%projfrcs%write(FRCS_FILE)
                 call gen_anisotropic_optlp(build_glob%vol2, build_glob%projfrcs, &
                     build_glob%eulspace_red, s, params_glob%pgrp, params_glob%hpind_fsc, &
                     params_glob%l_phaseplate)
