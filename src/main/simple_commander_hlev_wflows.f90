@@ -770,6 +770,7 @@ contains
         call cline_reconstruct3D%set('projfile', ORIG_WORK_PROJFILE)
         call cline_postprocess%set('prg',       'postprocess')
         call cline_postprocess%set('projfile',   ORIG_WORK_PROJFILE)
+        call cline_postprocess%set('mkdir',      'no')
         if( l_lpset )then
             call cline_postprocess%set('lp', lplims(2))
         else
