@@ -364,7 +364,7 @@ contains
         call calc_global_ori_weights
 
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
-        call calc_proj_weights
+        ! call calc_proj_weights !!!!!!!!!! turned off 4 now, needs integration and testing
 
         ! CLEAN
         call clean_strategy3D ! deallocate s3D singleton

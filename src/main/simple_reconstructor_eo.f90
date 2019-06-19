@@ -89,7 +89,7 @@ contains
         self%ext        = params_glob%ext
         self%numlen     = params_glob%numlen
         self%msk        = params_glob%msk
-        self%automsk    = file_exists(params_glob%mskfile)
+        self%automsk    = file_exists(params_glob%mskfile) .and. params_glob%l_envfsc
         self%phaseplate = params_glob%l_phaseplate
         self%hpind_fsc  = params_glob%hpind_fsc
         ! create composites
@@ -359,7 +359,7 @@ contains
             call odd%ifft()
             call odd%clip_inplace([self%box,self%box,self%box])
             ! masking
-            if( params_glob%l_envfsc .and. self%automsk )then
+            if( self%automsk )then
                 ! mask provided
                 call even%zero_env_background(self%envmask)
                 call odd%zero_env_background(self%envmask)
