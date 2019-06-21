@@ -73,6 +73,10 @@ contains
         call cline%set('prg',   'preprocess')
         ! read in movies
         call spproj%read( params%projfile )
+        ! sanity check
+        if( spproj%os_mic%get_noris() /= 0 )then
+            THROW_HARD('PREPROCESS_STREAM must always start from an empty project (eg from root proejct folder)')
+        endif
         ! picking
         l_pick = .false.
         if( cline%defined('refs') .or. cline%defined('vol1') ) l_pick = .true.
@@ -125,6 +129,7 @@ contains
             if( nmovies > 0 )then
                 do imovie = 1, nmovies
                     movie = trim(adjustl(movies(imovie)))
+                    if( .not.file_exists(movie) )cycle ! petty triple checking
                     call create_individual_project
                     call qenv%qscripts%add_to_streaming( cline )
                 enddo

@@ -285,7 +285,7 @@ contains
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
         real                          :: smpd, smpd_self
-        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls
+        integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls,istate
         select case(trim(oritype))
             case('mic')
                 os_ptr => self%os_mic
@@ -298,8 +298,9 @@ contains
         end select
         n2append = os_append_ptr%get_noris()
         if( n2append == 0 )return
-        smpd = os_append_ptr%get(1, 'smpd')
-        n    = os_ptr%get_noris()
+        smpd   = os_append_ptr%get(1, 'smpd')
+        istate = 1 ! default
+        n      = os_ptr%get_noris()
         if( n == 0 )then
             ! first entry
         else
@@ -309,7 +310,9 @@ contains
                 write(logfhandle,*) 'smpd 2 append', smpd
                 THROW_HARD('only a project with the same smpd can be appended to the project; append_project')
             endif
+            if( os_ptr%isthere(1,'state') ) istate = os_ptr%get_state(1)
         endif
+        call os_ptr%set(1,'state',real(istate))
         select case(trim(oritype))
             case('mic')
                 if( n == 0 )then
@@ -540,6 +543,7 @@ contains
             case DEFAULT
                 THROW_HARD('ctfflag: '//int2str(ctfvars%ctfflag)//' unsupported; add_single_movie')
         end select
+        call os_ptr%set(1,'state',1.) ! default on import
     end subroutine add_single_movie
 
     !> Add/append movies or micrographs without ctf parameters

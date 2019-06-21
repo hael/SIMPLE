@@ -137,7 +137,6 @@ contains
         endif
     end subroutine add2history_1
 
-
     !>  \brief  is for adding to the history of already reported files
     !>          absolute path is implied
     subroutine add2history_2( self, fname )
@@ -146,6 +145,7 @@ contains
         character(len=LONGSTRLEN), allocatable :: tmp_farr(:)
         character(len=LONGSTRLEN)              :: abs_fname
         integer :: n
+        if( .not.file_exists(fname) )return ! petty triple checking
         if( .not.allocated(self%history) )then
             n = 0
             allocate(self%history(1), stat=alloc_stat)
