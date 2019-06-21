@@ -34,7 +34,7 @@ type ctf
     procedure, private :: eval_3
     procedure, private :: eval_4
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
-    procedure, private :: evalPhSh
+    procedure          :: evalPhSh
     procedure, private :: eval_df
     procedure          :: apply
     procedure          :: ctf2img
@@ -42,7 +42,8 @@ type ctf
     procedure          :: wienerlike_restoration
     procedure          :: phaseflip_and_shift_serial
     procedure          :: apply_and_shift
-    procedure          :: kV2wl
+    procedure, private :: kV2wl
+    procedure          :: apply_convention
 end type ctf
 
 interface ctf
@@ -439,7 +440,6 @@ contains
         real,           intent(in)    :: dfy         !< defocus y-axis
         real,           intent(in)    :: angast      !< angle of astigmatism
         real,           intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real, allocatable :: kweights(:)
         integer :: ldim(3),logi(3),h,k,phys(3),sh
         real    :: ang,tval,spaFreqSq,hinv,kinv,inv_ldim(3)
         real    :: rh,rk
@@ -475,5 +475,18 @@ contains
         class(ctf), intent(in) :: self
         wavelength = 12.26 / sqrt((1000.0 * self%kV) + (0.9784*(1000.0 * self%kV)**2)/(10.0**6.0))
     end function kV2wl
+
+    subroutine apply_convention(self, dfx, dfy, angast)
+        class(ctf), intent(in)    :: self
+        real,       intent(inout) :: dfx,dfy,angast
+        real :: tmp
+        if( dfx < dfy )then
+            tmp = dfy
+            dfy = dfx
+            dfx = tmp
+            angast = angast+90.
+        endif
+        if( angast > 180. ) angast = angast-180.
+    end subroutine apply_convention
 
 end module simple_ctf

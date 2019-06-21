@@ -105,7 +105,7 @@ contains
         call orientation%set('phshift',        ctfvars%phshift)
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())
         call orientation%set('ctfscore',       ctfscore)
-        call orientation%set('cc90',           ctffit%get_cc90())
+        call orientation%set('ctfres',         ctffit%get_ctfres())
         call orientation%set('ctfjpg',         rel_ctfjpg)
         ! clean
         call ctffit%kill
