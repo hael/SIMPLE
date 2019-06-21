@@ -812,7 +812,6 @@ contains
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
                 integer :: ldim(3)
-                real    :: mskrad
                 if( params_glob%l_envfsc .and. cline%defined('mskfile') )then
                     ! mask provided
                     call mskvol%read(resmskname)

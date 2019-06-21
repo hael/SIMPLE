@@ -682,8 +682,8 @@ contains
         if( self%ft )          THROW_HARD('not intended for FTs; dampen_pspec_central_cross')
         if( self%ldim(3) > 1 ) THROW_HARD('not intended for 3D imgs; dampen_pspec_central_cross')
         lims = self%loop_lims(3)
-        mh   = maxval(lims(1,:))
-        mk   = maxval(lims(2,:))
+        mh   = abs(lims(1,1))
+        mk   = abs(lims(2,1))
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 if( h == 0 .or. k == 0 )then
@@ -6861,9 +6861,9 @@ contains
         endif
         call img%zero_and_unflag_ft
         lims = self%loop_lims(3)
-        mh = maxval(lims(1,:))
-        mk = maxval(lims(2,:))
-        ml = maxval(lims(3,:))
+        mh = abs(lims(1,1))
+        mk = abs(lims(2,1))
+        ml = abs(lims(3,1))
         !$omp parallel do collapse(3) default(shared) private(h,k,l,phys,comp,inds)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
@@ -6960,8 +6960,8 @@ contains
         hplim_freq = self%fit%get_find(1,hplim)
         lplim_freq = self%fit%get_find(1,lplim)
         lims = self%loop_lims(3)
-        mh = maxval(lims(1,:))
-        mk = maxval(lims(2,:))
+        mh = abs(lims(1,1))
+        mk = abs(lims(2,1))
         inds = 1
         self%rmat = 0.0
         do h=lims(1,1),lims(1,2)

@@ -345,6 +345,12 @@ contains
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
+        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
+        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        ! master parameters
         call params%new(cline)
         nparts = params%nparts
         ! set mkdir to no (to avoid nested directory structure)

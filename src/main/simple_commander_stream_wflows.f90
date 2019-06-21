@@ -44,12 +44,12 @@ contains
         type(cmdline)                          :: cline_make_pickrefs
         type(moviewatcher)                     :: movie_buff
         type(sp_project)                       :: spproj, stream_spproj
-        character(len=LONGSTRLEN), allocatable :: movies(:), prev_movies(:)
+        character(len=LONGSTRLEN), allocatable :: movies(:)
         character(len=:),          allocatable :: output_dir, output_dir_ctf_estimate, output_dir_picker
         character(len=:),          allocatable :: output_dir_motion_correct, output_dir_extract, stream_spprojfile
         character(len=LONGSTRLEN)              :: movie
-        integer                                :: box_coords(2), nmovies, imovie, stacksz, prev_stacksz, iter, icline
-        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev, cnt, i
+        integer                                :: nmovies, imovie, stacksz, prev_stacksz, iter, icline
+        integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                                :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
@@ -71,6 +71,9 @@ contains
         params_glob%ncunits    = params%nparts
         call cline%set('mkdir', 'no')
         call cline%set('prg',   'preprocess')
+        if( cline%defined('dir_prev') .and. .not.file_exists(params%dir_prev) )then
+            THROW_HARD('Directory '//trim(params%dir_prev)//' does not exist!')
+        endif
         ! read in movies
         call spproj%read( params%projfile )
         ! sanity check
@@ -248,7 +251,6 @@ contains
                 integer :: iproj,nprojs,nptcls,cnt
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
-                if( .not.file_exists(params%dir_prev) ) return
                 call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)
                 nprojs = size(sp_files)
                 cnt    = 0

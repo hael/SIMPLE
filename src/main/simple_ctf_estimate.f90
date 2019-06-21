@@ -358,8 +358,8 @@ contains
         call tfun%init(dfx, dfy, angast)
         img      = 0.
         lims     = img%loop_lims(3)
-        mh       = maxval(lims(1,:))
-        mk       = maxval(lims(2,:))
+        mh       = abs(lims(1,1))
+        mk       = abs(lims(2,1))
         inds     = 1
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
@@ -382,54 +382,6 @@ contains
         end do
         !$omp end parallel do
     end subroutine ctf2pspecimg
-
-    !>  \brief  is for making a CTF power-spec image
-    subroutine ctf2pspecimgs( tfun, tfun_roavg, img, img_roavg, dfx, dfy, angast, add_phshift )
-        class(ctf),     intent(inout) :: tfun, tfun_roavg !< CTF objects
-        class(image),   intent(inout) :: img, img_roavg   !< image (outputs)
-        real,           intent(in)    :: dfx              !< defocus x-axis
-        real,           intent(in)    :: dfy              !< defocus y-axis
-        real,           intent(in)    :: angast           !< angle of astigmatism
-        real, optional, intent(in)    :: add_phshift      !< aditional phase shift (radians), for phase plate
-        integer :: lims(3,2),h,mh,k,mk,phys(3),ldim(3),inds(3)
-        real    :: ang, tval, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3), df_avg, tval_roavg
-        ! initialize
-        aadd_phshift = 0.
-        if( present(add_phshift) ) aadd_phshift = add_phshift
-        call tfun%init(dfx, dfy, angast)
-        df_avg = (dfx + dfy) / 2.0
-        call tfun_roavg%init(df_avg, df_avg, 0.)
-        img       = 0.
-        img_roavg = 0.
-        lims      = img%loop_lims(3)
-        mh        = maxval(lims(1,:))
-        mk        = maxval(lims(2,:))
-        inds      = 1
-        ldim      = img%get_ldim()
-        inv_ldim  = 1./real(ldim)
-        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,inds,spaFreqSq,ang,tval,tval_roavg,phys) &
-        !$omp schedule(static) proc_bind(close)
-        do h=lims(1,1),lims(1,2)
-            do k=lims(2,1),lims(2,2)
-                inds(1)    = min(max(1,h+mh+1),ldim(1))
-                inds(2)    = min(max(1,k+mk+1),ldim(2))
-                inds(3)    = 1
-                hinv       = real(h) * inv_ldim(1)
-                kinv       = real(k) * inv_ldim(2)
-                spaFreqSq  = hinv * hinv + kinv * kinv
-                ang        = atan2(real(k),real(h))
-                tval       = tfun%eval(spaFreqSq, ang, aadd_phshift)
-                tval       = min(1.,max(tval * tval,0.001))
-                tval       = sqrt(tval)
-                tval_roavg = tfun_roavg%eval(spaFreqSq, ang, aadd_phshift)
-                tval_roavg = min(1.,max(tval_roavg * tval_roavg,0.001))
-                tval_roavg = sqrt(tval_roavg)
-                call img%set(inds, tval)
-                call img_roavg%set(inds, tval_roavg)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine ctf2pspecimgs
 
     subroutine ctf_estimate_kill
         ppspec_all       => null()

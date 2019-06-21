@@ -435,8 +435,8 @@ contains
         real(dp)      :: avg, sdev, val
         integer       :: i,j,k, mh,mk
         call img%get_rmat_ptr(prmat)
-        mh   = maxval(self%flims(1,:))
-        mk   = maxval(self%flims(2,:))
+        mh   = abs(self%flims(1,1))
+        mk   = abs(self%flims(2,1))
         sdev = 0.d0
         avg  = 0.d0
         do i=1,self%npix_msk
@@ -466,8 +466,8 @@ contains
         call self%imgmsk%new(self%ldim_box, self%smpd)
         call self%imgmsk%resmsk(self%hp, self%lp)
         self%cc_msk = self%imgmsk%bin2logical()
-        mh   = maxval(self%flims(1,:))
-        mk   = maxval(self%flims(2,:))
+        mh   = abs(self%flims(1,1))
+        mk   = abs(self%flims(2,1))
         nr_msk = self%cc_msk
         ! builds mask indices
         self%npix_msk = count(nr_msk)
@@ -621,8 +621,8 @@ contains
         call img%get_rmat_ptr(prmat)
         prmat    = 0.
         lims     = img%loop_lims(3)
-        mh       = maxval(lims(1,:))
-        mk       = maxval(lims(2,:))
+        mh       = abs(lims(1,1))
+        mk       = abs(lims(2,1))
         ldim     = img%get_ldim()
         inv_ldim = 1./real(ldim)
         !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang,tval) &

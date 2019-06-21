@@ -299,7 +299,6 @@ contains
         n2append = os_append_ptr%get_noris()
         if( n2append == 0 )return
         smpd   = os_append_ptr%get(1, 'smpd')
-        istate = 1 ! default
         n      = os_ptr%get_noris()
         if( n == 0 )then
             ! first entry
@@ -310,9 +309,12 @@ contains
                 write(logfhandle,*) 'smpd 2 append', smpd
                 THROW_HARD('only a project with the same smpd can be appended to the project; append_project')
             endif
-            if( os_ptr%isthere(1,'state') ) istate = os_ptr%get_state(1)
         endif
-        call os_ptr%set(1,'state',real(istate))
+        ! dealing with states
+        istate = 1
+        if( os_append_ptr%isthere(1,'state') ) istate = os_append_ptr%get_state(1)
+        call os_append_ptr%set(1,'state',real(istate))
+        ! appending
         select case(trim(oritype))
             case('mic')
                 if( n == 0 )then

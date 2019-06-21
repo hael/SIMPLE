@@ -132,7 +132,7 @@ contains
             select case(D)
                 case(1)
                     ! 1D defocus
-                    cost = self%calc_cost(vec(1),vec(1),0.,cost)
+                    cost = self%calc_cost(vec(1),vec(1),0.,0.)
                 case(2)
                     ! 2D defocus
                     if( self%parms%l_phaseplate )then
@@ -172,8 +172,8 @@ contains
         if( present(add_phshift) ) aadd_phshift = add_phshift
         call self%tfun%init(dfx, dfy, angast)
         call self%pspec%get_rmat_ptr(prmat)
-        mh         = maxval(self%flims(1,:))
-        mk         = maxval(self%flims(2,:))
+        mh         = abs(self%flims(1,1))
+        mk         = abs(self%flims(2,1))
         inv_ldim   = 1./real(self%ldim)
         ctf_sqsum  = 0.d0
         dotproduct = 0.d0

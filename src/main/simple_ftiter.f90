@@ -89,37 +89,29 @@ contains
         endif
         self%llps   = self%lfnys ! default low-pass limits
         self%lhps   = 0          ! default high-pass limits
+        ! determines dimensions
         do d=1,3
             if (is_even(self%ldim(d))) then
                 self%rlogi_lbounds(d)     = -self%ldim(d)/2
                 self%rlogi_ubounds(d)     =  self%ldim(d)/2-1
                 self%clogi_lbounds(d)     = -self%ldim(d)/2
                 self%clogi_ubounds(d)     =  self%ldim(d)/2-1
-                self%clogi_lbounds_all(d) =  self%clogi_lbounds(d)+1
+                self%clogi_lbounds_all(d) =  self%clogi_lbounds(d)
                 self%clogi_ubounds_all(d) =  self%clogi_ubounds(d)
             else
-                self%rlogi_lbounds(d)     = -self%ldim(d)/2
-                self%rlogi_ubounds(d)     =  self%ldim(d)/2
-                self%clogi_lbounds(d)     = -self%ldim(d)/2
-                self%clogi_ubounds(d)     =  self%ldim(d)/2
+                self%rlogi_lbounds(d)     = -(self%ldim(d)-1)/2
+                self%rlogi_ubounds(d)     =  (self%ldim(d)-1)/2
+                self%clogi_lbounds(d)     = -(self%ldim(d)-1)/2
+                self%clogi_ubounds(d)     =  (self%ldim(d)-1)/2
                 self%clogi_lbounds_all(d) =  self%clogi_lbounds(d)
                 self%clogi_ubounds_all(d) =  self%clogi_ubounds(d)
             endif
             self%cphys_ubounds(d) = self%ldim(d)
         enddo
-        ! The first dimension in the complex case is treated specially
+        ! Exclude Friedel mates in the first dimension
         self%clogi_lbounds(1) = 0
-        if(is_even(self%ldim(1)))then
-            self%clogi_ubounds(1)     =  self%ldim(1)/2
-            self%cphys_ubounds(1)     =  self%ldim(1)/2+1
-            self%clogi_lbounds_all(1) = -self%clogi_ubounds(1)
-            self%clogi_ubounds_all(1) =  self%clogi_ubounds(1)-1
-        else
-            self%clogi_ubounds(1)     = (self%ldim(1)-1)/2
-            self%cphys_ubounds(1)     = (self%ldim(1)+1)/2
-            self%clogi_lbounds_all(1) = -self%clogi_ubounds(1)
-        endif
-        if(self%ldim(3) == 1)then ! if the image is 2D, the 3rd dimension is special
+        ! if the image is 2D, the 3rd dimension is special
+        if(self%ldim(3) == 1)then
             self%rlogi_lbounds(3) = 0
             self%rlogi_ubounds(3) = 0
             self%clogi_lbounds(3) = 0
