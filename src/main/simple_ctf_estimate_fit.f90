@@ -653,7 +653,7 @@ contains
             call self%ctf_cost2D%init(self%pspec, self%parms, self%inds_msk, 3, limits(1:3,:), self%astigtol, TOL)
         endif
         call self%ctf_cost2D%minimize(self%parms, self%cc_fit)
-        ! refined solution & without circularity issue
+        ! refined solution & without circular issue
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx + half_range)
@@ -753,7 +753,7 @@ contains
             hinv          = real(h) / real(self%box)
             spaFreqSq     = hinv * hinv
             ctf1d(h)      = -self%tfun%eval(spaFreqSq, mid_angast_rad, add_phshift=phshift)
-            nextrema1d(h) = real(floor(1./PI*self%tfun%evalPhSh(spaFreqSq, mid_angast_rad, phshift) + 0.5))
+            nextrema1d(h) = real(self%tfun%nextrema(spaFreqSq, mid_angast_rad, phshift))
         enddo
         ! 1D spectrum
         do k=rlims(2,1),rlims(2,2)
@@ -999,7 +999,7 @@ contains
         class(image),            intent(inout) :: ctf, extrema
         real, pointer :: pctf(:,:,:), pextr(:,:,:)
         real    :: ang, spaFreqSq, hinv, phshift, kinv, inv_ldim(3)
-        integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j, nextr
+        integer :: lims(3,2),h,mh,k,mk,ldim(3), i,j
         call ctf%get_rmat_ptr(pctf)
         call extrema%get_rmat_ptr(pextr)
         pctf     = 0.
@@ -1012,7 +1012,7 @@ contains
         call self%tfun%init(self%parms%dfx, self%parms%dfy, self%parms%angast)
         phshift = 0.
         if( self%parms%l_phaseplate ) phshift = self%parms%phshift
-        !$omp parallel do collapse(2) default(shared) private(nextr,h,hinv,k,kinv,i,j,spaFreqSq,ang) &
+        !$omp parallel do collapse(2) default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang) &
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
@@ -1022,8 +1022,7 @@ contains
                 hinv      = real(h) * inv_ldim(1)
                 kinv      = real(k) * inv_ldim(2)
                 spaFreqSq = hinv * hinv + kinv * kinv
-                nextr     = floor(1./PI * self%tfun%evalPhSh(spaFreqSq, ang, phshift)+0.5)
-                pextr(i,j,1) = real(nextr)
+                pextr(i,j,1) = real(self%tfun%nextrema(spaFreqSq, ang, phshift))
                 pctf(i,j,1)  = -self%tfun%eval(spaFreqSq, ang, phshift) ! dbl check sign change
             end do
         end do

@@ -22,20 +22,17 @@ type ctf
     real    :: Cs          = 0.    !< spherical aberration (input unit: mm)
     real    :: wl          = 0.    !< wavelength (input unit: A)
     real    :: amp_contr   = 0.07  !< fraction of amplitude contrast ([0.07,0.15] see Mindell 03)
+    real    :: amp_contr_const = 0.  !< Amplitude contrast derived term
     real    :: dfx         = 0.    !< underfocus x-axis, underfocus is positive; larger value = more underfocus (input unit: microns)
     real    :: dfy         = 0.    !< underfocus y-axis (input unit: microns)
     real    :: angast      = 0.    !< azimuth of x-axis 0.0 means axis is at 3 o'clock (input unit: degrees)
-    real    :: phaseq      = 0.    !< phase constrast weight (derived constant)
-    real    :: ampliq      = 0.    !< amplitude contrast weight (derived constant)
   contains
     procedure          :: init
-    procedure, private :: eval_1
-    procedure, private :: eval_2
-    procedure, private :: eval_3
-    procedure, private :: eval_4
+    procedure, private :: evalPhSh
+    procedure, private :: eval_1, eval_2, eval_3, eval_4
     generic            :: eval => eval_1, eval_2, eval_3, eval_4
-    procedure          :: evalPhSh
     procedure, private :: eval_df
+    procedure          :: nextrema
     procedure          :: apply
     procedure          :: ctf2img
     procedure          :: apply_serial
@@ -58,15 +55,16 @@ contains
         real, intent(in) :: Cs        !< constant
         real, intent(in) :: amp_contr !< amplitude contrast
         type(ctf) :: self
+        real      :: phaseq
         ! set constants
         self%kV        = kV
         self%wl        = self%kV2wl() / smpd
         self%Cs        = (Cs*1.0e7) / smpd
         self%amp_contr = amp_contr
         self%smpd      = smpd
-        ! compute derived constants (phase and amplitude contrast weights)
-        self%phaseq    = sqrt(1. - amp_contr * amp_contr)
-        self%ampliq    = amp_contr
+        ! compute derived constant
+        phaseq               = sqrt(1. - self%amp_contr*self%amp_contr)
+        self%amp_contr_const = atan(self%amp_contr / phaseq)
     end function constructor
 
     !>  \brief  initialise a CTF object with defocus/astigmatism params
@@ -80,7 +78,24 @@ contains
         self%angast = deg2rad(angast)
     end subroutine init
 
-    !>  \brief Returns the CTF, based on CTFFIND3 subroutine (see Mindell 2003)
+    !>  \brief returns the argument (radians) to the ctf
+    !!
+    !!  We follow the convention, like the rest of the cryo-EM/3DEM field, that underfocusing the objective lens
+    !!  gives rise to a positive phase shift of scattered electrons, whereas the spherical aberration gives a
+    !!  negative phase shift of scattered electrons
+    pure elemental real function evalPhSh( self, spaFreqSq, ang, add_phshift )
+        class(ctf), intent(in) :: self        !< instance
+        real,       intent(in) :: spaFreqSq   !< square of spatial frequency at which to compute the ctf (1/pixels^2)
+        real,       intent(in) :: ang         !< angle at which to compute the ctf (radians)
+        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
+        real :: df                            !< defocus at point at which we're evaluating the ctf
+        !! compute the defocus
+        df = self%eval_df(ang)
+        !! compute the ctf argument
+        evalPhSh = PI * self%wl * spaFreqSq * (df - 0.5 * self%wl*self%wl * spaFreqSq * self%Cs) + add_phshift
+    end function evalPhSh
+
+    !>  \brief Returns the CTF, based on CTFFIND4 subroutine (Rohou & Grigorieff (2015))
     !
     ! How to use eval:
     !
@@ -99,23 +114,20 @@ contains
     !                        else
     !                            ang = 0.
     !                        endif
-    function eval_1( self, spaFreqSq, dfx, dfy, angast, ang ) result ( val )
+    real function eval_1( self, spaFreqSq, dfx, dfy, angast, ang )
         class(ctf), intent(inout) :: self      !< instance
         real,       intent(in)    :: spaFreqSq !< squared reciprocal pixels
         real,       intent(in)    :: dfx       !< Defocus along first axis (micrometers)
         real,       intent(in)    :: dfy       !< Defocus along second axis (for astigmatic CTF, dfx .ne. dfy) (micrometers)
         real,       intent(in)    :: angast    !< Azimuth of first axis. 0.0 means axis is at 3 o'clock. (radians)
         real,       intent(in)    :: ang       !< Angle at which to compute the CTF (radians)
-        real :: val, phshift
         ! initialize the CTF object, using the input parameters
         call self%init(dfx, dfy, angast)
-        ! compute phase shift
-        phshift = self%evalPhSh(spaFreqSq, ang, 0.)
-        ! compute value of CTF, assuming white particles
-        val = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
+        eval_1 = sin( self%evalPhSh(spaFreqSq, ang, 0.) + self%amp_contr_const )
     end function eval_1
 
-    function eval_2( self, spaFreqSq, dfx, dfy, angast, ang, add_phshift ) result ( val )
+    real function eval_2( self, spaFreqSq, dfx, dfy, angast, ang, add_phshift )
         class(ctf), intent(inout) :: self        !< instance
         real,       intent(in)    :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in)    :: dfx         !< Defocus along first axis (micrometers)
@@ -123,13 +135,10 @@ contains
         real,       intent(in)    :: angast      !< Azimuth of first axis. 0.0 means axis is at 3 o'clock. (radians)
         real,       intent(in)    :: ang         !< Angle at which to compute the CTF (radians)
         real,       intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
-        real :: val, phshift
         ! initialize the CTF object, using the input parameters
         call self%init(dfx, dfy, angast)
-        ! compute phase shift
-        phshift = self%evalPhSh(spaFreqSq, ang, add_phshift)
-        ! compute value of CTF, assuming white particles
-        val = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
+        eval_2 = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
     end function eval_2
 
     !>  \brief Returns the CTF with pre-initialize parameters
@@ -137,13 +146,8 @@ contains
         class(ctf), intent(in) :: self        !< instance
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
-        real :: df, phshift
-        ! compute DOUBLE the effective defocus
-        df = (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
-        !! compute the ctf argument
-        phshift = 0.5 * pi * self%wl * spaFreqSq * (df - self%wl * self%wl * spaFreqSq * self%Cs)
-        ! compute value of CTF, assuming white particles
-        eval_3 = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
+        eval_3 = sin( self%evalPhSh(spaFreqSq, ang, 0.) + self%amp_contr_const )
     end function eval_3
 
     !>  \brief Returns the CTF with pre-initialize parameters
@@ -152,38 +156,25 @@ contains
         real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
         real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians)
         real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
-        real :: df, phshift
-        ! compute DOUBLE the effective defocus
-        df      = (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
-        ! compute the ctf argument
-        phshift = 0.5 * pi * self%wl * spaFreqSq * (df - self%wl * self%wl * spaFreqSq * self%Cs) + add_phshift
-        ! compute value of CTF, assuming white particles
-        eval_4  = (self%phaseq * sin(phshift) + self%ampliq * cos(phshift))
+        ! compute phase shift + amplitude constrast term & compute value of CTF, assuming white particles
+        eval_4 = sin( self%evalPhSh(spaFreqSq, ang, add_phshift) + self%amp_contr_const )
     end function eval_4
 
-    !>  \brief returns the argument (radians) to the sine and cosine terms of the ctf
-    !!
-    !!  We follow the convention, like the rest of the cryo-EM/3DEM field, that underfocusing the objective lens
-    !!  gives rise to a positive phase shift of scattered electrons, whereas the spherical aberration gives a
-    !!  negative phase shift of scattered electrons
-    pure elemental real function evalPhSh( self, spaFreqSq, ang, add_phshift ) result( phshift )
-        class(ctf), intent(in) :: self        !< instance
-        real,       intent(in) :: spaFreqSq   !< square of spatial frequency at which to compute the ctf (1/pixels^2)
-        real,       intent(in) :: ang         !< angle at which to compute the ctf (radians)
-        real,       intent(in) :: add_phshift !< aditional phase shift (radians), for phase plate
-        real :: df                            !< defocus at point at which we're evaluating the ctf
-        !! compute the defocus
-        df = self%eval_df(ang)
-        !! compute the ctf argument
-        phshift = pi * self%wl * spaFreqSq * (df - 0.5 * self%wl * self%wl * spaFreqSq * self%Cs) + add_phshift
-    end function evalPhSh
-
     !>  \brief  Return the effective defocus given the pre-set CTF parameters (from CTFFIND4)
-    pure elemental real function eval_df( self, ang ) result (df)
+    pure elemental real function eval_df( self, ang )
         class(ctf), intent(in) :: self !< instance
         real,       intent(in) :: ang  !< angle at which to compute the defocus (radians)
-        df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
+        eval_df = 0.5 * (self%dfx + self%dfy + cos(2.0 * (ang - self%angast)) * (self%dfx - self%dfy))
     end function eval_df
+
+    !>  \brief  Eq 11 of Rohou & Grigorieff (2015)
+    integer function nextrema( self, spaFreqSq, ang, phshift )
+        class(ctf), intent(in) :: self
+        real,       intent(in) :: spaFreqSq   !< squared reciprocal pixels
+        real,       intent(in) :: ang         !< Angle at which to compute the CTF (radians) )
+        real,       intent(in) :: phshift     !< aditional phase shift (radians), for phase plate
+        nextrema = abs(floor( 1. / PI * (self%evalPhSh(spaFreqSq, ang, phshift)+self%amp_contr_const) + 0.5))
+    end function nextrema
 
     !>  \brief  is for applying CTF to an image
     subroutine apply( self, img, dfx, mode, dfy, angast, bfac, add_phshift )

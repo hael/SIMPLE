@@ -12,6 +12,7 @@ private
 
 logical,  parameter :: perform_coarse   = .false.
 logical,  parameter :: perform_rndstart = .false.
+real(dp), parameter :: init_range       = 2.0_dp  ! range for random initialization (negative to positive)
 real(dp), parameter :: coarse_range     = 2.0_dp  ! range for coarse search (negative to positive)
 integer,  parameter :: coarse_num_steps = 5       ! no. of coarse search steps in x AND y (hence real no. is its square)
 
@@ -194,22 +195,21 @@ contains
                 irot = 0 ! to communicate that a better solution was not found
             endif
         else
+            self%cur_inpl_idx = irot
+            self%ospec%x      = [0.,0.]
+            self%ospec%x_8    = [0.d0,0.d0]
             if( perform_rndstart )then
-                init_xy(1) = ran3() * coarse_range * 2.d0 - coarse_range
-                init_xy(2) = ran3() * coarse_range * 2.d0 - coarse_range
+                init_xy(1) = 2.*(ran3()-0.5) * init_range
+                init_xy(2) = 2.*(ran3()-0.5) * init_range
                 self%ospec%x_8 = init_xy
                 self%ospec%x   = real(init_xy)
-            else
-                self%ospec%x   = [0.,0.]
-                self%ospec%x_8 = [0.d0,0.d0]
             endif
-            self%cur_inpl_idx   = irot
-            lowest_cost_overall = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [0.d0,0.d0], self%cur_inpl_idx)
             if (perform_coarse) then
                 call self%coarse_search(init_xy)
                 self%ospec%x_8 = init_xy
                 self%ospec%x   = real(init_xy)
             end if
+            lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             ! shift search
             call self%nlopt%minimize(self%ospec, self, lowest_cost)
             if( lowest_cost < lowest_cost_overall )then
@@ -232,30 +232,25 @@ contains
     subroutine coarse_search(self, init_xy)
         class(pftcc_shsrch_grad), intent(inout) :: self
         real(dp),                 intent(out)   :: init_xy(2)
-        real(dp)                                :: x, y
-        real(dp)                                :: lowest_cost, cost
-        real(dp)                                :: xy_step
-        integer                                 :: ix, iy
+        real(dp) :: x, y, lowest_cost, cost, stepx, stepy
+        integer  :: ix, iy
         if (coarse_num_steps .le. 1) then
             THROW_HARD('coarse_num_steps too small; coarse_search')
         end if
-        if (coarse_range .lt. 0._dp) then
-            THROW_HARD('coarse_range not positive; coarse_search')
-        end if
-        xy_step = 2._dp * coarse_range / real(coarse_num_steps-1,kind=dp)
-        lowest_cost = HUGE(lowest_cost)
-        do ix = 1, coarse_num_steps
-            x = -coarse_range + (ix-1) * xy_step
+        lowest_cost = huge(lowest_cost)
+        stepx = real((self%ospec%limits(1,2)-self%ospec%limits(1,1))/coarse_num_steps,dp)
+        stepy = real((self%ospec%limits(2,2)-self%ospec%limits(2,1))/coarse_num_steps,dp)
+        do ix = 1,coarse_num_steps
+            x = self%ospec%limits(1,1)+stepx/2. + real(ix-1,dp)*stepx
             do iy = 1,coarse_num_steps
-                y = -coarse_range + (iy-1) * xy_step
-                cost = - pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x, y], self%cur_inpl_idx)
+                y = self%ospec%limits(2,1)+stepy/2. + real(iy-1,dp)*stepy
+                cost = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, [x,y], self%cur_inpl_idx)
                 if (cost < lowest_cost) then
                     lowest_cost = cost
-                    init_xy(1) = x
-                    init_xy(2) = y
+                    init_xy     = [x,y]
                 end if
-            end do
-        end do
+            enddo
+        enddo
     end subroutine coarse_search
 
     subroutine coarse_search_opt_angle(self, init_xy, irot)
@@ -280,7 +275,7 @@ contains
             x = -coarse_range + (ix-1) * xy_step
             do iy = 1,coarse_num_steps
                 y = -coarse_range + (iy-1) * xy_step
-                call pftcc_glob%gencorrs(self%reference, self%particle, self%ospec%x, corrs)
+                call pftcc_glob%gencorrs(self%reference, self%particle, real([x,y]), corrs)
                 loc  = maxloc(corrs)
                 cost = - corrs(loc(1))
                 if (cost < lowest_cost) then
