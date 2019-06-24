@@ -269,9 +269,10 @@ contains
         ang = twopi/real(self%nrots)
         do irot=1,self%nrots
             self%angtab(irot) = real(irot-1)*ang
+            ! cycling over non-redundant logical dimensions
             do k=params_glob%kfromto(1),params_glob%kfromto(2)
-                self%polar(irot,k)            = cos(self%angtab(irot))*real(k) ! x-coordinate
-                self%polar(irot+self%nrots,k) = sin(self%angtab(irot))*real(k) ! y-coordinate
+                self%polar(irot,k)            =  sin(self%angtab(irot))*real(k) ! x-coordinate
+                self%polar(irot+self%nrots,k) = -cos(self%angtab(irot))*real(k) ! y-coordinate
             end do
             self%angtab(irot) = rad2deg(self%angtab(irot)) ! angle (in degrees)
         end do
