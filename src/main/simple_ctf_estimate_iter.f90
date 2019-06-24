@@ -58,7 +58,7 @@ contains
         ! global fitting
         call ctffit%new(self%micrograph, params_glob%pspecsz, ctfvars, [params_glob%dfmin,params_glob%dfmax],&
             &[params_glob%hp,params_glob%lp], params_glob%astigtol)
-        call ctffit%fit( ctfvars, fname_diag )
+        call ctffit%fit( ctfvars )
         ctfscore = ctffit%get_ctfscore()
         if( l_gen_thumb )then
             ! generate thumbnail

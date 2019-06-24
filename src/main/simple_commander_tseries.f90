@@ -343,7 +343,7 @@ contains
 
     subroutine exec_tseries_ctf_estimate( self, cline )
         use simple_image,             only: image
-        use simple_ctf_estimate
+        use simple_ctf_estimate_fit,  only: ctf_estimate_fit
         class(tseries_ctf_estimate_commander), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         character(len=LONGSTRLEN), parameter :: pspec_fname  = 'tseries_ctf_estimate_pspec.mrc'
@@ -351,11 +351,10 @@ contains
         integer,                   parameter :: nmics4ctf    = 10
         type(parameters)              :: params
         type(builder)                 :: build
-        type(image)                   :: mic_img, pspec_avg, pspec_up_avg, pspec_low_avg
-        type(image)                   :: pspec, pspec_up, pspec_low
+        type(ctf_estimate_fit)        :: ctffit
+        type(image)                   :: mic_img, pspec_avg, pspec
         type(ctfparams)               :: ctfvars
         character(len=:), allocatable :: micname
-        real    :: cc90, dfx, dfy, angast, phshift, dferr, cc, ctfscore
         integer :: nmics, imic, dims(3), nselmics
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -367,65 +366,43 @@ contains
         dims(2) = nint(build%spproj_field%get(1,'ydim'))
         dims(3) = 1
         call mic_img%new(dims, params%smpd)
-        call pspec_low%new([params%pspecsz,params%pspecsz,1], params%smpd)
-        call pspec_up%new( [params%pspecsz,params%pspecsz,1], params%smpd)
         call pspec%new(    [params%pspecsz,params%pspecsz,1], params%smpd)
-        call pspec_low_avg%new([params%pspecsz,params%pspecsz,1], params%smpd)
-        call pspec_up_avg%new( [params%pspecsz,params%pspecsz,1], params%smpd)
-        call pspec_avg%new(    [params%pspecsz,params%pspecsz,1], params%smpd)
+        call pspec_avg%new([params%pspecsz,params%pspecsz,1], params%smpd)
         nmics = build%spproj%get_nintgs()
         if( nmics /= build%spproj%os_mic%get_noris() ) THROW_HARD('Invalid number of micrographs')
-        write(logfhandle,'(A)')'>>> BUILDING AVERAGE POWER SPECTRUM'
-        ! cumulative sums of power
+        write(logfhandle,'(A)')'>>> BUILDING AVERAGE SPECTRUM'
+        ! accumulate spectrum
         nselmics = 0
         do imic = 1,nmics,10
             call progress(imic,nmics)
             nselmics = nselmics + 1
             call build%spproj_field%getter(imic,'forctf',micname)
             call mic_img%read(micname)
-            pspec_low = 0.
-            pspec_up  = 0.
-            pspec     = 0.
-            call mic_img%mic2eospecs(params%pspecsz, 'power', params%hp, pspec_low, pspec_up, pspec, postproc=.false.)
-            call pspec_low_avg%add(pspec_low,w=0.01)
-            call pspec_up_avg%add(pspec_up,  w=0.01)
-            call pspec_avg%add(pspec,        w=0.01)
+            pspec = 0.
+            call mic_img%mic2spec(params%pspecsz, 'sqrt', params%hp, pspec, postproc=.false.)
+            call pspec_avg%add(pspec, w=0.01)
         enddo
         call progress(1,1)
         call mic_img%kill
         call pspec%kill
-        call pspec_up%kill
-        call pspec_low%kill
-        ! averages powers
-        call pspec_low_avg%div(0.01*real(nselmics))
-        call pspec_up_avg%div( 0.01*real(nselmics))
-        call pspec_avg%div(    0.01*real(nselmics))
-        ! square root
-        call pspec_low_avg%sq_rt
-        call pspec_up_avg%sq_rt
-        call pspec_avg%sq_rt
+        ! average spectrum
+        call pspec_avg%div(0.01*real(nselmics))
         ! post-process
-        call pspec_low_avg%dampen_pspec_central_cross
-        call pspec_up_avg%dampen_pspec_central_cross
         call pspec_avg%dampen_pspec_central_cross
-        call pspec_low_avg%subtr_backgr(params%hp)
-        call pspec_up_avg%subtr_backgr(params%hp)
         call pspec_avg%subtr_backgr(params%hp)
         ! ctf estimation
         write(logfhandle,'(A)')'>>> CTF ESTIMATION'
         ctfvars = build%spproj_field%get_ctfvars(1)
-        call ctf_estimate_init(pspec_avg, pspec_low_avg, pspec_up_avg, params%smpd, ctfvars%kv,&
-            &ctfvars%cs, ctfvars%fraca, [params%dfmin,params%dfmax], [params%hp,params%lp],&
-            &params%astigtol, ctfvars%l_phaseplate, cc90)
-        call ctf_estimate_x_validated_fit( dfx, dfy, angast, phshift, dferr, cc, ctfscore, diag_fname)
-        call ctf_estimate_kill
-        ctfvars%dfx     = dfx
-        ctfvars%dfy     = dfy
-        ctfvars%angast  = angast
-        ctfvars%phshift = phshift
+        call ctffit%new(pspec_avg, params%pspecsz, ctfvars, [params%dfmin,params%dfmax],&
+            &[params%hp,params%lp],params%astigtol)
+        call ctffit%fit(ctfvars, pspec_avg)
+        call ctffit%write_diagnostic(diag_fname)
         do imic = 1,nmics
             call build%spproj_field%set_ctfvars(imic, ctfvars)
+            call build%spproj_field%set(imic, 'ctf_estimate_cc', ctffit%get_ccfit())
+            call build%spproj_field%set(imic, 'ctfscore', ctffit%get_ctfscore())
         enddo
+        call ctffit%kill
         ! final write
         call build%spproj%write(params%projfile)
         ! end gracefully

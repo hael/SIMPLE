@@ -78,7 +78,6 @@ contains
     procedure, private :: mic2spec_patch
     procedure, private :: norm_pspec
     procedure, private :: gen_roavspec1d
-    procedure, private :: gen_roavspec2d
     ! scoring, display & output
     procedure          :: plot_parms
     procedure          :: write_doc
@@ -254,12 +253,20 @@ contains
     ! DOERS
 
     !>  Performs initial grid search & 2D refinement, calculate stats
-    subroutine fit( self, parms, diagfname )
+    subroutine fit( self, parms, spec )
         class(ctf_estimate_fit), intent(inout) :: self
-        type(ctfparams),           intent(inout) :: parms
-        character(len=*),          intent(in)    :: diagfname
-        ! generate power spectrum from boxes
-        call self%mic2spec(self%pspec)
+        type(ctfparams),         intent(inout) :: parms
+        class(image),  optional, intent(inout) :: spec
+        if( present(spec) )then
+            ! use provided spectrum
+            if( .not. (self%pspec.eqdims.spec) )then
+                THROW_HARD('Spectrums have incomnpatible dimensions! fit')
+            endif
+            call self%pspec%copy(spec)
+        else
+            ! generate spectrum from boxes
+            call self%mic2spec(self%pspec)
+        endif
         ! generate & normalize 1D spectrum
         call self%gen_roavspec1d
         ! prepare rotationally averaged power spectra & CTF power spectrum
@@ -504,29 +511,6 @@ contains
         nullify(prmat)
     end subroutine gen_roavspec1d
 
-    !>  \brief  Generates 2D rotational average from the 1D spectrum
-    subroutine gen_roavspec2d( self )
-        class(ctf_estimate_fit), intent(inout) :: self
-        real, pointer :: prmat(:,:,:)
-        integer       :: i,j,h,k, mh,mk, sh
-        call self%pspec_roavg%get_rmat_ptr(prmat)
-        mh = abs(self%flims(1,1))
-        mk = abs(self%flims(2,1))
-        do h=self%flims(1,1),self%flims(1,2)
-            do k=self%flims(2,1),self%flims(2,2)
-                sh = nint(sqrt(real(h*h+k*k)))
-                i  = min(max(1,h+mh+1),self%ldim_box(1))
-                j  = min(max(1,k+mk+1),self%ldim_box(2))
-                if( sh>self%flims1d(2) )then
-                    prmat(i,j,1) = 0.
-                else
-                    prmat(i,j,1) = self%roavg_spec1d(sh)
-                endif
-            enddo
-        enddo
-        nullify(prmat)
-    end subroutine gen_roavspec2d
-
     ! builds resolution dependent mask and indices for correlation calculation
     subroutine gen_resmsk( self )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -565,7 +549,7 @@ contains
         df_avg = (self%parms%dfx + self%parms%dfy) / 2.0
         call self%ctf2pspecimg(self%pspec_ctf_roavg, df_avg, df_avg, 0.)
         hpfind = self%pspec_roavg%get_find(self%hp)
-        lpfind = self%pspec_roavg%get_find(self%lp)
+        lpfind = self%pspec_roavg%get_find(2.5)
         filtsz = self%pspec_roavg%get_filtsz()
         call self%pspec_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
         call self%pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
@@ -670,6 +654,10 @@ contains
         endif
         call self%ctf_cost2D%minimize(self%parms, self%cc_fit)
         ! refined solution & without circularity issue
+        limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
+        limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
+        limits(1,2) = min(self%df_lims(2),self%parms%dfx + half_range)
+        limits(2,2) = min(self%df_lims(2),self%parms%dfy + half_range)
         limits(3,1) = self%parms%angast - 30.       ! degrees
         limits(3,2) = self%parms%angast + 30.
         limits(4,1) = self%parms%phshift - PI/6.    ! radians

@@ -635,8 +635,8 @@ contains
         type(chash)                   :: job_descr
         type(qsys_env)                :: qenv
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        if( .not. cline%defined('hp')      ) call cline%set('hp',       10.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',       2.5)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check

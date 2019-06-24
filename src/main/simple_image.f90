@@ -40,7 +40,6 @@ contains
     procedure          :: ring
     procedure          :: copy
     procedure          :: mic2spec
-    procedure          :: mic2eospecs
     procedure          :: dampen_pspec_central_cross
     procedure          :: scale_pspec4viz
     procedure          :: window
@@ -79,8 +78,8 @@ contains
     procedure, private :: set_cmat_1
     procedure, private :: set_cmat_2
     generic            :: set_cmat => set_cmat_1, set_cmat_2
-    procedure          :: set_cmat_at_1
-    procedure          :: set_cmat_at_2
+    procedure, private :: set_cmat_at_1
+    procedure, private :: set_cmat_at_2
     generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
     procedure          :: set_cmats_from_cmats
     procedure          :: add_cmats_to_cmats
@@ -555,19 +554,22 @@ contains
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
-    subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out )
-        class(image),     intent(inout) :: self
-        integer,          intent(in)    :: box
-        character(len=*), intent(in)    :: speckind
-        real,             intent(in)    :: lp_backgr_subtr
-        type(image),      intent(inout) :: img_out
-        type(image)                     :: tmp, tmp2
+    subroutine mic2spec( self, box, speckind, lp_backgr_subtr, img_out, postproc )
+        class(image),      intent(inout) :: self
+        integer,           intent(in)    :: box
+        character(len=*),  intent(in)    :: speckind
+        real,              intent(in)    :: lp_backgr_subtr
+        type(image),       intent(inout) :: img_out
+        logical, optional, intent(in)    :: postproc
+        type(image) :: tmp, tmp2
         integer     :: xind, yind, cnt
-        logical     :: didft, outside
+        logical     :: didft, outside, l_postproc
         if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images')
         if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
             THROW_HARD('cannot use a box larger than the image')
         endif
+        l_postproc = .true.
+        if( present(postproc) ) l_postproc = postproc
         didft = .false.
         if( self%ft )then
             call self%ifft()
@@ -591,87 +593,14 @@ contains
             end do
         end do
         call img_out%div(real(cnt))
-        call img_out%dampen_pspec_central_cross
-        call img_out%subtr_backgr(lp_backgr_subtr)
+        if( l_postproc )then
+            call img_out%dampen_pspec_central_cross
+            call img_out%subtr_backgr(lp_backgr_subtr)
+        endif
         if( didft ) call self%fft()
         call tmp%kill
         call tmp2%kill
     end subroutine mic2spec
-
-    subroutine mic2eospecs( self, box, speckind, lp_backgr_subtr, pspec_lower, pspec_upper, pspec_all, postproc)
-        class(image),      intent(inout) :: self
-        integer,           intent(in)    :: box
-        character(len=*),  intent(in)    :: speckind
-        real,              intent(in)    :: lp_backgr_subtr
-        class(image),      intent(inout) :: pspec_lower, pspec_upper, pspec_all
-        logical, optional, intent(in)    :: postproc
-        type(image) :: tmp, tmp2
-        integer     :: xind, yind, cnt, neven_lim, nodd_lim, neven, nodd
-        logical     :: didft, outside, postproc_here
-        if( self%ldim(3) /= 1 ) THROW_HARD('only for 2D images; mic2eoimgs')
-        if( self%ldim(1) <= box .or. self%ldim(2) <= box )then
-            THROW_HARD('cannot use a box larger than the image; mic2eoimgs')
-        endif
-        didft = .false.
-        if( self%ft )then
-            call self%ifft()
-            didft = .true.
-        endif
-        postproc_here = .true.
-        if( present(postproc) ) postproc_here = postproc
-        ! count # images
-        cnt = 0
-        do xind=0,self%ldim(1)-box,box/2
-            do yind=0,self%ldim(2)-box,box/2
-                cnt = cnt + 1
-            end do
-        end do
-        ! divide eo
-        neven_lim = cnt / 2
-        nodd_lim  = cnt - neven_lim
-        ! prepate lower/upper/all spectra
-        cnt   = 0
-        neven = 0
-        nodd  = 0
-        call tmp%new([box,box,1], self%smpd)
-        call tmp2%new([box,box,1], self%smpd)
-        do xind=0,self%ldim(1)-box,box/2
-            do yind=0,self%ldim(2)-box,box/2
-                cnt = cnt + 1
-                call self%window_slim([xind,yind],box,tmp,outside)
-                call tmp%norm()
-                call tmp%zero_edgeavg
-                call tmp%fft()
-                if( cnt <= neven_lim )then
-                    neven = neven + 1
-                    call tmp%ft2img(speckind, tmp2)
-                    call pspec_lower%add(tmp2)
-                else
-                    nodd = nodd + 1
-                    call tmp%ft2img(speckind, tmp2)
-                    call pspec_upper%add(tmp2)
-                endif
-                call tmp%zero_and_unflag_ft
-                call tmp2%zero_and_unflag_ft
-            end do
-        end do
-        call pspec_all%add(pspec_lower)
-        call pspec_all%add(pspec_upper)
-        call pspec_lower%div(real(neven))
-        call pspec_upper%div(real(nodd))
-        call pspec_all%div(real(neven + nodd))
-        if( postproc_here )then
-            call pspec_lower%dampen_pspec_central_cross
-            call pspec_upper%dampen_pspec_central_cross
-            call pspec_all%dampen_pspec_central_cross
-            call pspec_lower%subtr_backgr(lp_backgr_subtr)
-            call pspec_upper%subtr_backgr(lp_backgr_subtr)
-            call pspec_all%subtr_backgr(lp_backgr_subtr)
-        endif
-        call tmp%kill()
-        call tmp2%kill()
-        if( didft ) call self%fft()
-    end subroutine mic2eospecs
 
     !> \brief dampens the central cross of a powerspectrum by mean filtering
     subroutine dampen_pspec_central_cross( self )
