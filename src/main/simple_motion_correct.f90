@@ -3,15 +3,16 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,           only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
-use simple_motion_patched,        only: motion_patched, PATCH_PDIM
-use simple_motion_patched_direct, only: motion_patched_direct
-use simple_motion_align_iso,      only: motion_align_iso
-use simple_image,                 only: image
-use simple_parameters,            only: params_glob
-use simple_estimate_ssnr,         only: acc_dose2filter
-use simple_oris,                  only: oris
-use simple_opt_lbfgsb,            only: PRINT_NEVALS
+use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_motion_patched,                only: motion_patched, PATCH_PDIM
+use simple_motion_align_iso,              only: motion_align_iso
+use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
+!use simple_motion_align_iso_direct,       only: motion_align_iso_direct
+use simple_image,                         only: image
+use simple_parameters,                    only: params_glob
+use simple_estimate_ssnr,                 only: acc_dose2filter
+use simple_oris,                          only: oris
+use simple_opt_lbfgsb,                    only: PRINT_NEVALS
 use simple_starfile_wrappers
 implicit none
 
@@ -43,7 +44,6 @@ logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
 type(motion_patched)        :: motion_patch
-type(motion_patched_direct) :: motion_patch_direct
 type(image),    allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
 
 ! data structures used by both isotropic, anisotropic & patch-based correction
@@ -80,10 +80,14 @@ character(len=:), allocatable :: mc_starfile_fname      !< file name for starfil
 type(starfile_table_type)     :: mc_starfile            !< starfile for motion correct output
 
 ! module global constants
-integer, parameter :: MITSREF        = 30      !< max # iterations of refinement optimisation
-real,    parameter :: SMALLSHIFT     = 1.      !< small initial shift to blur out fixed pattern noise
-logical, parameter :: PATCHED_DIRECT = .false. !< use direct patch-based motion correct (if patch-based motion correct activated)
-logical, parameter :: FITSHIFTS      = .false.  !< whether to fit optimized shifts at each iteration
+integer, parameter :: MITSREF                       = 30      !< max # iterations of refinement optimisation
+real,    parameter :: SMALLSHIFT                    = 1.      !< small initial shift to blur out fixed pattern noise
+logical, parameter :: FITSHIFTS                     = .false.
+
+logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial constraint for isotropic motion correction
+logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
+logical, parameter :: DO_PATCHED_POLYN              = .false.  !< run polynomially constrained motion correction for patch-based motion correction
+logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.  !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 
 contains
 
@@ -331,6 +335,42 @@ contains
 
     end subroutine motion_correct_iso_callback
 
+    subroutine motion_correct_iso_polyn_direct_callback( aPtr, align_iso_polyn_direct, converged )
+        class(*), pointer,                    intent(inout) :: aPtr
+        class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
+        logical,                              intent(out)   :: converged
+        select case(updateres)
+        case(0)
+            call update_res( updateres )
+        case(1)
+            call update_res( updateres )
+        case(2)
+            call update_res( updateres )
+        case DEFAULT
+            ! nothing to do
+        end select
+
+        if( updateres > 2) then
+            converged = .true.
+        else
+            converged = .false.
+        end if
+
+    contains
+
+        subroutine update_res( which_update )
+            integer, intent(in) :: which_update
+            lp = lp - resstep
+            call align_iso_polyn_direct%set_hp_lp(hp, lp)
+            write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
+            ! need to indicate that we updated resolution limit
+            updateres  = updateres + 1
+            ! indicate that reslim was updated
+            didupdateres = .true.
+        end subroutine update_res
+
+    end subroutine motion_correct_iso_polyn_direct_callback
+
     !> isotropic motion_correction of DDD movie
     subroutine motion_correct_iso( movie_stack_fname, ctfvars, shifts, gainref_fname, nsig )
         character(len=*),           intent(in)    :: movie_stack_fname !< input filename of stack
@@ -338,39 +378,67 @@ contains
         real,          allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
         character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
         real,             optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
-        real    :: ave, sdev, var, minw, maxw, corr
-        logical :: err, err_stat
-        type(motion_align_iso) :: align_iso
-        class(*), pointer :: callback_ptr
+        real                                :: ave, sdev, var, minw, maxw, corr
+        logical                             :: err, err_stat
+        type(motion_align_iso)              :: align_iso
+        type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
+        class(*), pointer                   :: callback_ptr
         callback_ptr => null()
         ! initialise
-        call align_iso%new
+        if (ISO_POLYN_DIRECT) then
+            call align_iso_polyn_direct%new
+        else
+            call align_iso%new
+        end if
         nsig_here = 5.0
         if( present(nsig) ) nsig_here = nsig
         call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
         if( err ) return
         call ftexp_transfmat_init(movie_frames_scaled(1))
-        call align_iso%set_frames(movie_frames_scaled, nframes)
-        call align_iso%set_hp_lp(hp,lp)
-        updateres = 0
-        call align_iso%set_trs(params_glob%scale*params_glob%trs)
-        call align_iso%set_smallshift(SMALLSHIFT)
-        call align_iso%set_rand_init_shifts(.true.)
-        call align_iso%set_ftol_gtol(1e-6, 1e-6)
-        call align_iso%set_shsrch_tol(1e-6)
-        call align_iso%set_fitshifts(FITSHIFTS)
-        call align_iso%set_callback( motion_correct_iso_callback )
-        call align_iso%align(callback_ptr)
-        corr = align_iso%get_corr()
-        if( corr < 0. )then
-            write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
-            THROW_WARN('OPTIMAL CORRELATION < 0.0')
-        endif
-        call align_iso%get_opt_shifts(opt_shifts)
-        if( allocated(shifts) ) deallocate(shifts)
-        allocate(shifts(nframes,2), source=opt_shifts)
-        call align_iso%get_weights(frameweights)
-        call align_iso%get_shifts_toplot(shifts_toplot)
+        if (ISO_POLYN_DIRECT) then
+            call align_iso_polyn_direct%set_frames(movie_frames_scaled, nframes)
+            call align_iso_polyn_direct%set_hp_lp(hp,lp)
+            updateres = 0
+            call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
+            call align_iso_polyn_direct%align_polyn(callback_ptr)
+            if (ISO_UNCONSTR_AFTER) then
+                call align_iso_polyn_direct%refine_direct
+            end if
+            corr = align_iso_polyn_direct%get_corr()
+            if( corr < 0. )then
+                write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+                THROW_WARN('OPTIMAL CORRELATION < 0.0')
+            endif
+            call align_iso_polyn_direct%get_opt_shifts(opt_shifts)
+            if( allocated(shifts) ) deallocate(shifts)
+            allocate(shifts(nframes,2), source=opt_shifts)
+            call align_iso_polyn_direct%get_weights(frameweights)
+            write (*,*) '@@@@@@@@@@@@@@@@@@@@@@@ motion_correct here, shifts=', shifts
+            write (*,*) '@@@@@@@@@@@@@@@@@@@@@@@                    , frameweights=', frameweights
+            call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
+        else
+            call align_iso%set_frames(movie_frames_scaled, nframes)
+            call align_iso%set_hp_lp(hp,lp)
+            updateres = 0
+            call align_iso%set_trs(params_glob%scale*params_glob%trs)
+            call align_iso%set_smallshift(SMALLSHIFT)
+            call align_iso%set_rand_init_shifts(.true.)
+            call align_iso%set_ftol_gtol(1e-6, 1e-6)
+            call align_iso%set_shsrch_tol(1e-6)
+            call align_iso%set_fitshifts(FITSHIFTS)
+            call align_iso%set_callback( motion_correct_iso_callback )
+            call align_iso%align(callback_ptr)
+            corr = align_iso%get_corr()
+            if( corr < 0. )then
+               write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
+               THROW_WARN('OPTIMAL CORRELATION < 0.0')
+            endif
+            call align_iso%get_opt_shifts(opt_shifts)
+            if( allocated(shifts) ) deallocate(shifts)
+            allocate(shifts(nframes,2), source=opt_shifts)
+            call align_iso%get_weights(frameweights)
+            call align_iso%get_shifts_toplot(shifts_toplot)
+        end if
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
@@ -462,13 +530,8 @@ contains
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
         logical :: doscale
-        if (PATCHED_DIRECT) then  ! NOTE: we can make this polymorphic later
-            call motion_patch_direct%new(motion_correct_ftol = params_glob%motion_correctftol, &
-                motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
-        else
-            call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
-                motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
-        endif
+        call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
+            motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
         smpd4scale = params_glob%smpd
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -492,14 +555,13 @@ contains
         end do
         write(logfhandle,'(a)') '>>> PATCH-BASED REFINEMENT'
         PRINT_NEVALS = .false.
-        ! apply deformation
-        if (PATCHED_DIRECT) then
-            call motion_patch_direct%set_frameweights( frameweights )
-            call motion_patch_direct%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot )
+        if (DO_PATCHED_POLYN) then
+            call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, &
+                patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot, patched_polyn)
         else
+            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn)
             call motion_patch%set_frameweights( frameweights )
             call motion_patch%set_fitshifts( FITSHIFTS )
-            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn )
         end if
     end subroutine motion_correct_patched
 

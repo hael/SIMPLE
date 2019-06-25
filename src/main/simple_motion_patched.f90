@@ -7,9 +7,10 @@ use simple_parameters,       only: params_glob
 use simple_opt_factory,      only: opt_factory
 use simple_opt_spec,         only: opt_spec
 use simple_optimizer,        only: optimizer
-use simple_image,            only: image
+use simple_image,            only: image, imstack_type
 use simple_ft_expanded,      only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_align_iso, only: motion_align_iso
+use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct, POLYDIM, POLYDIM2
 use CPlot2D_wrapper_module
 implicit none
 private
@@ -17,25 +18,22 @@ public :: motion_patched, PATCH_PDIM
 #include "simple_local_flags.inc"
 
 ! module global constants
-integer, parameter :: NX_PATCHED     = 5    ! number of patches in x-direction
-integer, parameter :: NY_PATCHED     = 5    !       "      "       y-direction
 real,    parameter :: TOL            = 1e-6 !< tolerance parameter
 real,    parameter :: TRS_DEFAULT    = 5.
 integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
+real,    parameter :: DIRECT_FTOL    = 1e-7
+real,    parameter :: DIRECT_GTOL    = 1e-7
 
 type :: rmat_ptr_type
     real, pointer :: rmat_ptr(:,:,:)
 end type rmat_ptr_type
 
-type :: stack_type
-    type(image), allocatable :: stack(:)
-end type stack_type
-
 type :: motion_patched
     private
     logical                             :: existence
-    type(stack_type),       allocatable :: frame_patches(:,:)
+    type(imstack_type),     allocatable :: frame_patches(:,:)
     type(motion_align_iso), allocatable :: align_iso(:,:)
+    type(motion_align_iso_polyn_direct), allocatable :: align_iso_polyn_direct(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
     real,                   allocatable :: lp(:,:)
@@ -50,6 +48,8 @@ type :: motion_patched
     real                                :: patch_centers(NX_PATCHED,NY_PATCHED,2)
     real                                :: motion_correct_ftol
     real                                :: motion_correct_gtol
+    real                                :: motion_patched_direct_ftol
+    real                                :: motion_patched_direct_gtol
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
     real                                :: trs
     real, public                        :: hp
@@ -57,25 +57,33 @@ type :: motion_patched
     logical                             :: has_global_shifts
     logical                             :: has_frameweights  = .false.
     logical                             :: fitshifts         = .false.
-
 contains
     procedure, private                  :: allocate_fields
     procedure, private                  :: deallocate_fields
     procedure, private                  :: set_size_frames_ref
     procedure, private                  :: set_patches
     procedure, private                  :: det_shifts
+    procedure, private                  :: det_shifts_polyn
+    procedure, private                  :: det_shifts_direct
     procedure, private                  :: fit_polynomial
     procedure, private                  :: get_local_shift
     procedure, private                  :: apply_polytransfo
     procedure, private                  :: plot_shifts
     procedure, private                  :: frameweights_callback
     procedure, private                  :: motion_patched_callback
+    procedure, private                  :: motion_patched_polyn_callback
     procedure, private                  :: pix2polycoords
     procedure, private                  :: get_patched_polyn
+    procedure, private                  :: cleanup_polyn
+    procedure, private                  :: grad_contrib_to_full_grad
+    procedure, private                  :: motion_patched_direct_cost
+    procedure, private                  :: motion_patched_direct_gcost
+    procedure, private                  :: motion_patched_direct_fdf
     procedure                           :: set_frameweights
     procedure                           :: set_fitshifts
     procedure                           :: new             => motion_patched_new
     procedure                           :: correct         => motion_patched_correct
+    procedure                           :: correct_polyn   => motion_patched_correct_polyn
     procedure                           :: kill            => motion_patched_kill
 end type motion_patched
 
@@ -209,13 +217,10 @@ contains
                 call CDataSet__SetDatasetColor(patch_start,1.0_c_double,0.0_c_double,0.0_c_double)
                 call CDataSet__new(fit)
                 call CDataSet__new(obs)
-                !call CDataSet__new(obsglob)
                 call CDataSet__SetDrawMarker(fit, C_FALSE)
                 call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
                 call CDataSet__SetDrawMarker(obs, C_FALSE)
                 call CDataSet__SetDatasetColor(obs, 0.5_c_double,0.5_c_double,0.5_c_double)
-                !call CDataSet__SetDrawMarker(obsglob, C_FALSE)
-                !call CDataSet__SetDatasetColor(obsglob, 0.5_c_double,0.5_c_double,0.0_c_double)
                 do iframe = 1, self%nframes
                     call CDataPoint__new2(&
                         real(self%patch_centers(ipx, ipy, 1) + &
@@ -224,12 +229,6 @@ contains
                         SCALE * self%shifts_patches_for_fit(3, iframe, ipx, ipy), c_double), &
                         p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
-                    !call CDataPoint__new2(&
-                    !    real(self%patch_centers(ipx, ipy, 1) + &
-                    !    SCALE * (self%global_shifts(iframe, 1)+self%shifts_patches_for_fit(2, iframe, ipx, ipy)), c_double), &
-                    !    real(self%patch_centers(ipx, ipy, 2) + &
-                    !    SCALE * (self%global_shifts(iframe, 2)+self%shifts_patches_for_fit(3, iframe, ipx, ipy)), c_double), p_obsglob)
-                    !call CDataSet__AddDataPoint(obsglob, p_obsglob)
                     call self%get_local_shift(iframe, self%patch_centers(ipx, ipy, 1), &
                         self%patch_centers(ipx, ipy, 2), loc_shift)
                     call CDataPoint__new2(&
@@ -242,16 +241,13 @@ contains
                     end if
                     call CDataPoint__delete(p_fit)
                     call CDataPoint__delete(p_obs)
-                    !call CDataPoint__delete(p_obsglob)
                 end do
                 call CPlot2D__AddDataSet(plot2D, obs)
-                !call CPlot2D__AddDataSet(plot2D, obsglob)
                 call CPlot2D__AddDataSet(plot2D, fit)
                 call CPlot2D__AddDataSet(plot2D, patch_start)
                 call CDataSet__delete(patch_start)
                 call CDataSet__delete(fit)
                 call CDataSet__delete(obs)
-                !call CDataSet__delete(obsglob)
             end do
         end do
         title%str = 'X (in pixels; trajectory scaled by ' // trim(real2str(SHIFT_SCALE)) // ')' // C_NULL_CHAR
@@ -319,7 +315,7 @@ contains
             type(rmat_ptr_type), intent(in) :: rmat_ins2(self%nframes)
             integer  :: x1_h,  x2_h,  y1_h,  y2_h
             real     :: y1, y2, y3, y4, t, u
-            logical :: outside
+            logical  :: outside
             outside = .false.
             x1_h = floor(xval)
             x2_h = x1_h + 1
@@ -449,12 +445,12 @@ contains
     subroutine set_patches( self, stack )
         class(motion_patched),          intent(inout) :: self
         type(image),       allocatable, intent(inout) :: stack(:)
-        real, allocatable :: res(:)
-        integer :: i, j, iframe, k, l, kk, ll
-        integer :: ip, jp           ! ip, jp: i_patch, j_patch
-        integer :: lims_patch(2,2)
+        real, allocatable   :: res(:)
+        integer             :: i, j, iframe, k, l, kk, ll
+        integer             :: ip, jp           ! ip, jp: i_patch, j_patch
+        integer             :: lims_patch(2,2)
         type(rmat_ptr_type) :: rmat_ptrs(self%nframes)
-        real, pointer :: rmat_patch(:,:,:)
+        real, pointer       :: rmat_patch(:,:,:)
         ! init
         do j = 1, NY_PATCHED
             do i = 1, NX_PATCHED
@@ -509,8 +505,8 @@ contains
     subroutine det_shifts( self )
         class(motion_patched), target, intent(inout) :: self
         real, allocatable :: opt_shifts(:,:)
-        real    :: corr_avg
-        integer :: iframe, i, j, alloc_stat
+        real              :: corr_avg
+        integer           :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
         allocate( self%align_iso(NX_PATCHED, NY_PATCHED), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
@@ -570,6 +566,78 @@ contains
         deallocate(self%align_iso)
     end subroutine det_shifts
 
+    subroutine det_shifts_polyn( self )
+        class(motion_patched), target, intent(inout) :: self
+        real, allocatable :: opt_shifts(:,:)
+        real              :: corr_avg
+        integer           :: iframe, i, j, alloc_stat
+        self%shifts_patches = 0.
+        allocate( self%align_iso_polyn_direct(NX_PATCHED, NY_PATCHED), stat=alloc_stat )
+        if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched_polyn')
+        !$omp parallel do collapse(2) default(shared) private(j,i) proc_bind(close) schedule(static)
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso_polyn_direct(i,j)%new
+                call self%align_iso_polyn_direct(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
+                call self%align_iso_polyn_direct(i,j)%set_hp_lp(self%hp, self%lp(i,j))
+                call self%align_iso_polyn_direct(i,j)%set_trs(self%trs)
+                call self%align_iso_polyn_direct(i,j)%set_ftol_gtol(TOL, TOL)
+                call self%align_iso_polyn_direct(i,j)%set_coords(i,j)
+                call self%align_iso_polyn_direct(i,j)%set_callback(motion_patched_polyn_callback_wrapper)
+                call self%align_iso_polyn_direct(i,j)%align_polyn(self)
+            end do
+        end do
+        !$omp end parallel do
+        corr_avg = 0.
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                corr_avg = corr_avg + self%align_iso_polyn_direct(i,j)%get_corr()
+            enddo
+        enddo
+        corr_avg = corr_avg / real(NX_PATCHED*NY_PATCHED)
+        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
+        ! Set the first shift to 0.
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso_polyn_direct(i,j)%get_opt_shifts(opt_shifts)
+                do iframe = 1, self%nframes
+                    self%shifts_patches(2:3,iframe,i,j) = opt_shifts(iframe, 1:2)
+                end do
+            end do
+        end do
+        do iframe = self%nframes, 1, -1
+            self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
+        enddo
+        do iframe = 1, self%nframes
+            self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:) + 0.5*self%shifts_patches(2,1,:,:)
+            self%shifts_patches_for_fit(3,iframe,:,:) = self%shifts_patches(3,iframe,:,:) + 0.5*self%shifts_patches(3,1,:,:)
+        enddo
+        ! no cleanup yet
+    end subroutine det_shifts_polyn
+
+    subroutine det_shifts_direct( self )
+        class(motion_patched), target, intent(inout) :: self
+        type(opt_factory)         :: ofac
+        type(opt_spec)            :: ospec
+        class(optimizer), pointer :: nlopt
+        real                      :: opt_lims(PATCH_PDIM*2, 2), lowest_cost
+        opt_lims(:,1) = -self%trs
+        opt_lims(:,2) =  self%trs
+        call ospec%specify('lbfgsb', PATCH_PDIM*2, ftol=self%motion_patched_direct_ftol, &
+            gtol=self%motion_patched_direct_gtol, limits=opt_lims, maxits=800)
+        call ospec%set_costfun_8(patched_direct_cost_wrapper)
+        call ospec%set_gcostfun_8(patched_direct_gcost_wrapper)
+        call ospec%set_fdfcostfun_8(patched_direct_fdf_wrapper)
+        call ofac%new(ospec, nlopt)
+        ospec%x_8(           1:PATCH_PDIM  ) = self%poly_coeffs(:,1)
+        ospec%x_8(PATCH_PDIM+1:PATCH_PDIM*2) = self%poly_coeffs(:,2)
+        ospec%x = real(ospec%x_8)
+        call nlopt%minimize(ospec, self, lowest_cost)
+        self%poly_coeffs(:,1) = ospec%x_8(           1:PATCH_PDIM  )
+        self%poly_coeffs(:,2) = ospec%x_8(PATCH_PDIM+1:PATCH_PDIM*2)
+        nlopt => null()
+    end subroutine det_shifts_direct
+
     subroutine get_patched_polyn( self, patched_polyn )
         class(motion_patched), intent(inout) :: self
         real(dp), allocatable, intent(out)   :: patched_polyn(:)
@@ -578,9 +646,71 @@ contains
         patched_polyn(PATCH_PDIM+1:2*PATCH_PDIM) = self%poly_coeffs(1:PATCH_PDIM, 2)
     end subroutine get_patched_polyn
 
+    subroutine cleanup_polyn( self )
+        class(motion_patched), intent(inout) :: self
+        integer :: i, j
+        do i = 1, NX_PATCHED
+            do j = 1, NY_PATCHED
+                call self%align_iso_polyn_direct(i,j)%kill
+            end do
+        end do
+        deallocate(self%align_iso_polyn_direct)
+    end subroutine cleanup_polyn
+
+    subroutine grad_contrib_to_full_grad( self, grad_contrib, x, y, grad_full )
+        class(motion_patched), intent(inout) :: self
+        real(dp),                     intent(in)    :: grad_contrib(POLYDIM2)
+        real(dp),                     intent(in)    :: x, y
+        real(dp),                     intent(out)   :: grad_full(PATCH_PDIM*2)
+        real(dp) :: x2, y2, xy
+        ! X:    (c01+c04 x+c07 x^2+c10 y+c13 y^2+c16 xy)*t   + (c02+c05 x+c08 x^2+c11 y+c14 y^2+c17 xy)*t^2
+        !     + (c03+c06 x+c09 x^2+c12 y+c15 y^2+c18 xy)*t^3
+        ! Y:    (c19+c22 x+c25 x^2+c28 y+c31 y^2+c34 xy)*t   + (c20+c23 x+c26 x^2+c29 y+c32 y^2+c35 xy)*t^2
+        !     + (c21+c24 x+c27 x^2+c30 y+c33 y^2+c36 xy)*t^3
+        x2 = x**2
+        y2 = y**2
+        xy = x*y
+        grad_full( 1) =      grad_contrib(1)
+        grad_full( 4) = x  * grad_contrib(1)
+        grad_full( 7) = x2 * grad_contrib(1)
+        grad_full(10) = y  * grad_contrib(1)
+        grad_full(13) = y2 * grad_contrib(1)
+        grad_full(16) = xy * grad_contrib(1)
+        grad_full( 2) =      grad_contrib(2)
+        grad_full( 5) = x  * grad_contrib(2)
+        grad_full( 8) = x2 * grad_contrib(2)
+        grad_full(11) = y  * grad_contrib(2)
+        grad_full(14) = y2 * grad_contrib(2)
+        grad_full(17) = xy * grad_contrib(2)
+        grad_full( 3) =      grad_contrib(3)
+        grad_full( 6) = x  * grad_contrib(3)
+        grad_full( 9) = x2 * grad_contrib(3)
+        grad_full(12) = y  * grad_contrib(3)
+        grad_full(15) = y2 * grad_contrib(3)
+        grad_full(18) = xy * grad_contrib(3)
+        grad_full(19) =      grad_contrib(4)
+        grad_full(22) = x  * grad_contrib(4)
+        grad_full(25) = x2 * grad_contrib(4)
+        grad_full(28) = y  * grad_contrib(4)
+        grad_full(31) = y2 * grad_contrib(4)
+        grad_full(34) = xy * grad_contrib(4)
+        grad_full(20) =      grad_contrib(5)
+        grad_full(23) = x  * grad_contrib(5)
+        grad_full(26) = x2 * grad_contrib(5)
+        grad_full(29) = y  * grad_contrib(5)
+        grad_full(32) = y2 * grad_contrib(5)
+        grad_full(35) = xy * grad_contrib(5)
+        grad_full(21) =      grad_contrib(6)
+        grad_full(24) = x  * grad_contrib(6)
+        grad_full(27) = x2 * grad_contrib(6)
+        grad_full(30) = y  * grad_contrib(6)
+        grad_full(33) = y2 * grad_contrib(6)
+        grad_full(36) = xy * grad_contrib(6)
+    end subroutine grad_contrib_to_full_grad
+
     subroutine set_frameweights( self, frameweights )
         class(motion_patched), intent(inout) :: self
-        real, allocatable, intent(in) :: frameweights(:)
+        real, allocatable,     intent(in) :: frameweights(:)
         integer :: nlen
         nlen = size(frameweights)
         if (allocated(self%frameweights)) deallocate(self%frameweights)
@@ -590,7 +720,7 @@ contains
 
     subroutine set_fitshifts( self, fitshifts )
         class(motion_patched), intent(inout) :: self
-        logical,                  intent(in) :: fitshifts
+        logical,               intent(in) :: fitshifts
         self%fitshifts = fitshifts
     end subroutine set_fitshifts
 
@@ -621,6 +751,8 @@ contains
         self%lp      = -1.
         self%hp      = -1.
         self%resstep = -1.
+        self%motion_patched_direct_ftol = DIRECT_FTOL
+        self%motion_patched_direct_gtol = DIRECT_GTOL
     end subroutine motion_patched_new
 
     subroutine motion_patched_correct( self, hp, resstep, frames, frames_output, shift_fname, &
@@ -671,6 +803,64 @@ contains
         ! output polynomial
         if ( present(patched_polyn) ) call self%get_patched_polyn(patched_polyn)
     end subroutine motion_patched_correct
+
+    subroutine motion_patched_correct_polyn( self, hp, resstep, frames, frames_output, shift_fname, &
+        refine_direct, global_shifts, patched_polyn )
+        class(motion_patched),           intent(inout) :: self
+        real,                            intent(in)    :: hp, resstep
+        type(image),        allocatable, intent(inout) :: frames(:)
+        type(image),        allocatable, intent(inout) :: frames_output(:)
+        character(len=:),   allocatable, intent(in)    :: shift_fname
+        logical,                         intent(in)    :: refine_direct
+        real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
+        real(dp), optional, allocatable, intent(out)   :: patched_polyn(:)
+        integer :: ldim_frames(3)
+        integer :: i
+        write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ patched polyn ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ '
+        ! prep
+        self%hp          = hp
+        self%lp          = params_glob%lpstart
+        self%resstep     = resstep
+        self%updateres   = 0
+        self%shift_fname = shift_fname // C_NULL_CHAR
+        if (allocated(self%global_shifts)) deallocate(self%global_shifts)
+        if (present(global_shifts)) then
+            allocate(self%global_shifts(size(global_shifts, 1), size(global_shifts, 2)))
+            self%global_shifts = global_shifts
+            self%has_global_shifts = .true.
+        else
+            self%has_global_shifts = .false.
+        end if
+        self%nframes = size(frames,dim=1)
+        self%ldim   = frames(1)%get_ldim()
+        do i = 1,self%nframes
+            ldim_frames = frames(i)%get_ldim()
+            if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
+                THROW_HARD('error in motion_patched_correct: frame dimensions do not match reference dimension; simple_motion_patched')
+            end if
+        end do
+        call self%allocate_fields()
+        call self%set_size_frames_ref()
+        ! divide the reference into patches & updates high-pass accordingly
+        call self%set_patches(frames)
+        ! determine shifts for patches
+        call self%det_shifts_polyn()
+        ! fit the polynomial model against determined shifts
+        call self%fit_polynomial()
+        write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^ fitted polynomial; poly_coeffs(:, 1)=', self%poly_coeffs(:,1), 'poly_coeffs(:, 2)=', self%poly_coeffs(:,2)
+        if ( refine_direct ) then
+            write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ patched direct ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ '
+            call self%det_shifts_direct()
+        end if
+        ! clean up align_iso_polyn_direct objects
+        call self%cleanup_polyn()
+        ! apply transformation
+        call self%apply_polytransfo(frames, frames_output)
+        ! report visual results
+        call self%plot_shifts()
+        ! output polynomial
+        if ( present(patched_polyn) ) call self%get_patched_polyn(patched_polyn)
+    end subroutine motion_patched_correct_polyn
 
     subroutine motion_patched_kill( self )
         class(motion_patched), intent(inout) :: self
@@ -795,5 +985,187 @@ contains
             THROW_HARD('error in frameweights_callback_wrapper: unknown type; simple_motion_patched')
         end select
     end subroutine frameweights_callback_wrapper
+
+    subroutine motion_patched_polyn_callback(self, align_iso_polyn_direct, converged)
+        class(motion_patched),                intent(inout) :: self
+        class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
+        logical,                              intent(out)   :: converged
+        integer :: i, j
+        integer :: nimproved, iter
+        logical :: didupdateres
+        call align_iso_polyn_direct%get_coords(i, j)
+        select case(self%updateres(i,j))
+        case(0)
+            call update_res( self%updateres(i,j) )
+        case(1)
+            call update_res( self%updateres(i,j) )
+        case(2)
+            call update_res( self%updateres(i,j) )
+        case DEFAULT
+            ! nothing to do
+        end select
+        if( self%updateres(i,j) > 2 )then ! at least one iteration with new lim
+            converged = .true.
+        else
+            converged = .false.
+        end if
+
+    contains
+
+        subroutine update_res( which_update )
+            integer, intent(in) :: which_update
+            self%lp(i,j) = self%lp(i,j) - self%resstep
+            call align_iso_polyn_direct%set_hp_lp(self%hp, self%lp(i,j))
+            write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', self%lp(i,j)
+            ! need to indicate that we updated resolution limit
+            self%updateres(i,j)  = self%updateres(i,j) + 1
+            ! indicate that reslim was updated
+            didupdateres = .true.
+        end subroutine update_res
+
+    end subroutine motion_patched_polyn_callback
+
+    subroutine motion_patched_polyn_callback_wrapper(aptr, align_iso_polyn_direct, converged)
+        class(*),                             intent(inout) :: aptr
+        class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
+        logical,                              intent(out)   :: converged
+        select type(aptr)
+        class is (motion_patched)
+            call aptr%motion_patched_polyn_callback(align_iso_polyn_direct, converged)
+        class default
+            THROW_HARD('error in motion_patched_polyn_callback_wrapper: unknown type; simple_motion_patched_polyn')
+        end select
+    end subroutine motion_patched_polyn_callback_wrapper
+
+    function motion_patched_direct_cost( self, vec ) result( r )
+        class(motion_patched), intent(inout) :: self
+        real(dp),                     intent(in)    :: vec(PATCH_PDIM*2)
+        real(dp) :: r
+        integer  :: xi, yi, j
+        real(dp) :: x, y
+        real(dp) :: val, t
+        real(dp) :: ashift(2)
+        r = 0.d0
+        ! convert polynomial coefficients into shifts
+        !$omp parallel do collapse(2) default(shared) private(x,y) proc_bind(close) schedule(static)
+        do xi = 1, NX_PATCHED
+            do yi = 1, NY_PATCHED
+                call self%pix2polycoords(real(self%patch_centers(xi,yi,1),dp), real(self%patch_centers(xi,yi,2),dp), x, y) ! TODO: memoize
+                do j = 1, self%nframes
+                    t = real(j - 1, dp)
+                    ashift(1) = apply_patch_poly(vec(           1:PATCH_PDIM  ), x, &
+                        y, t)
+                    ashift(2) = apply_patch_poly(vec(PATCH_PDIM+1:PATCH_PDIM*2), x, &
+                        y, t)
+                    self%align_iso_polyn_direct(xi,yi)%shifts(j,:) = - ashift(:)
+                end do
+                r = r + self%align_iso_polyn_direct(xi,yi)%motion_align_iso_contribs_cost()
+            end do
+        end do
+        !$omp end parallel do
+    end function motion_patched_direct_cost
+
+    function patched_direct_cost_wrapper( self, vec, D ) result( cost )
+        class(*),     intent(inout) :: self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(in)    :: vec(D)
+        real(kind=8) :: cost
+        select type(self)
+            class is (motion_patched)
+                cost = self%motion_patched_direct_cost( vec )
+            class DEFAULT
+                THROW_HARD('unknown type; patched_direct_cost_wrapper')
+        end select
+    end function patched_direct_cost_wrapper
+
+    subroutine motion_patched_direct_gcost( self, vec, grad )
+        class(motion_patched), intent(inout) :: self
+        real(dp),                     intent(in)    :: vec(PATCH_PDIM*2)
+        real(dp),                     intent(out)   :: grad(PATCH_PDIM*2)
+        real(dp) :: r
+        integer  :: xi, yi, j
+        real(dp) :: x, y
+        real(dp) :: t
+        real(dp) :: ashift(2)
+        real(dp) :: grad_contrib(POLYDIM2), grad_full_tmp(PATCH_PDIM*2)
+        grad(:) = 0.d0
+        ! convert polynomial coefficients into shifts
+        do xi = 1, NX_PATCHED
+            do yi = 1, NY_PATCHED
+                do j = 1, self%nframes
+                    t = real(j - 1, dp)
+                    call self%pix2polycoords(real(self%patch_centers(xi,yi,1),dp), real(self%patch_centers(xi,yi,2),dp), x, y) ! TODO: memoize
+                    ashift(1) = apply_patch_poly(vec(           1:PATCH_PDIM  ), x, y, t)
+                    ashift(2) = apply_patch_poly(vec(PATCH_PDIM+1:PATCH_PDIM*2), x, y, t)
+                    self%align_iso_polyn_direct(xi,yi)%shifts(j,:) = - ashift(:)
+                end do
+                ! calculate gradient contribution (partial)
+                call self%align_iso_polyn_direct(xi,yi)%motion_align_iso_contribs_gcost(grad_contrib)
+                call self%grad_contrib_to_full_grad( grad_contrib, x, y, grad_full_tmp )
+                grad(:) = grad(:) - grad_full_tmp(:)
+            end do
+        end do
+    end subroutine motion_patched_direct_gcost
+
+    subroutine patched_direct_gcost_wrapper( self, vec, grad, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(inout) :: vec(D)
+        real(dp), intent(out)   :: grad(D)
+        grad = 0.d0
+        select type(self)
+            class is (motion_patched)
+                call self%motion_patched_direct_gcost( vec, grad )
+            class DEFAULT
+                THROW_HARD('unknown type; patched_direct_gcost_wrapper')
+        end select
+    end subroutine patched_direct_gcost_wrapper
+
+    !< cost function for minimizer, f and gradient
+    subroutine motion_patched_direct_fdf( self, vec, f, grad )
+        class(motion_patched), intent(inout) :: self
+        real(dp),                     intent(in)    :: vec (PATCH_PDIM*2)
+        real(dp),                     intent(out)   :: grad(PATCH_PDIM*2), f
+        integer  :: xi, yi, j
+        real(dp) :: x, y
+        real(dp) :: ashift(2), t, ftmp, grad_contrib(POLYDIM2), grad_full_tmp(PATCH_PDIM*2)
+        write (*,*) 'fdf, patched direct, vec=', vec
+        f       = 0.d0
+        grad(:) = 0.d0
+        ! convert polynomial coefficients into shifts
+        !$omp parallel do collapse(2) default(shared) private(xi,yi,j,t,x,y,ashift,ftmp,grad_contrib,grad_full_tmp) reduction(+:f,grad) proc_bind(close) schedule(static)
+        do xi = 1, NX_PATCHED
+            do yi = 1, NY_PATCHED
+                do j = 1, self%nframes
+                    t = real(j - 1, dp)
+                    call self%pix2polycoords(real(self%patch_centers(xi,yi,1),dp), real(self%patch_centers(xi,yi,2),dp), x, y) ! TODO: memoize
+                    ashift(1) = apply_patch_poly(vec(           1:PATCH_PDIM  ), x, y, t)
+                    ashift(2) = apply_patch_poly(vec(PATCH_PDIM+1:PATCH_PDIM*2), x, y, t)
+                    self%align_iso_polyn_direct(xi,yi)%shifts(j,:) = - ashift(:)
+                end do
+                call self%align_iso_polyn_direct(xi,yi)%motion_align_iso_contribs_fdf(ftmp, grad_contrib)
+                f = f + ftmp
+                call self%grad_contrib_to_full_grad( grad_contrib, x, y, grad_full_tmp )
+                grad(:) = grad(:) + (- grad_full_tmp(:))
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine motion_patched_direct_fdf
+
+    subroutine patched_direct_fdf_wrapper( self, vec, f, grad, D )
+        class(*),     intent(inout) :: self
+        integer,      intent(in)    :: D
+        real(kind=8), intent(inout) :: vec(D)
+        real(kind=8), intent(out)   :: f, grad(D)
+        f    = 0.d0
+        grad = 0.d0
+        select type(self)
+            class is (motion_patched)
+                call self%motion_patched_direct_fdf( vec, f, grad )
+            class DEFAULT
+                THROW_HARD('unknown type; patched_direct_fdf_wrapper')
+        end select
+    end subroutine patched_direct_fdf_wrapper
+
 
 end module simple_motion_patched

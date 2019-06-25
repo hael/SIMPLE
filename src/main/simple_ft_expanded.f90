@@ -13,6 +13,7 @@ public :: ftexp_bfacmat,   ftexp_bfacmat_init,   ftexp_bfacmat_kill
 
 real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling of cost function
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
+complex,          parameter   :: JJ    = complex(0., 1.)
 
 real, allocatable :: ftexp_transfmat(:,:,:)                 ! transfer matrix
 real, allocatable :: ftexp_bfacmat(:,:)                     ! bfactor matrix
@@ -51,9 +52,12 @@ type :: ft_expanded
     procedure          :: subtr
     ! modifiers
     procedure          :: shift
+    procedure          :: normalize_mat
     ! calculators
     procedure, private :: calc_sumsq
     procedure          :: corr
+    procedure          :: corr_unnorm
+    procedure          :: gen_grad
     procedure, private :: corr_normalize_sp
     procedure, private :: corr_normalize_dp
     generic            :: corr_normalize => corr_normalize_sp, corr_normalize_dp
@@ -244,6 +248,21 @@ contains
         call self_out%calc_sumsq
     end subroutine shift
 
+    subroutine normalize_mat( self )
+        class(ft_expanded), intent(inout) :: self
+        real    :: anorm
+        integer :: hind,kind
+        anorm = self%corr_unnorm(self)
+        !$omp parallel do collapse(2) default(shared) private(hind,kind) proc_bind(close) schedule(static)
+        do hind=self%flims(1,1),self%flims(1,2)
+            do kind=self%flims(2,1),self%flims(2,2)
+                self%cmat(hind,kind,1) = self%cmat(hind,kind,1) / sqrt(anorm)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine normalize_mat
+
+
     ! CALCULATORS
 
     pure subroutine calc_sumsq( self )
@@ -267,6 +286,51 @@ contains
             r = 0.
         endif
     end function corr
+
+    ! unnormalized correlations, i.e. only the numerator term
+    function corr_unnorm( self1, self2 ) result( r )
+        class(ft_expanded), intent(in) :: self1, self2
+        real(dp) :: r, tmp ! we need double precision here to avoid round-off errors in openmp loop
+        integer  :: hind, kind
+        ! corr is real part of the complex mult btw 1 and 2*
+        r = sum(real(self1%cmat(1,:,1)*conjg(self2%cmat(1,:,1)),dp),&
+            mask=self1%bandmsk(1,:))
+        tmp = 0._dp
+        !$omp parallel do collapse(2) default(shared) private(kind,hind) reduction(+:tmp) proc_bind(close) schedule(static)
+        do hind = 2, self1%flims(1,2)
+            do kind = self1%flims(2,1), self1%flims(2,2)
+                if (self1%bandmsk(hind,kind)) then
+                    tmp = tmp + real(self1%cmat(hind,kind,1)*conjg(self2%cmat(hind,kind,1)),dp)
+                end if
+            end do
+        end do
+        !$tmp end parallel do
+        r = r + 2._dp * tmp
+    end function corr_unnorm
+
+    subroutine gen_grad( self, shvec, self_gradx, self_grady )
+        class(ft_expanded), intent(in)    :: self
+        real(dp),           intent(in)    :: shvec(2)
+        class(ft_expanded), intent(inout) :: self_gradx, self_grady
+        real             :: transf_vec(2),arg
+        integer          :: kstart,kstop,hind,kind,kkind,kind_shift
+        complex, pointer :: cmat_gradx(:,:,:), cmat_grady(:,:,:)
+        call self_gradx%get_cmat_ptr( cmat_gradx )
+        call self_grady%get_cmat_ptr( cmat_grady )
+        kind_shift = self%get_kind_shift()
+        !$omp parallel do collapse(2) default(shared) private(kind,hind,transf_vec,arg) proc_bind(close) schedule(static)
+        do kind=self%flims(2,1),self%flims(2,2)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    transf_vec = ftexp_transfmat(hind,kind+kind_shift,:)
+                    arg        = dot_product(shvec, transf_vec)
+                    cmat_gradx(hind,kind,1) = self%cmat(hind,kind,1) * exp(JJ * arg) * JJ * transf_vec(1)
+                    cmat_grady(hind,kind,1) = self%cmat(hind,kind,1) * exp(JJ * arg) * JJ * transf_vec(2)
+                end if
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine gen_grad
 
     elemental subroutine corr_normalize_sp( self1, self2, corr )
         class(ft_expanded), intent(in)    :: self1, self2

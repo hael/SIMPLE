@@ -43,6 +43,8 @@ integer                       :: nthr_glob         !< number of threads global v
 logical                       :: l_distr_exec_glob !< global distributed execution flag
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
+integer, parameter            :: NX_PATCHED     = 5    ! number of patches in x-direction for motion correction
+integer, parameter            :: NY_PATCHED     = 5    !       "      "       y-direction for motion correction
 
 ! type for arrays of allocatable strings
 type str4arr

@@ -11,7 +11,7 @@ use simple_fftw3
 use gnufor2
 implicit none
 private
-public :: image, test_image
+public :: image, test_image, imstack_type
 #include "simple_local_flags.inc"
 
 type :: image
@@ -361,6 +361,10 @@ end type image
 interface image
     module procedure constructor
 end interface image
+
+type :: imstack_type
+    type(image), allocatable :: stack(:)
+end type imstack_type
 
 ! CLASS PARAMETERS/VARIABLES
 logical,     parameter   :: shift_to_phase_origin=.true.
@@ -7800,7 +7804,7 @@ contains
             rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
                 &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
             !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win)&
-            !$omp reduction(+:ncured) proc_bind(close)
+            !$omp reduction(+:ncured,deadhot) proc_bind(close)
             do i=1,self%ldim(1)
                 do j=1,self%ldim(2)
                     if( self%rmat(i,j,1)<lthresh .or. self%rmat(i,j,1)>uthresh )then
