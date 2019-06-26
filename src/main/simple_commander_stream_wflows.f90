@@ -162,8 +162,10 @@ contains
                 enddo
                 nptcls = spproj%get_nptcls()
                 nmovs  = spproj%os_mic%get_noris()
-                ! write
-                call spproj%write
+                write(logfhandle,'(A,I5)')'>>> # MOVIES PROCESSED:    ',nmovs
+                if( l_pick )then
+                    write(logfhandle,'(A,I8)')'>>> # PARTICLES EXTRACTED: ',nptcls
+                endif
                 ! update for 2d streaming
                 call update_projects_list
                 deallocate(completed_jobs_clines)
@@ -264,7 +266,7 @@ contains
                 type(ori) :: o, o_stk
                 character(len=LONGSTRLEN), allocatable :: sp_files(:)
                 character(len=:), allocatable :: mic, mov
-                integer :: iproj,nprojs,nptcls,cnt
+                integer :: iproj,nprojs,cnt
                 logical :: err
                 if( .not.cline%defined('dir_prev') ) return
                 call simple_list_files(trim(params%dir_prev)//'/preprocess_*.simple', sp_files)

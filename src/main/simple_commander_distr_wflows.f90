@@ -919,7 +919,7 @@ contains
         real    :: corr, corr_prev, smpd
         integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
         logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
-        logical :: l_projection_matching, l_switch2euclid, l_continue, l_matchfilt_ini
+        logical :: l_projection_matching, l_switch2euclid, l_continue
         if( .not. cline%defined('refine') )then
             call cline%set('refine',  'single')
         else
@@ -1182,7 +1182,11 @@ contains
                 call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
                 do state = 1,params%nstates
                     str_state = int2str_pad(state,2)
-                    volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    if( str_has_substr(params%refine,'snhc') )then
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+                    else
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    endif
                     call cline_volassemble%set( 'state', real(state) )
                     if( params%nstates>1 )call cline_volassemble%set('part', real(state))
                     call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
@@ -1203,18 +1207,19 @@ contains
                         vol = trim(VOL_FBODY)//trim(str_state)//params%ext
                         if( params%refine .eq. 'snhc' )then
                             vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
+                            iostat = simple_rename( vol, vol_iter )
                         else
                             vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
+                            iostat = simple_rename( vol, vol_iter )
+                            vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                            vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                            vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
+                            vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
+                            iostat        = simple_rename( vol_even, vol_iter_even )
+                            iostat        = simple_rename( vol_odd,  vol_iter_odd  )
                         endif
-                        iostat = simple_rename( vol, vol_iter )
-                        vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                        vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                        vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
-                        vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
-                        iostat        = simple_rename( vol_even, vol_iter_even )
-                        iostat        = simple_rename( vol_odd,  vol_iter_odd  )
-                        fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
-                        optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
+                        fsc_file   = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                        optlp_file = ANISOLP_FBODY//trim(str_state)//params%ext
                         ! add filters to os_out
                         call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
                         call build%spproj%add_vol2os_out(optlp_file, params%smpd, state, 'vol_filt', box=params%box)
