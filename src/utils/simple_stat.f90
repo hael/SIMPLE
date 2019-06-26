@@ -54,7 +54,8 @@ contains
         logical, intent(out) :: err            !< error status
         real,    intent(in)  :: data(:)
         integer              :: n, i
-        real                 :: ep, nr, dev
+        real                 :: nr, dev
+        real(dp)             :: ep_dp, var_dp
         err = .false.
         n   = size(data,1)
         nr  = real(n)
@@ -66,17 +67,17 @@ contains
         ! calc average
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.
-        var = 0.
+        ep_dp = 0.
+        var_dp = 0.
         !$omp parallel do default(shared) private(i,dev) schedule(static)&
-        !$omp reduction(+:ep,var) proc_bind(close)
+        !$omp reduction(+:ep_dp,var_dp) proc_bind(close)
         do i=1,n
             dev = data(i)-ave
-            ep = ep+dev
-            var = var+dev*dev
+            ep_dp = ep_dp+real(dev,dp)
+            var_dp = var_dp+real(dev*dev,dp)
         end do
         !$omp end parallel do
-        var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        var = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
@@ -100,7 +101,8 @@ contains
         logical, intent(out) :: err              !< error status
         real, intent(in)     :: data(:,:)        !< input data
         integer              :: nx, ny, n, i, j
-        real                 :: ep, nr, dev
+        real                 :: nr, dev
+        real(dp)             :: ep_dp, var_dp
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
@@ -114,19 +116,19 @@ contains
         ! calc average
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.
-        var = 0.
+        ep_dp = 0._dp
+        var_dp = 0._dp
         !$omp parallel do default(shared) private(i,j,dev) schedule(static)&
-        !$omp reduction(+:ep,var) proc_bind(close) collapse(2)
+        !$omp reduction(+:ep_dp,var_dp) proc_bind(close) collapse(2)
         do i=1,nx
             do j=1,ny
                 dev = data(i,j)-ave
-                ep = ep+dev
-                var = var+dev*dev
+                ep_dp = ep_dp+real(dev,dp)
+                var_dp = var_dp+real(dev*dev,dp)
             end do
         end do
         !$omp end parallel do
-        var  = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        var  = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
@@ -150,7 +152,8 @@ contains
         logical, intent(out) :: err               !< error status
         real, intent(in)     :: data(:,:,:)       !< input data
         integer              :: nx, ny, nz, n, i, j, k
-        real                 :: ep, nr, dev
+        real                 :: nr, dev
+        real(dp)             :: ep_dp, var_dp
         err = .false.
         nx = size(data,1)
         ny = size(data,2)
@@ -164,21 +167,21 @@ contains
         endif
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep = 0.
-        var = 0.
+        ep_dp = 0._dp
+        var_dp = 0._dp
         !$omp parallel do default(shared) private(i,j,k,dev) schedule(static)&
-        !$omp reduction(+:ep,var) proc_bind(close) collapse(3)
+        !$omp reduction(+:ep_dp,var_dp) proc_bind(close) collapse(3)
         do i=1,nx
             do j=1,ny
                 do k=1,nz
                     dev = data(i,j,k)-ave
-                    ep = ep+dev
-                    var = var+dev*dev
+                    ep_dp = ep_dp+real(dev,dp)
+                    var_dp = var_dp+real(dev*dev,dp)
                 end do
             end do
         end do
         !$omp end parallel do
-        var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        var = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
@@ -202,8 +205,9 @@ contains
         logical, intent(out) :: err !< error status
         real,    intent(in)  :: data(:)
         logical, intent(in)  :: mask(:)
-        integer :: n, i, sz
-        real    :: ep, nr, dev, abs_var
+        integer  :: n, i, sz
+        real     :: nr, dev, abs_var
+        real(dp) :: ep_dp, var_dp
         err = .false.
         sz  = size(data)
         if( sz /= size(mask) ) THROW_HARD('mask does not conform with data; moment_4')
@@ -213,19 +217,19 @@ contains
         ! calc average
         ave = sum(data, mask=mask)/nr
         ! calc sum of devs and sum of devs squared
-        ep  = 0.
-        var = 0.
+        ep_dp  = 0._dp
+        var_dp = 0._dp
         !$omp parallel do default(shared) private(i,dev) schedule(static)&
-        !$omp reduction(+:ep,var) proc_bind(close)
+        !$omp reduction(+:ep_dp,var_dp) proc_bind(close)
         do i=1,sz
             if( mask(i) )then
                 dev = data(i) - ave
-                ep  = ep + dev
-                var = var + dev*dev
+                ep_dp  = ep_dp + real(dev,dp)
+                var_dp = var_dp + real(dev*dev,dp)
             endif
         end do
         !$omp end parallel do
-        var = (var-ep**2./nr)/(nr-1.) ! corrected two-pass formula
+        var = real((var_dp-ep_dp**2./nr)/(nr-1.)) ! corrected two-pass formula
         sdev = 0.
         if( var > 0. ) sdev = sqrt(var)
         if( abs(var) < TINY )then
