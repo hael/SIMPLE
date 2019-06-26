@@ -31,7 +31,7 @@ contains
         logical,                  intent(in)    :: l_gen_thumb
         type(ctf_estimate_fit)        :: ctffit
         character(len=:), allocatable :: fname_diag
-        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_ctfjpg, epsname, docname
+        character(len=LONGSTRLEN)     :: moviename_thumb, rel_moviename_thumb, rel_fname, epsname, docname
         real                          :: ctfscore, scale
         integer                       :: nframes, ldim(3), ldim_thumb(3)
         if( .not. file_exists(moviename_forctf) )&
@@ -89,15 +89,17 @@ contains
             epsname = trim(dir_out)//trim(adjustl(epsname))//'.eps'//C_NULL_CHAR
             docname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
             docname = swap_suffix(docname, '_ctf', FORCTF_SUFFIX)
-            docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)//C_NULL_CHAR
+            docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)
+            !docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)//C_NULL_CHAR ! for future use of star format?
             call ctffit%plot_parms(epsname)
-            call ctffit%write_doc(moviename_forctf, docname)
             call ctffit%write_diagnostic_patch(fname_diag)
-            call orientation%set('ctf_doc', trim(docname))
+            call ctffit%write_doc(moviename_forctf, docname)
+            call make_relativepath(CWD_GLOB,docname,rel_fname)
+            call orientation%set('ctfdoc', rel_fname)
         else
             call ctffit%write_diagnostic(fname_diag)
         endif
-        call make_relativepath(CWD_GLOB,fname_diag, rel_ctfjpg)
+        call make_relativepath(CWD_GLOB,fname_diag, rel_fname)
         ! reporting
         call orientation%set('dfx',            ctfvars%dfx)
         call orientation%set('dfy',            ctfvars%dfy)
@@ -106,7 +108,7 @@ contains
         call orientation%set('ctf_estimatecc', ctffit%get_ccfit())
         call orientation%set('ctfscore',       ctfscore)
         call orientation%set('ctfres',         ctffit%get_ctfres())
-        call orientation%set('ctfjpg',         rel_ctfjpg)
+        call orientation%set('ctfjpg',         rel_fname)
         ! clean
         call ctffit%kill
     end subroutine iterate

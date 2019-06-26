@@ -8,13 +8,15 @@ implicit none
 private
 public :: ft_expanded
 public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
+public :: ftexp_bfacmat,   ftexp_bfacmat_init,   ftexp_bfacmat_kill
 #include "simple_local_flags.inc"
 
 real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling of cost function
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 
-real, allocatable :: ftexp_transfmat(:,:,:)
-integer           :: ftexp_transf_flims(3,2), ftexp_transf_kzero
+real, allocatable :: ftexp_transfmat(:,:,:)                 ! transfer matrix
+real, allocatable :: ftexp_bfacmat(:,:)                     ! bfactor matrix
+integer           :: ftexp_transf_kzero, ftexp_bfac_kzero   ! index shift for transfer & b-factor matrix
 
 type :: ft_expanded
     private
@@ -292,19 +294,17 @@ contains
 
     ! TRANSFER MATRIX ROUTINES
 
-    subroutine ftexp_transfmat_init( img, lp )
-        class(image), intent(in)   :: img
-        real, optional, intent(in) :: lp
-        real    :: lp_here, lp_nyq, shconst(2)
+    subroutine ftexp_transfmat_init( img )
+        class(image), intent(in) :: img
+        real    :: lp_nyq, shconst(2)
         integer :: h,k,i,hcnt,kcnt
-        integer :: ldim(3),flims(3,2)
+        integer :: ldim(3),flims(3,2),ftexp_transf_flims(3,2)
         call ftexp_transfmat_kill
         ! dimensions
         ldim = img%get_ldim()
         if( ldim(3) > 1 ) THROW_HARD("In: ftexp_transfmat_init; simple_ft_expanded, 1")
         lp_nyq      = 2.*img%get_smpd()
-        lp_here     = merge(max(lp_nyq,lp), lp_nyq, present(lp))
-        flims       = img%loop_lims(1,lp_here)
+        flims       = img%loop_lims(1,lp_nyq)
         ftexp_transf_flims = flims
         do i=1,3
             ftexp_transf_flims(i,2) = ftexp_transf_flims(i,2) - ftexp_transf_flims(i,1) + 1
@@ -323,7 +323,8 @@ contains
             endif
         end do
         allocate(ftexp_transfmat(ftexp_transf_flims(1,1):ftexp_transf_flims(1,2),&
-                                 ftexp_transf_flims(2,1):ftexp_transf_flims(2,2), 2), source=0., stat=alloc_stat)
+                                &ftexp_transf_flims(2,1):ftexp_transf_flims(2,2), 2),&
+                &source=0., stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: ftexp_transfmat_init; simple_ft_expanded, 2",alloc_stat)
         !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt) proc_bind(close) schedule(static)
         do h=flims(1,1),flims(1,2)
@@ -331,7 +332,7 @@ contains
                 hcnt = h-flims(1,1)+1
                 kcnt = k-flims(2,1)+1
                 if( k==0 ) ftexp_transf_kzero = kcnt ! for transfer matrix indexing
-                ftexp_transfmat(hcnt,kcnt,:) = real([h,k])*shconst
+                ftexp_transfmat(hcnt,kcnt,:)  = real([h,k])*shconst
             end do
         end do
         !$omp end parallel do
@@ -339,8 +340,62 @@ contains
 
     subroutine ftexp_transfmat_kill
         if( allocated(ftexp_transfmat) ) deallocate(ftexp_transfmat)
-        ftexp_transf_flims = 0
         ftexp_transf_kzero = 0
     end subroutine ftexp_transfmat_kill
+
+    ! B-FACTOR MATRIX ROUTINES
+
+    subroutine ftexp_bfacmat_init( img, bfac )
+        class(image), intent(in) :: img
+        real,         intent(in) :: bfac
+        real    :: lp_nyq, shconst(2), spafreqsq,bfac_sc
+        integer :: h,k,i,hcnt,kcnt,ftexp_bfac_flims(3,2)
+        integer :: ldim(3),flims(3,2)
+        call ftexp_bfacmat_kill
+        ! dimensions
+        ldim = img%get_ldim()
+        if( ldim(3) > 1 ) THROW_HARD("In: ftexp_bfacmat_init; simple_ft_expanded, 1")
+        lp_nyq      = 2.*img%get_smpd()
+        flims       = img%loop_lims(1,lp_nyq)
+        ftexp_bfac_flims = flims
+        do i=1,3
+            ftexp_bfac_flims(i,2) = ftexp_bfac_flims(i,2) - ftexp_bfac_flims(i,1) + 1
+        end do
+        ftexp_bfac_flims(:,1) = 1
+        ! set shift constant
+        do i=1,2
+            if( ldim(i) == 1 )then
+                shconst(i) = 0.
+            else
+                if( is_even(ldim(i)) )then
+                    shconst(i) = PI/(real(ldim(i))/2.)
+                else
+                    shconst(i) = PI/(real(ldim(i)-1)/2.)
+                endif
+            endif
+        end do
+        allocate(ftexp_bfacmat(ftexp_bfac_flims(1,1):ftexp_bfac_flims(1,2),&
+                                &ftexp_bfac_flims(2,1):ftexp_bfac_flims(2,2)),&
+                &source=1., stat=alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("In: ftexp_bfacmat_init; simple_ft_expanded, 2",alloc_stat)
+        bfac_sc = max(0.,bfac/4.)
+        !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt,spafreqsq) proc_bind(close) schedule(static)
+        do h=flims(1,1),flims(1,2)
+            do k=flims(2,1),flims(2,2)
+                hcnt = h-flims(1,1)+1
+                kcnt = k-flims(2,1)+1
+                ! for b-factor matrix indexing
+                if( k==0 ) ftexp_bfac_kzero = kcnt ! for b-factor matrix indexing
+                spafreqsq = real(h*h+k*k)
+                ftexp_bfacmat(hcnt,kcnt) = exp(-bfac_sc*spafreqsq)
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine ftexp_bfacmat_init
+
+    subroutine ftexp_bfacmat_kill
+        if( allocated(ftexp_bfacmat) ) deallocate(ftexp_bfacmat)
+        ftexp_bfac_kzero = 0
+    end subroutine ftexp_bfacmat_kill
 
 end module simple_ft_expanded

@@ -312,7 +312,7 @@ contains
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
             enddo
         enddo
-        ! generate sqrt(power spectra)
+        ! generate spectrum
         call self%mic2spec_patch
         ! normalize, minimize, clean
         cc_sum = 0.
@@ -1032,34 +1032,21 @@ contains
     ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real :: x(2,self%npatch), yx(self%npatch), yy(self%npatch), sig(self%npatch)
-        real :: a(POLYDIM), v(POLYDIM,POLYDIM), w(POLYDIM)
-        real :: dfxavg, dfyavg, chi_sq
+        real    :: x(2,self%npatch), yx(self%npatch), yy(self%npatch), sig(self%npatch)
+        real    :: v(POLYDIM,POLYDIM), w(POLYDIM), chi_sq
         integer :: pi,pj, cnt
-        dfxavg = 0.
-        dfyavg = 0.
-        cnt    = 0
+        cnt = 0
         do pi=1,NPATCH
             do pj = 1,NPATCH
                 cnt = cnt + 1
-                dfxavg = dfxavg + self%parms_patch(pi,pj)%dfx
-                dfyavg = dfyavg + self%parms_patch(pi,pj)%dfy
-                call self%pix2poly(real(self%centers(pi,pj,1)), real(self%centers(pi,pj,2)), x(1,cnt), x(2,cnt))
+                call self%pix2poly(real(self%centers(pi,pj,1)),real(self%centers(pi,pj,2)), x(1,cnt),x(2,cnt))
                 yx(cnt) = self%parms_patch(pi,pj)%dfx
                 yy(cnt) = self%parms_patch(pi,pj)%dfy
             enddo
         enddo
-        dfxavg = dfxavg / real(self%npatch)
-        dfyavg = dfyavg / real(self%npatch)
-        yx     = yx - dfxavg
-        yy     = yy - dfyavg
-        sig    = 1.
-        call svd_multifit(x,yx,sig,a,v,w,chi_sq,poly)
-        self%polyx(1)  = dfxavg+a(1)
-        self%polyx(2:) = a(2:)
-        call svd_multifit(x,yy,sig,a,v,w,chi_sq,poly)
-        self%polyy(1)  = dfyavg+a(1)
-        self%polyy(2:) = a(2:)
+        sig = 1.
+        call svd_multifit(x,yx,sig,self%polyx,v,w,chi_sq,poly)
+        call svd_multifit(x,yy,sig,self%polyy,v,w,chi_sq,poly)
     end subroutine fit_polynomial
 
     function poly(p,n) result( res )
@@ -1074,10 +1061,10 @@ contains
     ! real space coordinates to polynomial coordinates
     subroutine pix2poly( self, xin, yin, xout, yout )
         class(ctf_estimate_fit), intent(inout) :: self
-        real,                      intent(in)  :: xin,yin
-        real,                      intent(out) :: xout,yout
-        xout = (xin-1.) / (self%ldim_mic(1)-1.) - 0.5
-        yout = (yin-1.) / (self%ldim_mic(2)-1.) - 0.5
+        real,                    intent(in)    :: xin,yin
+        real,                    intent(out)   :: xout,yout
+        xout = (xin-1.) / real(self%ldim_mic(1)-1) - 0.5
+        yout = (yin-1.) / real(self%ldim_mic(2)-1) - 0.5
     end subroutine pix2poly
 
     ! evaluate fitted defocus
@@ -1198,7 +1185,7 @@ contains
         call os%set(1,'dfy',    self%parms%dfy)
         call os%set(1,'angast', self%parms%angast)
         call os%set(1,'phshift',self%parms%phshift)
-        call os%set(1,'forctf',    moviename)
+        call os%set(1,'forctf', moviename)
         call os%set(1,'xdim',   real(self%ldim_mic(1)))
         call os%set(1,'ydim',   real(self%ldim_mic(2)))
         if( self%parms%l_phaseplate )then

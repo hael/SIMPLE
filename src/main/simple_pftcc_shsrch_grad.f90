@@ -198,6 +198,7 @@ contains
             self%cur_inpl_idx = irot
             self%ospec%x      = [0.,0.]
             self%ospec%x_8    = [0.d0,0.d0]
+            lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             if( perform_rndstart )then
                 init_xy(1) = 2.*(ran3()-0.5) * init_range
                 init_xy(2) = 2.*(ran3()-0.5) * init_range
@@ -209,7 +210,6 @@ contains
                 self%ospec%x_8 = init_xy
                 self%ospec%x   = real(init_xy)
             end if
-            lowest_cost_overall = -pftcc_glob%gencorr_for_rot_8(self%reference, self%particle, self%ospec%x_8, self%cur_inpl_idx)
             ! shift search
             call self%nlopt%minimize(self%ospec, self, lowest_cost)
             if( lowest_cost < lowest_cost_overall )then

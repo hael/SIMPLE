@@ -387,7 +387,7 @@ contains
     subroutine motion_correct_iso_calc_sums_1( movie_sum, movie_sum_corrected, movie_sum_ctf, need_movie_sum_ctf )
         type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         logical,     intent(in)    :: need_movie_sum_ctf
-        integer :: iframe        
+        integer :: iframe
         ! generate straight integrated movie frame for comparison
         call sum_movie_frames
         movie_sum = movie_sum_global
@@ -459,7 +459,6 @@ contains
 
     !> patch-based motion_correction of DDD movie
     subroutine motion_correct_patched
-        real(dp), allocatable :: poly(:,:)
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
         logical :: doscale
