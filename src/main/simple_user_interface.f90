@@ -2272,7 +2272,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &5, 11, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 11, 0, 15, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2316,6 +2316,8 @@ contains
         call preprocess_stream%set_input('srch_ctrls',12, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream%set_input('srch_ctrls',13, pgrp)
         preprocess_stream%srch_ctrls(13)%required = .false.
+        call preprocess_stream%set_input('srch_ctrls',14, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',15, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)

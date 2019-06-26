@@ -23,6 +23,7 @@ type convergence
     type(stats_struct) :: shwstdev  !< shift increment, weighted std deviation stats
     type(stats_struct) :: pw        !< particle weight stats
     type(stats_struct) :: ow        !< max orientation weight stats
+    type(oris)         :: ostats    !< centralize stats for writing
     real :: mi_class = 0.           !< class parameter distribution overlap
     real :: mi_proj  = 0.           !< projection parameter distribution overlap
     real :: mi_state = 0.           !< state parameter distribution overlap
@@ -100,6 +101,17 @@ contains
                 converged = .false.
             endif
         endif
+        ! stats
+        call self%ostats%new(1)
+        call self%ostats%set(1,'CLASS_OVERLAP',self%mi_class)
+        call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
+        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
+        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'CORRELATION',self%corr%avg)
+        call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
+        call self%ostats%write(STATS_FILE)
+        call self%ostats%kill
     end function check_conv2D
 
     function check_conv3D( self, cline, msk ) result( converged )
@@ -211,8 +223,26 @@ contains
             endif
             deallocate( state_mi_joint, statepops )
         endif
+        ! stats
+        call self%ostats%new(1)
+        call self%ostats%set(1,'ORIENTATION_OVERLAP',self%mi_proj)
+        if( params_glob%nstates > 1 ) call self%ostats%set(1,'STATE_OVERLAP', self%mi_state)
+        call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
+        call self%ostats%set(1,'DIST_BTW_BEST_ORIS',self%dist%avg)
+        call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
+        call self%ostats%set(1,'ANGULAR_SPREAD',self%spread%avg)
+        call self%ostats%set(1,'#_PEAKS',self%npeaks%avg)
+        call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
+        call self%ostats%set(1,'ORIENTATION_WEIGHT_MAX',self%ow%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'CORRELATION',self%corr%avg)
+        call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
+        call self%ostats%set(1,'AVG_SHIFT_INCR_PEAKS',self%shwmean%avg)
+        call self%ostats%set(1,'SDEV_SHIFT_INCR_PEAKS',self%shwstdev%avg)
+        call self%ostats%write(STATS_FILE)
         ! destruct
         deallocate(mask, updatecnts)
+        call self%ostats%kill
     end function check_conv3D
 
     function check_conv_cluster( self, cline ) result( converged )
@@ -246,6 +276,17 @@ contains
             write(logfhandle,'(A)') '>>> CONVERGED: .NO.'
             converged = .false.
         endif
+        ! stats
+        call self%ostats%new(1)
+        call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'CORRELATION',         self%corr%avg)
+        do istate=1,params_glob%nstates
+            call self%ostats%set(1,'STATE_POPULATION_'//int2str(istate), real(statepops(istate)))
+        enddo
+        call self%ostats%write(STATS_FILE)
+        ! cleanup
+        call self%ostats%kill
         deallocate( statepops )
     end function check_conv_cluster
 

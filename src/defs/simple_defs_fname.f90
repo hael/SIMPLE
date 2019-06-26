@@ -43,6 +43,8 @@ character(len=*), parameter :: FSC_FBODY            = 'fsc_state'
 character(len=*), parameter :: PSSNR_FBODY          = 'pssnr_state'
 character(len=*), parameter :: FRCS_FILE            = 'frcs'//BIN_EXT
 character(len=*), parameter :: ALGN_FBODY           = 'algndoc_'
+! STATS
+character(len=*), parameter :: STATS_FILE           = 'simple_stats'//trim(TXT_EXT)
 ! LOCAL RESOLUTION
 character(len=*), parameter :: LOCRESMAP3D_FILE     = 'locresmap3D_finds.bin'
 ! PREPROCESSING

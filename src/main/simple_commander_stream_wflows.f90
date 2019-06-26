@@ -167,9 +167,25 @@ contains
                 ! update for 2d streaming
                 call update_projects_list
                 deallocate(completed_jobs_clines)
+                ! exit for trial runs
+                if( cline%defined('nmovies_trial') )then
+                    if( nmovs  >= params%nmovies_trial )then
+                        write(logfhandle,'(A)')'>>> TRIAL # OF MOVIES REACHED'
+                        exit
+                    endif
+                endif
+                if( cline%defined('nptcls_trial') )then
+                    if( l_pick .and. (nptcls >= params%nptcls_trial) )then
+                        write(logfhandle,'(A)')'>>> TRIAL # OF PARTICLES REACHED'
+                        exit
+                    endif
+                endif
+                ! write
+                call spproj%write
+            else
+                ! wait
+                call simple_sleep(SHORTTIME)
             endif
-            ! wait
-            call simple_sleep(SHORTTIME)
         end do
         ! termination
         call spproj%write

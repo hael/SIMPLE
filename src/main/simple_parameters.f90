@@ -252,6 +252,7 @@ type :: parameters
     integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
     integer :: nnn=NPEAKS2REFINE   !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
+    integer :: nmovies_trial=0     !< # of movies after which preprocess_stream will stop
     integer :: noris=0
     integer :: nparts=1            !< # partitions in distributed exection
     integer :: npeaks=NPEAKS2REFINE
@@ -265,6 +266,7 @@ type :: parameters
     integer :: nstates=1           !< # states to reconstruct
     integer :: nsym=1
     integer :: nthr=1              !< # OpenMP threads{1}
+    integer :: nptcls_trial=0      !< # of particles after which preprocess_stream will stop
     integer :: numlen=0            !< length of number string
     integer :: numlen_tomo=3       !< length of number string tomo series index{3}
     integer :: nvalid=0
@@ -673,6 +675,7 @@ contains
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
         call check_iarg('ninplpeaks',     self%ninplpeaks)
+        call check_iarg('nmovies_trial',  self%nmovies_trial)
         call check_iarg('nnn',            self%nnn)
         call check_iarg('noris',          self%noris)
         call check_iarg('npeaks',         self%npeaks)
@@ -686,6 +689,7 @@ contains
         call check_iarg('npix',           self%npix)
         call check_iarg('nptcls',         self%nptcls)
         call check_iarg('nptcls_per_cls', self%nptcls_per_cls)
+        call check_iarg('nptcls_trial',   self%nptcls_trial)
         call check_iarg('nthr',           self%nthr)
         call check_iarg('numlen',         self%numlen)
         call check_iarg('numlen_tomo',    self%numlen_tomo)
