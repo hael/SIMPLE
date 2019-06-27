@@ -21,7 +21,7 @@ integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 200, POLYD
 type ctf_estimate_fit
     private
     class(image),    pointer  :: micrograph
-    type(image), allocatable  :: boxes(:,:)              ! for storing all boxes used to build power spectra
+    type(image), allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
     type(image)               :: pspec_patch(NPATCH,NPATCH)   ! patches micrograph powerspec
     type(image)               :: pspec                   ! all micrograph powerspec
     type(image)               :: pspec_ctf               ! CTF powerspec
@@ -35,6 +35,7 @@ type ctf_estimate_fit
     type(ctf_estimate_cost2D) :: ctf_cost2D              ! 2D optimization object
     real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
     integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
+    integer, allocatable      :: tiles_centers(:,:,:)
     logical, allocatable      :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
     real                      :: polyx(POLYDIM), polyy(POLYDIM)
     integer                   :: centers(NPATCH,NPATCH,2)
@@ -48,7 +49,7 @@ type ctf_estimate_fit
     real                      :: ctfscore     = -1.
     real                      :: ctfres       = -1.
     integer                   :: box          = 0        ! box size
-    integer                   :: nbox(2)      = 0        ! # boxes along x/y
+    integer                   :: ntiles(2)      = 0        ! # tiles along x/y
     integer                   :: npatch       = NPATCH*NPATCH
     integer                   :: flims(3,2)   = 0        ! fourier dimensions
     integer                   :: flims1d(2)   = 0        ! fourier dimensions
@@ -69,7 +70,7 @@ contains
     ! CTF fitting
     procedure, private :: gen_centers
     procedure, private :: gen_resmsk
-    procedure, private :: gen_boxes
+    procedure, private :: gen_tiles
     procedure          :: fit
     procedure, private :: mic2spec
     procedure, private :: grid_srch
@@ -143,7 +144,7 @@ contains
             enddo
         enddo
         ! generate windows
-        call self%gen_boxes
+        call self%gen_tiles
         ! search related
         if( dfrange(1) < dfrange(2) )then
             self%df_lims = dfrange
@@ -197,34 +198,36 @@ contains
     end subroutine read_doc
 
     ! stores tiled windows
-    subroutine gen_boxes( self )
+    subroutine gen_tiles( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(image) :: tmp
         integer     :: xind,yind, i,j, firstx,lastx, firsty,lasty
         logical     :: outside
         call tmp%new(self%ldim_box, self%smpd)
-        self%nbox(1) = floor(real(self%ldim_mic(1))/real(self%box/2))
-        self%nbox(2) = floor(real(self%ldim_mic(2))/real(self%box/2))
-        allocate(self%boxes(self%nbox(1),self%nbox(2)))
+        self%ntiles(1) = floor(real(self%ldim_mic(1))/real(self%box/2))
+        self%ntiles(2) = floor(real(self%ldim_mic(2))/real(self%box/2))
+        allocate(self%tiles(self%ntiles(1),self%ntiles(2)),&
+            &self%tiles_centers(self%ntiles(1),self%ntiles(2),2))
         firstx = 1
         lastx  = self%ldim_mic(1)-self%box+1
         firsty = 1
         lasty  = self%ldim_mic(2)-self%box+1
-        do i = 1,self%nbox(1)
-            do j = 1,self%nbox(2)
-                xind = firstx + floor(real((i-1)*(lastx-firstx))/real(self%nbox(1)-1)) - 1
-                yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%nbox(2)-1)) - 1
-                call self%boxes(i,j)%new(self%ldim_box, self%smpd)
+        do i = 1,self%ntiles(1)
+            do j = 1,self%ntiles(2)
+                xind = firstx + floor(real((i-1)*(lastx-firstx))/real(self%ntiles(1)-1)) - 1
+                yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%ntiles(2)-1)) - 1
+                self%tiles_centers(i,j,:) = [xind,yind]+self%box/2+1
+                call self%tiles(i,j)%new(self%ldim_box, self%smpd)
                 call self%micrograph%window_slim([xind,yind],self%box,tmp,outside)
                 call tmp%norm
                 call tmp%zero_edgeavg
                 call tmp%fft
-                call tmp%ft2img(SPECKIND, self%boxes(i,j))
+                call tmp%ft2img(SPECKIND, self%tiles(i,j))
                 call tmp%zero_and_unflag_ft
             enddo
         enddo
         call tmp%kill
-    end subroutine gen_boxes
+    end subroutine gen_tiles
 
     ! GETTERS
 
@@ -264,7 +267,7 @@ contains
             endif
             call self%pspec%copy(spec)
         else
-            ! generate spectrum from boxes
+            ! generate spectrum from tiles
             call self%mic2spec(self%pspec)
         endif
         ! generate & normalize 1D spectrum
@@ -298,9 +301,15 @@ contains
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy+0.5)
-        ! init
+        ! generate spectrum
+        call self%mic2spec_patch
+        ! normalize, minimize, clean
+        cc_sum = 0.
+        !$omp parallel do collapse(2) default(shared) private(pi,pj,cc) &
+        !$omp schedule(static) proc_bind(close) reduction(+:cc_sum)
         do pi=1,NPATCH
             do pj=1,NPATCH
+                ! init
                 self%parms_patch(pi,pj)%kv      = self%parms%kv
                 self%parms_patch(pi,pj)%cs      = self%parms%cs
                 self%parms_patch(pi,pj)%fraca   = self%parms%fraca
@@ -310,21 +319,13 @@ contains
                 self%parms_patch(pi,pj)%angast  = self%parms%angast
                 self%parms_patch(pi,pj)%phshift = self%parms%phshift
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
-            enddo
-        enddo
-        ! generate spectrum
-        call self%mic2spec_patch
-        ! normalize, minimize, clean
-        cc_sum = 0.
-        !$omp parallel do collapse(2) default(shared) private(pi,pj,cc) &
-        !$omp schedule(static) proc_bind(close) reduction(+:cc_sum)
-        do pi=1,NPATCH
-            do pj=1,NPATCH
                 call self%norm_pspec(self%pspec_patch(pi,pj))
                 call self%ctf_cost_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol, TOL_REFINE)
+                ! optimization
                 call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
                 cc_sum = cc_sum + cc
+                ! cleanup
                 call self%ctf_cost_patch(pi,pj)%kill
             enddo
         enddo
@@ -345,12 +346,12 @@ contains
             THROW_HARD('Incorrect dimensions; mic2spec')
         endif
         spec = 0.
-        do i = 1,self%nbox(1)
-            do j = 1,self%nbox(2)
-                call spec%add(self%boxes(i,j))
+        do i = 1,self%ntiles(1)
+            do j = 1,self%ntiles(2)
+                call spec%add(self%tiles(i,j))
             end do
         end do
-        n = product(self%nbox)
+        n = product(self%ntiles)
         call spec%div(real(n))
         call spec%dampen_pspec_central_cross
         call spec%subtr_backgr(self%hp)
@@ -400,49 +401,35 @@ contains
     !!          the resulting spectrum has dampened central cross and subtracted background
     subroutine mic2spec_patch( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real        :: dists(product(self%nbox))
-        real        :: dist, dist_thresh, w, sumw
-        integer     :: pi,pj, xind,yind, cnt, center_win(2), i,j, nbox, nthresh
-        nbox    = product(self%nbox)
-        nthresh = max(nint(real(nbox)*0.30),min(nbox,15))
+        real        :: dist, w, sumw
+        integer     :: pi,pj, i,j, cnt
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
-        !$omp private(i,j,pi,pj,cnt,w,sumw,xind,yind,dists,dist_thresh,center_win,dist)
+        !$omp private(i,j,pi,pj,w,sumw,dist)
         do pi = 1,NPATCH
             do pj = 1,NPATCH
-                self%pspec_patch(pi,pj) = 0.
-                cnt = 0
-                do xind=0,self%ldim_mic(1)-self%box,self%box/2
-                    do yind=0,self%ldim_mic(2)-self%box,self%box/2
-                        cnt = cnt+1
-                        center_win = [xind, yind] + self%box/2
-                        dists(cnt) = sqrt(real(sum((self%centers(pi,pj,:)-center_win)**2)))
-                    end do
-                end do
-                call hpsort(dists)
-                dist_thresh = dists(nthresh)
                 sumw = 0.
-                i = 0
-                do xind=0,self%ldim_mic(1)-self%box,self%box/2
-                    i = i+1
-                    j = 0
-                    do yind=0,self%ldim_mic(2)-self%box,self%box/2
-                        j = j+1
-                        center_win = [xind, yind] + self%box/2
-                        dist = sqrt(real(sum((self%centers(pi,pj,:)-center_win)**2)))
-                        if( dist > dist_thresh ) cycle
-                        w    = exp(-0.25*(dist/self%box)**2.)
+                self%pspec_patch(pi,pj) = 0.
+                do i = 1,self%ntiles(1)
+                    do j = 1,self%ntiles(2)
+                        dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
+                        w    = exp(-0.5 *(dist/self%box)**2.)
+                        if( w < 1.e-4 ) cycle
                         sumw = sumw + w
-                        call self%pspec_patch(pi,pj)%add(self%boxes(i,j),w)
-                    end do
-                end do
+                        call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
+                    enddo
+                enddo
+                !print *,pi,pj,w
                 call self%pspec_patch(pi,pj)%div(sumw)
                 call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
             enddo
         enddo
         !$omp end parallel do
+        cnt = 0
         do pi = 1,NPATCH
             do pj = 1,NPATCH
+                cnt = cnt+1
                 call self%pspec_patch(pi,pj)%subtr_backgr(self%hp)
+                !call self%pspec_patch(pi,pj)%write('patches.mrc',cnt)
             enddo
         enddo
     end subroutine mic2spec_patch
@@ -1259,13 +1246,13 @@ contains
         if( allocated(self%roavg_spec1d) ) deallocate(self%roavg_spec1d)
         if( allocated(self%cc_msk) )       deallocate(self%cc_msk)
         if( allocated(self%inds_msk) )     deallocate(self%inds_msk)
-        if( allocated(self%boxes) )then
-            do i=1,self%nbox(1)
-                do j=1,self%nbox(2)
-                    call self%boxes(i,j)%kill
+        if( allocated(self%tiles) )then
+            do i=1,self%ntiles(1)
+                do j=1,self%ntiles(2)
+                    call self%tiles(i,j)%kill
                 enddo
             enddo
-            deallocate(self%boxes)
+            deallocate(self%tiles,self%tiles_centers)
         endif
         do i = 1,NPATCH
             do j = 1,NPATCH
