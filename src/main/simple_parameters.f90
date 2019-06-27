@@ -380,7 +380,7 @@ type :: parameters
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: sherr=0.            !< shift error(in pixels){2}
-    real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{100.}
+    real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio

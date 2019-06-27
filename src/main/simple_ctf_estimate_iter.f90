@@ -75,8 +75,7 @@ contains
             call self%pspec4viz%scale_pspec4viz
             call self%pspec4viz%collage(self%thumbnail, self%img_jpg)
             moviename_thumb = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-            moviename_thumb = swap_suffix(moviename_thumb, THUMBNAIL_SUFFIX, FORCTF_SUFFIX)
-            moviename_thumb = trim(dir_out)//trim(adjustl(moviename_thumb))//trim(JPG_EXT)
+            moviename_thumb = trim(dir_out)//trim(adjustl(moviename_thumb))//trim(THUMBNAIL_SUFFIX)//trim(JPG_EXT)
             call self%img_jpg%write_jpg(moviename_thumb, norm=.true., quality=92)
             call make_relativepath(CWD_GLOB,moviename_thumb, rel_moviename_thumb)
             call orientation%set('thumb', trim(rel_moviename_thumb))
@@ -85,11 +84,9 @@ contains
         if( L_PATCH )then
             call ctffit%fit_patches
             epsname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-            epsname = swap_suffix(epsname, '_ctf', FORCTF_SUFFIX)
-            epsname = trim(dir_out)//trim(adjustl(epsname))//'.eps'//C_NULL_CHAR
+            epsname = trim(dir_out)//trim(adjustl(epsname))//'_ctf.eps'//C_NULL_CHAR
             docname = trim(get_fbody(basename(trim(moviename_forctf)), params_glob%ext, separator=.false.))
-            docname = swap_suffix(docname, '_ctf', FORCTF_SUFFIX)
-            docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)
+            docname = trim(dir_out)//trim(adjustl(docname))//'_ctf'//trim(TXT_EXT)
             !docname = trim(dir_out)//trim(adjustl(docname))//trim(TXT_EXT)//C_NULL_CHAR ! for future use of star format?
             call ctffit%plot_parms(epsname)
             call ctffit%write_diagnostic_patch(fname_diag)

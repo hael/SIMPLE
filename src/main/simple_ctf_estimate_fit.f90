@@ -5,7 +5,6 @@ use simple_image,             only: image
 use simple_ctf,               only: ctf
 use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D
 use simple_starfile_wrappers
-use simple_timer
 use CPlot2D_wrapper_module
 
 implicit none
@@ -200,33 +199,37 @@ contains
     ! stores tiled windows
     subroutine gen_tiles( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        type(image) :: tmp
+        type(image), allocatable :: tmpimgs(:,:)
         integer     :: xind,yind, i,j, firstx,lastx, firsty,lasty
         logical     :: outside
-        call tmp%new(self%ldim_box, self%smpd)
         self%ntiles(1) = floor(real(self%ldim_mic(1))/real(self%box/2))
         self%ntiles(2) = floor(real(self%ldim_mic(2))/real(self%box/2))
         allocate(self%tiles(self%ntiles(1),self%ntiles(2)),&
-            &self%tiles_centers(self%ntiles(1),self%ntiles(2),2))
+            &self%tiles_centers(self%ntiles(1),self%ntiles(2),2),&
+            &tmpimgs(self%ntiles(1),self%ntiles(2)))
         firstx = 1
         lastx  = self%ldim_mic(1)-self%box+1
         firsty = 1
         lasty  = self%ldim_mic(2)-self%box+1
+        !$omp parallel do collapse(2) default(shared) private(i,j,xind,yind,outside) &
+        !$omp schedule(static) proc_bind(close)
         do i = 1,self%ntiles(1)
             do j = 1,self%ntiles(2)
                 xind = firstx + floor(real((i-1)*(lastx-firstx))/real(self%ntiles(1)-1)) - 1
                 yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%ntiles(2)-1)) - 1
                 self%tiles_centers(i,j,:) = [xind,yind]+self%box/2+1
+                call tmpimgs(i,j)%new(self%ldim_box, self%smpd, wthreads=.false.)
                 call self%tiles(i,j)%new(self%ldim_box, self%smpd)
-                call self%micrograph%window_slim([xind,yind],self%box,tmp,outside)
-                call tmp%norm
-                call tmp%zero_edgeavg
-                call tmp%fft
-                call tmp%ft2img(SPECKIND, self%tiles(i,j))
-                call tmp%zero_and_unflag_ft
+                call self%micrograph%window_slim([xind,yind],self%box,tmpimgs(i,j),outside)
+                call tmpimgs(i,j)%norm
+                call tmpimgs(i,j)%zero_edgeavg
+                call tmpimgs(i,j)%fft
+                call tmpimgs(i,j)%ft2img(SPECKIND, self%tiles(i,j))
+                call tmpimgs(i,j)%kill
             enddo
         enddo
-        call tmp%kill
+        !$omp end parallel do
+        deallocate(tmpimgs)
     end subroutine gen_tiles
 
     ! GETTERS
@@ -402,7 +405,7 @@ contains
     subroutine mic2spec_patch( self )
         class(ctf_estimate_fit), intent(inout) :: self
         real        :: dist, w, sumw
-        integer     :: pi,pj, i,j, cnt
+        integer     :: pi,pj, i,j
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
         !$omp private(i,j,pi,pj,w,sumw,dist)
         do pi = 1,NPATCH
@@ -413,23 +416,19 @@ contains
                     do j = 1,self%ntiles(2)
                         dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
                         w    = exp(-0.5 *(dist/self%box)**2.)
-                        if( w < 1.e-4 ) cycle
+                        if( w < 1.e-3 ) cycle
                         sumw = sumw + w
                         call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
                     enddo
                 enddo
-                !print *,pi,pj,w
                 call self%pspec_patch(pi,pj)%div(sumw)
                 call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
             enddo
         enddo
         !$omp end parallel do
-        cnt = 0
         do pi = 1,NPATCH
             do pj = 1,NPATCH
-                cnt = cnt+1
                 call self%pspec_patch(pi,pj)%subtr_backgr(self%hp)
-                !call self%pspec_patch(pi,pj)%write('patches.mrc',cnt)
             enddo
         enddo
     end subroutine mic2spec_patch
@@ -1075,31 +1074,23 @@ contains
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
-        real, parameter       :: SCALE = 200.
+        real, parameter       :: SCALE = 50.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
-        type(CDataSet_type)   :: calc, fit, center
+        type(CDataSet_type)   :: center
         type(CDataPoint_type) :: p1
-        real                  :: cx,cy,dfx,dfy,avgdfx,avgdfy,dfxmin,dfxmax,dfymin,dfymax
+        character(len=STDLEN) :: titlestr
+        real                  :: msz,cx,cy,df,dfmin,dfmax,col,dfx,dfy
         integer               :: pi,pj
-        avgdfx = 0.
-        avgdfy = 0.
-        dfxmin = huge(dfxmin)
-        dfxmax = -huge(dfxmax)
-        dfymin = huge(dfymin)
-        dfymax = -huge(dfymax)
+        dfmin  =  huge(dfmin)
+        dfmax  =  -huge(dfmax)
         do pi = 1, NPATCH
             do pj = 1, NPATCH
-                avgdfx = avgdfx + self%parms_patch(pi,pj)%dfx
-                avgdfy = avgdfy + self%parms_patch(pi,pj)%dfy
-                dfxmin = min(dfxmin, self%parms_patch(pi,pj)%dfx)
-                dfxmax = max(dfxmax, self%parms_patch(pi,pj)%dfx)
-                dfymin = min(dfymin, self%parms_patch(pi,pj)%dfy)
-                dfymax = max(dfymax, self%parms_patch(pi,pj)%dfy)
+                df    = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
+                dfmin = min(dfmin,df)
+                dfmax = max(dfmax,df)
             enddo
         enddo
-        avgdfx = avgdfx / real(self%npatch)
-        avgdfy = avgdfy / real(self%npatch)
         call CPlot2D__new(plot2D, fname)
         call CPlot2D__SetDrawXAxisGridLines(plot2D, C_FALSE)
         call CPlot2D__SetDrawYAxisGridLines(plot2D, C_FALSE)
@@ -1112,47 +1103,27 @@ contains
                 ! center
                 cx = real(self%centers(pi,pj,1))
                 cy = real(self%centers(pi,pj,2))
+                call self%pix2polyvals(cx,cy,dfx,dfy)
+                df = (dfx+dfy)/2.
+                msz = SCALE * df
+                if( is_equal(dfmax,dfmin) )then
+                    col = 0.
+                else
+                    col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
+                endif
                 call CDataSet__new(center)
                 call CDataSet__SetDrawMarker(center, C_TRUE)
-                call CDataSet__SetMarkerSize(center, real(5., c_double))
-                call CDataSet__SetDatasetColor(center, 1.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataSet__SetMarkerSize(center, real(msz, c_double))
+                call CDataSet__SetDatasetColor(center, real(col, c_double),1.0_c_double,0.0_c_double)
                 call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
                 call CDataSet__delete(center)
-                ! calculated
-                call CDataSet__new(calc)
-                call CDataSet__SetDrawMarker(calc, C_FALSE)
-                call CDataSet__SetDatasetColor(calc, 0.0_c_double,0.0_c_double,1.0_c_double)
-                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(calc, p1)
-                call CDataPoint__delete(p1)
-                dfx = SCALE * (self%parms_patch(pi,pj)%dfx-dfxmin)/(dfxmax-dfxmin)
-                dfy = SCALE * (self%parms_patch(pi,pj)%dfy-dfymin)/(dfymax-dfymin)
-                call CDataPoint__new2(real(cx+dfx, c_double), real(cy+dfy, c_double), p1)
-                call CDataSet__AddDataPoint(calc, p1)
-                call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, calc)
-                call CDataSet__delete(calc)
-                ! fit
-                call CDataSet__new(fit)
-                call CDataSet__SetDrawMarker(fit, C_FALSE)
-                call CDataSet__SetDatasetColor(fit, 0.0_c_double,0.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
-                call CDataSet__AddDataPoint(fit, p1)
-                call CDataPoint__delete(p1)
-                call self%pix2polyvals(cx,cy,dfx,dfy)
-                dfx = SCALE * (dfx-dfxmin)/(dfxmax-dfxmin)
-                dfy = SCALE * (dfy-dfymin)/(dfymax-dfymin)
-                call CDataPoint__new2(real(cx+dfx, c_double), real(cy+dfy, c_double), p1)
-                call CDataSet__AddDataPoint(fit, p1)
-                call CDataPoint__delete(p1)
-                call CPlot2D__AddDataSet(plot2D, fit)
-                call CDataSet__delete(fit)
             end do
         end do
-        title%str = 'Need to simplify. Blue: calculated; black: interpolated'//C_NULL_CHAR
+        write(titlestr,'(A,F6.3,A,F6.3,A)')'Defocus from ',dfmin,' microns (green) to ',dfmax,' (yellow)'
+        title%str = trim(titlestr)//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, fname)
         call CPlot2D__delete(plot2D)
@@ -1164,17 +1135,20 @@ contains
         type(oris) :: os
         integer    :: i
         call os%new(3)
-        call os%set(1,'smpd',   self%parms%smpd)
-        call os%set(1,'cs',     self%parms%cs)
-        call os%set(1,'kv',     self%parms%kv)
-        call os%set(1,'fraca',  self%parms%fraca)
-        call os%set(1,'dfx',    self%parms%dfx)
-        call os%set(1,'dfy',    self%parms%dfy)
-        call os%set(1,'angast', self%parms%angast)
-        call os%set(1,'phshift',self%parms%phshift)
-        call os%set(1,'forctf', moviename)
-        call os%set(1,'xdim',   real(self%ldim_mic(1)))
-        call os%set(1,'ydim',   real(self%ldim_mic(2)))
+        call os%set(1,'smpd',    self%parms%smpd)
+        call os%set(1,'cs',      self%parms%cs)
+        call os%set(1,'kv',      self%parms%kv)
+        call os%set(1,'fraca',   self%parms%fraca)
+        call os%set(1,'dfx',     self%parms%dfx)
+        call os%set(1,'dfy',     self%parms%dfy)
+        call os%set(1,'angast',  self%parms%angast)
+        call os%set(1,'phshift', self%parms%phshift)
+        call os%set(1,'forctf',  moviename)
+        call os%set(1,'xdim',    real(self%ldim_mic(1)))
+        call os%set(1,'ydim',    real(self%ldim_mic(2)))
+        call os%set(1,'ctfres',  self%ctfres)
+        call os%set(1,'ctfscore',self%ctfscore)
+        call os%set(1,'ctfcc',   self%cc_fit)
         if( self%parms%l_phaseplate )then
             call os%set(1,'phaseplate','yes')
         else
