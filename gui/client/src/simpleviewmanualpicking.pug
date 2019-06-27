@@ -1,0 +1,23 @@
+div.viewmaster
+	h="Micrograph"
+	select#iterationselector(
+		onchange="simpleview.getManualPickMicrograph(this)"
+	)
+		each micrograph in micrographs
+			option(
+				data-intg=micrograph.path
+				data-xdim=micrograph.xdim
+				data-ydim=micrograph.ydim
+			)=micrograph.name
+	div.navarrows
+		img(
+			src='img/leftarrow.png'
+			onclick='simpleview.getManualPickMicrograph(document.getElementById("iterationselector"), false, true)'
+			)
+		img(
+			src='img/rightarrow.png'
+			onclick='simpleview.getManualPickMicrograph(document.getElementById("iterationselector"), true, false)'
+			)
+	h#particlecounter
+div#thumbnails
+	canvas#pickingcanvas.picking

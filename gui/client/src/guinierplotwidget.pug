@@ -1,0 +1,44 @@
+div.viewheader
+	img#simplepagelogo(
+		src="img/square_logo_small.png"
+	)
+	h="Guinier Plot"
+	img#closebutton(
+		src="img/close.png"
+		onclick="guinierplotwidget.hide()"
+	)
+	
+div.inputpage
+	table
+		tr
+			td="Volume"
+			td
+				select#guiniervolume
+					each volume in volumes
+						option(
+							data-vol=volume['vol']
+							data-smpd=volume['smpd']
+						)=volume['name']
+		tr
+			td="Low Resolution Limit"	
+			td
+				input#guinierhp(
+					type="text"
+				)
+		tr
+			td="High Resolution Limit"
+			td
+				input#guinierlp(
+					type="text"
+				)
+div#guinierchart
+
+div#guinierbfac
+
+div.buttons
+	div(
+		onclick="guinierplotwidget.calculate()"
+	)="Calculate"
+	div(
+		onclick="guinierplotwidget.use()"
+	)="Use"

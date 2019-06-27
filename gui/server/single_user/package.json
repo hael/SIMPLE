@@ -1,0 +1,53 @@
+{
+  "name": "simple_gui",
+  "productName": "simple_gui",
+  "version": "3.0.0",
+  "description": "Graphical user interface for SIMPLE",
+  "main": "simple.js",
+  "build": {
+    "files": ["!**/tutorials/*"],
+    "asar": false,
+    "linux": {
+      "target": "AppImage",
+      "artifactName": "simple_gui.linux"
+    },
+    "appImage": {
+      "systemIntegration": "doNotAsk"
+    }
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "postinstall": "install-app-deps"
+  },
+  "keywords": [],
+  "author": "Joseph Caesar",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^9.6.6",
+    "child-process-promise": "^2.2.1",
+    "command-exists": "^1.2.8",
+    "compression": "^1.7.3",
+    "debug": "^4.1.0",
+    "electron-prompt": "^1.2.0",
+    "express": "^4.16.4",
+    "find-open-port": "^1.0.2",
+    "fs-extra": "^7.0.0",
+    "grepit": "^1.0.0",
+    "help": "^3.0.2",
+    "http-auth": "^3.2.3",
+    "is-running": "^2.1.0",
+    "morgan": "^1.9.1",
+    "mrchandler": "^1.0.0",
+    "node-fetch": "^2.2.0",
+    "pug": "^2.0.3",
+    "require": "^2.4.20",
+    "sharp": "^0.21.3",
+    "sqlite3": "^4.0.2"
+  },
+  "devDependencies": {
+    "electron": "^3.0.11",
+    "electron-builder": "^20.38.3",
+    "pkg": "^4.3.7"
+  }
+}

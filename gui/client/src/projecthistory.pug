@@ -1,0 +1,77 @@
+table
+	tr
+		td
+			b="Id"
+		td
+			b="Type"
+		td
+			b="Status"
+		td
+		td
+		td
+		td
+		td
+		td
+		td
+			b="Name"
+	each task in history
+		tr
+			td=task['id']
+			td=task['type']
+			td(
+				title="PID : " + task['pid']
+			)=task['status']
+			td
+				if task['view'] != "null"
+					img.actionicons(
+						src="img/view-out.png"
+						data-func="viewoutput"
+						data-view=task['view']
+						data-folder=task['folder']
+						data-status=task['status']
+						onclick="historyfunctions.select(this)"
+						title="view output"
+					)
+			td
+				img.actionicons(
+						src="img/folder.png"
+						data-func="viewfiles"
+						data-folder=task['folder']
+						onclick="historyfunctions.select(this)"
+						title="view files"
+					)
+			td
+				img.actionicons(
+						src="img/rerun.png"
+						data-func="rerun"
+						data-arguments=task['arguments']
+						onclick="historyfunctions.select(this)"
+						title="re-run job"
+					)
+			td
+				img.actionicons(
+						src="img/delete.png"
+						data-func="deletejob"
+						data-id=task['id']
+						onclick="historyfunctions.select(this)"
+						title="delete job"
+					)
+			td
+				img.actionicons(
+						src="img/kill.png"
+						data-func="kill"
+						data-id=task['id']
+						data-pid=task['pid']
+						onclick="historyfunctions.select(this)"
+						title="kill job"
+					)
+			td
+				img.actionicons(
+						src="img/log.png"
+						onclick="historyfunctions.showLog('" + task['folder'] + "')"
+						title="log file"
+					)
+			td(
+				title=task['description']
+			)=task['name']
+			

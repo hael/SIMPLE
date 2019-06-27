@@ -1,0 +1,36 @@
+need to update quite a few of the images in the tutorial so they start from the correct job
+
+mask size needs updating - ??? 100 pixels (120A radius)
+box size in manual pick
+
+
+import project to GUI mode - read simple file???
+
+combine simple project files
+
+import task to new project?????
+
+
+copy jobs between projects
+
+
+autopick - have option to only pick small subset of movies for a test -  ideally spaced over defoucus range
+
+the old radius versus diameter, pixels versus angstroms thing
+
+
+#change Save Clusters to Export Averages
+#
+845787.htmlfiletab -default output location and file name
+#view3D broken on mac (view 2D works fine)
+FSC curve - add on 0.5 and 0.143
+/home/administrator/ws/data/simple
+
+
+
+
+
+
+volume display doesn't look right in tutorial
+path to mask probably not right
+re-select clusters in ini3D projection matching window

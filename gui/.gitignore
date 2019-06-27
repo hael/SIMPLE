@@ -1,8 +1,1 @@
-/node_modules
-/out
-/package-lock.json
-/simple.sqlite
-/gui_electron.geany
-/dist/linux-unpacked
-/dist/mac
 /tutorials

@@ -41,3 +41,4 @@ doc/html/
 *.toc
 *.orig
 /node_modules
+/dist

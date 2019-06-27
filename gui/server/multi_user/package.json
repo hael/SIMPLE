@@ -1,0 +1,35 @@
+{
+  "name": "simple_gui_multiuser",
+  "productName": "simple_gui_multiuser",
+  "version": "3.0.0",
+  "description": "Graphical user interface for SIMPLE",
+  "main": "simple_multiuser.js",
+  "scripts": {
+    "build": "pkg --target=host -o dist/simple_gui_multiuser.linux --max_old_space_size=16000 simple_multiuser.js"
+  },
+  "keywords": [],
+  "author": "Joseph Caesar",
+  "license": "MIT",
+  "dependencies": {
+    "@types/node": "^9.6.6",
+    "child-process-promise": "^2.2.1",
+    "command-exists": "^1.2.8",
+    "compression": "^1.7.3",
+    "debug": "^4.1.0",
+    "express": "^4.16.4",
+    "find-open-port": "^1.0.2",
+    "fs-extra": "^7.0.0",
+    "grepit": "^1.0.0",
+    "help": "^3.0.2",
+    "http-auth": "^3.2.3",
+    "is-running": "^2.1.0",
+    "morgan": "^1.9.1",
+    "mrchandler": "^1.0.0",
+    "node-fetch": "^2.2.0",
+    "pug": "^2.0.3",
+    "require": "^2.4.20",
+    "sharp": "^0.21.3",
+    "sqlite3": "^4.0.2",
+    "pkg": "^4.3.7"
+  }
+}
