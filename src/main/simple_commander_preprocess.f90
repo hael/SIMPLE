@@ -823,7 +823,6 @@ contains
                         l_ctfpatch = .true.
                     endif
                 endif
-                l_ctfpatch = .false. ! deactivating for now
                 do iptcl=1,nptcls
                     if( .not.oris_mask(iptcl) )cycle
                     ! update global counter
@@ -833,7 +832,7 @@ contains
                     call build%spproj%set_boxcoords(iptcl_glob, nint(ptcl_pos))
                     ! updates particle defocus
                     if( l_ctfpatch )then
-                        ptcl_pos = ptcl_pos+real(params%box/2) ! provides center
+                        ptcl_pos = ptcl_pos+real(params%box/2) !  center
                         call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
                         call build%spproj%os_ptcl2D%set(iptcl_glob,'dfx',dfx)
                         call build%spproj%os_ptcl3D%set(iptcl_glob,'dfx',dfx)
@@ -842,7 +841,8 @@ contains
                     endif
                 end do
                 ! clean
-                call boxfile%kill()
+                call boxfile%kill
+                call ctffit%kill
             enddo
             ! write
             call build%spproj%write

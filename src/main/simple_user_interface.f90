@@ -157,6 +157,7 @@ type(simple_input_param) :: box
 type(simple_input_param) :: clip
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
+type(simple_input_param) :: ctfpatch
 type(simple_input_param) :: ctf_yes
 type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
@@ -665,6 +666,7 @@ contains
         call set_param(ctf,           'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){no}',&
         &'(yes|no|flip){no}', .true., 'no')
         call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
+        call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
@@ -1212,12 +1214,13 @@ contains
         &'CTF parameter fitting',&                                      ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
         &'simple_distr_exec',&                                          ! executable
-        &0, 1, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 2, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
         call ctf_estimate%set_input('parm_ios', 1, pspecsz)
+        call ctf_estimate%set_input('parm_ios', 2, ctfpatch)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2211,7 +2214,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &3, 8, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 9, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2227,6 +2230,7 @@ contains
         &'Template output integrated movie name', 'e.g. mic_', .false., 'mic_')
         call preprocess%set_input('parm_ios', 7,  pspecsz)
         call preprocess%set_input('parm_ios', 8,  numlen)
+        call preprocess%set_input('parm_ios', 9,  ctfpatch)
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2272,7 +2276,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &5, 11, 0, 15, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 12, 0, 15, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2298,6 +2302,7 @@ contains
         preprocess_stream%parm_ios(10)%required = .true.
         call preprocess_stream%set_input('parm_ios', 11, smpd)
         preprocess_stream%parm_ios(11)%required = .true.
+        call preprocess_stream%set_input('parm_ios', 12,  ctfpatch)
         ! alternative inputs
         ! <empty>
         ! search controls

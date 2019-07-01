@@ -28,6 +28,7 @@ type :: parameters
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
+    character(len=3)      :: ctfpatch='no'        !< whether to perform patched CTF estimation(yes|no){no}
     character(len=3)      :: cure='no'
     character(len=3)      :: dev='no'             !< development flag for experimental code(yes|no){no}
     character(len=3)      :: dihedral='no'        !< dihedral symmetry or not(yes|no){no}
@@ -492,6 +493,7 @@ contains
         call check_carg('continue',       self%continue)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
+        call check_carg('ctfpatch',       self%ctfpatch)
         call check_carg('ctfstats',       self%ctfstats)
         call check_carg('cure',           self%cure)
         call check_carg('detector',       self%detector)

@@ -164,6 +164,7 @@ contains
         type(oris)                              :: os_stk
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind, boxfile_name
+        real    :: dfx,dfy
         integer :: boxcoords(2), lfoo(3)
         integer :: nframes,imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
         if( .not. cline%defined('outside')   ) call cline%set('outside',   'no')
@@ -285,14 +286,24 @@ contains
             enddo
             ! import stacks into project
             call spproj%add_stktab(stktab,os_stk)
-            ! transfer particles locations to ptcl2D
+            ! transfer particles locations to ptcl2D & defocus to 2D/3D
             cnt = 0
             do ipart = 1,params%nparts
                 call spproj_part%read_segment('ptcl2D',parts_fname(ipart))
                 do i = 1,spproj_part%os_ptcl2D%get_noris()
                     cnt = cnt + 1
+                    ! picking coordinates
                     call spproj_part%get_boxcoords(i, boxcoords)
                     call spproj%set_boxcoords(cnt, boxcoords)
+                    ! defocus from patch-based ctf estimation
+                    if( spproj_part%os_ptcl2D%isthere(i,'dfx') )then
+                        dfx = spproj_part%os_ptcl2D%get(i, 'dfx')
+                        dfy = spproj_part%os_ptcl2D%get(i, 'dfy')
+                        call spproj%os_ptcl2D%set(cnt,'dfx',dfx)
+                        call spproj%os_ptcl2D%set(cnt,'dfy',dfy)
+                        call spproj%os_ptcl3D%set(cnt,'dfx',dfx)
+                        call spproj%os_ptcl3D%set(cnt,'dfy',dfy)
+                    endif
                 enddo
                 call spproj_part%kill
             enddo

@@ -284,7 +284,7 @@ contains
         type(ori)                     :: o
         type(ctfparams)               :: ctfvar
         character(len=:), allocatable :: stk
-        real                          :: smpd, smpd_self
+        real                          :: smpd, smpd_self, dfx,dfy
         integer                       :: boxcoords(2),i,iptcl,cnt,n,n2append,nptcls,istate
         select case(trim(oritype))
             case('mic')
@@ -341,6 +341,14 @@ contains
                     if( proj%has_boxcoords(iptcl) )then
                         call proj%get_boxcoords(iptcl, boxcoords)
                         call self%set_boxcoords(cnt, boxcoords)
+                    endif
+                    if( ctfvar%ctfflag /= CTFFLAG_NO )then
+                        dfx = proj%os_ptcl2D%get(iptcl, 'dfx')
+                        dfy = proj%os_ptcl2D%get(iptcl, 'dfy')
+                        call self%os_ptcl2D%set(cnt,'dfx',dfx)
+                        call self%os_ptcl2D%set(cnt,'dfy',dfy)
+                        call self%os_ptcl3D%set(cnt,'dfx',dfx)
+                        call self%os_ptcl3D%set(cnt,'dfy',dfy)
                     endif
                 enddo
         end select

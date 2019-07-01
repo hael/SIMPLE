@@ -86,7 +86,6 @@ contains
     procedure, private :: calc_ctfres
     procedure, private :: gen_ctf_extrema
     procedure          :: write_diagnostic
-    procedure          :: write_diagnostic_patch
     procedure, private :: ctf2pspecimg
     ! polynomial fitting
     procedure, private :: fit_polynomial
@@ -219,7 +218,7 @@ contains
                 yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%ntiles(2)-1)) - 1
                 self%tiles_centers(i,j,:) = [xind,yind]+self%box/2+1
                 call tmpimgs(i,j)%new(self%ldim_box, self%smpd, wthreads=.false.)
-                call self%tiles(i,j)%new(self%ldim_box, self%smpd)
+                call self%tiles(i,j)%new(self%ldim_box, self%smpd, wthreads=.false.)
                 call self%micrograph%window_slim([xind,yind],self%box,tmpimgs(i,j),outside)
                 call tmpimgs(i,j)%norm
                 call tmpimgs(i,j)%zero_edgeavg
@@ -266,7 +265,7 @@ contains
         if( present(spec) )then
             ! use provided spectrum
             if( .not. (self%pspec.eqdims.spec) )then
-                THROW_HARD('Spectrums have incomnpatible dimensions! fit')
+                THROW_HARD('Spectrums have incompatible dimensions! fit')
             endif
             call self%pspec%copy(spec)
         else
@@ -284,7 +283,7 @@ contains
         ! 3/4D refinement of grid solution
         call self%refine
         call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
-        ! calculate CTF scores
+        ! calculate CTF stats
         call self%calc_ctfscore
         call self%calc_ctfres
         ! output
@@ -535,7 +534,7 @@ contains
         df_avg = (self%parms%dfx + self%parms%dfy) / 2.0
         call self%ctf2pspecimg(self%pspec_ctf_roavg, df_avg, df_avg, 0.)
         hpfind = self%pspec_roavg%get_find(self%hp)
-        lpfind = self%pspec_roavg%get_find(2.5)
+        lpfind = self%pspec_roavg%get_find(max(2.5,2.*self%smpd))
         filtsz = self%pspec_roavg%get_filtsz()
         call self%pspec_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
         call self%pspec_ctf_roavg%mask(real(lpfind), 'soft', inner=real(hpfind))
@@ -543,7 +542,7 @@ contains
         call self%pspec_ctf_roavg%norm_bin
         allocate(corrs(filtsz))
         call self%pspec_roavg%frc_pspec(self%pspec_ctf_roavg, corrs)
-        self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind - hpfind + 1)
+        self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind-hpfind+1)
     end subroutine calc_ctfscore
 
     ! make & write half-n-half diagnostic
@@ -560,37 +559,9 @@ contains
         call self%pspec%norm()
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, self%cc_msk)
         call pspec_half_n_half%scale_pspec4viz
-        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
+        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
         call pspec_half_n_half%kill
     end subroutine write_diagnostic
-
-    ! make & write half-n-half diagnostic
-    subroutine write_diagnostic_patch( self, diagfname )
-        class(ctf_estimate_fit), intent(inout) :: self
-        character(len=*),          intent(in)    :: diagfname
-        type(image) :: pspec_half_n_half, tmp
-        integer     :: pi,pj
-        call tmp%new(self%ldim_box,self%parms%smpd)
-        self%pspec_ctf = 0.
-        do pi = 1,NPATCH
-            do pj = 1,NPATCH
-                tmp = 0.
-                if( self%parms%l_phaseplate )then
-                    call self%ctf2pspecimg(tmp, self%parms_patch(pi,pj)%dfx, self%parms_patch(pi,pj)%dfy, self%parms_patch(pi,pj)%angast, add_phshift=self%parms_patch(pi,pj)%phshift)
-                else
-                    call self%ctf2pspecimg(tmp, self%parms_patch(pi,pj)%dfx, self%parms_patch(pi,pj)%dfy, self%parms_patch(pi,pj)%angast)
-                endif
-                call self%pspec_ctf%add(tmp)
-            enddo
-        enddo
-        call self%pspec_ctf%norm()
-        call self%pspec%norm()
-        call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, self%cc_msk)
-        call pspec_half_n_half%scale_pspec4viz
-        call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true.)
-        call pspec_half_n_half%kill
-        call tmp%kill
-    end subroutine write_diagnostic_patch
 
     ! 1D brute force over rotational average
     subroutine grid_srch( self )
@@ -1074,7 +1045,7 @@ contains
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
-        real, parameter       :: SCALE = 50.
+        real, parameter       :: SCALE = 20.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: center
@@ -1098,11 +1069,11 @@ contains
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
         call CPlot2D__SetFlipY(plot2D, C_TRUE)
-        do pi = 1, NPATCH
-            do pj = 1, NPATCH
+        do pi = 1,self%ntiles(1)
+            do pj = 1,self%ntiles(2)
                 ! center
-                cx = real(self%centers(pi,pj,1))
-                cy = real(self%centers(pi,pj,2))
+                cx = real(self%tiles_centers(pi,pj,1))
+                cy = real(self%tiles_centers(pi,pj,2))
                 call self%pix2polyvals(cx,cy,dfx,dfy)
                 df = (dfx+dfy)/2.
                 msz = SCALE * df
