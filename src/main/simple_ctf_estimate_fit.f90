@@ -3,9 +3,10 @@ include 'simple_lib.f08'
 use simple_oris,              only: oris
 use simple_image,             only: image
 use simple_ctf,               only: ctf
-use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D
+use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost2Dcont
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
+use simple_timer
 
 implicit none
 
@@ -30,7 +31,7 @@ type ctf_estimate_fit
     type(ctfparams)           :: parms                   ! for storing ctf parameters
     type(ctfparams)           :: parms_patch(NPATCH,NPATCH) ! for storing patch ctf parameters
     type(ctf_estimate_cost1D) :: ctf_cost1D              ! optimization object for whole micrograph
-    type(ctf_estimate_cost2D) :: ctf_cost_patch(NPATCH,NPATCH) ! patch optimization objects
+    type(ctf_estimate_cost2Dcont) :: costcont_patch(NPATCH,NPATCH) ! patch optimization objects
     type(ctf_estimate_cost2D) :: ctf_cost2D              ! 2D optimization object
     real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
     integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
@@ -78,6 +79,7 @@ contains
     procedure, private :: mic2spec_patch
     procedure, private :: norm_pspec
     procedure, private :: gen_roavspec1d
+    procedure, private :: subtr_backgr
     ! scoring, display & output
     procedure          :: plot_parms
     procedure          :: write_doc
@@ -131,7 +133,7 @@ contains
         call self%pspec_ctf%new(self%ldim_box, self%smpd)
         call self%pspec_ctf_roavg%new(self%ldim_box, self%smpd)
         self%flims      = self%pspec%loop_lims(3) ! redundant
-        self%flims1d    = [0,minval(abs(self%flims(1:2,:)))]
+        self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
         self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
         allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
         ! init patches power spectra images
@@ -248,11 +250,25 @@ contains
         get_ctfscore = self%ctfscore
     end function get_ctfscore
 
+    ! for visualization
     subroutine get_pspec(self, pspec_out)
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: pspec_out
-        ! self%pspec may have gone through arbitrary normalization
+        integer       :: h,k,i,j,sh
         call pspec_out%copy(self%pspec)
+        ! zero center
+        do h = -self%freslims1d(1),self%freslims1d(1)
+            i = self%box/2+1+h
+            do k = -self%freslims1d(1),self%freslims1d(1)
+                sh = nint(sqrt(real(h*h+k*k)))
+                if( sh < self%freslims1d(1) ) then
+                    j = self%box/2+1+k
+                    call pspec_out%set([i,j,1],0.)
+                endif
+            enddo
+        enddo
+        ! norm
+        call self%norm_pspec(pspec_out)
     end subroutine get_pspec
 
     ! DOERS
@@ -298,7 +314,8 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         real    :: limits(2,2), cc, cc_sum
-        integer :: pi,pj
+        integer :: pi,pj,i
+        real(dp) :: dfx,dfy,f1,grad1(2),f2,grad2(2)
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
@@ -322,16 +339,20 @@ contains
                 self%parms_patch(pi,pj)%phshift = self%parms%phshift
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
                 call self%norm_pspec(self%pspec_patch(pi,pj))
-                call self%ctf_cost_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
-                    &self%inds_msk, 2, limits, self%astigtol, TOL_REFINE)
+                call self%costcont_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
+                    &self%inds_msk, 2, limits, self%astigtol)
                 ! optimization
-                call self%ctf_cost_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
+                call self%costcont_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
                 cc_sum = cc_sum + cc
                 ! cleanup
-                call self%ctf_cost_patch(pi,pj)%kill
+                call self%costcont_patch(pi,pj)%kill
             enddo
         enddo
         !$omp end parallel do
+        do pi=1,NPATCH
+            do pj=1,NPATCH
+            enddo
+        enddo
         self%cc_fit = cc_sum/real(self%npatch)
         ! polynomial fit
         call self%fit_polynomial
@@ -356,7 +377,7 @@ contains
         n = product(self%ntiles)
         call spec%div(real(n))
         call spec%dampen_pspec_central_cross
-        call spec%subtr_backgr(self%hp)
+        call self%subtr_backgr(spec)
     end subroutine mic2spec
 
     subroutine gen_centers( self )
@@ -414,7 +435,7 @@ contains
                 do i = 1,self%ntiles(1)
                     do j = 1,self%ntiles(2)
                         dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
-                        w    = exp(-0.5 *(dist/self%box)**2.)
+                        w    = exp(-0.5 *(dist/real(self%box)*2.)**2.)
                         if( w < 1.e-3 ) cycle
                         sumw = sumw + w
                         call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
@@ -422,14 +443,10 @@ contains
                 enddo
                 call self%pspec_patch(pi,pj)%div(sumw)
                 call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
+                call self%subtr_backgr(self%pspec_patch(pi,pj))
             enddo
         enddo
         !$omp end parallel do
-        do pi = 1,NPATCH
-            do pj = 1,NPATCH
-                call self%pspec_patch(pi,pj)%subtr_backgr(self%hp)
-            enddo
-        enddo
     end subroutine mic2spec_patch
 
     !>  \brief  Normalize to zero mean and unit variance the reference power spectrum
@@ -556,7 +573,7 @@ contains
             call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast)
         endif
         call self%pspec_ctf%norm()
-        call self%pspec%norm()
+        call self%norm_pspec(self%pspec)
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, self%cc_msk)
         call pspec_half_n_half%scale_pspec4viz
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
@@ -628,6 +645,37 @@ contains
         call self%ctf_cost2D%kill
     end subroutine refine
 
+    subroutine subtr_backgr( self, img )
+        class(ctf_estimate_fit), intent(inout) :: self
+        class(image),            intent(inout) :: img
+        real, pointer :: prmat(:,:,:)
+        real(dp)      :: rn, rsum
+        real          :: rplane(self%box,self%box)
+        integer       :: winsz, hwinsz, i, j, s, ss, t, tt
+        call img%get_rmat_ptr(prmat)
+        hwinsz = nint(real(self%box/2)*self%smpd / self%hp / sqrt(2.))
+        winsz  = 2*hwinsz + 1
+        rn     = real(winsz*winsz,dp)
+        !$omp parallel do collapse(2) default(shared) private(i,j,s,ss,t,tt,rsum)&
+        !$omp schedule(static) proc_bind(close)
+        do i=1,self%box
+            do j=1,self%box
+                rsum = 0.d0
+                do s=i-hwinsz,i+hwinsz
+                    ss = cyci_1d_static(self%box, s)
+                    do t=j-hwinsz,j+hwinsz
+                        tt   = cyci_1d_static(self%box, t)
+                        rsum = rsum + real(prmat(ss,tt,1),dp)
+                    end do
+                end do
+                rplane(i,j) = real(rsum/rn)
+            end do
+        end do
+        !$omp end parallel do
+        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1) - rplane(:,:)
+    end subroutine subtr_backgr
+
+
     !>  \brief  is for making a |CTF| spectrum image
     subroutine ctf2pspecimg( self, img, dfx, dfy, angast, add_phshift )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -694,7 +742,8 @@ contains
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
         ! normalize spectrum
-        call self%mic2spec(specimg) ! should become un-necessary
+        !call self%mic2spec(specimg) ! should become un-necessary
+        call specimg%copy(self%pspec)
         call norm2dspec
         ! calculate number of extrema & ctf values
         call self%gen_ctf_extrema(ctf, extrema)
@@ -809,7 +858,7 @@ contains
                         i = min(max(1,h+mhr+1),self%box)
                         j = min(max(1,k+mk+1),self%box)
                         sh = nint(sqrt(real(h*h+k*k)))
-                        if( sh <= self%freslims1d(1) ) prmat(i,j,1) = 0 ! to update to s<self%freslims1d(1)
+                        if( sh <= self%freslims1d(1) ) prmat(i,j,1) = 0. ! to update to s<self%freslims1d(1)
                     enddo
                 enddo
                 ! dampens central cross again
@@ -1069,11 +1118,12 @@ contains
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
         call CPlot2D__SetFlipY(plot2D, C_TRUE)
-        do pi = 1,self%ntiles(1)
-            do pj = 1,self%ntiles(2)
+        do pi = 1,NPATCH
+            do pj = 1,NPATCH
                 ! center
-                cx = real(self%tiles_centers(pi,pj,1))
-                cy = real(self%tiles_centers(pi,pj,2))
+                cx = real(self%centers(pi,pj,1))
+                cy = real(self%centers(pi,pj,2))
+                ! interpolated
                 call self%pix2polyvals(cx,cy,dfx,dfy)
                 df = (dfx+dfy)/2.
                 msz = SCALE * df
@@ -1086,11 +1136,28 @@ contains
                 call CDataSet__SetDrawMarker(center, C_TRUE)
                 call CDataSet__SetMarkerSize(center, real(msz, c_double))
                 call CDataSet__SetDatasetColor(center, real(col, c_double),1.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataPoint__new2(real(cx-50., c_double), real(cy-50., c_double), p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
                 call CDataSet__delete(center)
+                ! calc
+                ! df = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
+                ! msz = SCALE * df
+                ! if( is_equal(dfmax,dfmin) )then
+                !     col = 0.
+                ! else
+                !     col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
+                ! endif
+                ! call CDataSet__new(center)
+                ! call CDataSet__SetDrawMarker(center, C_TRUE)
+                ! call CDataSet__SetMarkerSize(center, real(msz, c_double))
+                ! call CDataSet__SetDatasetColor(center, 0.0_c_double,real(col, c_double),0.0_c_double)
+                ! call CDataPoint__new2(real(cx+50., c_double), real(cy+50., c_double), p1)
+                ! call CDataSet__AddDataPoint(center, p1)
+                ! call CDataPoint__delete(p1)
+                ! call CPlot2D__AddDataSet(plot2D, center)
+                ! call CDataSet__delete(center)
             end do
         end do
         write(titlestr,'(A,F6.3,A,F6.3,A)')'Defocus from ',dfmin,' microns (green) to ',dfmax,' (yellow)'
@@ -1202,7 +1269,7 @@ contains
         do i = 1,NPATCH
             do j = 1,NPATCH
                 call self%pspec_patch(i,j)%kill
-                call self%ctf_cost_patch(i,j)%kill
+                call self%costcont_patch(i,j)%kill
             enddo
         enddo
         self%exists = .false.

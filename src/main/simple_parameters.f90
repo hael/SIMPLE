@@ -326,7 +326,6 @@ type :: parameters
     real    :: dfmax=5.0           !< maximum expected defocus(in microns)
     real    :: dfmin=0.3           !< minimum expected defocus(in microns)
     real    :: dfsdev=0.1
-    real    :: dfstep=0.05         !< defocus step size for grid search
     real    :: dose_rate=30.0      !< dose rate(in e/A2/s)
     real    :: dstep=0.
     real    :: dsteppd=0.
@@ -373,7 +372,6 @@ type :: parameters
     real    :: mw=0.               !< molecular weight(in kD)
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: nsig=2.5            !< # sigmas
-    real    :: optlims(7,2)=0.
     real    :: outer=0.            !< outer mask radius(in pixels)
     real    :: part_concentration  !< concentration of particles in the micrograph
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
@@ -400,7 +398,6 @@ type :: parameters
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
-    logical :: cyclic(7)        = .false.
     logical :: l_autoscale      = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
@@ -743,7 +740,6 @@ contains
         call check_rarg('dfmax',          self%dfmax)
         call check_rarg('dfmin',          self%dfmin)
         call check_rarg('dfsdev',         self%dfsdev)
-        call check_rarg('dfstep',         self%dfstep)
         call check_rarg('dose_rate',      self%dose_rate)
         call check_rarg('e1',             self%e1)
         call check_rarg('e2',             self%e2)
@@ -1318,16 +1314,6 @@ contains
             self%trs = 0.00001
             self%l_doshift = .false.
         endif
-        ! set optlims
-        self%optlims(:3,:)  = self%eullims
-        self%optlims(4:5,1) = -self%trs
-        self%optlims(4:5,2) = self%trs
-        self%optlims(6:7,1) = -self%dfsdev
-        self%optlims(6:7,2) = self%dfsdev
-        ! Set first three in cyclic true
-        self%cyclic(1) = .true.
-        self%cyclic(2) = .true.
-        self%cyclic(3) = .true.
         ! Set molecular diameter
         if( .not. cline%defined('moldiam') )then
             self%moldiam = 2. * self%msk * self%smpd

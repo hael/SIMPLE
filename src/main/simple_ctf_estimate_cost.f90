@@ -1,12 +1,13 @@
 module simple_ctf_estimate_cost
 include 'simple_lib.f08'
-use simple_image,    only: image
-use simple_ctf,      only: ctf
-use simple_opt_spec, only: opt_spec
-use simple_opt_de,   only: opt_de
+use simple_image,     only: image
+use simple_ctf,       only: ctf
+use simple_opt_spec,  only: opt_spec
+use simple_opt_de,    only: opt_de
+use simple_optimizer, only: optimizer
 implicit none
 
-public :: ctf_estimate_cost1D, ctf_estimate_cost2D
+public :: ctf_estimate_cost1D, ctf_estimate_cost2D, ctf_estimate_cost2Dcont
 private
 #include "simple_local_flags.inc"
 
@@ -44,11 +45,37 @@ type ctf_estimate_cost2D
         procedure, private :: init2D
         procedure          :: minimize
         procedure, private :: cost2D
-        procedure, private :: calc_cost2D
+        procedure          :: calc_cost2D
         procedure, private :: kill2D
         generic            :: init => init2D
         generic            :: kill => kill2D
 end type ctf_estimate_cost2D
+
+type ctf_estimate_cost2Dcont
+    private
+    class(image),     pointer :: pspec => null()    !< reference SQRT( power spectrum ) normalized
+    class(ctfparams), pointer :: parms => null()    !< For microscope characteristics
+    class(optimizer), pointer :: nlopt => null()    !< optimizer object
+    integer,          pointer :: inds(:,:)          !< Mask indices
+    type(opt_spec)            :: ospec              !< optimizer specification object
+    real(dp)                  :: kv, cs, fraca, angast, df, phshift, smpd, amp_contr_const, wl, wlsq ! CTF
+    real(dp)                  :: conversionfactor = 0.d0    ! unit conversion
+    real(dp)                  :: astigtol         = 0.05d0  !< Astigmatic tolerance (microns)
+    integer                   :: ndim             = 0       !< # of dimensions to optimize
+    integer                   :: ldim(3)          = 0       !< dimensions of spectrum
+    integer                   :: flims(3,2)       = 0       !< fourier limits
+    integer                   :: ninds            = 0       !< number of pixels to correlate
+    contains
+        procedure, private :: init2Dcont
+        procedure, private :: minimize2D_cont
+        procedure, private :: fdf2D
+        procedure, private :: kill2Dcont
+        generic            :: init     => init2Dcont
+        generic            :: minimize => minimize2D_cont
+        generic            :: kill     => kill2Dcont
+end type ctf_estimate_cost2Dcont
+
+real(dp), parameter :: kpen = 0.005d0 ! force constant for astigmatism tolerance penalty
 
 contains
 
@@ -75,7 +102,7 @@ contains
         integer,                  intent(in)    :: ndim
         real,                     intent(in)    :: limits(ndim,2)
         real,                     intent(in)    :: astigtol, tol
-        call self%kill
+        call self%kill2D
         self%pspec => pspec
         self%parms => parms
         self%inds  => inds
@@ -88,6 +115,47 @@ contains
         call self%ospec%specify('de',self%ndim,limits=limits, maxits=400, ftol=tol)
         call self%ospec%set_costfun(cost2D_wrapper)
     end subroutine init2D
+
+    subroutine init2Dcont( self, pspec, parms, inds, ndim, limits, astigtol)
+        use simple_opt_factory, only: opt_factory
+        class(ctf_estimate_cost2Dcont), intent(inout) :: self
+        class(image),     target, intent(inout) :: pspec
+        class(ctfparams), target, intent(inout) :: parms
+        integer,          target, intent(inout) :: inds(:,:)
+        integer,                  intent(in)    :: ndim
+        real,                     intent(in)    :: limits(ndim,2)
+        real,                     intent(in)    :: astigtol
+        type(opt_factory) :: opt_fact
+        real(dp)          :: amp_contr, phaseq
+        call self%kill2Dcont
+        self%pspec    => pspec
+        self%parms    => parms
+        self%inds     => inds
+        self%ldim     = self%pspec%get_ldim()
+        self%flims    = self%pspec%loop_lims(3)
+        self%ninds    = size(self%inds,dim=2)
+        self%ndim     = ndim
+        self%astigtol = real(astigtol,dp)
+        ! set constants, cf. ctf type
+        self%smpd             = real(self%parms%smpd,dp)
+        self%conversionfactor = 1.d4/self%smpd
+        self%kV               = real(self%parms%kV,dp)
+        self%wl               = 12.26d0 / dsqrt(1.d3*self%kV + 0.9784d0*self%kV*self%kv) / self%smpd
+        self%wlsq             = self%wl*self%wl
+        self%cs               = real(self%parms%Cs,dp)*1.d7 / self%smpd
+        amp_contr             = real(self%parms%fraca,dp)
+        phaseq                = dsqrt(1.d0-amp_contr*amp_contr)
+        self%amp_contr_const  = datan(amp_contr / phaseq)
+        self%angast           = real(self%parms%angast,dp)*DPI/180.d0
+        self%phshift          = 0.d0
+        if( self%parms%l_phaseplate ) self%phshift = real(self%parms%phshift,dp)
+        ! optimizer
+        call self%ospec%specify('lbfgsb', 2, ftol=1e-1, gtol=1e-3, limits=limits(1:2,:), max_step=0.01, maxits=100)
+        call opt_fact%new(self%ospec, self%nlopt)
+        self%ospec%costfun_8    => f2D_costfun
+        self%ospec%gcostfun_8   => df2D_costfun
+        self%ospec%fdfcostfun_8 => fdf2D_costfun
+    end subroutine init2Dcont
 
     ! 1D ROUTINE
 
@@ -223,7 +291,7 @@ contains
         real,             optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         real, pointer :: prmat(:,:,:)
         real          :: ang, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
-        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,ctf_sum
+        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr
         integer       :: h,mh,k,mk, i,j, l
         ! initialize, it assumes that the reference(img) ins zero mean and
         ! unit variance over the resolution range
@@ -236,9 +304,8 @@ contains
         inv_ldim   = 1./real(self%ldim)
         ctf_sqsum  = 0.d0
         dotproduct = 0.d0
-        ctf_sum    = 0.d0
         !$omp parallel do default(shared) private(h,hinv,k,kinv,i,j,spaFreqSq,ang,tval,tvalsq,l) &
-        !$omp schedule(static) proc_bind(close) reduction(+:ctf_sqsum,dotproduct,ctf_sum)
+        !$omp schedule(static) proc_bind(close) reduction(+:ctf_sqsum,dotproduct)
         do l = 1,self%ninds
             h = self%inds(1,l)
             k = self%inds(2,l)
@@ -253,17 +320,186 @@ contains
             tvalsq    = min(1.d0,max(tval*tval,0.000001d0))
             tval      = dsqrt(tvalsq)
             ! correlation sums
-            ctf_sum    = ctf_sum    + tval
             ctf_sqsum  = ctf_sqsum  + tvalsq
             dotproduct = dotproduct + tval*real(prmat(i,j,1),dp)
         end do
         !$omp end parallel do
-        ! one pass correlation
         ! because reference is normalized (zero-mean, unit variance)
-        corr = dotproduct / dsqrt(real(self%ninds,dp)*ctf_sqsum-ctf_sum*ctf_sum)
+        corr = dotproduct / dsqrt(ctf_sqsum*real(self%ninds,dp))
         ! cost
         calc_cost2D = -real(corr,sp)
     end function calc_cost2D
+
+    ! 2D continuous routines
+
+    !>  Wrappers for optimizer
+    subroutine fdf2D_costfun( self, vec, f, grad, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(inout) :: vec(D)
+        real(dp), intent(out)   :: f, grad(D)
+        select type(self)
+            class is(ctf_estimate_cost2Dcont)
+                call self%fdf2D(D, vec, f, grad)
+            class DEFAULT
+                THROW_HARD('Forbidden type; fdf2D_costfun')
+        end select
+    end subroutine fdf2D_costfun
+
+    subroutine df2D_costfun( self, vec, grad, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(inout) :: vec(D)
+        real(dp), intent(out)   :: grad(D)
+        real(dp) :: f
+        select type(self)
+            class is(ctf_estimate_cost2Dcont)
+                call self%fdf2D(D, vec, f, grad )
+            class DEFAULT
+                THROW_HARD('Forbidden type; fdf2D_costfun')
+        end select
+    end subroutine df2D_costfun
+
+    real(dp) function f2D_costfun( self, vec, D )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(in)    :: vec(D)
+        real(dp) :: grad(2)
+        f2D_costfun = 1.d0
+        select type(self)
+            class is(ctf_estimate_cost2Dcont)
+                call self%fdf2D(D, vec, f2D_costfun, grad )
+            class DEFAULT
+                THROW_HARD('Forbidden type; f2D_costfun')
+        end select
+    end function f2D_costfun
+
+    subroutine fdf2D( self, D, df, f, grad )
+        class(ctf_estimate_cost2Dcont), intent(inout) :: self
+        integer,                        intent(in)    :: D
+        real(dp),                       intent(in)    :: df(D)
+        real(dp),                       intent(inout) :: f, grad(D)
+        real, pointer :: prmat(:,:,:)
+        real(dp)      :: dcc_dangast(2), dcc_ddfx(2), dcc_ddfy(2), dcc_dphshift(2), inv_ldim(3)
+        real(dp)      :: spaFreqSq, dfx, dfy, df_eff, ang, tvalsh, costerm, denom,denomsq, ddfmicrons
+        real(dp)      :: ctfsq_sum,dotproduct,abstval,tval,corr,hinv,kinv,rn,signctf, ddf_dangast
+        real(dp)      :: dabsctf_ddf, ddf_ddfx, ddf_ddfy,phshift_eff, absctf_obs, A, dabsctf_dphshift
+        real(dp)      :: fpen, gpen(2)
+        integer       :: h,mh,k,mk, i,j, l
+        call self%pspec%get_rmat_ptr(prmat)
+        dfx          = df(1) * self%conversionfactor
+        dfy          = df(2) * self%conversionfactor
+        ddfmicrons   = df(1)-df(2)
+        mh           = abs(self%flims(1,1))
+        mk           = abs(self%flims(2,1))
+        inv_ldim     = 1.d0/real(self%ldim,dp)
+        rn           = real(self%ninds,dp)
+        ctfsq_sum    = 0.d0
+        dotproduct   = 0.d0
+        dcc_ddfx     = 0.d0
+        dcc_ddfy     = 0.d0
+        dcc_dangast  = 0.d0
+        dcc_dphshift = 0.d0
+        !$omp parallel do default(shared) private(h,hinv,k,kinv,i,j,l,spaFreqSq,ang,costerm,df_eff,phshift_eff) &
+        !$omp private(tval,abstval,absctf_obs,signctf,tvalsh,dabsctf_ddf,ddf_ddfx,ddf_ddfy,ddf_dangast,dabsctf_dphshift)&
+        !$omp schedule(static) proc_bind(close) reduction(+:ctfsq_sum,dotproduct,dcc_ddfx,dcc_ddfy,dcc_dangast,dcc_dphshift)
+        do l = 1,self%ninds
+            h = self%inds(1,l)
+            k = self%inds(2,l)
+            i = min(max(1,h+mh+1),self%ldim(1))
+            j = min(max(1,k+mk+1),self%ldim(2))
+            ! |CTF|
+            hinv        = real(h,dp) * inv_ldim(1)
+            kinv        = real(k,dp) * inv_ldim(2)
+            spaFreqSq   = hinv * hinv + kinv * kinv
+            ang         = datan2(real(k,dp),real(h,dp))
+            costerm     = dcos(2.d0*(ang-self%angast))
+            df_eff      = 0.5d0*(dfx+dfy + costerm*(dfx-dfy))
+            phshift_eff = DPI*self%wl*spaFreqSq*(df_eff-0.5d0*self%wlsq*spaFreqSq*self%Cs) + self%phshift + self%amp_contr_const
+            tval        = dsin(phshift_eff)
+            abstval     = dabs(tval)
+            absctf_obs  = real(prmat(i,j,1),dp)
+            ! sums
+            dotproduct = dotproduct + abstval*absctf_obs
+            ctfsq_sum  = ctfsq_sum  + abstval*abstval
+            ! gradients
+            signctf     = dsign(1.d0, tval)
+            tvalsh      = dcos(phshift_eff)
+            dabsctf_ddf = signctf * DPI*self%wl*spaFreqSq * tvalsh
+            ! gradients defocus
+            ddf_ddfx    = 0.5d0*(1.d0+costerm)
+            ddf_ddfy    = 0.5d0*(1.d0-costerm)
+            dcc_ddfx    = dcc_ddfx + dabsctf_ddf*ddf_ddfx*[absctf_obs, abstval]
+            dcc_ddfy    = dcc_ddfy + dabsctf_ddf*ddf_ddfy*[absctf_obs, abstval]
+            if( D >= 3 )then
+                ! gradients astigmatism, untested
+                ddf_dangast = (dfx-dfy) * dsin(2.d0*(ang-self%angast))
+                dcc_dangast = dcc_ddfx + dabsctf_ddf*ddf_dangast*[absctf_obs, abstval]
+                if( D == 4 )then
+                    ! gradients phase shift, untested
+                    dabsctf_dphshift = signctf * tvalsh
+                    dcc_dphshift     = dcc_dphshift + dabsctf_dphshift*[absctf_obs, abstval]
+                endif
+            endif
+        end do
+        !$omp end parallel do
+        denomsq = rn * ctfsq_sum
+        denom   = dsqrt(denomsq)
+        A       = dotproduct*rn/denomsq**1.5d0
+        ! correlation & gradients
+        corr = dotproduct / denom
+        grad(1) = self%conversionfactor * (dcc_ddfx(1) / denom - dcc_ddfx(2) * A)
+        grad(2) = self%conversionfactor * (dcc_ddfy(1) / denom - dcc_ddfy(2) * A)
+        if( D >= 3 )then
+            grad(3) = dcc_dangast(1) / denom - dcc_dangast(2) * A
+            if( D == 4 )then
+                grad(4) = dcc_dangast(1) / denom - dcc_dangast(2) * A
+            endif
+        endif
+        ! atigmatism penalty term
+        fpen    = kpen * ((df(1)-df(2))/self%astigtol)**2.d0
+        gpen(1) = 2.d0*kpen/self%astigtol**2. * (df(1)-df(2))
+        gpen(2) = -gpen(1)
+        ! the end
+        f    = fpen-corr
+        grad = gpen-grad
+    end subroutine fdf2D
+
+    !>  Optimization routine
+    subroutine minimize2D_cont( self, parms, cc )
+        class(ctf_estimate_cost2Dcont), intent(inout) :: self
+        class(ctfparams),           intent(inout) :: parms
+        real,                       intent(out)   :: cc
+        real :: cost_here
+        self%parms%dfx     = parms%dfx
+        self%parms%dfy     = parms%dfy
+        self%parms%angast  = parms%angast
+        self%parms%phshift = parms%phshift
+        self%parms%l_phaseplate = parms%l_phaseplate
+        select case(self%ndim)
+            case(2)
+                ! defocus
+                self%ospec%x = [parms%dfx,parms%dfy]
+            case(3)
+                ! defocus + astimgatism
+                self%ospec%x = [parms%dfx,parms%dfy,parms%angast]
+            case(4)
+                ! defocus + astimgatism + phase shift
+                self%ospec%x = [parms%dfx,parms%dfy,parms%angast]
+        end select
+        self%ospec%x_8 = real(self%ospec%x,dp)
+        call self%nlopt%minimize(self%ospec, self, cost_here)
+        ! report
+        cc = -real(cost_here)
+        parms%dfx = self%ospec%x(1)
+        parms%dfy = self%ospec%x(2)
+        select case(self%ndim)
+            case(3)
+                parms%angast = self%ospec%x(3)
+            case(4)
+                parms%phshift = self%ospec%x(4)
+        end select
+    end subroutine minimize2D_cont
 
     !>  DESTRUCTORS
 
@@ -281,5 +517,14 @@ contains
         call self%ospec%kill
         call self%diffevol%kill
     end subroutine kill2D
+
+    subroutine kill2Dcont( self )
+        class(ctf_estimate_cost2Dcont), intent(inout) :: self
+        self%pspec => null()
+        self%parms => null()
+        self%inds  => null()
+        if(associated(self%nlopt)) call self%nlopt%kill
+        self%nlopt => null()
+    end subroutine kill2Dcont
 
 end module simple_ctf_estimate_cost

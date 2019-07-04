@@ -163,7 +163,6 @@ type(simple_input_param) :: deftab
 type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
-type(simple_input_param) :: dfstep
 type(simple_input_param) :: e1, e2, e3
 type(simple_input_param) :: eo
 type(simple_input_param) :: focusmsk
@@ -713,7 +712,6 @@ contains
         call set_param(pspecsz,       'pspecsz',       'num',    'Size of power spectrum', 'Size of power spectrum in pixels', 'in pixels', .false., 512.)
         call set_param(dfmin,         'dfmin',         'num',    'Expected minimum defocus', 'Expected minimum defocus in microns{0.3}', 'in microns{0.3}', .false., 0.3)
         call set_param(dfmax,         'dfmax',         'num',    'Expected maximum defocus', 'Expected maximum defocus in microns{5.0}', 'in microns{5.0}', .false., 5.0)
-        call set_param(dfstep,        'dfstep',        'num',    'Defocus step size', 'Defocus step size for grid search in microns{0.05}', 'in microns{0.05}', .false., 0.05)
         call set_param(astigtol,      'astigtol',      'num',    'Expected astigmatism', 'expected (tolerated) astigmatism(in microns){0.05}', 'in microns{0.05}',  .false., 0.05)
         call set_param(mw,            'mw',            'num',    'Molecular weight','Molecular weight in kDa', 'in kDa', .false., 0.)
         call set_param(mirr,          'mirr',          'multi',  'Perform mirroring', 'Whether to mirror and along which axis(no|x|y){no}', '(no|x|y){no}', .false., 'no')
@@ -1214,7 +1212,7 @@ contains
         &'CTF parameter fitting',&                                      ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
         &'simple_distr_exec',&                                          ! executable
-        &0, 2, 0, 4, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 2, 0, 3, 2, 0, 2, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1226,8 +1224,7 @@ contains
         ! search controls
         call ctf_estimate%set_input('srch_ctrls', 1, dfmin)
         call ctf_estimate%set_input('srch_ctrls', 2, dfmax)
-        call ctf_estimate%set_input('srch_ctrls', 3, dfstep)
-        call ctf_estimate%set_input('srch_ctrls', 4, astigtol)
+        call ctf_estimate%set_input('srch_ctrls', 3, astigtol)
         ! filter controls
         call ctf_estimate%set_input('filt_ctrls', 1, lp)
         ctf_estimate%filt_ctrls(1)%required     = .false.
@@ -2214,7 +2211,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &3, 9, 0, 14, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 9, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2242,14 +2239,13 @@ contains
         call preprocess%set_input('srch_ctrls', 6, nsig)
         call preprocess%set_input('srch_ctrls', 7, dfmin)
         call preprocess%set_input('srch_ctrls', 8, dfmax)
-        call preprocess%set_input('srch_ctrls', 9, dfstep)
-        call preprocess%set_input('srch_ctrls',10, astigtol)
-        call preprocess%set_input('srch_ctrls',11, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
-        call preprocess%set_input('srch_ctrls',12, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        call preprocess%set_input('srch_ctrls', 9, astigtol)
+        call preprocess%set_input('srch_ctrls',10, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess%set_input('srch_ctrls',11, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess%set_input('srch_ctrls',13, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess%set_input('srch_ctrls', 14, pgrp)
-        preprocess%srch_ctrls(14)%required = .false.
+        call preprocess%set_input('srch_ctrls',12, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls',13, pgrp)
+        preprocess%srch_ctrls(13)%required = .false.
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
@@ -2276,7 +2272,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &5, 12, 0, 15, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 12, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2313,16 +2309,15 @@ contains
         call preprocess_stream%set_input('srch_ctrls', 5, tof)
         call preprocess_stream%set_input('srch_ctrls', 6, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 7, dfmax)
-        call preprocess_stream%set_input('srch_ctrls', 8, dfstep)
-        call preprocess_stream%set_input('srch_ctrls', 9, astigtol)
-        call preprocess_stream%set_input('srch_ctrls',10, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',11, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        call preprocess_stream%set_input('srch_ctrls', 8, astigtol)
+        call preprocess_stream%set_input('srch_ctrls', 9, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',10, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess_stream%set_input('srch_ctrls',12, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls',13, pgrp)
+        call preprocess_stream%set_input('srch_ctrls',11, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls',12, pgrp)
         preprocess_stream%srch_ctrls(13)%required = .false.
-        call preprocess_stream%set_input('srch_ctrls',14, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',15, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',13, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',14, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
@@ -3328,7 +3323,7 @@ contains
         &'Time-series CTF parameter fitting',&                                  ! descr_short
         &'is a distributed SIMPLE workflow for CTF parameter fitting',& ! descr_long
         &'simple_exec',&                                                ! executable
-        &0, 1, 0, 4, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
+        &0, 1, 0, 3, 2, 0, 1, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3339,8 +3334,7 @@ contains
         ! search controls
         call tseries_ctf_estimate%set_input('srch_ctrls', 1, dfmin)
         call tseries_ctf_estimate%set_input('srch_ctrls', 2, dfmax)
-        call tseries_ctf_estimate%set_input('srch_ctrls', 3, dfstep)
-        call tseries_ctf_estimate%set_input('srch_ctrls', 4, astigtol)
+        call tseries_ctf_estimate%set_input('srch_ctrls', 3, astigtol)
         ! filter controls
         call tseries_ctf_estimate%set_input('filt_ctrls', 1, lp)
         tseries_ctf_estimate%filt_ctrls(1)%required     = .false.
