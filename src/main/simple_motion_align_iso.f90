@@ -210,7 +210,7 @@ contains
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             ! updates shifts & weights
             if( self%fitshifts )then
-                if( lpcnt >= 2 )then
+                if( lpcnt >= 1 )then
                     ! turns off fitting
                     self%fitshifts = .false.
                 else

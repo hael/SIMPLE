@@ -82,7 +82,7 @@ type(starfile_table_type)     :: mc_starfile            !< starfile for motion c
 ! module global constants
 integer, parameter :: MITSREF                       = 30      !< max # iterations of refinement optimisation
 real,    parameter :: SMALLSHIFT                    = 1.      !< small initial shift to blur out fixed pattern noise
-logical, parameter :: FITSHIFTS                     = .false.
+logical, parameter :: FITSHIFTS                     = .true.
 
 logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial constraint for isotropic motion correction
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
@@ -559,9 +559,9 @@ contains
             call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, &
                 patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot, patched_polyn)
         else
-            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn)
-            call motion_patch%set_frameweights( frameweights )
             call motion_patch%set_fitshifts( FITSHIFTS )
+            call motion_patch%set_frameweights( frameweights )
+            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn)
         end if
     end subroutine motion_correct_patched
 
