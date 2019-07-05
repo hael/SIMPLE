@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_oris,              only: oris
 use simple_image,             only: image
 use simple_ctf,               only: ctf
-use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost2Dcont
+use simple_ctf_estimate_cost, only: ctf_estimate_cost1D,ctf_estimate_cost2D,ctf_estimate_cost4Dcont
 use simple_starfile_wrappers
 use CPlot2D_wrapper_module
 use simple_timer
@@ -15,7 +15,7 @@ private
 #include "simple_local_flags.inc"
 
 character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
-real,                  parameter :: TOL      = 1.e-4, TOL_REFINE = 1.e-6
+real,                  parameter :: TOL      = 1.e-5
 integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 200, POLYDIM = 6
 
 type ctf_estimate_fit
@@ -30,9 +30,9 @@ type ctf_estimate_fit
     type(ctf)                 :: tfun                    ! transfer function object
     type(ctfparams)           :: parms                   ! for storing ctf parameters
     type(ctfparams)           :: parms_patch(NPATCH,NPATCH) ! for storing patch ctf parameters
-    type(ctf_estimate_cost1D) :: ctf_cost1D              ! optimization object for whole micrograph
-    type(ctf_estimate_cost2Dcont) :: costcont_patch(NPATCH,NPATCH) ! patch optimization objects
-    type(ctf_estimate_cost2D) :: ctf_cost2D              ! 2D optimization object
+    type(ctf_estimate_cost4Dcont) :: costcont_patch(NPATCH,NPATCH) ! patch continuous optimization objects
+    type(ctf_estimate_cost2D)     :: cost2D                        ! 2D discrete optimization object
+    type(ctf_estimate_cost4Dcont) :: costcont                      ! 4D continuous optimization object
     real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
     integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
     integer, allocatable      :: tiles_centers(:,:,:)
@@ -254,20 +254,7 @@ contains
     subroutine get_pspec(self, pspec_out)
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: pspec_out
-        integer       :: h,k,i,j,sh
         call pspec_out%copy(self%pspec)
-        ! zero center
-        do h = -self%freslims1d(1),self%freslims1d(1)
-            i = self%box/2+1+h
-            do k = -self%freslims1d(1),self%freslims1d(1)
-                sh = nint(sqrt(real(h*h+k*k)))
-                if( sh < self%freslims1d(1) ) then
-                    j = self%box/2+1+k
-                    call pspec_out%set([i,j,1],0.)
-                endif
-            enddo
-        enddo
-        ! norm
         call self%norm_pspec(pspec_out)
     end subroutine get_pspec
 
@@ -299,6 +286,7 @@ contains
         ! 3/4D refinement of grid solution
         call self%refine
         call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
+        print *,'out',self%parms%dfx,self%parms%dfy,self%parms%angast,self%parms%phshift
         ! calculate CTF stats
         call self%calc_ctfscore
         call self%calc_ctfres
@@ -314,8 +302,7 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         real    :: limits(2,2), cc, cc_sum
-        integer :: pi,pj,i
-        real(dp) :: dfx,dfy,f1,grad1(2),f2,grad2(2)
+        integer :: pi,pj
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
@@ -455,28 +442,14 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: img
         real, pointer :: prmat(:,:,:)
-        real(dp)      :: avg, sdev, val
-        integer       :: i,j,k, mh,mk
+        real(dp)      :: avg, sdev
         call img%get_rmat_ptr(prmat)
-        mh   = abs(self%flims(1,1))
-        mk   = abs(self%flims(2,1))
-        sdev = 0.d0
-        avg  = 0.d0
-        do i=1,self%npix_msk
-            j = min(max(1,self%inds_msk(1,i)+mh+1),self%ldim_box(1))
-            k = min(max(1,self%inds_msk(2,i)+mk+1),self%ldim_box(2))
-            avg = avg + real(prmat(j,k,1),dp)
-        enddo
-        avg = avg / real(self%npix_msk,dp)
-        do i=1,self%npix_msk
-            j = min(max(1,self%inds_msk(1,i)+mh+1),self%ldim_box(1))
-            k = min(max(1,self%inds_msk(2,i)+mk+1),self%ldim_box(2))
-            val  = real(prmat(j,k,1),dp) - avg
-            sdev = sdev + val*val
-        enddo
+        avg  = sum(real(prmat(1:self%box,1:self%box,:),dp),mask=self%cc_msk) / real(self%npix_msk,dp)
+        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1)-real(avg)
+        sdev = sum(real(prmat(1:self%box,1:self%box,:),dp)**2.d0,mask=self%cc_msk)
         sdev = dsqrt(sdev/real(self%npix_msk,dp))
         if(sdev <= TINY) sdev = 1.d0
-        prmat(1:self%box,1:self%box,1) = real((real(prmat(1:self%box,1:self%box,1),dp) - avg)/sdev)
+        prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1)/real(sdev)
         nullify(prmat)
     end subroutine norm_pspec
 
@@ -522,9 +495,12 @@ contains
         call imgmsk%new(self%ldim_box, self%smpd)
         call imgmsk%resmsk(self%hp, self%lp)
         self%cc_msk = imgmsk%bin2logical()
+        ! discards central cross
+        self%cc_msk(self%box/2+1,:,1) = .false.
+        self%cc_msk(:,self%box/2+1,1) = .false.
+        ! builds mask indices
         mh = abs(self%flims(1,1))
         mk = abs(self%flims(2,1))
-        ! builds mask indices
         self%npix_msk = count(self%cc_msk)
         allocate(self%inds_msk(2,self%npix_msk))
         cnt = 0
@@ -567,6 +543,8 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),          intent(in)    :: diagfname
         type(image) :: pspec_half_n_half
+        logical     :: l_msk(1:self%box,1:self%box,1)
+        integer     :: logicen
         if( self%parms%l_phaseplate )then
             call self%ctf2pspecimg(self%pspec_ctf, self%parms%dfx, self%parms%dfy, self%parms%angast, add_phshift=self%parms%phshift)
         else
@@ -574,7 +552,11 @@ contains
         endif
         call self%pspec_ctf%norm()
         call self%norm_pspec(self%pspec)
-        call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, self%cc_msk)
+        l_msk = self%cc_msk
+        ! putting back central cross for display
+        logicen = self%box/2+1
+        l_msk(logicen:logicen+self%freslims1d(2),logicen,1) = .true.
+        call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, l_msk)
         call pspec_half_n_half%scale_pspec4viz
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
         call pspec_half_n_half%kill
@@ -583,18 +565,18 @@ contains
     ! 1D brute force over rotational average
     subroutine grid_srch( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        type(ctf_estimate_cost1D) :: ctf_costs(NSTEPS)
-        real    :: dfs(NSTEPS), costs(NSTEPS), df_best
-        integer :: i, loc
+        type(ctf_estimate_cost1D) :: ctfcosts(NSTEPS)
+        real                      :: dfs(NSTEPS), costs(NSTEPS), df_best
+        integer                   :: i, loc
         ! no astigmatism
         self%parms%phshift = 0.
         if( self%parms%l_phaseplate ) self%parms%phshift = PIO2
         !$omp parallel do default(shared) private(i) schedule(static) proc_bind(close)
         do i = 1,NSTEPS
-            call ctf_costs(i)%init(self%pspec_roavg,self%flims1d,self%freslims1d,self%roavg_spec1d,self%parms)
+            call ctfcosts(i)%init(self%pspec_roavg,self%flims1d,self%freslims1d,self%roavg_spec1d,self%parms)
             dfs(i)   = self%df_lims(1) + real(i-1)*self%df_step
-            costs(i) = ctf_costs(i)%cost(dfs(i))
-            call ctf_costs(i)%kill
+            costs(i) = ctfcosts(i)%cost(dfs(i))
+            call ctfcosts(i)%kill
         enddo
         !$omp end parallel do
         loc     = minloc(costs,dim=1)
@@ -622,11 +604,12 @@ contains
         limits(4,:) = [0.,3.142] ! radians
         ! good solution
         if( self%parms%l_phaseplate )then
-            call self%ctf_cost2D%init(self%pspec, self%parms, self%inds_msk, 4, limits,        self%astigtol, TOL)
+            call self%cost2D%init(self%pspec,self%parms,self%inds_msk,4,limits,       self%astigtol, TOL)
         else
-            call self%ctf_cost2D%init(self%pspec, self%parms, self%inds_msk, 3, limits(1:3,:), self%astigtol, TOL)
+            call self%cost2D%init(self%pspec,self%parms,self%inds_msk,3,limits(1:3,:),self%astigtol, TOL)
         endif
-        call self%ctf_cost2D%minimize(self%parms, self%cc_fit)
+        call self%cost2D%minimize(self%parms, self%cc_fit)
+        call self%cost2D%kill
         ! refined solution & without circular issue
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
@@ -637,12 +620,12 @@ contains
         limits(4,1) = self%parms%phshift - PI/6.    ! radians
         limits(4,2) = self%parms%phshift + PI/6
         if( self%parms%l_phaseplate )then
-            call self%ctf_cost2D%init(self%pspec, self%parms, self%inds_msk, 4, limits,        self%astigtol, TOL_REFINE)
+            call self%costcont%init(self%pspec, self%parms, self%inds_msk, 4, limits, self%astigtol)
         else
-            call self%ctf_cost2D%init(self%pspec, self%parms, self%inds_msk, 3, limits(1:3,:), self%astigtol, TOL_REFINE)
+            call self%costcont%init(self%pspec, self%parms, self%inds_msk, 3, limits(1:3,:), self%astigtol)
         endif
-        call self%ctf_cost2D%minimize(self%parms, self%cc_fit)
-        call self%ctf_cost2D%kill
+        call self%costcont%minimize(self%parms, self%cc_fit)
+        call self%costcont%kill
     end subroutine refine
 
     subroutine subtr_backgr( self, img )
@@ -656,6 +639,7 @@ contains
         hwinsz = nint(real(self%box/2)*self%smpd / self%hp / sqrt(2.))
         winsz  = 2*hwinsz + 1
         rn     = real(winsz*winsz,dp)
+        rplane = 0.
         !$omp parallel do collapse(2) default(shared) private(i,j,s,ss,t,tt,rsum)&
         !$omp schedule(static) proc_bind(close)
         do i=1,self%box
@@ -1253,8 +1237,7 @@ contains
         call self%pspec_ctf%kill
         call self%pspec_ctf_roavg%kill
         call self%pspec_roavg%kill
-        call self%ctf_cost1D%kill
-        call self%ctf_cost2D%kill
+        call self%cost2D%kill
         if( allocated(self%roavg_spec1d) ) deallocate(self%roavg_spec1d)
         if( allocated(self%cc_msk) )       deallocate(self%cc_msk)
         if( allocated(self%inds_msk) )     deallocate(self%inds_msk)

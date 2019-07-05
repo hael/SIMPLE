@@ -71,7 +71,7 @@ type heap_vars
 end type heap_vars
 
 type :: polarft_corrcalc
-    private
+    !private
     integer                          :: hpind_fsc  = 0        !< high-pass index FSC
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
@@ -89,7 +89,6 @@ type :: polarft_corrcalc
     real(sp),            allocatable :: ctfmats(:,:,:)        !< expand set of CTF matrices (for efficient parallel exec)
     real(sp),            allocatable :: ref_optlp(:,:)        !< references optimal filter
     real(sp),            allocatable :: pssnr_filt(:,:)       !< filter for particle ssnr
-    real(dp),            allocatable :: bfacweights4shift(:)  !< b-factor weights for shift serach
     complex(sp),         allocatable :: pfts_refs_even(:,:,:) !< 3D complex matrix of polar reference sections (nrefs,pftsz,nk), even
     complex(sp),         allocatable :: pfts_refs_odd(:,:,:)  !< -"-, odd
     complex(sp),         allocatable :: pfts_drefs_even(:,:,:,:) !< derivatives w.r.t. orientation angles of 3D complex matrices
@@ -205,7 +204,6 @@ end type polarft_corrcalc
 
 ! CLASS PARAMETERS/VARIABLES
 complex(sp), parameter           :: zero            = cmplx(0.,0.) !< just a complex zero
-real(dp),    parameter           :: bfac4shift      = 50.d0
 integer,     parameter           :: FFTW_USE_WISDOM = 16
 class(polarft_corrcalc), pointer :: pftcc_glob
 
@@ -222,7 +220,6 @@ contains
         character(kind=c_char, len=:), allocatable :: fft_wisdoms_fname ! FFTW wisdoms (per part or suffer I/O lag)
         integer             :: local_stat,irot, k, ithr, i, ik, cnt
         logical             :: even_dims, test(2)
-        real(dp)            :: spafreq
         real(sp)            :: ang
         integer(kind=c_int) :: wsdm_ret
         ! kill possibly pre-existing object
@@ -327,8 +324,7 @@ contains
                  &self%pfts_ptcls(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2),1:self%nptcls),&
                  &self%sqsums_ptcls(1:self%nptcls),self%fftdat(params_glob%nthr),self%fft_carray(params_glob%nthr),&
                  &self%fftdat_ptcls(1:self%nptcls,params_glob%kfromto(1):params_glob%kfromto(2)),&
-                 &self%heap_vars(params_glob%nthr),self%bfacweights4shift(params_glob%kfromto(1):params_glob%kfromto(2)),&
-                 &stat=alloc_stat)
+                 &self%heap_vars(params_glob%nthr), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('shared arrays; new; simple_polarft_corrcalc')
         local_stat=0
         do ithr=1,params_glob%nthr
@@ -396,11 +392,6 @@ contains
                 call c_f_pointer(self%fftdat_ptcls(i,ik)%p_re, self%fftdat_ptcls(i,ik)%re, [self%pftsz])
                 call c_f_pointer(self%fftdat_ptcls(i,ik)%p_im, self%fftdat_ptcls(i,ik)%im, [self%pftsz])
             end do
-        end do
-        ! b-factor weights for shift search
-        do ik = params_glob%kfromto(1),params_glob%kfromto(2)
-            spafreq = real(ik,dp) / real(self%ldim(1),dp)
-            self%bfacweights4shift(ik) = dexp(-bfac4shift/4.d0*spafreq*spafreq)
         end do
         ! FFTW3 wisdoms file
         if( params_glob%l_distr_exec )then
@@ -1257,8 +1248,7 @@ contains
         integer,                 intent(in)    :: i, irot
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         integer     :: rot, k
-        real(sp)    :: euclid
-        complex(sp) :: tmp
+        real(sp)    :: euclid, tmp
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
@@ -1285,28 +1275,27 @@ contains
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i, irot
         complex(dp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        integer     :: rot, k
-        real(dp)    :: euclid
-        complex(dp) :: tmp
+        integer  :: rot, k
+        real(dp) :: euclid, tmp
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
             rot = irot
         end if
-        euclid = 1._dp
+        euclid = 1.d0
         do k = params_glob%kfromto(1), params_glob%kstop
-        if( irot == 1 )then
+            if( irot == 1 )then
                 tmp =       sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
-        else if( irot <= self%pftsz )then
+            else if( irot <= self%pftsz )then
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - self%pfts_ptcls(rot:self%pftsz,k,i)))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - conjg(self%pfts_ptcls(1:rot-1,k,i))))
-        else if( irot == self%pftsz + 1 )then
+            else if( irot == self%pftsz + 1 )then
                 tmp = sum(csq(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
-        else
+            else
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
-        end if
-            euclid = euclid - tmp / ( 2._dp * self%sigma2_noise(k, i))
+            end if
+            euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, i))
         end do
     end function calc_euclid_for_rot_8
 
@@ -2345,7 +2334,7 @@ contains
             deallocate( self%sqsums_ptcls, self%angtab, self%argtransf,&
                 &self%polar, self%pfts_refs_even, self%pfts_refs_odd, self%pfts_drefs_even, self%pfts_drefs_odd,&
                 self%pfts_ptcls, self%fft_factors, self%fftdat, self%fftdat_ptcls, self%fft_carray,&
-                &self%iseven, self%pinds, self%heap_vars, self%bfacweights4shift)
+                &self%iseven, self%pinds, self%heap_vars)
             call fftwf_destroy_plan(self%plan_bwd)
             call fftwf_destroy_plan(self%plan_fwd_1)
             call fftwf_destroy_plan(self%plan_fwd_2)
