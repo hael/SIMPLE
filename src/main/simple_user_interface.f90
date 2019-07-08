@@ -2315,7 +2315,7 @@ contains
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         call preprocess_stream%set_input('srch_ctrls',11, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess_stream%set_input('srch_ctrls',12, pgrp)
-        preprocess_stream%srch_ctrls(13)%required = .false.
+        preprocess_stream%srch_ctrls(12)%required = .false.
         call preprocess_stream%set_input('srch_ctrls',13, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls',14, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         ! filter controls

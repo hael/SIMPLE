@@ -16,21 +16,20 @@ private
 
 character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
 real,                  parameter :: TOL      = 1.e-5
-integer,               parameter :: NPATCH   = 5, IARES = 5, NSTEPS = 200, POLYDIM = 6
+integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 6
 
 type ctf_estimate_fit
     private
     class(image),    pointer  :: micrograph
     type(image), allocatable  :: tiles(:,:)              ! for storing all tiles used to build power spectra
-    type(image)               :: pspec_patch(NPATCH,NPATCH)   ! patches micrograph powerspec
+    type(image), allocatable  :: pspec_patch(:,:)   ! patches micrograph powerspec
     type(image)               :: pspec                   ! all micrograph powerspec
     type(image)               :: pspec_ctf               ! CTF powerspec
     type(image)               :: pspec_ctf_roavg         ! rotationally averaged CTF powerspec
     type(image)               :: pspec_roavg             ! rotationally averaged all micrograph powerspec
     type(ctf)                 :: tfun                    ! transfer function object
     type(ctfparams)           :: parms                   ! for storing ctf parameters
-    type(ctfparams)           :: parms_patch(NPATCH,NPATCH) ! for storing patch ctf parameters
-    type(ctf_estimate_cost4Dcont) :: costcont_patch(NPATCH,NPATCH) ! patch continuous optimization objects
+    type(ctfparams), allocatable  :: parms_patch(:,:) ! for storing patch ctf parameters
     type(ctf_estimate_cost2D)     :: cost2D                        ! 2D discrete optimization object
     type(ctf_estimate_cost4Dcont) :: costcont                      ! 4D continuous optimization object
     real,    allocatable      :: roavg_spec1d(:)         ! 1D rotational average spectrum
@@ -38,7 +37,7 @@ type ctf_estimate_fit
     integer, allocatable      :: tiles_centers(:,:,:)
     logical, allocatable      :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
     real                      :: polyx(POLYDIM), polyy(POLYDIM)
-    integer                   :: centers(NPATCH,NPATCH,2)
+    integer, allocatable      :: centers(:,:,:)
     real                      :: smpd         = 0.
     real                      :: df_lims(2)   = [0.3,5.0]! defocus range
     real                      :: df_step      = 0.05     ! defocus step for grid search
@@ -50,7 +49,8 @@ type ctf_estimate_fit
     real                      :: ctfres       = -1.
     integer                   :: box          = 0        ! box size
     integer                   :: ntiles(2)      = 0        ! # tiles along x/y
-    integer                   :: npatch       = NPATCH*NPATCH
+    integer                   :: ntotpatch    = 0
+    integer                   :: npatches(2)  = 0
     integer                   :: flims(3,2)   = 0        ! fourier dimensions
     integer                   :: flims1d(2)   = 0        ! fourier dimensions
     integer                   :: freslims1d(2)= 0        ! fourier dimensions
@@ -68,7 +68,7 @@ contains
     procedure          :: get_pspec
     procedure          :: get_ctfres
     ! CTF fitting
-    procedure, private :: gen_centers
+    !procedure, private :: gen_centers
     procedure, private :: gen_resmsk
     procedure, private :: gen_tiles
     procedure          :: fit
@@ -136,15 +136,42 @@ contains
         self%flims1d    = [0,maxval(abs(self%flims(1:2,:)))]
         self%freslims1d = [self%pspec%get_find(self%hp),self%pspec%get_find(self%lp)]
         allocate(self%roavg_spec1d(self%flims1d(1):self%flims1d(2)),source=0.)
-        ! init patches power spectra images
-        call self%gen_centers
-        do i=1,NPATCH
-            do j=1,NPATCH
-                call self%pspec_patch(i,j)%new(self%ldim_box, self%smpd)
-            enddo
-        enddo
         ! generate windows
         call self%gen_tiles
+        ! init patches power spectra images
+        if( all(self%ntiles>2) )then
+            if( is_even(self%ntiles(1)) )then
+                self%npatches(1) = self%ntiles(1)/2
+            else
+                self%npatches(1) = (self%ntiles(1)-1)/2
+            endif
+            if( is_even(self%ntiles(2)) )then
+                self%npatches(2) = self%ntiles(2)/2
+            else
+                self%npatches(2) = (self%ntiles(2)-1)/2
+            endif
+            allocate(self%pspec_patch(self%npatches(1),self%npatches(2)),&
+                &self%centers(self%npatches(1),self%npatches(2),2),&
+                &self%parms_patch(self%npatches(1),self%npatches(2)))
+            do i = 1,self%npatches(1)
+                do j = 1,self%npatches(2)
+                    call self%pspec_patch(i,j)%new(self%ldim_box, self%smpd)
+                    if( is_even(self%ntiles(1)) )then
+                        self%centers(i,j,1) = nint(0.5*(self%tiles_centers(2*i-1,1,1)+self%tiles_centers(2*i,1,1)))
+                    else
+                        self%centers(i,j,1) = self%tiles_centers(2*i,1,1)
+                    endif
+                    if( is_even(self%ntiles(2)) )then
+                        self%centers(i,j,2) = nint(0.5*(self%tiles_centers(1,2*j-1,2)+self%tiles_centers(1,2*j,2)))
+                    else
+                        self%centers(i,j,2) = self%tiles_centers(1,2*j,2)
+                    endif
+                enddo
+            enddo
+            self%ntotpatch = product(self%npatches)
+        else
+            self%ntotpatch = 0
+        endif
         ! search related
         if( dfrange(1) < dfrange(2) )then
             self%df_lims = dfrange
@@ -286,7 +313,6 @@ contains
         ! 3/4D refinement of grid solution
         call self%refine
         call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
-        print *,'out',self%parms%dfx,self%parms%dfy,self%parms%angast,self%parms%phshift
         ! calculate CTF stats
         call self%calc_ctfscore
         call self%calc_ctfres
@@ -301,20 +327,20 @@ contains
     !>  Performs patch based refinement
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real    :: limits(2,2), cc, cc_sum
+        type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
+        real    :: limits(2,2), cc
         integer :: pi,pj
+        if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
         limits(2,2) = min(self%df_lims(2),self%parms%dfy+0.5)
         ! generate spectrum
         call self%mic2spec_patch
-        ! normalize, minimize, clean
-        cc_sum = 0.
         !$omp parallel do collapse(2) default(shared) private(pi,pj,cc) &
-        !$omp schedule(static) proc_bind(close) reduction(+:cc_sum)
-        do pi=1,NPATCH
-            do pj=1,NPATCH
+        !$omp schedule(static) proc_bind(close)
+        do pi=1,self%npatches(1)
+            do pj=1,self%npatches(2)
                 ! init
                 self%parms_patch(pi,pj)%kv      = self%parms%kv
                 self%parms_patch(pi,pj)%cs      = self%parms%cs
@@ -326,22 +352,15 @@ contains
                 self%parms_patch(pi,pj)%phshift = self%parms%phshift
                 self%parms_patch(pi,pj)%l_phaseplate = self%parms%l_phaseplate
                 call self%norm_pspec(self%pspec_patch(pi,pj))
-                call self%costcont_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
+                call costcont_patch(pi,pj)%init(self%pspec_patch(pi,pj), self%parms_patch(pi,pj),&
                     &self%inds_msk, 2, limits, self%astigtol)
                 ! optimization
-                call self%costcont_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
-                cc_sum = cc_sum + cc
+                call costcont_patch(pi,pj)%minimize(self%parms_patch(pi,pj), cc)
                 ! cleanup
-                call self%costcont_patch(pi,pj)%kill
+                call costcont_patch(pi,pj)%kill
             enddo
         enddo
         !$omp end parallel do
-        do pi=1,NPATCH
-            do pj=1,NPATCH
-            enddo
-        enddo
-        self%cc_fit = cc_sum/real(self%npatch)
-        ! polynomial fit
         call self%fit_polynomial
     end subroutine fit_patches
 
@@ -350,7 +369,7 @@ contains
     subroutine mic2spec( self, spec )
         class(ctf_estimate_fit), intent(inout) :: self
         class(image),            intent(inout) :: spec
-        integer     :: i,j,n, ldim(3)
+        integer     :: i,j,ldim(3)
         ldim = spec%get_ldim()
         if( ldim(1)/=self%box .or. ldim(2)/= self%box .or. ldim(3)/=1 )then
             THROW_HARD('Incorrect dimensions; mic2spec')
@@ -361,51 +380,10 @@ contains
                 call spec%add(self%tiles(i,j))
             end do
         end do
-        n = product(self%ntiles)
-        call spec%div(real(n))
+        call spec%div(real(product(self%ntiles)))
         call spec%dampen_pspec_central_cross
         call self%subtr_backgr(spec)
     end subroutine mic2spec
-
-    subroutine gen_centers( self )
-        class(ctf_estimate_fit), intent(inout) :: self
-        integer :: lims_patches(NPATCH,NPATCH,2,2)
-        integer :: i,j, ldim_patch(2)
-        real    :: cen, dist
-        ldim_patch(1) = round2even(real(self%ldim_mic(1))/real(NPATCH))
-        ldim_patch(2) = round2even(real(self%ldim_mic(2))/real(NPATCH))
-        ! along X
-        ! limits & center first patches
-        lims_patches(1,:,1,1) = 1
-        lims_patches(1,:,1,2) = ldim_patch(1)
-        self%centers(1,:,1)  = sum(lims_patches(1,:,1,1:2),dim=2) / 2
-        ! limits & center last patches
-        lims_patches(NPATCH,:,1,1) = self%ldim_mic(1)-ldim_patch(1)+1
-        lims_patches(NPATCH,:,1,2) = self%ldim_mic(1)
-        self%centers(NPATCH,:,1)   = sum(lims_patches(NPATCH,:,1,1:2),dim=2) / 2
-        ! adjust other patch centers to be evenly spread
-        dist = real(self%centers(NPATCH,1,1)-self%centers(1,1,1)+1) / real(NPATCH-1)
-        do i=2,NPATCH-1
-            cen = self%centers(1,1,1) + real(i-1)*dist
-            lims_patches(i,:,1,1) = ceiling(cen) - ldim_patch(1)/2
-            lims_patches(i,:,1,2) = lims_patches(i,:,1,1) + ldim_patch(1) - 1
-            self%centers(i,:,1)   = sum(lims_patches(i,:,1,1:2),dim=2) / 2
-        enddo
-        ! along Y
-        lims_patches(:,1,2,1) = 1
-        lims_patches(:,1,2,2) = ldim_patch(2)
-        self%centers(:,1,2)  = sum(lims_patches(:,1,2,1:2),dim=2) / 2
-        lims_patches(:,NPATCH,2,1) = self%ldim_mic(2)-ldim_patch(2)+1
-        lims_patches(:,NPATCH,2,2) = self%ldim_mic(2)
-        self%centers(:,NPATCH,2)  = sum(lims_patches(:,NPATCH,2,1:2),dim=2) / 2
-        dist = real(self%centers(1,NPATCH,2)-self%centers(1,1,2)+1) / real(NPATCH-1)
-        do j=2,NPATCH-1
-            cen = self%centers(1,1,2) + real(j-1)*dist
-            lims_patches(:,j,2,1) = ceiling(cen) - ldim_patch(2)/2
-            lims_patches(:,j,2,2) = lims_patches(:,j,2,1) + ldim_patch(2) - 1
-            self%centers(:,j,2)  = sum(lims_patches(:,j,2,1:2),dim=2) /2
-        enddo
-    end subroutine gen_centers
 
     !> mic2spec calculates the average powerspectrum over a micrograph
     !!          the resulting spectrum has dampened central cross and subtracted background
@@ -415,15 +393,15 @@ contains
         integer     :: pi,pj, i,j
         !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
         !$omp private(i,j,pi,pj,w,sumw,dist)
-        do pi = 1,NPATCH
-            do pj = 1,NPATCH
+        do pi = 1,self%npatches(1)
+            do pj = 1,self%npatches(2)
                 sumw = 0.
                 self%pspec_patch(pi,pj) = 0.
                 do i = 1,self%ntiles(1)
                     do j = 1,self%ntiles(2)
                         dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
-                        w    = exp(-0.5 *(dist/real(self%box)*2.)**2.)
-                        if( w < 1.e-3 ) cycle
+                        w    = exp(-1.*(dist/real(self%box))**2.)
+                        if( w < 5.e-3 ) cycle
                         sumw = sumw + w
                         call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
                     enddo
@@ -555,7 +533,7 @@ contains
         l_msk = self%cc_msk
         ! putting back central cross for display
         logicen = self%box/2+1
-        l_msk(logicen:logicen+self%freslims1d(2),logicen,1) = .true.
+        l_msk(logicen:min(self%box,logicen+self%freslims1d(2)),logicen,1) = .true.
         call self%pspec%before_after(self%pspec_ctf, pspec_half_n_half, l_msk)
         call pspec_half_n_half%scale_pspec4viz
         call pspec_half_n_half%write_jpg(trim(diagfname), norm=.true., quality=92)
@@ -658,7 +636,6 @@ contains
         !$omp end parallel do
         prmat(1:self%box,1:self%box,1) = prmat(1:self%box,1:self%box,1) - rplane(:,:)
     end subroutine subtr_backgr
-
 
     !>  \brief  is for making a |CTF| spectrum image
     subroutine ctf2pspecimg( self, img, dfx, dfy, angast, add_phshift )
@@ -1022,12 +999,12 @@ contains
     ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real    :: x(2,self%npatch), yx(self%npatch), yy(self%npatch), sig(self%npatch)
+        real    :: x(2,self%ntotpatch), yx(self%ntotpatch), yy(self%ntotpatch), sig(self%ntotpatch)
         real    :: v(POLYDIM,POLYDIM), w(POLYDIM), chi_sq
         integer :: pi,pj, cnt
         cnt = 0
-        do pi=1,NPATCH
-            do pj = 1,NPATCH
+        do pi=1,self%npatches(1)
+            do pj = 1,self%npatches(2)
                 cnt = cnt + 1
                 call self%pix2poly(real(self%centers(pi,pj,1)),real(self%centers(pi,pj,2)), x(1,cnt),x(2,cnt))
                 yx(cnt) = self%parms_patch(pi,pj)%dfx
@@ -1078,18 +1055,18 @@ contains
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
-        real, parameter       :: SCALE = 20.
+        real, parameter       :: SCALE = 15.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: center
         type(CDataPoint_type) :: p1
         character(len=STDLEN) :: titlestr
-        real                  :: msz,cx,cy,df,dfmin,dfmax,col,dfx,dfy
+        real                  :: msz,cx,cy,df,dfmin,dfmax,col,dfx,dfy,angast
         integer               :: pi,pj
         dfmin  =  huge(dfmin)
-        dfmax  =  -huge(dfmax)
-        do pi = 1, NPATCH
-            do pj = 1, NPATCH
+        dfmax  = -huge(dfmax)
+        do pi = 1, self%npatches(1)
+            do pj = 1, self%npatches(2)
                 df    = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
                 dfmin = min(dfmin,df)
                 dfmax = max(dfmax,df)
@@ -1102,8 +1079,8 @@ contains
         call CPlot2D__SetYAxisSize(plot2D, 600._c_double)
         call CPlot2D__SetDrawLegend(plot2D, C_FALSE)
         call CPlot2D__SetFlipY(plot2D, C_TRUE)
-        do pi = 1,NPATCH
-            do pj = 1,NPATCH
+        do pi = 1,self%npatches(1)
+            do pj = 1,self%npatches(2)
                 ! center
                 cx = real(self%centers(pi,pj,1))
                 cy = real(self%centers(pi,pj,2))
@@ -1118,9 +1095,23 @@ contains
                 endif
                 call CDataSet__new(center)
                 call CDataSet__SetDrawMarker(center, C_TRUE)
-                call CDataSet__SetMarkerSize(center, real(msz, c_double))
-                call CDataSet__SetDatasetColor(center, real(col, c_double),1.0_c_double,0.0_c_double)
-                call CDataPoint__new2(real(cx-50., c_double), real(cy-50., c_double), p1)
+                call CDataSet__SetMarkerSize(center, real(msz,c_double))
+                call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
+                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
+                call CDataPoint__delete(p1)
+                call CPlot2D__AddDataSet(plot2D, center)
+                call CDataSet__delete(center)
+                ! astigmatism
+                angast = deg2rad(self%parms_patch(pi,pj)%angast)
+                call CDataSet__new(center)
+                call CDataSet__SetDrawMarker(center, C_FALSE)
+                call CDataSet__SetMarkerSize(center,3.0_c_double)
+                call CDataSet__SetDatasetColor(center,0.0_c_double,0.0_c_double,0.0_c_double)
+                call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
+                call CDataPoint__delete(p1)
+                call CDataPoint__new2(real(cx+msz*cos(angast),c_double), -real(cy+msz*sin(angast),c_double),p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
@@ -1136,8 +1127,8 @@ contains
                 ! call CDataSet__new(center)
                 ! call CDataSet__SetDrawMarker(center, C_TRUE)
                 ! call CDataSet__SetMarkerSize(center, real(msz, c_double))
-                ! call CDataSet__SetDatasetColor(center, 0.0_c_double,real(col, c_double),0.0_c_double)
-                ! call CDataPoint__new2(real(cx+50., c_double), real(cy+50., c_double), p1)
+                ! call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
+                ! call CDataPoint__new2(real(cx, c_double), real(cy+100., c_double), p1)
                 ! call CDataSet__AddDataPoint(center, p1)
                 ! call CDataPoint__delete(p1)
                 ! call CPlot2D__AddDataSet(plot2D, center)
@@ -1249,12 +1240,16 @@ contains
             enddo
             deallocate(self%tiles,self%tiles_centers)
         endif
-        do i = 1,NPATCH
-            do j = 1,NPATCH
-                call self%pspec_patch(i,j)%kill
-                call self%costcont_patch(i,j)%kill
+        if( allocated(self%pspec_patch) )then
+            do i = 1,self%npatches(1)
+                do j = 1,self%npatches(2)
+                    call self%pspec_patch(i,j)%kill
+                enddo
             enddo
-        enddo
+            deallocate(self%pspec_patch,self%centers,self%parms_patch)
+            self%ntotpatch = 0
+            self%npatches  = 0
+        endif
         self%exists = .false.
     end subroutine kill
 
