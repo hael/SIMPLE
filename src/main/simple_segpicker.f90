@@ -94,7 +94,7 @@ contains
         real        :: ave, sdev, maxv, minv
         real        :: thresh(1)
         ! 0) Reading and saving original micrograph
-        call read_micrograph(self%pickername, smpd = self%smpd)
+        call read_micrograph(self%pickername, smpd=self%smpd)
         ! 1) Shrink and high pass filtering
         call shrink_micrograph(SHRINK, self%ldim_shrunken, self%smpd_shrunken)
         self%hp_box =  4.*self%max_rad+2.*self%max_rad

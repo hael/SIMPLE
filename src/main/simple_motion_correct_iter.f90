@@ -46,9 +46,9 @@ contains
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
         integer :: ldim(3), ldim_thumb(3)
-        real    :: scale, var
+        real    :: scale, var, doserateperframe
         logical :: err
-        integer :: i, iframe
+        integer :: i, iframe, nframes
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -85,6 +85,7 @@ contains
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
+        nframes = size(shifts(:,1))
         call moment(shifts(:,1), shstats(1)%avg, shstats(1)%sdev, var, err)
         call moment(shifts(:,2), shstats(2)%avg, shstats(2)%sdev, var, err)
         call orientation%set('xavg',  shstats(1)%avg)
@@ -123,7 +124,13 @@ contains
         end if
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(ctfvars%smpd, dp))
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(params_glob%dose_rate, dp))
+        if( params_glob%l_dose_weight )then
+            doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
+            doserateperframe = doserateperframe / real(nframes)             ! per frame
+        else
+            doserateperframe = 0.
+        endif
+        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
         call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_START_FRAME, 1)
@@ -132,7 +139,7 @@ contains
         call starfile_table__clear(mc_starfile)
         call starfile_table__setIsList(mc_starfile, .false.)
         call starfile_table__setName(mc_starfile, "global_shift")
-        do iframe = 1, size(shifts_toplot,1)
+        do iframe = 1, nframes
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
             call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shifts_toplot(iframe, 1), dp))

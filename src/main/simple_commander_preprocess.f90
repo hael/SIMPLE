@@ -540,7 +540,6 @@ contains
 
     subroutine exec_segpick( self, cline )
         use simple_segpicker, only: segpicker
-        use simple_tvfilter, only : tvfilter
         class(segpick_commander), intent(inout) :: self
         class(cmdline),           intent(inout) :: cline !< command line input
         character(len=:), allocatable :: output_dir

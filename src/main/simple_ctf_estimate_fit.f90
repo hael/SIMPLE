@@ -16,7 +16,7 @@ private
 
 character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
 real,                  parameter :: TOL      = 1.e-5
-integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 6
+integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 10
 
 type ctf_estimate_fit
     private
@@ -36,7 +36,7 @@ type ctf_estimate_fit
     integer, allocatable      :: inds_msk(:,:)           ! indices of pixels within resolution mask
     integer, allocatable      :: tiles_centers(:,:,:)
     logical, allocatable      :: cc_msk(:,:,:)           ! redundant (including Friedel symmetry) resolution mask
-    real                      :: polyx(POLYDIM), polyy(POLYDIM)
+    real(dp)                  :: polyx(POLYDIM), polyy(POLYDIM)
     integer, allocatable      :: centers(:,:,:)
     real                      :: smpd         = 0.
     real                      :: df_lims(2)   = [0.3,5.0]! defocus range
@@ -217,8 +217,8 @@ contains
         self%ldim_mic(3) = 1
         ! polynomes
         do i = 1,POLYDIM
-            self%polyx(i) = os%get(2,'px'//int2str(i))
-            self%polyy(i) = os%get(3,'py'//int2str(i))
+            self%polyx(i) = real(os%get(2,'px'//int2str(i)),dp)
+            self%polyy(i) = real(os%get(3,'py'//int2str(i)),dp)
         enddo
         ! clean
         call os%kill
@@ -999,39 +999,40 @@ contains
     ! fit dfx/y to 2 polynomials
     subroutine fit_polynomial( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        real    :: x(2,self%ntotpatch), yx(self%ntotpatch), yy(self%ntotpatch), sig(self%ntotpatch)
-        real    :: v(POLYDIM,POLYDIM), w(POLYDIM), chi_sq
-        integer :: pi,pj, cnt
+        real(dp) :: x(2,self%ntotpatch), yx(self%ntotpatch), yy(self%ntotpatch), sig(self%ntotpatch)
+        real(dp) :: v(POLYDIM,POLYDIM), w(POLYDIM), chi_sq
+        integer  :: pi,pj, cnt
         cnt = 0
         do pi=1,self%npatches(1)
             do pj = 1,self%npatches(2)
                 cnt = cnt + 1
-                call self%pix2poly(real(self%centers(pi,pj,1)),real(self%centers(pi,pj,2)), x(1,cnt),x(2,cnt))
-                yx(cnt) = self%parms_patch(pi,pj)%dfx
-                yy(cnt) = self%parms_patch(pi,pj)%dfy
+                call self%pix2poly(real(self%centers(pi,pj,1),dp),real(self%centers(pi,pj,2),dp),&
+                    &x(1,cnt),x(2,cnt))
+                yx(cnt) = real(self%parms_patch(pi,pj)%dfx,dp)
+                yy(cnt) = real(self%parms_patch(pi,pj)%dfy,dp)
             enddo
         enddo
-        sig = 1.
+        sig = 1.d0
         call svd_multifit(x,yx,sig,self%polyx,v,w,chi_sq,poly)
         call svd_multifit(x,yy,sig,self%polyy,v,w,chi_sq,poly)
     end subroutine fit_polynomial
 
     function poly(p,n) result( res )
-        real,    intent(in)  :: p(:)
-        integer, intent(in)  :: n
-        real :: res(n), x,y
+        real(dp), intent(in) :: p(:)
+        integer,  intent(in) :: n
+        real(dp) :: res(n), x,y
         x = p(1)
         y = p(2)
-        res = [1., x, x*x, y, y*y, x*y]
+        res = [1.d0, x, x*x, x*x*x, y, y*y, y*y*y, x*y, x*y*y, x*x*y]
     end function poly
 
     ! real space coordinates to polynomial coordinates
     subroutine pix2poly( self, xin, yin, xout, yout )
         class(ctf_estimate_fit), intent(inout) :: self
-        real,                    intent(in)    :: xin,yin
-        real,                    intent(out)   :: xout,yout
-        xout = (xin-1.) / real(self%ldim_mic(1)-1) - 0.5
-        yout = (yin-1.) / real(self%ldim_mic(2)-1) - 0.5
+        real(dp),                intent(in)    :: xin,yin
+        real(dp),                intent(out)   :: xout,yout
+        xout = (xin-1.d0) / real(self%ldim_mic(1)-1,dp) - 0.5d0
+        yout = (yin-1.d0) / real(self%ldim_mic(2)-1,dp) - 0.5d0
     end subroutine pix2poly
 
     ! evaluate fitted defocus
@@ -1039,15 +1040,15 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         real,                    intent(in)    :: xin,yin
         real,                    intent(out)   :: dfx,dfy
-        real :: xp,yp
-        call self%pix2poly(real(xin),real(yin), xp,yp)
-        dfx = poly2val(self%polyx,xp,yp)
-        dfy = poly2val(self%polyy,xp,yp)
+        real(dp) :: xp,yp
+        call self%pix2poly(real(xin,dp),real(yin,dp), xp,yp)
+        dfx = real(poly2val(self%polyx,xp,yp))
+        dfy = real(poly2val(self%polyy,xp,yp))
         contains
 
-            real function poly2val(p,x,y)
-                real, intent(in) :: p(POLYDIM),x,y
-                poly2val = dot_product(p, [1., x, x*x, y, y*y, x*y])
+            real(dp) function poly2val(p,x,y)
+                real(dp), intent(in) :: p(POLYDIM),x,y
+                poly2val = dot_product(p, [1.d0, x, x*x, x*x*x, y, y*y, y*y*y, x*y, x*y*y, x*x*y])
             end function poly2val
 
     end subroutine pix2polyvals
@@ -1055,7 +1056,7 @@ contains
     subroutine plot_parms( self, fname )
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: fname
-        real, parameter       :: SCALE = 15.
+        real, parameter       :: SCALE = 10.
         type(str4arr)         :: title
         type(CPlot2D_type)    :: plot2D
         type(CDataSet_type)   :: center
@@ -1111,7 +1112,7 @@ contains
                 call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
-                call CDataPoint__new2(real(cx+msz*cos(angast),c_double), -real(cy+msz*sin(angast),c_double),p1)
+                call CDataPoint__new2(real(cx+2.*msz*cos(angast),c_double), real(cy+2.*msz*sin(angast),c_double),p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
@@ -1168,8 +1169,8 @@ contains
             call os%set(1,'phaseplate','no')
         endif
         do i = 1, POLYDIM
-            call os%set(2,'px'//int2str(i),self%polyx(i))
-            call os%set(3,'py'//int2str(i),self%polyy(i))
+            call os%set(2,'px'//int2str(i),real(self%polyx(i)))
+            call os%set(3,'py'//int2str(i),real(self%polyy(i)))
         enddo
         call os%write(fname)
         call os%kill

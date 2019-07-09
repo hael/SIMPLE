@@ -62,11 +62,9 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         else
             call seg_picker%preprocess_mic(params_glob%detector)
         endif
-        ! call segpick%extract_particles()
         ! call segpick%print_info()
         call seg_picker%kill
     endif
-
 end subroutine iterate
 
 end module simple_picker_iter

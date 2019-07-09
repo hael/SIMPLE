@@ -683,11 +683,14 @@ contains
         type(cmdline)    :: cline_make_pickrefs
         type(qsys_env)   :: qenv
         type(chash)      :: job_descr
+        logical :: use_segmentation
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')
         endif
-        if( .not.cline%defined('refs') .and. .not.cline%defined('vol1') )then
-            THROW_HARD('one of REFS and VOL1 must be provided!')
+        use_segmentation = .true.
+        if( cline%defined('refs') .or. cline%defined('vol1') ) use_segmentation = .false.
+        if( use_segmentation )then
+            THROW_HARD('segmentation-based picking not active yet')
         endif
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'mic')
@@ -705,12 +708,14 @@ contains
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)
         ! prepares picking references
-        cline_make_pickrefs = cline
-        call cline_make_pickrefs%set('prg','make_pickrefs')
-        call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
-        call cline%set('refs', trim(PICKREFS)//params%ext)
-        call cline%delete('vol1')
-        write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        if( .not.use_segmentation )then
+            cline_make_pickrefs = cline
+            call cline_make_pickrefs%set('prg','make_pickrefs')
+            call qenv%exec_simple_prg_in_queue(cline_make_pickrefs, 'MAKE_PICKREFS_FINISHED')
+            call cline%set('refs', trim(PICKREFS)//params%ext)
+            call cline%delete('vol1')
+            write(logfhandle,'(A)')'>>> PREPARED PICKING TEMPLATES'
+        endif
         ! prepare job description
         call cline%gen_job_descr(job_descr)
         ! schedule & clean
