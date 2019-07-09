@@ -124,7 +124,7 @@ contains
         integer  :: iter
         real     :: cxy(3)
         logical  :: callback_convgd
-        real     :: opt_lims(POLYDIM2,2)
+        real     :: opt_lims(2*(self%nframes-1),2)
         real     :: lowest_cost
         logical  :: convergd
         real(dp) :: tmp_shifts(self%nframes, 2)
@@ -147,12 +147,15 @@ contains
         self%opt_shifts = 0.
         opt_lims(:,1) = -self%trs
         opt_lims(:,2) =  self%trs
-        call ospec%specify('lbfgsb', POLYDIM2, ftol=self%ftol, gtol=self%gtol, limits=opt_lims, factr=self%factr, pgtol=self%pgtol)
+        call ospec%specify('lbfgsb', (self%nframes-1)*2, ftol=self%ftol, gtol=self%gtol, limits=opt_lims, factr=self%factr, pgtol=self%pgtol)
         write (*,*) 'specifying: ftol=', self%ftol, 'gtol=', self%gtol, 'factr=', self%factr, 'pgtol=', self%pgtol
         call ofac%new(ospec, nlopt)
-        call ospec%set_costfun_8(motion_align_iso_polyn_direct_cost_wrapper)
-        call ospec%set_gcostfun_8(motion_align_iso_polyn_direct_gcost_wrapper)
-        call ospec%set_fdfcostfun_8(motion_align_iso_polyn_direct_fdf_wrapper)
+        call ospec%set_costfun_8(motion_align_iso_direct_cost_wrapper)
+        call ospec%set_gcostfun_8(motion_align_iso_direct_gcost_wrapper)
+        call ospec%set_fdfcostfun_8(motion_align_iso_direct_fdf_wrapper)
+        !call ospec%set_costfun_8(motion_align_iso_polyn_direct_cost_wrapper)
+        !call ospec%set_gcostfun_8(motion_align_iso_polyn_direct_gcost_wrapper)
+        !call ospec%set_fdfcostfun_8(motion_align_iso_polyn_direct_fdf_wrapper)
         if (alloc_stat.ne.0) call allocchk('align 1; motion_align_iso_polyn_direct_align')
         convergd = .false.
         ospec%x_8 = 0._dp
@@ -160,9 +163,9 @@ contains
         do while (.not. convergd)
             call nlopt%minimize(ospec, self, lowest_cost)
             iter = iter + 1
-            call self%coeffs_to_shifts(ospec%x_8, tmp_shifts)
+            call self%vec_to_shifts(ospec%x_8, tmp_shifts)!call self%coeffs_to_shifts(ospec%x_8, tmp_shifts)
             self%opt_shifts = - real(tmp_shifts)
-            self%corr       = - real(self%motion_align_iso_polyn_direct_cost(ospec%x_8) / real(self%nframes,dp))
+            self%corr       = - real(self%motion_align_iso_direct_cost(ospec%x_8) / real(self%nframes,dp))
             if (associated(self%callback)) then
                 call self%callback(callback_ptr, self, convergd)
             else
