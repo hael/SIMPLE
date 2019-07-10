@@ -315,7 +315,8 @@ contains
 
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,scale_project_distr_commander
+        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,&
+            &scale_project_distr_commander
         use simple_commander_cluster2D,    only: rank_cavgs_commander
         use simple_commander_imgproc,      only: scale_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
@@ -340,9 +341,10 @@ contains
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
-        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
+        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc, projfile_prune
         real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
+        integer  :: nptcls_sel
         logical  :: scaling
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
@@ -350,6 +352,7 @@ contains
         if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
         if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+        call cline%delete('clip')
         ! master parameters
         call params%new(cline)
         nparts = params%nparts
@@ -367,6 +370,23 @@ contains
             ! removes previous cluster2D solution (states are preserved)
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
+        endif
+        ! re-extraction
+        nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
+        if( (nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())))&
+            &.and. (spproj%get_nintgs() > 0) .and. (spproj%get_nstks() > 0) )then
+            call cline%printline
+            write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
+            projfile_prune = 'autoprune'//trim(METADATA_EXT)
+            call spproj%prune_project(cline,projfile_prune,'./autoprune/')
+            call spproj%kill
+            status = simple_rename(projfile_prune,params%projfile)
+            call spproj%read_segment('projinfo',params%projfile)
+            call spproj%projinfo%delete_entry('projname')
+            call spproj%update_projinfo(cline)
+            call spproj%write_segment_inside('projinfo',params%projfile)
+            call spproj%read(params%projfile)
+            params%nptcls = nptcls_sel
         endif
         ! refinement flag
         if(.not.cline%defined('refine')) call cline%set('refine','snhc')

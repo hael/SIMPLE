@@ -67,8 +67,8 @@ contains
         ! calc average
         ave = sum(data)/nr
         ! calc sum of devs and sum of devs squared
-        ep_dp = 0.
-        var_dp = 0.
+        ep_dp  = 0.d0
+        var_dp = 0.d0
         !$omp parallel do default(shared) private(i,dev) schedule(static)&
         !$omp reduction(+:ep_dp,var_dp) proc_bind(close)
         do i=1,n

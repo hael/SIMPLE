@@ -124,11 +124,10 @@ contains
         end if
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.0_dp)
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(ctfvars%smpd, dp))
+        doserateperframe = 0.
         if( params_glob%l_dose_weight )then
             doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
             doserateperframe = doserateperframe / real(nframes)             ! per frame
-        else
-            doserateperframe = 0.
         endif
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)

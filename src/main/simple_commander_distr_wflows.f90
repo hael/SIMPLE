@@ -389,7 +389,10 @@ contains
             ! removes boxfile from micrographs
             call spproj%os_mic%delete_entry(imic,'boxfile')
         enddo
-        if( nmics == 0 ) THROW_HARD('No particles to re-extract! exec_extract')
+        if( nmics == 0 )then
+            THROW_WARN('No particles to re-extract! exec_extract')
+            return
+        endif
         ! DISTRIBUTED EXTRACTION
         ! setup the environment for distributed execution
         call qenv%new(params%nparts)

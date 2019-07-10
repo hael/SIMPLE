@@ -148,9 +148,9 @@ contains
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2)
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        integer :: i, iter, iframe, nimproved, maxits_saved, lpcnt
+        integer :: i, iter, iframe, nimproved, maxits_saved
         real    :: cxy(3), hp_saved, lp_saved
-        logical :: callback_convgd
+        logical :: callback_convgd, fitshifts
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_iso: align')
         end if
@@ -189,7 +189,7 @@ contains
             if (self%maxits > 0) ftexp_srch(iframe)%ospec%maxits = self%maxits
         end do
         ! main loop
-        lpcnt = 0
+        fitshifts       = self%fitshifts
         self%corr_saved = -1.
         do iter=1,self%mitsref
             self%iter = iter
@@ -209,21 +209,15 @@ contains
             self%nimproved = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             ! updates shifts & weights
-            if( self%fitshifts )then
-                if( lpcnt >= 1 )then
-                    ! turns off fitting
-                    self%fitshifts = .false.
-                else
-                    call self%recenter_shifts(self%opt_shifts)
-                    call self%fit_polynomial
-                    do iframe = 1,self%nframes
-                        call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
-                    enddo
-                endif
+            if( fitshifts )then
+                fitshifts = .false.
+                call self%recenter_shifts(self%opt_shifts)
+                call self%fit_polynomial
+                do iframe = 1,self%nframes
+                    call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
+                enddo
             endif
-            if( .not.self%fitshifts )then
-                write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
-            endif
+            write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
             call self%recenter_shifts(self%opt_shifts)
             call self%calc_frameweights(callback_ptr)
             ! build new reference
@@ -250,7 +244,7 @@ contains
                 if (callback_convgd) exit
                 if ((abs(hp_saved-self%hp) > epsilon(hp_saved)) .or. &
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
-                    lpcnt = lpcnt + 1
+                    fitshifts = self%fitshifts
                     ! need to re-make the ftexps
                     call self%create_ftexp_objs
                     call self%calc_frameweights( callback_ptr )
@@ -649,7 +643,7 @@ contains
          contains
              real function poly2val(p,x)
                  real(dp), intent(in)    :: p(POLYDIM), x
-                 poly2val = dot_product(p, [1.d0, x, x*x, x*x*x])
+                 poly2val = real(dot_product(p, [1.d0, x, x*x, x*x*x]))
              end function poly2val
      end subroutine polynomial2shift
 
