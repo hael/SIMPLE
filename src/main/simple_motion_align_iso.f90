@@ -148,9 +148,9 @@ contains
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2)
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        integer :: i, iter, iframe, nimproved, maxits_saved
+        integer :: i, iter, iframe, nimproved, maxits_saved, lp_updates
         real    :: cxy(3), hp_saved, lp_saved
-        logical :: callback_convgd, fitshifts
+        logical :: callback_convgd, fitshifts_saved
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_iso: align')
         end if
@@ -189,7 +189,8 @@ contains
             if (self%maxits > 0) ftexp_srch(iframe)%ospec%maxits = self%maxits
         end do
         ! main loop
-        fitshifts       = self%fitshifts
+        lp_updates      = 0
+        fitshifts_saved = self%fitshifts
         self%corr_saved = -1.
         do iter=1,self%mitsref
             self%iter = iter
@@ -209,8 +210,8 @@ contains
             self%nimproved = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             ! updates shifts & weights
-            if( fitshifts )then
-                fitshifts = .false.
+            if( lp_updates >= 3 ) self%fitshifts = .false.
+            if( self%fitshifts )then
                 call self%recenter_shifts(self%opt_shifts)
                 call self%fit_polynomial
                 do iframe = 1,self%nframes
@@ -231,10 +232,10 @@ contains
             endif
             self%corrfrac = self%corr_prev / self%corr
             if (associated(self%callback)) then
-                hp_saved = self%hp
-                lp_saved = self%lp
+                hp_saved        = self%hp
+                lp_saved        = self%lp
                 callback_convgd = .false.
-                maxits_saved = self%maxits
+                maxits_saved    = self%maxits
                 call self%callback(callback_ptr, self, callback_convgd)
                 if (maxits_saved /= self%maxits) then
                     do iframe = 1, self%nframes
@@ -242,9 +243,11 @@ contains
                     end do
                 end if
                 if (callback_convgd) exit
+                self%fitshifts = .false.
                 if ((abs(hp_saved-self%hp) > epsilon(hp_saved)) .or. &
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
-                    fitshifts = self%fitshifts
+                    lp_updates     = lp_updates + 1 
+                    self%fitshifts = fitshifts_saved
                     ! need to re-make the ftexps
                     call self%create_ftexp_objs
                     call self%calc_frameweights( callback_ptr )

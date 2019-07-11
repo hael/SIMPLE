@@ -931,9 +931,8 @@ contains
         character(len=LONGSTRLEN), allocatable :: list(:)
         character(len=STDLEN),     allocatable :: state_assemble_finished(:)
         integer,                   allocatable :: state_pops(:)
-        character(len=STDLEN)     :: vol, vol_even, vol_odd, vol_iter, vol_iter_even
-        character(len=STDLEN)     :: vol_iter_odd, str, str_iter, optlp_file
-        character(len=STDLEN)     :: str_state, fsc_file
+        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, optlp_file
+        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
         character(len=LONGSTRLEN) :: volassemble_output
         real    :: corr, corr_prev, smpd
         integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
@@ -994,7 +993,6 @@ contains
         call cline_postprocess%set('mkdir',   'no')
         call cline_postprocess%set('imgkind', 'vol')
         if( trim(params%oritype).eq.'cls3D' ) call cline_postprocess%set('imgkind', 'vol_cavg')
-        call cline_volassemble%set('nthr', 0.)  ! to ensure use of all resources in assembly
         ! for parallel volassemble over states
         allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
         if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
@@ -1226,16 +1224,9 @@ contains
                         vol = trim(VOL_FBODY)//trim(str_state)//params%ext
                         if( params%refine .eq. 'snhc' )then
                             vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
-                            iostat = simple_rename( vol, vol_iter )
+                            iostat   = simple_rename( vol, vol_iter )
                         else
-                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
-                            iostat = simple_rename( vol, vol_iter )
-                            vol_even      = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
-                            vol_odd       = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
-                            vol_iter_even = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_even'//params%ext
-                            vol_iter_odd  = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//'_odd' //params%ext
-                            iostat        = simple_rename( vol_even, vol_iter_even )
-                            iostat        = simple_rename( vol_odd,  vol_iter_odd  )
+                            vol_iter = trim(vol)
                         endif
                         fsc_file   = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
                         optlp_file = ANISOLP_FBODY//trim(str_state)//params%ext
@@ -1264,6 +1255,16 @@ contains
                     call cline_postprocess%set('state', real(state))
                     if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
                     call xpostprocess%execute(cline_postprocess)
+                    ! for gui visualization
+                    if( params%refine .ne. 'snhc' )then
+                        volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
+                        call simple_copy_file(volpproc, vol_iter) ! for GUI visualization
+                        if( iter > 1 )then
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                            call del_file(vol_iter)
+                        endif
+                    endif
                 enddo
             end select
             ! CONVERGENCE

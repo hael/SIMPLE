@@ -818,8 +818,8 @@ contains
         write(logfhandle,'(A)') '>>> INITIAL 3D MODEL GENERATION WITH REFINE3D'
         write(logfhandle,'(A)') '>>>'
         call xrefine3D_distr%execute(cline_refine3D_init)
-        iter = cline_refine3D_init%get_rarg('endit')
-        call set_iter_dependencies
+        iter     = cline_refine3D_init%get_rarg('endit')
+        vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
         if( symran_before_refine )then
             call work_proj1%read_segment('ptcl3D', trim(WORK_PROJFILE))
             call se1%symrandomize(work_proj1%os_ptcl3D)
@@ -913,6 +913,7 @@ contains
         write(logfhandle,'(A)') '>>>'
         call cline_refine3D_refine%set('startit', iter + 1.)
         call xrefine3D_distr%execute(cline_refine3D_refine)
+        iter = cline_refine3D_refine%get_rarg('endit')
         ! updates shifts & deals with final volume
         call work_proj2%read_segment('ptcl3D', WORK_PROJFILE)
         if( do_autoscale )then
@@ -940,8 +941,8 @@ contains
             call xpostprocess%execute(cline_postprocess)
             call os%kill
         else
-            iter = cline_refine3D_refine%get_rarg('endit')
-            call set_iter_dependencies
+            iter     = cline_refine3D_refine%get_rarg('endit')
+            vol_iter = trim(VOL_FBODY)//trim(str_state)//params%ext
             call vol%new([orig_box,orig_box,orig_box],orig_smpd)
             call vol%read(vol_iter)
             call vol%mirror('x')
@@ -1008,12 +1009,6 @@ contains
         call simple_end('**** SIMPLE_INITIAL_3DMODEL NORMAL STOP ****')
 
         contains
-
-            subroutine set_iter_dependencies
-                character(len=3) :: str_iter
-                str_iter = int2str_pad(nint(iter),3)
-                vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//trim(str_iter)//params%ext
-            end subroutine set_iter_dependencies
 
             subroutine prep_eo_stks_refine
                 use simple_ori, only: ori

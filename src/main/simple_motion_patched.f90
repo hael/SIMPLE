@@ -932,7 +932,7 @@ contains
                     .and. self%updateres(i,j) == which_update )then
                     self%lp(i,j) = self%lp(i,j) - self%resstep
                     call align_iso%set_hp_lp(self%hp, self%lp(i,j))
-                    write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', self%lp(i,j)
+                    write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
                     ! need to indicate that we updated resolution limit
                     self%updateres(i,j)  = self%updateres(i,j) + 1
                     ! indicate that reslim was updated
