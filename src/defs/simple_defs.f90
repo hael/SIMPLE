@@ -43,8 +43,6 @@ integer                       :: nthr_glob         !< number of threads global v
 logical                       :: l_distr_exec_glob !< global distributed execution flag
 integer                       :: part_glob         !< global part index
 character(len=:), allocatable :: cmdline_glob      !< global command line string
-integer, parameter            :: NX_PATCHED     = 5    ! number of patches in x-direction for motion correction
-integer, parameter            :: NY_PATCHED     = 5    !       "      "       y-direction for motion correction
 
 ! type for arrays of allocatable strings
 type str4arr
@@ -158,6 +156,7 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systematic iterations for streaming 2D pool
+integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 
 ! orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma

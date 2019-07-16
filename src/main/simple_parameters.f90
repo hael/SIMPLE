@@ -158,7 +158,7 @@ type :: parameters
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: detector='sobel'     !< detector for edge detection (sobel|canny|bin)
+    character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|canny|bin)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
@@ -273,6 +273,8 @@ type :: parameters
     integer :: nvalid=0
     integer :: nvars=30
     integer :: nvox=0              !< # voxels{0}
+    integer :: nxpatch=MC_NPATCH   !< # of patches along x for motion correctionn{5}
+    integer :: nypatch=MC_NPATCH   !< # of patches along y for motion correctionn{5}
     integer :: offset=10           !< pixels offset{10}
     integer :: part=1
     integer :: pcasz=0
@@ -694,6 +696,8 @@ contains
         call check_iarg('numlen_tomo',    self%numlen_tomo)
         call check_iarg('nvars',          self%nvars)
         call check_iarg('nvox',           self%nvox)
+        call check_iarg('nxpatch',        self%nxpatch)
+        call check_iarg('nypatch',        self%nypatch)
         call check_iarg('offset',         self%offset)
         call check_iarg('part',           self%part)
         call check_iarg('pspecsz',        self%pspecsz)

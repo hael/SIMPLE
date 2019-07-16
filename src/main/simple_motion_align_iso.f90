@@ -207,7 +207,7 @@ contains
                 self%corrs(iframe)        = cxy(1)
             end do
             !$omp end parallel do
-            self%nimproved = nimproved
+            self%nimproved     = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
             ! updates shifts & weights
             if( lp_updates >= 3 ) self%fitshifts = .false.
@@ -246,7 +246,7 @@ contains
                 self%fitshifts = .false.
                 if ((abs(hp_saved-self%hp) > epsilon(hp_saved)) .or. &
                     (abs(lp_saved-self%lp) > epsilon(lp_saved))) then
-                    lp_updates     = lp_updates + 1 
+                    lp_updates     = lp_updates + 1
                     self%fitshifts = fitshifts_saved
                     ! need to re-make the ftexps
                     call self%create_ftexp_objs

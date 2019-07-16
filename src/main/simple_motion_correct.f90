@@ -39,6 +39,7 @@ type(image), target, allocatable :: movie_frames_scaled(:)            !< scaled 
 real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
 real,                allocatable :: shifts_toplot(:,:)                !< shifts for plotting (in patch-based mc)
 real(dp),            allocatable :: patched_polyn(:)                  !< polynomial from patched-based correction
+real                             :: TOL_ISO = 1.e-6                   !< LBFGSB tolerance for isotropic search
 integer                          :: updateres
 logical                          :: didupdateres
 
@@ -59,7 +60,7 @@ complex,     allocatable :: cmat(:,:,:), cmat_sum(:,:,:) !< complex matrices for
 
 ! module global variables
 integer :: nframes        = 0        !< number of frames
-integer :: fixed_frame    = 0        !< fixed frame of reference (0,0)
+integer :: fixed_frame    = 0        !< fixed frame of reference for isotropic alignment (0,0)
 integer :: ldim(3)        = [0,0,0]  !< logical dimension of frame
 integer :: ldim_orig(3)   = [0,0,0]  !< logical dimension of frame (original, for use in motion_correct_iter)
 integer :: ldim_scaled(3) = [0,0,0]  !< shrunken logical dimension of frame
@@ -80,10 +81,8 @@ character(len=:), allocatable :: mc_starfile_fname      !< file name for starfil
 type(starfile_table_type)     :: mc_starfile            !< starfile for motion correct output
 
 ! module global constants
-integer, parameter :: MITSREF                       = 30      !< max # iterations of refinement optimisation
 real,    parameter :: SMALLSHIFT                    = 1.      !< small initial shift to blur out fixed pattern noise
 logical, parameter :: FITSHIFTS                     = .true.
-
 logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial constraint for isotropic motion correction
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
 logical, parameter :: DO_PATCHED_POLYN              = .false.  !< run polynomially constrained motion correction for patch-based motion correction
@@ -103,7 +102,7 @@ contains
         logical,     allocatable :: outliers(:,:)
         type(image)        :: tmpmovsum, gainref
         real               :: moldiam, dimo4, time_per_frame, current_time
-        integer            :: iframe, ncured, deadhot(2), i, j, winsz, ldim_scaled_tmp(3), shp(3)
+        integer            :: iframe, ncured, deadhot(2), i, j, winsz, shp(3)
         integer, parameter :: HWINSZ = 6
         logical            :: l_gain
         ! get number of frames & dim from stack
@@ -130,8 +129,8 @@ contains
         ! set sampling distance
         smpd        = ctfvars%smpd
         smpd_scaled = ctfvars%smpd/params_glob%scale
-        ! set fixed frame (all others are shifted by reference to this at 0,0)
-        fixed_frame = 1                       !align the frames wrt the first one
+        ! set fixed frame to central one
+        fixed_frame = nint(0.5*real(nframes))
         ! set reslims
         dimo4   = (real(minval(ldim_scaled(1:2))) * smpd_scaled) / 4.
         moldiam = 0.7 * real(params_glob%box) * smpd_scaled
@@ -147,8 +146,6 @@ contains
         if ( motion_correct_with_patched ) then
             allocate( movie_frames_shifted_saved(nframes), stat=alloc_stat )
             if(alloc_stat.ne.0)call allocchk('motion_correct_init 3; simple_motion_correct')
-            allocate( patched_polyn(2*PATCH_PDIM), source=0._dp, stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('motion_correct_init 4; simple_motion_correct')
         end if
         do iframe=1,nframes
             call movie_frames_scaled(iframe)%new(ldim_scaled, smpd_scaled, wthreads=.false.)
@@ -423,9 +420,10 @@ contains
             call align_iso%set_trs(params_glob%scale*params_glob%trs)
             call align_iso%set_smallshift(SMALLSHIFT)
             call align_iso%set_rand_init_shifts(.true.)
-            call align_iso%set_ftol_gtol(1e-6, 1e-6)
-            call align_iso%set_shsrch_tol(1e-6)
+            call align_iso%set_ftol_gtol(TOL_ISO, TOL_ISO)
+            call align_iso%set_shsrch_tol(TOL_ISO)
             call align_iso%set_fitshifts(FITSHIFTS)
+            call align_iso%set_fixed_frame(fixed_frame)
             call align_iso%set_callback( motion_correct_iso_callback )
             call align_iso%align(callback_ptr)
             corr = align_iso%get_corr()
@@ -531,7 +529,7 @@ contains
         integer :: iframe, ldim4scale(3)
         logical :: doscale
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
-            motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale * params_glob%trs)
+            motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale*params_glob%trs)
         smpd4scale = params_glob%smpd
         doscale = .false.
         if( smpd4scale > params_glob%smpd )then
@@ -556,13 +554,17 @@ contains
         write(logfhandle,'(a)') '>>> PATCH-BASED REFINEMENT'
         PRINT_NEVALS = .false.
         if (DO_PATCHED_POLYN) then
-            call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, &
-                patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot, patched_polyn)
+            call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched,&
+                &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
         else
-            call motion_patch%set_fitshifts( FITSHIFTS )
+            call motion_patch%set_fitshifts(FITSHIFTS)
             call motion_patch%set_frameweights( frameweights )
-            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched, patched_shift_fname, shifts_toplot, patched_polyn)
+            call motion_patch%set_fixed_frame(fixed_frame)
+            call motion_patch%set_interp_fixed_frame(fixed_frame)
+            call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched,&
+                &patched_shift_fname, shifts_toplot)
         end if
+        call motion_patch%get_poly4star(patched_polyn)
     end subroutine motion_correct_patched
 
     subroutine motion_correct_patched_calc_sums_1( movie_sum_corrected, movie_sum_ctf )
@@ -746,24 +748,6 @@ contains
         if( present(fromto) ) ffromto = fromto
         l_w_scalar = present(scalar_weight)
         call movie_sum_global%new(ldim_scaled, smpd_scaled)
-        if (.false.) then
-            call movie_sum_global%set_ft(.true.)
-            cmat_sum = cmplx(0.,0.)
-            !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
-            do iframe=ffromto(1),ffromto(2)
-                if (.not. movie_frames_shifted_patched(iframe)%is_ft()) call movie_frames_shifted_patched(iframe)%fft()
-                call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
-                if( l_w_scalar )then
-                    cmat_sum = cmat_sum + cmat * scalar_weight
-                else
-                    cmat_sum = cmat_sum + cmat * frameweights(iframe)
-                endif
-                call movie_frames_shifted_patched(iframe)%ifft()
-            end do
-            !$omp end parallel do
-            call movie_sum_global%set_cmat(cmat_sum)
-            call movie_sum_global%ifft()
-        end if
         allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
         if ( do_dose_weight ) then
             ft_flag = movie_sum_global%is_ft()

@@ -14,7 +14,6 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-logical,          parameter :: DO_PATCHED = .true.
 character(len=*), parameter :: speckind   = 'sqrt'
 
 type :: motion_correct_iter
@@ -45,10 +44,9 @@ contains
         real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
-        integer :: ldim(3), ldim_thumb(3)
-        real    :: scale, var, doserateperframe
+        real    :: scale, var
+        integer :: ldim(3), ldim_thumb(3), nframes
         logical :: err
-        integer :: i, iframe, nframes
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -72,6 +70,8 @@ contains
             self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
             &//int2str(params_glob%tof)//INTGMOV_SUFFIX//params_glob%ext
         endif
+        ! whether to perform patch-based step
+        motion_correct_with_patched = (params_glob%nxpatch > 1) .and. (params_glob%nypatch > 1)
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
@@ -81,7 +81,6 @@ contains
         else
             self%moviename = trim(moviename)
         endif
-        motion_correct_with_patched = DO_PATCHED
         ! execute the motion_correction
         call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
         ! return shift stats
@@ -104,51 +103,18 @@ contains
             if( cline%defined('tof') )then
                 ! order matters here, if anisotropic correction is on the subsum needs to be generated first
                 call motion_correct_iso_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf, .not. DO_PATCHED)
+                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf,&
+                    &.not.motion_correct_with_patched)
             else
-                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf, .not. DO_PATCHED)
+                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf,&
+                    &.not.motion_correct_with_patched)
             endif
         endif
-        ! write to starfile
-        call starfile_table__open_ofile(mc_starfile, mc_starfile_fname) ! open as new file
-        ! global fields
-        call starfile_table__addObject(mc_starfile)
-        call starfile_table__setIsList(mc_starfile, .true.)
-        call starfile_table__setname(mc_starfile, "general")
-        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_X, ldim_orig(1))
-        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Y, ldim_orig(2))
-        call starfile_table__setValue_int(mc_starfile, EMDL_IMAGE_SIZE_Z, ldim_orig(3))
-        call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, simple_abspath(self%moviename))
-        if (present(gainref_fname)) then
-            call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, gainref_fname)
-        end if
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.0_dp)
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(ctfvars%smpd, dp))
-        doserateperframe = 0.
-        if( params_glob%l_dose_weight )then
-            doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
-            doserateperframe = doserateperframe / real(nframes)             ! per frame
-        endif
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
-        call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
-        call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_START_FRAME, 1)
-        call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 1)
-        call starfile_table__write_ofile(mc_starfile)
-        call starfile_table__clear(mc_starfile)
-        call starfile_table__setIsList(mc_starfile, .false.)
-        call starfile_table__setName(mc_starfile, "global_shift")
-        do iframe = 1, nframes
-            call starfile_table__addObject(mc_starfile)
-            call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shifts_toplot(iframe, 1), dp))
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shifts_toplot(iframe, 2), dp))
-        end do
-        call starfile_table__write_ofile(mc_starfile)
+        call write_iso2star
         ! destruct before anisotropic correction
         call motion_correct_iso_kill
         ! Patch based approach
-        if(DO_PATCHED) then
+        if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
             call motion_correct_patched()
             if( cline%defined('tof') )then
@@ -157,15 +123,7 @@ contains
             else
                 call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
             endif
-            call starfile_table__clear(mc_starfile)
-            call starfile_table__setIsList(mc_starfile, .false.)
-            call starfile_table__setName(mc_starfile, "local_motion_model")
-            do i = 1, size(patched_polyn,1)
-                call starfile_table__addObject(mc_starfile)
-                call starfile_table__setValue_int(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFFS_IDX, i-1)
-                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, patched_polyn(i))
-            end do
-            call starfile_table__write_ofile(mc_starfile)
+            call write_aniso2star
             ! cleanup
             call motion_correct_patched_kill
         endif
@@ -208,19 +166,78 @@ contains
             call make_relativepath(CWD_GLOB,self%moviename_intg_frames,rel_fname)
             call orientation%set('intg_frames',  trim(rel_fname))
         endif
-        call starfile_table__close_ofile(mc_starfile)
-        call starfile_table__delete(mc_starfile)
         call make_relativepath(CWD_GLOB,mc_starfile_fname,rel_fname)
         call orientation%set("mc_starfile",rel_fname)
-        if( DO_PATCHED )then
+        if( motion_correct_with_patched )then
             call make_relativepath(CWD_GLOB, patched_shift_fname, rel_fname)
             call orientation%set('mceps', rel_fname)
         endif
         call motion_correct_kill_common
+        call starfile_table__close_ofile(mc_starfile)
+        call starfile_table__delete(mc_starfile)
         ! deallocate
         if( allocated(shifts_toplot)) deallocate(shifts_toplot)
         if( allocated(patched_polyn)) deallocate(patched_polyn)
         if( allocated(shifts) )       deallocate(shifts)
+    contains
+
+        ! open, write isotropic shifts and do not close star file
+        subroutine write_iso2star
+            real    :: doserateperframe
+            integer :: iframe
+             ! open as new file
+            call starfile_table__open_ofile(mc_starfile, mc_starfile_fname)
+            ! global fields
+            call starfile_table__addObject(mc_starfile)
+            call starfile_table__setIsList(mc_starfile, .true.)
+            call starfile_table__setname(mc_starfile, "general")
+            call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_X, ldim_orig(1))
+            call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Y, ldim_orig(2))
+            call starfile_table__setValue_int(mc_starfile,    EMDL_IMAGE_SIZE_Z, ldim_orig(3))
+            call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_MOVIE_NAME, simple_abspath(self%moviename))
+            if (present(gainref_fname)) then
+                call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
+            end if
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.0_dp)
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(ctfvars%smpd, dp))
+            doserateperframe = 0.
+            if( params_glob%l_dose_weight )then
+                doserateperframe = params_glob%exp_time*params_glob%dose_rate   ! total dose
+                doserateperframe = doserateperframe / real(nframes)             ! per frame
+            endif
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_DOSE_RATE, real(doserateperframe, dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_PRE_EXPOSURE, 0.0_dp)
+            call starfile_table__setValue_double(mc_starfile, EMDL_CTF_VOLTAGE, real(params_glob%kv, dp))
+            call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_START_FRAME, 1)
+            call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_MODEL_VERSION, 1)
+            call starfile_table__write_ofile(mc_starfile)
+            ! isotropic shifts
+            call starfile_table__clear(mc_starfile)
+            call starfile_table__setIsList(mc_starfile, .false.)
+            call starfile_table__setName(mc_starfile, "global_shift")
+            do iframe = 1, nframes
+                call starfile_table__addObject(mc_starfile)
+                call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shifts_toplot(iframe, 1), dp))
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shifts_toplot(iframe, 2), dp))
+            end do
+            call starfile_table__write_ofile(mc_starfile)
+        end subroutine write_iso2star
+
+        ! write anisotropic shifts
+        subroutine write_aniso2star
+            integer :: iframe
+            call starfile_table__clear(mc_starfile)
+            call starfile_table__setIsList(mc_starfile, .false.)
+            call starfile_table__setName(mc_starfile, "local_motion_model")
+            do iframe = 1, size(patched_polyn,1)
+                call starfile_table__addObject(mc_starfile)
+                call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
+                call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, patched_polyn(iframe))
+            end do
+            call starfile_table__write_ofile(mc_starfile)
+        end subroutine write_aniso2star
+
     end subroutine iterate
 
     function get_moviename( self, which ) result( moviename )

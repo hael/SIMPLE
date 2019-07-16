@@ -71,9 +71,9 @@ CPlot2D::CPlot2D(std::string title)
     m_dYAxisLabelFontSize=12.0;
 
     m_strXAxisTitleFont="Courier";
-    m_dXAxisTitleFontSize=16.0;
+    m_dXAxisTitleFontSize=14.0;
     m_strYAxisTitleFont="Courier";
-    m_dYAxisTitleFontSize=16.0;
+    m_dYAxisTitleFontSize=14.0;
     m_dXAxisTitleColor[0]=0.0;
     m_dXAxisTitleColor[1]=0.0;
     m_dXAxisTitleColor[2]=0.0;
