@@ -9,13 +9,16 @@ public :: tvfilter, test_tvfilter
 
 type :: tvfilter
     logical               :: existence
-    type(image),  pointer :: image_ptr
+    type(image)           :: interpolate_coeffs
+    real, pointer         :: interpolate_coeffs_rmat(:,:,:) => null()
     integer               :: img_dims(2)
     type(image)           :: r_img, b_img
     integer               :: ldim(2)
 contains
     procedure :: new               => new_tvfilter
     procedure :: apply_filter
+    procedure :: prepare_interpolation
+    procedure :: interp_val
     procedure :: kill              => kill_tvfilter
     procedure, private :: fill_r
     procedure, private :: fill_b
@@ -79,6 +82,102 @@ contains
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
 
+    subroutine prepare_interpolation( self, img, lambda, idx )
+        class(tvfilter),   intent(inout) :: self
+        class(image),      intent(inout) :: img
+        real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
+        integer, optional, intent(in)    :: idx
+        integer :: idx_here
+        integer :: img_ldim(3), rb_ldim(3)
+        real    :: img_smpd
+        logical :: img_ft_prev
+        complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
+        logical :: do_alloc
+        integer :: dims1
+        call self%interpolate_coeffs%kill
+        self%interpolate_coeffs = img
+        if (.not. present(idx)) then
+            idx_here = 1
+        else
+            idx_here = idx
+        end if
+        img_ldim = img%get_ldim()
+        self%img_dims(1:2) = img_ldim(1:2)
+        if (idx_here > img_ldim(3)) then
+            THROW_HARD('tvfilter::apply_filter : idx greater than stack size')
+        end if
+        self%ldim(1:2) = img_ldim(1:2)
+        img_smpd = img%get_smpd()
+        do_alloc = .true.
+        if (self%r_img%exists()) then
+            rb_ldim  = self%r_img%get_ldim()
+            if (all(img_ldim(1:2) == rb_ldim(1:2))) then
+                do_alloc = .false.
+            end if
+        end if
+        if (do_alloc) then
+            rb_ldim(1:2) = img_ldim(1:2)
+            rb_ldim(3)   = 1
+            call self%r_img%new(rb_ldim, img_smpd)
+            call self%b_img%new(rb_ldim, img_smpd)
+            call self%fill_b()
+            call self%fill_r()
+            call self%r_img%fft_noshift()
+            call self%b_img%fft_noshift()
+        end if
+        img_ft_prev = self%interpolate_coeffs%is_ft()
+        if (.not. img_ft_prev) call self%interpolate_coeffs%fft()
+        call self%b_img%get_cmat_ptr(cmat_b)
+        call self%r_img%get_cmat_ptr(cmat_r)
+        call self%interpolate_coeffs%get_cmat_ptr(cmat_img)
+        dims1 = int(img_ldim(1)/2)+1
+        cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * conjg(cmat_b(1:dims1,:,1)) / &
+            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
+        call self%interpolate_coeffs%ifft()
+        call self%interpolate_coeffs%get_rmat_ptr(self%interpolate_coeffs_rmat)
+    end subroutine prepare_interpolation
+
+    function interp_val(self, x, y) result( val )
+        class(tvfilter), intent(in) :: self
+        real,            intent(in) :: x, y
+        real :: val
+        integer :: xi(5), yi(5) ! 3=floor'ed, 1=-2, 2=-1, 4=+1, 5=+2
+        integer :: xi_h(5), yi_h(5)  ! TODO: reduce to 4x4 points
+        integer :: i, j
+        real    :: dx, dy, b3x, b3y
+        xi(3) = floor(x)
+        yi(3) = floor(y)
+        xi(1) = xi(3) - 2
+        yi(1) = yi(3) - 2
+        xi(2) = xi(3) - 1
+        yi(2) = yi(3) - 1
+        xi(4) = xi(3) + 1
+        yi(4) = yi(3) + 1
+        xi(5) = xi(3) + 2
+        yi(5) = yi(3) + 2
+        xi_h = xi
+        yi_h = yi
+        do i = 1, 5
+            xi_h(i) = max(xi(i), 1)
+            yi_h(i) = max(yi(i), 1)
+            xi_h(i) = min(xi_h(i), self%ldim(1))
+            yi_h(i) = min(yi_h(i), self%ldim(2))
+        end do
+        val = 0.
+        do i = 1, 5
+            dx  = x - real(xi_h(i))
+            b3x = b3(dx)
+            if (b3x < EPSILON(b3x)) then
+                cycle
+            end if
+            do j = 1, 5
+                dy = y - real(yi_h(j))
+                b3y = b3(dy)
+                val = val + b3x * b3y * self%interpolate_coeffs_rmat(xi_h(i), yi_h(i), 1)
+            end do
+        end do
+    end function interp_val
+
     subroutine fill_b(self)
         class(tvfilter), intent(inout) :: self
         integer :: nonzero_x(3), nonzero_y(3)         ! indices of non-zero entries in x- and y-component
@@ -113,38 +212,35 @@ contains
                 b(x,y,1) = nonzero_val_x(i) * nonzero_val_y(j)
             end do
         end do
-
-    contains
-
-        pure elemental function b3_help(x) result(y)
-            real, intent(in) :: x
-            real :: y
-            if (x < 0.) then
-                y = 0.
-                return
-            end if
-            if (x < 1.) then
-                y = 0.5*x**2
-                return
-            end if
-            if (x < 2.) then
-                y = -x**2+3.*x-1.5
-                return
-            end if
-            if (x < 3.) then
-                y = 0.5*x**2-3.*x+4.5
-                return
-            end if
-            y = 0.
-        end function b3_help
-
-        pure elemental function b3(x) result(y)
-            real, intent(in) :: x
-            real :: y
-            y = b3_help(x + 1.5)
-        end function b3
-
     end subroutine fill_b
+
+    pure elemental function b3(x) result(y)
+        real, intent(in) :: x
+        real :: y
+        y = b3_help(x + 1.5)
+    contains
+        pure elemental function b3_help(xx) result(yy)
+            real, intent(in) :: xx
+            real :: yy
+            if (xx < 0.) then
+                yy = 0.
+                return
+            end if
+            if (xx < 1.) then
+                yy = 0.5*xx**2
+                return
+            end if
+            if (xx < 2.) then
+                yy = -xx**2+3.*xx-1.5
+                return
+            end if
+            if (xx < 3.) then
+                yy = 0.5*xx**2-3.*xx+4.5
+                return
+            end if
+            yy = 0.
+        end function b3_help
+    end function b3
 
     subroutine fill_r(self)
         class(tvfilter), intent(inout) :: self
@@ -192,7 +288,7 @@ contains
                 y = 11. / 20.
                 return
             end if
-            if (i == 2) then
+             if (i == 2) then
                 y = 13. / 60.
                 return
             end if
@@ -286,6 +382,8 @@ contains
         class(tvfilter), intent(inout) :: self
         call self%r_img%kill()
         call self%b_img%kill()
+        self%interpolate_coeffs_rmat => null()
+        call self%interpolate_coeffs%kill
         self%existence = .false.
     end subroutine kill_tvfilter
 
