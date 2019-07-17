@@ -100,15 +100,36 @@ contains
     subroutine exec_info_stktab( self, cline )
         class(info_stktab_commander), intent(inout) :: self
         class(cmdline),               intent(inout) :: cline
+        character(LONGSTRLEN), allocatable :: stkfnames(:)
         type(parameters) :: params
+        integer          :: ldim(3), box, istk, np_stk
         call params%new(cline)
         if( .not. file_exists(params%stktab) )then
             THROW_HARD('file: '//trim(params%stktab)//' not in cwd; exec_info_stktab')
         endif
-        write(logfhandle,*) '# micrograps: ', params%nmics
-        write(logfhandle,*) '# particles : ', params%nptcls
-        write(logfhandle,*) 'ldim        : ', params%ldim
-        write(logfhandle,*) 'box size    : ', params%box
+        call read_filetable(params%stktab, stkfnames)
+        params%nmics  = size(stkfnames)
+        if( params%nmics < 1 ) THROW_HARD('Nonsensical # of stacks: '//int2str(params%nmics))
+        params%nptcls = 0
+        do istk = 1, params%nmics
+            ! get dimension of stack and # ptcls
+            call find_ldim_nptcls(trim(stkfnames(istk)), ldim, np_stk)
+            if( istk == 1 )then
+                box         = ldim(1)
+                params%ldim = ldim
+            else
+                if( box /= ldim(1) )then
+                    THROW_HARD('Box size of stk #'//int2str(istk)//' is '//int2str(ldim(1))//' which is inconsistent with box='//int2str(box)//' of stk #1')
+                endif
+            endif
+            ! update nptcls
+            params%nptcls = params%nptcls + np_stk
+        end do
+        params%box = box
+        write(logfhandle,*) '# micrograps   : ', params%nmics
+        write(logfhandle,*) '# particles    : ', params%nptcls
+        write(logfhandle,*) 'ldim of stk #1 : ', params%ldim
+        write(logfhandle,*) 'box size       : ', params%box
         call simple_end('**** SIMPLE_INFO_STKTAB NORMAL STOP ****')
     end subroutine exec_info_stktab
 
