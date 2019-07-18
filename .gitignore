@@ -8,7 +8,6 @@ fort.*
 *.img
 *.hed
 *.mrc
-*.pdb
 *.bin
 *.log
 *.swp
