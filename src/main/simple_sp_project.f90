@@ -51,7 +51,9 @@ contains
     procedure          :: get_micparams
     ! os_stk related methods
     procedure          :: add_stk
-    procedure          :: add_stktab
+    procedure, private :: add_stktab_1
+    procedure, private :: add_stktab_2
+    generic            :: add_stktab => add_stktab_1, add_stktab_2
     procedure          :: add_single_stk
     procedure          :: get_stkname
     procedure          :: get_stkname_and_ind
@@ -945,7 +947,8 @@ contains
         end select
     end subroutine add_single_stk
 
-    subroutine add_stktab( self, stkfnames, os )
+    ! adds stktab given per-stk parameters
+    subroutine add_stktab_1( self, stkfnames, os )
         class(sp_project),     intent(inout) :: self
         character(LONGSTRLEN), intent(inout) :: stkfnames(:)
         class(oris),           intent(inout) :: os ! parameters associated with stktab
@@ -1054,7 +1057,139 @@ contains
         enddo
         call o_ptcl%kill
         call o_stk%kill
-    end subroutine add_stktab
+    end subroutine add_stktab_1
+
+    ! adds stktab given per-particle parameters
+    subroutine add_stktab_2( self, stkfnames, ctfvars, os )
+        class(sp_project),     intent(inout) :: self
+        character(LONGSTRLEN), intent(inout) :: stkfnames(:)
+        type(ctfparams),       intent(in)    :: ctfvars
+        class(oris),           intent(inout) :: os ! parameters associated with stktab
+        integer,  allocatable :: nptcls_arr(:)
+        type(ori)             :: o_ptcl, o_stk
+        character(LONGSTRLEN) :: stk_relpath
+        integer   :: ldim(3), ldim_here(3), n_os_ptcl2D, n_os_ptcl3D, n_os_stk
+        integer   :: i, istk, fromp, top, nptcls, n_os, nstks, nptcls_tot, stk_ind, pind
+        nstks = size(stkfnames)
+        n_os  = os%get_noris()
+        ! first pass for sanity check and determining dimensions
+        allocate(nptcls_arr(nstks),source=0)
+        do istk=1,nstks
+            ! full path and existence check
+            call make_relativepath(CWD_GLOB,stkfnames(istk),stk_relpath)
+            stkfnames(istk) = trim(stk_relpath)
+            ! logical dimension management
+            call find_ldim_nptcls(stkfnames(istk), ldim, nptcls)
+            ldim(3) = 1
+            if( istk == 1 )then
+                ldim_here = ldim
+            else
+                if( .not. all(ldim_here == ldim) )then
+                    write(logfhandle,*) 'micrograph stack #  : ', istk
+                    write(logfhandle,*) 'stk name            : ', trim(stkfnames(istk))
+                    write(logfhandle,*) 'ldim in object      : ', ldim_here
+                    write(logfhandle,*) 'ldim read from stack: ', ldim
+                    THROW_HARD('inconsistent logical dimensions; add_stktab')
+                endif
+            endif
+            if( ldim(1) /= ldim(2) )then
+                write(logfhandle,*) 'stk name: ', trim(stkfnames(istk))
+                write(logfhandle,*) 'xdim:     ', ldim(1)
+                write(logfhandle,*) 'ydim:     ', ldim(2)
+                THROW_HARD('nonsquare particle images not supported; add_stktab')
+            endif
+            ! stash number of images
+            nptcls_arr(istk) = nptcls
+        enddo
+        nptcls_tot  = sum(nptcls_arr)
+        if( n_os /= nptcls_tot )then
+            write(logfhandle,*) '# input oris               : ', n_os
+            write(logfhandle,*) '# ptcls in stacks in stktab: ', nptcls_tot
+            THROW_HARD('nonconforming sizes of inputs; add_stktab_2')
+        endif
+        ! oris allocation
+        n_os_stk    = self%os_stk%get_noris()
+        n_os_ptcl2D = self%os_ptcl2D%get_noris()
+        n_os_ptcl3D = self%os_ptcl3D%get_noris()
+        if( n_os_stk == 0 )then
+            call self%os_stk%new(nstks)
+            call self%os_ptcl2D%new(nptcls_tot)
+            call self%os_ptcl3D%new(nptcls_tot)
+            fromp = 1
+        else
+            if( .not.self%os_stk%isthere(n_os_stk,'top') )then
+                THROW_HARD('FROMP/TOP keys should always be informed; add_stktab_2')
+            endif
+            call self%os_stk%reallocate(n_os_stk + nstks)
+            call self%os_ptcl2D%reallocate(n_os_ptcl2D + nptcls_tot)
+            call self%os_ptcl3D%reallocate(n_os_ptcl3D + nptcls_tot)
+            fromp = nint(self%os_stk%get(n_os_stk,'top')) + 1
+        endif
+        ! parameters transfer
+        do istk=1,nstks
+            top     = fromp + nptcls_arr(istk) - 1 ! global index
+            stk_ind = n_os_stk + istk
+            ! updates stk segment
+            call o_stk%new
+            call o_stk%set('stk',     trim(stkfnames(istk)))
+            call o_stk%set('box',     real(ldim(1)))
+            call o_stk%set('nptcls',  real(nptcls_arr(istk)))
+            call o_stk%set('fromp',   real(fromp))
+            call o_stk%set('top',     real(top))
+            call o_stk%set('stkkind', 'split')
+            call o_stk%set('imgkind', 'ptcl')
+            call o_stk%set('smpd',    ctfvars%smpd)
+            call o_stk%set('kv',      ctfvars%kv)
+            call o_stk%set('cs',      ctfvars%cs)
+            call o_stk%set('fraca',   ctfvars%fraca)
+            call o_stk%set('state',   1.0) ! default on import
+            if( ctfvars%l_phaseplate )then
+                call o_stk%set('phaseplate', 'yes')
+                call o_stk%set('phshift',    ctfvars%phshift)
+            else
+                call o_stk%set('phaseplate', 'no')
+            endif
+            select case(ctfvars%ctfflag)
+                case(CTFFLAG_NO)
+                    call o_stk%set('ctf', 'no')
+                case(CTFFLAG_YES)
+                    call o_stk%set('ctf', 'yes')
+                case(CTFFLAG_FLIP)
+                    call o_stk%set('ctf', 'flip')
+                case DEFAULT
+                    THROW_HARD('unsupported ctfflag: '//int2str(ctfvars%ctfflag)//'; add_stktab_2')
+            end select
+            call self%os_stk%set_ori(stk_ind, o_stk)
+            ! updates particles segment
+            do i=1,nptcls_arr(istk)
+                pind = fromp+i-1
+                call os%get_ori(pind, o_ptcl)
+                call o_ptcl%set('stkind', real(stk_ind))
+                call o_ptcl%set('state',  1.)
+                select case(ctfvars%ctfflag)
+                    case(CTFFLAG_YES,CTFFLAG_FLIP)
+                        if( .not.o_ptcl%isthere('dfx') )then
+                            call o_ptcl%print_ori
+                            THROW_HARD('Missing defocus parameter(s) for particle: '//int2str(pind))
+                        endif
+                    case DEFAULT
+                        ! all good
+                end select
+                if( ctfvars%l_phaseplate )then
+                    if( .not.o_ptcl%isthere('phshift') )then
+                        call o_ptcl%print_ori
+                        THROW_HARD('Missing phase-shift parameter for particle: '//int2str(pind))
+                    endif
+                endif
+                call self%os_ptcl2D%set_ori(pind, o_ptcl)
+                call self%os_ptcl3D%set_ori(pind, o_ptcl)
+            enddo
+            ! update
+            fromp = top + 1 ! global index
+        enddo
+        call o_ptcl%kill
+        call o_stk%kill
+    end subroutine add_stktab_2
 
     !>  Only commits to disk when a change to the project is made
     subroutine split_stk( self, nparts, dir )

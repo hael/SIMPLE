@@ -483,11 +483,13 @@ contains
         type(sp_project) :: spproj
         type(oris)       :: os
         type(nrtxtfile)  :: paramfile
-        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
-        integer          :: i, ndatlines, nrecs, n_ori_inputs, lfoo(3)
         type(ctfparams)  :: ctfvars
+        integer          :: lfoo(3), i, ndatlines, nrecs, n_ori_inputs, nstks
+        logical          :: inputted_oritab, inputted_plaintexttab, inputted_deftab
+        logical          :: l_stktab_per_stk_parms
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( .not. cline%defined('ctf')   ) call cline%set('ctf',   'yes')
+        l_stktab_per_stk_parms = .true.
         call params%new(cline)
         ! PARAMETER INPUT MANAGEMENT
         ! parameter input flags
@@ -571,37 +573,17 @@ contains
                 endif
             end do
         endif
-        if( cline%defined('stk') )then
-            ctfvars%smpd = params%smpd
-            select case(trim(params%ctf))
-                case('yes')
-                    ctfvars%ctfflag = CTFFLAG_YES
-                case('no')
-                    ctfvars%ctfflag = CTFFLAG_NO
-                case('flip')
-                    ctfvars%ctfflag = CTFFLAG_FLIP
-                case DEFAULT
-                    write(logfhandle,*)
-                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_import_particles')
-            end select
-            if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
-                ! if importing single stack of extracted particles, these are hard requirements
-                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
-                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
-                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')
-                if( cline%defined('phaseplate') )then
-                    phaseplate = cline%get_carg('phaseplate')
-                else
-                    allocate(phaseplate, source='no')
-                endif
-                ctfvars%kv           = params%kv
-                ctfvars%cs           = params%cs
-                ctfvars%fraca        = params%fraca
-                ctfvars%l_phaseplate = phaseplate .eq. 'yes'
-            endif
-        else
+        if( cline%defined('stktab') )then
             ! importing from stktab
-            if( n_ori_inputs == 1 )then
+            call read_filetable(params%stktab, stkfnames)
+            nstks = size(stkfnames)
+            if( params%mkdir.eq.'yes' )then
+                do i=1,nstks
+                    if(stkfnames(i)(1:1).ne.'/') stkfnames(i) = PATH_PARENT//trim(stkfnames(i))
+                enddo
+            endif
+            l_stktab_per_stk_parms = (os%get_noris() == nstks)
+            if( (n_ori_inputs == 1) .and. l_stktab_per_stk_parms )then
                 ! sampling distance
                 call os%set_all2single('smpd', params%smpd)
                 ! acceleration voltage
@@ -671,6 +653,36 @@ contains
                 endif
             endif
         endif
+        if( cline%defined('stk') .or. (cline%defined('stktab').and..not.l_stktab_per_stk_parms) )then
+            ! getting ctf parameters from command-line if stk import or stktab & per particle info
+            ctfvars%smpd = params%smpd
+            select case(trim(params%ctf))
+                case('yes')
+                    ctfvars%ctfflag = CTFFLAG_YES
+                case('no')
+                    ctfvars%ctfflag = CTFFLAG_NO
+                case('flip')
+                    ctfvars%ctfflag = CTFFLAG_FLIP
+                case DEFAULT
+                    write(logfhandle,*)
+                    THROW_HARD('unsupported ctf flag: '//trim(params%ctf)//'; exec_import_particles')
+            end select
+            if( ctfvars%ctfflag .ne. CTFFLAG_NO )then
+                ! if importing single stack of extracted particles, these are hard requirements
+                if( .not. cline%defined('kv')    ) THROW_HARD('kv (acceleration voltage in kV{300}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('cs')    ) THROW_HARD('cs (spherical aberration constant in mm{2.7}) input required when importing movies; exec_import_particles')
+                if( .not. cline%defined('fraca') ) THROW_HARD('fraca (fraction of amplitude contrast{0.1}) input required when importing movies; exec_import_particles')
+                if( cline%defined('phaseplate') )then
+                    phaseplate = cline%get_carg('phaseplate')
+                else
+                    allocate(phaseplate, source='no')
+                endif
+                ctfvars%kv           = params%kv
+                ctfvars%cs           = params%cs
+                ctfvars%fraca        = params%fraca
+                ctfvars%l_phaseplate = phaseplate .eq. 'yes'
+            endif
+        endif
 
         ! PROJECT FILE MANAGEMENT
         call spproj%read(params%projfile)
@@ -688,18 +700,14 @@ contains
         endif
         ! add list of stacks (stktab) if present
         if( cline%defined('stktab') )then
-            call read_filetable(params%stktab, stkfnames)
-            if( size(stkfnames) /= os%get_noris() )then
-                THROW_HARD('Incompatible number of stacks & meta-data; exec_import_particles')
+            if( l_stktab_per_stk_parms )then
+                ! per stack parameters
+                call spproj%add_stktab(stkfnames, os)
+            else
+                ! per particle parameters
+                call spproj%add_stktab(stkfnames, ctfvars, os)
             endif
-            if( params%mkdir.eq.'yes' )then
-                do i=1,size(stkfnames)
-                    if(stkfnames(i)(1:1).ne.'/') stkfnames(i) = PATH_PARENT//trim(stkfnames(i))
-                enddo
-            endif
-            call spproj%add_stktab(stkfnames, os)
         endif
-
         ! WRITE PROJECT FILE
         call spproj%write ! full write since this is guaranteed to be the first import
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
