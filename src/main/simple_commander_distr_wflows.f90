@@ -1251,6 +1251,7 @@ contains
                 call build%spproj%write_segment_inside('out')
                 ! per state post-process
                 do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
                     if( state_pops(state) == 0 )cycle
                     call cline_postprocess%set('state', real(state))
                     if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)

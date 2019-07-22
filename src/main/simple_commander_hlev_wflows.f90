@@ -1128,15 +1128,13 @@ contains
         logical  :: fall_over, cavgs_import
         if( nint(cline%get_rarg('nstates')) <= 1 ) THROW_HARD('Non-sensical NSTATES argument for heterogeneity analysis!')
         if( .not. cline%defined('refine') )  call cline%set('refine', 'cluster')
-        if( .not. cline%defined('eo') .and. .not. cline%defined('lp') ) call cline%set('eo', 'yes')
-        if( cline%defined('lp') )            call cline%set('eo','no')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        if( .not. cline%defined('oritype')) call cline%set('oritype', 'ptcl3D')
         ! make master parameters
         call params%new(cline)
         orig_projfile   = trim(params%projfile)
         params%projfile = trim(params%cwd)//'/'//trim(params%projname)//trim(METADATA_EXT)
         call cline%set('projfile',params%projfile)
-        if( .not.params%l_eo .and. .not.cline%defined('lp') ) THROW_HARD('need lp input when eo .eq. no; cluster3D')
+        !if( .not.params%l_eo .and. .not.cline%defined('lp') ) THROW_HARD('need lp input when eo .eq. no; cluster3D')
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! prep project
@@ -1164,14 +1162,14 @@ contains
             cavgs_import = spproj%os_ptcl2D%get_noris() == 0
             if( cavgs_import )then
                 ! start from import
-                if(.not.cline%defined('lp')) THROW_HARD('need LP=XXX for imported class-averages; cluster3D')
+                if(.not.params%l_lpset ) THROW_HARD('need LP=XXX for imported class-averages; cluster3D')
                 lp_cls3D = params%lp
                 allocate(states(ncls), source=1)
             else
                 ! start from previous 2D
                 states = nint(spproj%os_cls2D%get_all('state'))
                 ! determines resolution limit
-                if(cline%defined('lp'))then
+                if( params%l_lpset )then
                     lp_cls3D = params%lp
                 else
                     tmp_rarr  = spproj%os_cls2D%get_all('res')
@@ -1213,7 +1211,7 @@ contains
         deallocate(labels)
 
         ! e/o partition
-        if( params%l_eo )then
+        if( .not.params%l_lpset )then
             if( os%get_nevenodd() == 0 ) call os%partition_eo
         else
             call os%set_all2single('eo', -1.)
@@ -1229,8 +1227,9 @@ contains
         call cline%delete('refine')
         ! resolution limits
         if( trim(params%oritype).eq.'cls3D' )then
-            params%eo   = 'no'
-            params%l_eo = .false.
+            params%eo      = 'no'
+            params%l_eo    = .false.
+            params%l_lpset = .true.
             call cline%set('eo','no')
             call cline%set('lp',lp_cls3D)
         else
@@ -1245,7 +1244,9 @@ contains
         call cline_refine3D1%set('match_filt','no')
         call cline_refine3D1%set('maxits',     real(MAXITS1))
         call cline_refine3D1%set('neigh',     'yes') ! always consider neighbours
-        call cline_refine3D1%set('nnn',        0.05*real(params%nspace))
+        if( .not.cline_refine3D1%defined('nnn') )then
+            call cline_refine3D1%set('nnn', 0.05*real(params%nspace))
+        endif
         call cline_refine3D1%delete('update_frac')  ! no update frac for extremal optimization
         ! second stage
         call cline_refine3D2%set('prg', 'refine3D')
@@ -1305,7 +1306,7 @@ contains
 
         ! MIXED MODEL RECONSTRUCTION
         ! retrieve mixed model Fourier components, normalization matrix, FSC & anisotropic filter
-        if( params%l_eo )then
+        if( .not.params%l_lpset )then
             work_proj%os_ptcl3D = os
             call work_proj%write
             call xreconstruct3D_distr%execute(cline_reconstruct3D_mixed_distr)
@@ -1336,7 +1337,6 @@ contains
         ! randomize state labels
         write(logfhandle,'(A)') '>>>'
         call gen_labelling(os, params%nstates, 'squared_uniform')
-        call os%write('cluster3D_init.txt') ! analysis purpose only
         work_proj%os_ptcl3D = os
         ! writes for reconstruct3D,refine3D
         call work_proj%write
@@ -1378,7 +1378,6 @@ contains
         iter = nint(cline_refine3D1%get_rarg('endit'))
         ! for analysis purpose only
         call work_proj%read_segment('ptcl3D', params%projfile)
-        call work_proj%os_ptcl3D%write('cluster3D_stage1.txt')
         call work_proj%kill
 
         ! STAGE2: soft multi-states refinement

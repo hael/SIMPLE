@@ -212,6 +212,7 @@ contains
             call mskvol%new(ldim, smpd)
             call mskvol%read(params%mskfile)
             call vol%mul(mskvol)
+            call mskvol%kill
         else if( params%automsk .eq. 'yes' )then
             if( .not. cline%defined('thres') )then
                 write(logfhandle,*) 'Need a pixel threshold > 0. for the binarisation'

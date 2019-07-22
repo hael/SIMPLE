@@ -80,16 +80,18 @@ real,             parameter :: ico_theta_lim = 37.37736814064969
 contains
 
     !>  \brief  is a constructor
-    function constructor( pgrp ) result( self )
-        character(len=*), intent(in) :: pgrp        !< sym group string
-        type(sym)                    :: self
+    function constructor( pgrp, icorelion ) result( self )
+        character(len=*), intent(in)  :: pgrp        !< sym group string
+        logical, optional, intent(in) :: icorelion
+        type(sym)                     :: self
         call self%new(pgrp)
     end function constructor
 
     !>  \brief  is a constructor
-    subroutine new( self, pgrp )
-        class(sym),       intent(inout) :: self
-        character(len=*), intent(in)    :: pgrp         !< sym group string
+    subroutine new( self, pgrp, icorelion )
+        class(sym),        intent(inout) :: self
+        character(len=*),  intent(in)    :: pgrp         !< sym group string
+        logical, optional, intent(in)    :: icorelion
         call self%kill
         self%c_or_d = .false.
         self%n      = 1
@@ -128,7 +130,15 @@ contains
             if( self%pgrp(1:1).eq.'I' ) self%pgrp(1:1) = 'i'
             self%n = nico
             call self%e_sym%new(self%n)
-            call self%make_i_relion
+            if( present(icorelion) )then
+                if( icorelion )then
+                    call self%make_i_relion
+                else
+                    call self%make_i_spider
+                endif
+            else
+                call self%make_i_spider
+            endif
         else
             write(logfhandle,'(a)') 'symmetry not supported; new; simple_sym', pgrp
             stop
