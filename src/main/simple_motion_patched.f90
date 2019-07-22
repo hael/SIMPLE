@@ -14,7 +14,7 @@ use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct, P
 use CPlot2D_wrapper_module
 implicit none
 private
-public :: motion_patched, PATCH_PDIM
+public :: motion_patched
 #include "simple_local_flags.inc"
 
 ! module global constants
@@ -47,7 +47,7 @@ type :: motion_patched
     integer                             :: ldim(3)                  ! size of entire frame, reference
     integer                             :: ldim_patch(3)            ! size of one patch
     integer                             :: fixed_frame        = 1   ! frame of reference for alignment
-    integer                             :: interp_fixed_frame = 1   ! frame of interpolation for alignment
+    integer                             :: interp_fixed_frame = 1   ! frame of reference for interpolation
     real                                :: motion_correct_ftol
     real                                :: motion_correct_gtol
     real                                :: motion_patched_direct_ftol
@@ -556,9 +556,12 @@ contains
         self%shifts_patches = 0.
         allocate( self%align_iso(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
-        !$omp parallel do collapse(2) default(shared) private(j,i) proc_bind(close) schedule(static)
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
+        corr_avg = 0.
+        !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
+        !$omp proc_bind(close) schedule(static) reduction(+:corr_avg)
+        do i = 1,params_glob%nxpatch
+            do j = 1,params_glob%nypatch
+                ! init
                 call self%align_iso(i,j)%new
                 call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
                 if( self%has_frameweights )then
@@ -576,34 +579,23 @@ contains
                 call self%align_iso(i,j)%set_fitshifts(self%fitshifts)
                 call self%align_iso(i,j)%set_fixed_frame(self%fixed_frame)
                 call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
+                ! align
                 call self%align_iso(i,j)%align(self)
-            end do
-        end do
-        !$omp end parallel do
-        corr_avg = 0.
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
+                ! fetch info
                 corr_avg = corr_avg + self%align_iso(i,j)%get_corr()
-            enddo
-        enddo
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
-        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        ! making sure the shifts are in reference to fixed_frame
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
                 call self%align_iso(i,j)%get_opt_shifts(opt_shifts)
                 do iframe = 1, self%nframes
-                    self%shifts_patches(:,iframe,i,j)         = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
-                    self%shifts_patches_for_fit(:,iframe,i,j) = self%shifts_patches(:,iframe,i,j)
+                    ! making sure the shifts are in reference to fixed_frame
+                    self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
                 end do
-            end do
-        end do
-        ! cleanup
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
+                ! cleanup
                 call self%align_iso(i,j)%kill
             end do
         end do
+        !$omp end parallel do
+        self%shifts_patches_for_fit = self%shifts_patches
+        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
         deallocate(self%align_iso)
     end subroutine det_shifts
 
@@ -790,7 +782,7 @@ contains
         self%has_global_shifts = .false.
         if (present(global_shifts)) then
             allocate(self%global_shifts(size(global_shifts, 1), size(global_shifts, 2)))
-            self%global_shifts    = global_shifts
+            self%global_shifts     = global_shifts
             self%has_global_shifts = .true.
         end if
         self%nframes = size(frames,dim=1)

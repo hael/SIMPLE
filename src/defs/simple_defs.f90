@@ -141,6 +141,7 @@ real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for 
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 real, parameter    :: STREAM_SRCHFRAC      = 0.2       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: STREAM_INPLFRAC      = 0.2       !< fraction of times in-plane search is performed in the pool
+real, parameter    :: MC_PATCHSZ           = 720.      !< recommended patch size (in pixels) for motion correction
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

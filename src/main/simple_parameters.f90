@@ -47,6 +47,7 @@ type :: parameters
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
     character(len=3)      :: masscen='no'         !< center to center of gravity(yes|no){no}
     character(len=3)      :: match_filt='yes'     !< matched filter on (yes|no){yes}
+    character(len=3)      :: mcpatch='yes'        !< whether to perform patch-based alignment during motion correction
     character(len=3)      :: merge='no'
     character(len=3)      :: mirr='no'            !< mirror(no|x|y){no}
     character(len=3)      :: mkdir='no'           !< make auto-named execution directory(yes|no){no}
@@ -346,8 +347,8 @@ type :: parameters
     real    :: frac_outliers=0.
     real    :: fraczero=0.
     real    :: ftol=1e-6
-    real    :: motion_correctftol = 1e-2   !< tolerance (gradient) for motion_correctrer
-    real    :: motion_correctgtol = 1e-2   !< tolerance (function value) for motion_correct
+    real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
+    real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
     real    :: globwfrac = GLOBAL_WEIGHT_FRAC !< global weight fraction (threshold of mean + one sigma)
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
@@ -526,6 +527,7 @@ contains
         call check_carg('locres',         self%locres)
         call check_carg('masscen',        self%masscen)
         call check_carg('match_filt',     self%match_filt)
+        call check_carg('mcpatch',        self%mcpatch)
         call check_carg('merge',          self%merge)
         call check_carg('mirr',           self%mirr)
         call check_carg('mkdir',          self%mkdir)
@@ -1402,6 +1404,13 @@ contains
                 ! set default nnn value to 10% of the search space
                 self%nnn = max(nint(0.1 * real(self%nspace)), NPEAKS2REFINE)
             endif
+        endif
+        ! motion correction
+        if( self%tomo .eq. 'yes' ) self%mcpatch = 'no'
+        if( self%mcpatch.eq.'yes' .and. self%nxpatch*self%nypatch<=1 ) self%mcpatch = 'no'
+        if( self%mcpatch.eq.'no' )then
+            self%nxpatch = 0
+            self%nypatch = 0
         endif
         !>>> END, IMAGE-PROCESSING-RELATED
         ! set global pointer to instance

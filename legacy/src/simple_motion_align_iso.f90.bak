@@ -1,5 +1,6 @@
 ! linearly align frames in a maximum-likelihood way, double (nested) iteration.
 ! convergence and frameweights can be determined by callback
+! The cumulative shifts are estimated
 module simple_motion_align_iso
 !$ use omp_lib
 !$ use omp_lib_kinds
@@ -17,8 +18,7 @@ private
 #include "simple_local_flags.inc"
 
 real,    parameter :: SMALLSHIFT_DEFAULT = 1.
-real,    parameter :: NIMPROVED_TOL      = 1.e-7
-real,    parameter :: SRCH_TOL           = 1.e-6
+real,    parameter :: NIMPROVED_TOL      = 1e-7
 integer, parameter :: MITSREF_DEFAULT    = 30
 integer, parameter :: POLYDIM            = 4
 
@@ -32,7 +32,9 @@ type :: motion_align_iso
     type(ft_expanded),                allocatable     :: movie_sum_global_ftexp_threads(:) !< array of global movie sums for parallel refinement
     real,                             allocatable     :: shifts_toplot(:,:)                !< for plotting
     real,                             allocatable     :: opt_shifts(:,:)                   !< shifts identified
+    real,                             allocatable     :: opt_shifts_saved(:,:)             !< best shifts
     real,                             allocatable     :: frameweights(:)                   !< array of frameweights
+    real,                             allocatable     :: frameweights_saved(:)             !< array of frameweights
     real,                             allocatable     :: corrs(:)                          !< per-frame correlations
     real(dp)                                          :: polyx(POLYDIM), polyy(POLYDIM)    !< polynomial coefficients
     real                                              :: ftol                              !< tolerance parameter for minimizer
@@ -44,7 +46,9 @@ type :: motion_align_iso
     real                                              :: hp = -1.                          !< high pass value
     real                                              :: lp = -1.                          !< low pass value
     real                                              :: corr                              !< correlation
-    real                                              :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for shsrch update
+    real                                              :: corr_prev                         !< previous correlation
+    real                                              :: corr_saved                        !< best correlation
+    real                                              :: shsrch_tol                        !< tolerance parameter for shsrch update
     integer                                           :: nimproved                         !< number of improved frames
     integer                                           :: maxits         = 0                !< maximum number of iterations; 0: default
     integer                                           :: nframes_allocd = 0                !< number of frames allocated
@@ -55,6 +59,7 @@ type :: motion_align_iso
     integer                                           :: coord_x, coord_y                  !< x,y coordinates for patch-based alignment callback
     logical                                           :: fitshifts        = .false.
     logical                                           :: rand_init_shifts = .false.        !< randomize initial condition?
+    logical                                           :: has_shsrch_tol   = .false.        !< is shsrch_tol set
     logical, public                                   :: existence        = .false.
 
 contains
@@ -136,7 +141,6 @@ contains
         self%frameweights_callback => null()
         self%hp                    = -1.
         self%lp                    = -1.
-        self%shsrch_tol            = SRCH_TOL
         self%existence             = .true.
     end subroutine motion_align_iso_new
 
@@ -145,9 +149,8 @@ contains
         class(*),                   intent(inout) :: callback_ptr  !< callback pointer to be passed as first argument
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2)
         type(ftexp_shsrch), allocatable           :: ftexp_srch(:)
-        real    :: opt_shifts_saved(self%nframes,2), opt_shifts_prev(self%nframes, 2), opt_vels(self%nframes, 2)
-        real    :: frameweights_saved(self%nframes), cxy(3), hp_saved, lp_saved, corr_prev, corr_saved
-        integer :: prev_frames(self%nframes), i, iter, iframe, nimproved, maxits_saved, lp_updates, prev_frame
+        integer :: i, iter, iframe, nimproved, maxits_saved, lp_updates
+        real    :: cxy(3), hp_saved, lp_saved
         logical :: callback_convgd, fitshifts_saved
         if ( .not. self%existence ) then
             THROW_HARD('not instantiated; simple_motion_align_iso: align')
@@ -161,8 +164,11 @@ contains
         self%iter = 0
         call self%create_ftexp_objs
         call self%calc_frameweights( callback_ptr )
-        self%opt_shifts = 0.
-        if( present(ini_shifts) ) self%opt_shifts = ini_shifts
+        if( present(ini_shifts) )then
+            self%opt_shifts = ini_shifts
+        else
+            self%opt_shifts = 0.
+        endif
         if ( self%rand_init_shifts ) then
             do iframe = 1, self%nframes
                 if( iframe == self%fixed_frame ) cycle
@@ -170,14 +176,6 @@ contains
                 self%opt_shifts(iframe,2) = self%opt_shifts(iframe,2) + (ran3()-.5) * self%smallshift
             end do
         end if
-        ! previous frames indices for increments calculation
-        do iframe = self%fixed_frame-1,1,-1
-            prev_frames(iframe) = iframe+1
-        end do
-        prev_frames(self%fixed_frame) = self%fixed_frame
-        do iframe = self%fixed_frame+1,self%nframes
-            prev_frames(iframe) = iframe-1
-        end do
         ! generate movie sum for refinement
         call self%shift_wsum_and_calc_corrs
         self%corr = sum(self%corrs)/real(self%nframes)
@@ -185,47 +183,35 @@ contains
         if (alloc_stat.ne.0) call allocchk('align 1; simple_motion_align_init')
         do iframe = 1, self%nframes
             call ftexp_srch(iframe)%new(self%movie_sum_global_ftexp_threads(iframe),&
-                self%movie_frames_ftexp_sh(iframe),self%trs, motion_correct_ftol=self%ftol, motion_correct_gtol=self%gtol)
-            call ftexp_srch(iframe)%set_shsrch_tol(self%shsrch_tol)
+                self%movie_frames_ftexp(iframe),self%trs, motion_correct_ftol=self%ftol, motion_correct_gtol=self%gtol)
+            if (self%has_shsrch_tol) then
+                call ftexp_srch(iframe)%set_shsrch_tol(self%shsrch_tol)
+            end if
             if (self%maxits > 0) ftexp_srch(iframe)%ospec%maxits = self%maxits
         end do
         ! main loop
         lp_updates      = 0
         fitshifts_saved = self%fitshifts
-        corr_saved      = -1.
-        opt_vels        =  0.
+        self%corr_saved = -1.
         do iter=1,self%mitsref
-            self%iter       = iter
-            nimproved       = 0
-            PRINT_NEVALS    = .false.
-            opt_shifts_prev = self%opt_shifts
+            self%iter = iter
+            nimproved = 0
+            PRINT_NEVALS = .false.
             ! individual optimizations
-            !$omp parallel do default(shared) private(iframe,prev_frame,cxy) proc_bind(close) reduction(+:nimproved)
-            do iframe = 1,self%nframes
-                prev_frame = prev_frames(iframe)
-                call self%movie_sum_global_ftexp_threads(iframe)%subtr(self%movie_frames_ftexp_sh(iframe),&
-                    &w=self%frameweights(iframe))
-                call self%movie_frames_ftexp(iframe)%shift([-opt_shifts_prev(prev_frame,1), -opt_shifts_prev(prev_frame,2), 0.],&
-                    &self%movie_frames_ftexp_sh(iframe))
-                cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), opt_vels(iframe,:))
+            !$omp parallel do default(shared) private(iframe,cxy) proc_bind(close) reduction(+:nimproved)
+            do iframe=1,self%nframes
+                call self%movie_sum_global_ftexp_threads(iframe)%subtr(&
+                    self%movie_frames_ftexp_sh(iframe), w=self%frameweights(iframe))
+                cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), self%opt_shifts(iframe,:))
                 if( cxy(1) - self%corrs(iframe) > NIMPROVED_TOL ) nimproved = nimproved + 1
-                opt_vels(iframe,:) = cxy(2:3)
-                self%corrs(iframe) = cxy(1)
+                self%opt_shifts(iframe,:) = cxy(2:3)
+                self%corrs(iframe)        = cxy(1)
             end do
             !$omp end parallel do
             self%nimproved     = nimproved
             self%frac_improved = real(self%nimproved) / real(self%nframes) * 100.
-            ! build new shifts
-            do iframe = 1,self%nframes
-                if( iframe == self%fixed_frame )then
-                    self%opt_shifts(self%fixed_frame,:) = opt_vels(self%fixed_frame,:)
-                else
-                    prev_frame = prev_frames(iframe)
-                    self%opt_shifts(iframe,:) = opt_shifts_prev(prev_frame,:) + opt_vels(iframe,:)
-                endif
-            end do
-            ! iterative fitting
-            if( lp_updates >= 1 ) self%fitshifts = .false.
+            ! updates shifts & weights
+            if( lp_updates >= 3 ) self%fitshifts = .false.
             if( self%fitshifts )then
                 call self%recenter_shifts(self%opt_shifts)
                 call self%fit_polynomial
@@ -233,20 +219,19 @@ contains
                     call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
                 enddo
             endif
-            ! recenter shifts
+            write(logfhandle,'(a,1x,f4.0)') 'This % of frames improved their alignment: ', self%frac_improved
             call self%recenter_shifts(self%opt_shifts)
-            ! updates weights
             call self%calc_frameweights(callback_ptr)
             ! build new reference
             call self%shift_wsum_and_calc_corrs
-            corr_prev = self%corr
-            self%corr = sum(self%corrs) / real(self%nframes)
-            if( self%corr >= corr_saved ) then ! save the local optimum
-                corr_saved         = self%corr
-                frameweights_saved = self%frameweights
-                opt_shifts_saved   = self%opt_shifts
+            self%corr_prev = self%corr
+            self%corr      = sum(self%corrs) / real(self%nframes)
+            if( self%corr >= self%corr_saved ) then ! save the local optimum
+                self%corr_saved         = self%corr
+                self%frameweights_saved = self%frameweights
+                self%opt_shifts_saved   = self%opt_shifts
             endif
-            self%corrfrac = corr_prev / self%corr
+            self%corrfrac = self%corr_prev / self%corr
             if (associated(self%callback)) then
                 hp_saved        = self%hp
                 lp_saved        = self%lp
@@ -269,17 +254,16 @@ contains
                     call self%calc_frameweights( callback_ptr )
                     call self%shift_wsum_and_calc_corrs
                     ! need to destroy all previous knowledge about correlations
-                    self%corr  = sum(self%corrs) / real(self%nframes)
-                    corr_prev  = self%corr
-                    corr_saved = self%corr
+                    self%corr       = sum(self%corrs) / real(self%nframes)
+                    self%corr_prev  = self%corr
+                    self%corr_saved = self%corr
                 end if
             end if
         end do
         ! put the best local optimum back
-        self%corr          = corr_saved
-        self%opt_shifts    = opt_shifts_saved
-        self%frameweights  = frameweights_saved
-        self%shifts_toplot = self%opt_shifts
+        self%corr         = self%corr_saved
+        self%opt_shifts   = self%opt_shifts_saved
+        self%frameweights = self%frameweights_saved
         do i = 1, self%nframes
             call ftexp_srch(i)%kill
         end do
@@ -307,6 +291,8 @@ contains
             shifts(iframe,2) = shifts(iframe,2) + ysh
             if( abs(shifts(iframe,1)) < 1e-6 ) shifts(iframe,1) = 0.
             if( abs(shifts(iframe,2)) < 1e-6 ) shifts(iframe,2) = 0.
+            self%shifts_toplot(iframe,1) = shifts(iframe, 1)
+            self%shifts_toplot(iframe,2) = shifts(iframe, 2)
         end do
     end subroutine recenter_shifts
 
@@ -360,8 +346,10 @@ contains
             self%movie_sum_global_ftexp_threads(self%nframes),&
             self%shifts_toplot(self%nframes,2),&
             self%opt_shifts(self%nframes,2),&
+            self%opt_shifts_saved(self%nframes,2),&
             self%corrs(self%nframes),&
-            self%frameweights(self%nframes), stat=alloc_stat )
+            self%frameweights(self%nframes),&
+            self%frameweights_saved(self%nframes), stat=alloc_stat )
         if(alloc_stat.ne.0)call allocchk('allocate_fields; simple_motion_align_iso')
         self%nframes_allocd = self%nframes
     end subroutine allocate_fields
@@ -377,7 +365,7 @@ contains
             end do
             deallocate( self%movie_frames_ftexp, self%movie_frames_ftexp_sh, &
                 self%movie_sum_global_ftexp_threads, self%opt_shifts, self%frameweights, self%corrs, &
-                self%shifts_toplot)
+                self%shifts_toplot, self%opt_shifts_saved, self%frameweights_saved)
         else
             if ( allocated(self%movie_frames_ftexp) .or. allocated(self%movie_frames_ftexp_sh) .or.&
                  allocated(self%movie_sum_global_ftexp_threads) .or. allocated(self%opt_shifts) .or.&
@@ -591,6 +579,7 @@ contains
         class(motion_align_iso), intent(inout) :: self
         real, intent(in) :: shsrch_tol
         self%shsrch_tol = shsrch_tol
+        self%has_shsrch_tol = .true.
     end subroutine motion_align_iso_set_shsrch_tol
 
     subroutine motion_align_iso_set_maxits( self, maxits )
