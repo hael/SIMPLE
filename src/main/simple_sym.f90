@@ -84,7 +84,7 @@ contains
         character(len=*), intent(in)  :: pgrp        !< sym group string
         logical, optional, intent(in) :: icorelion
         type(sym)                     :: self
-        call self%new(pgrp)
+        call self%new(pgrp, icorelion)
     end function constructor
 
     !>  \brief  is a constructor

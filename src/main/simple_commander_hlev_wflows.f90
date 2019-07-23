@@ -654,7 +654,7 @@ contains
         else
             call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
             if( .not.file_exists(frcs_fname) )then
-                THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
+                THROW_HARD('the project file does not contain enough information for e/o alignment, use a low-pass instead')
             endif
         endif
         ! set lplims
@@ -1134,7 +1134,6 @@ contains
         orig_projfile   = trim(params%projfile)
         params%projfile = trim(params%cwd)//'/'//trim(params%projname)//trim(METADATA_EXT)
         call cline%set('projfile',params%projfile)
-        !if( .not.params%l_eo .and. .not.cline%defined('lp') ) THROW_HARD('need lp input when eo .eq. no; cluster3D')
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! prep project
@@ -1227,10 +1226,7 @@ contains
         call cline%delete('refine')
         ! resolution limits
         if( trim(params%oritype).eq.'cls3D' )then
-            params%eo      = 'no'
-            params%l_eo    = .false.
             params%l_lpset = .true.
-            call cline%set('eo','no')
             call cline%set('lp',lp_cls3D)
         else
             if(.not.cline%defined('lplim_crit'))call cline%set('lplim_crit', 0.5)
@@ -1435,14 +1431,11 @@ contains
         type(ori)                :: o_tmp
         integer                  :: state, iptcl, nstates, single_state, ncls, istk, nstks
         logical                  :: l_singlestate, cavgs_import, fall_over
-        if( .not. cline%defined('eo') )      call cline%set('eo', 'no')
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
         call params%new(cline)
         ! set mkdir to no
         call cline%set('mkdir', 'no')
         ! sanity checks
-        if( params%eo .eq. 'no' .and. .not. cline%defined('lp') )&
-            &THROW_HARD('need lp input when eo .eq. no; cluster3D_refine')
         if( .not.cline%defined('maxits') )call cline%set('maxits',real(MAXITS))
         l_singlestate = cline%defined('state')
         if( l_singlestate )then
@@ -1512,7 +1505,7 @@ contains
             else
                 call spproj%get_frcs(frcs_fname, 'frc2D', fail=.false.)
                 if( .not.file_exists(frcs_fname) )then
-                    THROW_HARD('the project file does not contain the required information for e/o alignment, use eo=no instead')
+                    THROW_HARD('the project file does not contain enough information for e/o alignment, use a low-pass instead')
                 endif
             endif
             if( count(states==0) .eq. ncls )then
@@ -1526,7 +1519,6 @@ contains
                 call spproj_master%os_ptcl3D%set_all('state', real(states))
             else
                 call prep_eo_stks
-                params_glob%eo     = 'yes'
                 params_glob%nptcls = spproj_master%get_nptcls()
             endif
             ! name & oritype change
@@ -1606,7 +1598,7 @@ contains
         endif
         do state=1,params%nstates
             if( state_pops(state) == 0 )cycle
-            if( l_singlestate .and. state.ne.single_state )cycle
+            if( l_singlestate .and. state.ne.single_state ) cycle
             ! renames volumes and updates in os_out
             call stash_state(state)
             ! updates orientations
@@ -1632,7 +1624,6 @@ contains
         do state=1,params%nstates
             if( state_pops(state) == 0 )cycle
             if( l_singlestate .and. state.ne.single_state )cycle
-            call simple_rmdir(dirs(state))
             call del_file(projfiles(state))
         enddo
         if(params%oritype.eq.'cls3D') call del_file(cls3D_projfile)
@@ -1645,54 +1636,55 @@ contains
 
             ! stash docs, volumes , etc.
             subroutine stash_state(s)
-                integer, intent(in)   :: s
-                character(len=2), parameter :: one = '01'
+                integer, intent(in) :: s
+                character(len=2),            parameter :: one = '01'
                 character(len=LONGSTRLEN), allocatable :: files(:)
-                character(len=STDLEN) :: src, dest
-                character(len=2)      :: str_state
-                character(len=8)      :: str_iter
-                integer               :: i, it, final_it, stat, pos, l
+                character(len=LONGSTRLEN) :: src, dest, vol, fsc, volfilt
+                character(len=2)          :: str_state
+                character(len=8)          :: str_iter
+                integer                   :: i, final_it, stat, l, pos
                 final_it  = nint(cline_refine3D(s)%get_rarg('endit'))
                 str_state = int2str_pad(s,2)
-                ! moves all *state01* files
-                call simple_list_files(trim(dirs(state))//'/*state01*', files)
-                do i=1,size(files)
-                    src  = files(i)
-                    dest = basename(files(i))
-                    l    = len_trim(dest)
-                    pos  = index(dest(1:l),'_state01',back=.true.)
-                    dest(pos:pos+7) = '_state' // str_state
-                    stat = simple_rename(src, dest)
-                enddo
-                deallocate(files)
-                ! FSC print outs
-                if( params%eo.ne.'no')then
-                    src  = filepath( dirs(s), 'RESOLUTION_STATE'//one)
-                    dest = 'RESOLUTION_STATE'//str_state
-                    stat = simple_rename(src, dest)
-                    do it = 1,final_it
-                        str_iter = '_ITER'//int2str_pad(it,3)
-                        src  = filepath( dirs(s), 'RESOLUTION_STATE'//one//str_iter)
-                        dest = 'RESOLUTION_STATE'//str_state//str_iter
-                        stat = simple_rename(src, dest)
-                    enddo
+                str_iter  = '_ITER'//int2str_pad(final_it,3)
+                if( s == 1 )then
+                    vol     = filepath(dirs(s), trim(VOL_FBODY)//one//trim(params%ext))
+                    fsc     = filepath(dirs(s), trim(FSC_FBODY)//one//BIN_EXT)
+                    volfilt = filepath(dirs(s), trim(ANISOLP_FBODY)//one//params%ext)
+                else
+                    ! renames all *state01* files
+                     call simple_list_files(trim(dirs(s))//'/*state01*', files)
+                     do i=1,size(files)
+                         src  = files(i)
+                         dest = basename(files(i))
+                         l    = len_trim(dest)
+                         pos  = index(dest(1:l),'_state01',back=.true.)
+                         dest(pos:pos+7) = '_state' // str_state
+                         stat = simple_rename(src, filepath(trim(dirs(s)),dest))
+                     enddo
+                     deallocate(files)
+                     call simple_list_files(trim(dirs(s))//'/*STATE01*', files)
+                     do i=1,size(files)
+                         src  = files(i)
+                         dest = basename(files(i))
+                         l    = len_trim(dest)
+                         pos  = index(dest(1:l),'_STATE01',back=.true.)
+                         dest(pos:pos+7) = '_STATE' // str_state
+                         stat = simple_rename(src, filepath(trim(dirs(s)),dest))
+                     enddo
+                     deallocate(files)
+                     vol     = filepath(dirs(s), trim(VOL_FBODY)//str_state//trim(params%ext))
+                     fsc     = filepath(dirs(s), trim(FSC_FBODY)//str_state//BIN_EXT)
+                     volfilt = filepath(dirs(s), trim(ANISOLP_FBODY)//str_state//params%ext)
                 endif
                 ! updates os_out
-                str_iter = '_iter'//int2str_pad(final_it,3)
-                src      = trim(VOL_FBODY)//str_state//str_iter//params%ext
                 if(params%oritype.eq.'cls3D')then
-                    call spproj%add_vol2os_out(trim(src), params%smpd, s, 'vol_cavg')
+                    call spproj%add_vol2os_out(vol, params%smpd, s, 'vol_cavg')
                 else
-                    call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol')
-                    if( params%eo.ne.'no')then
-                        src = trim(FSC_FBODY)//str_state//BIN_EXT
-                        call spproj_master%add_fsc2os_out(trim(src), s, params%box)
-                        src  = trim(ANISOLP_FBODY)//str_state//params%ext
-                        call spproj_master%add_vol2os_out(trim(src), params%smpd, s, 'vol_filt', box=params%box)
-                        src  = FRCS_FILE
-                        call  spproj_master%add_frcs2os_out(trim(src),'frc3D')
-                    endif
+                    call spproj_master%add_vol2os_out(vol, params%smpd, s, 'vol')
                 endif
+                call spproj_master%add_fsc2os_out(fsc, s, params%box)
+                call spproj_master%add_vol2os_out(volfilt, params%smpd, s, 'vol_filt', box=params%box)
+                call spproj_master%add_frcs2os_out(filepath(dirs(s),FRCS_FILE),'frc3D')
             end subroutine stash_state
 
             subroutine prep_eo_stks
@@ -1703,7 +1695,6 @@ contains
                 do state=1,params%nstates
                     call cline_refine3D(state)%delete('lp')
                     call cline_refine3D(state)%set('frcs',trim(frcs_fname))
-                    call cline_refine3D(state)%set('eo',         'yes')
                     call cline_refine3D(state)%set('lplim_crit', 0.5)
                     call cline_refine3D(state)%set('clsfrcs',   'yes')
                 enddo

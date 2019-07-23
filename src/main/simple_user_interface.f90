@@ -1030,7 +1030,7 @@ contains
         &'3D heterogeneity analysis',&                                             ! descr_short
         &'is a distributed workflow for heterogeneity analysis by 3D clustering',& ! descr_long
         &'simple_distr_exec',&                                                     ! executable
-        &0, 1, 0, 8, 7, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 1, 0, 8, 6, 5, 2, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1055,9 +1055,8 @@ contains
         call cluster3D%set_input('filt_ctrls', 3, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D%set_input('filt_ctrls', 4, lplim_crit)
-        call cluster3D%set_input('filt_ctrls', 5, eo)
-        call cluster3D%set_input('filt_ctrls', 6, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
-        call cluster3D%set_input('filt_ctrls', 7, envfsc)
+        call cluster3D%set_input('filt_ctrls', 5, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit','low-pass limit in Angstroms', .false., 0.)
+        call cluster3D%set_input('filt_ctrls', 6, envfsc)
         ! mask controls
         call cluster3D%set_input('mask_ctrls', 1, msk)
         call cluster3D%set_input('mask_ctrls', 2, inner)
@@ -1077,7 +1076,7 @@ contains
         &'is a distributed workflow based on probabilistic projection matching &
         &for refinement of 3D heterogeneity analysis by cluster3D ',&        ! descr_long
         &'simple_distr_exec',&                                               ! executable
-        &2, 1, 0, 11, 7, 3, 2, .true.)                                       ! # entries in each group
+        &2, 1, 0, 11, 6, 3, 2, .true.)                                       ! # entries in each group
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster3D_refine%set_input('img_ios', 1, 'msklist', 'file', 'List of mask files', 'List (.txt file) of mask files for the different states', 'e.g. mskfiles.txt', .false., '')
@@ -1109,8 +1108,7 @@ contains
         call cluster3D_refine%set_input('filt_ctrls', 4, 'lpstop', 'num', 'Low-pass limit for frequency limited refinement', 'Low-pass limit used to limit the resolution &
         &to avoid possible overfitting', 'low-pass limit in Angstroms', .false., 1.0)
         call cluster3D_refine%set_input('filt_ctrls', 5, lplim_crit)
-        call cluster3D_refine%set_input('filt_ctrls', 6, eo)
-        call cluster3D_refine%set_input('filt_ctrls', 7, envfsc)
+        call cluster3D_refine%set_input('filt_ctrls', 6, envfsc)
         ! mask controls
         call cluster3D_refine%set_input('mask_ctrls', 1, msk)
         call cluster3D_refine%set_input('mask_ctrls', 2, inner)
