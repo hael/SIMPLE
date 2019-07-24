@@ -6870,7 +6870,7 @@ contains
         type(image) :: tmp
         integer     :: winsz
         call tmp%copy(self)
-        winsz = nint((self%ldim(1) * self%smpd) / lp)
+        winsz = nint(real(self%ldim(1)/2)*self%smpd / lp / sqrt(2.))
         call tmp%real_space_filter(winsz, 'average')
         self%rmat = self%rmat - tmp%rmat
         call tmp%kill()
