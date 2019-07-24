@@ -468,37 +468,35 @@ contains
         !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%shift2Dserial(-opt_shifts(iframe,:))
-            ! back to real space for anisotropic alignment
-            if( motion_correct_with_patched ) call movie_frames_shifted(iframe)%ifft
+            if (motion_correct_with_patched) then
+                ! Save the isotropically corrected frames for anisotropic alignment
+                call movie_frames_shifted_saved(iframe)%new(ldim_scaled, smpd_scaled)
+                call movie_frames_shifted_saved(iframe)%copy(movie_frames_shifted(iframe))
+                call movie_frames_shifted_saved(iframe)%ifft
+            endif
         end do
         !$omp end parallel do
-        if (motion_correct_with_patched) then
-            ! Save the isotropically corrected frames for anisotropic alignment
+        ! Following sums are performed in case anisotropic correction will be unsuccessfull
+        if( l_fromto )then
+            ! Weighted, un-filtered partial sum
+            wvec = 0.
+            wvec(fromto(1):fromto(2)) = frameweights(fromto(1):fromto(2))
+            call sum_frames(movie_sum_corrected_fromto, wvec)
+        endif
+        ! Unweighted, unfiltered sum for CTF estimation
+        wvec = scalar_weight
+        call sum_frames(movie_sum_ctf, wvec)
+        ! Weighted, filtered sum for micrograph
+        if( params_glob%l_dose_weight )then
+            call gen_dose_weight_filter(filtarr, movie_frames_shifted)
+            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
             do iframe=1,nframes
-                movie_frames_shifted_saved(iframe) = movie_frames_shifted(iframe)
-            enddo
-        else
-            ! No anisotropic correction
-            if( l_fromto )then
-                ! Weighted, un-filtered partial sum
-                wvec = 0.
-                wvec(fromto(1):fromto(2)) = frameweights(fromto(1):fromto(2))
-                call sum_frames(movie_sum_corrected_fromto, wvec)
-            endif
-            ! Unweighted, unfiltered sum for CTF estimation
-            wvec = scalar_weight
-            call sum_frames(movie_sum_ctf, wvec)
-            ! Weighted, filtered sum for micrograph
-            if( params_glob%l_dose_weight )then
-                call gen_dose_weight_filter(filtarr, movie_frames_shifted)
-                !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-                do iframe=1,nframes
-                    call movie_frames_shifted(iframe)%apply_filter_serial(filtarr(iframe,:))
-                end do
-                !$omp end parallel do
-            endif
-            call sum_frames(movie_sum_corrected,frameweights)
-        end if
+                call movie_frames_shifted(iframe)%apply_filter_serial(filtarr(iframe,:))
+            end do
+            !$omp end parallel do
+        endif
+        call sum_frames(movie_sum_corrected,frameweights)
+
         contains
 
             subroutine sum_frames( img_sum, weights )
@@ -520,6 +518,7 @@ contains
                 call img_sum%ifft()
             end subroutine sum_frames
     end subroutine motion_correct_iso_calc_sums
+
 
     subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
         integer,     intent(inout) :: frame_counter  !< frame counter

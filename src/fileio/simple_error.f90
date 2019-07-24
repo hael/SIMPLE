@@ -22,10 +22,12 @@ contains
         else
             write(logfhandle,'(A,I5)') '; '//trim(file)//'; line: ', line
         endif
+        if( ll_stop )then
 #if defined(GNU) && defined(_DEBUG)
-        call backtrace()
+                    call backtrace()
 #endif
-        if( ll_stop ) call exit(EXIT_FAILURE)
+            call exit(EXIT_FAILURE)
+        endif
     end subroutine simple_exception
 
     !> \brief  is for checking allocation

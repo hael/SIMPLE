@@ -14,7 +14,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-real,             parameter :: PATCH_CHISQ_THRESHOLD = 8. ! in pixels
+real,             parameter :: PATCH_FIT_THRESHOLD = 5.0 ! threshold for polynomial fitting in pixels
 character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter
@@ -124,7 +124,7 @@ contains
         if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
             call motion_correct_patched( goodnessoffit )
-            patch_success = (goodnessoffit(1)<PATCH_CHISQ_THRESHOLD) .and. (goodnessoffit(2)<PATCH_CHISQ_THRESHOLD)
+            patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
             if( patch_success )then
                 if( cline%defined('tof') )then
                     call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
@@ -133,15 +133,14 @@ contains
                     call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
                 endif
                 call write_aniso2star
-                ! cleanup
-                call motion_correct_patched_kill
             else
-                motion_correct_with_patched = .false.
                 THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
                 THROW_WARN('Only isotropic/stage-drift correction will be used')
             endif
             call orientation%set('gofx',goodnessoffit(1))
             call orientation%set('gofy',goodnessoffit(2))
+            ! cleanup
+            call motion_correct_patched_kill
         endif
         ! generate power-spectra
         call self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)
