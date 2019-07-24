@@ -905,6 +905,7 @@ contains
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
+        call build%spproj_field%kill
         call simple_end('**** SIMPLE_DISTR_CLUSTER2D NORMAL STOP ****')
     end subroutine exec_cluster2D_distr
 
@@ -1329,6 +1330,7 @@ contains
         call cline%delete( 'startit' )
         call cline%set('endit', real(iter))
         ! end gracefully
+        call build%spproj_field%kill
         call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
     end subroutine exec_refine3D_distr
 
@@ -1441,6 +1443,7 @@ contains
         endif
         ! termination
         call qsys_cleanup
+        call build%spproj_field%kill
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D_distr
 
@@ -1603,6 +1606,7 @@ contains
             end do
         endif
         ! end gracefully
+        call build%spproj_field%kill
         call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
     end subroutine exec_scale_project_distr
 

@@ -99,6 +99,8 @@ contains
         call qsys_job_finished(  'simple_commander_cluster2D :: exec_make_cavgs' )
         call cavger_kill
         ! end gracefully
+        call build%kill_strategy2D_tbox
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_MAKE_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_make_cavgs
 
@@ -187,6 +189,7 @@ contains
             call cline%set('converged', 'no')
         endif
         ! end gracefully
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_2DCONV NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_check_2Dconv
 
@@ -231,6 +234,7 @@ contains
             ! nothing to do
         endif
         ! end gracefully
+        call build%kill_general_tbox
         call simple_end('**** SIMPLE_RANK_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_rank_cavgs
 

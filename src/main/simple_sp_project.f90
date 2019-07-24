@@ -2491,10 +2491,10 @@ contains
     subroutine prune_project( self_in, cline, projout_fname, dir )
         use simple_image,   only: image
         use simple_cmdline, only: cmdline
-        class(sp_project),                   intent(inout) :: self_in
-        class(cmdline),                      intent(in)    :: cline
-        character(len=LONGSTRLEN),           intent(in)    :: projout_fname
-        character(len=*),          optional, intent(in)    :: dir
+        class(sp_project),          intent(inout) :: self_in
+        class(cmdline),             intent(in)    :: cline
+        character(len=*),           intent(in)    :: projout_fname
+        character(len=*), optional, intent(in)    :: dir
         character(len=:), allocatable :: newstkname,stkname,projname,new_projname,projfile,new_projfile,ext
         character(len=LONGSTRLEN)     :: relstkname
         character(len=STDLEN):: stkdir

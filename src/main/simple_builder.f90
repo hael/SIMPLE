@@ -71,7 +71,7 @@ type :: builder
     procedure                           :: build_strategy3D_tbox
     procedure, private                  :: kill_strategy3D_tbox
     procedure, private                  :: build_strategy2D_tbox
-    procedure, private                  :: kill_strategy2D_tbox
+    procedure                           :: kill_strategy2D_tbox
 end type builder
 
 class(builder), pointer :: build_glob  => null()

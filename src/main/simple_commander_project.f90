@@ -786,8 +786,8 @@ contains
         call cline%set('mkdir', 'yes')
         call params%new(cline)
         call spproj%read(params%projfile)
-        projfile_prune = get_fbody(params%projfile,METADATA_EXT,separator=.false.)
-        projfile_prune = trim(projfile_prune)//'_prune'//trim(METADATA_EXT)
+        projfile_prune = get_fbody(basename(params%projfile),METADATA_EXT,separator=.false.)
+        projfile_prune = filepath(CWD_GLOB, trim(projfile_prune)//'_prune'//trim(METADATA_EXT))
         call spproj%prune_project(cline, projfile_prune)
         call simple_end('**** PRUNE_PROJECT NORMAL STOP ****')
     end subroutine exec_prune_project
