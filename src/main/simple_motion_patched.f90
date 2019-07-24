@@ -53,6 +53,7 @@ type :: motion_patched
     real                                :: motion_patched_direct_ftol
     real                                :: motion_patched_direct_gtol
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
+    real                                :: poly_chisq(2)              ! polynomial fit goodness of fit
     real                                :: trs
     real, public                        :: hp
     real                                :: resstep
@@ -85,6 +86,7 @@ contains
     procedure                           :: set_fixed_frame
     procedure                           :: set_interp_fixed_frame
     procedure                           :: get_poly4star
+    procedure                           :: get_polyfit_chisq
     procedure                           :: new
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: correct_polyn   => motion_patched_correct_polyn
@@ -164,6 +166,7 @@ contains
         real(dp) :: sig(self%nframes*params_glob%nxpatch*params_glob%nypatch)
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
         integer  :: idx, iframe, i, j
+        self%poly_chisq = 0.
         sig = 1.d0
         idx = 0
         do iframe = 1, self%nframes
@@ -180,7 +183,11 @@ contains
             if( self%frameweights(iframe) < 1.e-6 ) sig(iframe) = 1.d6
         end do
         call svd_multifit(x,yx,sig,self%poly_coeffs(:,1),v,w,chisq,patch_poly)
+        self%poly_chisq(1) = real(chisq)
         call svd_multifit(x,yy,sig,self%poly_coeffs(:,2),v,w,chisq,patch_poly)
+        self%poly_chisq(2) = real(chisq)
+        self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) )
+        self%poly_chisq    = self%poly_chisq / params_glob%scale ! average difference in pixels
     end subroutine fit_polynomial
 
     subroutine plot_shifts(self)
@@ -306,6 +313,12 @@ contains
         call svd_multifit(x,yx,sig,polycoeffs(           1:  PATCH_PDIM),v,w,chisq,patch_poly)
         call svd_multifit(x,yy,sig,polycoeffs(PATCH_PDIM+1:2*PATCH_PDIM),v,w,chisq,patch_poly)
     end subroutine get_poly4star
+
+    function get_polyfit_chisq( self )result( chisq )
+        class(motion_patched), intent(in) :: self
+        real :: chisq(2)
+        chisq = self%poly_chisq
+    end function get_polyfit_chisq
 
     elemental subroutine pix2polycoords( self, xin, yin, x, y )
         class(motion_patched), intent(in)  :: self

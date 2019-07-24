@@ -14,6 +14,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
+real,             parameter :: PATCH_CHISQ_THRESHOLD = 8. ! in pixels
 character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter
@@ -44,9 +45,9 @@ contains
         real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
-        real    :: scale, var
+        real    :: goodnessoffit(2), scale, var
         integer :: ldim(3), ldim_thumb(3), nframes
-        logical :: err
+        logical :: err, patch_success
         ! check, increment counter & print
         if( .not. file_exists(moviename) )then
             write(logfhandle,*) 'inputted movie stack does not exist: ', trim(moviename)
@@ -122,16 +123,25 @@ contains
         ! Patch based approach
         if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
-            call motion_correct_patched
-            if( cline%defined('tof') )then
-                call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
+            call motion_correct_patched( goodnessoffit )
+            patch_success = (goodnessoffit(1)<PATCH_CHISQ_THRESHOLD) .and. (goodnessoffit(2)<PATCH_CHISQ_THRESHOLD)
+            if( patch_success )then
+                if( cline%defined('tof') )then
+                    call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
+                    call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
+                else
+                    call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
+                endif
+                call write_aniso2star
+                ! cleanup
+                call motion_correct_patched_kill
             else
-                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
+                motion_correct_with_patched = .false.
+                THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
+                THROW_WARN('Only isotropic/stage-drift correction will be used')
             endif
-            call write_aniso2star
-            ! cleanup
-            call motion_correct_patched_kill
+            call orientation%set('gofx',goodnessoffit(1))
+            call orientation%set('gofy',goodnessoffit(2))
         endif
         ! generate power-spectra
         call self%moviesum%mic2spec(params_glob%pspecsz, speckind, LP_PSPEC_BACKGR_SUBTR, self%pspec_sum)

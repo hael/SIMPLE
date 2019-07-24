@@ -598,10 +598,12 @@ contains
     ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
     !> patch-based motion_correction of DDD movie
-    subroutine motion_correct_patched
+    subroutine motion_correct_patched( chisq )
+        real, intent(out) :: chisq(2)     !< whether polynomial fitting was within threshold
         real    :: scale, smpd4scale
         integer :: iframe, ldim4scale(3)
         logical :: doscale
+        chisq = huge(chisq(1))
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale*params_glob%trs)
         smpd4scale = params_glob%smpd
@@ -631,6 +633,7 @@ contains
         if (DO_PATCHED_POLYN) then
             call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched,&
                 &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
+            chisq = 0.
         else
             call motion_patch%set_fitshifts(FITSHIFTS)
             call motion_patch%set_frameweights( frameweights )
@@ -638,6 +641,7 @@ contains
             call motion_patch%set_interp_fixed_frame(fixed_frame)
             call motion_patch%correct( hp, resstep, movie_frames_shifted, movie_frames_shifted_patched,&
                 &patched_shift_fname, shifts_toplot)
+            chisq = motion_patch%get_polyfit_chisq()
         end if
         call motion_patch%get_poly4star(patched_polyn)
     end subroutine motion_correct_patched
