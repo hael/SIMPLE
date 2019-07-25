@@ -1185,14 +1185,15 @@ contains
         &'Compare a pair of nanoparticle atomic-resolution maps',& ! descr_short
         &'is a program for providing statistics of differences between pairs of nanoparticle atomic-resolution maps',& ! descr long
         &'simple_exec',&                                     ! executable
-        &2, 0, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
         & 'input volume e.g. vol.mrc', .true., '')
-        ! parameter input/output
         call compare_nano%set_input('img_ios', 2, 'vol2', 'file', 'Volume', '2nd Nanoparticle volume to compare', &
         & 'input volume e.g. vol.mrc', .true., '')        ! search controls
+        ! parameter input/output
+        call compare_nano%set_input('parm_ios', 1, smpd)
         ! <empty>
         ! alternative inputs
         ! <empty>
@@ -2448,17 +2449,18 @@ contains
         &'Analyse powerspectra images stack',&               ! descr_short
         &'is a program for validation statistic on powerspectra images prior ctf estimation',& ! descr long
         &'simple_exec',&                                     ! executable
-        &1, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call pspec_stats%set_input('img_ios', 1, 'fname', 'file', 'Stack of powerspectra images', 'Stack of powerspectra images', 'e.g. xxx.mrc file', .true., '')
+        call pspec_stats%set_input('img_ios', 1, 'filetab', 'file', 'List of files to select from', 'List of files to select from', 'e.g. filetab.txt', .true., '')
         ! parameter input/output
-        call pspec_stats%set_input('parm_ios',   1, smpd)
+        call pspec_stats%set_input('parm_ios', 1, smpd)
         ! search controls
         ! <empty>
         ! alternative inputs
         ! filter controls
-        call pspec_stats%set_input('filt_ctrls', 1, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 35.)        ! mask controls
+        ! <empty>
+        ! mask controls
         ! <empty>
         ! computer controls
         ! <empty>

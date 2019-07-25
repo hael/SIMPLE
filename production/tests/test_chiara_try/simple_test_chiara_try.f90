@@ -1,21 +1,21 @@
 module simple_test_chiara_try_mod
     include 'simple_lib.f08'
-    use simple_aff_prop
-    use simple_commander_distr_wflows
-    use gnufor2
-    use simple_ctf
-    use simple_micops
-    use simple_image
-    use simple_stackops
-    use simple_math
-    use simple_segmentation
-    use simple_parameters, only: parameters
-    use simple_cmdline,    only: cmdline
-    use simple_tvfilter
-    use simple_ctf
-    use simple_ppca
-    use simple_stat
-    use simple_lapackblas, only : sgeev
+    ! use simple_aff_prop
+    ! use simple_commander_distr_wflows
+    ! use gnufor2
+    ! use simple_ctf
+    ! use simple_micops
+    use simple_image, only : image
+    ! use simple_stackops
+    ! use simple_math
+    ! use simple_segmentation
+    ! use simple_parameters, only: parameters
+    ! use simple_cmdline,    only: cmdline
+    ! use simple_tvfilter
+    ! use simple_ctf
+    ! use simple_ppca
+    ! use simple_stat
+    ! use simple_lapackblas, only : sgeev
     implicit none
     contains
 
@@ -282,20 +282,77 @@ end subroutine laplacian_filt
   !     e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
   !     deallocate(xhist,yhist)
   ! end function entropy
+
+  ! function entropy_try(X,n) result(e)
+  !     real, intent(in)    :: X(:)
+  !     integer, intent(in) :: N
+  !     real                :: e !entropy value
+  !     real,    allocatable :: xhist(:) !discretization of the values
+  !     integer, allocatable :: yhist(:) !number of occurences
+  !     real,    allocatable :: p(:), p_no_zero(:)
+  !     integer :: i, cnt
+  !     call create_hist_vector(X,n,xhist,yhist)
+  !     allocate(p(size(yhist)), source = 0.)
+  !     p =  real(yhist)/real(sum(yhist)) !probabilities
+  !     cnt = count(p>TINY)
+  !     allocate(p_no_zero(cnt), source = 0.)
+  !     cnt = 0 !reset
+  !     do i = 1, size(p)
+  !         if(p(i) > TINY) then
+  !             cnt = cnt + 1
+  !             p_no_zero(cnt) = p(i) !remove zeroes occurrencies
+  !         endif
+  !     enddo
+  !     e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
+  !     deallocate(xhist,yhist)
+  ! end function entropy_try
+
+
+  !From the paper 'Approximate Entropy for Testing Randomness'
+  ! I am writing it to compare binary strings (vectors)
+  ! function approx_entropy(X,m) result(e)
+  !     integer,    intent(inout) :: X(:)
+  !     integer, intent(in)    :: m
+  !     real :: e ! approximate entropy
+  !     integer, allocatable :: C(:)
+  !     real, allocatable :: Phi(:)
+  !     integer :: n, h, hh
+  !     integer, allocatable :: cnt(:)
+  !     n = size(X, dim = 1) ! number of elements in X
+  !     allocate(C  (n-m+1), source = 0 )
+  !     allocate(Phi(n-m+1), source = 0.)
+  !     allocate(cnt(n-m+1), source = 0 )
+  !     do h = 1, n-m+1
+  !         do hh = 1, n-m+1
+  !             if(vectors_are_equal(X(hh:hh+m-1), X(h:h+m-1)) .and. h /= hh) cnt(h) = cnt(h) + 1  !I don't know if h/=hh is necessary
+  !         enddo
+  !         C(h) = cnt(h)/(n-m+1)
+  !     enddo
+  !     print *, 'cnt = ', cnt
+  !     print *, 'C = ', C
+  !     do h = 1, n-m+1
+  !         Phi(h) = Phi(h)+log(real(C(h)))
+  !     enddo
+  !     print *, 'Phi = ', Phi
+  !     e = Phi(m)-Phi(m+1)
+  ! end function approx_entropy
+
+
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
     include 'simple_lib.f08'
     use simple_math
-    use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
-    use simple_cmdline,        only: cmdline, cmdline_err
-    use simple_commander_base, only: execute_commander
-    use simple_spproj_hlev
-    use simple_commander_distr_wflows
-    use simple_commander_stream_wflows
-    use simple_commander_hlev_wflows
-    use simple_image, only : image
-    use simple_stackops
+    ! use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
+    ! use simple_cmdline,        only: cmdline, cmdline_err
+    ! use simple_commander_base, only: execute_commander
+    ! use simple_spproj_hlev
+    ! use simple_commander_distr_wflows
+    ! use simple_commander_stream_wflows
+    ! use simple_commander_hlev_wflows
+    ! use simple_image, only : image
+    ! use simple_stackops
+    use simple_test_chiara_try_mod
   ! use simple_tvfilter
   ! use simple_ctf
   ! use simple_ppca
@@ -309,15 +366,40 @@ program simple_test_chiara_try
   ! integer, allocatable :: imat(:,:,:)
   ! real :: r, avg, d, st, m(3), smpd, tmp_max, coord(3)
   ! integer :: N_max
-    real, allocatable :: X(:), rmat(:,:,:)
+    real :: X(6)
     real :: e
     type(image) :: img
-    call img%new([512,512,1], 1.41)
-    call img%read('pspecs_saga_polii.mrc', 71)
-    rmat = img%get_rmat()
-    X = reshape(rmat, [512*512])
-    e = entropy(X,512)
-    print *, 'e = ', e ! USE SCALE IMAGE???
+    integer :: m
+    ! call img%new([512,512,1], 1.41)
+    ! !call img%read('pspecs_saga_polii.mrc', 71)
+    ! rmat = img%get_rmat()
+    ! rmat = 5.
+    ! call img%set_rmat(rmat)
+    ! call img%write('RmatUniform.mrc')
+    ! X = reshape(rmat, [512*512])
+
+    ! Entropy calculation
+    ! X  = [40.,50.,60.,17.,17.,17.]
+    ! print *, 'entropy = ', entropy_shells(X,67.,4.)
+    ! print *, ' before:', entropy(X,64)
+    !
+    !
+    ! X  = [1./6.,1./6.,1./6.,1./6.,1./6.,1./6.]
+    ! print *, 'entropy = ', entropy_shells(X,1.,0.)
+    ! print *, ' before:', entropy(X,64)
+    !
+    ! X  = [0.,0.,60.,0.,0.,0.]
+    ! print *, 'entropy = ', entropy_shells(X,67.,0.)
+    ! print *, ' before:', entropy(X,64)
+    !
+    ! X  = [50.,40.,60.,30.,20.,10.]
+    ! print *, 'entropy = ', entropy_shells(X,67.,0.)
+    ! print *, ' before:', entropy(X,64)
+
+
+    !print *, 'min X = ', minval(X), 'max(X) = ', maxval(X), 'shape(X)', shape(X)
+    !e = entropy_try(X,6)
+    !print *, 'e = ', e ! USE SCALE IMAGE???
     ! ! centers1 = reshape([1.,1.,1.,1.5,1.5,1.5,2.3,2.4,2.5,4.1,4.3,4.7],[3,4])
     ! print *, 'centers1(:3,1) = ',centers1(:3,1)
     ! call vis_mat(centers1)

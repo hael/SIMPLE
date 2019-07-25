@@ -54,7 +54,7 @@ deallocate(rmat)
 call mic_original%write('original_micrograph.mrc')
 call read_micrograph( micfname = 'original_micrograph.mrc', smpd = 1.0)
 call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-call set_box(BOX, box_shrunken, 2.)  !2 is the SNR
+! call set_box(BOX, box_shrunken, 2.)  !2 is the SNR  !MODIFIEEEED
 call extract_boxes2file(OFFSET, 'extracted_windows2.mrc', n_images, BOFFSET)
 call img_msk%new([box_shrunken,box_shrunken,1], 1.)
 img_msk = 1.
@@ -74,7 +74,7 @@ end do
 ! second iteration pf ppca with different level of noise
 call read_micrograph( micfname = 'original_micrograph.mrc', smpd = 1.0)
 call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-call set_box(BOX, box_shrunken, 1.)
+!call set_box(BOX, box_shrunken, 1.) !MODIFIEEEED
 call extract_boxes2file(OFFSET, 'extracted_windows1.mrc', n_images, BOFFSET)
 call make_pattern_stack('extracted_windows1.mrc', 'vecs4ppca.bin', l_mask , D, recsz, avg) !(stackops)
 call my_ppca%new(n_images, D, eigen)
@@ -91,7 +91,7 @@ end do
 ! third iteration pf ppca with higher level of noise
 call read_micrograph( micfname = 'original_micrograph.mrc', smpd = 1.0)
 call shrink_micrograph(SHRINK, ldim_shrunken, smpd_shrunken)
-call set_box(BOX, box_shrunken, 0.1)
+! call set_box(BOX, box_shrunken, 0.1) !MODIFIEEEED
 call extract_boxes2file(OFFSET, 'extracted_windows01.mrc', n_images, BOFFSET)
 call make_pattern_stack('extracted_windows01.mrc', 'vecs4ppca.bin', l_mask , D, recsz, avg) !(stackops)
 call my_ppca%new(n_images, D, eigen)

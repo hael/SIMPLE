@@ -571,12 +571,10 @@ contains
         else
             call pc%new(params%fname,params%min_rad,params%max_rad,params%smpd)
         endif
-        if( cline%defined('lp')) then
-            call pc%preprocess_mic(detector, params%lp)
-        else
-            call pc%preprocess_mic(detector)
-        endif
-        call pc%extract_particles()
+        call pc%preprocess_mic(detector)
+        call pc%identify_particle_positions()
+        call pc%output_identified_particle_positions()
+        call pc%write_boxfile()
         call pc%print_info()
         ! kill
         call pc%kill

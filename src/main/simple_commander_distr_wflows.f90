@@ -692,9 +692,6 @@ contains
         endif
         use_segmentation = .true.
         if( cline%defined('refs') .or. cline%defined('vol1') ) use_segmentation = .false.
-        if( use_segmentation )then
-            THROW_HARD('segmentation-based picking not active yet')
-        endif
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
         if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'mic')
         call params%new(cline)

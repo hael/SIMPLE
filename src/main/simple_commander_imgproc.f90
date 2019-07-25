@@ -213,9 +213,9 @@ contains
                             THROW_HARD('both upper and lower threshold needed; simple_segmentation')
                         else
                             if( cline%defined('lp')) then
-                                call canny(img,[params%thres_low, params%thres_up],lp(1))
+                                call canny(img,img,[params%thres_low, params%thres_up],lp(1)) !inout/output image coincide
                             else
-                                call canny(img,[params%thres_low, params%thres_up])
+                                call canny(img,img,[params%thres_low, params%thres_up])
                             endif
                         endif
                     elseif( params%automatic .eq. 'yes') then
@@ -467,21 +467,38 @@ contains
     subroutine exec_pspec_stats( self, cline )
         use simple_genpspec_and_statistics, only: pspec_statistics
         class(pspec_stats_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters)       :: params
+        class(cmdline),               intent(inout) :: cline !< command line input
         type(pspec_statistics) :: pspec
-        integer :: ldim(3), nptcls
-        real    :: smpd
-        call params%new(cline)
+        type(parameters)       :: params
+        integer :: nfiles,n_mic
+        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        real, allocatable    :: score(:)
+        integer, parameter   :: N_SHELLS = 8
+        character(len = 100) :: iom
+        integer :: status
+        ! sanity checks
+        if( .not. cline%defined('filetab') )then
+            THROW_HARD('ERROR! filetab needs to be present; exec_pspec_stats')
+        endif
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_pspec_stats')
         endif
-        if( .not. cline%defined('fname') )then
-            THROW_HARD('ERROR! fname needs to be present; exec_pspec_stats')
-        endif
-        call pspec%new(params%fname,8) !it also create a new instance of the class powerspectrum
-        call find_ldim_nptcls (params%fname,ldim, nptcls, smpd)
-        call pspec%run()
+        call params%new(cline)
+        call read_filetable(params%filetab, filenames)
+        nfiles = size(filenames)
+        allocate(score(nfiles), source = 0.)
+        do n_mic = 1, nfiles
+            call pspec%new(filenames(n_mic),params%smpd,N_SHELLS)
+            call pspec%run()
+            call pspec%get_score(score(n_mic))
+            call pspec%kill()
+        enddo
+        ! print scores on a file
+        open(unit = 13, access = 'sequential',file = 'Scores.txt', form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
+        do n_mic = 1, nfiles
+            write(unit = 13, fmt = "(a,a,a,a,l1)") filenames(n_mic),' score ', trim(real2str(score(n_mic))), ' discard:', score(n_mic) < 60.
+        enddo
+        close(13)
         ! end gracefully
         call simple_end('**** SIMPLE_PSPEC_STATS NORMAL STOP ****')
     end subroutine exec_pspec_stats

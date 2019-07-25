@@ -35,9 +35,9 @@ contains
     end subroutine read_micrograph
 
     subroutine shrink_micrograph( shrink_fact, ldim_out, smpd_out )
-        real,              intent(in)  :: shrink_fact
-        integer, optional, intent(out) :: ldim_out(3)
-        real,    optional, intent(out) :: smpd_out
+        real,                  intent(in)  :: shrink_fact
+        integer,     optional, intent(out) :: ldim_out(3)
+        real,        optional, intent(out) :: smpd_out
         shrink_factor    = shrink_fact
         ldim_shrunken(1) = round2even(real(ldim(1))/shrink_factor)
         ldim_shrunken(2) = round2even(real(ldim(2))/shrink_factor)
@@ -51,18 +51,19 @@ contains
         if( DEBUG_HERE ) write(logfhandle,*) 'DEBUG_HERE(micops); did shrink micrograph to logical dimension: ', ldim_shrunken
     end subroutine shrink_micrograph
 
-    subroutine set_box( box_in, box_out, snr )
-        integer,           intent(in)  :: box_in
-        integer, optional, intent(out) :: box_out
-        real,    optional, intent(in)  :: snr
+    subroutine set_box( box_in, box_out, mic_out )
+        integer,               intent(in)  :: box_in
+        integer,     optional, intent(out) :: box_out
+        type(image), optional, intent(out) :: mic_out
         box = box_in
         box_shrunken = round2even(real(box)/shrink_factor)
         !high-pass filter shrunken micrograph according to box_shrunken
         call micrograph_shrunken%bp(4*box_shrunken *micrograph_shrunken%get_smpd(), 0.)!width=real(box_shrunken)) ! width = 30. Chiara
         ! return filtered micrograph in real-space
         call micrograph_shrunken%ifft()
-        if(present(snr)) call micrograph_shrunken%add_gauran(snr)
-        if( DEBUG_HERE ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
+        !if(present(snr)) call micrograph_shrunken%add_gauran(snr)
+        !if( DEBUG_HERE ) call micrograph_shrunken%write('shrunken_hpassfiltered.mrc')
+        if(present(mic_out))  call mic_out%copy(micrograph_shrunken)
         ! loop dimensions for target extraction will be 0:nx and 0:ny
         nx = ldim_shrunken(1) - box_shrunken
         ny = ldim_shrunken(2) - box_shrunken

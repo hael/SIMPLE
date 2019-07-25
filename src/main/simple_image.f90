@@ -3337,7 +3337,7 @@ contains
     end subroutine order_cc
 
     ! This subroutine takes in input a connected components (cc)
-    ! image and eliminates some of the ccs according to thei size.
+    ! image and eliminates some of the ccs according to their size.
     ! The decision method consists in calculate the avg size of the ccs
     ! and their standar deviation.
     ! Elimin ccs which have size: > ave + 2.*stdev

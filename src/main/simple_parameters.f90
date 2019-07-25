@@ -159,7 +159,7 @@ type :: parameters
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
-    character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|canny|bin)
+    character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
@@ -366,7 +366,7 @@ type :: parameters
     real    :: lpstart=0.          !< start low-pass limit(in A){15}
     real    :: lpstop=8.0          !< stop low-pass limit(in A){8}
     real    :: lpthresh=30.
-    real    :: max_rad =0.         !< particle longest  dim (in pixels)
+    real    :: max_rad=0.          !< particle longest  dim (in pixels)
     real    :: min_rad=100.        !< particle shortest dim (in pixels)
     real    :: moldiam=140.        !< molecular diameter(in A)
     real    :: moment=0.
@@ -376,7 +376,6 @@ type :: parameters
     real    :: ndev=2.0            !< # deviations in one-cluster clustering
     real    :: nsig=2.5            !< # sigmas
     real    :: outer=0.            !< outer mask radius(in pixels)
-    real    :: part_concentration  !< concentration of particles in the micrograph
     real    :: phranlp=35.         !< low-pass phase randomize(yes|no){no}
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
@@ -784,7 +783,6 @@ contains
         call check_rarg('ndev',           self%ndev)
         call check_rarg('nsig',           self%nsig)
         call check_rarg('outer',          self%outer)
-        call check_rarg('part_concentration', self%part_concentration)
         call check_rarg('phranlp',        self%phranlp)
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)

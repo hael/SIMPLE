@@ -471,6 +471,9 @@ contains
         integer :: ldim1(3), ldim2(3)
         real    :: smpd1,smpd2
         call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_compare_nano')
+        endif
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_compare_nano')
         endif
@@ -478,8 +481,8 @@ contains
             THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
         endif
         ! COMPARING
-        call nano1%new(params%vols(1))
-        call nano2%new(params%vols(2))
+        call nano1%new(params%vols(1), params%smpd)
+        call nano2%new(params%vols(2), params%smpd)
         call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
         call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
         if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
@@ -490,7 +493,7 @@ contains
         call nano1%kill
         call nano2%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
+        call simple_end('**** SIMPLE_COMPARE_NANO NORMAL STOP ****')
     end subroutine exec_compare_nano
 
     ! for binarizing a nanoparticle and identiying its atomic positions
@@ -511,7 +514,7 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call nano%new(params%vols(1),SCALE_FACTOR)
+        call nano%new(params%vols(1), params%smpd, SCALE_FACTOR)
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
         ! execute
         call nano%detect_atoms()

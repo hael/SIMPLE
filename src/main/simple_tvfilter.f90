@@ -74,7 +74,7 @@ contains
         call self%r_img%get_cmat_ptr(cmat_r)
         call img%get_cmat_ptr(cmat_img)
         dims1 = int(img_ldim(1)/2)+1
-        cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * conjg(cmat_b(1:dims1,:,1)) / &
+        cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2) / &
             (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter

@@ -78,13 +78,15 @@ end type nanoparticle
 contains
 
     !constructor
-    subroutine new_nanoparticle(self, fname, sc_fac)
+    subroutine new_nanoparticle(self, fname, cline_smpd, sc_fac)
         use simple_syslib
         class(nanoparticle), intent(inout) :: self
         character(len=*),    intent(in)    :: fname
+        real,                intent(in)    :: cline_smpd
         real, optional,      intent(in)    :: sc_fac
         integer :: nptcls
         real    :: ssc_fac
+        real    :: smpd
         call self%kill
         call simple_getcwd(self%output_dir)
         ssc_fac = 1.
@@ -92,7 +94,8 @@ contains
         self%SCALE_FACTOR = ssc_fac
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
-        call find_ldim_nptcls(self%partname,  self%ldim, nptcls, self%smpd)
+        self%smpd = cline_smpd
+        call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new         (self%ldim, self%smpd)
         call self%img_bin%new     (int(real(self%ldim)*self%SCALE_FACTOR), self%smpd/self%SCALE_FACTOR)
         !call self%img_over_smp%new(int(real(self%ldim)*self%SCALE_FACTOR), self%smpd/self%SCALE_FACTOR)

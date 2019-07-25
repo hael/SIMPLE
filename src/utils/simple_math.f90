@@ -489,11 +489,29 @@ contains
         is_equal_1 = abs(val1-val2) < TINY
     end function
 
-        !>   to check if val is zero
+    !>   to check if val is zero
     elemental logical function is_equal_2( val1, val2 )
         real(8), intent(in) :: val1, val2  !< query val
         is_equal_2 = abs(val1-val2) < DTINY
     end function is_equal_2
+
+    !>   to check if two integer vectors are equal
+    function vectors_are_equal(vec1, vec2) result(yes_no)
+        integer, intent(in) :: vec1(:)
+        integer, intent(in) :: vec2(:)
+        logical :: yes_no
+        integer :: n
+        yes_no = .false.
+        if(size(vec1) == size(vec2)) then
+            yes_no = .true. !initialize
+            do n = 1, size(vec1)
+                if(vec1(n) .ne. vec2(n)) then
+                     yes_no = .false.
+                     return
+                 endif
+            enddo
+        endif
+    end function vectors_are_equal
 
     !>   to put the which element (if it exists) last in the array,
     !!         swapping it with its present position
@@ -2047,7 +2065,6 @@ contains
         deallocate(mask)
     end subroutine elim_dup
 
-    !!!!!!ADDED BY CHIARA!!!!!
     ! All the 4 following routines have testing purposes and allow
     ! the user to print a matrix so that the output is similar to
     ! the usual representation of a matrix.
@@ -2147,18 +2164,27 @@ contains
         real      :: xmin, xmax, dx
         if(allocated(xhist)) deallocate(xhist)
         if(allocated(yhist)) deallocate(yhist)
-        allocate(xhist(0:n-1), source = 0.)
-        allocate(yhist(n), source = 0 )
         xmin=minval(x)
         xmax=maxval(x)
-        dx=(xmax+1-xmin)/n
-        do i=0,n-1
-            xhist(i)=xmin+i*dx
-        end do
-        do i=1,size(x)
-            j=nint((x(i)-xmin)/dx)+1
-            if(j <= size(yhist)) yhist(j)=yhist(j)+1
-        end do
+        if(abs(xmin-xmax)<TINY) then !just one value
+            allocate(xhist(1), source = xmin)
+            allocate(yhist(1), source = size(x, dim = 1)) !all of them have value xmin
+        else
+            allocate(xhist(0:n-1), source = 0.)
+            allocate(yhist(n), source = 0 )
+            dx=(xmax+1-xmin)/n
+            do i=0,n-1
+                xhist(i)=xmin+i*dx
+            end do
+            do i=1,size(x)
+                j=nint((x(i)-xmin)/dx)+1
+                if(j <= size(yhist)) then
+                    yhist(j)=yhist(j)+1
+                else
+                    yhist(size(yhist)) = yhist(size(yhist)) + 1
+                endif
+            end do
+        endif
     end subroutine create_hist_vector
 
     !This function is meant to be a support for performing histogram stretching.
@@ -2400,6 +2426,50 @@ contains
           e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
           deallocate(xhist,yhist)
       end function entropy
+
+      ! Divide power spectrum the range [min_val, max_val] in N intervals
+      ! and calculate per shell entropy.
+      function entropy_shells(X,xmax,xmin,N) result(e)
+          real,    intent(in) :: X(:)
+          real,    intent(in) :: xmax !maximum gray level value of the all power spectrum img
+          real,    intent(in) :: xmin !minimum gray level value of the all power spectrum img
+          integer, intent(in) :: N
+          real                :: e !entropy value
+          real, allocatable   :: xhist(:) !discretization of the values
+          integer             :: yhist(N) !number of occurences
+          real, allocatable   :: p(:), p_no_zero(:)
+          integer :: i,j,cnt
+          real    :: dx
+          yhist = 0
+          ! To change: put in input the hist vector
+          if(abs(xmin-xmax)<TINY) then  !just one value
+              e = - log10(1./real(N))/log10(2.) !formula: log2(1/N)
+              return
+          else
+              allocate(xhist(0:N-1), source = 0.)
+              dx=(xmax+1-xmin)/N
+              do i=0,n-1
+                  xhist(i)=xmin+i*dx
+              end do
+              do i=1,size(X)
+                  j=nint((X(i)-xmin)/dx)+1
+                  if(j <= size(yhist)) yhist(j)=yhist(j)+1
+              end do
+          endif
+          allocate(p(size(yhist)), source = 0.)
+          p =  real(yhist)/real(sum(yhist)) !probabilities
+          cnt = count(p>TINY)
+          allocate(p_no_zero(cnt), source = 0.)
+          cnt = 0 !reset
+          do i = 1, size(p)
+              if(p(i) > TINY) then
+                  cnt = cnt + 1
+                  p_no_zero(cnt) = p(i) !remove zeroes occurrencies
+              endif
+          enddo
+          e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: -sum(p*log2(p))
+          deallocate(p,p_no_zero,xhist)
+      end function entropy_shells
 
     ! imported from numerical recipes
     function pythag_sp(a,b)

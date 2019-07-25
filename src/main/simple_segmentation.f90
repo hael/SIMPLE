@@ -118,40 +118,75 @@ contains
   !        the algorithm it is fixed to its default value (= 0.33)
   !        as suggested in the source.
   ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
-  subroutine canny(img_in,thresh,lp)
-      type(image),    intent(inout) :: img_in
+  subroutine canny(img_in,img_out,scale_range,thresh,lp)
+      type(image),           intent(inout) :: img_in
+      type(image), optional, intent(out)   :: img_out
+      real, optional, intent(in)    :: scale_range(2)
       real, optional, intent(in)    :: thresh(2)
       real, optional, intent(in)    :: lp(1)
-      real                       :: tthresh(2),  sigma, m
-      real, allocatable          :: grad(:,:,:), vector(:)
-      integer                    :: ldim(3)
-      logical :: debug
+      real              :: tthresh(2),  sigma, m
+      real, allocatable :: grad(:,:,:), vector(:)
+      integer           :: ldim(3)
+      logical           :: debug
+      real              :: sscale_range(2)
+      real              :: smpd
       debug = .false.
-      ldim = img_in%get_ldim()
-      call img_in%scale_pixels([1.,real(ldim(1))*2.+1.]) !to be coherent with the other case
-      ! call img_in%scale_pixels([1.,255.])
-      if(present(thresh)) then
-         call canny_edge(img_in,thresh)
-         return
-      endif
-      sigma = 0.33
-      allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-      if(IMPROVED) then
-          call img_in%calc_gradient_improved(grad)
+      ldim  = img_in%get_ldim()
+      smpd  = img_in%get_smpd()
+      sscale_range = [1.,real(ldim(1))] !real(ldim(1))*2.+1., modification 25/07
+      if(present(scale_range)) sscale_range = scale_range
+      if(present(img_out)) then
+          call img_out%new(ldim, smpd)
+          call img_out%copy(img_in)
+          call img_out%scale_pixels([sscale_range(1),sscale_range(2)])
+          if(present(thresh)) then
+                 call canny_edge(img_out,thresh)
+                 return
+          endif
+          sigma = 0.33
+          allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
+          if(IMPROVED) then
+              call img_out%calc_gradient_improved(grad)
+          else
+              call img_out%calc_gradient(grad)
+          endif
+          allocate(vector(size(grad)), source = 0.)
+          vector(:) = pack(grad, .true.)
+          m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
+          !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+          tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
+          tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
+          if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
+          if (present(lp)) then
+              call canny_edge(img_out,tthresh,lp)
+          else
+              call canny_edge(img_out,tthresh)
+          endif
       else
-        call img_in%calc_gradient(grad)
-      endif
-      allocate(vector(size(grad)), source = 0.)!= pack(grad, .true.))
-      vector(:) = pack(grad, .true.)
-      m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
-      !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-      tthresh(1) = max(1.,                  (1.-sigma)*m) !lower
-      tthresh(2) = min(real(ldim(1))*2.+1., (1.+sigma)*m) !upper
-      if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
-      if (present(lp)) then
-          call canny_edge(img_in,tthresh,lp)
-      else
-          call canny_edge(img_in,tthresh)
+          call img_in%scale_pixels([sscale_range(1),sscale_range(2)]) !to be coherent with the other case
+          if(present(thresh)) then
+                 call canny_edge(img_in,thresh)
+                 return
+          endif
+          sigma = 0.33
+          allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
+          if(IMPROVED) then
+              call img_in%calc_gradient_improved(grad)
+          else
+              call img_in%calc_gradient(grad)
+          endif
+          allocate(vector(size(grad)), source = 0.)!= pack(grad, .true.))
+          vector(:) = pack(grad, .true.)
+          m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
+          !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+          tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
+          tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
+          if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
+          if (present(lp)) then
+              call canny_edge(img_in,tthresh,lp)
+          else
+              call canny_edge(img_in,tthresh)
+          endif
       endif
       deallocate(vector,grad)
   end subroutine canny
