@@ -76,7 +76,6 @@ contains
     procedure, private :: grid_srch
     procedure, private :: refine
     procedure          :: fit_patches
-    procedure, private :: mic2spec_patch
     procedure, private :: norm_pspec
     procedure, private :: gen_roavspec1d
     procedure, private :: subtr_backgr
@@ -328,20 +327,33 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
-        real    :: limits(2,2), cc
-        integer :: pi,pj
+        real    :: limits(2,2), cc, sumw, w, dist
+        integer :: pi,pj,i,j
         if( self%ntotpatch <= 0 ) return
-        limits(1,1) = max(self%df_lims(1),self%parms%dfx-0.5)
-        limits(1,2) = min(self%df_lims(2),self%parms%dfx+0.5)
-        limits(2,1) = max(self%df_lims(1),self%parms%dfy-0.5)
-        limits(2,2) = min(self%df_lims(2),self%parms%dfy+0.5)
-        ! generate spectrum
-        call self%mic2spec_patch
-        !$omp parallel do collapse(2) default(shared) private(pi,pj,cc) &
+        limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
+        limits(1,2) = min(self%df_lims(2),self%parms%dfx+1.)
+        limits(2,1) = max(self%df_lims(1),self%parms%dfy-1.)
+        limits(2,2) = min(self%df_lims(2),self%parms%dfy+1.)
+        !$omp parallel do collapse(2) default(shared) private(pi,pj,cc,sumw,i,j,w,dist) &
         !$omp schedule(static) proc_bind(close)
         do pi=1,self%npatches(1)
             do pj=1,self%npatches(2)
-                ! init
+                ! builds patch spectrum
+                sumw = 0.
+                self%pspec_patch(pi,pj) = 0.
+                do i = 1,self%ntiles(1)
+                    do j = 1,self%ntiles(2)
+                        dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
+                        w    = exp(-1.*(dist/real(self%box))**2.)
+                        if( w < 5.e-3 ) cycle
+                        sumw = sumw + w
+                        call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
+                    enddo
+                enddo
+                call self%pspec_patch(pi,pj)%div(sumw)
+                call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
+                call self%subtr_backgr(self%pspec_patch(pi,pj))
+                ! init search
                 self%parms_patch(pi,pj)%kv      = self%parms%kv
                 self%parms_patch(pi,pj)%cs      = self%parms%cs
                 self%parms_patch(pi,pj)%fraca   = self%parms%fraca
@@ -384,35 +396,6 @@ contains
         call spec%dampen_pspec_central_cross
         call self%subtr_backgr(spec)
     end subroutine mic2spec
-
-    !> mic2spec calculates the average powerspectrum over a micrograph
-    !!          the resulting spectrum has dampened central cross and subtracted background
-    subroutine mic2spec_patch( self )
-        class(ctf_estimate_fit), intent(inout) :: self
-        real        :: dist, w, sumw
-        integer     :: pi,pj, i,j
-        !$omp parallel do collapse(2) default(shared) schedule(static) proc_bind(close) &
-        !$omp private(i,j,pi,pj,w,sumw,dist)
-        do pi = 1,self%npatches(1)
-            do pj = 1,self%npatches(2)
-                sumw = 0.
-                self%pspec_patch(pi,pj) = 0.
-                do i = 1,self%ntiles(1)
-                    do j = 1,self%ntiles(2)
-                        dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
-                        w    = exp(-1.*(dist/real(self%box))**2.)
-                        if( w < 5.e-3 ) cycle
-                        sumw = sumw + w
-                        call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
-                    enddo
-                enddo
-                call self%pspec_patch(pi,pj)%div(sumw)
-                call self%pspec_patch(pi,pj)%dampen_pspec_central_cross
-                call self%subtr_backgr(self%pspec_patch(pi,pj))
-            enddo
-        enddo
-        !$omp end parallel do
-    end subroutine mic2spec_patch
 
     !>  \brief  Normalize to zero mean and unit variance the reference power spectrum
     !>  within the relevent resolution range
@@ -703,7 +686,6 @@ contains
             &spec1d_rank(0:nshells),ctf1d(0:nshells),nextrema1d(0:nshells), source=0.)
         allocate(nvals1d(0:nshells),source=0)
         ! normalize spectrum
-        !call self%mic2spec(specimg) ! should become un-necessary
         call specimg%copy(self%pspec)
         call norm2dspec
         ! calculate number of extrema & ctf values
@@ -1098,6 +1080,23 @@ contains
                 call CDataSet__SetDrawMarker(center, C_TRUE)
                 call CDataSet__SetMarkerSize(center, real(msz,c_double))
                 call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
+                call CDataPoint__new2(real(cx+200., c_double), real(cy, c_double), p1)
+                call CDataSet__AddDataPoint(center, p1)
+                call CDataPoint__delete(p1)
+                call CPlot2D__AddDataSet(plot2D, center)
+                call CDataSet__delete(center)
+                ! calc
+                df = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
+                msz = SCALE * df
+                if( is_equal(dfmax,dfmin) )then
+                    col = 0.
+                else
+                    col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
+                endif
+                call CDataSet__new(center)
+                call CDataSet__SetDrawMarker(center, C_TRUE)
+                call CDataSet__SetMarkerSize(center, real(msz, c_double))
+                call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
                 call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
@@ -1112,31 +1111,14 @@ contains
                 call CDataPoint__new2(real(cx, c_double), real(cy, c_double), p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
-                call CDataPoint__new2(real(cx+2.*msz*cos(angast),c_double), real(cy+2.*msz*sin(angast),c_double),p1)
+                call CDataPoint__new2(real(cx+80.*cos(angast),c_double), real(cy+80.*sin(angast),c_double),p1)
                 call CDataSet__AddDataPoint(center, p1)
                 call CDataPoint__delete(p1)
                 call CPlot2D__AddDataSet(plot2D, center)
                 call CDataSet__delete(center)
-                ! calc
-                ! df = (self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.
-                ! msz = SCALE * df
-                ! if( is_equal(dfmax,dfmin) )then
-                !     col = 0.
-                ! else
-                !     col = max(0.,min(1.,(df-dfmin)/(dfmax-dfmin)))
-                ! endif
-                ! call CDataSet__new(center)
-                ! call CDataSet__SetDrawMarker(center, C_TRUE)
-                ! call CDataSet__SetMarkerSize(center, real(msz, c_double))
-                ! call CDataSet__SetDatasetColor(center, real(col,c_double),1.0_c_double,0.0_c_double)
-                ! call CDataPoint__new2(real(cx, c_double), real(cy+100., c_double), p1)
-                ! call CDataSet__AddDataPoint(center, p1)
-                ! call CDataPoint__delete(p1)
-                ! call CPlot2D__AddDataSet(plot2D, center)
-                ! call CDataSet__delete(center)
             end do
         end do
-        write(titlestr,'(A,F6.3,A,F6.3,A)')'Defocus from ',dfmin,' microns (green) to ',dfmax,' (yellow)'
+        write(titlestr,'(A,F6.3,A,F6.3,A)')'Defocus range: ',dfmin,' - ',dfmax,' (in microns, green to yellow)'
         title%str = trim(titlestr)//C_NULL_CHAR
         call CPlot2D__SetXAxisTitle(plot2D, title%str)
         call CPlot2D__OutputPostScriptPlot(plot2D, fname)

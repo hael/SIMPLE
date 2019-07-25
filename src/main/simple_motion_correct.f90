@@ -555,7 +555,7 @@ contains
         if (present(gainref_fname)) then
             call starfile_table__setValue_string(mc_starfile, EMDL_MICROGRAPH_GAIN_NAME, trim(gainref_fname))
         end if
-        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, 1.0_dp)
+        call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_BINNING, real(1./params_glob%scale,dp))
         call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_ORIGINAL_PIXEL_SIZE, real(smpd, dp))
         doserateperframe = 0.
         if( params_glob%l_dose_weight )then
