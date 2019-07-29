@@ -50,7 +50,7 @@ real,        allocatable :: corrs(:)                     !< per-frame correlatio
 real,        allocatable :: shifts_toplot(:,:)           !< shifts for plotting & parsing
 real,        allocatable :: frameweights(:)              !< array of frameweights
 real,        allocatable :: acc_doses(:)                 !< accumulated doses
-complex,     allocatable :: cmat(:,:,:), cmat_sum(:,:,:) !< complex matrices for OpenMP reduction
+complex,     allocatable :: cmat_sum(:,:,:)              !< complex matrices for OpenMP reduction
 
 ! module global variables
 integer :: nframes        = 0        !< number of frames
@@ -90,8 +90,9 @@ contains
         logical,                    intent(out) :: err               !< error flag
         character(len=*), optional, intent(in)  :: gainref_fname     !< gain reference filename
         type(image), allocatable :: movie_frames(:)
-        real,        allocatable :: rmat(:,:,:), rmat_pad(:,:), win(:,:), rmat_sum(:,:,:)
+        real,        allocatable :: rmat_pad(:,:), win(:,:), rmat_sum(:,:,:)
         logical,     allocatable :: outliers(:,:)
+        real,      pointer :: prmat(:,:,:)
         type(image)        :: tmpmovsum, gainref
         real               :: moldiam, dimo4, time_per_frame, current_time
         integer            :: iframe, ncured, deadhot(2), i, j, winsz, shp(3)
@@ -147,15 +148,12 @@ contains
         shp   = movie_frames_scaled(1)%get_array_shape()
         winsz = 2 * HWINSZ + 1
         ! additional allocations
-        allocate(cmat(shp(1),shp(2),shp(3)), cmat_sum(shp(1),shp(2),shp(3)), rmat(ldim(1),ldim(2),1),&
+        allocate(cmat_sum(shp(1),shp(2),shp(3)),win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2),&
         &rmat_sum(ldim(1),ldim(2),1), rmat_pad(1-HWINSZ:ldim(1)+HWINSZ,1-HWINSZ:ldim(2)+HWINSZ),&
-        &win(winsz,winsz), corrs(nframes), opt_shifts(nframes,2), &
         &frameweights(nframes), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('motion_correct_init 5; simple_motion_correct')
         ! init
-        cmat               = cmplx(0.,0.)
         cmat_sum           = cmplx(0.,0.)
-        rmat               = 0.
         rmat_sum           = 0.
         rmat_pad           = 0.
         win                = 0.
@@ -182,11 +180,11 @@ contains
         write(logfhandle,'(a)') '>>> REMOVING DEAD/HOT PIXELS & FOURIER TRANSFORMING FRAMES'
         ! gain correction, generation of temporary movie sum and outlier detection
         rmat_sum = 0.
-        !$omp parallel do schedule(static) default(shared) private(iframe,rmat) proc_bind(close) reduction(+:rmat_sum)
+        !$omp parallel do schedule(static) default(shared) private(iframe,prmat) proc_bind(close) reduction(+:rmat_sum)
         do iframe=1,nframes
             if( l_gain ) call movie_frames(iframe)%mul(gainref) ! gain correction
-            call movie_frames(iframe)%get_rmat_sub(rmat)
-            rmat_sum = rmat_sum + rmat
+            call movie_frames(iframe)%get_rmat_ptr(prmat)
+            rmat_sum = rmat_sum + prmat
         end do
         !$omp end parallel do
         if( l_gain ) call gainref%kill
@@ -197,20 +195,19 @@ contains
         write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
         write(logfhandle,'(a,1x,i7)') '>>> # HOT  PIXELS:', deadhot(2)
         if( any(outliers) )then ! remove the outliers & do the rest
-            !$omp parallel do schedule(static) default(shared) private(iframe,rmat,rmat_pad,i,j,win) proc_bind(close)
+            !$omp parallel do schedule(static) default(shared) private(iframe,prmat,rmat_pad,i,j,win) proc_bind(close)
             do iframe=1,nframes
-                call movie_frames(iframe)%get_rmat_sub(rmat)
-                rmat_pad = median( reshape(rmat(:,:,1),(/(ldim(1)*ldim(2))/)) )
-                rmat_pad(1:ldim(1),1:ldim(2)) = rmat(1:ldim(1),1:ldim(2),1)
+                call movie_frames(iframe)%get_rmat_ptr(prmat)
+                rmat_pad(:,:) = median( reshape(prmat(1:ldim(1),1:ldim(2),1),(/(ldim(1)*ldim(2))/)) )
+                rmat_pad(1:ldim(1),1:ldim(2)) = prmat(1:ldim(1),1:ldim(2),1)
                 do i=1,ldim(1)
                     do j=1,ldim(2)
                         if( outliers(i,j) )then
                             win = rmat_pad( i-HWINSZ:i+HWINSZ, j-HWINSZ:j+HWINSZ )
-                            rmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
+                            prmat(i,j,1) = median( reshape(win,(/winsz**2/)) )
                         endif
                     enddo
                 enddo
-                call movie_frames(iframe)%set_rmat(rmat)
                 call movie_frames(iframe)%fft()
                 call movie_frames(iframe)%clip(movie_frames_scaled(iframe))
             enddo
@@ -223,7 +220,7 @@ contains
             end do
             !$omp end parallel do
         endif
-        ! ! check if we are doing dose weighting
+        ! check if we are doing dose weighting
         if( params_glob%l_dose_weight )then
             if( allocated(acc_doses) ) deallocate(acc_doses)
             allocate( acc_doses(nframes), stat=alloc_stat )
@@ -240,7 +237,7 @@ contains
         do iframe=1,nframes
             call movie_frames(iframe)%kill
         end do
-        deallocate(rmat, rmat_sum, rmat_pad, win, outliers, movie_frames)
+        deallocate(rmat_sum, rmat_pad, win, outliers, movie_frames)
     end subroutine motion_correct_init
 
     ! callback taking into account # of improving frames
@@ -502,15 +499,16 @@ contains
             subroutine sum_frames( img_sum, weights )
                 class(image), intent(inout) :: img_sum
                 real,         intent(in)    :: weights(1:nframes)
+                complex,  pointer :: pcmat(:,:,:)
                 integer :: iframe
                 call img_sum%new(ldim_scaled, smpd_scaled)
-                cmat_sum  = cmplx(0.,0.)
-                !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close)&
+                cmat_sum = cmplx(0.,0.)
+                !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close)&
                 !$omp schedule(static) reduction(+:cmat_sum)
                 do iframe=1,nframes
                     if( weights(iframe) < TINY ) cycle
-                    call movie_frames_shifted(iframe)%get_cmat_sub(cmat)
-                    cmat_sum = cmat_sum + cmat * weights(iframe)
+                    call movie_frames_shifted(iframe)%get_cmat_ptr(pcmat)
+                    cmat_sum = cmat_sum + pcmat * weights(iframe)
                 end do
                 !$omp end parallel do
                 call img_sum%set_ft(.true.)
@@ -649,32 +647,34 @@ contains
     subroutine motion_correct_patched_calc_sums_1( movie_sum_corrected, movie_sum_ctf, fromto )
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         integer,     intent(in)    :: fromto(2)
-        real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:), filtarr(:,:)
+        real,     pointer :: prmat(:,:,:)
+        complex,  pointer :: pcmat(:,:,:)
+        real, allocatable :: rmat_sum(:,:,:), filtarr(:,:)
         real              :: scalar_weight
         integer           :: iframe
         scalar_weight = 1. / real(nframes)
         call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
+        allocate( rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
         ! Sum for CTF estimation
-        !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
+        !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=fromto(1),fromto(2)
-            call movie_frames_shifted_patched(iframe)%get_rmat_sub(rmat)
-            rmat_sum = rmat_sum + rmat * scalar_weight
+            call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
+            rmat_sum = rmat_sum + prmat * scalar_weight
         end do
         !$omp end parallel do
         call movie_sum_ctf%set_rmat(rmat_sum)
         ! Sum for final micrograph
         if( params_glob%l_dose_weight )then
-            deallocate(rmat,rmat_sum)
+            deallocate(rmat_sum)
             call gen_dose_weight_filter(filtarr, movie_frames_shifted_patched)
             cmat_sum = cmplx(0.,0.)
-            !$omp parallel do default(shared) private(iframe,cmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
+            !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
             do iframe=fromto(1),fromto(2)
                 call movie_frames_shifted_patched(iframe)%fft
                 call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))
-                call movie_frames_shifted_patched(iframe)%get_cmat_sub(cmat)
-                cmat_sum = cmat_sum + cmat * frameweights(iframe)
+                call movie_frames_shifted_patched(iframe)%get_cmat_ptr(pcmat)
+                cmat_sum = cmat_sum + pcmat * frameweights(iframe)
             end do
             !$omp end parallel do
             call movie_sum_corrected%set_ft(.true.)
@@ -682,10 +682,10 @@ contains
             call movie_sum_corrected%ifft
         else
             rmat_sum = 0.
-            !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
+            !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
             do iframe=fromto(1),fromto(2)
-                call movie_frames_shifted_patched(iframe)%get_rmat_sub(rmat)
-                rmat_sum = rmat_sum + rmat * frameweights(iframe)
+                call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
+                rmat_sum = rmat_sum + prmat * frameweights(iframe)
             end do
             !$omp end parallel do
             call movie_sum_corrected%set_rmat(rmat_sum)
@@ -696,14 +696,15 @@ contains
     subroutine motion_correct_patched_calc_sums_2( movie_sum_corrected, fromto )
         type(image), intent(inout) :: movie_sum_corrected
         integer,     intent(in)    :: fromto(2)
-        real, allocatable :: rmat(:,:,:), rmat_sum(:,:,:)
+        real,     pointer :: prmat(:,:,:)
+        real, allocatable :: rmat_sum(:,:,:)
         integer           :: iframe
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        allocate( rmat(ldim_scaled(1),ldim_scaled(2),1), rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
-        !$omp parallel do default(shared) private(iframe,rmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
+        allocate(rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
+        !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=fromto(1), fromto(2)
-            call movie_frames_shifted_patched(iframe)%get_rmat_sub(rmat)
-            rmat_sum = rmat_sum + rmat * frameweights(iframe)
+            call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
+            rmat_sum = rmat_sum + prmat * frameweights(iframe)
         end do
         !$omp end parallel do
         call movie_sum_corrected%set_rmat(rmat_sum)
@@ -755,7 +756,6 @@ contains
         if( allocated(shifts_toplot)      ) deallocate(shifts_toplot)
         if( allocated(frameweights)       ) deallocate(frameweights)
         if( allocated(acc_doses)          ) deallocate(acc_doses)
-        if( allocated(cmat)               ) deallocate(cmat)
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
         call ftexp_transfmat_kill
     end subroutine motion_correct_kill_common

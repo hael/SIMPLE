@@ -7784,25 +7784,24 @@ contains
         present_outliers = present(outliers)
         ncured   = 0
         hwinsz   = 6
+        deadhot  = 0
         if( present_outliers )then
             if( allocated(outliers) ) deallocate(outliers)
-            allocate( outliers(self%ldim(1),self%ldim(2)), stat=alloc_stat)
+            allocate( outliers(self%ldim(1),self%ldim(2)),source =.false.,stat=alloc_stat)
             if(alloc_stat/=0)call allocchk("In simple_image::cure_outliers ")
-            outliers = .false.
         endif
-        call moment( self%rmat, ave, sdev, var, err )
+        call moment( self%rmat(1:self%ldim(1),1:self%ldim(2),1), ave, sdev, var, err )
         if( sdev<TINY )return
-        lthresh = ave - nsigma * sdev
-        uthresh = ave + nsigma * sdev
-        if( any(self%rmat<=lthresh) .or. any(self%rmat>=uthresh) )then
+        lthresh = ave - real(nsigma) * sdev
+        uthresh = ave + real(nsigma) * sdev
+        if( any(self%rmat(1:self%ldim(1),1:self%ldim(2),1)<lthresh).or.&
+            &any(self%rmat(1:self%ldim(1),1:self%ldim(2),1)>uthresh) )then
             winsz = 2*hwinsz+1
-            deadhot = 0
             allocate(rmat_pad(1-hwinsz:self%ldim(1)+hwinsz,1-hwinsz:self%ldim(2)+hwinsz),&
                 &win(winsz,winsz), stat=alloc_stat)
             if(alloc_stat/=0)call allocchk('In: cure_outliers; simple_image 1')
-            rmat_pad(:,:) = median( reshape(self%rmat(:,:,1), (/(self%ldim(1)*self%ldim(2))/)) )
-            rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = &
-                &self%rmat(1:self%ldim(1),1:self%ldim(2),1)
+            rmat_pad(:,:) = median( reshape(self%rmat(1:self%ldim(1),1:self%ldim(2),1), (/(self%ldim(1)*self%ldim(2))/)) )
+            rmat_pad(1:self%ldim(1), 1:self%ldim(2)) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
             !$omp parallel do collapse(2) schedule(static) default(shared) private(i,j,win)&
             !$omp reduction(+:ncured,deadhot) proc_bind(close)
             do i=1,self%ldim(1)

@@ -11,7 +11,6 @@ public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
 public :: ftexp_bfacmat,   ftexp_bfacmat_init,   ftexp_bfacmat_kill
 #include "simple_local_flags.inc"
 
-real(dp),         parameter   :: denom = 0.00075_dp  ! denominator for rescaling of cost function
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 complex,          parameter   :: JJ    = complex(0., 1.)
 

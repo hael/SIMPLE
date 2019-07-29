@@ -829,7 +829,7 @@ contains
                     call build%spproj%set_boxcoords(iptcl_glob, nint(ptcl_pos))
                     ! updates particle defocus
                     if( l_ctfpatch )then
-                        ptcl_pos = ptcl_pos+real(params%box/2) !  center
+                        ptcl_pos = ptcl_pos+1.+real(params%box/2) !  center
                         call ctffit%pix2polyvals(ptcl_pos(1),ptcl_pos(2), dfx,dfy)
                         call build%spproj%os_ptcl2D%set(iptcl_glob,'dfx',dfx)
                         call build%spproj%os_ptcl3D%set(iptcl_glob,'dfx',dfx)

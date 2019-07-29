@@ -401,23 +401,24 @@ contains
 
     subroutine shift_wsum_and_calc_corrs( self )
         class(motion_align_iso), intent(inout) :: self
-        complex, allocatable :: cmat_sum(:,:,:), cmat(:,:,:)
+        complex, allocatable :: cmat_sum(:,:,:)
+        complex,     pointer :: pcmat(:,:,:)
         integer :: iframe, flims(3,2)
         real    :: shvec(3)
         ! allocate matrices for reduction
         flims = self%movie_sum_global_ftexp_threads(1)%get_flims()
-        allocate(cmat(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)),&
-            cmat_sum(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)), source=cmplx(0.,0.))
+        allocate(cmat_sum(flims(1,1):flims(1,2),flims(2,1):flims(2,2),flims(3,1):flims(3,2)),&
+            &source=cmplx(0.,0.))
         ! FIRST LOOP TO OBTAIN WEIGHTED SUM
-        !$omp parallel default(shared) private(iframe,shvec,cmat) proc_bind(close)
+        !$omp parallel default(shared) private(iframe,shvec,pcmat) proc_bind(close)
         !$omp do schedule(static) reduction(+:cmat_sum)
         do iframe=1,self%nframes
             shvec(1) = -self%opt_shifts(iframe,1)
             shvec(2) = -self%opt_shifts(iframe,2)
             shvec(3) = 0.0
             call self%movie_frames_ftexp(iframe)%shift(shvec, self%movie_frames_ftexp_sh(iframe))
-            call self%movie_frames_ftexp_sh(iframe)%get_cmat(cmat)
-            cmat_sum = cmat_sum + cmat * self%frameweights(iframe)
+            call self%movie_frames_ftexp_sh(iframe)%get_cmat_ptr(pcmat)
+            cmat_sum = cmat_sum + pcmat * self%frameweights(iframe)
         end do
         !$omp end do
         ! SECOND LOOP TO UPDATE movie_sum_global_ftexp_threads AND CALCULATE CORRS

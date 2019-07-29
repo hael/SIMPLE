@@ -15,7 +15,6 @@ real,    parameter :: TOL    = 1e-4 !< tolerance parameter
 integer, parameter :: MAXITS = 30   !< maximum number of iterations
 
 complex(dp), parameter   :: J     = CMPLX(0.0_dp, 1.0_dp, kind=dp)
-real(dp),    parameter   :: denom = 0.00075_dp ! denominator for rescaling of cost function
 real(dp),    parameter   :: num   = 1.0d8      ! numerator for rescaling of cost function
 
 type :: ftexp_shsrch

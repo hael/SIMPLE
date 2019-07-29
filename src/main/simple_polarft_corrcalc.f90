@@ -252,6 +252,9 @@ contains
         endif
         self%nrefs       = nrefs                                       !< the number of references (logically indexded [1,nrefs])
         self%nrots       = round2even(twopi * real(params_glob%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
+        if( str_has_substr(params_glob%refine, 'neigh') )then
+            self%nrots   = self%nrots * 2                              !< twice the number of in-plane rotations
+        endif
         self%pftsz       = self%nrots / 2                              !< size of reference (nrots/2) (number of vectors used for matching)
         ! allocate optimal low-pass filter if matched filter is on
         if( params_glob%l_match_filt )then
