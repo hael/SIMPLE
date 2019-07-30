@@ -213,7 +213,7 @@ contains
                             THROW_HARD('both upper and lower threshold needed; simple_segmentation')
                         else
                             if( cline%defined('lp')) then
-                                call canny(img,img,[params%thres_low, params%thres_up],lp(1)) !inout/output image coincide
+                                call canny(img,img,[params%thres_low, params%thres_up],lp=lp(1)) !inout/output image coincide
                             else
                                 call canny(img,img,[params%thres_low, params%thres_up])
                             endif
