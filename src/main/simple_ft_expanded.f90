@@ -8,7 +8,6 @@ implicit none
 private
 public :: ft_expanded
 public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
-public :: ftexp_bfacmat,   ftexp_bfacmat_init,   ftexp_bfacmat_kill
 #include "simple_local_flags.inc"
 
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
@@ -73,7 +72,7 @@ contains
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
-        real    :: lp_nyq
+        real    :: lp_nyq, spafreq_denom_sq, bfac, spafreq_sq, w
         integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,kk,sqarg
         logical :: didft
         ! kill pre-existing object
@@ -86,6 +85,7 @@ contains
         lp_nyq         = 2.*self%smpd
         self%lp        = max(lp, lp_nyq)
         self%lims      = img%loop_lims(1,self%lp)
+        spafreq_denom_sq = (real(self%ldim(1))*self%smpd)**2.
         ! shift the limits 2 make transfer 2 GPU painless
         self%flims     = 1
         do i=1,3
@@ -117,6 +117,30 @@ contains
         self%cmat    = cmplx(0.,0.)
         self%bandmsk = .false.
         if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
+        ! bfac=300.
+        ! ! init matrices
+        ! hcnt = 0
+        ! do h=self%lims(1,1),self%lims(1,2)
+        !     hh   = h * h
+        !     hcnt = hcnt + 1
+        !     kcnt = 0
+        !     do k=self%lims(2,1),self%lims(2,2)
+        !         kk    = k * k
+        !         kcnt  = kcnt + 1
+        !         sqarg = hh + kk
+        !         if( sqarg < 0.5 )then
+        !             cycle ! excludes zero
+        !         elseif( sqarg <= lplim .and. sqarg >= hplim  )then
+        !             if( fetch_comps )then
+        !                 ! b-factor weight
+        !                 spafreq_sq = real(sqarg) / spafreq_denom_sq
+        !                 w =  max(0.,min(1.,exp(-0.125*bfac*spafreq_sq))) != sqrt(exp(-B/4*spafreq_sq))
+        !                 self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
+        !             endif
+        !             self%bandmsk(hcnt,kcnt) = .true.
+        !         end if
+        !     end do
+        ! end do
         ! init matrices
         hcnt = 0
         do h=self%lims(1,1),self%lims(1,2)
@@ -312,7 +336,7 @@ contains
         real(dp),           intent(in)    :: shvec(2)
         class(ft_expanded), intent(inout) :: self_gradx, self_grady
         real             :: transf_vec(2),arg
-        integer          :: kstart,kstop,hind,kind,kkind,kind_shift
+        integer          :: hind,kind,kind_shift
         complex, pointer :: cmat_gradx(:,:,:), cmat_grady(:,:,:)
         call self_gradx%get_cmat_ptr( cmat_gradx )
         call self_grady%get_cmat_ptr( cmat_grady )
@@ -405,60 +429,5 @@ contains
         if( allocated(ftexp_transfmat) ) deallocate(ftexp_transfmat)
         ftexp_transf_kzero = 0
     end subroutine ftexp_transfmat_kill
-
-    ! B-FACTOR MATRIX ROUTINES
-
-    subroutine ftexp_bfacmat_init( img, bfac )
-        class(image), intent(in) :: img
-        real,         intent(in) :: bfac
-        real    :: lp_nyq, shconst(2), spafreqsq,bfac_sc
-        integer :: h,k,i,hcnt,kcnt,ftexp_bfac_flims(3,2)
-        integer :: ldim(3),flims(3,2)
-        call ftexp_bfacmat_kill
-        ! dimensions
-        ldim = img%get_ldim()
-        if( ldim(3) > 1 ) THROW_HARD("In: ftexp_bfacmat_init; simple_ft_expanded, 1")
-        lp_nyq      = 2.*img%get_smpd()
-        flims       = img%loop_lims(1,lp_nyq)
-        ftexp_bfac_flims = flims
-        do i=1,3
-            ftexp_bfac_flims(i,2) = ftexp_bfac_flims(i,2) - ftexp_bfac_flims(i,1) + 1
-        end do
-        ftexp_bfac_flims(:,1) = 1
-        ! set shift constant
-        do i=1,2
-            if( ldim(i) == 1 )then
-                shconst(i) = 0.
-            else
-                if( is_even(ldim(i)) )then
-                    shconst(i) = PI/(real(ldim(i))/2.)
-                else
-                    shconst(i) = PI/(real(ldim(i)-1)/2.)
-                endif
-            endif
-        end do
-        allocate(ftexp_bfacmat(ftexp_bfac_flims(1,1):ftexp_bfac_flims(1,2),&
-                                &ftexp_bfac_flims(2,1):ftexp_bfac_flims(2,2)),&
-                &source=1., stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: ftexp_bfacmat_init; simple_ft_expanded, 2",alloc_stat)
-        bfac_sc = max(0.,bfac/4.)
-        !$omp parallel do collapse(2) default(shared) private(h,k,hcnt,kcnt,spafreqsq) proc_bind(close) schedule(static)
-        do h=flims(1,1),flims(1,2)
-            do k=flims(2,1),flims(2,2)
-                hcnt = h-flims(1,1)+1
-                kcnt = k-flims(2,1)+1
-                ! for b-factor matrix indexing
-                if( k==0 ) ftexp_bfac_kzero = kcnt ! for b-factor matrix indexing
-                spafreqsq = real(h*h+k*k)
-                ftexp_bfacmat(hcnt,kcnt) = exp(-bfac_sc*spafreqsq)
-            end do
-        end do
-        !$omp end parallel do
-    end subroutine ftexp_bfacmat_init
-
-    subroutine ftexp_bfacmat_kill
-        if( allocated(ftexp_bfacmat) ) deallocate(ftexp_bfacmat)
-        ftexp_bfac_kzero = 0
-    end subroutine ftexp_bfacmat_kill
 
 end module simple_ft_expanded

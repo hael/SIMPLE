@@ -136,7 +136,7 @@ contains
         self%nprojs       = params_glob%nspace
         self%nrefs        = self%nprojs*self%nstates
         self%nrefsmaxinpl = self%nrefs*params_glob%ninplpeaks
-        self%nrots        = round2even(twopi*real(params_glob%ring2))
+        self%nrots        = pftcc_glob%get_nrots()
         self%npeaks       = npeaks
         self%nbetter      = 0
         self%nrefs_eval   = 0

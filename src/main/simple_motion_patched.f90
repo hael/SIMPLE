@@ -64,6 +64,7 @@ contains
     procedure, private                  :: allocate_fields
     procedure, private                  :: deallocate_fields
     procedure, private                  :: set_size_frames_ref
+    procedure, private                  :: gen_patch
     procedure, private                  :: set_patches
     procedure, private                  :: det_shifts
     procedure, private                  :: det_shifts_polyn
@@ -561,20 +562,64 @@ contains
         write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
     end subroutine set_patches
 
-    subroutine det_shifts( self )
+    subroutine gen_patch( self, stack, pi, pj )
+        class(motion_patched),          intent(inout) :: self
+        type(image),       allocatable, intent(inout) :: stack(:)
+        integer,                        intent(in)    :: pi, pj
+        integer             :: iframe, k, l, kk, ll
+        integer             :: ip, jp           ! ip, jp: i_patch, j_patch
+        real, pointer       :: prmat_patch(:,:,:), prmat_frame(:,:,:)
+        do iframe=1,self%nframes
+            ! init
+            call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
+            call self%frame_patches(pi,pj)%stack(iframe)%get_rmat_ptr(prmat_patch)
+            call stack(iframe)%get_rmat_ptr(prmat_frame)
+            ! copy
+            do k = self%lims_patches(pi,pj,1,1), self%lims_patches(pi,pj,1,2)
+                kk = k
+                if (kk < 1) then
+                    kk = kk + self%ldim(1)
+                else if (kk > self%ldim(1)) then
+                    kk = kk - self%ldim(1)
+                end if
+                ip = k - self%lims_patches(pi,pj,1,1) + 1
+                do l = self%lims_patches(pi,pj,2,1), self%lims_patches(pi,pj,2,2)
+                    ll = l
+                    if (ll < 1) then
+                        ll = ll + self%ldim(2)
+                    else if (ll > self%ldim(2)) then
+                        ll = ll - self%ldim(2)
+                    end if
+                    jp = l - self%lims_patches(pi,pj,2,1) + 1
+                    ! now copy the value
+                    prmat_patch(ip,jp,1) = prmat_frame(kk,ll,1)
+                end do
+            end do
+        end do
+    end subroutine gen_patch
+
+    subroutine det_shifts( self, frames )
         class(motion_patched), target, intent(inout) :: self
-        real, allocatable :: opt_shifts(:,:)
+        type(image),      allocatable, intent(inout) :: frames(:)
+        real, allocatable :: opt_shifts(:,:), res(:)
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
         allocate( self%align_iso(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
         corr_avg = 0.
+        ! initialize transfer matrix to correct dimensions
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, params_glob%smpd)
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
+        res = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp = min(self%hp,res(1))
+        write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
         !$omp proc_bind(close) schedule(static) reduction(+:corr_avg)
         do i = 1,params_glob%nxpatch
             do j = 1,params_glob%nypatch
                 ! init
+                call self%gen_patch(frames,i,j)
                 call self%align_iso(i,j)%new
                 call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
                 if( self%has_frameweights )then
@@ -603,13 +648,16 @@ contains
                 end do
                 ! cleanup
                 call self%align_iso(i,j)%kill
+                do iframe=1,self%nframes
+                    call self%frame_patches(i,j)%stack(iframe)%kill
+                end do
             end do
         end do
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        deallocate(self%align_iso)
+        deallocate(self%align_iso,res)
     end subroutine det_shifts
 
     subroutine det_shifts_polyn( self )
@@ -808,10 +856,10 @@ contains
         end do
         call self%allocate_fields()
         call self%set_size_frames_ref()
-        ! divide the reference into patches & updates high-pass accordingly
-        call self%set_patches(frames)
+        ! ! divide the reference into patches & updates high-pass accordingly
+        ! call self%set_patches(frames)
         ! determine shifts for patches
-        call self%det_shifts()
+        call self%det_shifts(frames)
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
         ! apply transformation
