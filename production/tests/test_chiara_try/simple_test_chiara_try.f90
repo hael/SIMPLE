@@ -338,39 +338,256 @@ end subroutine laplacian_filt
   ! end function approx_entropy
 
 
+  ! This subroutine takes in input 2 2D vectors, centered in the origin
+  ! and it gives as an output the angle between them, IN DEGREES.
+  function ang2D_vecs(vec1, vec2) result(ang)
+      real, intent(inout) :: vec1(2), vec2(2)
+      real :: ang        !output angle
+      real :: ang_rad    !angle in radians
+      real :: mod1, mod2
+      real :: dot_prod
+      mod1 = sqrt(vec1(1)**2+vec1(2)**2)
+      mod2 = sqrt(vec2(1)**2+vec2(2)**2)
+      ! normalise
+      vec1 = vec1/mod1
+      vec2 = vec2/mod2
+      ! dot product
+      dot_prod = vec1(1)*vec2(1)+vec1(2)*vec2(2)
+      ! sanity check
+      if(dot_prod > 1. .or. dot_prod< -1.) then
+         ! THROW_WARN('Out of the domain of definition of arccos; ang2D_vecs')
+          ang_rad = 0.
+      else
+          ang_rad = acos(dot_prod)
+      endif
+      ! if(DEBUG_HERE) then
+      !     write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
+      !     write(logfhandle,*)'mod_1     = ', mod1
+      !     write(logfhandle,*)'mod_2     = ', mod2
+      !     write(logfhandle,*)'dot_prod  = ', dot_prod
+      !     write(logfhandle,*)'ang in radians', acos(dot_prod)
+      ! endif
+      !output angle
+      ang = rad2deg(ang_rad)
+  end function ang2D_vecs
+
+  subroutine circumference(img, rad)
+      type(image), intent(inout) :: img
+      real,        intent(in)    :: rad
+      integer :: i, j, sh, h, k
+      integer :: ldim(3)
+      real    :: smpd
+
+      ldim = img%get_ldim()
+      smpd = img%get_smpd()
+      do i = 1, ldim(1)
+          do j = 1, ldim(2)
+              h   = -int(ldim(1)/2) + i - 1
+              k   = -int(ldim(2)/2) + j - 1
+              sh  =  nint(hyp(real(h),real(k)))
+              if(abs(real(sh)-rad)<1) call img%set([i,j,1], 1.)
+            enddo
+        enddo
+    end subroutine circumference
+
+    function estimate_curvature(img_cc, cc, n_loop) result(c)
+        type(image), intent(inout) :: img_cc
+        integer, intent(in) :: cc      ! number of the connected component to estimate the curvature
+        integer, intent(in) :: n_loop
+        real        :: c       ! estimation of the curvature of the cc img
+        type(image) :: img_aux
+        integer, allocatable :: imat_cc(:,:,:), imat_aux(:,:,:)
+        integer, allocatable :: pos(:,:)
+        integer :: xmax, xmin, ymax, ymin
+        integer :: ldim(3), i, j
+        integer :: h, k, sh
+        integer :: sz, nb_pxls
+        logical :: done   ! to prematurely exit the loops
+        real    :: smpd
+        ldim = img_cc%get_ldim()
+        smpd = img_cc%get_smpd()
+        call img_aux%new(ldim, smpd)
+        imat_cc = nint(img_cc%get_rmat())
+        where(imat_cc /= cc) imat_cc = 0  !keep just the considered cc
+        allocate(imat_aux(ldim(1),ldim(2),1), source = 0)
+        ! fetch white pixel positions
+        call get_pixel_pos(imat_cc,pos)
+        done = .false.
+        do i = 1,ldim(1)
+            do j = 1, ldim(2)
+                if(imat_cc(i,j,1) > 0) then      !The first white pixel you meet, consider it
+                  h   = -int(ldim(1)/2) + i - 1
+                  k   = -int(ldim(2)/2) + j - 1
+                  sh  =  nint(hyp(real(h),real(k))) !Identify the shell the px belongs to: radius of the ideal circle
+                  ! Count the nb of white pixels in a circle of radius sh, TO OPTIMISE
+                  call circumference(img_aux,real(sh))
+                  ! Debug: save the image of the ideal circle of radius sh compared to the input data
+                  imat_aux = img_aux%get_rmat()
+                  ! Need to move from ellipse --> arc. Identify extreme points of the arc
+                  xmin = minval(pos(1,:))
+                  xmin = min(i,xmin)
+                  xmax = maxval(pos(1,:))
+                  xmax = max(i,xmax)
+                  ymin = minval(pos(2,:))
+                  ymin = min(j,ymin)
+                  ymax = maxval(pos(2,:))
+                  ymax = max(j,ymax)
+                  ! Check if the cc is a segment
+                  if(ymin == ymax .or. xmin == xmax) then
+                      print *, 'This cc is a segment, curvature is 0'
+                       c = 0.
+                       return
+                  endif
+                  ! Set to zero white pxls that are not in the arc
+                  imat_aux(1:xmin-2,:,1) = 0 !-2 for tickness
+                  imat_aux(:,1:ymin-2,1) = 0
+                  imat_aux(xmax+2:ldim(1),:,1) = 0
+                  imat_aux(:,ymax+2:ldim(2),1) = 0
+                  nb_pxls = count(imat_aux > 0)  !nb of white pxls in the ideal arc
+                  sz = count(imat_cc > 0) !number of white pixels in the cc
+                  call img_aux%set_rmat(real(imat_aux))
+                  call img_aux%write(trim(int2str(n_loop))//'RadiusShCirclePolished.mrc')
+                  c = real(sz)/(nb_pxls)
+                  print *, 'curvature      = ', c
+                  return
+              endif
+          enddo
+      enddo
+    end function estimate_curvature
+
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
     include 'simple_lib.f08'
     use simple_math
-    ! use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
-    ! use simple_cmdline,        only: cmdline, cmdline_err
-    ! use simple_commander_base, only: execute_commander
-    ! use simple_spproj_hlev
-    ! use simple_commander_distr_wflows
-    ! use simple_commander_stream_wflows
-    ! use simple_commander_hlev_wflows
-    ! use simple_image, only : image
-    ! use simple_stackops
     use simple_test_chiara_try_mod
-  ! use simple_tvfilter
-  ! use simple_ctf
-  ! use simple_ppca
-  ! use simple_stat
-  ! use simple_lapackblas, only : sgeev
-  ! use simple_test_chiara_try_mod
-  ! real, allocatable :: rmat(:,:,:), rmat_mask(:,:,:), rmat_prod(:,:,:)
-  ! real :: centers1(3,10)
-  ! real :: centers2(3,10)
-  ! integer, allocatable :: sz(:)
-  ! integer, allocatable :: imat(:,:,:)
-  ! real :: r, avg, d, st, m(3), smpd, tmp_max, coord(3)
-  ! integer :: N_max
-    real :: X(6)
-    real :: e
-    type(image) :: img
-    integer :: m
-    ! call img%new([512,512,1], 1.41)
+
+    type(image) :: img, img_cc, img_aux
+    integer, allocatable :: imat(:,:,:),imat_inside(:,:,:)
+    integer :: i,j
+    integer, allocatable :: pos(:,:)
+    integer :: loc(1)
+    real    :: d_max
+    real    :: c !curvature estimation
+    integer, allocatable :: sz(:)
+    integer :: sh, h, k
+    logical :: done
+    integer :: BOX
+    integer :: nb_pxls
+    real    :: curvature
+    real    :: theta, arc_length
+    real    :: vec1(2), vec2(2)
+    integer :: xmin, xmax, ymin, ymax
+    integer :: px_x, px_y, cnt, cc(1)
+    real    :: avg_curvature
+    integer :: number_biggest_ccs
+    number_biggest_ccs = 5
+    ! CURVATURE ESTIMATION ON REAL DATA
+    call img%new([512,512,1],1.34)
+    print *, 'Analysing 008_movieb_forctf_binarized_polished.mrc GOOD ONE'
+    call img%read('008_movieb_forctf_binarized_polished.mrc')
+    call img%find_connected_comps(img_cc)
+    sz = img_cc%size_connected_comps()
+    avg_curvature = 0.
+    do i = 1, number_biggest_ccs
+        cc(:) = maxloc(sz)
+        c = estimate_curvature(img_cc,cc(1),i)
+        avg_curvature = avg_curvature + c
+        call img_aux%copy(img_cc)
+        imat = nint(img_aux%get_rmat())
+        where(imat /= cc(1)) imat = 0
+        call img_aux%set_rmat(real(imat))
+        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+        sz(cc(1)) = 0 !discard
+    enddo
+    avg_curvature = avg_curvature/number_biggest_ccs
+    print *, 'avg_curvature = ', avg_curvature
+
+    print *, 'Analysing May08_03.05.02.bin_forctf_binarized_polished.mrc APOFERRITIN'
+    call img%read('May08_03.05.02.bin_forctf_binarized_polished.mrc')
+    call img%find_connected_comps(img_cc)
+    sz = img_cc%size_connected_comps()
+    avg_curvature = 0.
+    do i = 1, number_biggest_ccs
+        cc(:) = maxloc(sz)
+        c = estimate_curvature(img_cc,cc(1),i)
+        avg_curvature = avg_curvature + c
+        call img_aux%copy(img_cc)
+        imat = nint(img_aux%get_rmat())
+        where(imat /= cc(1)) imat = 0
+        call img_aux%set_rmat(real(imat))
+        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+        sz(cc(1)) = 0 !discard
+    enddo
+    avg_curvature = avg_curvature/number_biggest_ccs
+    print *, 'avg_curvature = ', avg_curvature
+
+    print *, 'Analysing 0315_intg_binarized_polished.mrc FALLACIOUS'
+    call img%read('0315_intg_binarized_polished.mrc')
+    call img%find_connected_comps(img_cc)
+    sz = img_cc%size_connected_comps()
+    avg_curvature = 0.
+    do i = 1, number_biggest_ccs
+        cc(:) = maxloc(sz)
+        c = estimate_curvature(img_cc,cc(1),i)
+        avg_curvature = avg_curvature + c
+        call img_aux%copy(img_cc)
+        imat = nint(img_aux%get_rmat())
+        where(imat /= cc(1)) imat = 0
+        call img_aux%set_rmat(real(imat))
+        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+        sz(cc(1)) = 0 !discard
+    enddo
+    avg_curvature = avg_curvature/number_biggest_ccs
+    print *, 'avg_curvature = ', avg_curvature
+
+    stop
+
+    ! CURVATURE ESTIMATION ON ARTOFICIAL DATA
+    ! BOX = 256
+    ! call img%new([BOX,BOX,1],1.)
+    ! print * , '************************************************'
+    ! print *, 'Curvature estimation on a circle'
+    ! call img%ellipse([BOX/2,BOX/2],[22.,22.], 'yes')
+    ! c = estimate_curvature(img,1)
+    ! print * , '************************************************'
+    ! print *, 'Curvature estimation on a arc of a circle'
+    ! imat = nint(img%get_rmat())
+    ! do i = 1,BOX
+    !     do j = 1,BOX
+    !         if(i < j) imat(i,j,1) = 0
+    !     enddo
+    ! enddo
+    ! call img%set_rmat(real(imat))
+    ! c = estimate_curvature(img,1)
+    ! print * , '************************************************'
+    ! imat = 0
+    ! call img%set_rmat(real(imat))
+    ! print *, 'Curvature estimation on a ellipse'
+    ! call img%ellipse([BOX/2,BOX/2],[22.,17.], 'yes')
+    ! imat = nint(img%get_rmat())
+    ! c = estimate_curvature(img,1)
+    ! print * , '************************************************'
+    ! print *, 'Curvature estimation on a arc of an ellipse'
+    ! do i = 1,BOX
+    !     do j = 1,BOX
+    !         if(i < j) imat(i,j,1) = 0
+    !     enddo
+    ! enddo
+    ! call img%set_rmat(real(imat))
+    ! c = estimate_curvature(img,1)
+    ! print * , '************************************************'
+    ! print *, 'Curvature estimation on a segment, length 20 pxls'
+    ! imat = 0
+    ! imat(BOX/2,140:160,1) = 1
+    ! call img%set_rmat(real(imat))
+    ! call img%ellipse([BOX/2,BOX/2],[46.,57.], 'yes')
+    ! call img%find_connected_comps(img_cc)
+    ! c = estimate_curvature(img_cc,1)
+    ! c = estimate_curvature(img_cc,2)
+
+
+        ! call img%new([512,512,1], 1.41)
     ! !call img%read('pspecs_saga_polii.mrc', 71)
     ! rmat = img%get_rmat()
     ! rmat = 5.

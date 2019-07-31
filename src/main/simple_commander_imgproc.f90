@@ -473,7 +473,6 @@ contains
         integer :: nfiles,n_mic
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         real, allocatable    :: score(:)
-        integer, parameter   :: N_SHELLS = 8
         character(len = 100) :: iom
         integer :: status
         ! sanity checks
@@ -487,16 +486,13 @@ contains
         call read_filetable(params%filetab, filenames)
         nfiles = size(filenames)
         allocate(score(nfiles), source = 0.)
+        ! print ouputs
+        open(unit = 13, access = 'sequential',file = 'Output.txt', form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
         do n_mic = 1, nfiles
-            call pspec%new(filenames(n_mic),params%smpd,N_SHELLS)
+            call pspec%new(filenames(n_mic),params%smpd)
             call pspec%run()
-            call pspec%get_score(score(n_mic))
+            write(unit = 13, fmt = "(a,a,l1)") trim(filenames(n_mic)), ' keep:', pspec%get_output()
             call pspec%kill()
-        enddo
-        ! print scores on a file
-        open(unit = 13, access = 'sequential',file = 'Scores.txt', form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
-        do n_mic = 1, nfiles
-            write(unit = 13, fmt = "(a,a,a,a,l1)") filenames(n_mic),' score ', trim(real2str(score(n_mic))), ' discard:', score(n_mic) < 60.
         enddo
         close(13)
         ! end gracefully

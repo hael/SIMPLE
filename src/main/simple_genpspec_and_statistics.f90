@@ -12,12 +12,18 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-logical, parameter :: DEBUG_HERE = .true.
+logical, parameter :: DEBUG_HERE = .false.
 integer, parameter :: BOX        = 512 !ps size
 real,    parameter :: LOW_LIM    = 30. !30 A, lower limit for resolution. Before that, we discard
-real,    parameter :: UP_LIM     = 4.  !upper limit for resolution in the entropy calculation.
+real,    parameter :: UP_LIM     = 3.  !upper limit for resolution in the entropy calculation.
 integer, parameter :: N_BINS     = 64  !number of bins for hist
 real,    parameter :: LAMBDA     = 1.  !for tv filtering
+integer, parameter :: N_BIG_CCS  = 5   !top N_BIG_CCS of the biggest ccs have to be considered in the avg curvature calculation
+real,    parameter :: THR_SCORE_UP    = 0.41!threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_SCORE_DOWN  = 0.29!threshold for keeping/discarding mic wrt score
+real,    parameter :: THR_CURVAT_UPUP = 9.  !threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_UP   = 5.  !threshold for keeping/discarding mic wrt average curvature
+real,    parameter :: THR_CURVAT_DOWN = 4.  !threshold for keeping/discarding mic wrt average curvature
 
 type :: pspec_statistics
     private
@@ -25,26 +31,25 @@ type :: pspec_statistics
     character(len=STDLEN)    :: fbody    = ''
     type(image)           :: mic                  !micrograph
     type(image)           :: ps, ps_bin, ps_ccs   !power spectrum, its binary version, its connected components
-    integer, allocatable  :: res_vec(:)
     type(parameters)      :: p
     type(cmdline)         :: cline
     integer     :: ldim_mic(3) = 0       !dim of the mic
-    integer     :: ldim(3)     = 0       !dim of the ps
+    integer     :: ldim(3)     = 0       !dim of the ps`
     real        :: smpd                  !smpd
-    integer     :: nn_shells   = 0       !nb of shells in which to divide the ps
     real        :: score       = 0.      !score, to keep/discard the mic
+    real        :: avg_curvat  = 0.
     logical     :: fallacious  = .false. !whether the mic has to be discarded or not
+    integer     :: LLim_Findex = 0       !Fourier index corresponding to LOW_LIM
+    integer     :: ULim_Findex = 0       !Fourier index corresponding to UP_LIM
 
   contains
     procedure          :: new => new_pspec_statistics
-    procedure, private :: build_resolutions_vector
-    procedure, private :: per_shell_entropy
     procedure, private :: empty
     procedure, private :: calc_weighted_avg_sz_ccs
+    procedure, private :: calc_avg_curvature
     procedure, private :: process_ps
-    procedure, private :: print_resolutions_vector
     procedure, private :: print_info
-    procedure          :: get_score
+    procedure          :: get_output
     procedure          :: run
     procedure          :: kill => kill_pspec_statistics
 end type pspec_statistics
@@ -52,19 +57,19 @@ end type pspec_statistics
 contains
 
     !constructor
-    subroutine new_pspec_statistics(self, name, cline_smpd, n)
+    subroutine new_pspec_statistics(self, name, cline_smpd)
         use simple_defs
         class(pspec_statistics), intent(inout) :: self
         character(len=*),        intent(in)    :: name
         real,                    intent(in)    :: cline_smpd
-        integer,                 intent(in)    :: n
         integer     :: nptcls
         real        :: smpd
         type(image) :: hist_stretch  !to perform histogram stretching (see Adiga s paper)
         !set parameters
-        self%smpd      = cline_smpd
-        self%nn_shells = n
-        self%micname   = name
+        self%smpd        = cline_smpd
+        self%micname     = name
+        self%ULim_Findex = calc_fourier_index(max(2.*self%smpd,UP_LIM), BOX,self%smpd)! Everything at a resolution higher than UP_LIM A is discarded
+        self%LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)                  ! Everything at a resolution lower than LOW_LIM A is discarded
         call find_ldim_nptcls(self%micname, self%ldim_mic, nptcls, smpd)
         self%fbody   = get_fbody(trim(self%micname),trim(fname2ext(self%micname)))
         call self%mic%new(self%ldim_mic, self%smpd)
@@ -75,129 +80,89 @@ contains
         call self%ps_bin%new(self%ldim, self%smpd)
         call self%ps_ccs%new(self%ldim, self%smpd)
         !power spectrum generation
-        call self%mic%mic2spec(BOX, 'power',2.82*LOW_LIM, self%ps)
+        call self%mic%mic2spec(BOX, 'power',LOW_LIM, self%ps)
         if(DEBUG_HERE) call self%ps%write(trim(self%fbody)//'_generated_ps.mrc')
-        ! call hist_stretch%new(self%ldim, self%smpd)  !histogram stretching, to try to reduce the influence of the central spot for entropy calculation
-        ! call self%ps%hist_stretching(hist_stretch)
-        ! if(DEBUG_HERE) call hist_stretch%write(trim(self%fbody)//'_hist_stretch_ps.mrc')
-        ! call self%ps%copy(hist_stretch)
     end subroutine new_pspec_statistics
 
-    !This function builds a vector that splits up the ps in nn_shells shells
-    !and stores the pixel limit in res_vec. The interval considered is [Nyq, 30] A.
-    subroutine build_resolutions_vector(self, box)
+    ! Result of the combination of score and curvature.
+    ! It states whether to keep or discard the mic.
+    ! Notation: L <-> low;
+    !           M <-> medium;
+    !           H <-> high;
+    !           S <-> score;
+    !           C <-> curvature.
+    ! H.S        --> keep
+    ! H.C        --> discard
+    ! L.S + L.C  --> keep
+    ! L.S + M.C  --> discard
+    ! M.S + M.C  --> discard
+    ! M.S + L.C  --> keep
+    function get_output(self) result(keep_mic)
         class(pspec_statistics), intent(inout) :: self
-        integer,                 intent(in)    :: box
-        integer :: step, i
-        integer :: min_val, max_val
-        if(self%nn_shells < 2) THROW_HARD('Too low number of shells; build_resolutions_res_vec')
-        if(allocated(self%res_vec)) deallocate(self%res_vec)
-        allocate(self%res_vec(self%nn_shells), source = 0)
-        min_val = calc_fourier_index(LOW_LIM,      BOX, self%smpd)
-        max_val = calc_fourier_index(2.*self%smpd, BOX, self%smpd)
-        step = (max_val-min_val)/self%nn_shells        !go from Nyq to 30 A
-        do i = 1, self%nn_shells
-            self%res_vec(i) = min_val-step/2 + i*step  !-step/2 to have the central spot, not the upper limit
-        end do
-    end subroutine build_resolutions_vector
-
-   ! Reporting purposes
-    subroutine print_resolutions_vector(self)
-        class(pspec_statistics), intent(inout) :: self
-        integer :: j
-        if(.not. allocated(self%res_vec)) THROW_HARD('Resolution vector hasn t been allocated yet; print_resolutions_vector')
-        write(logfhandle,*) 'RESOLUTION VECTOR: '
-         do j = 1, size(self%res_vec)
-            write(logfhandle,*) self%res_vec(j), calc_lowpass_lim(self%res_vec(j),BOX, self%smpd)
-        enddo
-    end subroutine print_resolutions_vector
-
-   ! This function calculates the entropy per shell.
-    subroutine per_shell_entropy(self)
-        use simple_math
-        class(pspec_statistics), intent(inout) :: self
-        real,    allocatable :: X(:)
-        real,    allocatable :: rmat(:,:,:)
-        real    :: e(self%nn_shells)
-        real    :: avg_entropy_per_shell, stdev_entropy_per_shell
-        integer :: cnt(self%nn_shells)
-        integer :: npxls_per_shell(self%nn_shells)
-        integer :: ind(1)
-        integer :: i, j
-        integer :: h, k, sh, n_shell
-        integer :: ULim_Findex, LLim_Findex
-        ULim_Findex = calc_fourier_index(max(2.*self%smpd,UP_LIM), BOX,self%smpd)! Everything at a resolution higher than UP_LIM A is discarded
-        LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)                  ! Everything at a resolution lower than LOW_LIM A is discarded
-        rmat = self%ps%get_rmat()
-        if(DEBUG_HERE) call self%ps%write(trim(self%fbody)//'_ps_for_entropy.mrc')
-        ! Calculate nb of pixels per shell
-        npxls_per_shell = 0
-        do i = 1, BOX
-            do j = 1, BOX
-                h   = -int(BOX/2) + i - 1
-                k   = -int(BOX/2) + j - 1
-                sh  =  nint(hyp(real(h),real(k)))                !shell to which px (i,j) belongs
-                if(sh < ULim_Findex .and. sh > LLim_Findex) then !discard outside LOW_LIM - UP_LIM A
-                    ! It's inconsistent with the resolution vector, because the res vec goes from Nyq to LOW_LIM, not UP_LIM
-                    ind = minloc(abs(self%res_vec-sh))           !corresponding shell in res_vec
-                    npxls_per_shell(ind(1)) = npxls_per_shell(ind(1)) + 1
-                endif
-            enddo
-        enddo
-        cnt = 0 ! initialisation
-        ! Calculate entropy per shell
-        do n_shell = 1, self%nn_shells
-            if(allocated(X)) deallocate(X)
-            allocate(X(npxls_per_shell(n_shell)), source = 0.)
-            do i = 1, BOX
-                do j = 1, BOX
-                    h   = -int(BOX/2) + i - 1
-                    k   = -int(BOX/2) + j - 1
-                    sh  =  nint(hyp(real(h),real(k)))
-                    if(sh < ULim_Findex .and. sh > LLim_Findex) then
-                        ind = minloc(abs(self%res_vec-sh))
-                        if(ind(1) == n_shell) then  !The pixel [i,j,1] belongs to the considered shell
-                            cnt(n_shell)    = cnt(n_shell) + 1
-                            X(cnt(n_shell)) =  rmat(i,j,1)
-                        endif
-                    endif
-                 enddo
-            enddo
-            e(n_shell) = entropy_shells(X,maxval(rmat),minval(rmat),4*N_BINS)
-            write(logfhandle,*) 'shell ', n_shell, 'entropy per shells ', e(n_shell)
-        enddo
-        ! Calculation of entropy statistics
-        avg_entropy_per_shell   = 0.
-        stdev_entropy_per_shell = 0.
-        avg_entropy_per_shell = sum(e)/real(self%nn_shells) !discard first shell
-        do n_shell = 1, self%nn_shells
-            stdev_entropy_per_shell = stdev_entropy_per_shell+ (e(self%nn_shells)-avg_entropy_per_shell)**2
-        enddo
-        stdev_entropy_per_shell = sqrt(stdev_entropy_per_shell/real(self%nn_shells-1))
-        write(logfhandle, *) 'avg_entropy_per_shell   = ', avg_entropy_per_shell
-        write(logfhandle, *) 'stdev_entropy_per_shell = ', stdev_entropy_per_shell
-        write(logfhandle, *) 'avg + std deviation     = ', avg_entropy_per_shell + stdev_entropy_per_shell
-    end subroutine per_shell_entropy
+        logical :: keep_mic
+        write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat !if(DEBUG_HERE)
+        if(self%score > THR_SCORE_UP .and. self%avg_curvat < THR_CURVAT_UPUP) then
+            keep_mic = .true.
+            return
+        elseif(self%avg_curvat > THR_CURVAT_UPUP) then
+            keep_mic = .false.
+            return
+        elseif(self%score > THR_SCORE_DOWN .and. self%avg_curvat < THR_CURVAT_UP ) then
+            keep_mic = .true.
+            return
+        elseif(self%score > THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_UP ) then
+            keep_mic = .false.
+            return
+        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_DOWN ) then
+            keep_mic = .false.
+            return
+        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat > THR_CURVAT_DOWN) then
+            keep_mic = .false.
+            return
+        elseif(self%score < THR_SCORE_DOWN .and. self%avg_curvat < THR_CURVAT_DOWN) then
+            keep_mic = .true.
+            return
+        else
+            keep_mic = .false.
+            THROW_WARN('This case has not been considered')
+        endif
+    end function get_output
 
     !This subroutine is meant to discard fallacious power spectra images
     !characterized by producing an 'empty' binarization.
     !If after binarization the # of white pixels detected in the central
-    !zone of the image is less than 2% of the tot
+    !zone of the image is less than 5% of the tot
     !# of central pixels, than it returns yes, otherwhise no.
-    !The central zone is a rectangle with dim BOX/2
+    !The central zone is characterized by having res in [LOW_LIM,UP_LIM/2]
     function empty(self) result(yes_no)
         class(pspec_statistics), intent(inout) :: self
         logical             :: yes_no
-        real, allocatable   :: rmat(:,:,:),rmat_central(:,:,:)
+        real, allocatable   :: rmat(:,:,:)
+        real, parameter     :: PERCENT = 0.05
+        integer :: i, j
+        integer :: h, k, sh
+        integer :: cnt, cnt_white
+        integer :: uplim
+        uplim = self%ULim_Findex/2
         yes_no = .false.
         rmat = self%ps_bin%get_rmat()
         if(any(rmat > 1.001) .or. any(rmat < -0.001)) THROW_HARD('Expected binary image in input; discard_ps')
-        allocate(rmat_central(BOX/2+1,BOX/2+1,1), source = 0.)
-        rmat_central(1:BOX/2+1,1:BOX/2+1,1) = &
-               & rmat( BOX/2-BOX/4 : BOX/2+BOX/4 , &
-               &       BOX/2-BOX/4 : BOX/2+BOX/4 , 1)
-        if(count(rmat_central(:,:,:) > 0.5)< 2*BOX*BOX/(2*2*100)) yes_no = .true.; return
-        deallocate(rmat, rmat_central)
+        !initialize
+        cnt       = 0
+        cnt_white = 0
+        do i = 1, BOX
+            do j = 1, BOX
+                h   = -int(BOX/2) + i - 1
+                k   = -int(BOX/2) + j - 1
+                sh  =  nint(hyp(real(h),real(k)))
+                if(sh < uplim .and. sh > self%LLim_Findex) then
+                    cnt = cnt + 1                                !number of pixels in the selected zone
+                    if(rmat(i,j,1) > TINY) cnt_white = cnt_white + 1 !number of white pixels in the selected zone
+                endif
+             enddo
+        enddo
+        if(real(cnt_white)/real(cnt)<PERCENT) yes_no = .true.; return
+        deallocate(rmat)
     end function empty
 
     subroutine print_info(self)
@@ -214,10 +179,8 @@ contains
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a)")  '-----------SELECTED PARAMETERS------------- '
         write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a,tr1,i0.0)") 'Nb of shells    ', self%nn_shells
         write(unit = 17, fmt = "(a,f5.2,a,f5.2, a)") 'Pixel split up in shells in the interval', 2.*self%smpd, ' - ', LOW_LIM,' A'
     end subroutine print_info
-
 
    ! This subroutine calculates the weighted avg of the size
    ! of the connected components of the binary version of
@@ -226,21 +189,18 @@ contains
    ! spectra. The valid ones should have rings in the
    ! center, so big connected components toward the
    ! center of the image.
+   ! This is the SCORE.
     subroutine calc_weighted_avg_sz_ccs(self, sz)
         class(pspec_statistics), intent(inout) :: self
         integer,                 intent(in)    :: sz(:)
         integer, allocatable :: imat(:,:,:)
         integer, allocatable :: imat_sz(:,:,:)
-        integer :: ULim_Findex, LLim_Findex
         integer :: h,k,sh
         integer :: i, j
         real    :: denom  !denominator of the formula
         real    :: a
-        ULim_Findex = calc_fourier_index(max(2.*self%smpd,UP_LIM), BOX,self%smpd)! Everything at a resolution higher than UP_LIM A is discarded
-        LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)                  ! Everything at a resolution lower than LOW_LIM A is discarded
         denom = 0.
         call self%ps_ccs%elim_cc([1,BOX*4]) !eliminate connected components with size one
-        call self%ps_ccs%write(trim(self%fbody)//'_polished_ccs.mrc')
         imat = nint(self%ps_ccs%get_rmat())
         allocate(imat_sz(BOX,BOX,1), source = 0)
         call generate_mat_sz_ccs(imat,imat_sz,sz)
@@ -251,24 +211,27 @@ contains
                     h   = -int(BOX/2) + i - 1
                     k   = -int(BOX/2) + j - 1
                     sh  =  nint(hyp(real(h),real(k)))
-                    if( sh > ULim_Findex .or. sh < LLim_Findex ) then
+                    if( sh > self%ULim_Findex .or. sh < self%LLim_Findex ) then
                          if(DEBUG_HERE) call self%ps_bin%set([i,j,1], 0.)
                          cycle ! Do not consider white pixels detected after outside frequency range [LOW_LIM,UP_LIM]
                     endif
-                    a = (1.-real(sh)/real(ULim_Findex))
+                    a = (1.-real(sh)/real(self%ULim_Findex))
                     denom = denom + a
                     self%score = self%score + a*imat_sz(i,j,1)/(2.*PI*sh)
                 endif
             enddo
         enddo
         if(DEBUG_HERE) call self%ps_bin%write(trim(self%fbody)//'_binarized_polished.mrc')
+        call self%ps_bin%find_connected_comps(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
+        self%avg_curvat = self%calc_avg_curvature()
+        if(DEBUG_HERE) write(logfhandle,*) 'avg curvature ', self%avg_curvat
         !normalization
         if(abs(denom) > TINY) then
             self%score = self%score/denom
         else
             THROW_HARD('Denominator = 0! calc_weighted_avg_sz_ccs')
         endif
-        print *, 'SCORE =       ', self%score
+        if(DEBUG_HERE) write(logfhandle,*) 'SCORE =       ', self%score
     contains
 
         ! This subroutine is meant to generate a matrix in which in each pixel is
@@ -291,73 +254,135 @@ contains
         end subroutine generate_mat_sz_ccs
     end subroutine calc_weighted_avg_sz_ccs
 
+    ! This function simply calculates the average curvature of the
+    ! top N_BIG_CCS (in size) connected components.
+    function calc_avg_curvature(self) result(avg)
+        class(pspec_statistics), intent(inout) :: self
+        real    :: avg !average curvature
+        integer :: i
+        integer :: cc(1)
+        integer, allocatable :: sz(:)
+        sz = self%ps_ccs%size_connected_comps()
+        call self%ps_ccs%write(trim(self%fbody)//'_inside_curvature.mrc')
+        avg = 0.
+        do i = 1,N_BIG_CCS
+            cc(:) = maxloc(sz)
+            avg = avg + estimate_curvature(self%ps_ccs,cc(1))
+            sz(cc(1)) = 0 !discard
+        enddo
+        avg = avg/N_BIG_CCS
+    contains
+        ! This subroutine estimates the curvature of the connected
+        ! component cc in the connected component image of the ps.
+        ! The curvature is defined as the ratio between the nb
+        ! of pixels in the cc and the ideal circumference arc which
+        ! has the same extremes as cc.
+        function estimate_curvature(ps_ccs,cc) result(c)
+            type(image), intent(inout) :: ps_ccs
+            integer,     intent(in)    :: cc      ! number of the connected component to estimate the curvature
+            ! integer, intent(in) :: n_loop
+            real        :: c       ! estimation of the curvature of the cc img
+            type(image) :: img_aux
+            integer, allocatable :: imat_cc(:,:,:), imat_aux(:,:,:)
+            integer, allocatable :: pos(:,:)
+            integer :: xmax, xmin, ymax, ymin
+            integer :: i, j
+            integer :: h, k, sh
+            integer :: sz, nb_pxls
+            logical :: done   ! to prematurely exit the loops
+            call img_aux%new(self%ldim, self%smpd)
+            imat_cc = nint(ps_ccs%get_rmat())
+            where(imat_cc /= cc) imat_cc = 0  !keep just the considered cc
+            allocate(imat_aux(BOX,BOX,1), source = 0)
+            ! fetch white pixel positions
+            call get_pixel_pos(imat_cc,pos)
+            done = .false.
+            do i = 1,BOX
+                do j = 1,BOX
+                    if(imat_cc(i,j,1) > 0) then      !The first white pixel you meet, consider it
+                      h   = -int(BOX/2) + i - 1
+                      k   = -int(BOX/2) + j - 1
+                      sh  =  nint(hyp(real(h),real(k))) !Identify the shell the px belongs to: radius of the ideal circle
+                      ! Count the nb of white pixels in a circle of radius sh, TO OPTIMISE
+                      call circumference(img_aux,real(sh))
+                      ! Image of the ideal circle of radius sh compared to the input data
+                      imat_aux = img_aux%get_rmat()
+                      ! Need to move from ellipse --> arc. Identify extreme points of the arc
+                      xmin = minval(pos(1,:))
+                      xmin = min(i,xmin)
+                      xmax = maxval(pos(1,:))
+                      xmax = max(i,xmax)
+                      ymin = minval(pos(2,:))
+                      ymin = min(j,ymin)
+                      ymax = maxval(pos(2,:))
+                      ymax = max(j,ymax)
+                      ! Check if the cc is a segment
+                      if(ymin == ymax .or. xmin == xmax) then
+                          print *, 'This cc is a segment, curvature is 0'
+                           c = 0.
+                           return
+                      endif
+                      ! Set to zero white pxls that are not in the arc
+                      imat_aux(1:xmin-2,:,1) = 0 !-2 for tickness
+                      imat_aux(:,1:ymin-2,1) = 0
+                      imat_aux(xmax+2:BOX,:,1) = 0
+                      imat_aux(:,ymax+2:BOX,1) = 0
+                      nb_pxls = count(imat_aux > 0)  !nb of white pxls in the ideal arc
+                      sz = count(imat_cc > 0) !number of white pixels in the cc
+                      c = real(sz)/(nb_pxls)
+                      return
+                  endif
+              enddo
+          enddo
+        end function estimate_curvature
+
+        !Circumference of radius r and center the center of the img.
+        !Gray value of the new build circumference 1.
+        subroutine circumference(img, rad)
+            type(image), intent(inout) :: img
+            real,        intent(in)    :: rad
+            integer :: i, j, sh, h, k
+            do i = 1, BOX
+                do j = 1, BOX
+                    h   = -int(BOX/2) + i - 1
+                    k   = -int(BOX/2) + j - 1
+                    sh  =  nint(hyp(real(h),real(k)))
+                    if(abs(real(sh)-rad)<1) call img%set([i,j,1], 1.)
+                  enddo
+              enddo
+        end subroutine circumference
+    end function calc_avg_curvature
+
     !This is the core subroutine of this module. Preprocessing and binarization of the
     !ps is performed here. Then estimation of how far do the detected rings extend.
     ! Finally estimation of the number of countiguous rings.
     subroutine process_ps(self)
-      use gnufor2
       class(pspec_statistics), intent(inout) :: self
       integer, allocatable :: sz(:)
       real                 :: res
       integer              :: ind(1)
       integer              :: h, k, sh
       integer              :: i, j
-      call build_resolutions_vector(self, BOX)
-      ! calculation of entropy to identify fallacious data
-      call self%per_shell_entropy()
       call prepare_ps(self)
       call binarize_ps(self)
       ! calculation of the weighted average size of the ccs ->  score
       call self%ps_bin%find_connected_comps(self%ps_ccs)
       sz = self%ps_ccs%size_connected_comps()
       call self%calc_weighted_avg_sz_ccs(sz)
-      ! connected components size histogram
-      !call hist(real(sz),N_BINS)
-      ! Matlab compatible file for histograms
-      ! open(119, file=trim(self%fbody)//'CCsSizeHist')
-      ! write (119,*) 'sz=[...'
-      ! do i = 1, size(sz)
-      !     write (119,'(A)', advance='no') trim(int2str(sz(i)))
-      !     if(i < size(sz)) write (119,'(A)', advance='no') ', '
-      ! end do
-      ! write (119,*) '];'
-      ! close(119)
       deallocate(sz)
-      ! call self%print_info()
-      !if(self%fallacious) write(unit = 17, fmt = '(a)')  'Micrograph is fallacious '
-      !close(17, status = "keep")
-      ! printing shell rings on ps image, for developing and debugging
-      ! Representation of the division in shells on the ps image
-      do i = 1, BOX
-          do j = 1, BOX
-              h   = -int(BOX/2) + i - 1
-              k   = -int(BOX/2) + j - 1
-              sh  =  nint(hyp(real(h),real(k)))
-              do k =1,size(self%res_vec)
-                  if(abs(real(sh)-self%res_vec(k))<1) call self%ps%set([i,j,1], real(BOX/3))
-              enddo
-        enddo
-    enddo
-    call self%ps%write(trim(self%fbody)//'_shells.mrc')
   contains
 
-      !Preprocessing steps: -) elimination of central spot
-      !??? to complete according to what we decide
+      !Preprocessing steps: -) tv filtering
+      !                     -) elimination of central spot
+      !                     -) scaling
       subroutine prepare_ps(self)
           use simple_tvfilter, only: tvfilter
           class(pspec_statistics), intent(inout) :: self
           type(tvfilter) :: tvf
-          integer        :: winsz
+          call tvf%new()
+          call tvf%apply_filter(self%ps, LAMBDA)
           call manage_central_spot(self)
-          call self%ps%scale_pixels([1.,real(N_BINS)]) ! to set facilitate entropy calculation
-          ! call tvf%new()
-          ! call tvf%apply_filter(self%ps,LAMBDA)
-          ! if(DEBUG_HERE) call self%ps%write(trim(self%fbody)//'_tvfiltered_ps.mrcs')
-          ! call tvf%kill
-          ! median filtering
-          ! winsz = 2
-          ! call self%ps%real_space_filter(winsz,'median')
-          ! if(DEBUG_HERE) call self%ps%write(trim(self%fbody)//'_medianfiltered_ps.mrcs')
+          call self%ps%scale_pixels([1.,real(N_BINS)])
       end subroutine prepare_ps
 
       ! This subroutine extract a circle from the central part of the
@@ -371,7 +396,6 @@ contains
           real, allocatable :: rmat(:,:,:), rmat_dist(:,:,:)
           real              :: avg
           integer           :: lims(3,2), mh, mk
-          integer           :: LLim_Findex
           integer           :: i, j
           integer           :: k, h, sh
           integer           :: cnt
@@ -379,7 +403,6 @@ contains
           lmsk = .true.
           allocate(rmat     (BOX,BOX,1), source = self%ps%get_rmat())
           allocate(rmat_dist(BOX,BOX,1), source = 0.)
-          LLim_Findex = calc_fourier_index(LOW_LIM,BOX,self%smpd)
           lims = self%ps%loop_lims(3)
           mh   = abs(lims(1,1))
           mk   = abs(lims(2,1))
@@ -390,9 +413,9 @@ contains
                   sh  = nint(hyp(real(h),real(k))) !shell to which px
                   i = min(max(1,h+mh+1),BOX)
                   j = min(max(1,k+mk+1),BOX)
-                  if(sh < LLim_Findex ) then
+                  if(sh < self%LLim_Findex ) then
                       lmsk(i,j,1) = .false.
-                  elseif(sh >= LLim_Findex .and. sh < LLim_Findex + 2) then
+                  elseif(sh >= self%LLim_Findex .and. sh < self%LLim_Findex + 2) then
                       avg = avg + rmat(i,j,1)
                       cnt = cnt + 1
                   endif
@@ -404,7 +427,7 @@ contains
                   sh  = nint(hyp(real(h),real(k))) !shell to which px
                   i = min(max(1,h+mh+1),BOX)
                   j = min(max(1,k+mk+1),BOX)
-                  if(sh < LLim_Findex ) then
+                  if(sh < self%LLim_Findex ) then
                       rmat_dist(i,j,1) = sqrt(real((i-BOX/2-1)**2+(j-BOX/2-1)**2)) !dist between [i,j,1] and [BOX/2,BOX/2,1] (distance from the center)
                   endif
               enddo
@@ -426,22 +449,16 @@ contains
           scale_range = [1.,real(BOX)]
           call canny(self%ps,self%ps_bin,scale_range)
           do i=1,BOX  !get rid of border effects
-              call self%ps%set([i,1,1],0.)
-              call self%ps%set([i,BOX,1],0.)
-              call self%ps%set([1,i,1],0.)
-              call self%ps%set([BOX,i,1],0.)
+              call self%ps_bin%set([i,1,1],0.)
+              call self%ps_bin%set([i,BOX,1],0.)
+              call self%ps_bin%set([1,i,1],0.)
+              call self%ps_bin%set([BOX,i,1],0.)
           enddo
           if(DEBUG_HERE) call self%ps_bin%write(trim(self%fbody)//'_binarized.mrc')
           self%fallacious =  self%empty() !check if the mic is fallacious
-          if(self%fallacious) write(logfhandle,*) trim(self%fbody), ' to be discarded'
+          if(self%fallacious) write(logfhandle,*) trim(self%fbody), ' TO BE DISCARDED'
       end subroutine binarize_ps
   end subroutine process_ps
-
-  subroutine get_score(self,score)
-      class(pspec_statistics), intent(inout) :: self
-      real,                    intent(out)   :: score
-      score = self%score
-  end subroutine get_score
 
   subroutine run(self)
       class(pspec_statistics), intent(inout) :: self
@@ -456,12 +473,12 @@ contains
       call self%ps%kill()
       call self%ps_bin%kill()
       call self%ps_ccs%kill()
-      if(allocated(self%res_vec)) deallocate(self%res_vec)
       self%micname      = ''
       self%fbody        = ''
       self%ldim         = 0
       self%smpd         = 0.
-      self%nn_shells    = 0
+      self%score        = 0.
+      self%avg_curvat   = 0.
       self%fallacious   = .false.
   end subroutine kill_pspec_statistics
 end module simple_genpspec_and_statistics
