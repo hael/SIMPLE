@@ -100,7 +100,7 @@ contains
     function get_output(self) result(keep_mic)
         class(pspec_statistics), intent(inout) :: self
         logical :: keep_mic
-        write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat !if(DEBUG_HERE)
+        if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat 
         if(self%score > THR_SCORE_UP .and. self%avg_curvat < THR_CURVAT_UPUP) then
             keep_mic = .true.
             return
@@ -224,14 +224,12 @@ contains
         if(DEBUG_HERE) call self%ps_bin%write(trim(self%fbody)//'_binarized_polished.mrc')
         call self%ps_bin%find_connected_comps(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
         self%avg_curvat = self%calc_avg_curvature()
-        if(DEBUG_HERE) write(logfhandle,*) 'avg curvature ', self%avg_curvat
         !normalization
         if(abs(denom) > TINY) then
             self%score = self%score/denom
         else
             THROW_HARD('Denominator = 0! calc_weighted_avg_sz_ccs')
         endif
-        if(DEBUG_HERE) write(logfhandle,*) 'SCORE =       ', self%score
     contains
 
         ! This subroutine is meant to generate a matrix in which in each pixel is
@@ -263,7 +261,6 @@ contains
         integer :: cc(1)
         integer, allocatable :: sz(:)
         sz = self%ps_ccs%size_connected_comps()
-        call self%ps_ccs%write(trim(self%fbody)//'_inside_curvature.mrc')
         avg = 0.
         do i = 1,N_BIG_CCS
             cc(:) = maxloc(sz)
@@ -447,7 +444,7 @@ contains
           integer     :: ldim(3),i
           real        :: scale_range(2)
           scale_range = [1.,real(BOX)]
-          call canny(self%ps,self%ps_bin,scale_range)
+          call canny(self%ps,self%ps_bin,scale_range = scale_range)
           do i=1,BOX  !get rid of border effects
               call self%ps_bin%set([i,1,1],0.)
               call self%ps_bin%set([i,BOX,1],0.)
