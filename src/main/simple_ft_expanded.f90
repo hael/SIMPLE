@@ -67,25 +67,25 @@ contains
 
     ! CONSTRUCTORS
 
-    subroutine new( self, img, hp, lp, fetch_comps )
+    subroutine new( self, img, hp, lp, fetch_comps, bfac )
         class(ft_expanded), intent(inout) :: self
         class(image),       intent(inout) :: img
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
-        real    :: lp_nyq, spafreq_denom_sq, bfac, spafreq_sq, w
-        integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,kk,sqarg
-        logical :: didft
+        real, optional,     intent(in)    :: bfac
+        real    :: lp_nyq, spafreq_denom_sq, spafreq_sq, w
+        integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,sqarg
+        logical :: didft, l_bfac
         ! kill pre-existing object
         call self%kill
         ! set constants
-        self%ldim      = img%get_ldim()
+        self%ldim = img%get_ldim()
         if( self%ldim(3) > 1 ) THROW_HARD('only for 2D images; new_1')
-        self%smpd      = img%get_smpd()
-        self%hp        = hp
-        lp_nyq         = 2.*self%smpd
-        self%lp        = max(lp, lp_nyq)
-        self%lims      = img%loop_lims(1,self%lp)
-        spafreq_denom_sq = (real(self%ldim(1))*self%smpd)**2.
+        self%smpd = img%get_smpd()
+        self%hp   = hp
+        lp_nyq    = 2.*self%smpd
+        self%lp   = max(lp, lp_nyq)
+        self%lims = img%loop_lims(1,self%lp)
         ! shift the limits 2 make transfer 2 GPU painless
         self%flims     = 1
         do i=1,3
@@ -102,6 +102,12 @@ contains
             kcnt = kcnt + 1
             if( k==0 ) self%kzero = kcnt
         enddo
+        ! bfactor
+        l_bfac = .false.
+        if( present(bfac) )then
+            if( bfac > 0.) l_bfac = .true.
+        endif
+        spafreq_denom_sq = (real(self%ldim(1))*self%smpd)**2.
         ! prepare image
         didft = .false.
         if( .not. img%is_ft() .and. fetch_comps )then
@@ -117,30 +123,6 @@ contains
         self%cmat    = cmplx(0.,0.)
         self%bandmsk = .false.
         if(alloc_stat.ne.0)call allocchk("In: new_1; simple_ft_expanded, 2",alloc_stat)
-        ! bfac=300.
-        ! ! init matrices
-        ! hcnt = 0
-        ! do h=self%lims(1,1),self%lims(1,2)
-        !     hh   = h * h
-        !     hcnt = hcnt + 1
-        !     kcnt = 0
-        !     do k=self%lims(2,1),self%lims(2,2)
-        !         kk    = k * k
-        !         kcnt  = kcnt + 1
-        !         sqarg = hh + kk
-        !         if( sqarg < 0.5 )then
-        !             cycle ! excludes zero
-        !         elseif( sqarg <= lplim .and. sqarg >= hplim  )then
-        !             if( fetch_comps )then
-        !                 ! b-factor weight
-        !                 spafreq_sq = real(sqarg) / spafreq_denom_sq
-        !                 w =  max(0.,min(1.,exp(-0.125*bfac*spafreq_sq))) != sqrt(exp(-B/4*spafreq_sq))
-        !                 self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
-        !             endif
-        !             self%bandmsk(hcnt,kcnt) = .true.
-        !         end if
-        !     end do
-        ! end do
         ! init matrices
         hcnt = 0
         do h=self%lims(1,1),self%lims(1,2)
@@ -148,13 +130,21 @@ contains
             hcnt = hcnt + 1
             kcnt = 0
             do k=self%lims(2,1),self%lims(2,2)
-                kk    = k * k
                 kcnt  = kcnt + 1
-                sqarg = hh + kk
-                if( sqarg < 0.5 )then
+                sqarg = hh +  k*k
+                if( sqarg < 1 )then
                     cycle ! excludes zero
                 elseif( sqarg <= lplim .and. sqarg >= hplim  )then
-                    if( fetch_comps ) self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
+                    if( fetch_comps )then
+                        if( l_bfac )then
+                            ! b-factor weight
+                            spafreq_sq = real(sqarg) / spafreq_denom_sq
+                            w =  max(0.,min(1.,exp(-0.125*bfac*spafreq_sq))) != sqrt(exp(-B/4*spafreq_sq))
+                            self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
+                        else
+                            self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
+                        endif
+                    endif
                     self%bandmsk(hcnt,kcnt) = .true.
                 end if
             end do

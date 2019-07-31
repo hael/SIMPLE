@@ -45,7 +45,7 @@ contains
         real,             allocatable :: shifts(:,:)
         type(stats_struct)        :: shstats(2)
         character(len=LONGSTRLEN) :: rel_fname
-        real    :: goodnessoffit(2), scale, var
+        real    :: goodnessoffit(2), scale, var, bfac_here
         integer :: ldim(3), ldim_thumb(3), nframes
         logical :: err, patch_success
         ! check, increment counter & print
@@ -82,6 +82,9 @@ contains
         endif
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)
         if( params_glob%tomo.eq.'yes' ) motion_correct_with_patched = .false.
+        ! b-factors for alignment
+        bfac_here = -1.
+        if( cline%defined('bfac') ) bfac_here = params_glob%bfac
         ! check, increment counter & print
         write(logfhandle,'(a,1x,a)') '>>> PROCESSING MOVIE:', trim(moviename)
         ! averages frames as a pre-processing step (Falcon 3 with long exposures)
@@ -92,7 +95,11 @@ contains
             self%moviename = trim(moviename)
         endif
         ! execute the motion_correction
-        call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
+        if( cline%defined('nsig') )then
+            call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname, nsig=params_glob%nsig)
+        else
+            call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
+        endif
         ! return shift stats
         nframes = size(shifts(:,1))
         call moment(shifts(:,1), shstats(1)%avg, shstats(1)%sdev, var, err)
@@ -123,7 +130,7 @@ contains
         ! Patch based approach
         if( motion_correct_with_patched ) then
             patched_shift_fname = trim(dir_out)//trim(adjustl(fbody_here))//'_shifts.eps'
-            call motion_correct_patched( goodnessoffit )
+            call motion_correct_patched( bfac_here, goodnessoffit )
             patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
             if( patch_success )then
                 if( cline%defined('tof') )then

@@ -41,8 +41,9 @@ type :: motion_align_iso
     real                                              :: frac_improved                     !< fraction of improved frames
     real                                              :: smallshift                        !< range for initial random shift
     real                                              :: corrfrac                          !< quotient new/old correlation
-    real                                              :: hp = -1.                          !< high pass value
-    real                                              :: lp = -1.                          !< low pass value
+    real                                              :: hp             = -1.              !< high pass value
+    real                                              :: lp             = -1.              !< low pass value
+    real                                              :: bfactor        = -1.              !< b-factor for alignment weights
     real                                              :: corr                              !< correlation
     real                                              :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for shsrch update
     integer                                           :: nimproved                         !< number of improved frames
@@ -58,7 +59,7 @@ type :: motion_align_iso
     logical, public                                   :: existence        = .false.
 
 contains
-    procedure, private :: motion_align_iso_new
+    procedure          :: new
     procedure, private :: motion_align_iso_align
     procedure, private :: motion_align_iso_kill
     procedure, private :: recenter_shifts                   !< put shifts rel. to fixed frame
@@ -70,7 +71,6 @@ contains
     procedure, private :: fit_polynomial
     procedure, private :: polynomial2shift
     procedure          :: shift_wsum_and_calc_corrs         !< shift, sum and calculate new correlatons
-    procedure          :: new                  => motion_align_iso_new
     procedure          :: align                => motion_align_iso_align
     procedure          :: kill                 => motion_align_iso_kill
     procedure          :: set_shsrch_tol       => motion_align_iso_set_shsrch_tol
@@ -100,6 +100,7 @@ contains
     procedure          :: set_callback         => motion_align_iso_set_callback
     procedure          :: set_frameweights_callback => motion_align_iso_set_frameweights_callback
     procedure          :: is_fitshifts
+    procedure          :: set_bfactor
 end type motion_align_iso
 
 abstract interface
@@ -119,7 +120,7 @@ end interface
 
 contains
 
-    subroutine motion_align_iso_new( self )
+    subroutine new( self )
         class(motion_align_iso), intent(inout) :: self
         call self%kill()
         self%trs                   = params_glob%trs
@@ -137,8 +138,9 @@ contains
         self%hp                    = -1.
         self%lp                    = -1.
         self%shsrch_tol            = SRCH_TOL
+        self%bfactor               = -1.
         self%existence             = .true.
-    end subroutine motion_align_iso_new
+    end subroutine new
 
     subroutine motion_align_iso_align( self, callback_ptr, ini_shifts )
         class(motion_align_iso),    intent(inout) :: self
@@ -203,8 +205,6 @@ contains
             !$omp parallel do default(shared) private(iframe,prev_frame,cxy) proc_bind(close) reduction(+:nimproved)
             do iframe = 1,self%nframes
                 prev_frame = prev_frames(iframe)
-                call self%movie_sum_global_ftexp_threads(iframe)%subtr(self%movie_frames_ftexp_sh(iframe),&
-                    &w=self%frameweights(iframe))
                 call self%movie_frames_ftexp(iframe)%shift([-opt_shifts_prev(prev_frame,1), -opt_shifts_prev(prev_frame,2), 0.],&
                     &self%movie_frames_ftexp_sh(iframe))
                 cxy = ftexp_srch(iframe)%minimize(self%corrs(iframe), opt_vels(iframe,:))
@@ -225,12 +225,19 @@ contains
                 endif
             end do
             ! iterative fitting
-            if( lp_updates >= 1 ) self%fitshifts = .false.
+            if((lp_updates >= 3) .or. (iter >= self%mitsref-5)) self%fitshifts = .false.
             if( self%fitshifts )then
-                call self%recenter_shifts(self%opt_shifts)
-                call self%fit_polynomial
+                call self%fit_polynomial(opt_vels)
                 do iframe = 1,self%nframes
-                    call self%polynomial2shift(iframe, self%opt_shifts(iframe,:))
+                    call self%polynomial2shift(iframe, opt_vels(iframe,:))
+                enddo
+                do iframe = 1,self%nframes
+                    if( iframe == self%fixed_frame )then
+                        self%opt_shifts(self%fixed_frame,:) = opt_vels(self%fixed_frame,:)
+                    else
+                        prev_frame = prev_frames(iframe)
+                        self%opt_shifts(iframe,:) = opt_shifts_prev(prev_frame,:) + opt_vels(iframe,:)
+                    endif
                 enddo
             endif
             ! recenter shifts
@@ -392,13 +399,14 @@ contains
         integer :: iframe
         !$omp parallel do default(shared) private(iframe) schedule(static) proc_bind(close)
         do iframe=1,self%nframes
-            call self%movie_frames_ftexp(iframe)%new(self%frames(iframe), self%hp, self%lp, .true.)
+            call self%movie_frames_ftexp(iframe)%new(self%frames(iframe), self%hp, self%lp, .true., bfac=self%bfactor)
             call self%movie_frames_ftexp_sh(iframe)%new(self%frames(iframe), self%hp, self%lp, .false.)
             call self%movie_sum_global_ftexp_threads(iframe)%new(self%frames(iframe), self%hp, self%lp, .false.)
         end do
         !$omp end parallel do
     end subroutine create_ftexp_objs
 
+    ! shifts frames, generate references, substracts self from references and calculates correlations
     subroutine shift_wsum_and_calc_corrs( self )
         class(motion_align_iso), intent(inout) :: self
         complex, allocatable :: cmat_sum(:,:,:)
@@ -432,9 +440,6 @@ contains
             ! calc corr
             self%corrs(iframe) = self%movie_sum_global_ftexp_threads(iframe)%&
                 corr(self%movie_frames_ftexp_sh(iframe))
-            ! add the subtracted movie frame back to the weighted sum
-            call self%movie_sum_global_ftexp_threads(iframe)%add(self%movie_frames_ftexp_sh(iframe), &
-                w=self%frameweights(iframe))
         end do
         !$omp end do
         !$omp end parallel
@@ -627,21 +632,28 @@ contains
     end subroutine motion_align_iso_set_frameweights_callback
 
     logical function is_fitshifts( self )
-            class(motion_align_iso), intent(in) :: self
-            is_fitshifts = self%fitshifts
+        class(motion_align_iso), intent(in) :: self
+        is_fitshifts = self%fitshifts
     end function is_fitshifts
+
+    subroutine set_bfactor( self, bfac )
+        class(motion_align_iso), intent(inout) :: self
+        real,                    intent(in)    :: bfac
+        self%bfactor = bfac
+    end subroutine set_bfactor
 
     ! FITTING RELATED
 
     ! fit shifts to 2 polynomials
-     subroutine fit_polynomial( self )
+     subroutine fit_polynomial( self, shifts )
          class(motion_align_iso), intent(inout) :: self
+         real     :: shifts(self%nframes,2)
          real(dp) :: x(self%nframes), y(self%nframes,2), sig(self%nframes)
          real(dp) :: v(POLYDIM,POLYDIM), w(POLYDIM), chisq
          integer  :: iframe
          x      = (/(real(iframe-self%fixed_frame,dp),iframe=1,self%nframes)/)
-         y(:,1) = real(self%opt_shifts(:,1),dp)
-         y(:,2) = real(self%opt_shifts(:,2),dp)
+         y(:,1) = real(shifts(:,1),dp)
+         y(:,2) = real(shifts(:,2),dp)
          sig    = 1.d0
          call svdfit(x, y(:,1), sig, self%polyx, v, w, chisq, poly)
          call svdfit(x, y(:,2), sig, self%polyy, v, w, chisq, poly)

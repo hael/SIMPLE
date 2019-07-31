@@ -64,7 +64,6 @@ real    :: smpd           = 0.       !< sampling distance
 real    :: smpd_scaled    = 0.       !< sampling distance
 real    :: kV             = 300.     !< acceleration voltage
 real    :: dose_rate      = 0.       !< dose rate
-real    :: nsig_here      = 5.0      !< nr of sigmas (for outlier removal)
 logical :: do_scale                    = .false.  !< scale or not
 logical :: motion_correct_with_patched = .false.  !< run patch-based aniso or not
 character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
@@ -72,7 +71,8 @@ character(len=:), allocatable :: mc_starfile_fname      !< file name for starfil
 type(starfile_table_type)     :: mc_starfile            !< starfile for motion correct output
 
 ! module global constants
-real,    parameter :: SMALLSHIFT                    = 1.      !< small initial shift to blur out fixed pattern noise
+real,    parameter :: NSIGMAS                       = 5.       !< Number of standard deviations for outliers detection
+real,    parameter :: SMALLSHIFT                    = 1.       !< small initial shift to blur out fixed pattern noise
 logical, parameter :: FITSHIFTS                     = .true.
 logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial constraint for isotropic motion correction
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
@@ -83,9 +83,10 @@ contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
 
-    subroutine motion_correct_init( movie_stack_fname, ctfvars, err, gainref_fname )
+    subroutine motion_correct_init( movie_stack_fname, ctfvars, nsig, err, gainref_fname )
         character(len=*),           intent(in)  :: movie_stack_fname !< input filename of stack
         type(ctfparams),            intent(in)  :: ctfvars           !< CTF parameters
+        real,                       intent(in)  :: nsig              !< # of std deviations for outliers detection
         logical,                    intent(out) :: err               !< error flag
         character(len=*), optional, intent(in)  :: gainref_fname     !< gain reference filename
         type(image), allocatable :: movie_frames(:)
@@ -186,7 +187,7 @@ contains
         if( l_gain ) call gainref%kill
         call tmpmovsum%new(ldim, smpd)
         call tmpmovsum%set_rmat(rmat_sum)
-        call tmpmovsum%cure_outliers(ncured, nsig_here, deadhot, outliers)
+        call tmpmovsum%cure_outliers(ncured, nsig, deadhot, outliers)
         call tmpmovsum%kill
         deallocate(rmat_sum)
         write(logfhandle,'(a,1x,i7)') '>>> # DEAD PIXELS:', deadhot(1)
@@ -357,7 +358,7 @@ contains
         real,          allocatable, intent(out)   :: shifts(:,:)       !< the nframes shifts identified
         character(len=*), optional, intent(in)    :: gainref_fname     !< gain reference filename
         real,             optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
-        real                                :: ave, sdev, var, minw, maxw, corr
+        real                                :: ave, sdev, var, minw, maxw, corr, nsig_here
         logical                             :: err, err_stat
         type(motion_align_iso)              :: align_iso
         type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
@@ -369,9 +370,9 @@ contains
         else
             call align_iso%new
         end if
-        nsig_here = 5.0
+        nsig_here = NSIGMAS
         if( present(nsig) ) nsig_here = nsig
-        call motion_correct_init(movie_stack_fname, ctfvars, err, gainref_fname)
+        call motion_correct_init(movie_stack_fname, ctfvars, nsig_here, err, gainref_fname)
         if( err ) return
         call ftexp_transfmat_init(movie_frames_scaled(1))
         if (ISO_POLYN_DIRECT) then
@@ -480,6 +481,7 @@ contains
         endif
         ! Unweighted, unfiltered sum for CTF estimation
         wvec = scalar_weight
+        where( frameweights < 1.e-6 ) wvec = 0.
         call sum_frames(movie_sum_ctf, wvec)
         ! Weighted, filtered sum for micrograph
         if( params_glob%l_dose_weight )then
@@ -597,7 +599,8 @@ contains
     ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
     !> patch-based motion_correction of DDD movie
-    subroutine motion_correct_patched( chisq )
+    subroutine motion_correct_patched( bfac, chisq )
+        real, intent(in)  :: bfac
         real, intent(out) :: chisq(2)     !< whether polynomial fitting was within threshold
         real    :: scale, smpd4scale
         integer :: ldim4scale(3)
@@ -631,6 +634,7 @@ contains
             call motion_patch%set_frameweights( frameweights )
             call motion_patch%set_fixed_frame(fixed_frame)
             call motion_patch%set_interp_fixed_frame(fixed_frame)
+            call motion_patch%set_bfactor(bfac)
             call motion_patch%correct( hp, resstep, movie_frames_shifted_saved, movie_frames_shifted_patched,&
                 &patched_shift_fname, shifts_toplot)
             chisq = motion_patch%get_polyfit_chisq()
@@ -654,6 +658,7 @@ contains
         ! Sum for CTF estimation
         !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=fromto(1),fromto(2)
+            if( frameweights(iframe) < 1.e-6 ) cycle
             call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
             rmat_sum(:,:,1) = rmat_sum(:,:,1) + scalar_weight*prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
         end do
@@ -666,6 +671,7 @@ contains
             cmat_sum = cmplx(0.,0.)
             !$omp parallel do default(shared) private(iframe,pcmat) proc_bind(close) schedule(static) reduction(+:cmat_sum)
             do iframe=fromto(1),fromto(2)
+                if( frameweights(iframe) < 1.e-6 ) cycle
                 call movie_frames_shifted_patched(iframe)%fft
                 call movie_frames_shifted_patched(iframe)%apply_filter_serial(filtarr(iframe,:))
                 call movie_frames_shifted_patched(iframe)%get_cmat_ptr(pcmat)
@@ -679,6 +685,7 @@ contains
             rmat_sum = 0.
             !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
             do iframe=fromto(1),fromto(2)
+                if( frameweights(iframe) < 1.e-6 ) cycle
                 call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
                 rmat_sum(:,:,1) = rmat_sum(:,:,1) + frameweights(iframe) * prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
             end do

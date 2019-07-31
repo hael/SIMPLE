@@ -48,6 +48,8 @@ type :: motion_patched
     integer                             :: ldim_patch(3)            ! size of one patch
     integer                             :: fixed_frame        = 1   ! frame of reference for alignment
     integer                             :: interp_fixed_frame = 1   ! frame of reference for interpolation
+    real                                :: smpd               = 0.
+    real                                :: bfactor            = -1.
     real                                :: motion_correct_ftol
     real                                :: motion_correct_gtol
     real                                :: motion_patched_direct_ftol
@@ -61,6 +63,7 @@ type :: motion_patched
     logical                             :: has_frameweights  = .false.
     logical                             :: fitshifts         = .false.
 contains
+    procedure                           :: new
     procedure, private                  :: allocate_fields
     procedure, private                  :: deallocate_fields
     procedure, private                  :: set_size_frames_ref
@@ -86,9 +89,9 @@ contains
     procedure                           :: set_fitshifts
     procedure                           :: set_fixed_frame
     procedure                           :: set_interp_fixed_frame
+    procedure                           :: set_bfactor
     procedure                           :: get_poly4star
     procedure                           :: get_polyfit_chisq
-    procedure                           :: new
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: correct_polyn   => motion_patched_correct_polyn
     procedure                           :: kill            => motion_patched_kill
@@ -116,6 +119,7 @@ contains
         self%hp          = -1.
         self%resstep     = -1.
         self%fixed_frame = 1
+        self%bfactor     = -1.
         self%motion_patched_direct_ftol = DIRECT_FTOL
         self%motion_patched_direct_gtol = DIRECT_GTOL
         self%existence = .true.
@@ -240,9 +244,16 @@ contains
                 ! centering to first frame for display only
                 shifts(:,1) = self%shifts_patches_for_fit(1,:,ipx,ipy)
                 shifts(:,2) = self%shifts_patches_for_fit(2,:,ipx,ipy)
-                shifts(:,1) = shifts(:,1) - shifts(1,1)
-                shifts(:,2) = shifts(:,2) - shifts(1,2)
-                call self%get_local_shift(1,cx,cy, ref_shift)
+                if( self%frameweights(1) < 1.e-6 )then
+                    shifts(:,1) = shifts(:,1) - shifts(2,1)
+                    shifts(:,2) = shifts(:,2) - shifts(2,2)
+                    call self%get_local_shift(2,cx,cy, ref_shift)
+                    shifts(1,:) = 0.
+                else
+                    shifts(:,1) = shifts(:,1) - shifts(1,1)
+                    shifts(:,2) = shifts(:,2) - shifts(1,2)
+                    call self%get_local_shift(1,cx,cy, ref_shift)
+                endif
                 ! plot
                 call CDataSet__new(patch_start)
                 call CDataSet__SetDrawMarker(patch_start,C_TRUE)
@@ -258,6 +269,7 @@ contains
                 call CDataSet__AddDataPoint(patch_start, p_fit)
                 call CDataPoint__delete(p_fit)
                 do iframe = 1, self%nframes
+                    if( self%frameweights(iframe) < 1.e-6 ) cycle
                     call CDataPoint__new2(real(cx + SCALE*shifts(iframe,1), c_double),&
                                          &real(cy + SCALE*shifts(iframe,2), c_double), p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
@@ -349,7 +361,7 @@ contains
         real     :: x, y, sh(2), shinterp(2)
         type(rmat_ptr_type) :: rmat_ins(self%nframes), rmat_outs(self%nframes)
         do iframe = 1, self%nframes
-            call frames_output(iframe)%new(self%ldim, params_glob%smpd)
+            call frames_output(iframe)%new(self%ldim, self%smpd)
             if (frames(iframe)%is_ft()) call frames(iframe)%ifft()
             call frames(iframe)%get_rmat_ptr(rmat_ins(iframe)%rmat_ptr)
             call frames_output(iframe)%get_rmat_ptr(rmat_outs(iframe)%rmat_ptr)
@@ -515,7 +527,7 @@ contains
         do j = 1, params_glob%nypatch
             do i = 1, params_glob%nxpatch
                 do iframe=1,self%nframes
-                    call self%frame_patches(i,j)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
+                    call self%frame_patches(i,j)%stack(iframe)%new(self%ldim_patch, self%smpd)
                 end do
             end do
         end do
@@ -571,7 +583,7 @@ contains
         real, pointer       :: prmat_patch(:,:,:), prmat_frame(:,:,:)
         do iframe=1,self%nframes
             ! init
-            call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, params_glob%smpd)
+            call self%frame_patches(pi,pj)%stack(iframe)%new(self%ldim_patch, self%smpd)
             call self%frame_patches(pi,pj)%stack(iframe)%get_rmat_ptr(prmat_patch)
             call stack(iframe)%get_rmat_ptr(prmat_frame)
             ! copy
@@ -609,7 +621,7 @@ contains
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
-        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, params_glob%smpd)
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd)
         call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
         res = self%frame_patches(1,1)%stack(1)%get_res()
         self%hp = min(self%hp,res(1))
@@ -636,14 +648,15 @@ contains
                 call self%align_iso(i,j)%set_coords(i,j)
                 call self%align_iso(i,j)%set_fitshifts(self%fitshifts)
                 call self%align_iso(i,j)%set_fixed_frame(self%fixed_frame)
+                call self%align_iso(i,j)%set_bfactor(self%bfactor)
                 call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
                 ! align
                 call self%align_iso(i,j)%align(self)
                 ! fetch info
                 corr_avg = corr_avg + self%align_iso(i,j)%get_corr()
                 call self%align_iso(i,j)%get_opt_shifts(opt_shifts)
+                ! making sure the shifts are in reference to fixed_frame
                 do iframe = 1, self%nframes
-                    ! making sure the shifts are in reference to fixed_frame
                     self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
                 end do
                 ! cleanup
@@ -822,6 +835,12 @@ contains
         self%interp_fixed_frame = fixed_frame
     end subroutine set_interp_fixed_frame
 
+    subroutine set_bfactor( self, bfac )
+        class(motion_patched), intent(inout) :: self
+        real,                  intent(in)    :: bfac
+        self%bfactor = bfac
+    end subroutine set_bfactor
+
     ! EXECUTION ROUTINES
 
     subroutine motion_patched_correct( self, hp, resstep, frames, frames_output, shift_fname, global_shifts )
@@ -847,7 +866,8 @@ contains
             self%has_global_shifts = .true.
         end if
         self%nframes = size(frames,dim=1)
-        self%ldim   = frames(1)%get_ldim()
+        self%ldim    = frames(1)%get_ldim()
+        self%smpd    = frames(1)%get_smpd()
         do i = 1,self%nframes
             ldim_frames = frames(i)%get_ldim()
             if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
@@ -855,9 +875,8 @@ contains
             end if
         end do
         call self%allocate_fields()
+        ! determines patch geometry
         call self%set_size_frames_ref()
-        ! ! divide the reference into patches & updates high-pass accordingly
-        ! call self%set_patches(frames)
         ! determine shifts for patches
         call self%det_shifts(frames)
         ! fit the polynomial model against determined shifts
