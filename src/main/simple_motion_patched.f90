@@ -25,7 +25,7 @@ real,    parameter :: DIRECT_FTOL    = 1e-7
 real,    parameter :: DIRECT_GTOL    = 1e-7
 
 type :: rmat_ptr_type
-    real, pointer :: rmat_ptr(:,:,:)
+   real, pointer :: rmat_ptr(:,:,:)
 end type rmat_ptr_type
 
 type :: motion_patched
@@ -85,6 +85,7 @@ contains
     procedure, private                  :: motion_patched_direct_cost
     procedure, private                  :: motion_patched_direct_gcost
     procedure, private                  :: motion_patched_direct_fdf
+    procedure, private                  :: coeffs_to_shifts
     procedure                           :: set_frameweights
     procedure                           :: set_fitshifts
     procedure                           :: set_fixed_frame
@@ -1073,8 +1074,8 @@ contains
         class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
         logical,                              intent(out)   :: converged
         integer :: i, j
-        integer :: nimproved, iter
         logical :: didupdateres
+        didupdateres = .false.
         call align_iso_polyn_direct%get_coords(i, j)
         select case(self%updateres(i,j))
         case(0)
@@ -1083,10 +1084,12 @@ contains
             call update_res( self%updateres(i,j) )
         case(2)
             call update_res( self%updateres(i,j) )
-        case DEFAULT
+            call align_iso_polyn_direct%set_factr_pgtol(1d+6, 1d-6)
+        case DEFAULT            
             ! nothing to do
         end select
-        if( self%updateres(i,j) > 2 )then ! at least one iteration with new lim
+        if( self%updateres(i,j) > 2 .and. .not. didupdateres)then ! at least one iteration with new lim
+            call align_iso_polyn_direct%reset_tols
             converged = .true.
         else
             converged = .false.
@@ -1119,9 +1122,29 @@ contains
         end select
     end subroutine motion_patched_polyn_callback_wrapper
 
+    subroutine coeffs_to_shifts( self )
+        class(motion_patched), intent(inout) :: self
+        integer  :: xi, yi, j
+        real(dp) :: ashift(2)
+        real(dp) :: x, y, t
+        do xi = 1, params_glob%nxpatch
+            do yi = 1, params_glob%nypatch
+                call self%pix2polycoords(real(self%patch_centers(xi,yi,1),dp), real(self%patch_centers(xi,yi,2),dp), x, y) ! TODO: memoize
+                do j = 1, self%nframes
+                    t = real(j - 1, dp)
+                    ashift(1) = apply_patch_poly(self%poly_coeffs(:,1), x, &
+                        y, t)
+                    ashift(2) = apply_patch_poly(self%poly_coeffs(:,2), x, &
+                        y, t)
+                    self%align_iso_polyn_direct(xi,yi)%shifts(j,:) = - ashift(:)
+                end do
+            end do
+        end do
+    end subroutine coeffs_to_shifts
+
     function motion_patched_direct_cost( self, vec ) result( r )
         class(motion_patched), intent(inout) :: self
-        real(dp),                     intent(in)    :: vec(PATCH_PDIM*2)
+        real(dp),              intent(in)    :: vec(PATCH_PDIM*2)
         real(dp) :: r
         integer  :: xi, yi, j
         real(dp) :: x, y

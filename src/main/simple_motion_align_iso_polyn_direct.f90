@@ -71,6 +71,7 @@ contains
     procedure                                         :: set_trs              => motion_align_iso_polyn_direct_set_trs
     procedure                                         :: set_ftol_gtol        => motion_align_iso_polyn_direct_set_ftol_gtol
     procedure                                         :: set_factr_pgtol      => motion_align_iso_polyn_direct_set_factr_pgtol
+    procedure                                         :: reset_tols           => motion_align_iso_polyn_direct_reset_tols
     procedure                                         :: get_corr             => motion_align_iso_polyn_direct_get_corr
     procedure                                         :: get_corrs            => motion_align_iso_polyn_direct_get_corrs
     procedure                                         :: get_opt_shifts       => motion_align_iso_polyn_direct_get_opt_shifts
@@ -170,6 +171,10 @@ contains
             if (.not. convergd) then
                 call self%create_ftexp_objs    ! lp should have changed, otherwise it should have converged
             end if
+            ospec%ftol = self%ftol
+            ospec%gtol = self%gtol
+            ospec%pgtol = self%pgtol
+            ospec%factr = self%factr
         end do
         call self%calc_corrs
         call self%calc_weights
@@ -387,6 +392,14 @@ contains
         self%pgtol = pgtol
     end subroutine motion_align_iso_polyn_direct_set_factr_pgtol
 
+    subroutine motion_align_iso_polyn_direct_reset_tols( self )
+        class(motion_align_iso_polyn_direct), intent(inout) :: self
+        self%ftol = ISO_POLYN_DIRECT_FTOL_DEF
+        self%gtol = ISO_POLYN_DIRECT_GTOL_DEF
+        self%factr = ISO_POLYN_DIRECT_FACTR_DEF
+        self%pgtol = ISO_POLYN_DIRECT_PGTOL_DEF
+    end subroutine motion_align_iso_polyn_direct_reset_tols
+
     function motion_align_iso_polyn_direct_get_corr( self ) result( corr )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real :: corr
@@ -438,7 +451,7 @@ contains
         real, allocatable,                    intent(out)   :: frameweights(:)
         allocate(frameweights(self%nframes), source=self%frameweights)
     end subroutine motion_align_iso_polyn_direct_get_weights
-
+    
     subroutine motion_align_iso_polyn_direct_refine_direct( self )
         use simple_opt_factory, only: opt_factory
         class(motion_align_iso_polyn_direct), intent(inout) :: self

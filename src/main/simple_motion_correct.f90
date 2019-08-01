@@ -319,6 +319,8 @@ contains
         class(*), pointer,                    intent(inout) :: aPtr
         class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
         logical,                              intent(out)   :: converged
+        logical :: didupdateres
+        didupdateres = .false.
         select case(updateres)
         case(0)
             call update_res( updateres )
@@ -326,11 +328,13 @@ contains
             call update_res( updateres )
         case(2)
             call update_res( updateres )
+            call align_iso_polyn_direct%set_factr_pgtol(1d+6, 1d-6)
         case DEFAULT
             ! nothing to do
         end select
 
-        if( updateres > 2) then
+        if( updateres > 2 .and. .not. didupdateres) then
+            call align_iso_polyn_direct%reset_tols
             converged = .true.
         else
             converged = .false.
@@ -393,8 +397,6 @@ contains
             if( allocated(shifts) ) deallocate(shifts)
             allocate(shifts(nframes,2), source=opt_shifts)
             call align_iso_polyn_direct%get_weights(frameweights)
-            write (*,*) '@@@@@@@@@@@@@@@@@@@@@@@ motion_correct here, shifts=', shifts
-            write (*,*) '@@@@@@@@@@@@@@@@@@@@@@@                    , frameweights=', frameweights
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
         else
             call align_iso%set_frames(movie_frames_scaled, nframes)

@@ -70,7 +70,7 @@ contains
     procedure, private :: corrmat2weights
     procedure, private :: allocate_fields
     procedure, private :: deallocate_fields
-    procedure, private :: create_ftexp_objs
+    procedure          :: create_ftexp_objs
     procedure, private :: fit_polynomial
     procedure, private :: polynomial2shift
     procedure          :: shift_wsum_and_calc_corrs         !< shift, sum and calculate new correlatons
@@ -583,7 +583,7 @@ contains
         real, allocatable,       intent(out)   :: corrs(:)
         allocate( corrs(self%nframes), source=self%corrs )
     end subroutine motion_align_iso_get_corrs
-
+    
     subroutine motion_align_iso_get_opt_shifts( self, opt_shifts )
         class(motion_align_iso), intent(inout) :: self
         real, allocatable,       intent(out)   :: opt_shifts(:,:)

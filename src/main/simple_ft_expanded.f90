@@ -59,6 +59,7 @@ type :: ft_expanded
     procedure, private :: corr_normalize_sp
     procedure, private :: corr_normalize_dp
     generic            :: corr_normalize => corr_normalize_sp, corr_normalize_dp
+    procedure          :: get_hp_lp
     ! destructor
     procedure          :: kill
 end type ft_expanded
@@ -356,6 +357,13 @@ contains
         real(dp),           intent(inout) :: corr
         corr   = corr / num
     end subroutine corr_normalize_dp
+
+    subroutine get_hp_lp( self, hp, lp )
+        class(ft_expanded), intent(in) :: self
+        real, intent(out) :: hp, lp
+        hp = self%hp
+        lp = self%lp
+    end subroutine get_hp_lp
 
     ! DESTRUCTOR
 
