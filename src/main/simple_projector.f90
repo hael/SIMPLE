@@ -53,6 +53,7 @@ type, extends(image) :: projector
     procedure          :: interp_fcomp_hyperb
     procedure          :: interp_fcomp_weiszfeld
     procedure          :: interp_fcomp_weiszfeld_dp
+    procedure          :: interp_fcomp_trilinear
     procedure, private :: interp_fcomp_memo
     procedure, private :: dinterp_fcomp
     procedure, private :: fdf_interp_fcomp
@@ -591,6 +592,27 @@ contains
             comp = cmplx(zi,kind=sp)
         end if
     end function interp_fcomp_weiszfeld_dp
+
+    !>  \brief is for tri-linear interpolation from the expanded complex matrix
+    pure function interp_fcomp_trilinear( self, loc )result( comp )
+        class(projector), intent(in) :: self
+        real,             intent(in) :: loc(3)
+        complex :: comp
+        real    :: w(2,2,2), d(3), dp(3)
+        integer :: lb(3)
+        lb = floor(loc)
+        d  = loc - real(lb)
+        dp = 1. - d
+        w(1,1,1) = product(dp)
+        w(2,1,1) =  d(1) * dp(2) * dp(3)
+        w(1,2,1) = dp(1) *  d(2) * dp(3)
+        w(1,1,2) = dp(1) * dp(2) *  d(3)
+        w(2,1,2) =  d(1) * dp(2) *  d(3)
+        w(1,2,2) = dp(1) *  d(2) *  d(3)
+        w(2,2,1) =  d(1) *  d(2) * dp(3)
+        w(2,2,2) = product(d)
+        comp = sum(w * self%cmat_exp(lb(1):lb(1)+1,lb(2):lb(2)+1,lb(3):lb(3)+1))
+    end function interp_fcomp_trilinear
 
     !>  \brief is to interpolate from the expanded complex matrix
     function interp_fcomp_memo( self, loc )result( comp )
