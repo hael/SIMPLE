@@ -24,8 +24,9 @@ real,     parameter :: ISO_POLYN_DIRECT_FTOL_DEF  = 1e-8
 real,     parameter :: ISO_POLYN_DIRECT_GTOL_DEF  = 1e-8
 real(dp), parameter :: ISO_POLYN_DIRECT_FACTR_DEF = 1d+3
 real(dp), parameter :: ISO_POLYN_DIRECT_PGTOL_DEF = 1d-7
-real,     parameter :: ISO_POLYN_DIRECT_TRS_DEF   = 20.
+real,     parameter :: ISO_POLYN_DIRECT_TRS_DEF   = 40.
 
+logical, parameter :: inc_or_not = .true. ! use increments ("velocities") instead of shifts
 
 type :: motion_align_iso_polyn_direct
     private
@@ -58,6 +59,7 @@ contains
     procedure, private                                :: coeffs_to_shifts          ! for polyn_direct
     procedure, private                                :: dcoeff                    ! for polyn_direct
     procedure, private                                :: vec_to_shifts             ! for direct
+    procedure, private                                :: vec_to_shift_incrs        ! for direct`
     procedure, private                                :: shifts_to_vec             ! for direct
     procedure, private                                :: calc_corrs
     procedure, private                                :: calc_weights
@@ -222,15 +224,15 @@ contains
             end do
             call self%movie_frames_R%kill
             call self%movie_frames_dR%kill
-            deallocate( self%movie_frames_Ij, self%movie_frames_Ij_sh, &
-                self%movie_frames_dIj_sh, self%movie_frames_R, self%movie_frames_dR, self%opt_shifts, &
-                self%shifts, self%corrs, self%frameweights )
+            deallocate( self%movie_frames_Ij, self%movie_frames_Ij_sh,                        &
+                self%movie_frames_dIj_sh, self%movie_frames_R,                                &
+                self%movie_frames_dR, self%opt_shifts, self%shifts, self%corrs, self%frameweights )
         else
             if ( allocated(self%movie_frames_Ij)     .or. allocated(self%movie_frames_Ij_sh) .or. &
                  allocated(self%movie_frames_dIj_sh) .or. allocated(self%movie_frames_R)     .or. &
                  allocated(self%movie_frames_dR)     .or. allocated(self%opt_shifts)         .or. &
                  allocated(self%shifts)              .or. allocated(self%corrs)              .or. &
-                 allocated(self%frameweights)                                                ) then
+                 allocated(self%frameweights)                                                      ) then
                 THROW_HARD('inconsistency; simple_motion_align_iso_polyn_direct: deallocate_fields')
             end if
         end if
@@ -243,10 +245,28 @@ contains
         integer  :: j
         ashifts(1,:) = 0.
         do j = 1, self%nframes-1
-            ashifts(j+1,1) = vec(2*(j-1)+1)
-            ashifts(j+1,2) = vec(2*(j-1)+2)
+            if (inc_or_not) then
+                ashifts(j+1,1) = ashifts(j,1) + vec(2*(j-1)+1)
+                ashifts(j+1,2) = ashifts(j,2) + vec(2*(j-1)+2)
+            else
+                ashifts(j+1,1) = vec(2*(j-1)+1)
+                ashifts(j+1,2) = vec(2*(j-1)+2)
+            end if
         end do
     end subroutine vec_to_shifts
+
+    subroutine vec_to_shift_incrs( self, vec, ashift_incrs )
+        class(motion_align_iso_polyn_direct), intent(inout) :: self
+        real(dp),                             intent(in)    :: vec(:)
+        real(dp),                             intent(out)   :: ashift_incrs(:,:)
+        integer  :: j
+        ashift_incrs(1,:) = 0.
+        do j = 1, self%nframes-1
+            ashift_incrs(j+1,1) = vec(2*(j-1)+1)
+            ashift_incrs(j+1,2) = vec(2*(j-1)+2)
+        end do
+    end subroutine vec_to_shift_incrs
+
 
     subroutine shifts_to_vec( self, ashifts, vec )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
@@ -255,8 +275,13 @@ contains
         integer :: j
         ! we should assume that ashifts(1,:) = 0, but just in case, we subtract ashifts(1,:) anyway
         do j = 1, self%nframes-1
-            vec(               j) = ashifts(j+1,1) - ashifts(1,1)
-            vec(self%nframes-1+j) = ashifts(j+1,2) - ashifts(1,2)
+            if (inc_or_not) then
+                vec(               j) = ashifts(j+1,1) - ashifts(j,1)
+                vec(self%nframes-1+j) = ashifts(j+1,2) - ashifts(j,2)
+            else
+                vec(               j) = ashifts(j+1,1) - ashifts(1,1)
+                vec(self%nframes-1+j) = ashifts(j+1,2) - ashifts(1,2)
+            end if
             write (*,*) 'shifts_to_vec: accessing elements ', j, 'and', self%nframes-1+j
         end do
     end subroutine shifts_to_vec
@@ -704,8 +729,9 @@ contains
         real(dp),                       intent(in)    :: vec((self%nframes-1)*2)
         real(dp),                       intent(out)   :: f
         real(dp),                       intent(out)   :: grad((self%nframes-1)*2)
+        real(dp) :: grad_tmp((self%nframes-1)*2)
         real(dp) :: shifts(self%nframes,2), shvec(3)
-        real     :: atmp
+        real(dp) :: atmp
         integer  :: j, p, xy
         write (*,*) 'fdf, direct, vec=', vec
         ! determine shifts
@@ -717,7 +743,7 @@ contains
             shvec(1:2) = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
-                                                          self%movie_frames_dIj_sh(j,2) )
+                self%movie_frames_dIj_sh(j,2) )
         end do
         !$omp end parallel do
         ! R = sum_j I_j
@@ -727,14 +753,29 @@ contains
         end do
         ! corr = sqrt( R * R )
         f = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
+        !$omp parallel do collapse(2) default(shared) private(xy,j,atmp) schedule(static) proc_bind(close)
         do xy = 1, 2
-            do j = 1, self%nframes-1 !parallelize here
+            do j = 1, self%nframes-1 !parallelize here                
                 atmp = self%movie_frames_R%corr_unnorm(self%movie_frames_dIj_sh(j+1, xy)) / f
-                grad(2*(j-1)+xy) = atmp
+                grad_tmp(2*(j-1)+xy) = atmp
             end do
         end do
+        !$omp end parallel do
         f    = - f
-        grad = - grad
+        grad_tmp = - grad_tmp
+        if (inc_or_not) then
+            grad = 0._dp
+            do xy = 1, 2
+                do j = self%nframes-1, 1, -1
+                    if (j < self%nframes-1) then
+                        grad(2*(j-1)+xy) = grad(2*(j)+xy)
+                    end if
+                    grad(2*(j-1)+xy) = grad(2*(j-1)+xy) + grad_tmp(2*(j-1)+xy)
+                end do
+            end do
+        else
+            grad  = grad_tmp
+        end if
     end subroutine motion_align_iso_direct_fdf
 
     subroutine motion_align_iso_direct_fdf_wrapper( self, vec, f, grad, D )
@@ -819,6 +860,7 @@ contains
         integer  :: j, p, xy
         ! shifts will have been correctly determined by owning motion_patched object
         ! shifts frames
+!ss        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
         do j = 1, self%nframes
             shvec(3) = 0._dp
             shvec(1:2) = self%shifts(j,:)
@@ -826,6 +868,7 @@ contains
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                                                           self%movie_frames_dIj_sh(j,2) )
         end do
+!ss        !$omp end parallel do
         ! R = sum_j I_j
         call self%movie_frames_R%zero
         do j = 1, self%nframes
