@@ -407,6 +407,7 @@ contains
             call align_iso%set_shsrch_tol(TOL_ISO)
             call align_iso%set_fitshifts(FITSHIFTS)
             call align_iso%set_fixed_frame(fixed_frame)
+            call align_iso%set_group_frames(.false.)
             call align_iso%set_callback( motion_correct_iso_callback )
             call align_iso%align(callback_ptr)
             corr = align_iso%get_corr()

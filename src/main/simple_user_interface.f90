@@ -1974,7 +1974,7 @@ contains
         & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
         & contiguous subset of frames will be averaged without any dose-weighting applied',&   ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 6, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &1, 5, 0, 7, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -1994,6 +1994,7 @@ contains
         call motion_correct%set_input('srch_ctrls', 4, fromf)
         call motion_correct%set_input('srch_ctrls', 5, tof)
         call motion_correct%set_input('srch_ctrls', 6, nsig)
+        call motion_correct%set_input('srch_ctrls', 7, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 0.)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
