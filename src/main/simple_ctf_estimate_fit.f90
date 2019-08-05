@@ -48,7 +48,7 @@ type ctf_estimate_fit
     real                      :: ctfscore     = -1.
     real                      :: ctfres       = -1.
     integer                   :: box          = 0        ! box size
-    integer                   :: ntiles(2)      = 0        ! # tiles along x/y
+    integer                   :: ntiles(2)    = 0        ! # tiles along x/y
     integer                   :: ntotpatch    = 0
     integer                   :: npatches(2)  = 0
     integer                   :: flims(3,2)   = 0        ! fourier dimensions
@@ -692,7 +692,6 @@ contains
         call self%gen_ctf_extrema(ctf, extrema)
         ! midway astigmatism & ensuring it has not been zeroed by central cross dampening
         mid_angast   = self%parms%angast + 45.
-        ! convention has to be enforced before this !!!
         angdist_axes = mod(mid_angast, 90.)
         if( abs(angdist_axes) <     min_angdist ) mid_angast = sign(min_angdist ,angdist_axes)
         if( abs(angdist_axes) > 90.-min_angdist ) mid_angast = sign(90.-min_angdist, angdist_axes)

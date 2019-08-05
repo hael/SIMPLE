@@ -500,7 +500,7 @@ contains
     end subroutine exec_pspec_stats
 
     !> provides re-scaling and clipping routines for MRC or SPIDER stacks and volumes
-    recursive subroutine exec_scale( self, cline )
+    subroutine exec_scale( self, cline )
         use simple_procimgfile, only: resize_imgfile_double, resize_and_clip_imgfile, resize_imgfile, pad_imgfile, clip_imgfile
         use simple_image,       only: image
         use simple_qsys_funs,   only: qsys_job_finished
@@ -509,120 +509,173 @@ contains
         type(parameters) :: params
         type(builder)    :: build
         type(image)      :: vol2, img, img2
+        integer, allocatable :: states(:)
+        logical, allocatable :: ptcl_msk(:)
         real             :: ave, sdev, var, med, smpd_new, scale
         integer          :: ldim(3), ldim_scaled(3), nfiles, nframes, iframe, ifile
-        !integer          :: ldims_scaled(2,3)
-        character(len=:), allocatable :: fname
+        integer          :: istk, nstks, ptcl_fromp, ptcl_top
+        character(len=:), allocatable :: fname, stkin, stkout
         character(len=LONGSTRLEN), allocatable :: filenames(:)
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         if( cline%defined('stk') .and. cline%defined('vol1') ) THROW_HARD('Cannot operate on images AND volume at once')
-        if( cline%defined('stk') )then
-            ! 2D
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-            call img%new([params%box,params%box,1],params%smpd)
-            call img2%new([params%box,params%box,1],params%smpd)
-            if( cline%defined('scale') .or. cline%defined('newbox') )then
-                call del_file(params%outstk)
-                ! Rescaling
-                ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
-                if( cline%defined('clip') )then
-                    call resize_and_clip_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,&
-                    [params%clip,params%clip,1],smpd_new)
-                else
-                    call resize_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,smpd_new)
-                    write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
-                endif
-                write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
-            else if( cline%defined('clip') )then
-                call del_file(params%outstk)
-                ! Clipping
-                if( params%clip > params%box )then
-                    call pad_imgfile(params%stk,params%outstk,[params%clip,params%clip,1],params%smpd)
-                else
-                    call clip_imgfile(params%stk,params%outstk,[params%clip,params%clip,1],params%smpd)
-                endif
-            endif
-        else if( cline%defined('vol1') )then
-            ! 3D
-            call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
-            if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
-            call build%vol%read(params%vols(1))
-            if( cline%defined('scale') .or. cline%defined('newbox') )then
-                ! Rescaling
-                call vol2%new([params%newbox,params%newbox,params%newbox],params%smpd)
-                call build%vol%fft()
-                call vol2%set_ft(.true.)
-                if( params%newbox < params%box )then
-                    call build%vol%clip(vol2)
-                else if( params%newbox > params%box )then
-                    call build%vol%pad(vol2)
-                else
-                    call vol2%copy(build%vol)
-                endif
-                call build%vol%copy(vol2)
-                call build%vol%ifft()
-                scale = real(params%newbox)/real(params%box)
-                params%box = params%newbox
-                smpd_new = params%smpd/scale
-                write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
-            endif
-            if( cline%defined('clip') )then
-                ! Clipping
-                call vol2%new([params%clip,params%clip,params%clip],params%smpd)
-                if( params%clip < params%box )then
-                    call build%vol%clip(vol2)
-                else
-                    call build%vol%stats( 'background', ave, sdev, var, med )
-                    call build%vol%pad(vol2, backgr=med)
-                endif
-                call build%vol%copy(vol2)
-            else
-                 write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', params%newbox
-            endif
-            if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
-        else if( cline%defined('filetab') )then
-            call params%new(cline)
-            call read_filetable(params%filetab, filenames)
-            nfiles = size(filenames)
-            call find_ldim_nptcls(filenames(1),ldim,nframes)
-            ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+        if( cline%defined('projfile') .and. cline%defined('fromp') .and. cline%defined('top')&
+            &.and..not.cline%defined('stk') .and. .not.cline%defined('vol1') .and. .not.cline%defined('filetab'))then
+            ! input comes from distributed execution scale_project
+            call cline%set('oritype', 'ptcl2D')
+            call build%init_params_and_build_spproj(cline, params)
+            call build%spproj%read_segment('stk',params%projfile)
+            nstks = build%spproj%os_stk%get_noris()
+            if( nstks == 0 ) THROW_HARD('NO EXISTING STACK IN PROJECT')
             if( cline%defined('newbox') )then
-                ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
-                params%scale = real(params%newbox) / real(ldim(1))
+                ldim_scaled  = [params%newbox,params%newbox,1]
+                params%scale = real(params%newbox) / real(params%box)
             else if( cline%defined('scale') )then
-                ldim_scaled(1) = round2even(real(ldim(1))*params%scale)
-                ldim_scaled(2) = round2even(real(ldim(2))*params%scale)
-                ldim_scaled(3)   = 1
+                ldim_scaled(1) = round2even(real(params%box)*params%scale)
+                ldim_scaled(2) = round2even(real(params%box)*params%scale)
+                ldim_scaled(3) = 1
             else
-                THROW_HARD('filetab key only in combination with scale or newbox!')
+                THROW_HARD('MISSING NEW DIMENSION!')
             endif
-            call img%new(ldim,params%smpd)
-            call img2%new(ldim_scaled,params%smpd/params%scale)
-            do ifile=1,nfiles
-                call progress(ifile, nfiles)
-                if( cline%defined('dir_target') )then
-                    fname = filepath(trim(params%dir_target),add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
-                else
-                    fname = add2fbody(trim(filenames(ifile)), params%ext, '_sc')
+            ! state handling
+            states = nint(build%spproj_field%get_all('state'))
+            if( cline%defined('state') )then
+                if( .not.any(states == params%state) )then
+                    THROW_HARD('NO PARTICLE MATCHING STATE FOUND. STATE: '//int2str(params%state))
                 endif
-                call find_ldim_nptcls(filenames(ifile),ldim,nframes)
-                ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
-                do iframe= 1, nframes
-                    call img%read(filenames(ifile), iframe)
-                    call img%fft()
-                    if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2) .and. ldim_scaled(3) <= ldim(3) )then
-                        call img%clip(img2)
-                    else
-                        call img%pad(img2)
-                    endif
-                    call img2%ifft()
-                    call img2%write(fname, iframe)
-                end do
-                deallocate(fname)
-            end do
+                where( states /= params%state ) states = 0
+            else
+                ! all inclusive by default
+                params%state = 1
+                states = 1
+            endif
+            do istk = params%fromp, params%top
+                call progress(istk, nstks)
+                stkin      = build%spproj%get_stkname(istk)
+                ptcl_fromp = nint(build%spproj%os_stk%get(istk,'fromp'))
+                ptcl_top   = nint(build%spproj%os_stk%get(istk,'top'))
+                ptcl_msk   = (states(ptcl_fromp:ptcl_top) == 1)
+                if( cline%defined('dir_target') )then
+                    stkout = filepath(trim(params%dir_target),add2fbody(basename(stkin),params%ext,SCALE_SUFFIX))
+                else
+                    stkout = add2fbody(trim(stkin),params%ext,SCALE_SUFFIX)
+                endif
+                call resize_imgfile(stkin, stkout, params%smpd, ldim_scaled, smpd_new, mask=ptcl_msk)
+            enddo
+            deallocate(states,ptcl_msk)
         else
-            THROW_HARD('SIMPLE_SCALE needs input image(s) or volume or filetable!')
+            if( cline%defined('stk') )then
+                ! 2D
+                call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
+                call img%new([params%box,params%box,1],params%smpd)
+                call img2%new([params%box,params%box,1],params%smpd)
+                if( cline%defined('scale') .or. cline%defined('newbox') )then
+                    call del_file(params%outstk)
+                    ! Rescaling
+                    ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
+                    if( cline%defined('clip') )then
+                        call resize_and_clip_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,&
+                        [params%clip,params%clip,1],smpd_new)
+                    else
+                        call resize_imgfile(params%stk,params%outstk,params%smpd,ldim_scaled,smpd_new)
+                        write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', ldim_scaled(1)
+                    endif
+                    write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
+                else if( cline%defined('clip') )then
+                    call del_file(params%outstk)
+                    ! Clipping
+                    if( params%clip > params%box )then
+                        call pad_imgfile(params%stk,params%outstk,[params%clip,params%clip,1],params%smpd)
+                    else
+                        call clip_imgfile(params%stk,params%outstk,[params%clip,params%clip,1],params%smpd)
+                    endif
+                endif
+            else if( cline%defined('vol1') )then
+                ! 3D
+                call build%init_params_and_build_general_tbox(cline, params, do3d=.true., boxmatch_off=.true.)
+                if( .not.file_exists(params%vols(1)) ) THROW_HARD('Cannot find input volume')
+                call build%vol%read(params%vols(1))
+                if( cline%defined('scale') .or. cline%defined('newbox') )then
+                    ! Rescaling
+                    call vol2%new([params%newbox,params%newbox,params%newbox],params%smpd)
+                    call build%vol%fft()
+                    call vol2%set_ft(.true.)
+                    if( params%newbox < params%box )then
+                        call build%vol%clip(vol2)
+                    else if( params%newbox > params%box )then
+                        call build%vol%pad(vol2)
+                    else
+                        call vol2%copy(build%vol)
+                    endif
+                    call build%vol%copy(vol2)
+                    call build%vol%ifft()
+                    scale = real(params%newbox)/real(params%box)
+                    params%box = params%newbox
+                    smpd_new = params%smpd/scale
+                    write(logfhandle,'(a,1x,f9.4)') 'SAMPLING DISTANCE AFTER SCALING:', smpd_new
+                endif
+                if( cline%defined('clip') )then
+                    ! Clipping
+                    call vol2%new([params%clip,params%clip,params%clip],params%smpd)
+                    if( params%clip < params%box )then
+                        call build%vol%clip(vol2)
+                    else
+                        call build%vol%stats( 'background', ave, sdev, var, med )
+                        call build%vol%pad(vol2, backgr=med)
+                    endif
+                    call build%vol%copy(vol2)
+                else
+                     write(logfhandle,'(a,1x,i5)') 'BOX SIZE AFTER SCALING:', params%newbox
+                endif
+                if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
+            else if( cline%defined('filetab') )then
+                call params%new(cline)
+                call read_filetable(params%filetab, filenames)
+                nfiles = size(filenames)
+                call find_ldim_nptcls(filenames(1),ldim,nframes)
+                ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+                if( cline%defined('newbox') )then
+                    ldim_scaled = [params%newbox,params%newbox,1] ! dimension of scaled
+                    params%scale = real(params%newbox) / real(ldim(1))
+                else if( cline%defined('scale') )then
+                    ldim_scaled(1) = round2even(real(ldim(1))*params%scale)
+                    ldim_scaled(2) = round2even(real(ldim(2))*params%scale)
+                    ldim_scaled(3)   = 1
+                else
+                    THROW_HARD('filetab key only in combination with scale or newbox!')
+                endif
+                call img%new(ldim,params%smpd)
+                call img2%new(ldim_scaled,params%smpd/params%scale)
+                do ifile=1,nfiles
+                    call progress(ifile, nfiles)
+                    if( cline%defined('dir_target') )then
+                        fname = filepath(trim(params%dir_target),add2fbody(basename(filenames(ifile)), params%ext, SCALE_SUFFIX))
+                    else
+                        fname = add2fbody(trim(filenames(ifile)), params%ext, SCALE_SUFFIX)
+                    endif
+                    call find_ldim_nptcls(filenames(ifile),ldim,nframes)
+                    ldim(3) = 1 ! to correct for the stupide 3:d dim of mrc stacks
+                    do iframe= 1, nframes
+                        call img%read(filenames(ifile), iframe)
+                        call img%fft()
+                        if( ldim_scaled(1) <= ldim(1) .and. ldim_scaled(2) <= ldim(2) .and. ldim_scaled(3) <= ldim(3) )then
+                            call img%clip(img2)
+                        else
+                            call img%pad(img2)
+                        endif
+                        call img2%ifft()
+                        call img2%write(fname, iframe)
+                    end do
+                    deallocate(fname)
+                end do
+            else
+                THROW_HARD('SIMPLE_SCALE needs input image(s) or volume or filetable!')
+            endif
         endif
+        ! cleanup
+        call vol2%kill
+        call img%kill
+        call img2%kill
+        call build%kill_general_tbox
         ! end gracefully
         call simple_end('**** SIMPLE_SCALE NORMAL STOP ****', print_simple=.false.)
         call qsys_job_finished(  'simple_commander_imgproc :: exec_scale' )

@@ -1510,23 +1510,20 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track_distr
 
-    recursive subroutine exec_scale_project_distr( self, cline )
+    subroutine exec_scale_project_distr( self, cline )
         class(scale_project_distr_commander), intent(inout) :: self
         class(cmdline),                       intent(inout) :: cline
-        type(scale_project_distr_commander) :: xscale_distr
         type(qsys_env)                     :: qenv
         type(chash)                        :: job_descr
         type(cmdline)                      :: cline_scale
-        type(chash),               allocatable :: part_params(:)
-        character(len=LONGSTRLEN), allocatable :: part_stks(:)
-        type(parameters)              :: params
-        type(builder)                 :: build
+        type(chash),      allocatable :: part_params(:)
         character(len=:), allocatable :: projfile_sc
-        character(len=STDLEN) :: filetab
-        integer, allocatable  :: parts(:,:)
-        real                  :: smpd, smpd_target
-        integer               :: istk, ipart, nparts, nstks, cnt, partsz, box, newbox
-        logical               :: gen_sc_project
+        integer,          allocatable :: parts(:,:)
+        type(parameters) :: params
+        type(builder)    :: build
+        real             :: smpd, smpd_target
+        integer          :: ipart, nparts, nstks, box, newbox
+        logical          :: gen_sc_project
         ! mkdir=yes: a new *_sc project + stacks are generated
         ! mkdir=no : only stacks are scaled
         gen_sc_project = cline%get_carg('mkdir').eq.'yes'
@@ -1547,8 +1544,6 @@ contains
         endif
         smpd = build%spproj%get_smpd()
         box  = build%spproj%get_box()
-        call cline_scale%set('smpd', smpd)
-        call cline_scale%set('box',  real(box))
         if( gen_sc_project )then
             ! make new project & scales
             smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
@@ -1560,50 +1555,36 @@ contains
                 write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox
                 THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
             endif
-            call cline_scale%set('newbox', real(newbox))
-            call xscale_distr%execute( cline_scale )
-            ! delete copy in working directory
-            call del_file(params%projfile)
         else
-            ! scaling only
-            params%nparts = nparts
-            parts = split_nobjs_even(nstks, nparts)
-            allocate(part_params(nparts))
-            cnt = 0
-            do ipart=1,nparts
-                call part_params(ipart)%new(1)
-                partsz = parts(ipart,2) - parts(ipart,1) + 1
-                allocate(part_stks(partsz))
-                ! creates part filetab
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
-                do istk=1,partsz
-                    cnt = cnt + 1
-                    part_stks(istk) = build%spproj%get_stkname(cnt)
-                enddo
-                ! write part filetab & update part parameters
-                call write_filetable( filetab, part_stks )
-                call part_params(ipart)%set('filetab', filetab)
-                deallocate(part_stks)
-            end do
-            deallocate(parts)
-            ! setup the environment for distributed execution
-            call qenv%new(nparts)
-            ! prepare job description
-            call cline_scale%gen_job_descr(job_descr)
-            call job_descr%set('prg', 'scale')
-            call job_descr%set('autoscale', 'no')
-            ! schedule
-            call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
-            ! clean
-            call qsys_cleanup
-            ! removes temporary split stktab lists
-            do ipart=1,nparts
-                filetab = 'scale_stktab_part'//int2str(ipart)//trim(TXT_EXT)
-                call del_file( filetab )
-            end do
+            newbox = params%newbox
         endif
+        ! needs to be re-set
+        call cline_scale%set('smpd', smpd)
+        call cline_scale%set('box',  real(box))
+        ! setup the environment for distributed execution
+        params%nparts = nparts
+        call qenv%new(nparts)
+        ! prepares stack-based parts
+        parts = split_nobjs_even(nstks, nparts)
+        allocate(part_params(nparts))
+        do ipart=1,nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
+            call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
+        end do
+        ! prepare job description
+        call cline_scale%gen_job_descr(job_descr)
+        call job_descr%set('prg',      'scale')
+        call job_descr%set('newbox',   int2str(newbox))
+        call job_descr%set('autoscale','no')
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
+        ! delete copy in working directory
+        if( gen_sc_project )call del_file(params%projfile)
+        ! clean
+        call qsys_cleanup
         ! end gracefully
-        call build%spproj_field%kill
+        call build%spproj%kill
         call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
     end subroutine exec_scale_project_distr
 

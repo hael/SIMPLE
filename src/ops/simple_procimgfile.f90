@@ -152,20 +152,27 @@ contains
     !! \param smpd_new new sampling distance
     !! \param fromptop index range for copying
     !!
-    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop )
+    subroutine resize_imgfile( fname2resize, fname, smpd, ldim_new, smpd_new, fromptop, mask )
         character(len=*),  intent(in)  :: fname2resize, fname
         real,              intent(in)  :: smpd
         integer,           intent(in)  :: ldim_new(3)
         real,              intent(out) :: smpd_new
         integer, optional, intent(in)  :: fromptop(2)
-        type(image) :: img, img_resized
+        logical, optional, intent(in)  :: mask(:)
+        type(image) :: img, img_resized, blank_img
         integer     :: n, i, ldim(3), prange(2), cnt, sz
+        logical     :: use_mask
         call find_ldim_nptcls(fname2resize, ldim, n)
         ldim(3) = 1
         call raise_exception_imgfile( n, ldim, 'resize_imgfile' )
         call img%new(ldim,smpd)
         call img_resized%new(ldim_new,smpd) ! this sampling distance will be overwritten
         write(logfhandle,'(a)') '>>> RESIZING IMAGES'
+        use_mask = present(mask)
+        if( use_mask )then
+            if( size(mask) /= n ) THROW_HARD('INCOMPATIBLE STACK & MASK SIZE: '//int2str(n)//' vs. '//int2str(size(mask)))
+            if( .not.all(mask) ) call blank_img%new(ldim_new,smpd*real(ldim(1))/real(ldim_new(1)))
+        endif
         if( present(fromptop) )then
             prange = fromptop
         else
@@ -177,6 +184,12 @@ contains
         do i=prange(1),prange(2)
             cnt = cnt+1
             call progress(cnt,sz)
+            if( use_mask )then
+                if( .not.mask(i) )then
+                    call blank_img%write(fname, cnt)
+                    cycle
+                endif
+            endif
             call img%read(fname2resize, i)
             call img%fft()
             if( ldim_new(1) <= ldim(1) .and. ldim_new(2) <= ldim(2)&
@@ -191,6 +204,7 @@ contains
         smpd_new = img_resized%get_smpd()
         call img%kill
         call img_resized%kill
+        call blank_img%kill
     end subroutine resize_imgfile
 
     !>  \brief clip_imgfile is for clipping

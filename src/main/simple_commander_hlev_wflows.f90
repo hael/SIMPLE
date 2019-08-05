@@ -61,7 +61,7 @@ contains
         type(parameters)                    :: params
         type(sp_project)                    :: spproj, spproj_sc
         character(len=:),       allocatable :: projfile, orig_projfile
-        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked
+        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs
         real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
         integer                             :: last_iter, box, status
         logical                             :: do_scaling
@@ -137,6 +137,8 @@ contains
             scale_factor = cline_scale%get_rarg('scale')
             smpd         = cline_scale%get_rarg('smpd')
             box          = nint(cline_scale%get_rarg('newbox'))
+            call cline_scale%set('state',1.)
+            call cline_scale%delete('smpd') !!
             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
             call xscale_distr%execute( cline_scale )
             ! rename scaled projfile and stash original project file
@@ -204,6 +206,10 @@ contains
             call spproj%read(orig_projfile_bak)
             call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
             call rescale_cavgs(finalcavgs)
+            cavgs = add2fbody(finalcavgs,params%ext,'_even')
+            call rescale_cavgs(cavgs)
+            cavgs = add2fbody(finalcavgs,params%ext,'_odd')
+            call rescale_cavgs(cavgs)
             call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
             spproj%os_cls2D  = spproj_sc%os_cls2D
@@ -414,6 +420,8 @@ contains
             scale_stage1 = cline_scale1%get_rarg('scale')
             scaling      = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
+                call cline_scale1%delete('smpd') !!
+                call cline_scale1%set('state',1.)
                 call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
                 call xscale_distr%execute( cline_scale1 )
                 ! rename scaled projfile and stash original project file
@@ -469,6 +477,8 @@ contains
             scale_stage2 = cline_scale2%get_rarg('scale')
             scaling      = basename(projfile_sc) /= basename(orig_projfile)
             if( scaling )then
+                call cline_scale2%delete('smpd') !!
+                call cline_scale2%set('state',1.)
                 call xscale_distr%execute( cline_scale2 )
                 ! rename scaled projfile and stash original project file
                 ! such that the scaled project file has the same name as the original and can be followed from the GUI
@@ -707,6 +717,7 @@ contains
             scale_factor1 = cline_scale1%get_rarg('scale')
             box          = nint(cline_scale1%get_rarg('newbox'))
             msk          = cline%get_rarg('msk')
+            call cline_scale1%delete('smpd')
             call xscale_distr%execute( cline_scale1 )
         else
             box         = orig_box
@@ -894,6 +905,7 @@ contains
                 scale_factor2 = cline_scale2%get_rarg('scale')
                 box = nint(cline_scale2%get_rarg('newbox'))
                 msk = cline%get_rarg('msk')
+                call cline_scale2%delete('smpd') !!
                 call xscale_distr%execute( cline_scale2 )
                 call work_proj2%os_ptcl3D%mul_shifts(scale_factor2)
                 call work_proj2%write

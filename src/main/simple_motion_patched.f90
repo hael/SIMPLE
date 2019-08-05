@@ -417,8 +417,8 @@ contains
             y2 = rmat_ins(iiframe)%rmat_ptr(x2_h, y1_h, 1)
             y3 = rmat_ins(iiframe)%rmat_ptr(x2_h, y2_h, 1)
             y4 = rmat_ins(iiframe)%rmat_ptr(x1_h, y2_h, 1)
-            t   = xval - x1_h
-            u   = yval - y1_h
+            t   = xval - real(x1_h)
+            u   = yval - real(y1_h)
             interp_bilin =  (1. - t) * (1. - u) * y1 + &
                         &t  * (1. - u) * y2 + &
                         &t  *       u  * y3 + &
