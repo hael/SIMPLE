@@ -61,6 +61,7 @@ type :: oris
     procedure, private :: get_nodd
     procedure          :: print_
     procedure          :: print_matrices
+    procedure          :: sample4update_and_incrcnt_nofrac
     procedure          :: sample4update_and_incrcnt
     procedure          :: sample4update_and_incrcnt2D
     procedure          :: incr_updatecnt
@@ -1095,6 +1096,39 @@ contains
         end do
     end subroutine print_matrices
 
+    subroutine sample4update_and_incrcnt_nofrac( self, fromto, nsamples, inds, mask )
+        class(oris),          intent(inout) :: self
+        integer,              intent(in)    :: fromto(2)
+        integer,              intent(out)   :: nsamples
+        integer, allocatable, intent(out)   :: inds(:)
+        logical,              intent(out)   :: mask(fromto(1):fromto(2))
+        real, allocatable :: states(:)
+        real    :: val
+        integer :: iptcl, cnt
+        ! gather info
+        allocate( states(fromto(1):fromto(2)) )
+        do iptcl=fromto(1),fromto(2)
+            states(iptcl) = self%o(iptcl)%get('state')
+        end do
+        ! figure out how many samples
+        nsamples = count(states > 0.5)
+        ! allocate output index array
+        if( allocated(inds) ) deallocate(inds)
+        allocate( inds(nsamples) )
+        ! update mask & count
+        mask = .false.
+        cnt  = 0
+        do iptcl = fromto(1),fromto(2)
+            if( states(iptcl) > 0.5 )then
+                cnt         = cnt + 1
+                inds(cnt)   = iptcl
+                mask(iptcl) = .true.
+                val         = self%o(iptcl)%get('updatecnt')
+                call self%o(iptcl)%set('updatecnt', val+1.0)
+            endif
+        end do
+    end subroutine sample4update_and_incrcnt_nofrac
+
     subroutine sample4update_and_incrcnt( self, fromto, update_frac, nsamples, inds, mask )
         class(oris),          intent(inout) :: self
         integer,              intent(in)    :: fromto(2)
@@ -1213,24 +1247,16 @@ contains
     end subroutine sample4update_and_incrcnt2D
 
     subroutine incr_updatecnt( self, fromto, mask )
-        class(oris),       intent(inout) :: self
-        integer,           intent(in)    :: fromto(2)
-        logical, optional, intent(in)    :: mask(fromto(1):fromto(2))
+        class(oris), intent(inout) :: self
+        integer,     intent(in)    :: fromto(2)
+        logical,     intent(in)    :: mask(fromto(1):fromto(2))
         integer :: i
         real    :: cnt
-        if( present(mask) )then
-            do i=fromto(1),fromto(2)
-                if( .not.mask(i) )cycle
-                cnt = self%o(i)%get('updatecnt')
-                call self%o(i)%set('updatecnt', cnt + 1.0)
-            end do
-        else
-            ! soon to be deprecated
-            do i=fromto(1),fromto(2)
-                cnt = self%o(i)%get('updatecnt')
-                call self%o(i)%set('updatecnt', cnt + 1.0)
-            end do
-        endif
+        do i=fromto(1),fromto(2)
+            if( .not.mask(i) )cycle
+            cnt = self%o(i)%get('updatecnt')
+            call self%o(i)%set('updatecnt', cnt + 1.0)
+        end do
     end subroutine incr_updatecnt
 
     !>  \brief  check wether the orientation has any typical search parameter

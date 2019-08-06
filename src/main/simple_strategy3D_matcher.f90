@@ -136,11 +136,9 @@ contains
             call build_glob%spproj_field%sample4update_and_incrcnt([params_glob%fromp,params_glob%top],&
             &params_glob%update_frac, nptcls2update, pinds, ptcl_mask)
         else
-            nptcls2update = params_glob%top - params_glob%fromp + 1
-            allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
-            pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
-            ptcl_mask = .true.
-            call build_glob%spproj_field%incr_updatecnt([params_glob%fromp,params_glob%top])
+            allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+            call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&
+            nptcls2update, pinds, ptcl_mask)
         endif
 
         ! EXTREMAL LOGICS
@@ -199,7 +197,7 @@ contains
         call build_glob%vol2%kill
         ! array allocation for strategy3D
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D'
-        call prep_strategy3D( ptcl_mask, npeaks )  ! allocate s3D singleton
+        call prep_strategy3D( ptcl_mask, npeaks ) ! allocate s3D singleton
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: array allocation for strategy3D, DONE'
         if( L_BENCH ) rt_prep_primesrch3D = toc(t_prep_primesrch3D)
         ! switch for per-particle polymorphic strategy3D construction
