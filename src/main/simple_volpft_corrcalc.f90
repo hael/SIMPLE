@@ -81,9 +81,9 @@ contains
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 ! calculate sampling location
-                vec(1) = 0.
+                vec(1) = real(k)
                 vec(2) = 0.
-                vec(3) = real(k)
+                vec(3) = 0.                
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
             end do
         end do
@@ -131,9 +131,9 @@ contains
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 ! calculate sampling location
-                vec(1) = 0.
+                vec(1) = real(k)
                 vec(2) = 0.
-                vec(3) = real(k)
+                vec(3) = 0.
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
             end do
         end do
