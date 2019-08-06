@@ -28,9 +28,10 @@ type(opt4openMP), allocatable :: opt_symaxes(:)     !< parallel optimisation, sy
 real,             allocatable :: sym_rmats(:,:,:)   !< symmetry operations rotation matrices
 type(volpft_corrcalc)         :: vpftcc             !< corr calculator
 type(ori)                     :: saxis_glob         !< best symaxis solution found so far
-integer                       :: nrestarts = 3      !< simplex restarts (randomized bounds)
-integer                       :: nsym      = 0      !< # symmetry ops
-integer                       :: nspace    = 0      !< # complex vectors in vpftcc
+integer                       :: nrestarts     = 3  !< simplex restarts (randomized bounds)
+integer                       :: nsym          = 0  !< # symmetry ops
+integer                       :: nspace        = 0  !< # complex vectors in vpftcc
+integer                       :: nspace_nonred = 0  !< # nonredundant complex vectors in vpftcc
 integer                       :: kfromto(2)         !< Fourier index range
 
 contains
@@ -51,6 +52,7 @@ contains
         ! create the correlator
         call vpftcc%new(vol, hp, lp, KBALPHA)
         nspace  = vpftcc%get_nspace()
+        nspace_nonred = vpftcc%get_nspace_nonred()
         kfromto = vpftcc%get_kfromto()
         if( DEBUG_HERE ) write(logfhandle,*) 'nspace : ', nspace
         if( DEBUG_HERE ) write(logfhandle,*) 'kfromto: ', kfromto
@@ -209,8 +211,8 @@ contains
     function volpft_symsrch_scorefun( rmat_symaxis ) result( cc )
         real, intent(in) :: rmat_symaxis(3,3)
         real    :: cc, rmat(3,3)
-        complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace)
-        complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace)
+        complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace_nonred)
+        complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace_nonred)
         real    :: sqsum_targets(nsym), sqsum_sum
         integer :: isym
         sum_of_sym_targets = cmplx(0.,0.)

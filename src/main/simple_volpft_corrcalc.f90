@@ -18,10 +18,12 @@ type :: volpft_corrcalc
     class(projector), pointer :: vol_ref    => null() !< pointer to reference volume
     class(projector), pointer :: vol_target => null() !< pointer to target volume
     integer                   :: nspace          = 0  !< number of vec:s in representation
+    integer                   :: nspace_nonred   = 0  !< number of non-redundant vec:s in representation
     integer                   :: kfromto_vpft(2) = 0  !< Fourier index range
     real                      :: sqsum_ref            !< memoized square sum 4 corrcalc (ref)
     complex, allocatable      :: vpft_ref(:,:)        !< reference lines 4 matching
     real,    allocatable      :: locs_ref(:,:,:)      !< nspace x nk x 3 matrix of positions (reference)
+    real,    allocatable      :: locs_ref_nonred(:,:,:)!<nspace_nonred x nk x 3 matrix of positions (reference), nonredundant elements
     logical                   :: existence = .false.  !< to indicate existence
   contains
     ! CONSTRUCTOR
@@ -30,6 +32,7 @@ type :: volpft_corrcalc
     generic            :: new => new_1, new_2
     ! GETTERS
     procedure          :: get_nspace
+    procedure          :: get_nspace_nonred
     procedure          :: get_kfromto
     ! INTERPOLATION METHODS
     procedure, private :: extract_ref
@@ -67,11 +70,13 @@ contains
         ! make the icosahedral group
         call ico%new('ico')
         self%nspace = ico%get_nsym()
+        self%nspace_nonred = self%nspace/2
         ! set other stuff
         self%kfromto_vpft(1) = vol_ref%get_find(hp)
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
         allocate( self%vpft_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
-                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3), stat=alloc_stat)
+                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3),&
+                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
         ! generate sampling space
         do ispace=1,self%nspace
@@ -85,6 +90,17 @@ contains
                 vec(2) = 0.
                 vec(3) = 0.                
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
+            end do
+        end do
+        ! record the non-redundant lines (note they are slightly fragmented)
+        do ispace=1,5
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                self%locs_ref_nonred(k,ispace,:) = self%locs_ref(k,ispace,:)
+            end do
+        end do
+        do ispace=11,35
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                self%locs_ref_nonred(k,ispace-5,:) = self%locs_ref(k,ispace,:)
             end do
         end do
         ! prepare for fast interpolation
@@ -117,11 +133,13 @@ contains
         ! make the icosahedral group (defines sampling geometry)
         call ico%new('i')
         self%nspace = ico%get_nsym()
+        self%nspace_nonred = self%nspace/2
         ! set other stuff
         self%kfromto_vpft(1) = self%vol_ref%get_find(hp)
         self%kfromto_vpft(2) = self%vol_ref%get_find(lp)
         allocate( self%vpft_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
-                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3), stat=alloc_stat)
+                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3),&
+                  self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
         ! generate sampling space
         do ispace=1,self%nspace
@@ -135,6 +153,17 @@ contains
                 vec(2) = 0.
                 vec(3) = 0.
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
+            end do
+        end do
+        ! record the non-redundant lines (note they are slightly fragmented)
+        do ispace=1,5
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                self%locs_ref_nonred(k,ispace,:) = self%locs_ref(k,ispace,:)
+            end do
+        end do
+        do ispace=11,35
+            do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
+                self%locs_ref_nonred(k,ispace-5,:) = self%locs_ref(k,ispace,:)
             end do
         end do
         ! prepare for fast interpolation
@@ -156,6 +185,12 @@ contains
         integer :: nspace
         nspace = self%nspace
     end function get_nspace
+
+    pure function get_nspace_nonred( self ) result( nspace_nonred )
+        class(volpft_corrcalc), intent(in) :: self
+        integer :: nspace_nonred
+        nspace_nonred = self%nspace_nonred
+    end function get_nspace_nonred
 
     pure function get_kfromto( self ) result( kfromto )
         class(volpft_corrcalc), intent(in) :: self
@@ -182,13 +217,13 @@ contains
     subroutine extract_target_1( self, rmat, vpft_target, sqsum_target )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
-        complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real,                   intent(out)   :: sqsum_target
         real    :: loc(3)
         integer :: ispace, k
-        do ispace=1,self%nspace
+        do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                loc = matmul(self%locs_ref(k,ispace,:),rmat)
+                loc = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp(loc)
             end do
         end do
@@ -199,13 +234,13 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
         real,                   intent(in)    :: shvec(3)
-        complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        complex,                intent(out)   :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real,                   intent(out)   :: sqsum_target
         real    :: loc(3)
         integer :: ispace, k
-        do ispace=1,self%nspace
+        do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                loc  = matmul(self%locs_ref(k,ispace,:),rmat)
+                loc  = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
                 vpft_target(k,ispace) = &
                     &self%vol_target%interp_fcomp(loc) * self%vol_target%oshift(loc, shvec)
             end do
@@ -216,7 +251,7 @@ contains
     function corr_1( self, rmat ) result( cc )
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
-        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real    :: sqsum_target, cc
         call self%extract_target_1(rmat, vpft_target, sqsum_target)
         cc = sum(real(self%vpft_ref * conjg(vpft_target)))
@@ -227,7 +262,7 @@ contains
         class(volpft_corrcalc), intent(inout) :: self
         real,                   intent(in)    :: rmat(3,3)
         real,                   intent(in)    :: shvec(3)
-        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace)
+        complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real    :: sqsum_target, cc
         call self%extract_target_2(rmat, shvec, vpft_target, sqsum_target)
         cc = sum(real(self%vpft_ref * conjg(vpft_target)))
@@ -239,7 +274,7 @@ contains
         if( self%existence )then
             self%vol_ref    => null()
             self%vol_target => null()
-            deallocate(self%vpft_ref,self%locs_ref)
+            deallocate(self%vpft_ref,self%locs_ref,self%locs_ref_nonred)
             self%existence = .false.
         endif
     end subroutine kill
