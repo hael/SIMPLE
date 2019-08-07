@@ -670,7 +670,6 @@ contains
     end subroutine calc_3Drec
 
     subroutine setup_weights_read_o_peaks
-        integer :: i
         ! set npeaks
         npeaks = NPEAKS2REFINE
         ! particle weights
@@ -680,10 +679,9 @@ contains
             call build_glob%spproj_field%calc_hard_weights(params_glob%frac)
         endif
         ! prepare particle mask
-        nptcls2update = params_glob%top - params_glob%fromp + 1
-        allocate(pinds(nptcls2update), ptcl_mask(params_glob%fromp:params_glob%top))
-        pinds = (/(i,i=params_glob%fromp,params_glob%top)/)
-        ptcl_mask = .true.
+        allocate(ptcl_mask(params_glob%fromp:params_glob%top))
+        call build_glob%spproj_field%sample4update_and_incrcnt_nofrac([params_glob%fromp,params_glob%top],&
+        nptcls2update, pinds, ptcl_mask)
         ! allocate s3D singleton
         call prep_strategy3D(ptcl_mask, npeaks)
         ! read peaks
@@ -698,8 +696,10 @@ contains
         endif
         call open_o_peaks_io(trim(params_glob%o_peaks_file))
         do iptcl=params_glob%fromp,params_glob%top
-            call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
-            call update_softmax_weights(iptcl, npeaks)
+            if( ptcl_mask(iptcl) )then
+                call read_o_peak(s3D%o_peaks(iptcl), [params_glob%fromp,params_glob%top], iptcl, n_nozero)
+                call update_softmax_weights(iptcl, npeaks)
+            endif
         end do
         call close_o_peaks_io
     end subroutine read_o_peaks

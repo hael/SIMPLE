@@ -381,7 +381,6 @@ contains
         nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
         if( (nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())))&
             &.and. (spproj%get_nintgs() > 0) .and. (spproj%get_nstks() > 0) )then
-            call cline%printline
             write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
             projfile_prune = 'autoprune'//trim(METADATA_EXT)
             call spproj%prune_project(cline,projfile_prune,'./autoprune/')
