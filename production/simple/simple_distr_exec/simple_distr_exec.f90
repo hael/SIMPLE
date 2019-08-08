@@ -46,6 +46,7 @@ type(cleanup2D_nano_commander)              :: xcleanup2D_nano
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_distr_commander)         :: xscale_project
+type(prune_project_distr_commander)         :: xprune_project
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
@@ -127,7 +128,9 @@ select case(prg)
 
     ! SUPPORTING WORKFLOWS
     case( 'scale_project' )
-        call xscale_project%execute(cline )
+        call xscale_project%execute( cline )
+    case( 'prune_project' )
+        call xprune_project%execute( cline )
     case DEFAULT
         THROW_HARD('prg='//trim(prg)//' is unsupported')
 end select

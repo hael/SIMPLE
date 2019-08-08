@@ -34,7 +34,6 @@ type(import_boxes_commander)          :: ximport_boxes
 type(import_particles_commander)      :: ximport_particles
 type(import_cavgs_commander)          :: ximport_cavgs
 type(merge_stream_projects_commander) :: xmerge_stream_projects
-type(prune_project_commander)         :: xprune_project
 type(replace_project_field_commander) :: xreplace_project_field
 type(selection_commander)             :: xselection
 type(export_relion_commander)         :: xexport_relion
@@ -132,8 +131,6 @@ select case(prg)
         call ximport_cavgs%execute(cline)
     case( 'merge_stream_projects' )
         call xmerge_stream_projects%execute(cline)
-    case( 'prune_project' )
-        call xprune_project%execute(cline)
     case( 'replace_project_field' )
         call xreplace_project_field%execute(cline)
     case( 'selection', 'report_selection' )

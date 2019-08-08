@@ -591,6 +591,7 @@ contains
         write(logfhandle,'(A)') pick_extract_stream%name
         write(logfhandle,'(A)') preprocess%name
         write(logfhandle,'(A)') preprocess_stream%name
+        write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
@@ -631,7 +632,6 @@ contains
         write(logfhandle,'(A)') print_magic_boxes%name
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
-        write(logfhandle,'(A)') prune_project%name
         write(logfhandle,'(A)') pspec_stats%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
@@ -2666,14 +2666,13 @@ contains
         &'prune_project',&                            ! name
         &'discards deselected data from a project',&  ! descr_short
         &'is a program for discarding deselected data (particles,stacks) from a project',& ! descr_long
-        &'simple_exec',&                             ! executable
-        &0, 2, 0, 0, 0, 0, 0, .false.)              ! # entries in each group, requires sp_project
+        &'simple_distr_exec',&                       ! executable
+        &0, 0, 0, 0, 0, 0, 1, .true.)                ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
-        call prune_project%set_input('parm_ios', 1, projfile)
-        call prune_project%set_input('parm_ios', 2, clip)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -2683,7 +2682,7 @@ contains
         ! mask controls
         ! <empty>
         ! computer controls
-        ! <empty>
+        call prune_project%set_input('comp_ctrls', 1, nparts)
     end subroutine new_prune_project
 
     subroutine new_reconstruct3D

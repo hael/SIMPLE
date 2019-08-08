@@ -20,9 +20,9 @@ public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
-public :: prune_project_commander
 public :: merge_stream_projects_commander
 public :: replace_project_field_commander
+public :: prune_project_commander
 private
 #include "simple_local_flags.inc"
 
@@ -70,10 +70,6 @@ type, extends(commander_base) :: export_cavgs_commander
   contains
     procedure :: execute      => exec_export_cavgs
 end type export_cavgs_commander
-type, extends(commander_base) :: prune_project_commander
-  contains
-    procedure :: execute      => exec_prune_project
-end type prune_project_commander
 type, extends(commander_base) :: merge_stream_projects_commander
   contains
     procedure :: execute      => exec_merge_stream_projects
@@ -82,6 +78,10 @@ type, extends(commander_base) :: replace_project_field_commander
   contains
     procedure :: execute      => exec_replace_project_field
 end type replace_project_field_commander
+type, extends(commander_base) :: prune_project_commander
+  contains
+    procedure :: execute      => exec_prune_project
+end type prune_project_commander
 contains
 
     !> convert binary (.simple) oris doc to text (.txt)
@@ -776,22 +776,6 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
-    !> for purging of a project of state=0
-    subroutine exec_prune_project( self, cline )
-        class(prune_project_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        character(len=:), allocatable :: projfile_prune
-        call cline%set('mkdir', 'yes')
-        call params%new(cline)
-        call spproj%read(params%projfile)
-        projfile_prune = get_fbody(basename(params%projfile),METADATA_EXT,separator=.false.)
-        projfile_prune = filepath(CWD_GLOB, trim(projfile_prune)//'_prune'//trim(METADATA_EXT))
-        call spproj%prune_project(cline, projfile_prune)
-        call simple_end('**** PRUNE_PROJECT NORMAL STOP ****')
-    end subroutine exec_prune_project
-
     !> for appending one project from preprocess_stream to another
     subroutine exec_merge_stream_projects( self, cline )
         class(merge_stream_projects_commander), intent(inout) :: self
@@ -811,7 +795,7 @@ contains
     !> for substituting one project field for another, for dev only
     subroutine exec_replace_project_field( self, cline )
         class(replace_project_field_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
+        class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
         call cline%set('mkdir', 'yes')
@@ -822,5 +806,163 @@ contains
         call spproj%write
         call simple_end('**** REPLACE_PROJECT_FIELD NORMAL STOP ****')
     end subroutine exec_replace_project_field
+
+    ! subroutine exec_prune_project( self_in, cline, projout_fname, dir )
+    subroutine exec_prune_project( self, cline )
+        use simple_qsys_funs,  only: qsys_job_finished
+        use simple_binoris_io, only: binwrite_oritab
+        use simple_ori,        only: ori
+        use simple_image,      only: image
+        use simple_cmdline,    only: cmdline
+        class(prune_project_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters)              :: params
+        type(image)                   :: img
+        type(sp_project)              :: spproj, spproj_out
+        type(ori)                     :: o, o_stk
+        character(len=:), allocatable :: newstkname,stkname,ext
+        logical,          allocatable :: stks_mask(:), ptcls_mask(:)
+        integer,          allocatable :: stkinds(:), stk2mic_inds(:)
+        character(len=LONGSTRLEN) :: relstkname, stkdir
+        real                      :: smpd
+        integer                   :: iptcl, istk, stk_cnt, nptcls_tot, ptcl_cnt, nmics_sel, imic
+        integer                   :: box, nstks, nstks_tot, fromp, top, fromp_glob, top_glob, nmics_tot
+        integer                   :: nstks_part, nptcls_part, stkind, nstks_prev, ptcl_glob
+        ! init
+        call params%new(cline)
+        if( params%dir .eq. '' )then
+            stkdir = PATH_HERE
+        else
+            stkdir = trim(params%dir)
+        endif
+        ! particles
+        call spproj%read_segment('ptcl2D', params%projfile)
+        nptcls_tot = spproj%os_ptcl2D%get_noris()
+        allocate(ptcls_mask(nptcls_tot), stkinds(nptcls_tot))
+        nptcls_part = 0
+        do iptcl=1,nptcls_tot
+            ptcls_mask(iptcl) = spproj%os_ptcl2D%get_state(iptcl) > 0
+            if( ptcls_mask(iptcl) )then
+                stkinds(iptcl) = nint(spproj%os_ptcl2D%get(iptcl,'stkind'))
+                if( stkinds(iptcl) >= params%fromp .and. stkinds(iptcl) <= params%top )then
+                    nptcls_part = nptcls_part+1
+                endif
+            else
+                stkinds(iptcl) = 0
+            endif
+        enddo
+        call spproj%read_segment('ptcl3D', params%projfile)
+        call spproj_out%os_ptcl2D%new(nptcls_part)
+        call spproj_out%os_ptcl3D%new(nptcls_part)
+        ! stacks
+        call spproj%read_segment('stk', params%projfile)
+        nstks_tot = spproj%get_nstks()
+        if( nstks_tot == 0 ) THROW_HARD('No images to operate on!')
+        allocate(stks_mask(nstks_tot))
+        do istk=1,nstks_tot
+            stks_mask(istk) = spproj%os_stk%get_state(istk) > 0
+            if( count(stkinds==istk) == 0 ) stks_mask(istk) = .false.
+        enddo
+        nstks = count(stks_mask)
+        nstks_part = count(stks_mask(params%fromp:params%top))
+        if( nstks_part == 0 )then
+            call qsys_job_finished('simple_commander_project :: exec_prune_project')
+            return
+        endif
+        call spproj_out%os_stk%new(nstks_part)
+        ! micrographs
+        call spproj%read_segment('mic', params%projfile)
+        nmics_tot = spproj%os_mic%get_noris()
+        if( nmics_tot > 0 )then
+            nmics_sel  = spproj%os_mic%get_noris(consider_state=.true.)
+            if( nmics_sel /= nstks )then
+                THROW_HARD('Inconsistent # of selected micrographs and # of stacks; prune_project')
+            endif
+            allocate(stk2mic_inds(nstks_tot),source=0)
+            istk = 0
+            do imic=1,nmics_tot
+                if( spproj%os_mic%get_state(imic) == 0 ) cycle
+                istk = istk+1
+                if( stks_mask(istk) ) stk2mic_inds(istk) = imic
+            enddo
+            call spproj_out%os_mic%new(nstks_part)
+        endif
+        ! new stacks
+        box  = spproj%get_box()
+        smpd = spproj%get_smpd()
+        write(logfhandle,'(A)')'>>> GENERATING STACK(S)'
+        call img%new([box,box,1],smpd)
+        call simple_mkdir(stkdir)
+        nstks_prev = count(stks_mask(:params%fromp-1))
+        stkind     = nstks_prev
+        stk_cnt    = 0
+        if( params%fromp == 1 )then
+            top_glob   = 0
+        else
+            top = nint(spproj%os_stk%get(params%fromp-1,'top'))
+            top_glob  = count(ptcls_mask(1:top))
+        endif
+        ptcl_glob  = 0
+        do istk=params%fromp,params%top
+            if( .not.stks_mask(istk) ) cycle
+            stk_cnt = stk_cnt +1
+            stkind  = stkind + 1
+            call spproj%os_stk%get_ori(istk, o_stk)
+            call o_stk%getter('stk',stkname)
+            ext        = fname2ext(stkname)
+            newstkname = trim(stkdir)//trim(get_fbody(basename(stkname),ext))//'.mrc'
+            fromp      = nint(o_stk%get('fromp'))
+            top        = nint(o_stk%get('top'))
+            fromp_glob = top_glob+1
+            ptcl_cnt   = 0
+            do iptcl=fromp,top
+                if( .not.ptcls_mask(iptcl) )cycle
+                ptcl_glob = ptcl_glob + 1
+                top_glob  = top_glob+1
+                ptcl_cnt  = ptcl_cnt+1
+                ! copy image
+                call img%read(stkname, iptcl-fromp+1)
+                call img%write(newstkname, ptcl_cnt)
+                ! update orientations
+                call spproj%os_ptcl2D%get_ori(iptcl, o)
+                call o%set('stkind', real(stkind))
+                call spproj_out%os_ptcl2D%set_ori(ptcl_glob, o)
+                call spproj%os_ptcl3D%get_ori(iptcl, o)
+                call o%set('stkind', real(stkind))
+                call spproj_out%os_ptcl3D%set_ori(ptcl_glob, o)
+            enddo
+            ! update stack
+            call make_relativepath(CWD_GLOB, newstkname, relstkname)
+            call o_stk%set('stk',   relstkname)
+            call o_stk%set('fromp', real(fromp_glob))
+            call o_stk%set('top',   real(top_glob))
+            call o_stk%set('nptcls',real(ptcl_cnt))
+            call spproj_out%os_stk%set_ori(stk_cnt, o_stk)
+            ! update micrograph
+            if( nmics_tot > 0 )then
+                imic = stk2mic_inds(istk)
+                call spproj%os_mic%get_ori(imic, o)
+                call spproj_out%os_mic%set_ori(stk_cnt, o)
+            endif
+        enddo
+        spproj_out%projinfo = spproj%projinfo
+        spproj_out%compenv  = spproj%compenv
+        if( spproj%jobproc%get_noris()  > 0 ) spproj_out%jobproc = spproj%jobproc
+        call spproj%kill
+        call spproj_out%write(trim(ALGN_FBODY)//int2str(params%part)//METADATA_EXT)
+        ! cleanup
+        call spproj_out%kill
+        call img%kill
+        call o%kill
+        call o_stk%kill
+        ! end gracefully
+        call qsys_job_finished('simple_commander_project :: exec_prune_project')
+    contains
+
+        subroutine write_field
+
+        end subroutine write_field
+
+    end subroutine exec_prune_project
 
 end module simple_commander_project

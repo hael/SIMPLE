@@ -73,6 +73,9 @@ type(rotmats2oris_commander)          :: xrotmats2oris
 type(print_project_vals_commander)    :: xprint_project_vals
 type(o_peaksstats_commander)          :: xo_peaksstats
 
+! ORIENTATION DATA MANAGEMENT PROGRAMS
+type(prune_project_commander)         :: xprune_project
+
 ! TIME-SERIES ANALYSIS PROGRAMS
 type(tseries_track_commander)         :: xtseries_track
 
@@ -190,6 +193,10 @@ select case(prg)
         call xprint_project_vals%execute(cline)
     case( 'o_peaksstats')
         call xo_peaksstats%execute(cline)
+
+    ! DATA MANAGEMENT PROGRAMS
+    case( 'prune_project' )
+        call xprune_project%execute(cline)
 
     ! TIME-SERIES ANALYSIS PROGRAMS
     case( 'tseries_track' )

@@ -322,7 +322,7 @@ contains
     !> for distributed CLUSTER2D with two-stage autoscaling
     subroutine exec_cluster2D_autoscale( self, cline )
         use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,&
-            &scale_project_distr_commander
+            &scale_project_distr_commander, prune_project_distr_commander
         use simple_commander_cluster2D,    only: rank_cavgs_commander
         use simple_commander_imgproc,      only: scale_commander
         class(cluster2D_autoscale_commander), intent(inout) :: self
@@ -332,6 +332,7 @@ contains
         integer,               parameter :: MAXITS_STAGE1_EXTR = 15
         character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
         ! commanders
+        type(prune_project_distr_commander) :: xprune_project
         type(make_cavgs_distr_commander)    :: xmake_cavgs
         type(cluster2D_distr_commander)     :: xcluster2D_distr
         type(rank_cavgs_commander)          :: xrank_cavgs
@@ -341,13 +342,12 @@ contains
         type(cmdline) :: cline_cluster2D_stage1
         type(cmdline) :: cline_cluster2D_stage2
         type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
-        type(cmdline) :: cline_make_cavgs
-        type(cmdline) :: cline_rank_cavgs
+        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_prune_project
         ! other variables
         type(parameters)              :: params
         type(sp_project)              :: spproj, spproj_sc
         character(len=:), allocatable :: projfile_sc, orig_projfile
-        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc, projfile_prune
+        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
         real     :: scale_stage1, scale_stage2, trs_stage2
         integer  :: nparts, last_iter_stage1, last_iter_stage2, status
         integer  :: nptcls_sel
@@ -377,19 +377,13 @@ contains
             call spproj%os_ptcl2D%delete_2Dclustering
             call spproj%write_segment_inside(params%oritype)
         endif
-        ! re-extraction
+        ! automated pruning
         nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        if( (nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())))&
-            &.and. (spproj%get_nintgs() > 0) .and. (spproj%get_nstks() > 0) )then
+        if( nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())) )then
             write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
-            projfile_prune = 'autoprune'//trim(METADATA_EXT)
-            call spproj%prune_project(cline,projfile_prune,'./autoprune/')
             call spproj%kill
-            status = simple_rename(projfile_prune,params%projfile)
-            call spproj%read_segment('projinfo',params%projfile)
-            call spproj%projinfo%delete_entry('projname')
-            call spproj%update_projinfo(cline)
-            call spproj%write_segment_inside('projinfo',params%projfile)
+            cline_prune_project = cline
+            call xprune_project%execute(cline_prune_project)
             call spproj%read(params%projfile)
             params%nptcls = nptcls_sel
         endif
