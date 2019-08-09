@@ -47,6 +47,8 @@ type :: volpft_corrcalc
     procedure          :: kill
 end type volpft_corrcalc
 
+real, parameter :: i_startvec(3) = (/.2259467440, .3054884673, .9249998733/)  ! numerically found vector that will result in even sampling of unit sphere under i operations
+
 contains
 
     !>  \brief  is a constructor
@@ -86,9 +88,9 @@ contains
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 ! calculate sampling location
-                vec(1) = real(k)
-                vec(2) = 0.
-                vec(3) = 0.                
+                vec(1) = real(k)*i_startvec(1)
+                vec(2) = real(k)*i_startvec(2)
+                vec(3) = real(k)*i_startvec(3)
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
             end do
         end do
@@ -149,9 +151,9 @@ contains
             ! loop over resolution shells
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 ! calculate sampling location
-                vec(1) = real(k)
-                vec(2) = 0.
-                vec(3) = 0.
+                vec(1) = real(k)*i_startvec(1)
+                vec(2) = real(k)*i_startvec(2)
+                vec(3) = real(k)*i_startvec(3)
                 self%locs_ref(k,ispace,:) = matmul(vec,rmat)
             end do
         end do
