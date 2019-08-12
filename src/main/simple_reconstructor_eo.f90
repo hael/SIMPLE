@@ -335,12 +335,11 @@ contains
         integer,                 intent(in)    :: state                 !< state
         character(len=*),        intent(in)    :: fname_even, fname_odd !< even/odd filenames
         integer,                 intent(out)   :: find4eoavg            !< Fourier index for eo averaging
-        real,     allocatable :: res(:), corrs(:), fsc_arr(:), pssnr(:)
         type(image)           :: even, odd
-        complex, allocatable  :: cmat(:,:,:)
-        character(len=STDLEN) :: fsc_fname
-        integer               :: j, find_plate, ldim(3)
-        real                  :: mskrad
+        complex,  allocatable :: cmat(:,:,:)
+        real,     allocatable :: res(:), corrs(:), pssnr(:), fsc_t(:), fsc_n(:)
+        integer               :: k,k_rand, find_plate, filtsz
+        real                  :: lp_rand, corr_n
         if( (params_glob%cc_objfun == OBJFUN_EUCLID) .or. params_glob%l_pssnr )then
             ! even
             cmat = self%even%get_cmat()
@@ -420,14 +419,39 @@ contains
             ! clip
             call self%even%clip(even)
             call self%odd%clip(odd)
-            ! write unnormalised unmasked even/odd volumes
+            ! write un-normalised unmasked even/odd volumes
             call even%write(trim(fname_even), del_if_exists=.true.)
             call odd%write(trim(fname_odd),   del_if_exists=.true.)
+            filtsz = even%get_filtsz()
+            res    = even%get_res()
             if( self%automsk )then
                 call even%zero_background
                 call odd%zero_background
                 call even%mul(self%envmask)
                 call odd%mul(self%envmask)
+                ! forward FT
+                call even%fft()
+                call odd%fft()
+                ! calculate FSC according to Chen et al,JSB,2013
+                allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
+                call even%fsc(odd, fsc_t)
+                k_rand  = get_lplim_at_corr(fsc_t, 0.8)
+                k_rand  = min(k_rand, calc_fourier_index(10.,self%box,self%smpd))
+                lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
+                call even%phase_rand(lp_rand)
+                call odd%phase_rand(lp_rand)
+                call even%fsc(odd, fsc_n)
+                do k = 1,filtsz
+                    if( k < k_rand+3 )then
+                        corrs(k) = fsc_t(k)
+                    else
+                        corr_n   = min(fsc_n(k),0.9999)
+                        corrs(k) = (fsc_t(k)-corr_n) / (1.-corr_n)
+                    endif
+                enddo
+                call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
+                call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
+                deallocate(fsc_t,fsc_n)
             else
                 ! spherical masking
                 if( self%inner > 1. )then
@@ -437,23 +461,22 @@ contains
                     call even%mask(self%msk, 'soft')
                     call odd%mask(self%msk, 'soft')
                 endif
+                ! forward FT
+                call even%fft()
+                call odd%fft()
+                ! calculate FSC
+                allocate(corrs(filtsz), source=0.)
+                call even%fsc(odd, corrs)
             endif
-            ! forward FT
-            call even%fft()
-            call odd%fft()
-            ! calculate FSC
-            res = even%get_res()
-            allocate(corrs(even%get_filtsz()))
-            call even%fsc(odd, corrs)
         endif
         find_plate = 0
         if( self%phaseplate ) call phaseplate_correct_fsc(corrs, find_plate)
         if( self%hpind_fsc > 0 ) corrs(:self%hpind_fsc) = corrs(self%hpind_fsc + 1)
-        do j=1,size(res)
-           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(j), '>>> CORRELATION:', corrs(j)
+        do k=1,size(res)
+           write(logfhandle,'(A,1X,F6.2,1X,A,1X,F7.3)') '>>> RESOLUTION:', res(k), '>>> CORRELATION:', corrs(k)
         end do
         ! save, get & print resolution
-        call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//'.bin')
+        call arr2file(corrs, 'fsc_state'//int2str_pad(state,2)//BIN_EXT)
         call get_resolution(corrs, res, self%res_fsc05, self%res_fsc0143)
         self%res_fsc05   = max(self%res_fsc05,self%fny)
         self%res_fsc0143 = max(self%res_fsc0143,self%fny)

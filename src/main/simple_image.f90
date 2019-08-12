@@ -4336,32 +4336,26 @@ contains
         real, intent(in)            :: lp
         integer                     :: h,k,l,phys(3),lims(3,2)
         logical                     :: didft
-        real                        :: freq,lp_freq,sgn1,sgn2,sgn3
+        real                        :: freq,lp_freq, amp,phase
         real, parameter             :: errfrac=0.5
         didft = .false.
         if( .not. self%ft )then
             call self%fft()
             didft = .true.
         endif
-        lp_freq = self%fit%get_find(1,lp) ! assuming square 4 now
+        lp_freq = real(self%fit%get_find(1,lp)) ! assuming square 4 now
         lims    = self%fit%loop_lims(2)
-        !$omp parallel do collapse(3) default(shared) private(h,k,l,freq,phys,sgn1,sgn2,sgn3)&
+        !$omp parallel do collapse(3) default(shared) private(h,k,l,freq,phys,amp,phase)&
         !$omp schedule(static) proc_bind(close)
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
                 do l=lims(3,1),lims(3,2)
                     freq = hyp(real(h),real(k),real(l))
                     if(freq .gt. lp_freq)then
-                        phys = self%fit%comp_addr_phys([h,k,l])
-                        sgn1 = 1.
-                        sgn2 = 1.
-                        sgn3 = 1.
-                        if( ran3() > 0.5 ) sgn1 = -1.
-                        if( ran3() > 0.5 ) sgn2 = -1.
-                        if( ran3() > 0.5 ) sgn3 = -1.
-                        self%cmat(phys(1),phys(2),phys(3)) = self%cmat(phys(1),phys(2),phys(3))*&
-                            self%oshift([h,k,l],[sgn1*ran3()*errfrac*self%ldim(1),&
-                            sgn2*ran3()*errfrac*self%ldim(2),sgn3*ran3()*errfrac*self%ldim(3)])
+                        phys  = self%fit%comp_addr_phys([h,k,l])
+                        amp   = mycabs(self%cmat(phys(1),phys(2),phys(3)))
+                        phase = ran3() * TWOPI
+                        self%cmat(phys(1),phys(2),phys(3)) = amp * cmplx(cos(phase), sin(phase))
                     endif
                 end do
             end do
