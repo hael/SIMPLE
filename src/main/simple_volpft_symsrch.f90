@@ -15,6 +15,7 @@ private
 #include "simple_local_flags.inc"
 
 logical, parameter :: DEBUG_HERE = .false.
+logical, parameter :: SRCH_INPL  = .false.
 integer, parameter :: NPROJ      = 1000
 integer, parameter :: NBEST      = 20
 integer, parameter :: ANGSTEP    = 5
@@ -125,19 +126,27 @@ contains
         call espace%new(NPROJ)
         call espace%spiral
         ! count # in-plane angles
-        n_inpls = 0
-        do inpl=0,359,ANGSTEP
-            n_inpls = n_inpls + 1
-        end do
+        if( SRCH_INPL )then
+            n_inpls = 0
+            do inpl=0,359,ANGSTEP
+                n_inpls = n_inpls + 1
+            end do
+        else
+            n_inpls = 1
+        endif
         ! allocate
         allocate(inpl_angs(n_inpls), rmats(ffromto(1):ffromto(2),n_inpls,3,3),&
             &corrs(ffromto(1):ffromto(2),n_inpls))
         ! fill-in the in-plane angles
-        n_inpls = 0
-        do inpl=0,359,ANGSTEP
-            n_inpls = n_inpls + 1
-            inpl_angs(n_inpls) = real(inpl)
-        end do
+        if( SRCH_INPL )then
+            n_inpls = 0
+            do inpl=0,359,ANGSTEP
+                n_inpls = n_inpls + 1
+                inpl_angs(n_inpls) = real(inpl)
+            end do
+        else
+            inpl_angs(1) = 0.
+        endif
         ! fill-in the rotation matrices
         do iproj=ffromto(1),ffromto(2)
             eul = espace%get_euler(iproj)
