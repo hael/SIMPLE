@@ -17,9 +17,9 @@ private
 logical, parameter :: DEBUG_HERE = .false.
 logical, parameter :: SRCH_INPL  = .false.
 integer, parameter :: NPROJ      = 1000
-integer, parameter :: NBEST      = 20
+integer, parameter :: NBEST      = 10
 integer, parameter :: ANGSTEP    = 5
-logical, parameter :: SCOREFUN_JACOB      = .true.  !< use Jacobian (k^2) in score function
+logical, parameter :: SCOREFUN_JACOB      = .false. !< use Jacobian (k^2) in score function
 logical, parameter :: ONE_HEMISPHERE_ONLY = .true.  !< only consider one hemisphere in coarse search
 
 type opt4openMP
