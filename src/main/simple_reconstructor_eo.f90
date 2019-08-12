@@ -338,8 +338,8 @@ contains
         type(image)           :: even, odd
         complex,  allocatable :: cmat(:,:,:)
         real,     allocatable :: res(:), corrs(:), pssnr(:), fsc_t(:), fsc_n(:)
+        real                  :: lp_rand
         integer               :: k,k_rand, find_plate, filtsz
-        real                  :: lp_rand, corr_n
         if( (params_glob%cc_objfun == OBJFUN_EUCLID) .or. params_glob%l_pssnr )then
             ! even
             cmat = self%even%get_cmat()
@@ -425,33 +425,60 @@ contains
             filtsz = even%get_filtsz()
             res    = even%get_res()
             if( self%automsk )then
-                call even%zero_background
-                call odd%zero_background
-                call even%mul(self%envmask)
-                call odd%mul(self%envmask)
-                ! forward FT
-                call even%fft()
-                call odd%fft()
                 ! calculate FSC according to Chen et al,JSB,2013
                 allocate(corrs(filtsz),fsc_t(filtsz),fsc_n(filtsz), source=0.)
-                call even%fsc(odd, fsc_t)
-                k_rand  = get_lplim_at_corr(fsc_t, 0.8)
-                k_rand  = min(k_rand, calc_fourier_index(10.,self%box,self%smpd))
-                lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
-                call even%phase_rand(lp_rand)
-                call odd%phase_rand(lp_rand)
-                call even%fsc(odd, fsc_n)
-                do k = 1,filtsz
-                    if( k < k_rand+3 )then
-                        corrs(k) = fsc_t(k)
-                    else
-                        corr_n   = min(fsc_n(k),0.9999)
-                        corrs(k) = (fsc_t(k)-corr_n) / (1.-corr_n)
-                    endif
-                enddo
-                call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
-                call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
-                deallocate(fsc_t,fsc_n)
+                ! Masked FSC
+                call even%zero_background
+                call odd%zero_background
+                call even%mul(self%envmask)             ! mask
+                call odd%mul(self%envmask)
+                call even%fft()                         ! Fourier space
+                call odd%fft()
+                call even%fsc(odd, fsc_t)               ! FSC
+                ! re-generates e/o volumes
+                call even%zero_and_unflag_ft
+                call odd%zero_and_unflag_ft
+                call self%even%clip(even)
+                call self%odd%clip(odd)
+                ! Randomize then calculate masked FSC
+                k_rand = get_lplim_at_corr(fsc_t, 0.8) ! determine randomization low-pass
+                if( k_rand > filtsz-3 )then
+                    ! reverts to sherical masking
+                    call even%mask(self%msk, 'soft')
+                    call odd%mask(self%msk, 'soft')
+                    call even%fft()
+                    call odd%fft()
+                    call even%fsc(odd, corrs)
+                else
+                    lp_rand = calc_lowpass_lim(k_rand, self%box, self%smpd)
+                    ! randomize
+                    call even%fft()
+                    call odd%fft()
+                    call even%phase_rand(lp_rand)
+                    call odd%phase_rand(lp_rand)
+                    ! mask
+                    call even%ifft()
+                    call odd%ifft()
+                    call even%zero_background
+                    call odd%zero_background
+                    call even%mul(self%envmask)
+                    call odd%mul(self%envmask)
+                    ! FSC & correction
+                    call even%fft()
+                    call odd%fft()
+                    call even%fsc(odd, fsc_n)
+                    corrs = fsc_t
+                    do k = k_rand+2,filtsz
+                        if( fsc_n(k) > fsc_t(k) )then
+                            corrs(k) = 0.
+                        else
+                            corrs(k) = (fsc_t(k)-fsc_n(k)) / (1.-fsc_n(k))
+                        endif
+                    enddo
+                    call arr2file(fsc_t, 'fsct_state'//int2str_pad(state,2)//BIN_EXT)
+                    call arr2file(fsc_n, 'fscn_state'//int2str_pad(state,2)//BIN_EXT)
+                    deallocate(fsc_t,fsc_n)
+                endif
             else
                 ! spherical masking
                 if( self%inner > 1. )then
