@@ -19,7 +19,8 @@ logical, parameter :: SRCH_INPL  = .false.
 integer, parameter :: NPROJ      = 1000
 integer, parameter :: NBEST      = 20
 integer, parameter :: ANGSTEP    = 5
-logical, parameter :: SCOREFUN_JACOB = .false.      !< use Jacobian (k^2) in score function
+logical, parameter :: SCOREFUN_JACOB      = .false. !< use Jacobian (k^2) in score function
+logical, parameter :: ONE_HEMISPHERE_ONLY = .false. !< only consider one hemisphere in coarse search
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -126,6 +127,14 @@ contains
         ! projection directions in discrete search
         call espace%new(NPROJ)
         call espace%spiral
+        if (ONE_HEMISPHERE_ONLY) then
+            do iproj = 1, NPROJ
+                if (espace%e2get(iproj) < 90.) then
+                    ffromto(2) = iproj
+                    exit
+                end if
+            end do
+        end if
         ! count # in-plane angles
         if( SRCH_INPL )then
             n_inpls = 0
