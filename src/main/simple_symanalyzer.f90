@@ -17,6 +17,8 @@ logical, parameter :: WRITE_VOLUMES      = .false.
 real,    parameter :: SHSRCH_HWDTH       = 4.0
 real,    parameter :: ZSCORE_LBOUND_PEAK = 1.0
 real,    parameter :: ZSCORE_LBOUND_C1   = 2.9
+integer, parameter :: MAXKMIT            = 20
+integer, parameter :: NCLS               = 4
 integer            :: nsym       ! total number of symmetries considered
 integer            :: kfromto(2) ! Fourier index range
 
@@ -143,13 +145,13 @@ contains
         character(len=3), intent(out)   :: pgrp_out
         type(sym_stats), allocatable    :: pgrps(:)
         real,    allocatable  :: ccs(:), zscores(:)
-        integer, allocatable  :: peaks(:)
+        integer, allocatable  :: peaks(:), labels(:)
         type(sym)             :: symobj
         character(len=STDLEN) :: errmsg
         character(len=3)      :: pgrp_sub
-        integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, isub
+        integer :: ncsym, icsym, cnt, idsym, j, ldim(3), nsub, isub, npeaks
         integer :: isym, jsym, filtsz, iisym, fnr, highest_pgrp_detected
-        real    :: smpd
+        real    :: smpd, means(NCLS)
         ! get info from vol_in
         smpd       = vol_in%get_smpd()
         filtsz     = vol_in%get_filtsz()
@@ -206,11 +208,24 @@ contains
             peaks    = 0
             peaks(1) = 1
         else ! identify symmetry peaks
-            where( zscores >= ZSCORE_LBOUND_PEAK )
-                peaks = 1
-            elsewhere
-                peaks = 0
-            endwhere
+            npeaks = count(zscores >= ZSCORE_LBOUND_PEAK)
+            if( npeaks == 0 )then
+                ! peak detection by clustering
+                call sortmeans(zscores, MAXKMIT, means, labels)
+                where( labels == NCLS )
+                    peaks = 1
+                elsewhere
+                    peaks = 0
+                endwhere
+                deallocate(labels)
+            else
+                ! peak detection by tresholding
+                where( zscores >= ZSCORE_LBOUND_PEAK )
+                    peaks = 1
+                elsewhere
+                    peaks = 0
+                endwhere
+            endif
         endif
         ! output
         call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
