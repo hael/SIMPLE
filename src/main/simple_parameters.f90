@@ -221,7 +221,6 @@ type :: parameters
     integer :: extr_iter=1
     integer :: find=1              !< Fourier index
     integer :: nframesgrp=0        !< # frames to group before motion_correct(Falcon 3){0}
-    integer :: fromf=1             !< start frame index
     integer :: fromp=1             !< start ptcl index
     integer :: fstep=1
     integer :: grow=0              !< # binary layers to grow(in pixels)
@@ -293,7 +292,6 @@ type :: parameters
     integer :: szsn=SZSN_INIT      !< size of stochastic neighborhood{5}
     integer :: time_inactive=7200  !< end time limit(secs)
     integer :: tofny=0
-    integer :: tof=1               !< stop frame index
     integer :: top=1
     integer :: tos=1
     integer :: trsstep=1
@@ -654,7 +652,6 @@ contains
         call check_iarg('extr_iter',      self%extr_iter)
         call check_iarg('find',           self%find)
         call check_iarg('nframesgrp',     self%nframesgrp)
-        call check_iarg('fromf',          self%fromf)
         call check_iarg('fromp',          self%fromp)
         call check_iarg('fstep',          self%fstep)
         call check_iarg('grow',           self%grow)
@@ -710,7 +707,6 @@ contains
         call check_iarg('stepsz',         self%stepsz)
         call check_iarg('szsn',           self%szsn)
         call check_iarg('time_inactive',  self%time_inactive)
-        call check_iarg('tof',            self%tof)
         call check_iarg('top',            self%top)
         call check_iarg('tos',            self%tos)
         call check_iarg('trsstep',        self%trsstep)

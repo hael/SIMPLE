@@ -20,11 +20,11 @@ character(len=*), parameter :: speckind = 'sqrt'
 type :: motion_correct_iter
     private
     ! these image objects are part of the instance to avoid excessive memory re-allocations
-    type(image) :: moviesum, moviesum_corrected, moviesum_corrected_frames
+    type(image) :: moviesum, moviesum_corrected
     type(image) :: moviesum_ctf, pspec_sum, pspec_ctf, img_jpg
     type(image) :: pspec_half_n_half, thumbnail
     ! these strings are part of the instance for reporting purposes
-    character(len=STDLEN) :: moviename, moviename_intg, moviename_intg_frames
+    character(len=STDLEN) :: moviename, moviename_intg
     character(len=STDLEN) :: moviename_forctf, moviename_thumb
   contains
     procedure :: iterate
@@ -67,10 +67,6 @@ contains
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)
         self%moviename_thumb  = trim(dir_out)//trim(adjustl(fbody_here))//THUMBNAIL_SUFFIX//trim(JPG_EXT)
-        if( cline%defined('tof') )then
-            self%moviename_intg_frames = trim(dir_out)//trim(adjustl(fbody_here))//'_frames'//int2str(params_glob%fromf)//'-'&
-            &//int2str(params_glob%tof)//INTGMOV_SUFFIX//params_glob%ext
-        endif
         ! determines whether to perform patch-based step & patch size
         if( params_glob%mcpatch.eq.'yes' )then
             if( .not.cline%defined('nxpatch') )then
@@ -96,9 +92,11 @@ contains
         endif
         ! execute the motion_correction
         if( cline%defined('nsig') )then
-            call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname, nsig=params_glob%nsig)
+            call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts,&
+                &gainref_fname=gainref_fname, nsig=params_glob%nsig)
         else
-            call motion_correct_iso(self%moviename, ctfvars, shifts, gainref_fname)
+            call motion_correct_iso(self%moviename, ctfvars, bfac_here, shifts,&
+                &gainref_fname=gainref_fname)
         endif
         ! return shift stats
         nframes = size(shifts(:,1))
@@ -117,12 +115,7 @@ contains
             call motion_correct_iso_calc_sums_tomo(frame_counter, params_glob%time_per_frame,&
             &self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         else
-            if( cline%defined('tof') )then
-                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf,&
-                    &self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-            else
-                call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
-            endif
+            call motion_correct_iso_calc_sums(self%moviesum, self%moviesum_corrected, self%moviesum_ctf)
         endif
         call write_iso2star(star_fname, self%moviename, gainref_fname)
         ! destruct before anisotropic correction
@@ -133,12 +126,7 @@ contains
             call motion_correct_patched( bfac_here, goodnessoffit )
             patch_success = all(goodnessoffit < PATCH_FIT_THRESHOLD)
             if( patch_success )then
-                if( cline%defined('tof') )then
-                    call motion_correct_patched_calc_sums(self%moviesum_corrected_frames, [params_glob%fromf,params_glob%tof])
-                    call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
-                else
-                    call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf, [1,nframes])
-                endif
+                call motion_correct_patched_calc_sums(self%moviesum_corrected, self%moviesum_ctf)
                 call write_aniso2star
             else
                 THROW_WARN('Polynomial fitting to patch-determined shifts was of insufficient quality')
@@ -155,7 +143,6 @@ contains
         call self%pspec_sum%before_after(self%pspec_ctf, self%pspec_half_n_half)
         call self%pspec_half_n_half%scale_pspec4viz
         ! write output
-        if( cline%defined('tof') ) call self%moviesum_corrected_frames%write(self%moviename_intg_frames)
         call self%moviesum_corrected%write(self%moviename_intg)
         call self%moviesum_ctf%write(self%moviename_forctf)
         ! generate thumbnail
@@ -184,10 +171,6 @@ contains
         call make_relativepath(CWD_GLOB,self%moviename_thumb,rel_fname)
         call orientation%set('thumb',  trim(rel_fname))
         call orientation%set('imgkind', 'mic')
-        if( cline%defined('tof') )then
-            call make_relativepath(CWD_GLOB,self%moviename_intg_frames,rel_fname)
-            call orientation%set('intg_frames',  trim(rel_fname))
-        endif
         call make_relativepath(CWD_GLOB,star_fname,rel_fname)
         call orientation%set("mc_starfile",rel_fname)
         if( motion_correct_with_patched )then
@@ -207,8 +190,6 @@ contains
         select case( which )
             case('intg')
                 allocate(moviename, source=trim(self%moviename_intg))
-            case('intg_frames')
-                allocate(moviename, source=trim(self%moviename_intg_frames))
             case('forctf')
                 allocate(moviename, source=trim(self%moviename_forctf))
             case('thumb')

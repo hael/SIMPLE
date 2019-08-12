@@ -169,7 +169,6 @@ type(simple_input_param) :: focusmsk
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
-type(simple_input_param) :: fromf
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
@@ -227,7 +226,6 @@ type(simple_input_param) :: startype
 type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
 type(simple_input_param) :: time_per_image
-type(simple_input_param) :: tof
 type(simple_input_param) :: trs
 type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
@@ -740,8 +738,6 @@ contains
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
         call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
         call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
-        call set_param(fromf,          'fromf',        'num',    'First frame to include in subsum', 'First frame index to include in subsum', 'give index', .false., 1.)
-        call set_param(tof,            'tof',          'num',    'Last frame to include in subsum', 'Last frame index to include in subsum', 'give index', .false., 1.)
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
@@ -1971,10 +1967,9 @@ contains
         & dose_rate and exp_time are given the individual frames will be low-pass filtered accordingly&
         & (dose-weighting strategy). If scale is given, the movie will be Fourier cropped according to&
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
-        & be pre-averaged in the given chunk size (Falcon 3 movies). If fromf/tof are given, a&
-        & contiguous subset of frames will be averaged without any dose-weighting applied',&   ! descr_long
+        & be pre-averaged in the given chunk size (Falcon 3 movies).',&                        ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 7, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &1, 5, 0, 5, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -1991,10 +1986,8 @@ contains
         call motion_correct%set_input('srch_ctrls', 1, trs)
         call motion_correct%set_input('srch_ctrls', 2, startit)
         call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call motion_correct%set_input('srch_ctrls', 4, fromf)
-        call motion_correct%set_input('srch_ctrls', 5, tof)
-        call motion_correct%set_input('srch_ctrls', 6, nsig)
-        call motion_correct%set_input('srch_ctrls', 7, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 0.)
+        call motion_correct%set_input('srch_ctrls', 4, nsig)
+        call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
@@ -2211,7 +2204,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &3, 9, 0, 13, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 9, 0, 12, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2234,18 +2227,17 @@ contains
         call preprocess%set_input('srch_ctrls', 1, trs)
         call preprocess%set_input('srch_ctrls', 2, startit)
         call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call preprocess%set_input('srch_ctrls', 4, fromf)
-        call preprocess%set_input('srch_ctrls', 5, tof)
-        call preprocess%set_input('srch_ctrls', 6, nsig)
-        call preprocess%set_input('srch_ctrls', 7, dfmin)
-        call preprocess%set_input('srch_ctrls', 8, dfmax)
-        call preprocess%set_input('srch_ctrls', 9, astigtol)
-        call preprocess%set_input('srch_ctrls',10, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
-        call preprocess%set_input('srch_ctrls',11, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        call preprocess%set_input('srch_ctrls', 4, nsig)
+        call preprocess%set_input('srch_ctrls', 5, dfmin)
+        call preprocess%set_input('srch_ctrls', 6, dfmax)
+        call preprocess%set_input('srch_ctrls', 7, astigtol)
+        call preprocess%set_input('srch_ctrls', 8, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess%set_input('srch_ctrls', 9, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess%set_input('srch_ctrls',12, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess%set_input('srch_ctrls',13, pgrp)
-        preprocess%srch_ctrls(13)%required = .false.
+        call preprocess%set_input('srch_ctrls',10, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess%set_input('srch_ctrls',11, pgrp)
+        preprocess%srch_ctrls(11)%required = .false.
+        call preprocess%set_input('srch_ctrls', 12, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
@@ -2272,7 +2264,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &5, 12, 0, 14, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 12, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2305,19 +2297,18 @@ contains
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
         call preprocess_stream%set_input('srch_ctrls', 2, nsig)
         call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls', 4, fromf)
-        call preprocess_stream%set_input('srch_ctrls', 5, tof)
-        call preprocess_stream%set_input('srch_ctrls', 6, dfmin)
-        call preprocess_stream%set_input('srch_ctrls', 7, dfmax)
-        call preprocess_stream%set_input('srch_ctrls', 8, astigtol)
-        call preprocess_stream%set_input('srch_ctrls', 9, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',10, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
+        call preprocess_stream%set_input('srch_ctrls', 4, dfmin)
+        call preprocess_stream%set_input('srch_ctrls', 5, dfmax)
+        call preprocess_stream%set_input('srch_ctrls', 6, astigtol)
+        call preprocess_stream%set_input('srch_ctrls', 7, 'thres', 'num', 'Picking distance threshold','Picking distance filer (in pixels)', 'in pixels', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 8, 'rm_outliers', 'binary', 'Remove micrograph image outliers for picking',&
         & 'Remove micrograph image outliers for picking(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call preprocess_stream%set_input('srch_ctrls',11, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
-        call preprocess_stream%set_input('srch_ctrls',12, pgrp)
-        preprocess_stream%srch_ctrls(12)%required = .false.
-        call preprocess_stream%set_input('srch_ctrls',13, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',14, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 9, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
+        call preprocess_stream%set_input('srch_ctrls',10, pgrp)
+        preprocess_stream%srch_ctrls(10)%required = .false.
+        call preprocess_stream%set_input('srch_ctrls',11, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',12, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls',13, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)

@@ -521,6 +521,7 @@ contains
         if( .not. cline%defined('trs')     ) call cline%set('trs',        5.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
+        if( .not. cline%defined('bfac')    ) call cline%set('bfac',      50.)
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))

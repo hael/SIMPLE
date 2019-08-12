@@ -41,6 +41,7 @@ contains
     procedure          :: kill           => ftexp_shsrch_kill
     procedure          :: set_dims_and_alloc                 !< set dimensions from images and allocate tmp matrices
     procedure          :: set_shsrch_tol
+    procedure          :: set_factr_pgtol
     procedure          :: corr_shifted_cost_8                !< cost function for minimizer, f only
     procedure          :: corr_gshifted_cost_8               !< cost function for minimizer, gradient only
     procedure          :: corr_fdfshifted_cost_8             !< cost function for minimizer, f and gradient
@@ -180,10 +181,17 @@ contains
     end subroutine set_dims_and_alloc
 
     subroutine set_shsrch_tol( self, shsrch_tol )
-        class(ftexp_shsrch),     intent(inout) :: self
-        real,         intent(in)    :: shsrch_tol
+        class(ftexp_shsrch), intent(inout) :: self
+        real,                intent(in)    :: shsrch_tol
         self%shsrch_tol = shsrch_tol
     end subroutine set_shsrch_tol
+
+    subroutine set_factr_pgtol( self, factr, pgtol )
+        class(ftexp_shsrch), intent(inout) :: self
+        real(dp),            intent(in)    :: factr, pgtol
+        self%ospec%factr = factr
+        self%ospec%pgtol = pgtol
+    end subroutine set_factr_pgtol
 
     !> Cost function, double precision
     function ftexp_shsrch_cost_8( self, vec, D ) result( cost )

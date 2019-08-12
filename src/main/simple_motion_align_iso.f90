@@ -583,7 +583,7 @@ contains
         real, allocatable,       intent(out)   :: corrs(:)
         allocate( corrs(self%nframes), source=self%corrs )
     end subroutine motion_align_iso_get_corrs
-    
+
     subroutine motion_align_iso_get_opt_shifts( self, opt_shifts )
         class(motion_align_iso), intent(inout) :: self
         real, allocatable,       intent(out)   :: opt_shifts(:,:)

@@ -1,5 +1,7 @@
 module simple_ctf_estimate_fit
 include 'simple_lib.f08'
+!$ use omp_lib
+!$ use omp_lib_kinds
 use simple_oris,              only: oris
 use simple_image,             only: image
 use simple_ctf,               only: ctf
@@ -68,7 +70,6 @@ contains
     procedure          :: get_pspec
     procedure          :: get_ctfres
     ! CTF fitting
-    !procedure, private :: gen_centers
     procedure, private :: gen_resmsk
     procedure, private :: gen_tiles
     procedure          :: fit
@@ -226,37 +227,41 @@ contains
     ! stores tiled windows
     subroutine gen_tiles( self )
         class(ctf_estimate_fit), intent(inout) :: self
-        type(image), allocatable :: tmpimgs(:,:)
-        integer     :: xind,yind, i,j, firstx,lastx, firsty,lasty
+        type(image) :: tmpimgs(nthr_glob)
+        integer     :: xind,yind, i,j, firstx,lastx, firsty,lasty,ithr
         logical     :: outside
         self%ntiles(1) = floor(real(self%ldim_mic(1))/real(self%box/2))
         self%ntiles(2) = floor(real(self%ldim_mic(2))/real(self%box/2))
         allocate(self%tiles(self%ntiles(1),self%ntiles(2)),&
-            &self%tiles_centers(self%ntiles(1),self%ntiles(2),2),&
-            &tmpimgs(self%ntiles(1),self%ntiles(2)))
+            &self%tiles_centers(self%ntiles(1),self%ntiles(2),2))
         firstx = 1
         lastx  = self%ldim_mic(1)-self%box+1
         firsty = 1
         lasty  = self%ldim_mic(2)-self%box+1
-        !$omp parallel do collapse(2) default(shared) private(i,j,xind,yind,outside) &
+        do ithr=1,nthr_glob
+            call tmpimgs(ithr)%new(self%ldim_box, self%smpd, wthreads=.false.)
+        enddo
+        !$omp parallel do collapse(2) default(shared) private(ithr,i,j,xind,yind,outside) &
         !$omp schedule(static) proc_bind(close)
         do i = 1,self%ntiles(1)
             do j = 1,self%ntiles(2)
+                ithr = omp_get_thread_num() + 1
                 xind = firstx + floor(real((i-1)*(lastx-firstx))/real(self%ntiles(1)-1)) - 1
                 yind = firsty + floor(real((j-1)*(lasty-firsty))/real(self%ntiles(2)-1)) - 1
                 self%tiles_centers(i,j,:) = [xind,yind]+self%box/2+1
-                call tmpimgs(i,j)%new(self%ldim_box, self%smpd, wthreads=.false.)
+                call tmpimgs(ithr)%zero_and_unflag_ft
                 call self%tiles(i,j)%new(self%ldim_box, self%smpd, wthreads=.false.)
-                call self%micrograph%window_slim([xind,yind],self%box,tmpimgs(i,j),outside)
-                call tmpimgs(i,j)%norm
-                call tmpimgs(i,j)%zero_edgeavg
-                call tmpimgs(i,j)%fft
-                call tmpimgs(i,j)%ft2img(SPECKIND, self%tiles(i,j))
-                call tmpimgs(i,j)%kill
+                call self%micrograph%window_slim([xind,yind],self%box,tmpimgs(ithr),outside)
+                call tmpimgs(ithr)%norm
+                call tmpimgs(ithr)%zero_edgeavg
+                call tmpimgs(ithr)%fft
+                call tmpimgs(ithr)%ft2img(SPECKIND, self%tiles(i,j))
             enddo
         enddo
         !$omp end parallel do
-        deallocate(tmpimgs)
+        do ithr=1,nthr_glob
+            call tmpimgs(ithr)%kill
+        enddo
     end subroutine gen_tiles
 
     ! GETTERS

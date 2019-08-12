@@ -93,6 +93,7 @@ contains
     procedure                           :: set_bfactor
     procedure                           :: get_poly4star
     procedure                           :: get_polyfit_chisq
+    procedure                           :: polytransfo
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: correct_polyn   => motion_patched_correct_polyn
     procedure                           :: kill            => motion_patched_kill
@@ -192,8 +193,7 @@ contains
         self%poly_chisq(1) = real(chisq)
         call svd_multifit(x,yy,sig,self%poly_coeffs(:,2),v,w,chisq,patch_poly)
         self%poly_chisq(2) = real(chisq)
-        self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) )
-        self%poly_chisq    = self%poly_chisq / params_glob%scale ! average difference in pixels
+        self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) ) ! average difference in pixels
     end subroutine fit_polynomial
 
     subroutine plot_shifts(self)
@@ -245,16 +245,10 @@ contains
                 ! centering to first frame for display only
                 shifts(:,1) = self%shifts_patches_for_fit(1,:,ipx,ipy)
                 shifts(:,2) = self%shifts_patches_for_fit(2,:,ipx,ipy)
-                if( self%frameweights(1) < 1.e-6 )then
-                    shifts(:,1) = shifts(:,1) - shifts(2,1)
-                    shifts(:,2) = shifts(:,2) - shifts(2,2)
-                    call self%get_local_shift(2,cx,cy, ref_shift)
-                    shifts(1,:) = 0.
-                else
-                    shifts(:,1) = shifts(:,1) - shifts(1,1)
-                    shifts(:,2) = shifts(:,2) - shifts(1,2)
-                    call self%get_local_shift(1,cx,cy, ref_shift)
-                endif
+                shifts(:,1) = shifts(:,1) - shifts(1,1)
+                shifts(:,2) = shifts(:,2) - shifts(1,2)
+                call self%get_local_shift(self%fixed_frame,cx,cy, ref_shift)
+                ref_shift = ref_shift - shifts(self%fixed_frame,:)
                 ! plot
                 call CDataSet__new(patch_start)
                 call CDataSet__SetDrawMarker(patch_start,C_TRUE)
@@ -354,6 +348,73 @@ contains
         shift(2) = apply_patch_poly(self%poly_coeffs(:,2), xx,yy,t)
     end subroutine get_local_shift
 
+    !>  Per frame real space polynomial interpolation
+    subroutine polytransfo( self, iframe, frame, frame_output )
+        class(motion_patched), intent(inout) :: self
+        integer,               intent(in)    :: iframe
+        type(image),           intent(inout) :: frame, frame_output
+        integer  :: i, j
+        real     :: coords(2), sh(2), shinterp(2)
+        type(rmat_ptr_type) :: rmat_in, rmat_out
+        call frame_output%new(self%ldim, self%smpd, wthreads=.false.)
+        call frame%ifft()
+        call frame%get_rmat_ptr(rmat_in%rmat_ptr)
+        call frame_output%get_rmat_ptr(rmat_out%rmat_ptr)
+        do i = 1, self%ldim(1)
+            do j = 1, self%ldim(2)
+                call self%get_local_shift(iframe, real(i), real(j), sh)
+                call self%get_local_shift(self%interp_fixed_frame, real(i), real(j), shinterp)
+                coords = real([i,j]) - sh + shinterp
+                rmat_out%rmat_ptr(i,j,1) = interp_bilin(coords(1), coords(2))
+            end do
+        end do
+
+    contains
+
+        pure real function interp_bilin( xval, yval )
+            real, intent(in) :: xval, yval
+            integer  :: x1_h,  x2_h,  y1_h,  y2_h
+            real     :: y1, y2, y3, y4, t, u
+            logical  :: outside
+            outside = .false.
+            x1_h = floor(xval)
+            x2_h = x1_h + 1
+            if( x1_h<1 .or. x2_h<1 )then
+                x1_h    = 1
+                outside = .true.
+            endif
+            if( x1_h>self%ldim(1) .or. x2_h>self%ldim(1) )then
+                x1_h    = self%ldim(1)
+                outside = .true.
+            endif
+            y1_h = floor(yval)
+            y2_h = y1_h + 1
+            if( y1_h<1 .or. y2_h<1 )then
+                y1_h    = 1
+                outside = .true.
+            endif
+            if( y1_h>self%ldim(2) .or. y2_h>self%ldim(2) )then
+                y1_h    = self%ldim(2)
+                outside = .true.
+            endif
+            if( outside )then
+                interp_bilin = rmat_in%rmat_ptr(x1_h, y1_h, 1)
+                return
+            endif
+            y1 = rmat_in%rmat_ptr(x1_h, y1_h, 1)
+            y2 = rmat_in%rmat_ptr(x2_h, y1_h, 1)
+            y3 = rmat_in%rmat_ptr(x2_h, y2_h, 1)
+            y4 = rmat_in%rmat_ptr(x1_h, y2_h, 1)
+            t   = xval - real(x1_h)
+            u   = yval - real(y1_h)
+            interp_bilin =  (1. - t) * (1. - u) * y1 + &
+                                 &t  * (1. - u) * y2 + &
+                                 &t  *       u  * y3 + &
+                           &(1. - t) *       u  * y4
+        end function interp_bilin
+
+    end subroutine polytransfo
+
     subroutine apply_polytransfo( self, frames, frames_output )
         class(motion_patched),    intent(inout) :: self
         type(image), allocatable, intent(inout) :: frames(:)
@@ -361,14 +422,16 @@ contains
         integer  :: i, j, iframe
         real     :: x, y, sh(2), shinterp(2)
         type(rmat_ptr_type) :: rmat_ins(self%nframes), rmat_outs(self%nframes)
+        !$omp parallel default(shared) private(iframe,j,i,sh,shinterp,x,y) proc_bind(close)
+        !$omp do schedule(static)
         do iframe = 1, self%nframes
-            call frames_output(iframe)%new(self%ldim, self%smpd)
-            if (frames(iframe)%is_ft()) call frames(iframe)%ifft()
+            call frames_output(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
+            call frames(iframe)%ifft()
             call frames(iframe)%get_rmat_ptr(rmat_ins(iframe)%rmat_ptr)
             call frames_output(iframe)%get_rmat_ptr(rmat_outs(iframe)%rmat_ptr)
         end do
-        !$omp parallel do collapse(3) default(shared) private(iframe,j,i,sh,shinterp,x,y)&
-        !$omp proc_bind(close) schedule(static)
+        !$omp end do
+        !$omp do collapse(3) schedule(static)
         do iframe = 1, self%nframes
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
@@ -380,7 +443,8 @@ contains
                 end do
             end do
         end do
-        !$omp end parallel do
+        !$omp end do
+        !$omp end parallel
     contains
 
         pure real function interp_bilin( xval, yval, iiframe )
@@ -844,11 +908,10 @@ contains
 
     ! EXECUTION ROUTINES
 
-    subroutine motion_patched_correct( self, hp, resstep, frames, frames_output, shift_fname, global_shifts )
+    subroutine motion_patched_correct( self, hp, resstep, frames, shift_fname, global_shifts )
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, resstep
         type(image),        allocatable, intent(inout) :: frames(:)
-        type(image),        allocatable, intent(inout) :: frames_output(:)
         character(len=:),   allocatable, intent(in)    :: shift_fname
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
@@ -882,18 +945,14 @@ contains
         call self%det_shifts(frames)
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
-        ! apply transformation
-        call self%apply_polytransfo(frames, frames_output)
         ! report visual results
         call self%plot_shifts()
     end subroutine motion_patched_correct
 
-    subroutine motion_patched_correct_polyn( self, hp, resstep, frames, frames_output, shift_fname, &
-        &refine_direct, global_shifts )
+    subroutine motion_patched_correct_polyn( self, hp, resstep, frames, shift_fname, refine_direct, global_shifts )
         class(motion_patched),           intent(inout) :: self
         real,                            intent(in)    :: hp, resstep
         type(image),        allocatable, intent(inout) :: frames(:)
-        type(image),        allocatable, intent(inout) :: frames_output(:)
         character(len=:),   allocatable, intent(in)    :: shift_fname
         logical,                         intent(in)    :: refine_direct
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
@@ -937,8 +996,6 @@ contains
         end if
         ! clean up align_iso_polyn_direct objects
         call self%cleanup_polyn()
-        ! apply transformation
-        call self%apply_polytransfo(frames, frames_output)
         ! report visual results
         call self%plot_shifts()
     end subroutine motion_patched_correct_polyn
@@ -1085,7 +1142,7 @@ contains
         case(2)
             call update_res( self%updateres(i,j) )
             call align_iso_polyn_direct%set_factr_pgtol(1d+6, 1d-6)
-        case DEFAULT            
+        case DEFAULT
             ! nothing to do
         end select
         if( self%updateres(i,j) > 2 .and. .not. didupdateres)then ! at least one iteration with new lim
