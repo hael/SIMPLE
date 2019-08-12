@@ -19,8 +19,8 @@ logical, parameter :: SRCH_INPL  = .false.
 integer, parameter :: NPROJ      = 1000
 integer, parameter :: NBEST      = 20
 integer, parameter :: ANGSTEP    = 5
-logical, parameter :: SCOREFUN_JACOB      = .false. !< use Jacobian (k^2) in score function
-logical, parameter :: ONE_HEMISPHERE_ONLY = .false. !< only consider one hemisphere in coarse search
+logical, parameter :: SCOREFUN_JACOB      = .true.  !< use Jacobian (k^2) in score function
+logical, parameter :: ONE_HEMISPHERE_ONLY = .true.  !< only consider one hemisphere in coarse search
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -75,7 +75,11 @@ contains
         ! make optimizer specs
         lims      = 0.
         lims(1,2) = 359.99
-        lims(2,2) = 180.
+        if( ONE_HEMISPHERE_ONLY )then
+            lims(2,2) = 90.
+        else
+            lims(2,2) = 180.
+        endif
         lims(3,2) = 359.99
         ! make parallel optimiser struct
         allocate(opt_symaxes(nthr_glob))
@@ -127,7 +131,7 @@ contains
         ! projection directions in discrete search
         call espace%new(NPROJ)
         call espace%spiral
-        if (ONE_HEMISPHERE_ONLY) then
+        if( ONE_HEMISPHERE_ONLY )then
             do iproj = 1, NPROJ
                 if (espace%e2get(iproj) < 90.) then
                     ffromto(2) = iproj
