@@ -19,6 +19,7 @@ logical, parameter :: SRCH_INPL  = .false.
 integer, parameter :: NPROJ      = 1000
 integer, parameter :: NBEST      = 20
 integer, parameter :: ANGSTEP    = 5
+logical, parameter :: SCOREFUN_JACOB = .false.      !< use Jacobian (k^2) in score function
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -223,7 +224,7 @@ contains
         complex :: sym_targets(nsym,kfromto(1):kfromto(2),nspace_nonred)
         complex :: sum_of_sym_targets(kfromto(1):kfromto(2),nspace_nonred)
         real    :: sqsum_targets(nsym), sqsum_sum
-        integer :: isym
+        integer :: isym, k
         sum_of_sym_targets = cmplx(0.,0.)
         do isym=1,nsym
             ! extracts Fourier component distribution @ symaxis @ symop isym
@@ -231,6 +232,12 @@ contains
             ! this is the correct order
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
             call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
+            if (SCOREFUN_JACOB) then
+              do k = kfromto(1),kfromto(2)
+                  sym_targets(isym,k,:) = sym_targets(isym,k,:) * real(k)
+              end do
+              sqsum_targets(isym) = sum(csq(sym_targets(isym,k,:)))
+            end if
             sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
         ! correlate with the average to score the symmetry axis
