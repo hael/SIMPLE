@@ -362,6 +362,20 @@ contains
         deallocate(str_tmp)
     end function int2str_pad
 
+    !>  \brief  pad string with spaces
+    function str_pad( str_in, len_padded ) result( str_out )
+        character(len=*), intent(in)  :: str_in
+        integer,          intent(in)  :: len_padded
+        character(len=:), allocatable :: str_out
+        integer :: slen
+        slen = len(str_in)
+        if( slen >= len_padded )then
+            str_out = str_in
+        else
+            str_out = str_in // spaces(len_padded - slen)
+        endif
+    end function str_pad
+
     !>  \brief  turns a string into an integer variable
     pure subroutine str2int( string, io_stat, ivar )
         character(len=*), intent(in)  :: string

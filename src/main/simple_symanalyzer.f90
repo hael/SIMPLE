@@ -231,7 +231,7 @@ contains
         call fopen(fnr, status='replace', file='symmetry_test_output.txt', action='write')
         write(fnr,'(a)') '>>> RESULTS RANKED ACCORDING TO DEGREE OF SYMMETRY'
         do isym=1,nsym
-            write(fnr,'(a,f5.2,a,f5.2,a,i1)') 'POINT-GROUP: '//trim(pgrps(isym)%str)//' CORRELATION: ',&
+            write(fnr,'(a,f5.2,a,f5.2,a,i1)') 'POINT-GROUP: '//str_pad(trim(pgrps(isym)%str), 3)//' CORRELATION: ',&
             &ccs(isym), ' Z-SCORE: ', zscores(isym), ' PEAK: ', peaks(isym)
             if( peaks(isym) == 1 ) highest_pgrp_detected = isym
         end do

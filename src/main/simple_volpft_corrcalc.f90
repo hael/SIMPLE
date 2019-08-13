@@ -47,7 +47,8 @@ type :: volpft_corrcalc
     procedure          :: kill
 end type volpft_corrcalc
 
-real, parameter :: i_startvec(3) = (/.2259467440, .3054884673, .9249998733/)  ! numerically found vector that will result in even sampling of unit sphere under i operations
+! numerically found vector that will result in even sampling of unit sphere under i operations
+real, parameter :: i_startvec(3) = (/.2259467440, .3054884673, .9249998733/)
 
 contains
 
