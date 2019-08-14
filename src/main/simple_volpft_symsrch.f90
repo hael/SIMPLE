@@ -16,7 +16,7 @@ private
 
 integer, parameter :: NPROJ = 1000
 integer, parameter :: NBEST = 10
-logical, parameter :: SCOREFUN_JACOB = .false.
+logical, parameter :: SCOREFUN_JACOB = .true.
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
