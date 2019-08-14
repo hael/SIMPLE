@@ -211,7 +211,6 @@ contains
         do ispace=1,self%nspace
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 self%vpft_ref(k,ispace) =&
-                ! self%vol_ref%interp_fcomp(self%locs_ref(k,ispace,:))
                 self%vol_ref%interp_fcomp_trilinear(self%locs_ref(k,ispace,:))
             end do
         end do
@@ -228,7 +227,6 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
-                ! vpft_target(k,ispace) = self%vol_target%interp_fcomp(loc)
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc)
             end do
         end do
@@ -246,7 +244,6 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 loc  = matmul(self%locs_ref_nonred(k,ispace,:),rmat)
-                ! vpft_target(k,ispace) = self%vol_target%interp_fcomp(loc) * self%vol_target%oshift(loc, shvec)
                 vpft_target(k,ispace) = self%vol_target%interp_fcomp_trilinear(loc) * self%vol_target%oshift(loc, shvec)
             end do
         end do
