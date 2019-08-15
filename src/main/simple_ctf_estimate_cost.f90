@@ -294,7 +294,7 @@ contains
         real,             optional, intent(in)    :: add_phshift !< aditional phase shift (radians), for phase plate
         real, pointer :: prmat(:,:,:)
         real          :: ang, spaFreqSq, hinv, aadd_phshift, kinv, inv_ldim(3)
-        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr
+        real(dp)      :: ctf_sqsum,dotproduct,tvalsq,tval,corr,fpen,rn
         integer       :: h,mh,k,mk, i,j, l
         ! initialize, it assumes that the reference(img) ins zero mean and
         ! unit variance over the resolution range
@@ -302,6 +302,7 @@ contains
         if( present(add_phshift) ) aadd_phshift = add_phshift
         call self%tfun%init(dfx, dfy, angast)
         call self%pspec%get_rmat_ptr(prmat)
+        rn = real(self%ninds,dp)
         mh = abs(self%flims(1,1))
         mk = abs(self%flims(2,1))
         inv_ldim   = 1./real(self%ldim)
@@ -328,9 +329,10 @@ contains
         end do
         !$omp end parallel do
         ! because reference is normalized (zero-mean, unit variance)
-        corr = dotproduct / dsqrt(ctf_sqsum*real(self%ninds,dp))
+        corr = dotproduct / dsqrt(ctf_sqsum*rn)
         ! cost
-        calc_cost2D = -real(corr,sp)
+        fpen = ((dfx-dfy)/self%astigtol)**2.d0 / (2.d0*rn)
+        calc_cost2D = -real(corr-fpen,sp)
     end function calc_cost2D
 
     ! 4D CONTINUOUS ROUTINES

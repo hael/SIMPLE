@@ -389,6 +389,7 @@ contains
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
         else
             updateres = 0
+            call align_iso%set_group_frames(.false.)
             call align_iso%set_frames(movie_frames_scaled, nframes)
             call align_iso%set_hp_lp(hp,lp)
             call align_iso%set_bfactor(bfactor)
@@ -399,7 +400,6 @@ contains
             call align_iso%set_shsrch_tol(TOL_ISO)
             call align_iso%set_fitshifts(FITSHIFTS)
             call align_iso%set_fixed_frame(fixed_frame)
-            call align_iso%set_group_frames(.false.)
             call align_iso%set_callback( motion_correct_iso_callback )
             call align_iso%align(callback_ptr)
             corr = align_iso%get_corr()

@@ -168,6 +168,7 @@ type(simple_input_param) :: eo
 type(simple_input_param) :: focusmsk
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
+type(simple_input_param) :: framesavg
 type(simple_input_param) :: frcs
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
@@ -177,6 +178,7 @@ type(simple_input_param) :: lp
 type(simple_input_param) :: lp_backgr
 type(simple_input_param) :: lplim_crit
 type(simple_input_param) :: maxits
+type(simple_input_param) :: mcpatch
 type(simple_input_param) :: mirr
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
@@ -192,6 +194,8 @@ type(simple_input_param) :: nsig
 type(simple_input_param) :: nspace
 type(simple_input_param) :: nthr
 type(simple_input_param) :: numlen
+type(simple_input_param) :: nxpatch
+type(simple_input_param) :: nypatch
 type(simple_input_param) :: objfun
 type(simple_input_param) :: oritab
 type(simple_input_param) :: oritab2
@@ -736,6 +740,10 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
+        call set_param(framesavg,      'framesavg',    'binary', 'Motion correction frames averaging', 'Whether to perform frames averaging during motion correction(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
+        call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{3}', .false., 3.)
+        call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{3}', .false., 3.)
         call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
         call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
@@ -1969,7 +1977,7 @@ contains
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&                        ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 5, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &1, 5, 0, 9, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -1987,7 +1995,11 @@ contains
         call motion_correct%set_input('srch_ctrls', 2, startit)
         call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
         call motion_correct%set_input('srch_ctrls', 4, nsig)
-        call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
+        call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', '{50}', .false., 50.)
+        call motion_correct%set_input('srch_ctrls', 6, mcpatch)
+        call motion_correct%set_input('srch_ctrls', 7, nxpatch)
+        call motion_correct%set_input('srch_ctrls', 8, nypatch)
+        call motion_correct%set_input('srch_ctrls', 9, framesavg)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
@@ -2204,7 +2216,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in sequence',&
         &'simple_distr_exec',&                                                              ! executable
-        &3, 9, 0, 12, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        &3, 9, 0, 16, 5, 0, 2, .true.)                                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2238,6 +2250,10 @@ contains
         call preprocess%set_input('srch_ctrls',11, pgrp)
         preprocess%srch_ctrls(11)%required = .false.
         call preprocess%set_input('srch_ctrls', 12, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
+        call preprocess%set_input('srch_ctrls', 13, mcpatch)
+        call preprocess%set_input('srch_ctrls', 14, nxpatch)
+        call preprocess%set_input('srch_ctrls', 15, nypatch)
+        call preprocess%set_input('srch_ctrls', 16, framesavg)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
@@ -2264,7 +2280,7 @@ contains
         &'is a distributed workflow that executes motion_correct, ctf_estimate and pick'//& ! descr_long
         &' in streaming mode as the microscope collects the data',&
         &'simple_distr_exec',&                                                              ! executable
-        &5, 12, 0, 13, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
+        &5, 12, 0, 17, 5, 0, 2, .true.)                                                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call preprocess_stream%set_input('img_ios', 1, 'dir_movies', 'dir', 'Input movies directory', 'Where the movies ot process will squentially appear', 'e.g. data/', .true., 'preprocess/')
@@ -2309,6 +2325,10 @@ contains
         call preprocess_stream%set_input('srch_ctrls',11, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls',12, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls',13, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
+        call preprocess_stream%set_input('srch_ctrls',14, mcpatch)
+        call preprocess_stream%set_input('srch_ctrls',15, nxpatch)
+        call preprocess_stream%set_input('srch_ctrls',16, nypatch)
+        call preprocess_stream%set_input('srch_ctrls',17, framesavg)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
         &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)

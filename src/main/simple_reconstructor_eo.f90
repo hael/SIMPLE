@@ -441,7 +441,7 @@ contains
                 call self%even%clip(even)
                 call self%odd%clip(odd)
                 ! Randomize then calculate masked FSC
-                k_rand = get_lplim_at_corr(fsc_t, 0.8) ! determine randomization low-pass
+                k_rand = get_lplim_at_corr(fsc_t, ENVMSK_FSC_THRESH) ! randomization frequency
                 if( k_rand > filtsz-3 )then
                     ! reverts to sherical masking
                     call even%mask(self%msk, 'soft')

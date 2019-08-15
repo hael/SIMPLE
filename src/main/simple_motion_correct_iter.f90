@@ -62,7 +62,6 @@ contains
         endif
         ! star output
         star_fname = trim(dir_out)//trim(adjustl(fbody_here))//'.star'
-        !call starfile_table__new(mc_starfile)
         ! isotropic ones
         self%moviename_intg   = trim(dir_out)//trim(adjustl(fbody_here))//INTGMOV_SUFFIX//trim(params_glob%ext)
         self%moviename_forctf = trim(dir_out)//trim(adjustl(fbody_here))//FORCTF_SUFFIX//trim(params_glob%ext)

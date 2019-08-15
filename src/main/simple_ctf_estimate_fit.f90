@@ -19,6 +19,7 @@ private
 character(len=STDLEN), parameter :: SPECKIND = 'sqrt'
 real,                  parameter :: TOL      = 1.e-5
 integer,               parameter :: IARES = 5, NSTEPS = 200, POLYDIM = 10
+logical,               parameter :: DEBUG_HERE = .false.
 
 type ctf_estimate_fit
     private
@@ -89,6 +90,7 @@ contains
     procedure, private :: gen_ctf_extrema
     procedure          :: write_diagnostic
     procedure, private :: ctf2pspecimg
+    procedure, private :: calc_tilt
     ! polynomial fitting
     procedure, private :: fit_polynomial
     procedure, private :: pix2poly
@@ -316,7 +318,6 @@ contains
         call self%grid_srch
         ! 3/4D refinement of grid solution
         call self%refine
-        call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
         ! calculate CTF stats
         call self%calc_ctfscore
         call self%calc_ctfres
@@ -332,7 +333,7 @@ contains
     subroutine fit_patches( self )
         class(ctf_estimate_fit), intent(inout) :: self
         type(ctf_estimate_cost4Dcont) :: costcont_patch(self%npatches(1),self%npatches(2))
-        real    :: limits(2,2), cc, sumw, w, dist
+        real    :: limits(2,2), cc, sumw, w, dist, tilt
         integer :: pi,pj,i,j
         if( self%ntotpatch <= 0 ) return
         limits(1,1) = max(self%df_lims(1),self%parms%dfx-1.)
@@ -350,7 +351,7 @@ contains
                     do j = 1,self%ntiles(2)
                         dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
                         w    = exp(-1.*(dist/real(self%box))**2.)
-                        if( w < 5.e-3 ) cycle
+                        if( w < 1.e-2 ) cycle
                         sumw = sumw + w
                         call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
                     enddo
@@ -504,6 +505,73 @@ contains
         self%ctfscore = real(count(corrs(hpfind:lpfind) > 0.)) / real(lpfind-hpfind+1)
     end subroutine calc_ctfscore
 
+    ! calculate micrograph tilt
+    subroutine calc_tilt( self, tilt )
+        class(ctf_estimate_fit), intent(inout) :: self
+        real,                    intent(inout) :: tilt
+        real     :: normal(3), cross(3), ref(3)
+        real(dp) :: x,y,z, sum_xx,sum_xy,sum_yy,sum_xz,sum_yz,sum_zz,detx,dety,detz,center(3)
+        integer :: pi,pj
+        tilt = 0.
+        if( self%ntotpatch == 0 )return
+        ref    = [0.,0.,1.]
+        center = 0.d0
+        do pi = 1,self%npatches(1)
+            do pj = 2,self%npatches(2)
+                center(3) = center(3) + real((self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.,dp)
+            enddo
+        enddo
+        center(3) = center(3) / real(self%ntotpatch,dp)
+        sum_xx = 0.d0
+        sum_xy = 0.d0
+        sum_yy = 0.d0
+        sum_xz = 0.d0
+        sum_yz = 0.d0
+        do pi = 1,self%npatches(1)
+            do pj = 2,self%npatches(2)
+                call self%pix2poly(real(self%centers(pi,pj,1),dp),real(self%centers(pi,pj,2),dp), x,y)
+                z = real((self%parms_patch(pi,pj)%dfx+self%parms_patch(pi,pj)%dfy)/2.,dp)
+                x = x - center(1)
+                y = y - center(2)
+                z = z - center(3)
+                sum_xx = sum_xx + x*x
+                sum_xy = sum_xy + x*y
+                sum_yy = sum_yy + y*y
+                sum_xz = sum_xz + x*z
+                sum_yz = sum_yz + y*z
+                sum_zz = sum_zz + z*z
+            enddo
+        enddo
+        detx = sum_yy*sum_zz - sum_yz*sum_yz
+        dety = sum_xx*sum_zz - sum_xz*sum_xz
+        detz = sum_xx*sum_yy - sum_xy*sum_xy
+        if( maxval([detx,dety,detz]) < 1.d-6 )then
+            THROW_WARN('No plane detected')
+            tilt = 0.
+            return
+        endif
+        select case( maxloc([detx,dety,detz],dim=1) )
+            case(1)
+                normal(1) = real(detx)
+                normal(2) = real(sum_xz*sum_yz - sum_xy*sum_zz)
+                normal(3) = real(sum_xy*sum_yz - sum_xz*sum_yy)
+            case(2)
+                normal(1) = real(sum_xz*sum_yz - sum_xy*sum_zz)
+                normal(2) = real(dety)
+                normal(3) = real(sum_xy*sum_xz - sum_yz*sum_xx)
+            case(3)
+                normal(1) = real(sum_xy*sum_yz - sum_xz*sum_yy)
+                normal(2) = real(sum_xy*sum_xz - sum_yz*sum_xx)
+                normal(3) = real(detz)
+        end select
+        normal   = normal / sqrt(sum(normal**2.))
+        cross(1) = ref(2)*normal(3) - ref(3)*normal(2)
+        cross(2) = ref(3)*normal(1) - ref(1)*normal(3)
+        cross(3) = ref(1)*normal(2) - ref(2)*normal(1)
+        tilt     = atan2(sqrt(sum(cross**2.)), dot_product(ref,normal))
+        tilt     = rad2deg(tilt)
+    end subroutine calc_tilt
+
     ! make & write half-n-half diagnostic
     subroutine write_diagnostic( self, diagfname )
         class(ctf_estimate_fit), intent(inout) :: self
@@ -576,6 +644,7 @@ contains
         endif
         call self%cost2D%minimize(self%parms, self%cc_fit)
         call self%cost2D%kill
+        call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
         ! refined solution & without circular issue
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
@@ -592,6 +661,7 @@ contains
         endif
         call self%costcont%minimize(self%parms, self%cc_fit)
         call self%costcont%kill
+        call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
     end subroutine refine
 
     subroutine subtr_backgr( self, img )
@@ -1133,8 +1203,13 @@ contains
         class(ctf_estimate_fit), intent(inout) :: self
         character(len=*),        intent(in)    :: moviename, fname
         type(oris) :: os
-        integer    :: i
-        call os%new(3)
+        real(dp)   :: x,y
+        integer    :: i,pi,pj,cnt
+        if( DEBUG_HERE )then
+            call os%new(3+self%ntotpatch)
+        else
+            call os%new(3)
+        endif
         call os%set(1,'smpd',    self%parms%smpd)
         call os%set(1,'cs',      self%parms%cs)
         call os%set(1,'kv',      self%parms%kv)
@@ -1149,6 +1224,7 @@ contains
         call os%set(1,'ctfres',  self%ctfres)
         call os%set(1,'ctfscore',self%ctfscore)
         call os%set(1,'ctfcc',   self%cc_fit)
+        call os%set(1,'npatch',  real(self%ntotpatch))
         if( self%parms%l_phaseplate )then
             call os%set(1,'phaseplate','yes')
         else
@@ -1158,6 +1234,19 @@ contains
             call os%set(2,'px'//int2str(i),real(self%polyx(i)))
             call os%set(3,'py'//int2str(i),real(self%polyy(i)))
         enddo
+        if( DEBUG_HERE )then
+            cnt = 3
+            do pi=1,self%npatches(1)
+                do pj=1,self%npatches(2)
+                    cnt = cnt+1
+                    call self%pix2poly(real(self%centers(pi,pj,1),dp), real(self%centers(pi,pj,2),dp), x,y)
+                    call os%set(cnt,'x',real(x))
+                    call os%set(cnt,'y',real(y))
+                    call os%set(cnt,'dfx',self%parms_patch(pi,pj)%dfx)
+                    call os%set(cnt,'dfy',self%parms_patch(pi,pj)%dfy)
+                enddo
+            enddo
+        endif
         call os%write(fname)
         call os%kill
     end subroutine write_doc

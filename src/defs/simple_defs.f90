@@ -142,6 +142,7 @@ real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht
 real, parameter    :: STREAM_SRCHFRAC      = 0.2       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: STREAM_INPLFRAC      = 0.2       !< fraction of times in-plane search is performed in the pool
 real, parameter    :: MC_PATCHSZ           = 1024.     !< recommended patch size (in pixels) for motion correction
+real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 
 ! integer #/threshold constants
 integer, parameter :: LPLIM1ITERBOUND      = 5         !< # iteration bound lplim stage 1 (PRIME2D)

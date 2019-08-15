@@ -698,6 +698,7 @@ contains
                 ! init
                 call self%gen_patch(frames,i,j)
                 call self%align_iso(i,j)%new
+                call self%align_iso(i,j)%set_group_frames(trim(params_glob%framesavg).eq.'yes')
                 call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
                 if( self%has_frameweights )then
                     call self%align_iso(i,j)%set_frameweights_callback(frameweights_callback_wrapper)
