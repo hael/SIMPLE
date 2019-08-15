@@ -16,6 +16,7 @@ private
 
 integer, parameter :: NPROJ = 1000
 integer, parameter :: NBEST = 10
+logical, parameter :: SCOREFUN_JACOB = .false.
 
 type opt4openMP
     type(opt_spec)            :: ospec              !< optimizer specification object
@@ -187,6 +188,12 @@ contains
             ! this is the correct order
             rmat = matmul(sym_rmats(isym,:,:), rmat_symaxis)
             call vpftcc%extract_target(rmat, sym_targets(isym,:,:), sqsum_targets(isym))
+            if( SCOREFUN_JACOB )then
+                do k = kfromto(1),kfromto(2)
+                    sym_targets(isym,k,:) = sym_targets(isym,k,:) * real(k)
+                end do
+                sqsum_targets(isym) = sum(csq(sym_targets(isym,:,:)))
+            end if
             sum_of_sym_targets = sum_of_sym_targets + sym_targets(isym,:,:)
         end do
         ! correlate with the average to score the symmetry axis
