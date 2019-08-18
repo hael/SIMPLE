@@ -61,7 +61,7 @@ contains
                 if( self%s%npeaks == 1 )then
                     if( self%s%nbetter > 0 ) exit
                 else
-                    if( self%s%nbetter >= RANDOMNESS_FAC .and. self%s%nrefs_eval >= NPROJPEAKS ) exit
+                    if( self%s%nbetter >= params_glob%rndfac .and. self%s%nrefs_eval >= NPROJPEAKS ) exit
                 endif
             end do
             call sort_corrs(self%s)  ! sort in correlation projection direction space

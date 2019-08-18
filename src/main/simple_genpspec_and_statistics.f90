@@ -100,7 +100,7 @@ contains
     function get_output(self) result(keep_mic)
         class(pspec_statistics), intent(inout) :: self
         logical :: keep_mic
-        if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat 
+        if(DEBUG_HERE) write(logfhandle,*) 'score = ',self%score, 'avg_curvat = ', self%avg_curvat
         if(self%score > THR_SCORE_UP .and. self%avg_curvat < THR_CURVAT_UPUP) then
             keep_mic = .true.
             return
@@ -169,7 +169,7 @@ contains
         class(pspec_statistics), intent(inout) :: self
         character(len = 100) :: iom
         integer              :: status
-        open(unit = 17, access = 'sequential', action = 'read(write)',file = trim(self%fbody)//"PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
+        open(unit = 17, access = 'sequential', action = 'readwrite',file = trim(self%fbody)//"PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
         write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>POWER SPECTRA STATISTICS>>>>>>>>>>>>>>>>>>'
         write(unit = 17, fmt = '(a)') ''
         write(unit = 17, fmt = "(a,a)")  'Input mic  ', trim(self%fbody)

@@ -285,6 +285,7 @@ type :: parameters
     integer :: recl_cgrid=-1
     integer :: ring1=2
     integer :: ring2=0
+    integer :: rndfac=RANDOMNESS_FAC !< randomness factor in stochastic search, the higher the greedier
     integer :: spec=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
@@ -703,6 +704,7 @@ contains
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
+        call check_iarg('rndfac',         self%rndfac)
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
         call check_iarg('state2split',    self%state2split)
