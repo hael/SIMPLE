@@ -770,7 +770,7 @@ contains
             call cline_symsrch%set('msk',      msk)
             call cline_symsrch%set('smpd',     work_proj1%get_smpd())
             call cline_symsrch%set('projfile', trim(WORK_PROJFILE))
-            call cline_symsrch%set('cenlp',    CENLP)
+            if( .not. cline_symsrch%defined('cenlp') ) call cline_symsrch%set('cenlp', CENLP)
             call cline_symsrch%set('hp',       params%hp)
             call cline_symsrch%set('lp',       lplims(1))
             call cline_symsrch%set('oritype',  'ptcl3D')
