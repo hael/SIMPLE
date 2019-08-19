@@ -74,7 +74,7 @@ logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
 logical, parameter :: DO_PATCHED_POLYN              = .false.  !< run polynomially constrained motion correction for patch-based motion correction
 logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.  !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
-logical, parameter :: HYBRID_CORRELATION_SEARCH     = .true.   !< semi discrete phase correlation followed by continuous correlation search
+logical, parameter :: HYBRID_CORRELATION_SEARCH     = .false.  !< semi discrete phase correlation followed by continuous correlation search
 contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION

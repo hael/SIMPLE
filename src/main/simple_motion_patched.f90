@@ -24,7 +24,7 @@ real,    parameter :: TRS_DEFAULT    = 5.
 integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 real,    parameter :: DIRECT_FTOL    = 1e-7
 real,    parameter :: DIRECT_GTOL    = 1e-7
-logical, parameter :: HYBRID_CORRELATION_SEARCH = .true.  !< semi discrete phase correlation followed by continuous correlation search
+logical, parameter :: HYBRID_CORRELATION_SEARCH = .false.  !< semi discrete phase correlation followed by continuous correlation search
 
 
 type :: rmat_ptr_type
