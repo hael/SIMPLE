@@ -140,7 +140,7 @@ contains
                         if( l_bfac )then
                             ! b-factor weight
                             spafreq_sq = real(sqarg) / spafreq_denom_sq
-                            w =  max(0.,min(1.,exp(-0.25*bfac*spafreq_sq))) != exp(-B/4*spafreq_sq)
+                            w =  max(0.,min(1.,exp(-0.125*bfac*spafreq_sq))) != sqrt(exp(-B/4*spafreq_sq))
                             self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
                         else
                             self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)

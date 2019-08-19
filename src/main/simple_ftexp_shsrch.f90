@@ -94,7 +94,7 @@ contains
     !> Main search routine
     function ftexp_shsrch_minimize( self, prev_corr, prev_shift ) result( cxy )
         class(ftexp_shsrch), intent(inout) :: self
-        real, optional,      intent(in) :: prev_corr, prev_shift(2)
+        real, optional,      intent(in)    :: prev_corr, prev_shift(2)
         real :: cxy(3)
         self%ospec%limits(1,1) = - self%maxHWshift
         self%ospec%limits(1,2) =   self%maxHWshift

@@ -77,7 +77,8 @@ contains
     procedure          :: set_rmat
     procedure, private :: set_cmat_1
     procedure, private :: set_cmat_2
-    generic            :: set_cmat => set_cmat_1, set_cmat_2
+    procedure, private :: set_cmat_3
+    generic            :: set_cmat => set_cmat_1, set_cmat_2, set_cmat_3
     procedure, private :: set_cmat_at_1
     procedure, private :: set_cmat_at_2
     generic            :: set_cmat_at => set_cmat_at_1, set_cmat_at_2
@@ -1295,6 +1296,13 @@ contains
         self%cmat = cval
     end subroutine set_cmat_2
 
+    pure subroutine set_cmat_3( self, self2copy )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self2copy
+        self%ft   = .true.
+        self%cmat = self2copy%cmat
+    end subroutine set_cmat_3
+
     ! set comp to cmat at index phys
     subroutine set_cmat_at_1( self , phys , comp)
         class(image), intent(inout) :: self
@@ -1808,7 +1816,7 @@ contains
         if( self%ft )then
             if( self%ldim(3) == 1 ) sect_here = 0
             fplane = self%expand_ft()
-            if(geomorsphr)then
+            if(geomorsphr_here)then
                 call gnufor_image(real(fplane), palette='gray')
                 call gnufor_image(aimag(fplane), palette='gray')
             else
@@ -5761,12 +5769,9 @@ contains
         endif
     end function corr_shifted
 
-
-
     !>  \brief is for calculating a real-space correlation coefficient between images
     !! \param self1,self2 image objects
     !! \return  r correlation coefficient
-    !!
     function real_corr_1( self1, self2 ) result( r )
         class(image), intent(inout) :: self1, self2
         real    :: diff1(self1%ldim(1),self1%ldim(2),self1%ldim(3)), diff1sc

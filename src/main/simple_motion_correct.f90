@@ -6,6 +6,7 @@ include 'simple_lib.f08'
 use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,                only: motion_patched
 use simple_motion_align_iso,              only: motion_align_iso
+use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
 !use simple_motion_align_iso_direct,       only: motion_align_iso_direct
 use simple_image,                         only: image
@@ -73,7 +74,7 @@ logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
 logical, parameter :: DO_PATCHED_POLYN              = .false.  !< run polynomially constrained motion correction for patch-based motion correction
 logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.  !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
-
+logical, parameter :: HYBRID_CORRELATION_SEARCH     = .true.   !< semi discrete phase correlation followed by continuous correlation search
 contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
@@ -354,6 +355,7 @@ contains
         real                                :: ave, sdev, var, minw, maxw, corr, nsig_here
         logical                             :: err, err_stat
         type(motion_align_iso)              :: align_iso
+        type(motion_align_hybrid)           :: hybrid_srch
         type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
         class(*), pointer                   :: callback_ptr
         callback_ptr => null()
@@ -361,7 +363,11 @@ contains
         if (ISO_POLYN_DIRECT) then
             call align_iso_polyn_direct%new
         else
-            call align_iso%new
+            if( HYBRID_CORRELATION_SEARCH )then
+                ! later
+            else
+                call align_iso%new
+            endif
         end if
         nsig_here = NSIGMAS
         if( present(nsig) ) nsig_here = nsig
@@ -387,31 +393,50 @@ contains
             allocate(shifts(nframes,2), source=opt_shifts)
             call align_iso_polyn_direct%get_weights(frameweights)
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
+            call align_iso%kill
         else
-            updateres = 0
-            call align_iso%set_group_frames(.false.)
-            call align_iso%set_frames(movie_frames_scaled, nframes)
-            call align_iso%set_hp_lp(hp,lp)
-            call align_iso%set_bfactor(bfactor)
-            call align_iso%set_trs(params_glob%scale*params_glob%trs)
-            call align_iso%set_smallshift(SMALLSHIFT)
-            call align_iso%set_rand_init_shifts(.true.)
-            call align_iso%set_ftol_gtol(TOL_ISO, TOL_ISO)
-            call align_iso%set_shsrch_tol(TOL_ISO)
-            call align_iso%set_fitshifts(FITSHIFTS)
-            call align_iso%set_fixed_frame(fixed_frame)
-            call align_iso%set_callback( motion_correct_iso_callback )
-            call align_iso%align(callback_ptr)
-            corr = align_iso%get_corr()
+            if( HYBRID_CORRELATION_SEARCH )then
+                call hybrid_srch%new(movie_frames_scaled)
+                call hybrid_srch%set_group_frames(.false.)
+                call hybrid_srch%set_hp_lp(hp,lp)
+                call hybrid_srch%set_bfactor(bfactor)
+                call hybrid_srch%set_trs(params_glob%scale*30.)
+                call hybrid_srch%set_rand_init_shifts(.true.)
+                call hybrid_srch%set_shsrch_tol(TOL_ISO)
+                call hybrid_srch%set_fitshifts(FITSHIFTS)
+                call hybrid_srch%set_fixed_frame(fixed_frame)
+                call hybrid_srch%align
+                corr = hybrid_srch%get_corr()
+                call hybrid_srch%get_opt_shifts(opt_shifts)
+                call hybrid_srch%get_weights(frameweights)
+                call hybrid_srch%get_shifts_toplot(shifts_toplot)
+                call hybrid_srch%kill
+            else
+                updateres = 0
+                call align_iso%set_group_frames(.false.)
+                call align_iso%set_frames(movie_frames_scaled, nframes)
+                call align_iso%set_hp_lp(hp,lp)
+                call align_iso%set_bfactor(bfactor)
+                call align_iso%set_trs(params_glob%scale*params_glob%trs)
+                call align_iso%set_smallshift(SMALLSHIFT)
+                call align_iso%set_rand_init_shifts(.true.)
+                call align_iso%set_ftol_gtol(TOL_ISO, TOL_ISO)
+                call align_iso%set_shsrch_tol(TOL_ISO)
+                call align_iso%set_fitshifts(FITSHIFTS)
+                call align_iso%set_fixed_frame(fixed_frame)
+                call align_iso%set_callback( motion_correct_iso_callback )
+                call align_iso%align(callback_ptr)
+                corr = align_iso%get_corr()
+                call align_iso%get_opt_shifts(opt_shifts)
+                call align_iso%get_weights(frameweights)
+                call align_iso%get_shifts_toplot(shifts_toplot)
+                call align_iso%kill
+            endif
             if( corr < 0. )then
                write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
                THROW_WARN('OPTIMAL CORRELATION < 0.0')
             endif
-            call align_iso%get_opt_shifts(opt_shifts)
-            if( allocated(shifts) ) deallocate(shifts)
-            allocate(shifts(nframes,2), source=opt_shifts)
-            call align_iso%get_weights(frameweights)
-            call align_iso%get_shifts_toplot(shifts_toplot)
+            shifts = opt_shifts
         end if
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
@@ -422,8 +447,6 @@ contains
         write(logfhandle,'(a,7x,f7.4)') '>>> MAX WEIGHT     :', maxw
         ! report the sampling distance of the possibly scaled movies
         ctfvars%smpd = smpd_scaled
-        ! cleanup
-        call align_iso%kill
     end subroutine motion_correct_iso
 
     ! generates sums & shift frames
