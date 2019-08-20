@@ -1266,7 +1266,7 @@ contains
         ! check number of peaks
         if(self%npeaks<=0) THROW_HARD('Invalid number of peaks')
         if(self%ninplpeaks<=0 .or. self%ninplpeaks>NINPLPEAKS2SORT)&
-            &THROW_HARD('Invalid number of peaks')
+            &THROW_HARD('Invalid number of in-plane peaks')
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
             self%nran = self%nptcls
