@@ -167,6 +167,9 @@ real, parameter    :: SIGMA2_FUDGE_DEFAULT = 50.       !< controls the sharpenes
                                                        !! smaller number means sharper distribution
 real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
                                                        !! smaller number means sharper distribution
+! Graphene
+real, parameter    :: GRAPHENE_BAND1       = 2.13      !< graphene band 1 for omission in score function
+real, parameter    :: GRAPHENE_BAND2       = 1.23      !< graphene band 2 for omission in score function
 
 ! C-compatible boolean constants
 logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)

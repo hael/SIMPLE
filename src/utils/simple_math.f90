@@ -1117,12 +1117,10 @@ contains
         end do
     end function get_lplim_at_corr
 
-    !>   returns the Fourier index of resolution \f$ (\si{\per\angstrom}) \f$
-    !< \param smpd pixel size
-    !! \param res resolution \f$ (\si{\angstrom}) \f$
+    !>   returns the Fourier index of resolution
     integer pure function calc_fourier_index( res, box, smpd )
         real, intent(in)    :: res, smpd
-        integer, intent(in) :: box       !< box size
+        integer, intent(in) :: box
         calc_fourier_index = nint((real(box-1)*smpd)/res)
     end function calc_fourier_index
 
@@ -1134,9 +1132,6 @@ contains
     end function calc_lowpass_lim
 
     !>  \brief get array of resolution steps
-    !> get_res
-    !! \return  res
-    !!
     function get_resarr( box, smpd ) result( res )
         integer, intent(in) :: box
         real,    intent(in) :: smpd
@@ -1149,6 +1144,29 @@ contains
             res(k) = calc_lowpass_lim(k, box, smpd)
         end do
     end function get_resarr
+
+    !> \brief get logical mask filtering out the Graphene bands
+    function calc_graphene_mask( box, smpd ) result( mask )
+        integer, intent(in)  :: box
+        real,    intent(in)  :: smpd
+        real,    allocatable :: res(:), sqdiff_band1(:), sqdiff_band2(:)
+        logical, allocatable :: mask(:)
+        integer, parameter   :: NBANDS = 3
+        integer              :: loc(NBANDS), n, i
+        res = get_resarr( box, smpd )
+        n   = size(res)
+        allocate(sqdiff_band1(n), source=(res - GRAPHENE_BAND1)**2.0)
+        allocate(sqdiff_band2(n), source=(res - GRAPHENE_BAND2)**2.0)
+        allocate(mask(n), source=.true.)
+        loc = minnloc(sqdiff_band1, NBANDS)
+        do i=1,NBANDS
+            mask(loc(i)) = .false.
+        end do
+        loc = minnloc(sqdiff_band2, NBANDS)
+        do i=1,NBANDS
+            mask(loc(i)) = .false.
+        end do
+    end function calc_graphene_mask
 
     ! LINEAR ALGEBRA STUFF
 
@@ -1685,10 +1703,10 @@ contains
         integer, intent(in) :: n
         real    :: arr(n), val
         integer :: loc(n), i, j, sz
-        logical :: val_lt(n)
+        logical :: val_gt(n)
         sz = size(rarr)
         if( sz < n )&
-        &call simple_exception('cannot identify more maxima than elements in the array; maxnloc_2', __FILENAME__ , __LINE__)
+        &call simple_exception('cannot identify more maxima than elements in the array; maxnloc', __FILENAME__ , __LINE__)
         loc = (/(i,i=1,n)/)
         arr = rarr(:n)
         call hpsort(arr, loc)
@@ -1696,7 +1714,45 @@ contains
         if( sz == n ) return
         do i=n+1,sz
             val    = rarr(i)
-            val_lt = val > rarr(loc)
+            val_gt = val > rarr(loc)
+            if( any(val_gt) )then
+                do j=1,n
+                    if( val_gt(j) )then
+                        if( j == 1 )then
+                            loc = [i,loc(1:n-1)]
+                            exit
+                        else if( j == n )then
+                            loc(n) = i
+                            exit
+                        else
+                            ! 1:j-1 untouched
+                            ! insert i @ location j
+                            ! j+1:n-1 forms the second part of the index array
+                            loc = [loc(1:j-1),i,loc(j:n-1)]
+                            exit
+                        endif
+                    endif
+                end do
+            endif
+        enddo
+    end function maxnloc
+
+    function minnloc( rarr, n ) result( loc )
+        real,    intent(in) :: rarr(:)
+        integer, intent(in) :: n
+        real    :: arr(n), val
+        integer :: loc(n), i, j, sz
+        logical :: val_lt(n)
+        sz = size(rarr)
+        if( sz < n )&
+        &call simple_exception('cannot identify more maxima than elements in the array; minnloc', __FILENAME__ , __LINE__)
+        loc = (/(i,i=1,n)/)
+        arr = rarr(:n)
+        call hpsort(arr, loc)
+        if( sz == n ) return
+        do i=n+1,sz
+            val    = rarr(i)
+            val_lt = val < rarr(loc)
             if( any(val_lt) )then
                 do j=1,n
                     if( val_lt(j) )then
@@ -1717,7 +1773,7 @@ contains
                 end do
             endif
         enddo
-    end function maxnloc
+    end function minnloc
 
     ! SEARCHING
 
@@ -2230,7 +2286,6 @@ contains
         x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
     end subroutine scale_vector
 
-
     ! Otsu's method
     ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
     ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
@@ -2469,7 +2524,7 @@ contains
           enddo
           e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: -sum(p*log2(p))
           deallocate(p,p_no_zero,xhist)
-      end function entropy_shells
+    end function entropy_shells
 
     ! imported from numerical recipes
     function pythag_sp(a,b)
@@ -3049,9 +3104,6 @@ contains
         call svbksb(u,w,v,b,a)
         chisq=vabs(matmul(usav,a)-b)**2      ! Evaluate chi-square.
     end subroutine svdfit_dp
-
-
-
 
     ! imported from numerical recipes
     ! modification of svdfit to support multivariate linear model, single precision
