@@ -11,6 +11,8 @@ public :: polarizer
 private
 #include "simple_local_flags.inc"
 
+complex, parameter :: CMPLX_ZERO = cmplx(0.,0.)
+
 type, extends(image) :: polarizer
     private
     complex, allocatable  :: pft(:,:)              !< Polar-FT matrix
@@ -95,33 +97,38 @@ contains
         allocate( self%polcyc1_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc1_mat )
         allocate( self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),    source=self_in%polcyc2_mat )
         allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
-        allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=cmplx(0.,0.) )
-        allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=cmplx(0.,0.) )
+        allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=CMPLX_ZERO )
+        allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=CMPLX_ZERO )
         allocate( self%wnorms(1:self%pdim(1),self%pdim(2):self%pdim(3)),                       source=self_in%wnorms )
     end subroutine copy_polarizer
 
     !> \brief  creates the polar Fourier transform
     !!         KEEP THIS ROUTINE SERIAL
-    subroutine polarize( self, pftcc, img_ind, isptcl, iseven )
+    subroutine polarize( self, pftcc, img_ind, isptcl, iseven, mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         class(polarizer),        intent(inout) :: self    !< projector instance
         class(polarft_corrcalc), intent(inout) :: pftcc   !< polarft_corrcalc object to be filled
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
+        logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: logi(3), phys(3), i, k, l, m, addr_l
         do i=1,self%pdim(1)
             do k=self%pdim(2),self%pdim(3)
-                do l=1,self%wdim
-                    addr_l = self%polcyc1_mat(i,k,l)
-                    do m=1,self%wdim
-                        logi = [addr_l,self%polcyc2_mat(i,k,m),0]
-                        phys = self%comp_addr_phys(logi)
-                        self%comps(l,m) = self%get_fcomp(logi,phys)
+                if( mask(k) )then
+                    do l=1,self%wdim
+                        addr_l = self%polcyc1_mat(i,k,l)
+                        do m=1,self%wdim
+                            logi = [addr_l,self%polcyc2_mat(i,k,m),0]
+                            phys = self%comp_addr_phys(logi)
+                            self%comps(l,m) = self%get_fcomp(logi,phys)
+                        enddo
                     enddo
-                enddo
-                self%pft(i,k) = dot_product(self%polweights_mat(i,k,:),&
-                &reshape(self%comps,(/self%wlen/))) / self%wnorms(i,k)
+                    self%pft(i,k) = dot_product(self%polweights_mat(i,k,:),&
+                    &reshape(self%comps,(/self%wlen/))) / self%wnorms(i,k)
+                else
+                    self%pft(i,k) = CMPLX_ZERO
+                endif
             end do
         end do
         if( isptcl )then

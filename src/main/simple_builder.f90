@@ -48,6 +48,7 @@ type :: builder
     real,                   allocatable :: fsc(:,:)               !< Fourier Shell Correlation
     integer,                allocatable :: nnmat(:,:)             !< matrix with nearest neighbor indices
     logical,                allocatable :: lmsk(:,:,:)            !< logical circular 2D mask
+    logical,                allocatable :: l_resmsk(:)            !< logical resolution mask
     ! PRIVATE EXISTENCE VARIABLES
     logical, private                    :: general_tbox_exists    = .false.
     logical, private                    :: cluster_tbox_exists    = .false.
@@ -243,6 +244,10 @@ contains
         if( params%projstats .eq. 'yes' )then
             if( .not. self%spproj_field%isthere('proj') ) call self%spproj_field%set_projs(self%eulspace)
         endif
+        ! resolution mask for correlation calculation (omitting shells corresponding to the graphene signal if params%l_graphene = .true.)
+        self%l_resmsk = calc_graphene_mask(params%boxmatch, params%smpd)
+        if( .not. params%l_graphene ) self%l_resmsk = .true.
+        ! associate global build pointer
         if( .not. associated(build_glob) ) build_glob => self
         self%general_tbox_exists = .true.
         write(logfhandle,'(A)') '>>> DONE BUILDING GENERAL TOOLBOX'
@@ -268,8 +273,9 @@ contains
             call self%vol%kill
             call self%vol2%kill
             call self%mskimg%kill
-            if( allocated(self%fsc)  ) deallocate(self%fsc)
-            if( allocated(self%lmsk) ) deallocate(self%lmsk)
+            if( allocated(self%fsc)  )     deallocate(self%fsc)
+            if( allocated(self%lmsk) )     deallocate(self%lmsk)
+            if( allocated(self%l_resmsk) ) deallocate(self%l_resmsk)
             self%general_tbox_exists = .false.
         endif
     end subroutine kill_general_tbox

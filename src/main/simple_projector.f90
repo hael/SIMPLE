@@ -16,6 +16,8 @@ public :: projector
 private
 #include "simple_local_flags.inc"
 
+complex, parameter :: CMPLX_ZERO = cmplx(0.,0.)
+
 type, extends(image) :: projector
     private
     type(kbinterpol)      :: kbwin                   !< window function object
@@ -88,7 +90,7 @@ contains
             if( m < lims(3,1) .or. m > lims(3,2) ) cycm(m) = cyci_1d( lims(3,:),m )
         enddo
         ! build expanded fourier components matrix
-        self%cmat_exp = cmplx(0.,0.)
+        self%cmat_exp = CMPLX_ZERO
         !$omp parallel do collapse(3) schedule(static) default(shared)&
         !$omp private(h,k,m,logi,phys) proc_bind(close)
         do h = self%ldim_exp(1,1),self%ldim_exp(1,2)
@@ -112,7 +114,7 @@ contains
         class(projector), intent(inout) :: self
         if( .not.self%expanded_exists )&
             &THROW_HARD('expanded Fourier matrix does not exist; reset_expanded')
-        self%cmat_exp = cmplx(0.,0.)
+        self%cmat_exp = CMPLX_ZERO
     end subroutine reset_expanded
 
     ! FOURIER PROJECTORS
@@ -189,23 +191,28 @@ contains
     end subroutine fproject_serial
 
     !> \brief  extracts a polar FT from a volume's expanded FT (self)
-    subroutine fproject_polar( self, iref, e, pftcc, iseven )
+    subroutine fproject_polar( self, iref, e, pftcc, iseven, mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
-        class(projector),        intent(inout) :: self   !< projector object
-        integer,                 intent(in)    :: iref   !< which reference
-        class(ori),              intent(in)    :: e      !< orientation
-        class(polarft_corrcalc), intent(inout) :: pftcc  !< object that holds the polar image
-        logical,                 intent(in)    :: iseven !< eo flag
+        class(projector),        intent(inout) :: self    !< projector object
+        integer,                 intent(in)    :: iref    !< which reference
+        class(ori),              intent(in)    :: e       !< orientation
+        class(polarft_corrcalc), intent(inout) :: pftcc   !< object that holds the polar image
+        logical,                 intent(in)    :: iseven  !< eo flag
+        logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: irot, k, pdim(3)
         real    :: vec(3), loc(3), e_rotmat(3,3)
         pdim = pftcc%get_pdim()
         e_rotmat = e%get_mat()
         do irot=1,pdim(1)
             do k=pdim(2),pdim(3)
-                vec(:2) = pftcc%get_coord(irot,k)
-                vec(3)  = 0.
-                loc     = matmul(vec,e_rotmat)
-                call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
+                if( mask(k) )then
+                    vec(:2) = pftcc%get_coord(irot,k)
+                    vec(3)  = 0.
+                    loc     = matmul(vec,e_rotmat)
+                    call pftcc%set_ref_fcomp(iref, irot, k, self%interp_fcomp(loc), iseven)
+                else
+                    call pftcc%set_ref_fcomp(iref, irot, k, CMPLX_ZERO, iseven)
+                endif
             end do
         end do
     end subroutine fproject_polar

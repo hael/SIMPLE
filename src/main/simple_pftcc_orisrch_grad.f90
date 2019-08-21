@@ -171,9 +171,9 @@ contains
                 call e%new()
                 call e%set_euler(real(vec(1:3)))
                 if( pftcc_glob%ptcl_iseven(self%particle) )then
-                    call build_glob%vol%fproject_polar(ithr, e, pftcc_glob, iseven=.true.)
+                    call build_glob%vol%fproject_polar(ithr, e, pftcc_glob, iseven=.true., mask=build_glob%l_resmsk)
                 else
-                    call build_glob%vol_odd%fproject_polar(ithr, e, pftcc_glob, iseven=.false.)
+                    call build_glob%vol_odd%fproject_polar(ithr, e, pftcc_glob, iseven=.false., mask=build_glob%l_resmsk)
                 endif
                 corr = pftcc_glob%gencorr_cc_for_rot_8(ithr, self%particle, vec(4:5), irot)
                 cost = -corr

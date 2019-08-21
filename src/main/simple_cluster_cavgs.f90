@@ -261,9 +261,9 @@ contains
             call match_imgs(iptcl)%fft()
             call mirr_match_imgs(iptcl)%fft()
             ! transfer to polar coordinates in even
-            call match_imgs(iptcl)%polarize(pftcc, iptcl, isptcl=.false., iseven=.true. )
+            call match_imgs(iptcl)%polarize(pftcc, iptcl, isptcl=.false., iseven=.true., mask=build_glob%l_resmsk)
             ! put mirror image in odd
-            call mirr_match_imgs(iptcl)%polarize(pftcc, iptcl, isptcl=.false., iseven=.false. )
+            call mirr_match_imgs(iptcl)%polarize(pftcc, iptcl, isptcl=.false., iseven=.false., mask=build_glob%l_resmsk)
             ! copy reference to particle
             call pftcc%cp_even_ref2ptcl(iptcl, iptcl)
         end do

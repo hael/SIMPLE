@@ -34,8 +34,8 @@ do iptcl=1,p%nptcls
     call b%img_match%read(p%stk, iptcl)
     call b%img_match%fft()
     ! transfer to polar coordinates
-    call b%img_match%polarize(pftcc, iptcl, isptcl=.false., iseven=.true.)
-    call b%img_match%polarize(pftcc, iptcl, .true., .true.)
+    call b%img_match%polarize(pftcc, iptcl, isptcl=.false., iseven=.true., mask=b%l_resmsk)
+    call b%img_match%polarize(pftcc, iptcl, isptcl=.true.,  iseven=.true., mask=b%l_resmsk)
 end do
 allocate(cc(pftcc%get_nrots()), cc_fft(pftcc%get_nrots()))
 

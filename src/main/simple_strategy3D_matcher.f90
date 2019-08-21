@@ -488,7 +488,7 @@ contains
                 do iref=1,params_glob%nspace
                     call build_glob%eulspace%get_ori(iref, o_tmp)
                     call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                        &o_tmp, pftcc, iseven=.true.)
+                        &o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
                     call o_tmp%kill
                 end do
                 !$omp end parallel do
@@ -500,7 +500,7 @@ contains
                     do iref=1,params_glob%nspace
                         call build_glob%eulspace%get_ori(iref, o_tmp)
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                            &o_tmp, pftcc, iseven=.false.)
+                            &o_tmp, pftcc, iseven=.false., mask=build_glob%l_resmsk)
                         call o_tmp%kill
                     end do
                     !$omp end parallel do
@@ -514,7 +514,7 @@ contains
                     do iref=1,params_glob%nspace
                         call build_glob%eulspace%get_ori(iref, o_tmp)
                         call build_glob%vol%fproject_polar((s - 1) * params_glob%nspace + iref, &
-                            &o_tmp, pftcc, iseven=.true.)
+                            &o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
                         call o_tmp%kill
                     end do
                     !$omp end parallel do
@@ -524,8 +524,7 @@ contains
                     do iref=1,params_glob%nspace
                         ind = (s - 1) * params_glob%nspace + iref
                         call build_glob%eulspace%get_ori(iref, o_tmp)
-                        call build_glob%vol%fproject_polar(ind, o_tmp, &
-                            &pftcc, iseven=.true.)
+                        call build_glob%vol%fproject_polar(ind, o_tmp, pftcc, iseven=.true., mask=build_glob%l_resmsk)
                         call pftcc%cp_even2odd_ref(ind)
                         call o_tmp%kill
                     end do
@@ -593,7 +592,7 @@ contains
                     imatch = iptcl - batchlims(1) + 1
                     call prepimg4align(iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
                     ! transfer to polar coordinates
-                    call match_imgs(imatch)%polarize(pftcc_here, imatch, .true., .true.)
+                    call match_imgs(imatch)%polarize(pftcc_here, imatch, .true., .true., mask=build_glob%l_resmsk)
                     ! calc stats
                     call set_ptcl_stats(pftcc_here, iptcl, imatch)
                 endif

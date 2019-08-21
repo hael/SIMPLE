@@ -302,7 +302,7 @@ contains
                 call prepimg4align( iptcl, build_glob%imgbatch(imatch), &
                     match_imgs(imatch), is3D=is3D)
                 ! transfer to polar coordinates
-                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true.)
+                call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
             end do
             !$omp end parallel do
         end do
