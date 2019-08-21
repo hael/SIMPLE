@@ -1145,7 +1145,7 @@ contains
         end do
     end function get_resarr
 
-    !> \brief get logical mask filtering out the Graphene bands
+    !> \brief calculate logical mask filtering out the Graphene bands
     function calc_graphene_mask( box, smpd ) result( mask )
         integer, intent(in)  :: box
         real,    intent(in)  :: smpd

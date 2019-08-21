@@ -43,6 +43,7 @@ type :: parameters
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
+    character(len=3)      :: graphene_filter='no' !< filter out graphene bands in correcation search
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
@@ -417,6 +418,7 @@ type :: parameters
     logical :: l_ptclw          = .true.
     logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
+    logical :: l_graphene       = .false.
     logical :: l_projw          = .false.
     logical :: l_rankw          = .true.
     logical :: l_remap_cls      = .false.
@@ -517,6 +519,7 @@ contains
         call check_carg('framesavg',      self%framesavg)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
+        call check_carg('graphene_filter',self%graphene_filter)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
@@ -1209,6 +1212,8 @@ contains
                     THROW_HARD('unsupported rank ordering criteria weighting method')
             end select
         endif
+        ! set graphene flag
+        self%l_graphene = self%graphene_filter .ne. 'no'
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value

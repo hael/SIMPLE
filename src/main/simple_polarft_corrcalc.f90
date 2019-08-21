@@ -127,6 +127,7 @@ type :: polarft_corrcalc
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
+    procedure          :: get_box
     procedure          :: get_rot
     procedure          :: get_roind
     procedure          :: get_coord
@@ -562,11 +563,17 @@ contains
     end function get_nrots
 
     ! !>  \brief  for getting the dimensions of the reference polar FT
-    function get_pdim( self ) result( pdim )
+    pure function get_pdim( self ) result( pdim )
         class(polarft_corrcalc), intent(in) :: self
         integer :: pdim(3)
         pdim = [self%pftsz,params_glob%kfromto(1),params_glob%kfromto(2)]
     end function get_pdim
+
+    pure function get_box( self ) result( box )
+        class(polarft_corrcalc), intent(in) :: self
+        integer :: box
+        box = self%ldim(1)
+    end function get_box
 
     !>  \brief is for getting the continuous in-plane rotation
     !!         corresponding to in-plane rotation index roind
