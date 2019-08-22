@@ -176,9 +176,10 @@ logical(c_bool), parameter :: C_FALSE = logical(.false.,kind=c_bool)
 logical(c_bool), parameter :: C_TRUE  = logical(.true. ,kind=c_bool)
 
 ! criterion for even/odd averaging in gold-FSC
-real,    parameter :: FSC4EOAVG3D = 0.95               !< corr criterium for eo-averaging in 3D
-real,    parameter :: FSC4EOAVG2D = 0.7                !< corr criterium for eo-averaging in 2D
-integer, parameter :: K4EOAVGLB   = 4                  !< Fourier index lower-bound
+real,    parameter :: FREQ4EOAVG3D = 20.                !< Frequencry criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG3D  = 0.95               !< corr criterion for eo-averaging in 3D
+real,    parameter :: FSC4EOAVG2D  = 0.7                !< corr criterion for eo-averaging in 2D
+integer, parameter :: K4EOAVGLB    = 4                  !< Fourier index lower-bound
 
 ! SNHC-related global constants, PRIME3D, refine=snhc
 integer, parameter :: SZSN_INIT  = 5

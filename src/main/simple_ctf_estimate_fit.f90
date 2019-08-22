@@ -350,7 +350,7 @@ contains
                 do i = 1,self%ntiles(1)
                     do j = 1,self%ntiles(2)
                         dist = sqrt(real(sum((self%centers(pi,pj,:)-self%tiles_centers(i,j,:))**2.)))
-                        w    = exp(-1.*(dist/real(self%box))**2.)
+                        w    = exp(-0.5*(dist/real(self%box))**2.)
                         if( w < 1.e-2 ) cycle
                         sumw = sumw + w
                         call self%pspec_patch(pi,pj)%add(self%tiles(i,j),w)
