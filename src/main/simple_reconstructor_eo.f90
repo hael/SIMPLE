@@ -513,7 +513,8 @@ contains
         if( self%hpind_fsc > 0 )then
             find4eoavg = self%hpind_fsc
         else
-            find4eoavg = max(K4EOAVGLB,get_lplim_at_corr(corrs, FSC4EOAVG3D))
+            find4eoavg = max(K4EOAVGLB,  calc_fourier_index(FREQ4EOAVG3D,self%box,self%smpd))
+            find4eoavg = min(find4eoavg, get_lplim_at_corr(corrs, FSC4EOAVG3D))
             find4eoavg = max(find4eoavg, find_plate)
         endif
         deallocate(corrs, res)
