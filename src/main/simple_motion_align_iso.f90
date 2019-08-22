@@ -172,6 +172,8 @@ contains
         self%opt_shifts = 0.
         call self%create_ftexp_objs
         call self%calc_frameweights( callback_ptr )
+        opt_shifts_saved   = self%opt_shifts
+        frameweights_saved = self%frameweights
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
         if ( self%rand_init_shifts ) then
             do iframe = 1, self%nframes

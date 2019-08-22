@@ -108,7 +108,7 @@ contains
         if( present(bfac) )then
             if( bfac > 1.e-6) l_bfac = .true.
         endif
-        spafreq_denom_sq = (real(self%ldim(1))*self%smpd)**2.
+        spafreq_denom_sq = real(maxval(self%ldim(1:2))**2)
         ! prepare image
         didft = .false.
         if( .not. img%is_ft() .and. fetch_comps )then
@@ -140,7 +140,7 @@ contains
                         if( l_bfac )then
                             ! b-factor weight
                             spafreq_sq = real(sqarg) / spafreq_denom_sq
-                            w =  max(0.,min(1.,exp(-0.125*bfac*spafreq_sq))) != sqrt(exp(-B/4*spafreq_sq))
+                            w =  min(1.,exp(-bfac*spafreq_sq))
                             self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
                         else
                             self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)

@@ -694,7 +694,7 @@ contains
         call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd)
         call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
         res = self%frame_patches(1,1)%stack(1)%get_res()
-        self%hp = min(self%hp,res(2))
+        self%hp = min(self%hp,res(1))
         write(logfhandle,'(A,F6.1)')'>>> PATCH HIGH-PASS: ',self%hp
         !$omp parallel do collapse(2) default(shared) private(i,j,iframe,opt_shifts)&
         !$omp proc_bind(close) schedule(static) reduction(+:corr_avg)
@@ -702,17 +702,19 @@ contains
             do j = 1,params_glob%nypatch
                 if( HYBRID_CORRELATION_SEARCH )then
                     ! init
+                    self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
                     call self%gen_patch(frames,i,j)
                     call self%align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
                     call self%align_hybrid(i,j)%set_group_frames(.false.)
                     call self%align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                    call self%align_hybrid(i,j)%set_hp_lp(self%hp, self%lp(i,j))
-                    call self%align_hybrid(i,j)%set_trs(self%trs)
+                    call self%align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                    call self%align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
                     call self%align_hybrid(i,j)%set_shsrch_tol(TOL)
                     call self%align_hybrid(i,j)%set_coords(i,j)
-                    call self%align_hybrid(i,j)%set_fitshifts(self%fitshifts)
+                    call self%align_hybrid(i,j)%set_fitshifts(.true.)
                     call self%align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
                     call self%align_hybrid(i,j)%set_bfactor(self%bfactor)
+                    ! align
                     call self%align_hybrid(i,j)%align(frameweights=self%frameweights)
                     ! fetch info
                     corr_avg = corr_avg + self%align_hybrid(i,j)%get_corr()
