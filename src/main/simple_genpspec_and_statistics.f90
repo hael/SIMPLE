@@ -81,7 +81,7 @@ contains
         call self%ps_ccs%new(self%ldim, self%smpd)
         !power spectrum generation
         call self%mic%mic2spec(BOX, 'power',LOW_LIM, self%ps)
-        if(DEBUG_HERE) call self%ps%write(trim(self%fbody)//'_generated_ps.mrc')
+        if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
     end subroutine new_pspec_statistics
 
     ! Result of the combination of score and curvature.
@@ -169,10 +169,10 @@ contains
         class(pspec_statistics), intent(inout) :: self
         character(len = 100) :: iom
         integer              :: status
-        open(unit = 17, access = 'sequential', action = 'readwrite',file = trim(self%fbody)//"PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
+        open(unit = 17, access = 'sequential', action = 'readwrite',file = basename(trim(self%fbody))//"PowerSpectraAnalysis.txt", form = 'formatted', iomsg = iom, iostat = status, position = 'append', status = 'replace')
         write(unit = 17, fmt = '(a)') '>>>>>>>>>>>>>>>>>>>>POWER SPECTRA STATISTICS>>>>>>>>>>>>>>>>>>'
         write(unit = 17, fmt = '(a)') ''
-        write(unit = 17, fmt = "(a,a)")  'Input mic  ', trim(self%fbody)
+        write(unit = 17, fmt = "(a,a)")  'Input mic  ', basename(trim(self%fbody))
         write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Logical dim mic ', self%mic%get_ldim()
         write(unit = 17, fmt = "(a,i0,tr1,i0,tr1,i0)") 'Logical dim ps  ', self%ps%get_ldim()
         write(unit = 17, fmt = "(a,f0.2)")             'Smpd            ', self%smpd
@@ -221,7 +221,7 @@ contains
                 endif
             enddo
         enddo
-        if(DEBUG_HERE) call self%ps_bin%write(trim(self%fbody)//'_binarized_polished.mrc')
+        if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized_polished.mrc')
         call self%ps_bin%find_connected_comps(self%ps_ccs) ! NOT TO REDO, NEED OPTIMISATION
         self%avg_curvat = self%calc_avg_curvature()
         !normalization
@@ -252,7 +252,7 @@ contains
         end subroutine generate_mat_sz_ccs
     end subroutine calc_weighted_avg_sz_ccs
 
-    ! This function simply calculates the average curvature of the
+    ! This function calculates the average curvature of the
     ! top N_BIG_CCS (in size) connected components.
     function calc_avg_curvature(self) result(avg)
         class(pspec_statistics), intent(inout) :: self
@@ -303,7 +303,7 @@ contains
                       ! Count the nb of white pixels in a circle of radius sh, TO OPTIMISE
                       call circumference(img_aux,real(sh))
                       ! Image of the ideal circle of radius sh compared to the input data
-                      imat_aux = img_aux%get_rmat()
+                      imat_aux = nint(img_aux%get_rmat())
                       ! Need to move from ellipse --> arc. Identify extreme points of the arc
                       xmin = minval(pos(1,:))
                       xmin = min(i,xmin)
@@ -451,16 +451,16 @@ contains
               call self%ps_bin%set([1,i,1],0.)
               call self%ps_bin%set([BOX,i,1],0.)
           enddo
-          if(DEBUG_HERE) call self%ps_bin%write(trim(self%fbody)//'_binarized.mrc')
+          if(DEBUG_HERE) call self%ps_bin%write(PATH_HERE//basename(trim(self%fbody))//'_binarized.mrc')
           self%fallacious =  self%empty() !check if the mic is fallacious
-          if(self%fallacious) write(logfhandle,*) trim(self%fbody), ' TO BE DISCARDED'
+          if(self%fallacious) write(logfhandle,*) basename(trim(self%fbody)), ' TO BE DISCARDED'
       end subroutine binarize_ps
   end subroutine process_ps
 
   subroutine run(self)
       class(pspec_statistics), intent(inout) :: self
       call self%p%new(self%cline)
-      write(logfhandle,*) '******> Processing PS ', trim(self%fbody)
+      write(logfhandle,*) '******> Processing PS ',basename(trim(self%fbody))
       call process_ps(self)
   end subroutine run
 

@@ -371,177 +371,360 @@ end subroutine laplacian_filt
       ang = rad2deg(ang_rad)
   end function ang2D_vecs
 
-  subroutine circumference(img, rad)
-      type(image), intent(inout) :: img
-      real,        intent(in)    :: rad
+  subroutine circumference(img, center, rad, full)
+      type(image),       intent(inout) :: img
+      integer,           intent(in)    :: center(2)
+      real,              intent(in)    :: rad
+      logical, optional, intent(in)    :: full ! Default is false
       integer :: i, j, sh, h, k
       integer :: ldim(3)
       real    :: smpd
-
+      logical :: ffull
+      ffull = .false.
+      if(present(full)) ffull = full
       ldim = img%get_ldim()
       smpd = img%get_smpd()
       do i = 1, ldim(1)
           do j = 1, ldim(2)
-              h   = -int(ldim(1)/2) + i - 1
-              k   = -int(ldim(2)/2) + j - 1
+              h   =  i - 1 - center(1)
+              k   =  j - 1 - center(2)
               sh  =  nint(hyp(real(h),real(k)))
-              if(abs(real(sh)-rad)<1) call img%set([i,j,1], 1.)
+              if(.not. ffull) then
+                  if(abs(real(sh)-rad)<1) call img%set([i,j,1], 1.)
+              else
+                  if(abs(real(sh))<rad) call img%set([i,j,1], 1.)
+              endif
             enddo
         enddo
     end subroutine circumference
 
-    function estimate_curvature(img_cc, cc, n_loop) result(c)
-        type(image), intent(inout) :: img_cc
-        integer, intent(in) :: cc      ! number of the connected component to estimate the curvature
-        integer, intent(in) :: n_loop
-        real        :: c       ! estimation of the curvature of the cc img
-        type(image) :: img_aux
-        integer, allocatable :: imat_cc(:,:,:), imat_aux(:,:,:)
-        integer, allocatable :: pos(:,:)
-        integer :: xmax, xmin, ymax, ymin
-        integer :: ldim(3), i, j
-        integer :: h, k, sh
-        integer :: sz, nb_pxls
-        logical :: done   ! to prematurely exit the loops
-        real    :: smpd
-        ldim = img_cc%get_ldim()
-        smpd = img_cc%get_smpd()
-        call img_aux%new(ldim, smpd)
-        imat_cc = nint(img_cc%get_rmat())
-        where(imat_cc /= cc) imat_cc = 0  !keep just the considered cc
-        allocate(imat_aux(ldim(1),ldim(2),1), source = 0)
-        ! fetch white pixel positions
-        call get_pixel_pos(imat_cc,pos)
-        done = .false.
-        do i = 1,ldim(1)
-            do j = 1, ldim(2)
-                if(imat_cc(i,j,1) > 0) then      !The first white pixel you meet, consider it
-                  h   = -int(ldim(1)/2) + i - 1
-                  k   = -int(ldim(2)/2) + j - 1
-                  sh  =  nint(hyp(real(h),real(k))) !Identify the shell the px belongs to: radius of the ideal circle
-                  ! Count the nb of white pixels in a circle of radius sh, TO OPTIMISE
-                  call circumference(img_aux,real(sh))
-                  ! Debug: save the image of the ideal circle of radius sh compared to the input data
-                  imat_aux = img_aux%get_rmat()
-                  ! Need to move from ellipse --> arc. Identify extreme points of the arc
-                  xmin = minval(pos(1,:))
-                  xmin = min(i,xmin)
-                  xmax = maxval(pos(1,:))
-                  xmax = max(i,xmax)
-                  ymin = minval(pos(2,:))
-                  ymin = min(j,ymin)
-                  ymax = maxval(pos(2,:))
-                  ymax = max(j,ymax)
-                  ! Check if the cc is a segment
-                  if(ymin == ymax .or. xmin == xmax) then
-                      print *, 'This cc is a segment, curvature is 0'
-                       c = 0.
-                       return
-                  endif
-                  ! Set to zero white pxls that are not in the arc
-                  imat_aux(1:xmin-2,:,1) = 0 !-2 for tickness
-                  imat_aux(:,1:ymin-2,1) = 0
-                  imat_aux(xmax+2:ldim(1),:,1) = 0
-                  imat_aux(:,ymax+2:ldim(2),1) = 0
-                  nb_pxls = count(imat_aux > 0)  !nb of white pxls in the ideal arc
-                  sz = count(imat_cc > 0) !number of white pixels in the cc
-                  call img_aux%set_rmat(real(imat_aux))
-                  call img_aux%write(trim(int2str(n_loop))//'RadiusShCirclePolished.mrc')
-                  c = real(sz)/(nb_pxls)
-                  print *, 'curvature      = ', c
-                  return
-              endif
-          enddo
-      enddo
-    end function estimate_curvature
-
+    function phase_corr_try(self1,self2,border) result(pc)
+        type(image),      intent(inout) :: self1, self2
+        integer, optional, intent(in)    :: border
+        type(image) :: pc
+        type(image) :: self1_crop, self2_crop, pc_crop
+        integer     :: bborder
+        integer     :: i, j
+        integer :: ldim(3)
+        real :: smpd
+        real, pointer :: rmat1(:,:,:), rmat2(:,:,:)
+        real, pointer :: rmat1_crop(:,:,:), rmat2_crop(:,:,:)
+        ldim = self1%get_ldim()
+        smpd = self1%get_smpd()
+        bborder = 0
+        if(present(border)) bborder = border
+        call self1_crop%new([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
+        call self2_crop%new([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
+        call pc_crop%new   ([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
+        call pc%new(ldim, smpd)
+        call self1%get_rmat_ptr(rmat1)
+        call self2%get_rmat_ptr(rmat2)
+        call self1_crop%get_rmat_ptr(rmat1_crop)
+        call self2_crop%get_rmat_ptr(rmat2_crop)
+        do i = bborder+1, ldim(1)-bborder
+            do j = bborder+1, ldim(2)-bborder
+                 rmat1_crop(i,j,1) =  rmat1(i,j,1) ! maybe instead of using the functions every time it's convinient to use matrices
+                 rmat2_crop(i,j,1) =  rmat2(i,j,1) ! maybe instead of using the functions every time it's convinient to use matrices
+            enddo
+        enddo
+        call self1_crop%fft()
+        call self2_crop%fft()
+        self2_crop = self2_crop%conjg()
+        pc_crop = self1_crop*self2_crop
+        call pc_crop%ifft()
+        call pc_crop%pad(pc,0.)
+    end function phase_corr_try
 end module simple_test_chiara_try_mod
 
 program simple_test_chiara_try
     include 'simple_lib.f08'
     use simple_math
     use simple_test_chiara_try_mod
+    use simple_micops
+    use simple_image, only : image
+    use simple_tvfilter, only : tvfilter
+    use simple_nanoparticles_mod, only : nanoparticle
+    type(image) :: img1, img2, pc
+    real, allocatable :: rmat(:,:,:)
+    !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION
+    call img1%new([512,512,1],1.)
+    call img2%new([512,512,1],1.)
+    allocate(rmat(512,512,1), source=0.)
+    rmat(256-50:256+50, 256-10:256+10,1) = 1.
+    rmat(10:50,50:80,1) = 1.
+    call img1%set_rmat(rmat)
+    call img1%write('RectangleIMG.mrc')
+    call img2%gauimg2D(50.,10.)
+    call img2%write('GaussianIMG.mrc')
+    pc = img1%phase_corr(img2,1)
+    call pc%write('PhaseCorrelationIMG.mrc')
+    ! VOLUM CLIUPPING FOR CHANGING ITS SMPD
+    ! call find_ldim_nptcls('EMD-6287.mrc', vol_dim, nptcls, vol_smpd)
+    ! call img%new(vol_dim,vol_smpd)
+    ! call img%read('EMD-6287.mrc')
+    ! print *, 'original dim = ', vol_dim, 'original smpd', vol_smpd
+    ! shrink_factor = 2.64/vol_smpd
+    ! print *, 'shrink_factor = ', shrink_factor
+    ! ldim_clip(1) = round2even(real(vol_dim(1))/shrink_factor)
+    ! ldim_clip(2) = round2even(real(vol_dim(2))/shrink_factor)
+    ! ldim_clip(3) = round2even(real(vol_dim(3))/shrink_factor)
+    ! print *, 'ldim_clip = ', ldim_clip
+    ! call clip_vol('EMD-6287.mrc', 'EMD-6287_clip.mrc', ldim_clip, vol_smpd )
+    ! call find_ldim_nptcls('EMD-6287_clip.mrc', ldim_clip, nptcls, clip_smpd)
+    ! print *, 'Now smpd = ',clip_smpd
+    !ARTIFICIAL DATA TEST FOR PHASECORRELATIONS
+    ! sigma_x = 5.
+    ! sigma_y = 10.
+    ! call field%new([512,512,1],1.)
+    ! call phasecorr%new([512,512,1],1.)
+    ! call reference%new([512,512,1],1.)
+    ! call aux%new([512,512,1],1.)
+    !
+    ! allocate(rmat(512,512,1), source=0.)
+    ! rmat(256-50:256+50, 256-10:256+10,1) = 1.
+    ! call field%set_rmat(rmat)
+    ! call field%add_gauran(0.1)
+    ! call field%write('RectangleNoise.mrc')
+    !
+    !
+    ! call reference%gauimg2D(sigma_x,sigma_y)
+    ! call reference%add_gauran(0.2)
+    ! step = 180./real(N_ROT)
+    ! call phasecorr%zero_and_unflag_ft()
+    ! call field%fft()
+    ! allocate(rmat_out(512,512,1), source = 0.)
+    ! do n_ang = 1, N_ROT
+    !     if(n_ang > 1) then !do not rotate the first time
+    !         if(reference%is_ft()) call reference%ifft() ! in order to rotate it has to be real
+    !         if(phasecorr%is_ft()) call phasecorr%ifft() ! in order to rotate it has to be real
+    !         call reference%rtsq_serial( step, 0., 0., rmat_out )
+    !         call reference%set_rmat(rmat_out)
+    !         call reference%write(trim(int2str(n_ang))//'ReferenceNoise.mrc')
+    !     else
+    !         call reference%write('1ReferenceNoise.mrc')
+    !     endif
+    !     call reference%fft()
+    !     call phasecorr%fft()    ! before sum they need to be in the same state
+    !     aux = reference%conjg() ! necessary
+    !     phasecorr = phasecorr + field*aux ! sum of them
+    !     call phasecorr%ifft()
+    !     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
+    ! enddo
+    ! call phasecorr%div(real(N_ROT-1))
+    ! call phasecorr%write('SumPhaseCorrNoise.mrc')
 
-    type(image) :: img, img_cc, img_aux
-    integer, allocatable :: imat(:,:,:),imat_inside(:,:,:)
-    integer :: i,j
-    integer, allocatable :: pos(:,:)
-    integer :: loc(1)
-    real    :: d_max
-    real    :: c !curvature estimation
-    integer, allocatable :: sz(:)
-    integer :: sh, h, k
-    logical :: done
-    integer :: BOX
-    integer :: nb_pxls
-    real    :: curvature
-    real    :: theta, arc_length
-    real    :: vec1(2), vec2(2)
-    integer :: xmin, xmax, ymin, ymax
-    integer :: px_x, px_y, cnt, cc(1)
-    real    :: avg_curvature
-    integer :: number_biggest_ccs
-    number_biggest_ccs = 5
+    !REAL DATA TEST FOR PHASE CORRELATIONS
+    ! ldim_shrunken(1) = 1854
+    ! ldim_shrunken(2) = 1918
+    ! ldim_shrunken(3) = 1
+    ! smpd_shrunken = 0.66*SHRINK
+    ! min_rad = 70.
+    ! max_rad = 75.
+    ! detector = 'bin'
+    ! call img%new   (ldim_shrunken,smpd_shrunken)
+    ! call img_cc%new(ldim_shrunken, smpd_shrunken)
+    ! lambda = 5.
+    ! hp_box =  4.*max_rad+2.*max_rad
+    ! ! 0) Reading and saving original micrograph
+    ! call read_micrograph('14sep05c_c_00003gr_00014sq_00002hl_00005es_c.mrc', smpd=0.66)
+    ! ! 1) Shrink and high pass filtering
+    ! call shrink_micrograph(SHRINK,ldim_shrunken ,smpd_shrunken)
+    ! call set_box(int(SHRINK*(hp_box)), box_shrunken, micrograph_shrunken)
+    ! call img%copy(micrograph_shrunken)
+    ! ! To take care of shrinking
+    ! min_rad = min_rad/SHRINK ! I am thingking I shouldn't multiply by the smpd cuz I am working in pxls
+    ! max_rad = max_rad/SHRINK
+    ! ! 2) Low pass filtering
+    ! call micrograph_shrunken%bp(0.,20.)
+    ! call micrograph_shrunken%ifft()
+    ! !2.1) TV denoising
+    ! call tvf%new()
+    ! call tvf%apply_filter(micrograph_shrunken, lambda)
+    ! call tvf%kill()
+    ! call micrograph_shrunken%write(PATH_HERE//'_tvfiltered.mrc')
+    ! ! 2.2) negative image, to obtain a binarization with white particles
+    ! call micrograph_shrunken%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
+    ! ! 3) Reference generation and Phase Correlation calculation
+    ! sigma_x = 3.5
+    ! sigma_y = 3.5
+    ! call reference%new(ldim_shrunken,smpd_shrunken)
+    ! call phasecorr%new(ldim_shrunken,smpd_shrunken)
+    ! call reference%gauimg2D(sigma_x,sigma_y)
+    ! call reference%add_gauran(0.2)
+    ! call reference%write('_ReferenceGau.mrc')
+    ! call micrograph_shrunken%fft()
+    ! call reference%fft()
+    ! aux = reference%conjg() ! Check if necessary
+    ! phasecorr = micrograph_shrunken*aux
+    ! call phasecorr%ifft()
+    ! call phasecorr%write('_PhaseCorrelationsSNR02.mrc')
+    ! ! 3) Binarization
+    ! call phasecorr%stats( ave, sdev, maxv, minv )
+    ! if(detector .eq. 'sobel') then
+    !     thresh(1) = ave+.5*sdev !sobel needs lower thresh not to pick just edges
+    !     call sobel(phasecorr,thresh)
+    ! else if (detector .eq. 'bin') then
+    !     call phasecorr%bin(ave+.8*sdev)
+    ! else if (detector .eq. 'otsu') then
+    !     rmat = phasecorr%get_rmat()
+    !     x = pack(rmat, .true.)
+    !     call otsu(x,x_out)
+    !     rmat = reshape(x_out, [ldim_shrunken(1),ldim_shrunken(2),1])
+    !     call phasecorr%set_rmat(rmat)
+    !     call phasecorr%erosion() !morphological erosion
+    !     deallocate(x,x_out,rmat)
+    ! else
+    !     print *, 'Invalid detector; preprocess_mic'
+    ! endif
+    ! call phasecorr%write(PATH_HERE//'_Bin.mrc')
+    ! winsz = int(min_rad+max_rad)/4 !half of the avg between the dimensions of the particles
+    ! call phasecorr%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
+    ! call phasecorr%write(PATH_HERE//'_BinMedian.mrc')
+
+
+
+    ! phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
+    ! figure;
+    ! plot_im(phasecorr);
+    ! end
+    !PICKER TESTS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    ! ldim_shrunken(1) = 1854
+    ! ldim_shrunken(2) = 1918
+    ! ldim_shrunken(3) = 1
+    ! smpd_shrunken = 0.66*SHRINK
+    ! min_rad = 70.
+    ! max_rad = 75.
+    ! detector = 'bin'
+    ! call img%new   (ldim_shrunken,smpd_shrunken)
+    ! call img_cc%new(ldim_shrunken, smpd_shrunken)
+    ! lambda = 5.
+    ! hp_box =  4.*max_rad+2.*max_rad
+    ! ! 0) Reading and saving original micrograph
+    ! call read_micrograph('14sep05c_c_00003gr_00014sq_00002hl_00005es_c.mrc', smpd=0.66)
+    ! ! 1) Shrink and high pass filtering
+    ! call shrink_micrograph(SHRINK,ldim_shrunken ,smpd_shrunken)
+    ! call set_box(int(SHRINK*(hp_box)), box_shrunken, micrograph_shrunken)
+    ! call img%copy(micrograph_shrunken)
+    ! ! To take care of shrinking
+    ! min_rad = min_rad/SHRINK ! I am thingking I shouldn't multiply by the smpd cuz I am working in pxls
+    ! max_rad = max_rad/SHRINK
+    ! ! 2) Low pass filtering
+    ! call micrograph_shrunken%bp(0., 20.)
+    ! call micrograph_shrunken%ifft()
+    ! call micrograph_shrunken%write('_mic_shrunken.mrc')
+    ! ! NEW APPROACH
+    !
+    ! call micrograph_shrunken%hist_stretching(micrograph_shrunken)
+    ! call micrograph_shrunken%write(PATH_HERE//'_hist_stretch.mrc')
+    ! call micrograph_shrunken%scale_pixels([1.,64.])
+    ! ! rmat = micrograph_shrunken%get_rmat()
+    ! ! rmat = sqrt(rmat)
+    ! ! call micrograph_shrunken%set_rmat(rmat)
+    ! ! call micrograph_shrunken%write(PATH_HERE//'_sqrt.mrc')
+    !
+    ! rmat = micrograph_shrunken%get_rmat()
+    ! rmat = log(rmat)
+    ! call micrograph_shrunken%set_rmat(rmat)
+    ! call micrograph_shrunken%write(PATH_HERE//'log.mrc')
+    !
+    ! ! 2.1) TV denoising
+    ! call tvf%new()
+    ! call tvf%apply_filter(micrograph_shrunken, lambda)
+    ! call tvf%kill()
+    ! call micrograph_shrunken%write(PATH_HERE//'_log_tvfiltered.mrc')
+    ! ! 2.2) negative image, to obtain a binarization with white particles
+    ! call micrograph_shrunken%neg() !TO REMOVE IN CASE OF NEGATIVE STAINING
+    ! ! 3) Binarization
+    ! call micrograph_shrunken%stats( ave, sdev, maxv, minv )
+    ! if(detector .eq. 'sobel') then
+    !     thresh(1) = ave+.5*sdev !sobel needs lower thresh not to pick just edges
+    !     call sobel(micrograph_shrunken,thresh)
+    ! else if (detector .eq. 'bin') then
+    !     call micrograph_shrunken%bin(ave+.8*sdev)
+    ! else if (detector .eq. 'otsu') then
+    !     rmat = micrograph_shrunken%get_rmat()
+    !     x = pack(rmat, .true.)
+    !     call otsu(x,x_out)
+    !     rmat = reshape(x_out, [ldim_shrunken(1),ldim_shrunken(2),1])
+    !     call micrograph_shrunken%set_rmat(rmat)
+    !     call micrograph_shrunken%erosion() !morphological erosion
+    !     deallocate(x,x_out,rmat)
+    ! else
+    !     print *, 'Invalid detector; preprocess_mic'
+    ! endif
+    ! call micrograph_shrunken%write(PATH_HERE//'_Bin.mrc')
+    ! winsz = int(min_rad+max_rad)/4 !half of the avg between the dimensions of the particles
+    ! call micrograph_shrunken%real_space_filter(winsz,'median') !median filtering allows easy calculation of cc
+    ! call micrograph_shrunken%write(PATH_HERE//'_BinMedian.mrc')
+    ! ! 5) Connected components (cc) identification
+    ! ! call micrograph_shrunken%find_connected_comps(img_cc)
+    ! ! 6) cc filtering
+    ! ! print *, 'before polishing the ccs: ', self%get_n_ccs()
+    ! ! call self%img_cc%polish_cc(self%min_rad,self%max_rad)
+    ! ! print *, 'after polishing the ccs: ', self%get_n_ccs()
+    ! ! if( DEBUG_HERE ) call self%img_cc%write_jpg(PATH_HERE//basename(trim(self%fbody))//'_ConnectedComponentsElimin.jpg')
+    ! ! call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'_ConnectedComponentsElimin.mrc')
+    ! ! call micrograph_shrunken%kill
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
     ! CURVATURE ESTIMATION ON REAL DATA
-    call img%new([512,512,1],1.34)
-    print *, 'Analysing 008_movieb_forctf_binarized_polished.mrc GOOD ONE'
-    call img%read('008_movieb_forctf_binarized_polished.mrc')
-    call img%find_connected_comps(img_cc)
-    sz = img_cc%size_connected_comps()
-    avg_curvature = 0.
-    do i = 1, number_biggest_ccs
-        cc(:) = maxloc(sz)
-        c = estimate_curvature(img_cc,cc(1),i)
-        avg_curvature = avg_curvature + c
-        call img_aux%copy(img_cc)
-        imat = nint(img_aux%get_rmat())
-        where(imat /= cc(1)) imat = 0
-        call img_aux%set_rmat(real(imat))
-        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
-        sz(cc(1)) = 0 !discard
-    enddo
-    avg_curvature = avg_curvature/number_biggest_ccs
-    print *, 'avg_curvature = ', avg_curvature
-
-    print *, 'Analysing May08_03.05.02.bin_forctf_binarized_polished.mrc APOFERRITIN'
-    call img%read('May08_03.05.02.bin_forctf_binarized_polished.mrc')
-    call img%find_connected_comps(img_cc)
-    sz = img_cc%size_connected_comps()
-    avg_curvature = 0.
-    do i = 1, number_biggest_ccs
-        cc(:) = maxloc(sz)
-        c = estimate_curvature(img_cc,cc(1),i)
-        avg_curvature = avg_curvature + c
-        call img_aux%copy(img_cc)
-        imat = nint(img_aux%get_rmat())
-        where(imat /= cc(1)) imat = 0
-        call img_aux%set_rmat(real(imat))
-        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
-        sz(cc(1)) = 0 !discard
-    enddo
-    avg_curvature = avg_curvature/number_biggest_ccs
-    print *, 'avg_curvature = ', avg_curvature
-
-    print *, 'Analysing 0315_intg_binarized_polished.mrc FALLACIOUS'
-    call img%read('0315_intg_binarized_polished.mrc')
-    call img%find_connected_comps(img_cc)
-    sz = img_cc%size_connected_comps()
-    avg_curvature = 0.
-    do i = 1, number_biggest_ccs
-        cc(:) = maxloc(sz)
-        c = estimate_curvature(img_cc,cc(1),i)
-        avg_curvature = avg_curvature + c
-        call img_aux%copy(img_cc)
-        imat = nint(img_aux%get_rmat())
-        where(imat /= cc(1)) imat = 0
-        call img_aux%set_rmat(real(imat))
-        call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
-        sz(cc(1)) = 0 !discard
-    enddo
-    avg_curvature = avg_curvature/number_biggest_ccs
-    print *, 'avg_curvature = ', avg_curvature
-
-    stop
+    ! call img%new([512,512,1],1.34)
+    ! print *, 'Analysing 008_movieb_forctf_binarized_polished.mrc GOOD ONE'
+    ! call img%read('008_movieb_forctf_binarized_polished.mrc')
+    ! call img%find_connected_comps(img_cc)
+    ! sz = img_cc%size_connected_comps()
+    ! avg_curvature = 0.
+    ! do i = 1, number_biggest_ccs
+    !     cc(:) = maxloc(sz)
+    !     c = estimate_curvature(img_cc,cc(1),i)
+    !     avg_curvature = avg_curvature + c
+    !     call img_aux%copy(img_cc)
+    !     imat = nint(img_aux%get_rmat())
+    !     where(imat /= cc(1)) imat = 0
+    !     call img_aux%set_rmat(real(imat))
+    !     call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+    !     sz(cc(1)) = 0 !discard
+    ! enddo
+    ! avg_curvature = avg_curvature/number_biggest_ccs
+    ! print *, 'avg_curvature = ', avg_curvature
+    !
+    ! print *, 'Analysing May08_03.05.02.bin_forctf_binarized_polished.mrc APOFERRITIN'
+    ! call img%read('May08_03.05.02.bin_forctf_binarized_polished.mrc')
+    ! call img%find_connected_comps(img_cc)
+    ! sz = img_cc%size_connected_comps()
+    ! avg_curvature = 0.
+    ! do i = 1, number_biggest_ccs
+    !     cc(:) = maxloc(sz)
+    !     c = estimate_curvature(img_cc,cc(1),i)
+    !     avg_curvature = avg_curvature + c
+    !     call img_aux%copy(img_cc)
+    !     imat = nint(img_aux%get_rmat())
+    !     where(imat /= cc(1)) imat = 0
+    !     call img_aux%set_rmat(real(imat))
+    !     call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+    !     sz(cc(1)) = 0 !discard
+    ! enddo
+    ! avg_curvature = avg_curvature/number_biggest_ccs
+    ! print *, 'avg_curvature = ', avg_curvature
+    !
+    ! print *, 'Analysing 0315_intg_binarized_polished.mrc FALLACIOUS'
+    ! call img%read('0315_intg_binarized_polished.mrc')
+    ! call img%find_connected_comps(img_cc)
+    ! sz = img_cc%size_connected_comps()
+    ! avg_curvature = 0.
+    ! do i = 1, number_biggest_ccs
+    !     cc(:) = maxloc(sz)
+    !     c = estimate_curvature(img_cc,cc(1),i)
+    !     avg_curvature = avg_curvature + c
+    !     call img_aux%copy(img_cc)
+    !     imat = nint(img_aux%get_rmat())
+    !     where(imat /= cc(1)) imat = 0
+    !     call img_aux%set_rmat(real(imat))
+    !     call img_aux%write(trim(int2str(i))//'BiggestCC.mrc')
+    !     sz(cc(1)) = 0 !discard
+    ! enddo
+    ! avg_curvature = avg_curvature/number_biggest_ccs
+    ! print *, 'avg_curvature = ', avg_curvature
 
     ! CURVATURE ESTIMATION ON ARTOFICIAL DATA
     ! BOX = 256

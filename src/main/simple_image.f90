@@ -279,6 +279,7 @@ contains
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
+    procedure          :: phase_corr
     procedure          :: prenorm4real_corr_1
     procedure          :: prenorm4real_corr_2
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2
@@ -3372,8 +3373,9 @@ contains
         call self%elim_cc([ floor(ave-2.*stdev) , ceiling(ave+2.*stdev) ])
         !call img_cc%order_cc() it is already done in the elim_cc subroutine
         ! Use particle radius. Hypothesise the biggest possible area is when
-        ! particle is circular, the smallest one is when the particle is rectangular
-        if(present(min_rad)) call self%elim_cc([ int(min_rad*max_rad) , int(2*3.14*(max_rad)**2) ])
+        ! particle is circular (with rad 3*max_rad), the smallest one is when the particle is rectangular
+        ! with lengths min_rad/2 and max_rad/2
+        if(present(min_rad)) call self%elim_cc([ int(min_rad*max_rad/4.) , int(2*3.14*(3*max_rad)**2) ])
     end subroutine polish_cc
 
      ! This subroutine is ment for 2D binary images. It implements
@@ -3399,7 +3401,6 @@ contains
         enddo
         call self_copy%kill
     end subroutine dilatation
-
 
      ! This subroutine is ment for 2D binary images. It implements
      ! the morphological operation erosion.
@@ -5218,15 +5219,222 @@ contains
         real,         intent(inout) :: neigh_8(27)
         integer,      intent(out)   :: nsz
         integer :: i, j, k
+        logical :: i_okay, j_okay, k_okay
         i = px(1)
         j = px(2)
         k = px(3)
-        if(k-1 < 1 .or. k+1 > self%ldim(3)) then
-            write(logfhandle,*) 'Please consider padding on the 3rd dim, I didn t implement all the cases :) '
-            THROW_HARD('Neigh of this px would exceed dim of the img; calc3D_neigh_8')
-        endif
-        ! identify neighborhood
-        if( i-1 < 1 .and. j-1 < 1 )then                            ! NW corner
+        i_okay = (i-1 > 0 .and. i+1 <= self%ldim(1))
+        j_okay = (j-1 > 0 .and. j+1 <= self%ldim(2))
+        k_okay = (k-1 > 0 .and. k+1 <= self%ldim(3))
+        if( i-1 < 1 .and. j-1 < 1 .and. k-1 < 1 )then
+            neigh_8(1) = self%rmat(i+1,j,k)
+            neigh_8(2) = self%rmat(i+1,j+1,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i+1,j,k+1)
+            neigh_8(5) = self%rmat(i+1,j+1,k+1)
+            neigh_8(6) = self%rmat(i,j+1,k+1)
+            neigh_8(7) = self%rmat(i,j,k+1)
+            neigh_8(8) = self%rmat(i,j,k)
+            nsz = 8
+            return
+        elseif(i+1 > self%ldim(1) .and. j+1 > self%ldim(2) .and. k+1 > self%ldim(3) )then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i-1,j-1,k)
+            neigh_8(3) = self%rmat(i,j-1,k)
+            neigh_8(4) = self%rmat(i-1,j,k-1)
+            neigh_8(5) = self%rmat(i-1,j-1,k-1)
+            neigh_8(6) = self%rmat(i,j-1,k-1)
+            neigh_8(7) = self%rmat(i,j,k-1)
+            neigh_8(8) = self%rmat(i,j,k)
+            nsz = 8
+            return
+        elseif(i-1 < 1 .and. j-1 < 1 .and. k+1 > self%ldim(3) )then
+            neigh_8(1) = self%rmat(i+1,j,k-1)
+            neigh_8(2) = self%rmat(i+1,j+1,k-1)
+            neigh_8(3) = self%rmat(i,j+1,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i+1,j,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i,j+1,k)
+            neigh_8(8) = self%rmat(i,j,k)
+            nsz = 8
+            return
+        elseif(i+1 > self%ldim(1) .and. j-1 < 1 .and. k-1 < 1 ) then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i-1,j+1,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i-1,j,k+1)
+            neigh_8(5) = self%rmat(i-1,j+1,k+1)
+            neigh_8(6) = self%rmat(i,j+1,k+1)
+            neigh_8(7) = self%rmat(i,j,k+1)
+            neigh_8(8) = self%rmat(i,j,k)
+            nsz = 8
+            return
+        elseif(i-1 < 1 .and. j+1 > self%ldim(2) .and. k-1 < 1 ) then
+            neigh_8(1) = self%rmat(i+1,j,k)
+            neigh_8(2) = self%rmat(i+1,j-1,k)
+            neigh_8(3) = self%rmat(i+1,j,k+1)
+            neigh_8(4) = self%rmat(i,j,k+1)
+            neigh_8(5) = self%rmat(i,j,k)
+            neigh_8(6) = self%rmat(i+1,j-1,k+1)
+            neigh_8(7) = self%rmat(i,j-1,k+1)
+            neigh_8(8) = self%rmat(i,j-1,k)
+            nsz = 8
+            return
+        elseif(i+1 > self%ldim(1) .and. j-1 < 1 .and. k+1 > self%ldim(3) ) then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i-1,j+1,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i-1,j,k-1)
+            neigh_8(5) = self%rmat(i-1,j+1,k-1)
+            neigh_8(6) = self%rmat(i,j+1,k-1)
+            neigh_8(7) = self%rmat(i,j,k-1)
+            neigh_8(8) = self%rmat(i,j,k)
+            nsz = 8
+            return
+        elseif(i-1 < 1 .and. j+1 > self%ldim(2) .and. k+1 > self%ldim(3) ) then
+            neigh_8(1) = self%rmat(i+1,j,k)
+            neigh_8(2) = self%rmat(i+1,j-1,k)
+            neigh_8(3) = self%rmat(i+1,j,k-1)
+            neigh_8(4) = self%rmat(i,j,k-1)
+            neigh_8(5) = self%rmat(i,j,k)
+            neigh_8(6) = self%rmat(i+1,j-1,k-1)
+            neigh_8(7) = self%rmat(i,j-1,k-1)
+            neigh_8(8) = self%rmat(i,j-1,k)
+            nsz = 8
+            return
+        elseif(i+1 > self%ldim(1) .and. j+1 > self%ldim(2) .and. k-1 < 1 ) then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i-1,j-1,k)
+            neigh_8(3) = self%rmat(i-1,j,k+1)
+            neigh_8(4) = self%rmat(i,j,k+1)
+            neigh_8(5) = self%rmat(i,j,k)
+            neigh_8(6) = self%rmat(i-1,j-1,k+1)
+            neigh_8(7) = self%rmat(i,j-1,k+1)
+            neigh_8(8) = self%rmat(i,j-1,k)
+            nsz = 8
+            return
+        elseif( i-1 < 1 .and. k-1 < 1 .and. j_okay )then
+            neigh_8(1) = self%rmat(i,j-1,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i+1,j-1,k)
+            neigh_8(5) = self%rmat(i+1,j,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i,j-1,k+1)
+            neigh_8(8) = self%rmat(i,j,k+1)
+            neigh_8(9) = self%rmat(i,j+1,k+1)
+            neigh_8(10) = self%rmat(i+1,j-1,k+1)
+            neigh_8(11) = self%rmat(i+1,j,k+1)
+            neigh_8(12) = self%rmat(i+1,j+1,k+1)
+            nsz = 12
+            return
+        elseif( i-1 < 1 .and. k+1 > self%ldim(3) .and. j_okay )then
+            neigh_8(1) = self%rmat(i,j-1,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i+1,j-1,k)
+            neigh_8(5) = self%rmat(i+1,j,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i,j-1,k-1)
+            neigh_8(8) = self%rmat(i,j,k-1)
+            neigh_8(9) = self%rmat(i,j+1,k-1)
+            neigh_8(10) = self%rmat(i+1,j-1,k-1)
+            neigh_8(11) = self%rmat(i+1,j,k-1)
+            neigh_8(12) = self%rmat(i+1,j+1,k-1)
+            nsz = 12
+            return
+        elseif( i+1 > self%ldim(1) .and. k+1 > self%ldim(3) .and. j_okay )then
+            neigh_8(1) = self%rmat(i,j-1,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i-1,j-1,k)
+            neigh_8(5) = self%rmat(i-1,j,k)
+            neigh_8(6) = self%rmat(i-1,j+1,k)
+            neigh_8(7) = self%rmat(i,j-1,k-1)
+            neigh_8(8) = self%rmat(i,j,k-1)
+            neigh_8(9) = self%rmat(i,j+1,k-1)
+            neigh_8(10) = self%rmat(i-1,j-1,k-1)
+            neigh_8(11) = self%rmat(i-1,j,k-1)
+            neigh_8(12) = self%rmat(i-1,j+1,k-1)
+            nsz = 12
+            return
+        elseif( i+1 > self%ldim(1) .and. k-1 < 1 .and. j_okay )then
+            neigh_8(1) = self%rmat(i,j-1,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i,j+1,k)
+            neigh_8(4) = self%rmat(i-1,j-1,k)
+            neigh_8(5) = self%rmat(i-1,j,k)
+            neigh_8(6) = self%rmat(i-1,j+1,k)
+            neigh_8(7) = self%rmat(i,j-1,k+1)
+            neigh_8(8) = self%rmat(i,j,k+1)
+            neigh_8(9) = self%rmat(i,j+1,k+1)
+            neigh_8(10) = self%rmat(i-1,j-1,k+1)
+            neigh_8(11) = self%rmat(i-1,j,k+1)
+            neigh_8(12) = self%rmat(i-1,j+1,k+1)
+            nsz = 12
+            return
+        elseif( j-1 < 1 .and. k-1 < 1 .and. i_okay )then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i+1,j,k)
+            neigh_8(4) = self%rmat(i-1,j+1,k)
+            neigh_8(5) = self%rmat(i,j+1,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i-1,j,k+1)
+            neigh_8(8) = self%rmat(i,j,k+1)
+            neigh_8(9) = self%rmat(i+1,j,k+1)
+            neigh_8(10) = self%rmat(i-1,j+1,k+1)
+            neigh_8(11) = self%rmat(i,j+1,k+1)
+            neigh_8(12) = self%rmat(i+1,j+1,k+1)
+            nsz = 12
+            return
+        elseif( j+1 > self%ldim(2) .and. k-1 < 1 .and. i_okay )then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i+1,j,k)
+            neigh_8(4) = self%rmat(i-1,j-1,k)
+            neigh_8(5) = self%rmat(i,j-1,k)
+            neigh_8(6) = self%rmat(i+1,j-1,k)
+            neigh_8(7) = self%rmat(i-1,j,k+1)
+            neigh_8(8) = self%rmat(i,j,k+1)
+            neigh_8(9) = self%rmat(i+1,j,k+1)
+            neigh_8(10) = self%rmat(i-1,j-1,k+1)
+            neigh_8(11) = self%rmat(i,j-1,k+1)
+            neigh_8(12) = self%rmat(i+1,j-1,k+1)
+            nsz = 12
+            return
+        elseif( j+1 > self%ldim(2) .and. k+1 > self%ldim(3) .and. i_okay )then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i+1,j,k)
+            neigh_8(4) = self%rmat(i-1,j-1,k)
+            neigh_8(5) = self%rmat(i,j-1,k)
+            neigh_8(6) = self%rmat(i+1,j-1,k)
+            neigh_8(7) = self%rmat(i-1,j,k-1)
+            neigh_8(8) = self%rmat(i,j,k-1)
+            neigh_8(9) = self%rmat(i+1,j,k-1)
+            neigh_8(10) = self%rmat(i-1,j-1,k-1)
+            neigh_8(11) = self%rmat(i,j-1,k-1)
+            neigh_8(12) = self%rmat(i+1,j-1,k-1)
+            nsz = 12
+            return
+        elseif( j-1 < 1 .and. k+1 > self%ldim(3) .and. i_okay )then
+            neigh_8(1) = self%rmat(i-1,j,k)
+            neigh_8(2) = self%rmat(i,j,k)
+            neigh_8(3) = self%rmat(i+1,j,k)
+            neigh_8(4) = self%rmat(i-1,j+1,k)
+            neigh_8(5) = self%rmat(i,j+1,k)
+            neigh_8(6) = self%rmat(i+1,j+1,k)
+            neigh_8(7) = self%rmat(i-1,j,k-1)
+            neigh_8(8) = self%rmat(i,j,k-1)
+            neigh_8(9) = self%rmat(i+1,j,k-1)
+            neigh_8(10) = self%rmat(i-1,j+1,k-1)
+            neigh_8(11) = self%rmat(i,j+1,k-1)
+            neigh_8(12) = self%rmat(i+1,j+1,k-1)
+            nsz = 12
+            return
+        elseif( i-1 < 1 .and. j-1 < 1 .and. k_okay )then                            ! NW corner
             neigh_8(1) = self%rmat(i+1,j,k-1)
             neigh_8(2) = self%rmat(i+1,j+1,k-1)
             neigh_8(3) = self%rmat(i,j+1,k-1)
@@ -5240,7 +5448,8 @@ contains
             neigh_8(11) = self%rmat(i,j,k+1)
             neigh_8(12) = self%rmat(i,j,k)
             nsz = 12
-        else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then ! SE corner
+            return
+        else if ( j+1 > self%ldim(2) .and. i+1 > self%ldim(1) .and. k_okay ) then ! SE corner
             neigh_8(1) = self%rmat(i-1,j,k-1)
             neigh_8(2) = self%rmat(i-1,j-1,k-1)
             neigh_8(3) = self%rmat(i,j-1,k-1)
@@ -5254,7 +5463,8 @@ contains
             neigh_8(11) = self%rmat(i,j,k+1)
             neigh_8(12) = self%rmat(i,j,k)
             nsz = 12
-        else if (j-1 < 1  .and. i+1 >self%ldim(1)) then            ! SW corner
+            return
+        else if ( j-1 < 1  .and. i+1 >self%ldim(1) .and. k_okay ) then            ! SW corner
             neigh_8(1) = self%rmat(i,j+1,k-1)
             neigh_8(2) = self%rmat(i-1,j+1,k-1)
             neigh_8(3) = self%rmat(i-1,j,k-1)
@@ -5268,7 +5478,8 @@ contains
             neigh_8(11) = self%rmat(i,j,k+1)
             neigh_8(12) = self%rmat(i,j,k)
             nsz = 12
-        else if (j+1 > self%ldim(2) .and. i-1 < 1) then            ! NE corner
+            return
+        else if ( j+1 > self%ldim(2) .and. i-1 < 1 .and. k_okay ) then            ! NE corner
             neigh_8(1) = self%rmat(i,j-1,k-1)
             neigh_8(2) = self%rmat(i+1,j-1,k-1)
             neigh_8(3) = self%rmat(i+1,j,k-1)
@@ -5282,7 +5493,8 @@ contains
             neigh_8(11) = self%rmat(i,j,k+1)
             neigh_8(12) = self%rmat(i,j,k)
             nsz = 12
-        else if( j-1 < 1 ) then                                    ! N border
+            return
+        else if( j-1 < 1 .and. i_okay .and. k_okay ) then                                    ! N border
             neigh_8(1) = self%rmat(i+1,j,k-1)
             neigh_8(2) = self%rmat(i+1,j+1,k-1)
             neigh_8(3) = self%rmat(i,j+1,k-1)
@@ -5302,7 +5514,8 @@ contains
             neigh_8(17) = self%rmat(i,j,k+1)
             neigh_8(18) = self%rmat(i,j,k)
             nsz = 18
-        else if ( j+1 > self%ldim(2) ) then                        ! S border
+            return
+        else if ( j+1 > self%ldim(2) .and. i_okay .and. k_okay ) then                        ! S border
             neigh_8(1) = self%rmat(i-1,j,k-1)
             neigh_8(2) = self%rmat(i-1,j-1,k-1)
             neigh_8(3) = self%rmat(i,j-1,k-1)
@@ -5322,7 +5535,8 @@ contains
             neigh_8(17) = self%rmat(i,j,k+1)
             neigh_8(18) = self%rmat(i,j,k)
             nsz = 18
-        else if ( i-1 < 1 ) then                                   ! W border
+            return
+        else if ( i-1 < 1 .and. j_okay .and. k_okay  ) then                                   ! W border
             neigh_8(1) = self%rmat(i,j-1,k-1)
             neigh_8(2) = self%rmat(i+1,j-1,k-1)
             neigh_8(3) = self%rmat(i+1,j,k-1)
@@ -5342,7 +5556,8 @@ contains
             neigh_8(17) = self%rmat(i,j,k+1)
             neigh_8(18) = self%rmat(i,j,k)
             nsz = 18
-        else if ( i+1 > self%ldim(1) ) then                       ! E border
+            return
+        else if ( i+1 > self%ldim(1) .and. j_okay .and. k_okay  ) then                       ! E border
             neigh_8(1) = self%rmat(i,j+1,k-1)
             neigh_8(2) = self%rmat(i-1,j+1,k-1)
             neigh_8(3) = self%rmat(i-1,j,k-1)
@@ -5362,7 +5577,50 @@ contains
             neigh_8(17) = self%rmat(i,j,k+1)
             neigh_8(18) = self%rmat(i,j,k)
             nsz = 18
-        else                                                     ! DEFAULT
+            return
+        else if ( k-1 < 1 .and. i_okay .and. j_okay ) then
+            neigh_8(1) = self%rmat(i-1,j-1,k)
+            neigh_8(2) = self%rmat(i-1,j-1,k+1)
+            neigh_8(3) = self%rmat(i-1,j,k)
+            neigh_8(4) = self%rmat(i-1,j+1,k)
+            neigh_8(5) = self%rmat(i-1,j+1,k+1)
+            neigh_8(6) = self%rmat(i-1,j,k+1)
+            neigh_8(7) = self%rmat(i,j-1,k)
+            neigh_8(8) = self%rmat(i+1,j-1,k)
+            neigh_8(9) = self%rmat(i+1,j,k)
+            neigh_8(10) = self%rmat(i+1,j+1,k)
+            neigh_8(11) = self%rmat(i,j+1,k)
+            neigh_8(12) = self%rmat(i,j-1,k+1)
+            neigh_8(13) = self%rmat(i+1,j-1,k+1)
+            neigh_8(14) = self%rmat(i+1,j,k+1)
+            neigh_8(15) = self%rmat(i+1,j+1,k+1)
+            neigh_8(16) = self%rmat(i,j+1,k+1)
+            neigh_8(17) = self%rmat(i,j,k+1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+            return
+        else if ( k+1 > self%ldim(3) .and. i_okay .and. j_okay) then
+            neigh_8(1) = self%rmat(i-1,j-1,k)
+            neigh_8(2) = self%rmat(i-1,j-1,k-1)
+            neigh_8(3) = self%rmat(i-1,j,k)
+            neigh_8(4) = self%rmat(i-1,j+1,k)
+            neigh_8(5) = self%rmat(i-1,j+1,k-1)
+            neigh_8(6) = self%rmat(i-1,j,k-1)
+            neigh_8(7) = self%rmat(i,j-1,k)
+            neigh_8(8) = self%rmat(i+1,j-1,k)
+            neigh_8(9) = self%rmat(i+1,j,k)
+            neigh_8(10) = self%rmat(i+1,j+1,k)
+            neigh_8(11) = self%rmat(i,j+1,k)
+            neigh_8(12) = self%rmat(i,j-1,k-1)
+            neigh_8(13) = self%rmat(i+1,j-1,k-1)
+            neigh_8(14) = self%rmat(i+1,j,k-1)
+            neigh_8(15) = self%rmat(i+1,j+1,k-1)
+            neigh_8(16) = self%rmat(i,j+1,k-1)
+            neigh_8(17) = self%rmat(i,j,k-1)
+            neigh_8(18) = self%rmat(i,j,k)
+            nsz = 18
+            return
+        else if(i_okay .and. j_okay .and. k_okay) then                                                   ! DEFAULT
             neigh_8(1) = self%rmat(i-1,j-1,k-1)
             neigh_8(2) = self%rmat(i,j-1,k-1)
             neigh_8(3) = self%rmat(i+1,j-1,k-1)
@@ -5391,6 +5649,10 @@ contains
             neigh_8(26) = self%rmat(i,j,k+1)
             neigh_8(27) = self%rmat(i,j,k)
             nsz = 27
+            return
+        else
+            print *, 'i, j, k =  ', i, j, k
+            THROW_HARD('Case not covered!; calc3D_neigh_8')
         endif
     end subroutine calc3D_neigh_8
 
@@ -5845,6 +6107,41 @@ contains
             r = 0.
         endif
     end function real_corr_2
+
+    !> /brief phase_corr calculates the phase correlation between
+    !> self1 and self2 and returns it in pc.
+    !> if border is present, then it calculates it discarding
+    !> the external frame in self1 self2 with width border.
+    ! FORMULA: phasecorr = ifft2(fft2(self1).*conj(fft2(self2)));
+    ! Returns real images
+    function phase_corr(self1,self2,border) result(pc)
+        class(image),      intent(inout) :: self1, self2
+        integer, optional, intent(in)    :: border
+        type(image) :: pc
+        type(image) :: aux
+        integer     :: i, j
+        if(self1.eqdims.self2) then
+            if(self1%ldim(3) > 1) THROW_HARD('Just for 2D images! phase_corr')
+            if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2)) &
+            & THROW_HARD('Input border parameter too big; phase_corr')
+            call pc%new(self1%ldim, self1%smpd)
+            call self1%fft()
+            call self2%fft()
+            aux = self2%conjg()
+            pc  = self1*aux
+            call pc%ifft()
+            call self1%ifft()
+            call self2%ifft()
+            if(present(border) .and. border > 1) then
+                pc%rmat(1:border,:,1) = 0.
+                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
+                pc%rmat(:,1:border,1) = 0.
+                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
+            endif
+        else
+            THROW_HARD('Cannot be performed on images with different dims; phase_corr')
+        endif
+    end function phase_corr
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
     subroutine prenorm4real_corr_1( self, sxx )
@@ -7412,7 +7709,6 @@ contains
           class(image), intent(inout) :: self
           real,         intent(in)    :: new_range(2)
           real :: old_range(2), sc
-          if( .not. self%is_2d() ) THROW_HARD('only for 2D images; scale_pixels')
           old_range(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
           old_range(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
           sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
