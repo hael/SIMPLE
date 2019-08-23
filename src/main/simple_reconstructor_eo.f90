@@ -37,7 +37,6 @@ type :: reconstructor_eo
     procedure, private :: reset_odd
     procedure          :: reset_sum
     procedure          :: apply_weight
-    procedure          :: set_lplim
     ! GETTERS
     procedure          :: get_kbwin
     procedure          :: get_res
@@ -157,13 +156,6 @@ contains
         call self%even%apply_weight(w)
         call self%odd%apply_weight(w)
     end subroutine apply_weight
-
-    subroutine set_lplim( self, lp )
-        class(reconstructor_eo), intent(inout) :: self
-        real,                    intent(in)    :: lp
-        call self%even%set_lplim(lp)
-        call self%odd%set_lplim(lp)
-    end subroutine set_lplim
 
     ! GETTERS
 

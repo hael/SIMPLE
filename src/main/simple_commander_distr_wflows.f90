@@ -1305,9 +1305,16 @@ contains
                 write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
                 write(logfhandle,'(A)')'>>>'
                 l_projection_matching = .false.
-                call cline%delete('lp')
-                call job_descr%delete('lp')
-                call cline_postprocess%delete('lp')
+                if( cline%defined('match_filt') )then
+                    if( cline%get_carg('match_filt').eq.'no' )then
+                        ! flags are kept so match_filt is not used
+                        call job_descr%set('match_filt','no')
+                    else
+                        call cline%delete('lp')
+                        call job_descr%delete('lp')
+                        call cline_postprocess%delete('lp')
+                    endif
+                endif
                 if( params%l_frac_update )then
                     call job_descr%set('update_frac', real2str(params%update_frac))
                     call cline%set('update_frac', params%update_frac)

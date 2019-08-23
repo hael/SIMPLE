@@ -165,7 +165,6 @@ type :: parameters
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
     character(len=STDLEN) :: dockmode='rotshift'  !< mode for docking (rot|shift|rotshift)
     character(len=STDLEN) :: draw_color='white'   !< color in which to identify the picked particle
-    character(len=STDLEN) :: eo='yes'             !< use FSC for filtering and low-pass limit update(yes|aniso|no){no}
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
@@ -406,7 +405,6 @@ type :: parameters
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
     logical :: l_doshift        = .false.
-    logical :: l_eo             = .false.
     logical :: l_lpset          = .false.
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
@@ -508,7 +506,6 @@ contains
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
-        call check_carg('eo',             self%eo)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)
@@ -1190,8 +1187,6 @@ contains
         endif
         ! set lpset flag
         self%l_lpset  = cline%defined('lp')
-        ! set eo flag
-        self%l_eo     = self%eo     .ne. 'no'
         ! set envfsc flag
         self%l_envfsc = self%envfsc .ne. 'no'
         ! set projw flag

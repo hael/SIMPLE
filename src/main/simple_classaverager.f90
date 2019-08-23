@@ -664,18 +664,16 @@ contains
             if( phaseplate ) call phaseplate_correct_fsc(frc, find_plate)
             call build_glob%projfrcs%set_frc(icls, frc, 1)
             ! average low-resolution info between eo pairs to keep things in register
-            if( params_glob%l_eo )then
-                find = build_glob%projfrcs%estimate_find_for_eoavg(icls, 1)
-                find = max(find, find_plate)
-                call cavgs_merged(icls)%fft()
-                call cavgs_even(icls)%fft()
-                call cavgs_odd(icls)%fft()
-                call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
-                call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
-                call cavgs_merged(icls)%ifft()
-                call cavgs_even(icls)%ifft()
-                call cavgs_odd(icls)%ifft()
-            endif
+            find = build_glob%projfrcs%estimate_find_for_eoavg(icls, 1)
+            find = max(find, find_plate)
+            call cavgs_merged(icls)%fft()
+            call cavgs_even(icls)%fft()
+            call cavgs_odd(icls)%fft()
+            call cavgs_even(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+            call cavgs_odd(icls)%insert_lowres_serial(cavgs_merged(icls), find)
+            call cavgs_merged(icls)%ifft()
+            call cavgs_even(icls)%ifft()
+            call cavgs_odd(icls)%ifft()
         end do
         !$omp end parallel do
         ! write FRCs
@@ -697,12 +695,10 @@ contains
         integer               :: icls
         select case(which)
             case('even')
-                if( .not.params_glob%l_eo )return
                 do icls=1,ncls
                     call cavgs_even(icls)%write(fname, icls)
                 end do
             case('odd')
-                if( .not.params_glob%l_eo )return
                 do icls=1,ncls
                     call cavgs_odd(icls)%write(fname, icls)
                 end do
