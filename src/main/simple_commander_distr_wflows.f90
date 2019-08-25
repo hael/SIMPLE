@@ -1009,7 +1009,6 @@ contains
             call cline_postprocess%delete( vol )
             state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
         enddo
-        DebugPrint ' In exec_refine3D_distr; begin starting models'
         ! E/O PARTITIONING
         if( build%spproj_field%get_nevenodd() == 0 )then
             if( params%tseries .eq. 'yes' )then
@@ -1034,13 +1033,6 @@ contains
                 endif
                 call cline%set(trim(vol), vol_fname)
                 params%vols(state) = vol_fname
-                if( state == 1 )then
-                    ! get the iteration number
-                    iter = fname2iter(basename(vol_fname))
-                    ! startit becomes the next
-                    params%startit = iter + 1
-                    call cline%set('startit', real(params%startit))
-                endif
             end do
             prev_refine_path = get_fpath(vol_fname)
             ! carry over FRCs/FSCs
