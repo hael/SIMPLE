@@ -198,9 +198,9 @@ type :: parameters
     character(len=STDLEN) :: wfun='kb'
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
-    integer(kind(ENUM_ORISEG))         :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
-    integer(kind(ENUM_OBJFUN))         :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
-    integer(kind=kind(ENUM_RANKWCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based orientation weights
+    integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
+    integer(kind(ENUM_OBJFUN))     :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
+    integer(kind=kind(ENUM_WCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based orientation weights
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0

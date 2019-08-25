@@ -484,18 +484,27 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
 
-    function corrs2weights( corrs ) result( weights )
-        real, intent(in)  :: corrs(:) !< correlation input
-        real, allocatable :: weights(:), corrs_copy(:)
+    function corrs2weights( corrs, crit, rankw_crit, p ) result( weights )
+        real,                                     intent(in) :: corrs(:) !< correlation input
+        integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: crit
+        integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: rankw_crit
+        real,                           optional, intent(in) :: p
+        integer(kind=kind(ENUM_WCRIT)) :: ccrit
+        real, allocatable :: weights(:), corrs_copy(:), rank_weights(:)
         real, parameter   :: THRESHOLD=1.5
-        real    :: maxminratio, corrmax, corrmin
+        real    :: maxminratio, corrmax, corrmin, minw
         integer :: ncorrs
+        ccrit = CORRW_CRIT
+        if( present(crit) ) ccrit = crit
+        select case(ccrit)
+            case(CORRW_CRIT,CORRW_ZSCORE_CRIT)
+                ! all good
+            case DEFAULT
+                THROW_HARD('Only CORRW_CRIT & CORRW_ZSCORE_CRIT allowed for crit dummy argument; corrs2weights')
+        end select
         ncorrs = size(corrs)
-        allocate(weights(ncorrs), stat=alloc_stat)
-        if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 1" , alloc_stat)
-        weights = 0.
+        allocate(weights(ncorrs), source=0.)
         allocate(corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
-        if(alloc_stat /= 0) call allocchk("In: corrs2weights; simple_stat 2" , alloc_stat)
         corrmax = maxval(corrs_copy)
         if( corrmax <= 0. )then
             ! weighting does not make sense, put them all to 1/ncorrs
@@ -504,20 +513,34 @@ contains
         endif
         ! remove negatives to prevent corrs around zero to recieve any weight power
         where( corrs_copy <= 0. ) corrs_copy = 0.
-        corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
-        maxminratio = corrmax / corrmin
-        if( maxminratio >= THRESHOLD )then
-           ! min/max normalise the correlations
-           call normalize_sigm(corrs_copy)
+        ! correlation-based weights
+        select case(ccrit)
+            case(CORRW_CRIT)
+                corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
+                maxminratio = corrmax / corrmin
+                if( maxminratio >= THRESHOLD )then
+                   ! min/max normalise the correlations
+                   call normalize_sigm(corrs_copy)
+                endif
+                ! calculate the exponential of the negative distances
+                where( corrs_copy > TINY )
+                    weights = exp(-(1. - corrs_copy))
+                else where
+                    weights = 0.
+                end where
+                ! normalize weights
+                weights = weights / sum(weights)
+            case(CORRW_ZSCORE_CRIT)
+                weights = z_scores(corrs_copy)
+                minw    = minval(weights)
+                weights = weights + abs(minw)
+        end select
+        ! convert to rank-based weights
+        if( present(rankw_crit) )then
+            allocate(rank_weights(ncorrs), source=0.)
+            call conv2rank_weights( ncorrs, weights, rankw_crit, rank_weights, p )
+            weights = rank_weights
         endif
-        ! calculate the exponential of the negative distances
-        where( corrs_copy > TINY )
-            weights = exp(-(1. - corrs_copy))
-        else where
-            weights = 0.
-        end where
-        ! normalize weights
-        weights = weights / sum(weights)
     end function corrs2weights
 
     ! integer STUFF
@@ -719,11 +742,11 @@ contains
     ! RANK STUFF
 
     subroutine conv2rank_weights( n, weights, crit, rank_weights, p )
-        integer,                            intent(in)  :: n
-        real,                               intent(in)  :: weights(n)
-        integer(kind=kind(ENUM_RANKWCRIT)), intent(in)  :: crit
-        real,                               intent(out) :: rank_weights(n)
-        real, optional,                     intent(in)  :: p
+        integer,                        intent(in)  :: n
+        real,                           intent(in)  :: weights(n)
+        integer(kind=kind(ENUM_WCRIT)), intent(in)  :: crit
+        real,                           intent(out) :: rank_weights(n)
+        real, optional,                 intent(in)  :: p
         real,    allocatable :: weights_nonzero(:), weights_tmp(:)
         integer, allocatable :: ranks(:)
         logical :: mask(n)
@@ -762,6 +785,8 @@ contains
                 else
                     THROW_HARD('need exponent (p) for rank exponent weight calculation; conv2rank_weights')
                 endif
+            case(RANK_INV_CRIT)
+                call rank_inverse_weights(n_nonzero, weights_nonzero)
             case DEFAULT
                 THROW_HARD('unsupported rank ordering criteria weighting method; conv2rank_weights')
         end select
@@ -790,16 +815,6 @@ contains
         end do
     end subroutine rank_sum_weights
 
-    subroutine rank_inverse_weights( n, weights )
-        integer, intent(in)  :: n
-        real,    intent(out) :: weights(n)
-        integer :: irank
-        do irank=1,n
-            weights(irank) = 1.0 / real(irank)
-        end do
-        weights = weights / sum(weights)
-    end subroutine rank_inverse_weights
-
     ! ROC weights
     subroutine rank_centroid_weights( n, weights )
         integer, intent(in)  :: n
@@ -827,5 +842,15 @@ contains
         end do
         weights = weights / sum(weights)
     end subroutine rank_exponent_weights
+
+    subroutine rank_inverse_weights( n, weights )
+        integer, intent(in)  :: n
+        real,    intent(out) :: weights(n)
+        integer :: irank
+        do irank=1,n
+            weights(irank) = 1.0 / real(irank)
+        end do
+        weights = weights / sum(weights)
+    end subroutine rank_inverse_weights
 
 end module simple_stat

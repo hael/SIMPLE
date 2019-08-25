@@ -92,12 +92,15 @@ enum, bind(c)
 end enum
 integer(kind=kind(ENUM_ORISEG)), parameter :: GENERIC_SEG = PTCL3D_SEG
 
-! rank ordering criteria weighting methods enumeration
+! weighting methods enumeration
 enum, bind(c)
-    enumerator :: ENUM_RANKWCRIT = 0
-    enumerator :: RANK_SUM_CRIT  = 1
-    enumerator :: RANK_CEN_CRIT  = 2
-    enumerator :: RANK_EXP_CRIT  = 3
+    enumerator :: ENUM_WCRIT        = 0
+    enumerator :: RANK_SUM_CRIT     = 1
+    enumerator :: RANK_CEN_CRIT     = 2
+    enumerator :: RANK_EXP_CRIT     = 3
+    enumerator :: RANK_INV_CRIT     = 4
+    enumerator :: CORRW_CRIT        = 5
+    enumerator :: CORRW_ZSCORE_CRIT = 6
 end enum
 
 ! export (to STAR) type enumeration
@@ -217,8 +220,8 @@ integer :: alloc_stat
 !! STOP is standard, CALL EXIT is an extension. STOP lets you display a text message where EXIT
 !! doesn't. Both let you set an exit status value. Otherwise they are pretty much the same.
 !! use call exit(EXIT_FAILURE)
-integer, parameter :: EXIT_SUCCESS = 0
-integer, parameter :: EXIT_FAILURE = 1
+integer, parameter :: EXIT_SUCCESS  = 0
+integer, parameter :: EXIT_FAILURE  = 1
 integer, parameter :: EXIT_FAILURE2 = 2
 integer, parameter :: EXIT_FAILURE3 = 3
 integer, parameter :: EXIT_FAILURE4 = 4
