@@ -41,16 +41,15 @@ contains
         class(cmdline),     intent(inout) :: cline
         integer,            intent(in)    :: ncls
         real,               intent(in)    :: msk
-        real,    allocatable :: updatecnts(:), states(:)
+        real,    allocatable :: updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: avg_updatecnt
         logical :: converged
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        updatecnts = build_glob%spproj_field%get_all('updatecnt')
-        states     = build_glob%spproj_field%get_all('states')
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
-        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        updatecnts    = build_glob%spproj_field%get_all('updatecnt')
+        avg_updatecnt = sum(updatecnts) / size(updatecnts)
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
         call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
@@ -112,8 +111,6 @@ contains
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
         call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
         call self%ostats%write(STATS_FILE)
-        ! destruct
-        deallocate(mask, updatecnts, states)
         call self%ostats%kill
     end function check_conv2D
 
@@ -121,7 +118,7 @@ contains
         class(convergence), intent(inout) :: self
         class(cmdline),     intent(inout) :: cline
         real,               intent(in)    :: msk
-        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:), states(:)
+        real,    allocatable :: state_mi_joint(:), statepops(:), updatecnts(:)
         logical, allocatable :: mask(:)
         real    :: min_state_mi_joint, avg_updatecnt
         logical :: converged
@@ -129,9 +126,8 @@ contains
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         updatecnts = build_glob%spproj_field%get_all('updatecnt')
-        states     = build_glob%spproj_field%get_all('states')
-        allocate(mask(size(updatecnts)), source=updatecnts > 0.5 .and. states > 0.5)
-        avg_updatecnt = sum(updatecnts) / real(count(states > 0.5))
+        avg_updatecnt = sum(updatecnts) / size(updatecnts)
+        allocate(mask(size(updatecnts)), source=updatecnts > 0.5)
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
         call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
@@ -245,7 +241,7 @@ contains
         call self%ostats%set(1,'SDEV_SHIFT_INCR_PEAKS',self%shwstdev%avg)
         call self%ostats%write(STATS_FILE)
         ! destruct
-        deallocate(mask, updatecnts, states)
+        deallocate(mask, updatecnts)
         call self%ostats%kill
     end function check_conv3D
 
