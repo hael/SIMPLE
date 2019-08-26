@@ -393,7 +393,7 @@ contains
             allocate(shifts(nframes,2), source=opt_shifts)
             call align_iso_polyn_direct%get_weights(frameweights)
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
-            call align_iso%kill
+            call align_iso_polyn_direct%kill
         else
             if( HYBRID_CORRELATION_SEARCH )then
                 call hybrid_srch%new(movie_frames_scaled)
