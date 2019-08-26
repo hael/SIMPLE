@@ -34,28 +34,19 @@ contains
         self%existence   = .true.
     end subroutine new_tvfilter
 
-    subroutine apply_filter( self, img, lambda, idx )
+    subroutine apply_filter( self, img, lambda )
         class(tvfilter),   intent(inout) :: self
         class(image),      intent(inout) :: img
         real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
-        integer, optional, intent(in)    :: idx
-        integer :: idx_here
         integer :: img_ldim(3), rb_ldim(3)
         real    :: img_smpd
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
         logical :: do_alloc
         integer :: dims1
-        if (.not. present(idx)) then
-            idx_here = 1
-        else
-            idx_here = idx
-        end if
         img_ldim = img%get_ldim()
+        if ( img_ldim(3) /= 1 ) THROW_HARD('only for 2D images; tvfilter::apply_filter')
         self%img_dims(1:2) = img_ldim(1:2)
-        if (idx_here > img_ldim(3)) then
-            THROW_HARD('tvfilter::apply_filter : idx greater than stack size')
-        end if
         img_smpd = img%get_smpd()
         do_alloc = .true.
         if (self%r_img%exists()) then
@@ -80,7 +71,7 @@ contains
         call self%r_img%get_cmat_ptr(cmat_r)
         call img%get_cmat_ptr(cmat_img)
         dims1 = int(img_ldim(1)/2)+1
-        cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2) / &
+        cmat_img(1:dims1,:,1) = cmat_img(1:dims1,:,1) * (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2) / &
             (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
