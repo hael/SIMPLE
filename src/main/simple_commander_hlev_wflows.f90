@@ -270,10 +270,11 @@ contains
         character(len=:), allocatable :: orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
-        call cline%set('center',    'yes')
-        call cline%set('autoscale', 'no')
-        call cline%set('refine',    'greedy')
-        call cline%set('tseries',   'yes')
+        call cline%set('center',          'yes')
+        call cline%set('autoscale',        'no')
+        call cline%set('refine',       'greedy')
+        call cline%set('tseries',         'yes')
+        call cline%set('graphene_filt', 'yes')
         if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)

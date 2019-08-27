@@ -126,6 +126,7 @@ type(simple_program), target :: pspec_stats
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
+type(simple_program), target :: refine3D_nano
 type(simple_program), target :: replace_project_field
 type(simple_program), target :: selection
 type(simple_program), target :: reproject
@@ -168,8 +169,9 @@ type(simple_input_param) :: eo
 type(simple_input_param) :: focusmsk
 type(simple_input_param) :: frac
 type(simple_input_param) :: fraca
-type(simple_input_param) :: groupframes
 type(simple_input_param) :: frcs
+type(simple_input_param) :: graphene_filt
+type(simple_input_param) :: groupframes
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
@@ -303,6 +305,7 @@ contains
         call new_reconstruct3D
         call new_reextract
         call new_refine3D
+        call new_refine3D_nano
         call new_replace_project_field
         call new_selection
         call new_scale
@@ -383,6 +386,7 @@ contains
         call push2prg_ptr_array(reconstruct3D)
         call push2prg_ptr_array(reextract)
         call push2prg_ptr_array(refine3D)
+        call push2prg_ptr_array(refine3D_nano)
         call push2prg_ptr_array(replace_project_field)
         call push2prg_ptr_array(selection)
         call push2prg_ptr_array(scale)
@@ -528,6 +532,8 @@ contains
                 ptr2prg => reextract
             case('refine3D')
                 ptr2prg => refine3D
+            case('refine3D_nano')
+                ptr2prg => refine3D_nano
             case('replace_project_field')
                 ptr2prg => replace_project_field
             case('selection')
@@ -597,6 +603,7 @@ contains
         write(logfhandle,'(A)') reconstruct3D%name
         write(logfhandle,'(A)') reextract%name
         write(logfhandle,'(A)') refine3D%name
+        write(logfhandle,'(A)') refine3D_nano%name
         write(logfhandle,'(A)') scale_project%name
         write(logfhandle,'(A)') tseries_track%name
     end subroutine list_distr_prgs_in_ui
@@ -765,6 +772,7 @@ contains
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(graphene_filt, 'graphene_filt', 'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -925,7 +933,7 @@ contains
         &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
         &probabilistic ab initio 3D reconstruction algorithm',&                 ! descr_long
         &'simple_distr_exec',&                                                  ! executable
-        &1, 0, 0, 11, 7, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
+        &1, 0, 0, 11, 8, 2, 2, .true.)                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call cluster2D%set_input('img_ios', 1, 'refs', 'file', 'Initial references',&
@@ -965,6 +973,7 @@ contains
         &ratio (SNR) in the presence of additive stochastic noise. Sometimes causes over-fitting and needs to be turned off(yes|no){yes}',&
         '(yes|no){yes}', .false., 'yes')
         call cluster2D%set_input('filt_ctrls', 7, ptclw)
+        call cluster2D%set_input('filt_ctrls', 8, graphene_filt)
         ! mask controls
         call cluster2D%set_input('mask_ctrls', 1, msk)
         call cluster2D%set_input('mask_ctrls', 2, inner)
@@ -2796,6 +2805,49 @@ contains
         call refine3D%set_input('comp_ctrls', 1, nparts)
         call refine3D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_refine3D
+
+    subroutine new_refine3D_nano
+        ! PROGRAM SPECIFICATION
+        call refine3D_nano%new(&
+        &'refine3D_nano',&                                                                                                    ! name
+        &'3D refinement of metallic nanoparticles',&                                                                          ! descr_short
+        &'is a distributed workflow for 3D refinement of metallic nanoparticles based on probabilistic projection matching',& ! descr_long
+        &'simple_distr_exec',&                                                                                                ! executable
+        &1, 0, 0, 10, 4, 2, 2, .true.)                                                                                        ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call refine3D_nano%set_input('img_ios', 1, 'vol1', 'file', 'FCC reference volume', 'FCC lattice reference volume for creating polar 2D central &
+        & sections for nanoparticle image matching', 'input volume e.g. vol.mrc', .true., 'vol1.mrc')
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call refine3D_nano%set_input('srch_ctrls', 1, nspace)
+        call refine3D_nano%set_input('srch_ctrls', 2, trs)
+        call refine3D_nano%set_input('srch_ctrls', 3, 'center', 'binary', 'Center reference volume(s)', 'Center reference volume(s) by their &
+        &center of gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        call refine3D_nano%set_input('srch_ctrls', 4, maxits)
+        call refine3D_nano%set_input('srch_ctrls', 5, update_frac)
+        call refine3D_nano%set_input('srch_ctrls', 6, frac)
+        call refine3D_nano%set_input('srch_ctrls', 7, pgrp)
+        call refine3D_nano%set_input('srch_ctrls', 8, objfun)
+        call refine3D_nano%set_input('srch_ctrls', 9, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
+        call refine3D_nano%set_input('srch_ctrls', 10, sigma2_fudge)
+        ! filter controls
+        call refine3D_nano%set_input('filt_ctrls', 1, hp)
+        call refine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
+        call refine3D_nano%set_input('filt_ctrls', 4,  projw)
+        ! mask controls
+        call refine3D_nano%set_input('mask_ctrls', 1, msk)
+        call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
+        ! computer controls
+        call refine3D_nano%set_input('comp_ctrls', 1, nparts)
+        call refine3D_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_refine3D_nano
 
     subroutine new_replace_project_field
         ! PROGRAM SPECIFICATION

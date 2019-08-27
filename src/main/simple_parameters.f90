@@ -43,7 +43,7 @@ type :: parameters
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)      :: graphene_filter='no' !< filter out graphene bands in correcation search
+    character(len=3)      :: graphene_filt='no' !< filter out graphene bands in correcation search
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
@@ -516,7 +516,7 @@ contains
         call check_carg('groupframes',      self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
-        call check_carg('graphene_filter',self%graphene_filter)
+        call check_carg('graphene_filt',self%graphene_filt)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
@@ -1208,7 +1208,7 @@ contains
             end select
         endif
         ! set graphene flag
-        self%l_graphene = self%graphene_filter .ne. 'no'
+        self%l_graphene = self%graphene_filt .ne. 'no'
         ! boxmatch
         self%boxmatch = find_boxmatch(self%box, self%msk)
         ! set default outer mask value

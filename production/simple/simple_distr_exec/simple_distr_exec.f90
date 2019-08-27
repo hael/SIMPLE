@@ -33,7 +33,7 @@ type(cleanup2D_commander)                   :: xcleanup2D_distr
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
-type(refine3D_distr_commander)              :: xprime3D_distr
+type(refine3D_distr_commander)              :: xrefine3D_distr
 type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
 
 ! CLUSTER3D WORKFLOWS
@@ -43,6 +43,7 @@ type(cluster3D_refine_commander)            :: xcluster3D_refine
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
 type(tseries_track_distr_commander)         :: xtseries_track_distr
 type(cleanup2D_nano_commander)              :: xcleanup2D_nano
+type(refine3D_nano_distr_commander)         :: xrefine3D_nano_distr
 
 ! MISCELLANEOUS WORKFLOWS
 type(scale_project_distr_commander)         :: xscale_project
@@ -110,7 +111,7 @@ select case(prg)
 
     ! REFINE3D WORKFLOWS
     case( 'refine3D' )
-        call execute_commander(xprime3D_distr, cline)
+        call execute_commander(xrefine3D_distr, cline)
     case( 'reconstruct3D' )
         call xreconstruct3D_distr%execute( cline )
 
@@ -125,6 +126,8 @@ select case(prg)
         call xtseries_track_distr%execute( cline )
     case( 'cleanup2D_nano' )
         call xcleanup2D_nano%execute(cline)
+    case( 'refine3D_nano')
+        call execute_commander(xrefine3D_nano_distr, cline)
 
     ! SUPPORTING WORKFLOWS
     case( 'scale_project' )
