@@ -12,9 +12,11 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-character(len=74) :: pdbfmt      = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
-character(len=74) :: pdbfmt_long = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
-character(len=74) :: pdbfmt_read = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3
+character(len=74), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+character(len=74), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
+character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3
+character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"   ! custom 3.3
+real,              parameter :: bohr_radius     = 0.5292    ! Angstroms
 
 !>  \brief type for dealing with atomic structures
 type :: atoms
@@ -25,12 +27,13 @@ type :: atoms
     character(len=1), allocatable :: chain(:)
     character(len=1), allocatable :: icode(:)
     character(len=3), allocatable :: resname(:)
-    character(len=3), allocatable :: element(:)
+    character(len=2), allocatable :: element(:)
     real,             allocatable :: charge(:)
     real,             allocatable :: xyz(:,:)
     real,             allocatable :: mw(:)
     real,             allocatable :: occupancy(:)
     real,             allocatable :: beta(:)
+    real,             allocatable :: radius(:)
     integer,          allocatable :: num(:)
     integer,          allocatable :: resnum(:)
     integer,          allocatable :: Z(:)
@@ -59,8 +62,10 @@ type :: atoms
     procedure          :: print_atom
     procedure          :: writepdb
     ! CALCULATORS
-    procedure, private :: Z_from_name
+    procedure          :: guess_element
+    procedure, private :: Z_and_radius_from_name
     procedure          :: get_geom_center
+    procedure          :: convolve
     ! MODIFIERS
     procedure          :: translate
     ! DESTRUCTOR
@@ -112,13 +117,20 @@ contains
             if( io_stat .ne. 0 )call str2int(line(5:11), io_stat, num )
             if( io_stat .ne. 0 )cycle
             i = i + 1
-            read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
-            &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
-            &self%occupancy(i), self%beta(i)
+            if( len_trim(line) < 68 )then
+                read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
+                &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                &self%occupancy(i), self%beta(i)
+            else
+                read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
+                &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
+                &self%occupancy(i), self%beta(i), self%element(i)
+            endif
             self%num(i) = num
             call fileiochk('new_from_pdb; simple_atoms error reading line '//trim(fname), io_stat)
             self%het(i) = atom_field == 'HETATM'
         enddo
+        call self%guess_element
         ! done
         call fclose(filnum, errmsg='new_from_pdb; simple_atoms closing '//trim(fname))
         contains
@@ -142,17 +154,19 @@ contains
         call self%kill
         allocate(self%name(n), self%chain(n), self%resname(n), self%xyz(n,3), self%mw(n),&
             self%occupancy(n), self%beta(n), self%num(n), self%Z(n), self%het(n), self%icode(n),&
-            self%altloc(n), self%resnum(n), stat=alloc_stat)
+            self%altloc(n), self%resnum(n), self%element(n), self%radius(n), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('new_instance :: simple_atoms', alloc_stat)
         self%name(:)    = '    '
         self%resname(:) = '   '
         self%chain(:)   = ' '
         self%altloc(:)  = ' '
         self%icode(:)   = ' '
+        self%element(:) = '  '
         self%mw        = 0.
         self%xyz       = 0.
         self%beta      = 0.
         self%occupancy = 0.
+        self%radius    = 0.
         self%num    = 0
         self%resnum = 0
         self%Z      = 0
@@ -165,6 +179,7 @@ contains
                 self%chain(:)   = 'A'
                 self%beta      = 1.
                 self%occupancy = 1.
+                self%radius    = 1.
                 self%num    = i
                 self%resnum = 1
             enddo
@@ -193,6 +208,8 @@ contains
         self%Z          = self_in%Z
         self%n          = n
         self%het        = self_in%het
+        self%element    = self_in%element
+        self%radius     = self_in%radius
     end subroutine copy
 
     ! GETTERS / SETTERS
@@ -301,7 +318,6 @@ contains
         class(atoms),     intent(in) :: self
         character(len=*), intent(in) :: fbody
         character(len=STDLEN) :: fname
-        character(len=76)     :: line
         integer               :: i, funit, io_stat
         logical               :: long
         fname = trim(adjustl(fbody)) // '.pdb'
@@ -329,7 +345,6 @@ contains
                         write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
                             self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
                             self%occupancy(ind), self%beta(ind)
-
                     else
                         atom_field(1:6) = 'ATOM  '
                         write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
@@ -342,34 +357,62 @@ contains
 
     ! CALCULATORS
 
-    integer function Z_from_name( self, name )
+    subroutine guess_element( self )
+        class(atoms), intent(inout) :: self
+        real    :: r
+        integer :: i, z
+        if( .not.self%exists ) THROW_HARD('Non-existent atoms object! guess_atomic_number')
+        do i=1,self%n
+            if( len_trim(self%element(i)) == 0 )then
+                call self%Z_and_radius_from_name(self%name(i),z,r)
+            else
+                call self%Z_and_radius_from_name(self%element(i)//'  ',z,r)
+            endif
+            if( z == 0 )then
+                THROW_WARN('Unknown atom '//int2str(i)//' : '//trim(self%name(i))//' - '//self%element(i))
+            else
+                self%radius(i) = r
+                self%Z(i) = z
+            endif
+        enddo
+    end subroutine guess_element
+
+    ! single covalent radii from Cordero, et al., 2008, "Covalent radii revisited"
+    ! Dalton Trans. (21): 2832–2838. doi:10.1039/b801115j
+    subroutine Z_and_radius_from_name( self, name, Z, r )
         class(atoms),     intent(inout) :: self
         character(len=4), intent(in)    :: name
+        integer,          intent(out)   :: Z
+        real,             intent(out)   :: r
         character(len=4) :: uppercase_name
+        Z = 0
+        r = 1.
         uppercase_name = upperCase(name)
         select case(trim(adjustl(uppercase_name)))
         ! organic
         case('H')
-            Z_from_name = 1
+            Z = 1 ; r = 0.31
         case('C')
-            Z_from_name = 6
+            Z = 6;  r = 0.76 ! sp3
         case('N')
-            Z_from_name = 7
+            Z = 7;  r = 0.71
         case('O')
-            Z_from_name = 8
+            Z = 8;  r = 0.66
         case('P')
-            Z_from_name = 15
+            Z = 15; r = 1.07
         case('S')
-            Z_from_name = 16
+            Z = 16; r = 1.05
         ! metals
         case('FE')
-            Z_from_name = 26
+            Z = 26; r = 1.16
         case('PD')
-            Z_from_name = 46
+            Z = 46; r = 1.2
         case('PT')
-            Z_from_name = 78
+            Z = 78; r = 1.23
+        case('AU')
+            Z = 79; r = 1.24
         end select
-    end function Z_from_name
+    end subroutine Z_and_radius_from_name
 
     function get_geom_center(self) result(center)
         class(atoms), intent(in) :: self
@@ -378,6 +421,60 @@ contains
         center(2) = sum(self%xyz(:,2)) / real(self%n)
         center(3) = sum(self%xyz(:,3)) / real(self%n)
     end function get_geom_center
+
+    ! Using 5-gaussian atomic scattering factors from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
+    subroutine convolve( self, vol )
+        use simple_image, only: image
+        class(atoms), intent(in)    :: self
+        class(image), intent(inout) :: vol
+        real, parameter :: C = 47.87568 ! conversion to eV
+        real, parameter :: fourpisq = 4.*PI*PI
+        real, pointer   :: prmat(:,:,:)
+        real    :: a(5), b(5), xyz(3), smpd, xx,yy,r2,cutoff
+        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,z,icutoff
+        if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
+        call vol%get_rmat_ptr(prmat)
+        prmat = 0.
+        smpd  = vol%get_smpd()
+        ldim  = vol%get_ldim()
+        cutoff  = 6.*smpd
+        icutoff = ceiling(cutoff/smpd)
+        do i = 1,self%n
+            z = self%Z(i)
+            if( z == 0 ) cycle
+            select case(z)
+            case(26) ! Fe
+                a = [0.3946, 1.2725, 1.7031,  2.3140,  1.4795]
+                b = [0.2717, 2.0443, 7.6007, 29.9714, 86.2265]
+            case(79) ! Au
+                a = [0.9674, 1.8916, 3.3993,  3.0524,  1.2607]
+                b = [0.2358, 1.4712, 5.6758, 18.7119, 61.5286]
+            end select
+            xyz = self%xyz(i,:)/smpd
+            pos = floor(xyz)
+            bbox(:,1) = pos   - icutoff
+            bbox(:,2) = pos+1 + icutoff
+            where( bbox < 1 ) bbox = 1
+            where( bbox > ldim(1) ) bbox = ldim(1)
+            do j = bbox(1,1),bbox(1,2)
+                do k = bbox(2,1),bbox(2,2)
+                    do l = bbox(3,1),bbox(3,2)
+                        r2 = sum((smpd*(xyz-real([j,k,l])))**2.)
+                        prmat(j,k,l) = prmat(j,k,l) + epot(r2)
+                    enddo
+                enddo
+            enddo
+        enddo
+
+    contains
+
+        ! electrostatic potential assuming static atoms (eq.32, B=0)
+        real elemental function epot(r2)
+            real, intent(in) :: r2
+            epot = C * sum( a*(FOURPI/b)**1.5 * exp(-fourpisq*r2/b) )
+        end function epot
+
+    end subroutine convolve
 
     ! MODIFIERS
 
@@ -405,6 +502,8 @@ contains
         if( allocated(self%resnum) )deallocate(self%resnum)
         if( allocated(self%Z) )deallocate(self%Z)
         if( allocated(self%het) )deallocate(self%het)
+        if( allocated(self%element) )deallocate(self%element)
+        if( allocated(self%radius) )deallocate(self%radius)
         self%n      = 0
         self%exists = .false.
     end subroutine kill

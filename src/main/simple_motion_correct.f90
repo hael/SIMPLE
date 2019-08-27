@@ -5,7 +5,6 @@ module simple_motion_correct
 include 'simple_lib.f08'
 use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,                only: motion_patched
-use simple_motion_align_iso,              only: motion_align_iso
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
 !use simple_motion_align_iso_direct,       only: motion_align_iso_direct
@@ -74,7 +73,6 @@ logical, parameter :: ISO_POLYN_DIRECT              = .false.  !< use polynomial
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
 logical, parameter :: DO_PATCHED_POLYN              = .false.  !< run polynomially constrained motion correction for patch-based motion correction
 logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.  !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
-logical, parameter :: HYBRID_CORRELATION_SEARCH     = .false.  !< semi discrete phase correlation followed by continuous correlation search
 contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION
@@ -226,85 +224,6 @@ contains
         deallocate(rmat_pad, win, outliers, movie_frames)
     end subroutine motion_correct_init
 
-    ! callback taking into account # of improving frames
-    subroutine motion_correct_iso_callback( aPtr, align_iso, converged )
-        class(*), pointer,       intent(inout) :: aPtr
-        class(motion_align_iso), intent(inout) :: align_iso
-        logical,                 intent(out)   :: converged
-        integer :: nimproved, iter
-        real    :: corrfrac, frac_improved
-        corrfrac      = align_iso%get_corrfrac()
-        frac_improved = align_iso%get_frac_improved()
-        nimproved     = align_iso%get_nimproved()
-        iter          = align_iso%get_iter()
-        didupdateres  = .false.
-        if( align_iso%is_fitshifts() )then
-            select case(updateres)
-                case(0)
-                    call update_res_fitshifts( 0.995, updateres )
-                case(1)
-                    call update_res_fitshifts( 0.998, updateres )
-                case(2)
-                    call update_res_fitshifts( 0.999, updateres )
-                case DEFAULT
-                    ! nothing to do
-            end select
-            if( updateres > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
-            else
-                converged = .false.
-            end if
-        else
-            select case(updateres)
-                case(0)
-                    call update_res( 0.96, 70., updateres )
-                case(1)
-                    call update_res( 0.97, 60., updateres )
-                case(2)
-                    call update_res( 0.98, 50., updateres )
-                case DEFAULT
-                    ! nothing to do
-            end select
-            if( updateres > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-                if( nimproved == 0 .and. iter > 2 )     converged = .true.
-                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
-            else
-                converged = .false.
-            end if
-        endif
-    contains
-
-        subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
-            real,    intent(in) :: thres_corrfrac, thres_frac_improved
-            integer, intent(in) :: which_update
-            if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
-                .and. updateres == which_update )then
-                lp = lp - resstep
-                call align_iso%set_hp_lp(hp, lp)
-                write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
-                ! need to indicate that we updated resolution limit
-                updateres  = updateres + 1
-                ! indicate that reslim was updated
-                didupdateres = .true.
-            endif
-        end subroutine update_res
-
-        subroutine update_res_fitshifts( thres_corrfrac, which_update )
-            real,    intent(in) :: thres_corrfrac
-            integer, intent(in) :: which_update
-            if( corrfrac > thres_corrfrac .and. updateres == which_update )then
-                lp = lp - resstep
-                call align_iso%set_hp_lp(hp, lp)
-                write(logfhandle,'(a,1x,f7.4)') '>>> LOW-PASS LIMIT UPDATED TO:', lp
-                ! need to indicate that we updated resolution limit
-                updateres  = updateres + 1
-                ! indicate that reslim was updated
-                didupdateres = .true.
-            endif
-        end subroutine update_res_fitshifts
-
-    end subroutine motion_correct_iso_callback
-
     subroutine motion_correct_iso_polyn_direct_callback( aPtr, align_iso_polyn_direct, converged )
         class(*), pointer,                    intent(inout) :: aPtr
         class(motion_align_iso_polyn_direct), intent(inout) :: align_iso_polyn_direct
@@ -354,7 +273,6 @@ contains
         real,             optional, intent(in)    :: nsig              !< # sigmas (for outlier removal)
         real                                :: ave, sdev, var, minw, maxw, corr, nsig_here
         logical                             :: err, err_stat
-        type(motion_align_iso)              :: align_iso
         type(motion_align_hybrid)           :: hybrid_srch
         type(motion_align_iso_polyn_direct) :: align_iso_polyn_direct
         class(*), pointer                   :: callback_ptr
@@ -362,12 +280,6 @@ contains
         ! initialise
         if (ISO_POLYN_DIRECT) then
             call align_iso_polyn_direct%new
-        else
-            if( HYBRID_CORRELATION_SEARCH )then
-                ! later
-            else
-                call align_iso%new
-            endif
         end if
         nsig_here = NSIGMAS
         if( present(nsig) ) nsig_here = nsig
@@ -395,43 +307,21 @@ contains
             call align_iso_polyn_direct%get_shifts_toplot(shifts_toplot)
             call align_iso_polyn_direct%kill
         else
-            if( HYBRID_CORRELATION_SEARCH )then
-                call hybrid_srch%new(movie_frames_scaled)
-                call hybrid_srch%set_group_frames(.false.)
-                call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
-                call hybrid_srch%set_bfactor(bfactor)
-                call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
-                call hybrid_srch%set_rand_init_shifts(.true.)
-                call hybrid_srch%set_shsrch_tol(TOL_ISO)
-                call hybrid_srch%set_fitshifts(FITSHIFTS)
-                call hybrid_srch%set_fixed_frame(fixed_frame)
-                call hybrid_srch%align
-                corr = hybrid_srch%get_corr()
-                call hybrid_srch%get_opt_shifts(opt_shifts)
-                call hybrid_srch%get_weights(frameweights)
-                call hybrid_srch%get_shifts_toplot(shifts_toplot)
-                call hybrid_srch%kill
-            else
-                updateres = 0
-                call align_iso%set_group_frames(.false.)
-                call align_iso%set_frames(movie_frames_scaled, nframes)
-                call align_iso%set_hp_lp(hp,lp)
-                call align_iso%set_bfactor(bfactor)
-                call align_iso%set_trs(params_glob%scale*params_glob%trs)
-                call align_iso%set_smallshift(SMALLSHIFT)
-                call align_iso%set_rand_init_shifts(.true.)
-                call align_iso%set_ftol_gtol(TOL_ISO, TOL_ISO)
-                call align_iso%set_shsrch_tol(TOL_ISO)
-                call align_iso%set_fitshifts(FITSHIFTS)
-                call align_iso%set_fixed_frame(fixed_frame)
-                call align_iso%set_callback( motion_correct_iso_callback )
-                call align_iso%align(callback_ptr)
-                corr = align_iso%get_corr()
-                call align_iso%get_opt_shifts(opt_shifts)
-                call align_iso%get_weights(frameweights)
-                call align_iso%get_shifts_toplot(shifts_toplot)
-                call align_iso%kill
-            endif
+            call hybrid_srch%new(movie_frames_scaled)
+            call hybrid_srch%set_group_frames(.false.)
+            call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
+            call hybrid_srch%set_bfactor(bfactor)
+            call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
+            call hybrid_srch%set_rand_init_shifts(.true.)
+            call hybrid_srch%set_shsrch_tol(TOL_ISO)
+            call hybrid_srch%set_fitshifts(FITSHIFTS)
+            call hybrid_srch%set_fixed_frame(fixed_frame)
+            call hybrid_srch%align
+            corr = hybrid_srch%get_corr()
+            call hybrid_srch%get_opt_shifts(opt_shifts)
+            call hybrid_srch%get_weights(frameweights)
+            call hybrid_srch%get_shifts_toplot(shifts_toplot)
+            call hybrid_srch%kill
             if( corr < 0. )then
                write(logfhandle,'(a,7x,f7.4)') '>>> OPTIMAL CORRELATION:', corr
                THROW_WARN('OPTIMAL CORRELATION < 0.0')

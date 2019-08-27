@@ -52,13 +52,19 @@ contains
         integer                                :: nptcls, nptcls_prev, nmovs, nmovs_prev
         logical                                :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
-        if( .not. cline%defined('trs')             ) call cline%set('trs',               5.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          20.)
-        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            6.)
+        ! mnotion correction
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
+        if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
+        if( .not. cline%defined('bfac')            ) call cline%set('bfac',            150.)
+        if( .not. cline%defined('groupframes')       ) call cline%set('groupframes',      'yes')
+        ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
+        ! extraction
         if( .not. cline%defined('pcontrast')       ) call cline%set('pcontrast',    'black')
         if( cline%defined('refs') .and. cline%defined('vol1') )then
             THROW_HARD('REFS and VOL1 cannot be both provided!')

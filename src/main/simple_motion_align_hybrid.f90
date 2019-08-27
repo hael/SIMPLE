@@ -39,15 +39,15 @@ type :: motion_align_hybrid
     real                           :: ftol=1.e-6,  gtol=1.e-6           !< tolerance parameters for minimizer
     real                           :: hp=-1.,      lp=-1.               !< high/low pass value
     real                           :: lpstart=-1., lpstop=-1.           !< resolutions limits
-    real                           :: bfactor = -1., bfactor_sc = 1.    !< b-factor for alignment weights
+    real                           :: bfactor = -1.                     !< b-factor for alignment weights
     real                           :: resstep        = 0.               !< resolution step
     real                           :: corr           = -1.              !< correlation
     real                           :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for continuous srch update
     real                           :: smpd = 0., smpd_sc =0.            !< sampling distance
     real                           :: scale_factor   = 1.
-    real                           :: trs            = 30.              !< half phase-correlation search bound
+    real                           :: trs            = 30.              !< half correlation disrete search bound
     integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
-    integer                        :: maxits_phcorr  = MAXITS_PHCORR    !< maximum number of iterations for phase-correlation search
+    integer                        :: maxits_phcorr  = MAXITS_PHCORR    !< maximum number of iterations for discrete search
     integer                        :: maxits_corr    = MAXITS_CORR      !< maximum number of iterations for continuous search
     integer                        :: nframes        = 0                !< number of frames
     integer                        :: fixed_frame    = 1                !< fixed (non-shifted) frame
@@ -72,10 +72,11 @@ contains
     procedure, private :: calc_shifts
     procedure, private :: shift_frames_gen_ref
     procedure          :: align
-    procedure, private :: align_phcorr
+    procedure, private :: align_dcorr
     procedure, private :: align_corr
     procedure, private :: shift_wsum_and_calc_corrs
     procedure, private :: gen_weights
+    procedure, private :: gen_frames_group
     procedure, private :: recenter_shifts
     procedure, private :: calc_rmsd
     ! Trajectory fitting related
@@ -151,8 +152,7 @@ contains
         integer :: cdim(3), iframe,box
         call self%dealloc_images
         ! works out dimensions for Fourier cropping
-        self%bfactor_sc   = max(30.,self%bfactor*params_glob%scale**2.)
-        self%scale_factor = sqrt(-log(1.e-9) / (2.*self%bfactor_sc))
+        self%scale_factor = sqrt(-log(1.e-9) / (2.*self%bfactor*params_glob%scale**2.))
         box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
         self%scale_factor = min(1.,real(box)/real(maxval(self%ldim(1:2))))
         self%smpd_sc = self%smpd / self%scale_factor
@@ -167,9 +167,9 @@ contains
             self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
         endif
         self%smpd_sc = self%smpd / self%scale_factor
-        self%trs     = self%scale_factor*real(self%trs)
+        self%trs     = self%scale_factor*self%trs
         ! allocate & set
-        call self%reference%new(self%ldim_sc,self%smpd_sc,wthreads=.false.)
+        call self%reference%new(self%ldim_sc,self%smpd,wthreads=.false.)
         call self%reference%zero_and_flag_ft
         cdim = self%reference%get_array_shape()
         allocate(self%weights(cdim(1),cdim(2)),self%frames(self%nframes),&
@@ -206,15 +206,54 @@ contains
     subroutine init_ftexps( self )
         class(motion_align_hybrid), intent(inout) :: self
         integer :: iframe
+        real    :: w1,w2,sumw
         call self%dealloc_ftexps
         allocate(self%frames_ftexp(self%nframes),self%frames_ftexp_sh(self%nframes),self%references_ftexp(self%nframes))
-        !$omp parallel do default(shared) private(iframe) schedule(static) proc_bind(close)
+        w1 = 0.5*exp(-real(self%lp_updates))
+        w2 = 0.5*exp(-real(self%lp_updates+1))
+        !$omp parallel default(shared) private(iframe,sumw) proc_bind(close)
+        !$omp do schedule(static)
         do iframe=1,self%nframes
             call self%frames_ftexp(iframe)%new(self%frames_orig(iframe), self%hp, self%lp, .true., bfac=self%bfactor)
-            call self%frames_ftexp_sh(iframe)%new(self%frames_orig(iframe), self%hp, self%lp, .false.)
             call self%references_ftexp(iframe)%new(self%frames_orig(iframe), self%hp, self%lp, .false.)
         end do
-        !$omp end parallel do
+        !$omp end do
+        !$omp do schedule(static)
+        do iframe=1,self%nframes
+            call self%frames_ftexp_sh(iframe)%new(self%frames_orig(iframe), self%hp, self%lp, .false.)
+            if( .not.self%group_frames ) cycle
+            sumw = 1.
+            call self%frames_ftexp_sh(iframe)%add(self%frames_ftexp(iframe))
+            if( iframe > 1 )then
+                sumw = sumw + w1
+                call add_shifted_frame(iframe,iframe-1,w1)
+                if( iframe > 2 )then
+                    sumw = sumw + w2
+                    call add_shifted_frame(iframe,iframe-2,w2)
+                endif
+            endif
+            if( iframe < self%nframes )then
+                sumw = sumw + w1
+                call add_shifted_frame(iframe,iframe+1,w1)
+                if( iframe < self%nframes-1 )then
+                    sumw = sumw + w2
+                    call add_shifted_frame(iframe,iframe+2,w2)
+                endif
+            endif
+            call self%frames_ftexp_sh(iframe)%div(sumw)
+            call self%frames_ftexp(iframe)%copy(self%frames_ftexp_sh(iframe))
+        enddo
+        !$omp end parallel
+        contains
+            subroutine add_shifted_frame(i, j, w)
+                integer, intent(in) :: i,j
+                real,    intent(in) :: w
+                real :: shvec(3)
+                shvec(1:2) = self%opt_shifts(i,:) - self%opt_shifts(j,:)
+                shvec(3)   = 0.
+                call self%frames_ftexp(j)%shift_and_add(-shvec, w, self%frames_ftexp_sh(i))
+            end subroutine add_shifted_frame
+
     end subroutine init_ftexps
 
     subroutine dealloc_ftexps( self )
@@ -229,7 +268,6 @@ contains
         endif
     end subroutine dealloc_ftexps
 
-
     ! Alignment routines
 
     subroutine align( self, ini_shifts, frameweights )
@@ -241,13 +279,12 @@ contains
         if (( self%hp < 0. ) .or. ( self%lp < 0.)) then
             THROW_HARD('hp or lp < 0; simple_motion_align_hybrid: align')
         end if
-        ! phase-correlation search
+        ! discrete correlation search
         call self%init_images
-
-        write(logfhandle,'(A,2I3)') '>>> PERFORMING PHASE-CORRELATION OPTIMIZATION FOR PATCH',self%px,self%py
-        call self%align_phcorr( ini_shifts, frameweights )
-        self%opt_shifts = self%opt_shifts / self%scale_factor
+        write(logfhandle,'(A,2I3)') '>>> PERFORMING DISCRETE CORRELATION OPTIMIZATION FOR PATCH',self%px,self%py
+        call self%align_dcorr( ini_shifts, frameweights )
         call self%dealloc_images
+        self%opt_shifts = self%opt_shifts / self%scale_factor
         ! correlation continuous search
         call self%init_ftexps
         write(logfhandle,'(A,2I3)') '>>> PERFORMING CONTINUOUS CORRELATION OPTIMIZATION FOR PATCH',self%px,self%py
@@ -257,8 +294,8 @@ contains
         self%shifts_toplot = self%opt_shifts
     end subroutine align
 
-    ! Phase-correlation based alignment
-    subroutine align_phcorr( self, ini_shifts, frameweights )
+    ! semi-discrete correlation based alignment
+    subroutine align_dcorr( self, ini_shifts, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real,             optional, intent(in)    :: ini_shifts(self%nframes,2), frameweights(self%nframes)
         real    :: opt_shifts_prev(self%nframes, 2), rmsd
@@ -271,8 +308,9 @@ contains
         ! resolution related
         self%lp         = self%lpstart
         self%lp_updates = 1
-        ! init shifts
+        ! init shifts & generate groups
         self%opt_shifts = 0.
+        call self%gen_frames_group
         if( present(ini_shifts) ) self%opt_shifts = ini_shifts
         if ( self%rand_init_shifts ) then
             ! random initialization
@@ -303,7 +341,7 @@ contains
             if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs)
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
-            if( iter > 1 .and. rmsd < 1. )then
+            if( iter > 1 .and. rmsd < 0.5 )then
                 self%lp_updates = self%lp_updates+1
                 if( self%lp_updates > NRESUPDATES )then
                     self%lp_updates = NRESUPDATES
@@ -318,6 +356,10 @@ contains
                     call self%recenter_shifts(self%opt_shifts)
                 endif
                 ! resolution & weights update
+                if( self%group_frames )then
+                    call self%gen_frames_group
+                    call self%shift_frames_gen_ref
+                endif
                 self%lp = max(self%lp-self%resstep, params_glob%lpstop)
                 call self%gen_weights
             endif
@@ -327,8 +369,9 @@ contains
             call self%frames_sh(iframe)%kill
         enddo
         deallocate(self%frames_sh)
-    end subroutine align_phcorr
+    end subroutine align_dcorr
 
+    ! continuous serach
     subroutine align_corr( self, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real, optional,             intent(in)    :: frameweights(self%nframes)
@@ -343,7 +386,7 @@ contains
         if( .not.l_calc_frameweights ) self%frameweights = frameweights
         frameweights_saved = self%frameweights
         ! shift boundaries
-        trs = 3.
+        trs = 5.*params_glob%scale
         ! search object allocation
         do iframe=1,self%nframes
             call ftexp_srch(iframe)%new(self%references_ftexp(iframe),&
@@ -432,39 +475,47 @@ contains
     ! shifts frames, generate reference and calculates correlations
     subroutine gen_frames_group( self )
         class(motion_align_hybrid), intent(inout) :: self
-        ! complex, allocatable :: cmat_sum(:,:,:)
-        ! complex,     pointer :: pcmat(:,:,:)
-        ! real    :: shconst(2),ds(2), w
-        ! integer :: nrlims(3,2),cdim(3), iframe
-        ! ! cdim   = self%reference%get_array_shape()
-        ! nrlims = self%reference%loops_lims(2)
-        ! shconst(1) = merge(PI/real(self%ldim(1))/2., PI/real(self%ldim(1)-1)/2., is_even(self%ldim(1)))
-        ! shconst(2) = merge(PI/real(self%ldim(2))/2., PI/real(self%ldim(2)-1)/2., is_even(self%ldim(2)))
-        ! do iframe = 1,self%nframes
-        !     call self%frames_sh(iframe)%get_cmt_ptr(psum)
-        !     call self%frames_sh(iframe-1)%get_cmt_ptr(p)
-        !     dsh = self%opt_shifts(iframe) - self%opt_shifts(iframe-1)
-        !
-        !
-        !
-        ! enddo
-        !
-        ! contains
-        !
-        !     subroutine add_shifted_weighted_frame_into(pin,pout,s,w)
-        !         real, intent(in) :: s(2), w
-        !         complex :: comp
-        !         real    :: sh_here(2), arg
-        !         sh_here = sh*shconst
-        !         do h = nrlims(1,1),nrlims(1,2)
-        !             do k = nrlims(2,1),nrlims(2,2)
-        !                 phys = self%reference%comp_addr_phys([h,k,0])
-        !                 arg  = sum(real([h,k]) * sh_here)
-        !                 comp = cmplx(cos(arg),sin(arg)) * pin(phys(1),phys(2),1)
-        !                 pout(phys(1),phys(2),1) = pout(phys(1),phys(2),1) + w*comp
-        !             enddo
-        !         enddo
-        !     end subroutine add_shifted_weighted_frame_into
+        real    :: w1,w2,sumw
+        integer :: iframe
+        if( .not.self%group_frames ) return
+        w1 = 0.5*exp(-real(self%lp_updates))
+        w2 = 0.5*exp(-real(self%lp_updates+1))
+        !$omp parallel default(shared) private(iframe,sumw) proc_bind(close)
+        !$omp do schedule(static)
+        do iframe = 1,self%nframes
+            sumw = 1.
+            call self%frames_orig(iframe)%clip(self%frames(iframe))
+            if( iframe > 1 )then
+                sumw = sumw+w1
+                call add_shifted_weighed_frame(iframe, iframe-1, w1)
+                if( iframe > 2 )then
+                    sumw = sumw+w2
+                    call add_shifted_weighed_frame(iframe, iframe-2, w2)
+                endif
+            endif
+            if( iframe < self%nframes )then
+                sumw = sumw+w1
+                call add_shifted_weighed_frame(iframe, iframe+1, w1)
+                if( iframe < self%nframes-1 )then
+                    sumw = sumw+w2
+                    call add_shifted_weighed_frame(iframe, iframe+1, w1)
+                endif
+            endif
+            call self%frames(iframe)%div(sumw)
+        enddo
+        !$omp end do
+        !$omp end parallel
+        contains
+
+            subroutine add_shifted_weighed_frame(i,j,w)
+                integer, intent(in) :: i,j
+                real,    intent(in) :: w
+                real :: dsh(2)
+                call self%frames_orig(j)%clip(self%frames_sh(i))
+                dsh = self%opt_shifts(i,:) - self%opt_shifts(j,:)
+                call self%frames_sh(i)%shift(-[dsh(1),dsh(2),0.])
+                call self%frames(i)%add(self%frames_sh(i),w)
+            end subroutine add_shifted_weighed_frame
 
     end subroutine gen_frames_group
 
@@ -473,61 +524,85 @@ contains
         class(motion_align_hybrid), intent(inout) :: self
         class(image),               intent(inout) :: frame
         real,                       intent(in)    :: weight
-        complex,     pointer :: pref(:,:,:), B(:,:,:)
-        complex, allocatable :: A(:,:)
-        real    :: num,sumrefsq,sumframesq
-        integer :: cdim(3)
-        cdim = self%reference%get_array_shape()
-        allocate(A(cdim(1),cdim(2)))
-        call self%reference%get_cmat_ptr(pref)
-        call frame%get_cmat_ptr(B)
-        A = pref(:,:,1) - weight*B(:,:,1)
-        num        = sum(self%weights * real(A*conjg(B(:,:,1))),mask=self%resmask)
-        sumrefsq   = sum(self%weights * csq(A),                 mask=self%resmask)
-        sumframesq = sum(self%weights * csq(B(:,:,1)),          mask=self%resmask)
+        complex :: cref, cframe
+        real    :: rw,w,num,sumsq_ref,sumsq_frame
+        integer :: h,k,nrflims(3,2),phys(3)
+        nrflims = self%reference%loop_lims(2)
+        num         = 0.
+        sumsq_ref   = 0.
+        sumsq_frame = 0.
+        do h = nrflims(1,1),nrflims(1,2)
+            rw = merge(1., 2., h==0) ! redundancy weight
+            do k = nrflims(2,1),nrflims(2,2)
+                phys = self%reference%comp_addr_phys(h,k,0)
+                if( self%resmask(phys(1),phys(2)) ) then
+                    w = self%weights(phys(1),phys(2))
+                    if( w < 1.e-10 ) cycle
+                    cref   = self%reference%get_cmat_at(phys)
+                    cframe = frame%get_cmat_at(phys)
+                    cref   = cref - weight*cframe
+                    num         = num         + rw * w * real(cref*conjg(cframe))
+                    sumsq_ref   = sumsq_ref   + rw * w * csq(cref)
+                    sumsq_frame = sumsq_frame + rw * w * csq(cframe)
+                endif
+            enddo
+        enddo
         calc_corr2ref = 0.
-        if( sumrefsq > TINY .and. sumframesq > TINY ) calc_corr2ref = num / sqrt(sumrefsq*sumframesq)
+        if( sumsq_ref > TINY .and. sumsq_frame > TINY )then
+             calc_corr2ref = num / sqrt(sumsq_ref*sumsq_frame)
+        endif
     end function calc_corr2ref
 
     ! identifies interpolated shifts within search range, frame destroyed on exit
     subroutine calc_shifts( self, iframe )
         class(motion_align_hybrid), intent(inout) :: self
         integer,                    intent(inout) :: iframe
-        complex, pointer :: pcref(:,:,:), pcmat(:,:,:)
-        real    :: prev_shift(2), shift(2), corr, alpha, beta, gamma, weight
-        integer :: center(2),pos(2),i,j,trs
-        ! init
-        prev_shift = self%opt_shifts(iframe,:)
-        weight     = self%frameweights(iframe)
-        trs        = min(ceiling(self%trs),minval(self%ldim_sc(1:2)/2))
-        ! phase correlation
-        call self%reference%get_cmat_ptr(pcref)
-        call self%frames_sh(iframe)%get_cmat_ptr(pcmat)
-        pcmat(:,:,1) = self%weights(:,:) * (pcref(:,:,1) - weight*pcmat(:,:,1)) * conjg(pcmat(:,:,1))
-        call self%frames_sh(iframe)%ifft
-        ! find peak
-        center = [self%ldim_sc(1)/2+1, self%ldim_sc(2)/2+1]
-        corr   = -huge(corr)
-        pos    = center
-        do i = center(1)-trs,center(1)+trs
-            do j = center(2)-trs,center(2)+trs
-                if( self%frames_sh(iframe)%get([i,j,1]) > corr )then
-                    pos  = [i,j]-center
-                    corr = self%frames_sh(iframe)%get([i,j,1])
+        real,    pointer :: pcorrs(:,:,:)
+        complex :: cref, cframe
+        real    :: dshift(2),corr,alpha,beta,gamma,weight,w,sqsum_ref,sqsum_frame,rw
+        integer :: pos(2),center(2),trs,h,k,phys(3),nrflims(3,2)
+        weight = self%frameweights(iframe)
+        trs    = min(ceiling(self%trs),minval(self%ldim_sc(1:2)/2))
+        ! correlations
+        sqsum_ref   = 0.
+        sqsum_frame = 0.
+        nrflims = self%reference%loop_lims(2)
+        do h = nrflims(1,1),nrflims(1,2)
+            rw = merge(1., 2., h==0) ! redundancy
+            do k = nrflims(2,1),nrflims(2,2)
+                phys = self%reference%comp_addr_phys(h,k,0)
+                w    = self%weights(phys(1),phys(2))
+                if( w < 1.e-10 )then
+                    call self%frames_sh(iframe)%set_cmat_at(phys, cmplx(0.,0.))
+                    cycle
                 endif
+                cref   = self%reference%get_cmat_at(phys)
+                cframe = self%frames_sh(iframe)%get_cmat_at(phys)
+                cref   = cref - weight*cframe
+                call self%frames_sh(iframe)%set_cmat_at(phys, w*cref*conjg(cframe))
+                sqsum_ref   = sqsum_ref   + rw*w*csq(cref)
+                sqsum_frame = sqsum_frame + rw*w*csq(cframe)
             enddo
         enddo
-        shift = prev_shift + real(pos)
+        call self%frames_sh(iframe)%ifft
+        call self%frames_sh(iframe)%div(sqrt(sqsum_ref*sqsum_frame/real(product(self%ldim_sc))))
+        ! find peak
+        call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
+        center = self%ldim_sc(1:2)/2+1
+        pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
+        corr   = pcorrs(center(1)+pos(1),center(2)+pos(2),1)
+        dshift = real(pos)
         ! interpolate
-        alpha = self%frames_sh(iframe)%get([pos(1)+center(1)-1,pos(2)+center(2),1])
-        beta  = self%frames_sh(iframe)%get([pos(1)+center(1)  ,pos(2)+center(2),1])
-        gamma = self%frames_sh(iframe)%get([pos(1)+center(1)+1,pos(2)+center(2),1])
-        shift(1) = shift(1) + interp_peak()
-        alpha = self%frames_sh(iframe)%get([pos(1)+center(1),pos(2)+center(2)-1,1])
-        beta  = self%frames_sh(iframe)%get([pos(1)+center(1),pos(2)+center(2)  ,1])
-        gamma = self%frames_sh(iframe)%get([pos(1)+center(1),pos(2)+center(2)+1,1])
-        shift(2) = shift(2) + interp_peak()
-        self%opt_shifts(iframe,:) = shift
+        alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
+        beta  = pcorrs(pos(1)+center(1)  ,pos(2)+center(2),1)
+        gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
+        dshift(1) = dshift(1) + interp_peak()
+        alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
+        beta  = pcorrs(pos(1)+center(1),pos(2)+center(2)  ,1)
+        gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
+        dshift(2) = dshift(2) + interp_peak()
+        ! update shift
+        self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
         call self%frames_sh(iframe)%zero_and_flag_ft
         contains
@@ -568,11 +643,12 @@ contains
                 shsq = h*h+k*k
                 if( shsq < bphplimsq ) cycle
                 if( shsq > bplplimsq ) cycle
+                if( shsq == 0 )        cycle
                 phys = self%reference%comp_addr_phys([h,k,0])
                 rsh  = sqrt(real(shsq))
                 spafreqsq = real(shsq) / spadenomsq
                 ! B-factor weight
-                bfacw = min(1.,exp(-spafreqsq*self%bfactor_sc))
+                bfacw = min(1.,exp(-spafreqsq*self%bfactor))
                 ! filter weight
                 w = 1.
                 if( shsq < hplimsq )then

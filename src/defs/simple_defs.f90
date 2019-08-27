@@ -144,7 +144,7 @@ real, parameter    :: NPEAKSATHRES         = 12.0      !< angular threshold for 
 real, parameter    :: SHC_INPL_TRSHWDTH    = 2.0       !< shift search halfwidht (pixels)
 real, parameter    :: STREAM_SRCHFRAC      = 0.2       !< fraction of times full 2D search is performed in the pool
 real, parameter    :: STREAM_INPLFRAC      = 0.2       !< fraction of times in-plane search is performed in the pool
-real, parameter    :: MC_PATCHSZ           = 1024.     !< recommended patch size (in pixels) for motion correction
+real, parameter    :: MC_PATCHSZ           = 780.      !< recommended patch size (in pixels) for motion correction
 real, parameter    :: ENVMSK_FSC_THRESH    = 0.8       !< FSC value after which phase-randomization and FSC correction is applied in enveloppe masking
 
 ! integer #/threshold constants
@@ -161,7 +161,7 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: RANDOMNESS_FAC       = 3         !< controls randomness of stochastic search, 1 is most random, 6 is least
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systematic iterations for streaming 2D pool
-integer, parameter :: MC_NPATCH            = 3         !< number of patches in x/y-direction for motion correction
+integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 
 ! orientation weighting scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma

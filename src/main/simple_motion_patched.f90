@@ -9,7 +9,6 @@ use simple_opt_spec,                      only: opt_spec
 use simple_optimizer,                     only: optimizer
 use simple_image,                         only: image, imstack_type
 use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
-use simple_motion_align_iso,              only: motion_align_iso
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct, POLYDIM, POLYDIM2
 use CPlot2D_wrapper_module
@@ -24,8 +23,6 @@ real,    parameter :: TRS_DEFAULT    = 5.
 integer, parameter :: PATCH_PDIM     = 18   ! dimension of fitted polynomial
 real,    parameter :: DIRECT_FTOL    = 1e-7
 real,    parameter :: DIRECT_GTOL    = 1e-7
-logical, parameter :: HYBRID_CORRELATION_SEARCH = .false.  !< semi discrete phase correlation followed by continuous correlation search
-
 
 type :: rmat_ptr_type
    real, pointer :: rmat_ptr(:,:,:)
@@ -35,7 +32,6 @@ type :: motion_patched
     private
     logical                             :: existence
     type(imstack_type),                  allocatable :: frame_patches(:,:)
-    type(motion_align_iso),              allocatable :: align_iso(:,:)
     type(motion_align_hybrid),           allocatable :: align_hybrid(:,:)
     type(motion_align_iso_polyn_direct), allocatable :: align_iso_polyn_direct(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
@@ -80,8 +76,6 @@ contains
     procedure, private                  :: get_local_shift
     procedure, private                  :: apply_polytransfo
     procedure, private                  :: plot_shifts
-    procedure, private                  :: frameweights_callback
-    procedure, private                  :: motion_patched_callback
     procedure, private                  :: motion_patched_polyn_callback
     procedure, private                  :: pix2polycoords
     procedure, private                  :: cleanup_polyn
@@ -686,8 +680,7 @@ contains
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
-        allocate(self%align_iso(params_glob%nxpatch, params_glob%nypatch),&
-            &self%align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
+        allocate(self%align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
@@ -700,78 +693,40 @@ contains
         !$omp proc_bind(close) schedule(static) reduction(+:corr_avg)
         do i = 1,params_glob%nxpatch
             do j = 1,params_glob%nypatch
-                if( HYBRID_CORRELATION_SEARCH )then
-                    ! init
-                    self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
-                    call self%gen_patch(frames,i,j)
-                    call self%align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                    call self%align_hybrid(i,j)%set_group_frames(.false.)
-                    call self%align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                    call self%align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
-                    call self%align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
-                    call self%align_hybrid(i,j)%set_shsrch_tol(TOL)
-                    call self%align_hybrid(i,j)%set_coords(i,j)
-                    call self%align_hybrid(i,j)%set_fitshifts(.true.)
-                    call self%align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
-                    call self%align_hybrid(i,j)%set_bfactor(self%bfactor)
-                    ! align
-                    call self%align_hybrid(i,j)%align(frameweights=self%frameweights)
-                    ! fetch info
-                    corr_avg = corr_avg + self%align_hybrid(i,j)%get_corr()
-                    call self%align_hybrid(i,j)%get_opt_shifts(opt_shifts)
-                    ! making sure the shifts are in reference to fixed_frame
-                    do iframe = 1, self%nframes
-                        self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
-                    end do
-                    ! cleanup
-                    call self%align_hybrid(i,j)%kill
-                    do iframe=1,self%nframes
-                        call self%frame_patches(i,j)%stack(iframe)%kill
-                    end do
-                else
-                    ! init
-                    call self%gen_patch(frames,i,j)
-                    call self%align_iso(i,j)%new
-                    call self%align_iso(i,j)%set_group_frames(trim(params_glob%framesavg).eq.'yes')
-                    call self%align_iso(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
-                    if( self%has_frameweights )then
-                        call self%align_iso(i,j)%set_frameweights_callback(frameweights_callback_wrapper)
-                    end if
-                    call self%align_iso(i,j)%set_mitsref(50)
-                    call self%align_iso(i,j)%set_smallshift(1.)
-                    call self%align_iso(i,j)%set_rand_init_shifts(.true.)
-                    call self%align_iso(i,j)%set_hp_lp(self%hp, self%lp(i,j))
-                    call self%align_iso(i,j)%set_trs(self%trs)
-                    call self%align_iso(i,j)%set_ftol_gtol(TOL, TOL)
-                    call self%align_iso(i,j)%set_shsrch_tol(TOL)
-                    call self%align_iso(i,j)%set_maxits(100)
-                    call self%align_iso(i,j)%set_coords(i,j)
-                    call self%align_iso(i,j)%set_fitshifts(self%fitshifts)
-                    call self%align_iso(i,j)%set_fixed_frame(self%fixed_frame)
-                    call self%align_iso(i,j)%set_bfactor(self%bfactor)
-                    call self%align_iso(i,j)%set_callback(motion_patched_callback_wrapper)
-                    ! align
-                    call self%align_iso(i,j)%align(self)
-                    ! fetch info
-                    corr_avg = corr_avg + self%align_iso(i,j)%get_corr()
-                    call self%align_iso(i,j)%get_opt_shifts(opt_shifts)
-                    ! making sure the shifts are in reference to fixed_frame
-                    do iframe = 1, self%nframes
-                        self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
-                    end do
-                    ! cleanup
-                    call self%align_iso(i,j)%kill
-                    do iframe=1,self%nframes
-                        call self%frame_patches(i,j)%stack(iframe)%kill
-                    end do
-                endif
+                ! init
+                self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
+                call self%gen_patch(frames,i,j)
+                call self%align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
+                call self%align_hybrid(i,j)%set_group_frames(trim(params_glob%groupframes).eq.'yes')
+                call self%align_hybrid(i,j)%set_rand_init_shifts(.true.)
+                call self%align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call self%align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
+                call self%align_hybrid(i,j)%set_shsrch_tol(TOL)
+                call self%align_hybrid(i,j)%set_coords(i,j)
+                call self%align_hybrid(i,j)%set_fitshifts(self%fitshifts)
+                call self%align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
+                call self%align_hybrid(i,j)%set_bfactor(self%bfactor)
+                ! align
+                call self%align_hybrid(i,j)%align(frameweights=self%frameweights)
+                ! fetch info
+                corr_avg = corr_avg + self%align_hybrid(i,j)%get_corr()
+                call self%align_hybrid(i,j)%get_opt_shifts(opt_shifts)
+                ! making sure the shifts are in reference to fixed_frame
+                do iframe = 1, self%nframes
+                    self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
+                end do
+                ! cleanup
+                call self%align_hybrid(i,j)%kill
+                do iframe=1,self%nframes
+                    call self%frame_patches(i,j)%stack(iframe)%kill
+                end do
             end do
         end do
         !$omp end parallel do
         self%shifts_patches_for_fit = self%shifts_patches
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        deallocate(self%align_iso,self%align_hybrid,res)
+        deallocate(self%align_hybrid,res)
     end subroutine det_shifts
 
     subroutine det_shifts_polyn( self )
@@ -1048,119 +1003,6 @@ contains
         self%existence        = .false.
         call ftexp_transfmat_kill
     end subroutine motion_patched_kill
-
-    !>  convergence callback
-    subroutine motion_patched_callback(self, align_iso, converged)
-        class(motion_patched),   intent(inout) :: self
-        class(motion_align_iso), intent(inout) :: align_iso
-        logical,                 intent(out)   :: converged
-        integer :: i, j
-        integer :: nimproved, iter
-        real    :: corrfrac, frac_improved
-        logical :: didupdateres
-        call align_iso%get_coords(i, j)
-        corrfrac      = align_iso%get_corrfrac()
-        frac_improved = align_iso%get_frac_improved()
-        nimproved     = align_iso%get_nimproved()
-        iter          = align_iso%get_iter()
-        didupdateres  = .false.
-        if( align_iso%is_fitshifts() )then
-            select case(self%updateres(i,j))
-            case(0)
-                call update_res_fitshifts( 0.99, self%updateres(i,j) )
-            case(1)
-                call update_res_fitshifts( 0.995, self%updateres(i,j) )
-            case(2)
-                call update_res_fitshifts( 0.999, self%updateres(i,j) )
-            case DEFAULT
-                ! nothing to do
-            end select
-            if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
-            else
-                converged = .false.
-            end if
-        else
-            select case(self%updateres(i,j))
-                case(0)
-                    call update_res( 0.96, 40., self%updateres(i,j) )
-                case(1)
-                    call update_res( 0.97, 30., self%updateres(i,j) )
-                case(2)
-                    call update_res( 0.98, 20., self%updateres(i,j) )
-                case DEFAULT
-                    ! nothing to do
-            end select
-            if( self%updateres(i,j) > 2 .and. .not. didupdateres )then ! at least one iteration with new lim
-                if( nimproved == 0 .and. iter > 2 )     converged = .true.
-                if( iter > 10 .and. corrfrac > 0.9999 ) converged = .true.
-            else
-                converged = .false.
-            end if
-        endif
-
-        contains
-
-            subroutine update_res( thres_corrfrac, thres_frac_improved, which_update )
-                real,    intent(in) :: thres_corrfrac, thres_frac_improved
-                integer, intent(in) :: which_update
-                if( corrfrac > thres_corrfrac .and. frac_improved <= thres_frac_improved&
-                    .and. self%updateres(i,j) == which_update )then
-                    self%lp(i,j) = self%lp(i,j) - self%resstep
-                    call align_iso%set_hp_lp(self%hp, self%lp(i,j))
-                    write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
-                    ! need to indicate that we updated resolution limit
-                    self%updateres(i,j)  = self%updateres(i,j) + 1
-                    ! indicate that reslim was updated
-                    didupdateres = .true.
-                endif
-            end subroutine update_res
-
-            subroutine update_res_fitshifts( thres_corrfrac, which_update )
-                real,    intent(in) :: thres_corrfrac
-                integer, intent(in) :: which_update
-                if( corrfrac > thres_corrfrac .and. self%updateres(i,j) == which_update )then
-                    self%lp(i,j) = self%lp(i,j) - self%resstep
-                    call align_iso%set_hp_lp(self%hp, self%lp(i,j))
-                    write(logfhandle,'(A,I2,A,I2,A,F8.3)')'>>> LOW-PASS LIMIT ',i,'-',j,' UPDATED TO: ', self%lp(i,j)
-                    ! need to indicate that we updated resolution limit
-                    self%updateres(i,j)  = self%updateres(i,j) + 1
-                    ! indicate that reslim was updated
-                    didupdateres = .true.
-                endif
-            end subroutine update_res_fitshifts
-    end subroutine motion_patched_callback
-
-    subroutine motion_patched_callback_wrapper(aptr, align_iso, converged)
-        class(*),                intent(inout) :: aptr
-        class(motion_align_iso), intent(inout) :: align_iso
-        logical,                 intent(out)   :: converged
-        select type(aptr)
-        class is (motion_patched)
-            call aptr%motion_patched_callback(align_iso, converged)
-        class default
-            THROW_HARD('error in motion_patched_callback_wrapper: unknown type; simple_motion_patched')
-        end select
-    end subroutine motion_patched_callback_wrapper
-
-    subroutine frameweights_callback( self, align_iso )
-        class(motion_patched),   intent(inout) :: self
-        class(motion_align_iso), intent(inout) :: align_iso
-        if (self%has_frameweights) then
-            call align_iso%set_weights(self%frameweights)
-        end if
-    end subroutine frameweights_callback
-
-    subroutine frameweights_callback_wrapper( aptr, align_iso )
-        class(*),                intent(inout) :: aptr
-        class(motion_align_iso), intent(inout) :: align_iso
-        select type(aptr)
-        class is (motion_patched)
-            call aptr%frameweights_callback(align_iso)
-        class default
-            THROW_HARD('error in frameweights_callback_wrapper: unknown type; simple_motion_patched')
-        end select
-    end subroutine frameweights_callback_wrapper
 
     subroutine motion_patched_polyn_callback(self, align_iso_polyn_direct, converged)
         class(motion_patched),                intent(inout) :: self

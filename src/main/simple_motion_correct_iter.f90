@@ -69,10 +69,10 @@ contains
         ! determines whether to perform patch-based step & patch size
         if( params_glob%mcpatch.eq.'yes' )then
             if( .not.cline%defined('nxpatch') )then
-                params_glob%nxpatch = min(MC_NPATCH, max(1,floor(orientation%get('xdim')/MC_PATCHSZ)) )
+                params_glob%nxpatch = min(MC_NPATCH, max(1,floor(orientation%get('xdim')*params_glob%scale/MC_PATCHSZ)) )
             endif
             if( .not.cline%defined('nypatch') )then
-                params_glob%nxpatch = min(MC_NPATCH, max(1,floor(orientation%get('ydim')/MC_PATCHSZ)) )
+                params_glob%nxpatch = min(MC_NPATCH, max(1,floor(orientation%get('ydim')*params_glob%scale/MC_PATCHSZ)) )
             endif
         endif
         motion_correct_with_patched = (params_glob%mcpatch.eq.'yes') .and. (params_glob%nxpatch*params_glob%nypatch > 1)

@@ -45,11 +45,14 @@ type :: ft_expanded
     ! setters
     procedure          :: set_cmat
     procedure          :: zero
+    procedure          :: copy
     ! arithmetics
     procedure          :: add
     procedure          :: subtr
+    procedure          :: div
     ! modifiers
     procedure          :: shift
+    procedure          :: shift_and_add
     procedure          :: normalize_mat
     ! calculators
     procedure, private :: calc_sumsq
@@ -219,6 +222,21 @@ contains
         self%sumsq = 0.
     end subroutine zero
 
+    ! not a constructor
+    pure subroutine copy( self, self2copy )
+        class(ft_expanded), intent(inout) :: self, self2copy
+        self%hp    = self2copy%hp
+        self%lp    = self2copy%lp
+        self%smpd  = self2copy%smpd
+        self%ldim  = self2copy%ldim
+        self%lims  = self2copy%lims
+        self%flims = self2copy%flims
+        self%kzero = self2copy%kzero
+        self%sumsq = self2copy%sumsq
+        self%cmat  = self2copy%cmat
+        self%bandmsk = self2copy%bandmsk
+    end subroutine copy
+
     ! ARITHMETICS
 
     subroutine add( self, self2add, w )
@@ -243,6 +261,14 @@ contains
         call self%calc_sumsq
     end subroutine subtr
 
+    pure subroutine div( self, val )
+        class(ft_expanded), intent(inout) :: self
+        real,               intent(in)    :: val
+        if( abs(val) < TINY ) return
+        self%cmat = self%cmat / val
+        call self%calc_sumsq
+    end subroutine div
+
     ! MODIFIERS
 
     subroutine shift( self, shvec, self_out )
@@ -261,6 +287,23 @@ contains
         end do
         call self_out%calc_sumsq
     end subroutine shift
+
+    subroutine shift_and_add( self, shvec, w, self_out )
+        class(ft_expanded), intent(in)    :: self
+        real,               intent(in)    :: shvec(3), w
+        class(ft_expanded), intent(inout) :: self_out
+        integer :: hind,kind,kind_shift
+        real    :: shvec_here(2), arg
+        shvec_here = shvec(1:2)
+        kind_shift = self%get_kind_shift()
+        do hind=self%flims(1,1),self%flims(1,2)
+            do kind=self%flims(2,1),self%flims(2,2)
+                arg = sum(shvec_here*ftexp_transfmat(hind,kind+kind_shift,:))
+                self_out%cmat(hind,kind,1) = self_out%cmat(hind,kind,1) + w * self%cmat(hind,kind,1) * cmplx(cos(arg),sin(arg))
+            end do
+        end do
+        call self_out%calc_sumsq
+    end subroutine shift_and_add
 
     subroutine normalize_mat( self )
         class(ft_expanded), intent(inout) :: self
