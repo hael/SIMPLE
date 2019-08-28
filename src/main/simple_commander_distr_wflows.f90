@@ -1359,10 +1359,8 @@ contains
       call cline%set('match_filt',     'no')
       call cline%set('ninplpeaks',      1.0)
       call cline%set('graphene_filt', 'yes')
-      call cline%set('tseries',       'yes')
       call cline%set('ptclw',          'no')
       ! dynamic parameters
-      if( .not. cline%defined('center')      ) call cline%set('center',     'yes')
       if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
       if( .not. cline%defined('globwfrac')   ) call cline%set('globwfrac',   0.05)
       if( .not. cline%defined('rndfac')      ) call cline%set('rndfac',       10.)
@@ -1371,7 +1369,6 @@ contains
       if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
       if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
       if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',         5.)
-      if( .not. cline%defined('hp')          ) call cline%set('hp',            5.)
       if( .not. cline%defined('maxits')      ) call cline%set('maxits',       20.)
       if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
       call xrefine3D_distr%execute(cline)

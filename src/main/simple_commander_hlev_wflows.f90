@@ -270,16 +270,14 @@ contains
         character(len=:), allocatable :: orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
-        call cline%set('center',        'yes')
-        call cline%set('autoscale',      'no')
-        call cline%set('refine',     'greedy')
-        call cline%set('tseries',       'yes')
-        call cline%set('graphene_filt', 'yes')
+        call cline%set('center',    'yes')
+        call cline%set('autoscale', 'no')
+        call cline%set('refine',    'greedy')
+        call cline%set('tseries',   'yes')
         if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
-        if( .not. cline%defined('hp')      ) call cline%set('hp',     5.)
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 10.)
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
         nparts = params%nparts
@@ -709,13 +707,13 @@ contains
             call simple_mkdir(STKPARTSDIR,errmsg="commander_hlev_wflows :: exec_initial_3Dmodel;  ")
             call work_proj1%scale_projfile(smpd_target, WORK_PROJFILE, cline, cline_scale1, dir=trim(STKPARTSDIR))
             scale_factor1 = cline_scale1%get_rarg('scale')
-            box          = nint(cline_scale1%get_rarg('newbox'))
-            msk          = cline%get_rarg('msk')
+            box           = nint(cline_scale1%get_rarg('newbox'))
+            msk           = cline%get_rarg('msk')
             call cline_scale1%delete('smpd')
             call xscale_distr%execute( cline_scale1 )
         else
-            box         = orig_box
-            msk         = orig_msk
+            box = orig_box
+            msk = orig_msk
         endif
         ! prepare command lines from prototype
         ! projects names are subject to change depending on scaling and are updated individually
