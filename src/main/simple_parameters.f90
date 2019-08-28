@@ -357,7 +357,7 @@ type :: parameters
     real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
     real    :: inner=0.            !< inner mask radius(in pixels)
     real    :: kv=300.             !< acceleration voltage(in kV){300.}
-    real    :: lam=0.5
+    real    :: lambda=0.5
     real    :: lp=20.              !< low-pass limit(in A)
     real    :: lp_backgr=20.       !< low-pass for solvent blurring (in A)
     real    :: lp_ctf_estimate=5.0 !< low-pass limit 4 ctf_estimate(in A)
@@ -769,7 +769,7 @@ contains
         call check_rarg('hp_fsc',         self%hp_fsc)
         call check_rarg('inner',          self%inner)
         call check_rarg('kv',             self%kv)
-        call check_rarg('lam',            self%lam)
+        call check_rarg('lambda',         self%lambda)
         call check_rarg('lp',             self%lp)
         call check_rarg('lp_backgr',      self%lp_backgr)
         call check_rarg('lp_ctf_estimate',self%lp_ctf_estimate)

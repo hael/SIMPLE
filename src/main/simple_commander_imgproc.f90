@@ -306,10 +306,12 @@ contains
     subroutine exec_filter( self, cline )
         use simple_procimgfile
         use simple_estimate_ssnr, only: fsc2optlp
+        use simple_tvfilter,      only: tvfilter
         class(filter_commander), intent(inout) :: self
         class(cmdline),          intent(inout) :: cline
         type(parameters)  :: params
         type(builder)     :: build
+        type(tvfilter)    :: tvfilt
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: width, fsc05, fsc0143
         integer           :: find
@@ -322,12 +324,12 @@ contains
             if( .not.file_exists(params%stk) ) THROW_HARD('cannot find input stack (stk)')
             if( cline%defined('filter') )then
                 select case(trim(params%filter))
-                case('tv')
-                    call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lam)
-                case('nlmean')
-                    call nlmean_imgfile(params%stk, params%outstk, params%smpd)
-                case DEFAULT
-                    THROW_HARD('Unknown filter!')
+                    case('tv')
+                        call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
+                    case('nlmean')
+                        call nlmean_imgfile(params%stk, params%outstk, params%smpd)
+                    case DEFAULT
+                        THROW_HARD('Unknown filter!')
                 end select
             else if( params%phrand .eq. 'no')then
                 ! projection_frcs filtering
@@ -394,6 +396,15 @@ contains
                     call get_resolution( fsc, res, fsc05, fsc0143 )
                     where(res < TINY) optlp = 0.
                     call build%vol%apply_filter(optlp)
+                else if( cline%defined('filter') )then
+                    select case(trim(params%filter))
+                        case('tv')
+                            call tvfilt%new
+                            call tvfilt%apply_filter_3d(build%vol, params%lambda)
+                            call tvfilt%kill
+                        case DEFAULT
+                            THROW_HARD('Unknown filter!')
+                    end select
                 else
                     THROW_HARD('Nothing to do!')
                 endif
