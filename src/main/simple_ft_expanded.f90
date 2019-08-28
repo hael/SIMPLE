@@ -13,9 +13,8 @@ public :: ftexp_transfmat, ftexp_transfmat_init, ftexp_transfmat_kill
 real(dp),         parameter   :: num   = 1.0d8       ! numerator for rescaling of cost function
 complex,          parameter   :: JJ    = complex(0., 1.)
 
-real, allocatable :: ftexp_transfmat(:,:,:)                 ! transfer matrix
-real, allocatable :: ftexp_bfacmat(:,:)                     ! bfactor matrix
-integer           :: ftexp_transf_kzero, ftexp_bfac_kzero   ! index shift for transfer & b-factor matrix
+real, allocatable :: ftexp_transfmat(:,:,:)     ! transfer matrix
+integer           :: ftexp_transf_kzero         ! index shift for transfer & b-factor matrix
 
 type :: ft_expanded
     private

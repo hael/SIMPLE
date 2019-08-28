@@ -67,6 +67,7 @@ type(edge_detector_commander)         :: xdetector
 type(masscen_commander)               :: xmasscen
 type(stk_corr_commander)              :: xstk_corr
 type(kstest_commander)                :: xkstst
+type(simulate_fcc_commander)          :: xsim_fcc
 
 ! ORIENTATION DATA MANAGEMENT PROGRAMS
 type(rotmats2oris_commander)          :: xrotmats2oris
@@ -185,6 +186,8 @@ select case(prg)
         call xstk_corr%execute(cline)
     case( 'kstest' )
         call xkstst%execute(cline)
+    case( 'simulate_fcc' )
+        call xsim_fcc%execute(cline)
 
     ! ORIENTATION DATA MANAGEMENT PROGRAMS
     case( 'rotmats2oris' )

@@ -52,8 +52,12 @@ type :: atoms
     procedure          :: get_name
     procedure          :: get_coord
     procedure          :: get_num
+    procedure          :: get_atomicnumber
+    procedure          :: get_radius
     procedure          :: set_coord
     procedure          :: set_chain
+    procedure          :: set_name
+    procedure          :: set_element
     procedure          :: set_num
     procedure          :: set_beta
     procedure          :: set_resnum
@@ -63,6 +67,7 @@ type :: atoms
     procedure          :: writepdb
     ! CALCULATORS
     procedure          :: guess_element
+    procedure, private :: guess_an_element
     procedure, private :: Z_and_radius_from_name
     procedure          :: get_geom_center
     procedure          :: convolve
@@ -145,7 +150,7 @@ contains
 
     subroutine new_instance( self, n, dummy )
         class(atoms),      intent(inout) :: self
-        integer,           intent(inout) :: n
+        integer,           intent(in)    :: n
         logical, optional, intent(in)    :: dummy
         integer :: i,alloc_stat
         logical :: ddummy
@@ -245,6 +250,20 @@ contains
         get_name = self%name(i)
     end function get_name
 
+    integer function get_atomicnumber( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atomicnumber')
+        get_atomicnumber = self%Z(i)
+    end function get_atomicnumber
+
+    real function get_radius( self, i )
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_atomicnumber')
+        get_radius = self%radius(i)
+    end function get_radius
+
     subroutine set_coord( self, i, xyz )
         class(atoms), intent(inout) :: self
         integer,      intent(in)    :: i
@@ -257,9 +276,27 @@ contains
         class(atoms),     intent(inout) :: self
         integer,          intent(in)    :: i
         character(len=1), intent(in)    :: chain
-        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_coord')
-        self%chain(i) = chain
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_chain')
+        self%chain(i) = upperCase(chain)
     end subroutine set_chain
+
+    subroutine set_name( self, i, name )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=4), intent(in)    :: name
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_name')
+        self%name(i) = upperCase(name)
+        call self%guess_an_element(i)
+    end subroutine set_name
+
+    subroutine set_element( self, i, element )
+        class(atoms),     intent(inout) :: self
+        integer,          intent(in)    :: i
+        character(len=2), intent(in)    :: element
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; set_element')
+        self%element(i) = upperCase(element)
+        call self%guess_an_element(i)
+    end subroutine set_element
 
     subroutine set_num( self, i, num )
         class(atoms),     intent(inout) :: self
@@ -309,7 +346,8 @@ contains
         write(logfhandle,'(I4,1X)',advance='no')self%resnum(i)
         write(logfhandle,'(A1,1X)',advance='no')self%icode(i)
         write(logfhandle,'(3F8.3,1X)',advance='no')self%xyz(i,:)
-        write(logfhandle,'(2F6.2,1X)',advance='yes')self%occupancy(i), self%beta(i)
+        write(logfhandle,'(2F6.2,1X)',advance='no')self%occupancy(i), self%beta(i)
+        write(logfhandle,'(A2)',advance='yes')self%element(i)
     end subroutine print_atom
 
     ! I/O
@@ -359,23 +397,32 @@ contains
 
     subroutine guess_element( self )
         class(atoms), intent(inout) :: self
-        real    :: r
-        integer :: i, z
+        integer :: i
         if( .not.self%exists ) THROW_HARD('Non-existent atoms object! guess_atomic_number')
         do i=1,self%n
-            if( len_trim(self%element(i)) == 0 )then
-                call self%Z_and_radius_from_name(self%name(i),z,r)
-            else
-                call self%Z_and_radius_from_name(self%element(i)//'  ',z,r)
-            endif
-            if( z == 0 )then
-                THROW_WARN('Unknown atom '//int2str(i)//' : '//trim(self%name(i))//' - '//self%element(i))
-            else
-                self%radius(i) = r
-                self%Z(i) = z
-            endif
+            call self%guess_an_element(i)
         enddo
     end subroutine guess_element
+
+    subroutine guess_an_element( self, i )
+        class(atoms), intent(inout) :: self
+        integer,      intent(in)    :: i
+        real    :: r
+        integer :: z
+        if( .not.self%exists ) THROW_HARD('Non-existent atoms object! guess_atomic_number')
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; guess_an_element')
+        if( len_trim(self%element(i)) == 0 )then
+            call self%Z_and_radius_from_name(self%name(i),z,r)
+        else
+            call self%Z_and_radius_from_name(self%element(i)//'  ',z,r)
+        endif
+        if( z == 0 )then
+            THROW_WARN('Unknown atom '//int2str(i)//' : '//trim(self%name(i))//' - '//self%element(i))
+        else
+            self%radius(i) = r
+            self%Z(i) = z
+        endif
+    end subroutine guess_an_element
 
     ! single covalent radii from Cordero, et al., 2008, "Covalent radii revisited"
     ! Dalton Trans. (21): 2832–2838. doi:10.1039/b801115j
@@ -422,56 +469,98 @@ contains
         center(3) = sum(self%xyz(:,3)) / real(self%n)
     end function get_geom_center
 
-    ! Using 5-gaussian atomic scattering factors from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
-    subroutine convolve( self, vol )
+    ! simulate electrostatic potential from elastic scattering
+    ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011
+    ! and aparmetrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
+    subroutine convolve( self, vol, cutoff, lp )
+        !$ use omp_lib
+        !$ use omp_lib_kinds
         use simple_image, only: image
-        class(atoms), intent(in)    :: self
-        class(image), intent(inout) :: vol
-        real, parameter :: C = 47.87568 ! conversion to eV
-        real, parameter :: fourpisq = 4.*PI*PI
-        real, pointer   :: prmat(:,:,:)
-        real    :: a(5), b(5), xyz(3), smpd, xx,yy,r2,cutoff
-        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,z,icutoff
+        class(atoms),   intent(in)    :: self
+        class(image),   intent(inout) :: vol
+        real,           intent(in)    :: cutoff
+        real, optional, intent(in)    :: lp
+        real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
+        real, parameter   :: fourpisq = 4.*PI*PI
+        real, allocatable :: rmat(:,:,:)
+        real    :: a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2
+        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff, cutoffsq
+        logical :: l_bfac
         if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
-        call vol%get_rmat_ptr(prmat)
-        prmat = 0.
-        smpd  = vol%get_smpd()
-        ldim  = vol%get_ldim()
-        cutoff  = 6.*smpd
-        icutoff = ceiling(cutoff/smpd)
+        smpd = vol%get_smpd()
+        ldim = vol%get_ldim()
+        l_bfac = present(lp)
+        if( l_bfac ) bfac = (4.*lp)**2.
+        allocate(rmat(ldim(1),ldim(2),ldim(3)),source=0.)
+        icutoff  = ceiling(cutoff/smpd)
+        cutoffsq = cutoff*cutoff
+        !$omp parallel do default(shared) private(i,z,a,b,aterm,xyz,pos,bbox,j,k,l,r2,rjk2,jj,kk)&
+        !$omp proc_bind(close) reduction(+:rmat)
         do i = 1,self%n
             z = self%Z(i)
-            if( z == 0 ) cycle
             select case(z)
+            case(6) ! C
+                a = [0.0893, 0.2563, 0.7570, 1.0487, 0.3575]
+                b = [0.2465, 1.7100, 6.4094,18.6113,50.2523]
+            case(7) ! N
+                a = [0.1022, 0.3219, 0.7982, 0.8197, 0.1715]
+                b = [0.2451, 1.7481, 6.1925,17.3894,48.1431]
+            case(8)
+                a = [0.0974, 0.2921, 0.6910,  0.6990, 0.2039]
+                b = [0.2067, 1.3815, 4.6943, 12.7105,32.4726]
+                ! case('P')
+                !     Z = 15; r = 1.07
+                ! case('S')
+                !     Z = 16; r = 1.05
+                ! case('PD')
+                !     Z = 46; r = 1.2
+                ! case('PT')
+                !     Z = 78; r = 1.23
             case(26) ! Fe
                 a = [0.3946, 1.2725, 1.7031,  2.3140,  1.4795]
                 b = [0.2717, 2.0443, 7.6007, 29.9714, 86.2265]
+            case(78) ! Pt
+                a = [0.9148, 1.8096, 3.2134,  3.2953,  1.5754]
+                b = [0.2263, 1.3813, 5.3243, 17.5987, 60.0171]
             case(79) ! Au
                 a = [0.9674, 1.8916, 3.3993,  3.0524,  1.2607]
                 b = [0.2358, 1.4712, 5.6758, 18.7119, 61.5286]
+            case DEFAULT
+                cycle
             end select
-            xyz = self%xyz(i,:)/smpd
-            pos = floor(xyz)
+            if( l_bfac ) b = b + bfac   ! eq B.6
+            aterm = a/b**1.5            ! eq B.6
+            xyz   = self%xyz(i,:)/smpd
+            pos   = floor(xyz)
             bbox(:,1) = pos   - icutoff
             bbox(:,2) = pos+1 + icutoff
+            if( any(bbox(:,2) < 1) )      cycle
+            if( any(bbox(:,1) > ldim(1)) )cycle
             where( bbox < 1 ) bbox = 1
             where( bbox > ldim(1) ) bbox = ldim(1)
             do j = bbox(1,1),bbox(1,2)
+                jj = j-1
                 do k = bbox(2,1),bbox(2,2)
+                    kk = k-1
+                    rjk2 = sum((smpd*(xyz(1:2)-real([jj,kk])))**2.)
+                    if(rjk2 > cutoffsq) cycle
                     do l = bbox(3,1),bbox(3,2)
-                        r2 = sum((smpd*(xyz-real([j,k,l])))**2.)
-                        prmat(j,k,l) = prmat(j,k,l) + epot(r2)
+                        r2 = rjk2 + (smpd*(xyz(3)-real(l-1)))**2.
+                        if(r2 > cutoffsq) cycle
+                        rmat(j,k,l) = rmat(j,k,l) + epot(r2,aterm,b)
                     enddo
                 enddo
             enddo
         enddo
-
+        !$omp end parallel do
+        rmat = C*rmat
+        call vol%set_rmat(rmat)
+        deallocate(rmat)
     contains
-
-        ! electrostatic potential assuming static atoms (eq.32, B=0)
-        real elemental function epot(r2)
-            real, intent(in) :: r2
-            epot = C * sum( a*(FOURPI/b)**1.5 * exp(-fourpisq*r2/b) )
+        ! potential assuming static atoms (eq B.6)
+        real function epot(r2,aterm,b)
+            real, intent(in) :: r2, aterm(5),b(5)
+            epot = sum( aterm * exp(-fourpisq*r2/b) )
         end function epot
 
     end subroutine convolve

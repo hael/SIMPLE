@@ -39,7 +39,7 @@ type :: parameters
     character(len=3)      :: doprint='no'
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
-    character(len=3)      :: groupframes='yes'    !< Whether to perform frames avergaing during motion correction(yes|no){no}
+    character(len=3)      :: groupframes='yes'    !< Whether to perform weighted frames avergaing during motion correction(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
@@ -168,6 +168,7 @@ type :: parameters
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
+    character(len=2)      :: element='  '         !< file extension{.mrc}
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
@@ -506,6 +507,7 @@ contains
         call check_carg('dopca',          self%dopca)
         call check_carg('doprint',        self%doprint)
         call check_carg('draw_color',     self%draw_color)
+        call check_carg('element',        self%element)
         call check_carg('errify',         self%errify)
         call check_carg('even',           self%even)
         call check_carg('exp_doc',        self%exp_doc)

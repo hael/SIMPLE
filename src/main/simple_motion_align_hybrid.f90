@@ -15,7 +15,7 @@ private
 real,    parameter :: SMALLSHIFT    = 1.
 real,    parameter :: SRCH_TOL      = 1.e-6
 real,    parameter :: NIMPROVED_TOL = 1.e-7
-integer, parameter :: MAXITS_PHCORR = 15
+integer, parameter :: MAXITS_DCORR  = 15
 integer, parameter :: MAXITS_CORR   = 5
 integer, parameter :: POLYDIM       = 4
 integer, parameter :: NRESUPDATES   = 3
@@ -44,10 +44,10 @@ type :: motion_align_hybrid
     real                           :: corr           = -1.              !< correlation
     real                           :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for continuous srch update
     real                           :: smpd = 0., smpd_sc =0.            !< sampling distance
-    real                           :: scale_factor   = 1.
+    real                           :: scale_factor   = 1.               !< local frame scaling
     real                           :: trs            = 30.              !< half correlation disrete search bound
     integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
-    integer                        :: maxits_phcorr  = MAXITS_PHCORR    !< maximum number of iterations for discrete search
+    integer                        :: maxits_dcorr   = MAXITS_DCORR     !< maximum number of iterations for discrete search
     integer                        :: maxits_corr    = MAXITS_CORR      !< maximum number of iterations for continuous search
     integer                        :: nframes        = 0                !< number of frames
     integer                        :: fixed_frame    = 1                !< fixed (non-shifted) frame
@@ -95,7 +95,6 @@ contains
     procedure          :: get_shifts_toplot
     procedure          :: set_fixed_frame
     procedure          :: set_fitshifts
-    procedure          :: set_maxits
     procedure          :: set_coords
     procedure          :: get_coords
     procedure          :: is_fitshifts
@@ -116,7 +115,7 @@ contains
         self%gtol           = params_glob%motion_correctgtol
         self%fixed_frame    = 1
         self%lp_updates     = 1
-        self%maxits_phcorr  = MAXITS_PHCORR
+        self%maxits_dcorr   = MAXITS_DCORR
         self%maxits_corr    = MAXITS_CORR
         self%shsrch_tol     = SRCH_TOL
         self%bfactor        = -1.
@@ -243,6 +242,7 @@ contains
             call self%frames_ftexp_sh(iframe)%div(sumw)
             call self%frames_ftexp(iframe)%copy(self%frames_ftexp_sh(iframe))
         enddo
+        !$omp end do
         !$omp end parallel
         contains
             subroutine add_shifted_frame(i, j, w)
@@ -265,6 +265,7 @@ contains
                 call self%frames_ftexp_sh(iframe)%kill
                 call self%references_ftexp(iframe)%kill
             end do
+            deallocate(self%references_ftexp,self%frames_ftexp_sh,self%frames_ftexp)
         endif
     end subroutine dealloc_ftexps
 
@@ -325,7 +326,7 @@ contains
         ! shift frames, generate reference & calculates correlation
         call self%shift_frames_gen_ref
         ! main loop
-        do iter=1,self%maxits_phcorr
+        do iter=1,self%maxits_dcorr
             opt_shifts_prev = self%opt_shifts
             ! individual optimizations
             !$omp parallel do schedule(static) default(shared) private(iframe) proc_bind(close)
@@ -364,18 +365,13 @@ contains
                 call self%gen_weights
             endif
         enddo
-        ! cleanup
-        do iframe=1,self%nframes
-            call self%frames_sh(iframe)%kill
-        enddo
-        deallocate(self%frames_sh)
     end subroutine align_dcorr
 
     ! continuous serach
     subroutine align_corr( self, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
         real, optional,             intent(in)    :: frameweights(self%nframes)
-        type(ftexp_shsrch) :: ftexp_srch(self%nframes)
+        type(ftexp_shsrch), allocatable :: ftexp_srch(:)
         real    :: opt_shifts_saved(self%nframes,2), opt_shifts_prev(self%nframes, 2), corrfrac
         real    :: frameweights_saved(self%nframes), cxy(3), rmsd, corr_prev, corr_saved, trs, frac_improved
         integer :: iter, iframe, nimproved
@@ -388,6 +384,7 @@ contains
         ! shift boundaries
         trs = 5.*params_glob%scale
         ! search object allocation
+        allocate(ftexp_srch(self%nframes))
         do iframe=1,self%nframes
             call ftexp_srch(iframe)%new(self%references_ftexp(iframe),&
                 self%frames_ftexp_sh(iframe),trs, motion_correct_ftol=self%ftol, motion_correct_gtol=self%gtol)
@@ -441,6 +438,7 @@ contains
         do iframe = 1, self%nframes
             call ftexp_srch(iframe)%kill
         end do
+        deallocate(ftexp_srch)
     end subroutine align_corr
 
     ! shifts frames, generate reference and calculates correlations
@@ -470,6 +468,8 @@ contains
         !$omp end do
         !$omp end parallel
         self%corr = sum(self%corrs) / real(self%nframes)
+        deallocate(cmat_sum)
+        nullify(pcmat)
     end subroutine shift_frames_gen_ref
 
     ! shifts frames, generate reference and calculates correlations
@@ -557,7 +557,7 @@ contains
     subroutine calc_shifts( self, iframe )
         class(motion_align_hybrid), intent(inout) :: self
         integer,                    intent(inout) :: iframe
-        real,    pointer :: pcorrs(:,:,:)
+        real, pointer :: pcorrs(:,:,:)
         complex :: cref, cframe
         real    :: dshift(2),corr,alpha,beta,gamma,weight,w,sqsum_ref,sqsum_frame,rw
         integer :: pos(2),center(2),trs,h,k,phys(3),nrflims(3,2)
@@ -604,6 +604,7 @@ contains
         ! update shift
         self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
+        nullify(pcorrs)
         call self%frames_sh(iframe)%zero_and_flag_ft
         contains
 
@@ -669,7 +670,7 @@ contains
     ! center shifts with respect to fixed_frame
     subroutine recenter_shifts( self, shifts )
         class(motion_align_hybrid), intent(inout) :: self
-        real,     intent(inout) :: shifts(self%nframes,2)
+        real,                       intent(inout) :: shifts(self%nframes,2)
         integer :: iframe
         do iframe=1,self%nframes
             shifts(iframe,:) = shifts(iframe,:) - shifts(self%fixed_frame,:)
@@ -721,6 +722,8 @@ contains
         !$omp end do
         !$omp end parallel
         self%corr = sum(self%corrs)/real(self%nframes)
+        deallocate(cmat_sum)
+        nullify(pcmat)
     end subroutine shift_wsum_and_calc_corrs
 
     ! Getters/setters
@@ -749,7 +752,7 @@ contains
 
     subroutine set_weights( self, frameweights )
         class(motion_align_hybrid), intent(inout) :: self
-        real, allocatable,       intent(in)    :: frameweights(:)
+        real, allocatable,          intent(in)    :: frameweights(:)
         if (size(frameweights) /= self%nframes) then
             THROW_HARD('inconsistency; simple_motion_align_hybrid: set_weights')
         end if
@@ -809,10 +812,11 @@ contains
         self%shsrch_tol = shsrch_tol
     end subroutine set_shsrch_tol
 
-    subroutine set_maxits( self, maxits )
+    subroutine set_maxits( self, maxits1, maxits2 )
         class(motion_align_hybrid), intent(inout) :: self
-        integer, intent(in) :: maxits
-        !self%maxits = maxits
+        integer,                    intent(in)    :: maxits1,maxits2
+        self%maxits_dcorr = maxits1
+        self%maxits_corr  = maxits2
     end subroutine set_maxits
 
     subroutine set_coords( self, x, y )

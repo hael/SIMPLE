@@ -287,6 +287,7 @@ contains
         call cmd_dict%push('e2',            'Euler 2 (in degrees){0}')
         call cmd_dict%push('e3',            'Euler 3 (in degrees){0}')
         call cmd_dict%push('edge',          'edge size for softening molecular envelope(in pixels){6}')
+        call cmd_dict%push('element',       'atom element')
         call cmd_dict%push('endian',        'endiannesss of files(big|little|native){native}')
         call cmd_dict%push('eps',           'learning rate{0.003}')
         call cmd_dict%push('eo',            'use FSC for filtering and low-pass limit update(yes|aniso|no)')
@@ -314,6 +315,7 @@ contains
         call cmd_dict%push('ft2img',        'convert Fourier transform to real image of power(yes|no){no}')
         call cmd_dict%push('gainref',       'gain reference')
         call cmd_dict%push('globwfrac',     'peaks global weight fraction (0-1){0.16}')
+        call cmd_dict%push('groupframes',   'whether to perform wghted frame averaging during patch-based motion correction')
         call cmd_dict%push('grow',          '# binary layers to grow(in pixels)')
         call cmd_dict%push('guinier',       'calculate Guinier plot(yes|no){no}')
         call cmd_dict%push('hfun',          'function used for normalization(sigm|tanh|lin){sigm}')
@@ -709,7 +711,19 @@ contains
         call private_prgs(22)%push_opt_key('nstates')
         call private_prgs(22)%push_opt_key('mskfile')
 
-        n_private_prgs = 22
+        ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
+        call private_prgs(23)%set_name('sim_fcc')
+        ! required keys
+        call private_prgs(23)%push_req_key('smpd')
+        call private_prgs(23)%push_req_key('element')
+        call private_prgs(23)%push_req_key('msk')
+        call private_prgs(23)%push_req_key('box')
+        ! optional keys
+        call private_prgs(23)%push_opt_key('nthr')
+        call private_prgs(23)%push_opt_key('outvol')
+        call private_prgs(23)%push_opt_key('lp')
+
+        n_private_prgs = 23
     end subroutine new_private_prgs
 
 end module simple_private_prgs

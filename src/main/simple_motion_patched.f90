@@ -32,7 +32,6 @@ type :: motion_patched
     private
     logical                             :: existence
     type(imstack_type),                  allocatable :: frame_patches(:,:)
-    type(motion_align_hybrid),           allocatable :: align_hybrid(:,:)
     type(motion_align_iso_polyn_direct), allocatable :: align_iso_polyn_direct(:,:)
     real,                   allocatable :: shifts_patches(:,:,:,:)
     real,                   allocatable :: shifts_patches_for_fit(:,:,:,:)
@@ -676,11 +675,12 @@ contains
     subroutine det_shifts( self, frames )
         class(motion_patched), target, intent(inout) :: self
         type(image),      allocatable, intent(inout) :: frames(:)
+        type(motion_align_hybrid), allocatable :: align_hybrid(:,:)
         real, allocatable :: opt_shifts(:,:), res(:)
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
-        allocate(self%align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
+        allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
         corr_avg = 0.
         ! initialize transfer matrix to correct dimensions
@@ -696,27 +696,27 @@ contains
                 ! init
                 self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
                 call self%gen_patch(frames,i,j)
-                call self%align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                call self%align_hybrid(i,j)%set_group_frames(trim(params_glob%groupframes).eq.'yes')
-                call self%align_hybrid(i,j)%set_rand_init_shifts(.true.)
-                call self%align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
-                call self%align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
-                call self%align_hybrid(i,j)%set_shsrch_tol(TOL)
-                call self%align_hybrid(i,j)%set_coords(i,j)
-                call self%align_hybrid(i,j)%set_fitshifts(self%fitshifts)
-                call self%align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
-                call self%align_hybrid(i,j)%set_bfactor(self%bfactor)
+                call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
+                call align_hybrid(i,j)%set_group_frames(trim(params_glob%groupframes).eq.'yes')
+                call align_hybrid(i,j)%set_rand_init_shifts(.true.)
+                call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
+                call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
+                call align_hybrid(i,j)%set_shsrch_tol(TOL)
+                call align_hybrid(i,j)%set_coords(i,j)
+                call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
+                call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
+                call align_hybrid(i,j)%set_bfactor(self%bfactor)
                 ! align
-                call self%align_hybrid(i,j)%align(frameweights=self%frameweights)
+                call align_hybrid(i,j)%align(frameweights=self%frameweights)
                 ! fetch info
-                corr_avg = corr_avg + self%align_hybrid(i,j)%get_corr()
-                call self%align_hybrid(i,j)%get_opt_shifts(opt_shifts)
+                corr_avg = corr_avg + align_hybrid(i,j)%get_corr()
+                call align_hybrid(i,j)%get_opt_shifts(opt_shifts)
                 ! making sure the shifts are in reference to fixed_frame
                 do iframe = 1, self%nframes
                     self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:) - opt_shifts(self%fixed_frame,:)
                 end do
                 ! cleanup
-                call self%align_hybrid(i,j)%kill
+                call align_hybrid(i,j)%kill
                 do iframe=1,self%nframes
                     call self%frame_patches(i,j)%stack(iframe)%kill
                 end do
@@ -726,7 +726,7 @@ contains
         self%shifts_patches_for_fit = self%shifts_patches
         corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
         write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        deallocate(self%align_hybrid,res)
+        deallocate(align_hybrid,res)
     end subroutine det_shifts
 
     subroutine det_shifts_polyn( self )

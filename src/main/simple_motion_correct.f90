@@ -35,7 +35,6 @@ logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
 type(motion_patched)        :: motion_patch
-type(image),    allocatable :: movie_frames_shifted_patched(:) !< shifted movie frames
 real(dp),       allocatable :: patched_polyn(:)                !< polynomial from patched-based correction
 
 ! data structures used by both isotropic & patch-based correction
@@ -83,6 +82,7 @@ contains
         real,                       intent(in)  :: nsig              !< # of std deviations for outliers detection
         logical,                    intent(out) :: err               !< error flag
         character(len=*), optional, intent(in)  :: gainref_fname     !< gain reference filename
+        integer,       parameter :: HWINSZ = 6
         type(image), allocatable :: movie_frames(:)
         real,        allocatable :: rmat_pad(:,:), win(:,:), rmat_sum(:,:,:)
         logical,     allocatable :: outliers(:,:)
@@ -90,7 +90,6 @@ contains
         type(image)        :: tmpmovsum, gainref
         real               :: moldiam, dimo4, time_per_frame, current_time
         integer            :: iframe, ncured, deadhot(2), i, j, winsz, shp(3)
-        integer, parameter :: HWINSZ = 6
         logical            :: l_gain
         ! get number of frames & dim from stack
         call find_ldim_nptcls(movie_stack_fname, ldim, nframes)
@@ -383,6 +382,7 @@ contains
                 call movie_frames_shifted(iframe)%apply_filter_serial(filtarr(iframe,:))
             end do
             !$omp end parallel do
+            deallocate(filtarr)
         endif
         call sum_frames(movie_sum_corrected,frameweights)
         ! cleanup
@@ -411,6 +411,7 @@ contains
                 call img_sum%set_ft(.true.)
                 call img_sum%set_cmat(cmat_sum)
                 call img_sum%ifft()
+                nullify(pcmat)
             end subroutine sum_frames
     end subroutine motion_correct_iso_calc_sums
 
@@ -513,7 +514,6 @@ contains
             scale = 1.
             smpd4scale = smpd_scaled
         endif
-        allocate(movie_frames_shifted_patched(nframes))
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
             &params_glob%nxpatch,' x ',params_glob%nxpatch,')'
         PRINT_NEVALS = .false.
@@ -536,13 +536,15 @@ contains
     ! weighted & un-weighted sums, dose-weighting
     subroutine motion_correct_patched_calc_sums( movie_sum_corrected, movie_sum_ctf )
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
-        real,     pointer :: prmat(:,:,:)
-        real, allocatable :: rmat_sum(:,:,:), filtarr(:,:)
+        real,            pointer :: prmat(:,:,:)
+        type(image), allocatable :: movie_frames_shifted_patched(:)
+        real,        allocatable :: rmat_sum(:,:,:), filtarr(:,:)
         real              :: scalar_weight
         integer           :: iframe
         scalar_weight = 1. / real(nframes)
         call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
-        allocate( rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0. )
+        allocate(rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0.)
+        allocate(movie_frames_shifted_patched(nframes))
         ! micrograph for CTF estimation
         !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=1,nframes
@@ -574,6 +576,11 @@ contains
         end do
         !$omp end parallel do
         call movie_sum_corrected%set_rmat(rmat_sum)
+        ! cleanup
+        do iframe=1,nframes
+            call movie_frames_shifted_patched(iframe)%kill
+        enddo
+        deallocate(movie_frames_shifted_patched,rmat_sum,filtarr)
     end subroutine motion_correct_patched_calc_sums
 
     ! write anisotropic shifts
@@ -592,12 +599,12 @@ contains
 
     subroutine motion_correct_patched_kill
         integer :: iframe
-        if( allocated(movie_frames_shifted_patched) )then
-            do iframe=1,size(movie_frames_shifted_patched)
-                call movie_frames_shifted_patched(iframe)%kill
+        call motion_patch%kill
+        if( allocated(movie_frames_shifted_saved) )then
+            do iframe=1,size(movie_frames_shifted_saved)
                 call movie_frames_shifted_saved(iframe)%kill
             end do
-            deallocate(movie_frames_shifted_patched, movie_frames_shifted_saved)
+            deallocate(movie_frames_shifted_saved)
         endif
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
