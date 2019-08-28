@@ -208,6 +208,7 @@ type(simple_input_param) :: outstk
 type(simple_input_param) :: outvol
 type(simple_input_param) :: pcontrast
 type(simple_input_param) :: pgrp
+type(simple_input_param) :: phasecorr
 type(simple_input_param) :: phaseplate
 type(simple_input_param) :: projfile
 type(simple_input_param) :: projfile_target
@@ -2120,7 +2121,7 @@ contains
         &'Template-based particle picking',&                               ! descr_short
         &'is a distributed workflow for template-based particle picking',& ! descr_long
         &'simple_distr_exec',&                                             ! executable
-        &2, 2, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
+        &2, 3, 0, 3, 1, 0, 2, .true.)                                      ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call pick%set_input('img_ios', 1, 'refs', 'file', 'Stack of class-averages for picking', 'Stack of class-averages for picking', 'e.g. cavgs.mrc', .false., '')
@@ -2128,6 +2129,7 @@ contains
         ! parameter input/output
         call pick%set_input('parm_ios', 1, 'dir', 'dir', 'Output directory', 'Output directory', 'e.g. pick/', .false., 'pick')
         call pick%set_input('parm_ios', 2, pcontrast)
+        call pick%set_input('parm_ios', 3, 'phasecorr', 'binary', 'Picking phasecorrelation approach','Use phase correlations approach for picking','(yes|no){no}', .true.,'no')
         ! alternative inputs
         ! <empty>
         ! search controls

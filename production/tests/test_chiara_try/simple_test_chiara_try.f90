@@ -98,278 +98,6 @@ end subroutine laplacian_filt
      9999 FORMAT( 11(:,1X,'(',F6.2,',',F6.2,')') )
           RETURN
       END SUBROUTINE PRINT_EIGENVECTORS
-  ! subroutine aff_prop
-  !     real                 :: centers(3,303)
-  !     type(aff_prop)       :: apcls
-  !     real                 :: simmat(900,900), simsum
-  !     integer, allocatable :: centers(:), labels(:)
-  !     integer              :: i, j, ncls, nerr
-  !     write(logfhandle,'(a)') '**info(simple_aff_prop_unit_test): testing all functionality'
-  !     ! make data
-  !     do i=1,300
-  !         datavecs(i,:) = 1.
-  !     end do
-  !     do i=301,600
-  !         datavecs(i,:) = 5.
-  !     end do
-  !     do i=601,900
-  !         datavecs(i,:) = 10.
-  !     end do
-  !     do i=1,900-1
-  !         do j=i+1,900
-  !             simmat(i,j) = -euclid(datavecs(i,:),datavecs(j,:))
-  !             simmat(j,i) = simmat(i,j)
-  !         end do
- !     end do
-  !     call apcls%new(900, simmat)
-  !     call apcls%propagate(centers, labels, simsum)
-  !     ncls = size(centers)
-  !     nerr = 0
-  !     do i=1,299
-  !         do j=i+1,300
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     do i=301,599
-  !         do j=i+1,600
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     do i=601,899
-  !         do j=i+1,900
-  !             if( labels(i) /= labels(j) ) nerr = nerr+1
-  !         end do
-  !     end do
-  !     write(logfhandle,*) 'NR OF CLUSTERS FOUND:', ncls
- !     write(logfhandle,*) 'NR OF ASSIGNMENT ERRORS:', nerr
-  !     write(logfhandle,*) 'CENTERS'
-  !     do i=1,size(centers)
-  !         write(logfhandle,*) datavecs(centers(i),:)
-  !     end do
-  !     if( ncls == 3 .and. nerr == 0 )then
-  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST COMPLETED ;-)'
-  !     else
-  !         write(logfhandle,'(a)') 'SIMPLE_AFF_PROP_UNIT_TEST FAILED!'
-  !     endif
-  ! end subroutine aff_prop
-
-  ! This subroutine takes in input coords of the atomic positions
-  ! in the nanoparticles to compare and calculates the rmsd
-  ! between them.
-  ! See formula
-  ! https://en.wikipedia.org/wiki/Root-mean-square_deviation_of_atomic_positions
-  subroutine calc_rmsd(centers1,centers2,r)
-      real, intent(in) :: centers1(:,:), centers2(:,:)
-      real, optional, intent(out) :: r !rmsd calculated
-      integer :: N, i, j
-      real    :: sum, rmsd
-      real, allocatable :: dist(:)
-      logical, allocatable :: mask(:)
-      integer :: location(1)
-      ! If they don't have the same nb of atoms.
-      if(size(centers1, dim = 2) <= size(centers2, dim = 2)) then
-          N = size(centers1, dim = 2) !compare based on centers1
-          print *, 'N = ', N
-          allocate(dist(N), source = 0.)
-          allocate(mask(size(centers2, dim = 2)), source = .true.)
-          do i = 1, N
-              dist(i)  = pixels_dist(centers1(:,i),centers2(:,:),'min',mask,location)
-              print *, 'pixel = ', i, 'location = ', location
-              dist(i) = dist(i)**2 !formula wants them square
-              mask(location(1)) = .false. ! not to consider the same atom more than once
-          enddo
-          print *, 'dist = ', dist, 'sum_dist = ', sum(dist), 'sum(dist)/N = ', sum(dist)/real(N)
-          rmsd = sqrt(sum(dist)/real(N))
-      print *, 'RMSD = ', rmsd
-      else
-          N = size(centers2, dim = 2) !compare based on centers2
-          allocate(dist(N), source = 0.)
-          allocate(mask(size(centers1, dim = 2)), source = .true.)
-          do i = 1, N
-              dist(i) = pixels_dist(centers2(:,i),centers1(:,:),'min',mask,location)
-              dist(i) = dist(i)**2        !formula wants them square
-              mask(location(1)) = .false. ! not to consider the same atom more than once
-      enddo
-          rmsd = sqrt(sum(dist)/real(N))
-          print *, 'RMSD = ', rmsd
-
-      endif
-      if(present(r)) r=rmsd
-  end subroutine calc_rmsd
-
-  subroutine calc_circ(img, i)
-      type(image), intent(inout) :: img
-      integer, optional, intent(in) :: i
-      type(image) :: img_cc
-      real,    allocatable :: rmat(:,:,:)
-      logical, allocatable :: border(:,:,:)
-      integer, allocatable :: imat(:,:,:)
-  integer :: label
-      integer :: v(1), s(1) !volumes and surfaces of each atom
-      real, parameter :: pi = 3.14159265359
-      real :: circularity
-      integer, allocatable :: pos(:,:)
-      logical, allocatable :: mask_dist(:) !for min and max dist calculation
-      integer :: location(1) !location of the farest vxls of the atom from its center
-      integer :: loc_min(1)
-      real    :: longest_dist
-      real :: volume, surface
-      !call img%find_connected_comps(img_cc)
-      ! call img_cc%write('ImgCc.mrc')
-      ! rmat = img_cc%get_rmat()
-      ! allocate(imat(50,50,50),source = nint(rmat)) !for function get_pixel_pos
-      ! call img_cc%border_mask(border, 1, .true.) !use 4neigh instead of 8neigh
-      ! where(border .eqv. .true.)
-      !     imat = 1
-      ! elsewhere
-      !     imat = 0
-      ! endwhere
-      ! call get_pixel_pos(imat,pos)   !pxls positions of the shell
-      ! if(allocated(mask_dist)) deallocate(mask_dist)
-      ! allocate(mask_dist(size(pos, dim = 2)), source = .true. )
-      ! longest_dist  = pixels_dist([24.5,24.5,24.5], real(pos),'max', mask_dist, location)
-      ! print *, 'radius = ', longest_dist
-      ! volume  = (4.*pi)/3.*(longest_dist)**3
-      ! print *, 'volume =', volume
-      ! surface = (4.*pi)*(longest_dist)**2
-      ! circularity = (6.*sqrt(pi)*volume)/ sqrt((surface**3))
-      ! print *, 'circularity = ',circularity
-      ! stop
-      !rmat = img_cc%get_rmat()
-      rmat = img%get_rmat()
-      allocate(imat(160,160,160),source = nint(rmat)) !for function get_pixel_pos
-      v(1) = count(imat == 1) !just count the number of vxls in the cc
-      call img%border_mask(border, 1)!, .true.)
-      rmat = 0.
-      where(border .eqv. .true.) rmat = 1.
-      call img%set_rmat(rmat)
-      if(present(i)) then
-        call img%write(int2str(i)//'Border.mrc')
-      else
-          call img%write('Border.mrc')
-      endif
-      s(1) = count(border .eqv. .true.)
-      circularity = (6.*sqrt(pi)*real(v(1)))/sqrt(real(s(1))**3)
-      print*, 'vol = ', v(1), 'surf = ', s(1), 'circ = ', circularity
-      deallocate(imat, border, rmat)
-  end subroutine calc_circ
-
-
-  ! function entropy(X,n) result(e)
-  !     use simple_math
-  !     real, intent(in)    :: X(:)
-  !     integer, intent(in) :: N
-  !     real                :: e !entropy value
-  !     real,    allocatable :: xhist(:) !discretization of the values
-  !     integer, allocatable :: yhist(:) !number of occurences
-  !     real,    allocatable :: p(:), p_no_zero(:)
-  !     integer :: i, cnt
-  !     call create_hist_vector(X,n,xhist,yhist)
-  !     allocate(p(size(yhist)), source = 0.)
-  !     p =  real(yhist)/real(sum(yhist)) !probabilities
-  !     print *, 'p = ', p
-  !     cnt = count(p>TINY)
-  !     print *, 'cnt = ', cnt
-  !     allocate(p_no_zero(cnt), source = 0.)
-  !     cnt = 0 !reset
-  !     do i = 1, size(p)
-  !         if(p(i) > TINY) then
-  !             cnt = cnt + 1
-  !             print *, 'i = ', i, 'p(i) = ', p(i)
-  !             p_no_zero(cnt) = p(i)
-  !         endif
-  !     enddo
-  !     e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
-  !     deallocate(xhist,yhist)
-  ! end function entropy
-
-  ! function entropy_try(X,n) result(e)
-  !     real, intent(in)    :: X(:)
-  !     integer, intent(in) :: N
-  !     real                :: e !entropy value
-  !     real,    allocatable :: xhist(:) !discretization of the values
-  !     integer, allocatable :: yhist(:) !number of occurences
-  !     real,    allocatable :: p(:), p_no_zero(:)
-  !     integer :: i, cnt
-  !     call create_hist_vector(X,n,xhist,yhist)
-  !     allocate(p(size(yhist)), source = 0.)
-  !     p =  real(yhist)/real(sum(yhist)) !probabilities
-  !     cnt = count(p>TINY)
-  !     allocate(p_no_zero(cnt), source = 0.)
-  !     cnt = 0 !reset
-  !     do i = 1, size(p)
-  !         if(p(i) > TINY) then
-  !             cnt = cnt + 1
-  !             p_no_zero(cnt) = p(i) !remove zeroes occurrencies
-  !         endif
-  !     enddo
-  !     e = -sum(p_no_zero*(log10(p_no_zero)/log10(2.))) !formula: sum(p*log2(p))
-  !     deallocate(xhist,yhist)
-  ! end function entropy_try
-
-
-  !From the paper 'Approximate Entropy for Testing Randomness'
-  ! I am writing it to compare binary strings (vectors)
-  ! function approx_entropy(X,m) result(e)
-  !     integer,    intent(inout) :: X(:)
-  !     integer, intent(in)    :: m
-  !     real :: e ! approximate entropy
-  !     integer, allocatable :: C(:)
-  !     real, allocatable :: Phi(:)
-  !     integer :: n, h, hh
-  !     integer, allocatable :: cnt(:)
-  !     n = size(X, dim = 1) ! number of elements in X
-  !     allocate(C  (n-m+1), source = 0 )
-  !     allocate(Phi(n-m+1), source = 0.)
-  !     allocate(cnt(n-m+1), source = 0 )
-  !     do h = 1, n-m+1
-  !         do hh = 1, n-m+1
-  !             if(vectors_are_equal(X(hh:hh+m-1), X(h:h+m-1)) .and. h /= hh) cnt(h) = cnt(h) + 1  !I don't know if h/=hh is necessary
-  !         enddo
-  !         C(h) = cnt(h)/(n-m+1)
-  !     enddo
-  !     print *, 'cnt = ', cnt
-  !     print *, 'C = ', C
-  !     do h = 1, n-m+1
-  !         Phi(h) = Phi(h)+log(real(C(h)))
-  !     enddo
-  !     print *, 'Phi = ', Phi
-  !     e = Phi(m)-Phi(m+1)
-  ! end function approx_entropy
-
-
-  ! This subroutine takes in input 2 2D vectors, centered in the origin
-  ! and it gives as an output the angle between them, IN DEGREES.
-  function ang2D_vecs(vec1, vec2) result(ang)
-      real, intent(inout) :: vec1(2), vec2(2)
-      real :: ang        !output angle
-      real :: ang_rad    !angle in radians
-      real :: mod1, mod2
-      real :: dot_prod
-      mod1 = sqrt(vec1(1)**2+vec1(2)**2)
-      mod2 = sqrt(vec2(1)**2+vec2(2)**2)
-      ! normalise
-      vec1 = vec1/mod1
-      vec2 = vec2/mod2
-      ! dot product
-      dot_prod = vec1(1)*vec2(1)+vec1(2)*vec2(2)
-      ! sanity check
-      if(dot_prod > 1. .or. dot_prod< -1.) then
-         ! THROW_WARN('Out of the domain of definition of arccos; ang2D_vecs')
-          ang_rad = 0.
-      else
-          ang_rad = acos(dot_prod)
-      endif
-      ! if(DEBUG_HERE) then
-      !     write(logfhandle,*)'>>>>>>>>>>>>>>>>>>>>>>'
-      !     write(logfhandle,*)'mod_1     = ', mod1
-      !     write(logfhandle,*)'mod_2     = ', mod2
-      !     write(logfhandle,*)'dot_prod  = ', dot_prod
-      !     write(logfhandle,*)'ang in radians', acos(dot_prod)
-      ! endif
-      !output angle
-      ang = rad2deg(ang_rad)
-  end function ang2D_vecs
 
   subroutine circumference(img, center, rad, full)
       type(image),       intent(inout) :: img
@@ -398,66 +126,133 @@ end subroutine laplacian_filt
         enddo
     end subroutine circumference
 
-    function phase_corr_try(self1,self2,border) result(pc)
-        type(image),      intent(inout) :: self1, self2
-        integer, optional, intent(in)    :: border
-        type(image) :: pc
-        type(image) :: self1_crop, self2_crop, pc_crop
-        integer     :: bborder
-        integer     :: i, j
-        integer :: ldim(3)
-        real :: smpd
-        real, pointer :: rmat1(:,:,:), rmat2(:,:,:)
-        real, pointer :: rmat1_crop(:,:,:), rmat2_crop(:,:,:)
-        ldim = self1%get_ldim()
-        smpd = self1%get_smpd()
-        bborder = 0
-        if(present(border)) bborder = border
-        call self1_crop%new([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
-        call self2_crop%new([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
-        call pc_crop%new   ([ldim(1)-2*bborder,ldim(2)-2*bborder,1], smpd)
-        call pc%new(ldim, smpd)
-        call self1%get_rmat_ptr(rmat1)
-        call self2%get_rmat_ptr(rmat2)
-        call self1_crop%get_rmat_ptr(rmat1_crop)
-        call self2_crop%get_rmat_ptr(rmat2_crop)
-        do i = bborder+1, ldim(1)-bborder
-            do j = bborder+1, ldim(2)-bborder
-                 rmat1_crop(i,j,1) =  rmat1(i,j,1) ! maybe instead of using the functions every time it's convinient to use matrices
-                 rmat2_crop(i,j,1) =  rmat2(i,j,1) ! maybe instead of using the functions every time it's convinient to use matrices
-            enddo
-        enddo
-        call self1_crop%fft()
-        call self2_crop%fft()
-        self2_crop = self2_crop%conjg()
-        pc_crop = self1_crop*self2_crop
-        call pc_crop%ifft()
-        call pc_crop%pad(pc,0.)
-    end function phase_corr_try
-end module simple_test_chiara_try_mod
+    subroutine calc_percentage_phiber(imgfile_jpeg)
+         use simple_jpg
+         character(len=*), intent(inout) :: imgfile_jpeg
+         type(image) :: img
+         type(image) :: img_aux ! TO REMOVE
+         integer     :: ldim(3)
+         integer     :: n_images
+         integer     :: i, j
+         integer     :: cnt
+         real        :: smpd
+         real        :: means(3)
+         logical, allocatable :: msk(:,:,:)
+         integer, allocatable :: labels(:)
+         integer, allocatable :: imat(:,:,:)
+         real,    allocatable :: x(:)
+         real,    allocatable :: rmat(:,:,:)
+         integer, parameter   :: MAXIT = 100
+         call img%new([256,256,1],1.)
+         ! call img%read_jpg(imgfile_jpeg)
+         !call find_ldim_nptcls(imgfile_jpeg, ldim, n_images, smpd)
+         ! call img%new(ldim, smpd)
+         call img%write_jpg('Fuck.jpg')
+         ! call img%read_jpg(imgfile_jpeg)
+         call img%write('InputImgMrcFormat.mrc')
+         rmat = img%get_rmat()
+         allocate(msk(ldim(1),ldim(2),1), source = .true.)
+         x = pack(rmat, msk)
+         call classify_3objects(x,MAXIT, means,labels)
+         call img_aux%new(ldim, smpd)
+         cnt = 0
+         do i = 1, ldim(1)
+             do j = 1, ldim(2)
+                 cnt = cnt + 1
+                 rmat(j,i,1) = labels(cnt)
+             enddo
+         enddo
+         call img_aux%set_rmat(rmat)
+         call img_aux%write('LabelsImg.mrc')
+         imat = nint(img_aux%get_rmat())
+         print *, 'Minval(imat) = ', minval(imat), 'maxval(imat) = ', maxval(imat)
+         print *, 'Void   = ', count(imat == 1), 'percent ',real(count(imat == 1))/real(size(imat))
+         print *, 'Phiber = ', count(imat == 2), 'percent ',real(count(imat == 2))/real(size(imat))
+         print *, 'Brown  =',  count(imat == 3), 'percent ',real(count(imat == 3))/real(size(imat))
+       contains
+         !implements the sortmeans algorithm
+         subroutine classify_3objects( dat, maxits, means, labels )
+             real,                 intent(in)  :: dat(:)    !< array for input
+             integer,              intent(in)  :: maxits    !< limit sort
+             real,                 intent(out) :: means(:)  !< array for output
+             integer, allocatable, intent(out) :: labels(:) !< labels for output
+             logical, allocatable :: mask(:)
+             real, parameter :: TOLL = 0.1
+             integer :: ncls, ndat, clssz, i, j, cnt_means, loc(1), changes
+             ncls = size(means)
+             ndat = size(dat)
+             if( allocated(labels) ) deallocate(labels)
+             allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
+             if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
+             ! initialization by sorting
+             !In this way I don't need to sort the data
+             mask = .true.
+             means(1) = minval(dat, mask) !void
+             where(abs(dat-means(1))<TINY) mask = .false.
+             means(2) = maxval(dat, mask) !phiber
+             where(abs(dat-means(2))<TINY) mask = .false.
+             means(3) = sum(dat, mask)/real(count(mask))
+             print *, 'means = ', means
+             ! the kmeans step
+             labels = 1
+             do j=1,maxits
+                 changes = 0
+                 ! find closest
+                 do i=1,ndat
+                     loc = minloc((means-dat(i))**2.0)
+                     if( labels(i) /= loc(1) ) changes = changes + 1
+                     labels(i) = loc(1)
+                 end do
+                 ! update means
+                 do i=1,ncls
+                     where( labels == i )
+                         mask = .true.
+                     else where
+                         mask = .false.
+                     end where
+                     means(i) = sum(dat, mask=mask)/real(count(mask))
+                 end do
+                 if( changes == 0 ) exit
+             end do
+             deallocate(mask)
+         end subroutine classify_3objects
+       end subroutine calc_percentage_phiber
+       end module simple_test_chiara_try_mod
 
-program simple_test_chiara_try
-    include 'simple_lib.f08'
-    use simple_math
-    use simple_test_chiara_try_mod
-    use simple_micops
-    use simple_image, only : image
-    use simple_tvfilter, only : tvfilter
-    use simple_nanoparticles_mod, only : nanoparticle
-    type(image) :: img1, img2, pc
-    real, allocatable :: rmat(:,:,:)
+    program simple_test_chiara_try
+       include 'simple_lib.f08'
+       use simple_math
+       use simple_jpg
+       use simple_test_chiara_try_mod
+       use simple_micops
+       use simple_image, only : image
+       use simple_tvfilter, only : tvfilter
+       use simple_nanoparticles_mod, only : nanoparticle
+       type(image) :: img1, img2, img_cc
+       real, pointer :: rmat(:,:,:)
+       real, allocatable ::  x(:)
+       real :: means(3)
+       integer, allocatable :: labels(:)
+       logical, allocatable :: msk(:,:,:)
+       integer, allocatable :: imat(:,:,:)
+       integer :: i,j, cnt
+       character(len=100) :: fname
+       !fname = 'ImgTest.jpg'
+       !call calc_percentage_phiber(fname)
+       call test_jpg_export()
+
     !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION
-    call img1%new([512,512,1],1.)
-    call img2%new([512,512,1],1.)
-    allocate(rmat(512,512,1), source=0.)
-    rmat(256-50:256+50, 256-10:256+10,1) = 1.
-    rmat(10:50,50:80,1) = 1.
-    call img1%set_rmat(rmat)
-    call img1%write('RectangleIMG.mrc')
-    call img2%gauimg2D(50.,10.)
-    call img2%write('GaussianIMG.mrc')
-    pc = img1%phase_corr(img2,1)
-    call pc%write('PhaseCorrelationIMG.mrc')
+    ! call img1%new([512,512,1],1.)
+    ! call img2%new([512,512,1],1.)
+    ! allocate(rmat(512,512,1), source=0.)
+    ! rmat(256-50:256+50, 256-10:256+10,1) = 1.
+    ! rmat(10:50,50:80,1) = 1.
+    ! call img1%set_rmat(rmat)
+    ! call img1%write('RectangleIMG.mrc')
+    ! call img2%gauimg2D(50.,10.)
+    ! call img2%write('GaussianIMG.mrc')
+    ! pc = img1%phase_corr(img2,1)
+    ! call pc%write('PhaseCorrelationIMG.mrc')
     ! VOLUM CLIUPPING FOR CHANGING ITS SMPD
     ! call find_ldim_nptcls('EMD-6287.mrc', vol_dim, nptcls, vol_smpd)
     ! call img%new(vol_dim,vol_smpd)

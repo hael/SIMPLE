@@ -1986,6 +1986,18 @@
         ]
       },
       {
+        "key": "phasecorr",
+        "keytype": "binary",
+        "descr_short": "Picking approach",
+        "descr_long": "Use phase correlations approach for picking (yes|no){no}",
+        "descr_placeholder": "(yes|no){no}",
+        "required": true,
+        "options": [
+          "yes",
+          "no"
+        ]
+      },
+      {
         "key": "phaseplate",
         "keytype": "binary",
         "descr_short": "Phase-plate images",

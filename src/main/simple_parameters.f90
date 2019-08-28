@@ -63,6 +63,7 @@ type :: parameters
     character(len=3)      :: order='no'           !< order ptcls according to correlation(yes|no){no}
     character(len=3)      :: outside='no'         !< extract boxes outside the micrograph boundaries(yes|no){no}
     character(len=3)      :: pad='no'
+    character(len=3)      :: phasecorr='no'       !< picker phasecorrelation approach (yes|no){no}
     character(len=3)      :: phaseplate='no'      !< images obtained with Volta phaseplate(yes|no){no}
     character(len=3)      :: phrand='no'          !< phase randomize(yes|no){no}
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
@@ -551,6 +552,7 @@ contains
         call check_carg('pgrp',           self%pgrp)
         call check_carg('pgrp_start',     self%pgrp_start)
         call check_carg('phaseplate',     self%phaseplate)
+        call check_carg('phasecorr',      self%phasecorr)
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('platonic',       self%platonic)

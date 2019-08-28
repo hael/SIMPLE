@@ -205,6 +205,7 @@ contains
         call chdict%push('pcontrast',     'particle contrast(black|white){black}')
         call chdict%push('pdbfile',       'input PDB formatted file')
         call chdict%push('pgrp',          'point-group symmetry(cn|dn|t|o|i)')
+        call chdict%push('phasecorr',     'picker phasecorrelation approach (yes|no){no}')
         call chdict%push('phaseplate',    'images obtained with Volta phaseplate(yes|no){no}')
         call chdict%push('phrand',        'phase randomize(yes|no){no}')
         call chdict%push('phshiftunit',   'additional phase-shift unit (radians|degrees){radians}')

@@ -6114,24 +6114,55 @@ contains
     !> the external frame in self1 self2 with width border.
     ! FORMULA: phasecorr = ifft2(fft2(self1).*conj(fft2(self2)));
     ! Returns real images
-    function phase_corr(self1,self2,border) result(pc)
+    function phase_corr(self1,self2,border,lp) result(pc)
         class(image),      intent(inout) :: self1, self2
         integer, optional, intent(in)    :: border
+        real,    optional, intent(in)    :: lp
         type(image) :: pc
-        type(image) :: aux
-        integer     :: i, j
+        ! type(image) :: aux
+        complex :: c1,c2
+        real :: rw,sqsum1,sqsum2
+        integer     :: nrflims(3,2),i, j,h,k, phys(3), shlim,shlimsq,npix
+        logical     :: ft1, ft2
         if(self1.eqdims.self2) then
             if(self1%ldim(3) > 1) THROW_HARD('Just for 2D images! phase_corr')
             if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2)) &
             & THROW_HARD('Input border parameter too big; phase_corr')
             call pc%new(self1%ldim, self1%smpd)
+            ft1 = self1%is_ft()
+            ft2 = self2%is_ft()
             call self1%fft()
             call self2%fft()
-            aux = self2%conjg()
-            pc  = self1*aux
+            call pc%new(self1%ldim, self1%smpd)
+            call pc%set_ft(.true.)
+            if(present(lp)) then
+                shlim = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
+                shlimsq = shlim*shlim
+            endif
+            sqsum1 = 0.
+            sqsum2 = 0.
+            nrflims = self1%loop_lims(2)
+            !$omp parallel do default(shared) private(h,k,rw,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
+            do h = nrflims(1,1),nrflims(1,2)
+                rw = merge(1., 2., h==0)
+                do k = nrflims(2,1),nrflims(2,2)
+                    phys = pc%comp_addr_phys(h,k,0)
+                    if( (h==0 .and. k==0) .or. ( present(lp) .and. (h*h+k*k > shlimsq)))then
+                        pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                        cycle
+                    endif
+                    c1 = self1%cmat(phys(1),phys(2),phys(3))
+                    c2 = self2%cmat(phys(1),phys(2),phys(3))
+                    pc%cmat(phys(1),phys(2),phys(3)) = c1 * conjg(c2)
+                    sqsum1 = sqsum1 + rw*csq(c1)
+                    sqsum2 = sqsum2 + rw*csq(c2)
+                enddo
+            enddo
+            !$omp end parallel do
             call pc%ifft()
-            call self1%ifft()
-            call self2%ifft()
+            call pc%div(sqrt(sqsum1*sqsum2/real(product(pc%ldim))))
+            if( .not.ft1 )call self1%ifft()
+            if( .not.ft2 )call self2%ifft()
             if(present(border) .and. border > 1) then
                 pc%rmat(1:border,:,1) = 0.
                 pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.

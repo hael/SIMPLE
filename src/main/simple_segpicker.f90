@@ -133,7 +133,7 @@ contains
         ! I PADDED HEREEE
         ! 2.3) New approach with phase correlation calculation
         call gen_phase_correlation(micrograph_shrunken,maxv,minv,mask_img)
-        call micrograph_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img) !HEREE, iut was before phase correlation calculation
+        call micrograph_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img) !HEREE, it was before phase correlation calculation
         ! 3) Binarization
         if(detector .eq. 'sobel') then
             self%detector = 'sobel'
