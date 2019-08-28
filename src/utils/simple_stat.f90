@@ -486,17 +486,14 @@ contains
 
     function corrs2weights( corrs, crit, rankw_crit, p ) result( weights )
         real,                                     intent(in) :: corrs(:) !< correlation input
-        integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: crit
+        integer(kind=kind(ENUM_WCRIT)),           intent(in) :: crit
         integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: rankw_crit
         real,                           optional, intent(in) :: p
-        integer(kind=kind(ENUM_WCRIT)) :: ccrit
         real, allocatable :: weights(:), corrs_copy(:), rank_weights(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, corrmax, corrmin, minw
         integer :: ncorrs
-        ccrit = CORRW_CRIT
-        if( present(crit) ) ccrit = crit
-        select case(ccrit)
+        select case(crit)
             case(CORRW_CRIT,CORRW_ZSCORE_CRIT)
                 ! all good
             case DEFAULT
@@ -514,7 +511,7 @@ contains
         ! remove negatives to prevent corrs around zero to recieve any weight power
         where( corrs_copy <= 0. ) corrs_copy = 0.
         ! correlation-based weights
-        select case(ccrit)
+        select case(crit)
             case(CORRW_CRIT)
                 corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
                 maxminratio = corrmax / corrmin

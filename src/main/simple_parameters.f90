@@ -161,6 +161,7 @@ type :: parameters
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
+    character(len=STDLEN) :: corrw = 'no'         !< correlation weighting scheme
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
@@ -202,7 +203,8 @@ type :: parameters
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
-    integer(kind=kind(ENUM_WCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based orientation weights
+    integer(kind=kind(ENUM_WCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based weights
+    integer(kind=kind(ENUM_WCRIT)) :: ccw_crit     = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -403,6 +405,7 @@ type :: parameters
     real    :: zsh=0.              !< z shift(in pixels){0}
     ! logical variables in ascending alphabetical order
     logical :: l_autoscale      = .false.
+    logical :: l_corrw          = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
@@ -1207,8 +1210,22 @@ contains
                     self%rankw_crit = RANK_CEN_CRIT
                 case('exp')
                     self%rankw_crit = RANK_EXP_CRIT
+                case('inv')
+                    self%rankw_crit = RANK_INV_CRIT
                 case DEFAULT
                     THROW_HARD('unsupported rank ordering criteria weighting method')
+            end select
+        endif
+        ! set correlation weighting scheme
+        self%l_corrw = self%corrw .ne. 'no'
+        if( self%l_corrw )then
+            select case(trim(self%corrw))
+                case('softmax')
+                    self%ccw_crit = CORRW_CRIT
+                case('zscore')
+                    self%ccw_crit = CORRW_ZSCORE_CRIT
+                case DEFAULT
+                    THROW_HARD('unsupported correlation weighting method')
             end select
         endif
         ! set graphene flag

@@ -156,6 +156,7 @@ type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
+type(simple_input_param) :: corrw
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -221,6 +222,7 @@ type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
 type(simple_input_param) :: rankw
+type(simple_input_param) :: rankw_general
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: sherr
@@ -774,6 +776,8 @@ contains
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(graphene_filt, 'graphene_filt', 'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(corrw,          'corrw',        'multi',  'Weights based on correlations', 'Weights based on correlations(softmax|zscore|no){softmax}',  '(softmax|zscore|no){softmax}',  .false., 'softmax')
+        call set_param(rankw_general,  'rankw',        'multi',  'Weights based on ranks', 'Weights based on ranks, independent of objective function magnitude(sum|cen|exp|inv|no){sum}',  '(sum|cen|exp|inv|no){no}',  .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1990,7 +1994,7 @@ contains
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&                        ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 9, 2, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &1, 5, 0, 9, 4, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2018,6 +2022,8 @@ contains
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
         call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 5.)
+        call motion_correct%set_input('filt_ctrls', 3, corrw)
+        call motion_correct%set_input('filt_ctrls', 4, rankw_general)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2041,7 +2047,7 @@ contains
         &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
         &chunk size (Falcon 3 movies)',& ! descr_long
         &'simple_distr_exec',&           ! executable
-        &0, 7, 0, 4, 3, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        &0, 7, 0, 4, 5, 0, 1, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2068,6 +2074,8 @@ contains
         call motion_correct_tomo%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 8.)
         call motion_correct_tomo%set_input('filt_ctrls', 3, kv)
+        call motion_correct_tomo%set_input('filt_ctrls', 4, corrw)
+        call motion_correct_tomo%set_input('filt_ctrls', 5, rankw_general)
         ! mask controls
         ! <empty>
         ! computer controls

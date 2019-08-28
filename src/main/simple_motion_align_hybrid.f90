@@ -339,7 +339,13 @@ contains
             ! shift frames, generate reference & calculates correlation
             call self%shift_frames_gen_ref
             ! updates weights
-            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs)
+            if( l_calc_frameweights )then
+                if( params_glob%l_rankw )then
+                    self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit, params_glob%rankw_crit)
+                else
+                    self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit)
+                endif
+            endif
             ! convergence
             rmsd = self%calc_rmsd(opt_shifts_prev, self%opt_shifts)
             if( iter > 1 .and. rmsd < 0.5 )then
@@ -416,7 +422,13 @@ contains
             ! recenter shifts
             call self%recenter_shifts(self%opt_shifts)
             ! updates weights
-            if( l_calc_frameweights ) self%frameweights = corrs2weights(self%corrs)
+            if( l_calc_frameweights )then
+                if( params_glob%l_rankw )then
+                    self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit, params_glob%rankw_crit)
+                else
+                    self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit)
+                endif
+            endif
             ! build new reference
             call self%shift_wsum_and_calc_corrs
             ! convergence

@@ -529,11 +529,13 @@ contains
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        if( .not. cline%defined('trs')      ) call cline%set('trs',         30.)
-        if( .not. cline%defined('lpstart')  ) call cline%set('lpstart',     15.)
-        if( .not. cline%defined('lpstop')   ) call cline%set('lpstop',       5.)
-        if( .not. cline%defined('bfac')     ) call cline%set('bfac',       150.)
+        if( .not. cline%defined('trs')        ) call cline%set('trs',           30.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       15.)
+        if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',         150.)
         if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'yes')
+        if( .not. cline%defined('corrw')      ) call cline%set('corrw',   'softmax')
+        if( .not. cline%defined('rankw')      ) call cline%set('rankw',        'no')
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
@@ -611,11 +613,13 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',       30.)
-        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',   20.)
-        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',     6.)
-        if( .not. cline%defined('tomo')    ) call cline%set('tomo',    'yes')
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'stk')
+        if( .not. cline%defined('trs')     ) call cline%set('trs',         30.)
+        if( .not. cline%defined('lpstart') ) call cline%set('lpstart',     20.)
+        if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',       6.)
+        if( .not. cline%defined('tomo')    ) call cline%set('tomo',      'yes')
+        if( .not. cline%defined('oritype') ) call cline%set('oritype',   'stk')
+        if( .not. cline%defined('corrw')   ) call cline%set('corrw', 'softmax')
+        if( .not. cline%defined('rankw')   ) call cline%set('rankw',      'no')
         call cline%set('prg', 'motion_correct')
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)

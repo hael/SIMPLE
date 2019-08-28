@@ -27,42 +27,42 @@ private
 #include "simple_local_flags.inc"
 
 ! data structures for isotropic correction
-type(image), target, allocatable :: movie_frames_scaled(:)            !< scaled movie frames
-real,                allocatable :: opt_shifts(:,:)                   !< optimal shifts identified
-real                             :: TOL_ISO = 1.e-6                   !< LBFGSB tolerance for isotropic search
+type(image), target, allocatable :: movie_frames_scaled(:) !< scaled movie frames
+real,                allocatable :: opt_shifts(:,:)        !< optimal shifts identified
+real                             :: TOL_ISO = 1.e-6        !< LBFGSB tolerance for isotropic search
 integer                          :: updateres
 logical                          :: didupdateres
 
 ! data structures for patch-based motion correction
 type(motion_patched)        :: motion_patch
-real(dp),       allocatable :: patched_polyn(:)                !< polynomial from patched-based correction
+real(dp),       allocatable :: patched_polyn(:)           !< polynomial from patched-based correction
 
 ! data structures used by both isotropic & patch-based correction
 type(image), allocatable :: movie_frames_shifted_saved(:) !< shifted movie frames
-real,        allocatable :: corrs(:)                     !< per-frame correlations
-real,        allocatable :: shifts_toplot(:,:)           !< shifts for plotting & parsing
-real,        allocatable :: frameweights(:)              !< array of frameweights
-real,        allocatable :: acc_doses(:)                 !< accumulated doses
-complex,     allocatable :: cmat_sum(:,:,:)              !< complex matrices for OpenMP reduction
+real,        allocatable :: corrs(:)                      !< per-frame correlations
+real,        allocatable :: shifts_toplot(:,:)            !< shifts for plotting & parsing
+real,        allocatable :: frameweights(:)               !< array of frameweights
+real,        allocatable :: acc_doses(:)                  !< accumulated doses
+complex,     allocatable :: cmat_sum(:,:,:)               !< complex matrices for OpenMP reduction
 
 ! module global variables
-integer :: nframes        = 0        !< number of frames
-integer :: fixed_frame    = 0        !< fixed frame of reference for isotropic alignment (0,0)
-integer :: ldim(3)        = [0,0,0]  !< logical dimension of frame
-integer :: ldim_orig(3)   = [0,0,0]  !< logical dimension of frame (original, for use in motion_correct_iter)
-integer :: ldim_scaled(3) = [0,0,0]  !< shrunken logical dimension of frame
-real    :: hp             = 0.       !< high-pass limit
-real    :: lp             = 0.       !< low-pass limit
-real    :: resstep        = 0.       !< resolution step size (in angstrom)
-real    :: smpd           = 0.       !< sampling distance
-real    :: smpd_scaled    = 0.       !< sampling distance
-real    :: kV             = 300.     !< acceleration voltage
-real    :: dose_rate      = 0.       !< dose rate
-logical :: do_scale                    = .false.  !< scale or not
-logical :: motion_correct_with_patched = .false.  !< run patch-based aniso or not
-character(len=:), allocatable :: patched_shift_fname    !< file name for shift plot for patched-based alignment
-character(len=:), allocatable :: mc_starfile_fname      !< file name for starfile rel. to motion correct
-type(starfile_table_type)     :: mc_starfile            !< starfile for motion correct output
+integer :: nframes        = 0                             !< number of frames
+integer :: fixed_frame    = 0                             !< fixed frame of reference for isotropic alignment (0,0)
+integer :: ldim(3)        = [0,0,0]                       !< logical dimension of frame
+integer :: ldim_orig(3)   = [0,0,0]                       !< logical dimension of frame (original, for use in motion_correct_iter)
+integer :: ldim_scaled(3) = [0,0,0]                       !< shrunken logical dimension of frame
+real    :: hp             = 0.                            !< high-pass limit
+real    :: lp             = 0.                            !< low-pass limit
+real    :: resstep        = 0.                            !< resolution step size (in angstrom)
+real    :: smpd           = 0.                            !< sampling distance
+real    :: smpd_scaled    = 0.                            !< sampling distance
+real    :: kV             = 300.                          !< acceleration voltage
+real    :: dose_rate      = 0.                            !< dose rate
+logical :: do_scale                    = .false.          !< scale or not
+logical :: motion_correct_with_patched = .false.          !< run patch-based aniso or not
+character(len=:), allocatable :: patched_shift_fname      !< file name for shift plot for patched-based alignment
+character(len=:), allocatable :: mc_starfile_fname        !< file name for starfile rel. to motion correct
+type(starfile_table_type)     :: mc_starfile              !< starfile for motion correct output
 
 ! module global constants
 real,    parameter :: NSIGMAS                       = 5.       !< Number of standard deviations for outliers detection
@@ -413,6 +413,7 @@ contains
                 call img_sum%ifft()
                 nullify(pcmat)
             end subroutine sum_frames
+
     end subroutine motion_correct_iso_calc_sums
 
     subroutine motion_correct_iso_calc_sums_tomo( frame_counter, time_per_frame, movie_sum, movie_sum_corrected, movie_sum_ctf )
@@ -487,7 +488,6 @@ contains
         if (allocated(opt_shifts)) deallocate(opt_shifts)
         call ftexp_transfmat_kill
     end subroutine motion_correct_iso_kill
-
 
     ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
@@ -609,7 +609,6 @@ contains
         call ftexp_transfmat_kill
     end subroutine motion_correct_patched_kill
 
-
     ! PUBLIC COMMON
 
     subroutine close_starfile
@@ -625,7 +624,6 @@ contains
         if( allocated(cmat_sum)           ) deallocate(cmat_sum)
         call ftexp_transfmat_kill
     end subroutine motion_correct_kill_common
-
 
     ! COMMON PRIVATE UTILITY METHODS
 

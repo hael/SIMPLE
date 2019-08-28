@@ -360,7 +360,11 @@ contains
 
     subroutine calc_weights( self )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        self%frameweights = corrs2weights(self%corrs)
+        if( params_glob%l_rankw )then
+            self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit, params_glob%rankw_crit)
+        else
+            self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit)
+        endif
     end subroutine calc_weights
 
     subroutine motion_align_iso_polyn_direct_set_frames( self, frames_ptr, nframes )
@@ -479,7 +483,7 @@ contains
         real, allocatable,                    intent(out)   :: frameweights(:)
         allocate(frameweights(self%nframes), source=self%frameweights)
     end subroutine motion_align_iso_polyn_direct_get_weights
-    
+
     subroutine motion_align_iso_polyn_direct_refine_direct( self )
         use simple_opt_factory, only: opt_factory
         class(motion_align_iso_polyn_direct), intent(inout) :: self
@@ -755,7 +759,7 @@ contains
         f = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
         !$omp parallel do collapse(2) default(shared) private(xy,j,atmp) schedule(static) proc_bind(close)
         do xy = 1, 2
-            do j = 1, self%nframes-1 !parallelize here                
+            do j = 1, self%nframes-1 !parallelize here
                 atmp = self%movie_frames_R%corr_unnorm(self%movie_frames_dIj_sh(j+1, xy)) / f
                 grad_tmp(2*(j-1)+xy) = atmp
             end do
