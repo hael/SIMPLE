@@ -580,7 +580,7 @@ contains
         do iframe=1,nframes
             call movie_frames_shifted_patched(iframe)%kill
         enddo
-        deallocate(movie_frames_shifted_patched,rmat_sum,filtarr)
+        deallocate(movie_frames_shifted_patched,rmat_sum)
     end subroutine motion_correct_patched_calc_sums
 
     ! write anisotropic shifts
