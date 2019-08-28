@@ -1355,12 +1355,12 @@ contains
       ! commander
       type(refine3D_distr_commander) :: xrefine3D_distr
       ! static parameters
-      call cline%set('prg',        'refine3D')
-      call cline%set('match_filt',       'no')
-      call cline%set('ninplpeaks',        1.0)
+      call cline%set('prg',      'refine3D')
+      call cline%set('match_filt',     'no')
+      call cline%set('ninplpeaks',      1.0)
       call cline%set('graphene_filt', 'yes')
-      call cline%set('tseries',         'yes')
-      call cline%set('ptclw',            'no')
+      call cline%set('tseries',       'yes')
+      call cline%set('ptclw',          'no')
       ! dynamic parameters
       if( .not. cline%defined('center')      ) call cline%set('center',     'yes')
       if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)

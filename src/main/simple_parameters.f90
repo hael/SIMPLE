@@ -39,11 +39,11 @@ type :: parameters
     character(len=3)      :: doprint='no'
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
-    character(len=3)      :: groupframes='yes'      !< Whether to perform frames avergaing during motion correction(yes|no){no}
+    character(len=3)      :: groupframes='yes'    !< Whether to perform frames avergaing during motion correction(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
-    character(len=3)      :: graphene_filt='no' !< filter out graphene bands in correcation search
+    character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
@@ -513,10 +513,10 @@ contains
         call check_carg('fbody',          self%fbody)
         call check_carg('filter',         self%filter)
         call check_carg('for3D',          self%for3D)
-        call check_carg('groupframes',      self%groupframes)
+        call check_carg('groupframes',    self%groupframes)
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
-        call check_carg('graphene_filt',self%graphene_filt)
+        call check_carg('graphene_filt',  self%graphene_filt)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
