@@ -73,7 +73,9 @@ contains
     procedure, private :: get_rmat_at_1
     procedure, private :: get_rmat_at_2
     generic            :: get_rmat_at => get_rmat_at_1, get_rmat_at_2
-    procedure          :: set
+    procedure, private :: set_1
+    procedure, private :: set_2
+    generic            :: set => set_1, set_2
     procedure          :: set_rmat
     procedure, private :: set_cmat_1
     procedure, private :: set_cmat_2
@@ -275,6 +277,7 @@ contains
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
     procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
+    procedure          :: corr_serial
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
@@ -303,6 +306,7 @@ contains
     procedure          :: add_gauran
     procedure          :: dead_hot_positions
     procedure          :: taper_edges
+    procedure          :: zero
     procedure          :: zero_and_unflag_ft
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
@@ -1493,7 +1497,7 @@ contains
     end function expand_ft
 
     !>  \brief  set image value at position x,y,z
-    subroutine set( self, logi, val )
+    subroutine set_1( self, logi, val )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: logi(3)
         real,         intent(in)    :: val
@@ -1501,7 +1505,15 @@ contains
             .and. logi(2) >= 1 .and. logi(3) <= self%ldim(3) .and. logi(3) >= 1 )then
             self%rmat(logi(1),logi(2),logi(3)) = val
         endif
-    end subroutine set
+    end subroutine set_1
+
+    subroutine set_2( self, self2set )
+        class(image), intent(inout) :: self
+        class(image), intent(in)    :: self2set
+        self%ft       = self2set%ft
+        self%rmat     = self2set%rmat
+        self%wthreads = self2set%wthreads
+    end subroutine set_2
 
     !>  \brief  set (replace) image data with new 3D data
     subroutine set_rmat( self, rmat )
@@ -5937,7 +5949,6 @@ contains
                 call self2%fft()
                 didft2 = .true.
             endif
-
             if( present(lp_dyn) )then
                 lims = self1%fit%loop_lims(1,lp_dyn)
             else
@@ -5979,6 +5990,20 @@ contains
             THROW_HARD('images to be correlated need to have same dimensions; corr')
         endif
     end function corr
+
+    !>  \brief corr is for correlating two images assumed to be Fourier transformed
+    function corr_serial( self1, self2 ) result( r )
+        class(image), intent(inout) :: self1, self2
+        real :: r, sumasq, sumbsq
+        r      = sum(real(self1%cmat)*conjg(self2%cmat))
+        sumasq = sum(csq(self2%cmat))
+        sumbsq = sum(csq(self1%cmat))
+        if( sumasq < TINY .or. sumbsq < TINY )then
+            r = 0.
+        else
+            r = r / sqrt(sumasq * sumbsq)
+        endif
+    end function corr_serial
 
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
@@ -6570,6 +6595,16 @@ contains
             end do
         end do
     end function dead_hot_positions
+
+    !>  \brief zero image
+    subroutine zero(self)
+        class(image), intent(inout) :: self
+        if( self%ft )then
+            self%cmat = cmplx(0.,0.)
+        else
+            self%rmat = 0.
+        endif
+    end subroutine zero
 
     !>  \brief zero image
     subroutine zero_and_unflag_ft(self)

@@ -531,6 +531,7 @@ contains
                 weights = z_scores(corrs_copy)
                 minw    = minval(weights)
                 weights = weights + abs(minw)
+                where( corrs_copy <= 0. ) weights = 0.
         end select
         ! convert to rank-based weights
         if( present(rankw_crit) )then
