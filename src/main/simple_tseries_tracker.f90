@@ -18,15 +18,14 @@ integer,                   parameter   :: CENRATE=15, NNN=8
 
 integer,                   allocatable :: particle_locations(:,:)
 character(len=LONGSTRLEN), allocatable :: framenames(:)
-type(image)               :: frame_img      ! for reading & updating the nearest neighbouring boxes
+type(image)               :: frame_img      ! for reading & updating the nearest neighbouring params_glob%boxes
 type(image)               :: frame_img_filt ! for performing the actual tracking
 type(image)               :: reference, tmp_img, ptcl_target
 type(image)               :: neigh_imgs_mean(NNN), diff_img
 type(tvfilter)            :: tv
 character(len=LONGSTRLEN) :: neighfnames(NNN), stkname
-integer                   :: ldim(3), nframes, box, nx, ny, offset
-real                      :: smpd, sxx, lp, cenlp, sumw
-character(len=3)          :: neg
+integer                   :: ldim(3), nframes, nx, ny
+real                      :: sxx, sumw
 logical                   :: l_neg
 
 contains
@@ -36,21 +35,15 @@ contains
         character(len=LONGSTRLEN), intent(in) :: fnames(:)
         integer :: n, i
         ! set constants
-        box    = params_glob%box
-        offset = params_glob%offset
-        smpd   = params_glob%smpd
-        lp     = params_glob%lp
-        cenlp  = params_glob%cenlp
-        neg    = params_glob%neg
-        l_neg    = .false.
-        if( params_glob%neg .eq. 'yes' ) l_neg = .true.
+        l_neg  = .false.
+        if( trim(params_glob%neg) .eq. 'yes' ) l_neg = .true.
         select case(trim(params_glob%filter))
             case('no','nlmean')
                 ! all good
             case('tv')
                 call tv%new()
             case DEFAULT
-                THROW_HARD('Unsupported filter!')
+                THROW_HARD('Unsupported filter in init_tracker!')
         end select
         ! names & dimensions
         nframes = size(fnames)
@@ -66,20 +59,20 @@ contains
             write(logfhandle,*) 'nframes: ', n
             THROW_HARD('init_tracker; assumes one frame per file')
         endif
-        nx = ldim(1) - box
-        ny = ldim(2) - box
+        nx = ldim(1) - params_glob%box
+        ny = ldim(2) - params_glob%box
         ! construct
         allocate(particle_locations(nframes,2), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_tseries_tracker :: init_tracker",alloc_stat)
         particle_locations = 0
-        call frame_img%new(ldim, smpd)
-        call frame_img_filt%new(ldim, smpd)
-        call tmp_img%new([box,box,1], smpd)
-        call reference%new([box,box,1], smpd)
-        call ptcl_target%new([box,box,1], smpd)
-        call diff_img%new([box,box,1], smpd)
+        call frame_img%new(ldim, params_glob%smpd)
+        call frame_img_filt%new(ldim, params_glob%smpd)
+        call tmp_img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call reference%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call ptcl_target%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call diff_img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         do i=1,NNN
-            call neigh_imgs_mean(i)%new([box,box,1], smpd)
+            call neigh_imgs_mean(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd)
             neighfnames(i) = ''
         end do
         particle_locations(:,1) = boxcoord(1)
@@ -124,9 +117,9 @@ contains
         do iframe=1,nframes
             xind = particle_locations(iframe,1)
             yind = particle_locations(iframe,2)
-            write(funit,'(I7,I7,I7,I7,I7)') xind, yind, box, box, -3
+            write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
             call frame_img%read(framenames(iframe),1)
-            call frame_img%window_slim([xind,yind,1], box, reference, outside)
+            call frame_img%window_slim([xind,yind,1], params_glob%box, reference, outside)
             if( l_neg ) call reference%neg()
             call reference%write(stkname, iframe)
         end do
@@ -143,7 +136,7 @@ contains
         integer, intent(in) :: iframe, pos(2)
         real    :: xyz(3)
         logical :: outside
-        call frame_img_filt%window_slim(pos, box, tmp_img, outside)
+        call frame_img_filt%window_slim(pos, params_glob%box, tmp_img, outside)
         call tmp_img%prenorm4real_corr(sxx)
         if( iframe == 1 )then
             reference = tmp_img
@@ -154,7 +147,7 @@ contains
         if( mod(iframe,CENRATE) == 0 )then
             ! center the reference
             if( l_neg ) call reference%neg()
-            xyz = reference%calc_shiftcen(cenlp)
+            xyz = reference%calc_shiftcen(params_glob%cenlp)
             if( l_neg ) call reference%neg()
         endif
     end subroutine update_reference
@@ -165,7 +158,7 @@ contains
         logical :: outside
         call identify_neighbours
         do i=1,NNN
-            call frame_img%window_slim(neigh(i,:), box, diff_img, outside)
+            call frame_img%window_slim(neigh(i,:), params_glob%box, diff_img, outside)
             if( .not. outside )then
                 call diff_img%subtr(neigh_imgs_mean(i))
                 call diff_img%div(sumw)
@@ -177,29 +170,29 @@ contains
 
             subroutine identify_neighbours
                 ! neigh east
-                neigh(1,1) = pos(1) + box
+                neigh(1,1) = pos(1) + params_glob%box
                 neigh(1,2) = pos(2)
                 ! neigh west
-                neigh(2,1) = pos(1) - box
+                neigh(2,1) = pos(1) - params_glob%box
                 neigh(2,2) = pos(2)
                 ! neigh north
                 neigh(3,1) = pos(1)
-                neigh(3,2) = pos(2) + box
+                neigh(3,2) = pos(2) + params_glob%box
                 ! neigh south
                 neigh(4,1) = pos(1)
-                neigh(4,2) = pos(2) - box
+                neigh(4,2) = pos(2) - params_glob%box
                 ! neigh north/east
-                neigh(5,1) = pos(1) + box
-                neigh(5,2) = pos(2) + box
+                neigh(5,1) = pos(1) + params_glob%box
+                neigh(5,2) = pos(2) + params_glob%box
                 ! neigh north/west
-                neigh(6,1) = pos(1) - box
-                neigh(6,2) = pos(2) + box
+                neigh(6,1) = pos(1) - params_glob%box
+                neigh(6,2) = pos(2) + params_glob%box
                 ! neigh south/east
-                neigh(7,1) = pos(1) + box
-                neigh(7,2) = pos(2) - box
+                neigh(7,1) = pos(1) + params_glob%box
+                neigh(7,2) = pos(2) - params_glob%box
                 ! neigh south/west
-                neigh(8,1) = pos(1) - box
-                neigh(8,2) = pos(2) - box
+                neigh(8,1) = pos(1) - params_glob%box
+                neigh(8,2) = pos(2) - params_glob%box
             end subroutine identify_neighbours
 
     end subroutine update_background_images
@@ -216,7 +209,7 @@ contains
             case DEFAULT
                 ! defaults to low-pass filtering
                 call frame_img_filt%fft()
-                call frame_img_filt%bp(0., lp)
+                call frame_img_filt%bp(0., params_glob%lp)
         end select
         call frame_img_filt%ifft()
     end subroutine update_frame
@@ -228,15 +221,15 @@ contains
         real        :: corr, target_corr
         logical     :: outside
         ! set srch range
-        xrange(1) = max(0,  pos(1) - offset)
-        xrange(2) = min(nx, pos(1) + offset)
-        yrange(1) = max(0,  pos(2) - offset)
-        yrange(2) = min(ny, pos(2) + offset)
+        xrange(1) = max(0,  pos(1) - params_glob%offset)
+        xrange(2) = min(nx, pos(1) + params_glob%offset)
+        yrange(1) = max(0,  pos(2) - params_glob%offset)
+        yrange(2) = min(ny, pos(2) + params_glob%offset)
         ! extract image, correlate, find peak
         corr = -1
         do xind=xrange(1),xrange(2)
             do yind=yrange(1),yrange(2)
-                call frame_img_filt%window_slim([xind,yind,1], box, ptcl_target, outside)
+                call frame_img_filt%window_slim([xind,yind,1], params_glob%box, ptcl_target, outside)
                 target_corr = reference%real_corr_prenorm(ptcl_target, sxx)
                 if( target_corr > corr )then
                     pos_refined = [xind,yind]

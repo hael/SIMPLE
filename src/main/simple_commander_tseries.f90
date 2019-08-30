@@ -138,7 +138,7 @@ contains
         do i = 1,spproj%os_mic%get_noris()
             if( spproj%os_mic%isthere(i,'intg') )then
                 iframe = iframe + 1
-                framenames(iframe) = trim(spproj%os_mic%get_static(i,'intg'))
+                framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
             endif
         enddo
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
