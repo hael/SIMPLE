@@ -217,6 +217,80 @@ end subroutine laplacian_filt
              deallocate(mask)
          end subroutine classify_3objects
        end subroutine calc_percentage_phiber
+
+       subroutine generate_gaussian_refs(refs,ldim,smpd,min_rad,max_rad)
+           type(image), allocatable, intent(inout) :: refs(:)
+           integer,     intent(in) :: ldim(3)
+           real,        intent(in) :: smpd
+           real,        intent(in) :: min_rad, max_rad
+           integer, parameter :: STEP = 5
+           integer :: nrefs
+           real    :: sigma_x, sigma_y
+           integer :: i, j
+           logical :: rotate_ref
+           real, allocatable :: rmat_out(:,:,:) !to use rtsq_serial
+           nrefs = 0
+           do i = 0, STEP-1
+               sigma_x = min_rad + i*STEP
+               if(sigma_x < max_rad) then
+                   do j = 0, STEP-1
+                       sigma_y = min_rad + j*STEP
+                       if(sigma_y < max_rad) then
+                           nrefs = nrefs + 1
+                           if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
+                           if(rotate_ref) nrefs = nrefs + 2 !total 3 references
+                       endif
+                       rotate_ref = .false. !restore
+                   enddo
+               endif
+           enddo
+           if(allocated(refs)) deallocate(refs)
+           allocate( refs(nrefs) )
+           allocate(rmat_out(ldim(1),ldim(2),1), source = 0.)
+           nrefs = 0
+           do i = 0, STEP-1
+               sigma_x = min_rad + i*STEP
+               if(sigma_x < max_rad) then
+                   do j = 0, STEP-1
+                       sigma_y = min_rad + j*STEP
+                       if(sigma_y < max_rad) then
+                            print *, 'generating ref with sigmax = ', sigma_x, 'sigmay = ', sigma_y
+                            if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
+                            nrefs = nrefs + 1
+                            call refs(nrefs)%new(ldim,smpd)
+                            call refs(nrefs)%gauimg2D(sigma_x,sigma_y)
+                            call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
+                            if(rotate_ref) then
+                                call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
+                                nrefs = nrefs + 1
+                                call refs(nrefs)%new(ldim,smpd)
+                                call refs(nrefs)%set_rmat(rmat_out)
+                                call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
+                                call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
+                                nrefs = nrefs + 1
+                                call refs(nrefs)%new(ldim,smpd)
+                                call refs(nrefs)%set_rmat(rmat_out)
+                                call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
+                            endif
+                       endif
+                       rotate_ref = .false. !restore
+                   enddo
+               endif
+           enddo
+           deallocate(rmat_out)
+           ! sigma_x = (self%min_rad)/2. ! half of the radius
+           ! sigma_y = (self%max_rad)/2.
+           ! rotate_ref = .false.
+           ! if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
+           ! print *, 'sigma_x = ', sigma_x, 'sigma_y = ', sigma_y
+           ! rot_step = 180./real(N_ROT) !it's gaussian, so rotate just 180 degrees
+           ! call self%reference%gauimg2D(sigma_x,sigma_y)
+           ! call self%reference%write(PATH_HERE//basename(trim(self%fbody))//'_GaussianReference.mrc')
+           ! call field%fft()
+           ! allocate(rmat_out(self%ldim_shrunken(1),self%ldim_shrunken(2),1), source = 0.)
+           ! call self%phasecorr%zero_and_unflag_ft()
+           ! print *, 'rotate_ref = ', rotate_ref
+       end subroutine generate_gaussian_refs
        end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -228,18 +302,20 @@ end subroutine laplacian_filt
        use simple_image, only : image
        use simple_tvfilter, only : tvfilter
        use simple_nanoparticles_mod, only : nanoparticle
-       type(image) :: img1, img2, img_cc
-       real, pointer :: rmat(:,:,:)
-       real, allocatable ::  x(:)
-       real :: means(3)
-       integer, allocatable :: labels(:)
-       logical, allocatable :: msk(:,:,:)
-       integer, allocatable :: imat(:,:,:)
-       integer :: i,j, cnt
+       type(image), allocatable :: refs(:)
+       integer :: i,j, cnt, ldim(3)
        character(len=100) :: fname
+       real :: smpd, min_rad, max_rad
+       smpd    = 1.
+       min_rad = 10.
+       max_rad = 40.
+       ldim(1) = 256
+       ldim(2) = 256
+       ldim(3) = 1
+       call generate_gaussian_refs(refs,ldim,smpd,min_rad,max_rad)
+
        !fname = 'ImgTest.jpg'
        !call calc_percentage_phiber(fname)
-       call test_jpg_export()
 
     !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION
     ! call img1%new([512,512,1],1.)

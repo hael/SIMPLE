@@ -1,19 +1,19 @@
 ! particle picker
-module simple_phasecorr_picker
+module simple_phasecorr_segpicker
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
 use simple_image,        only: image
 implicit none
 
-public :: init_phasecorr_picker, exec_phasecorr_picker, kill_phasecorr_picker
+public :: init_phasecorr_segpicker, exec_phasecorr_segpicker, kill_phasecorr_segpicker
 private
 
 ! PEAK STATS INDICES
 integer,          parameter   :: SDEV     = 2
 integer,          parameter   :: DYNRANGE = 3
 integer,          parameter   :: SSCORE   = 4
-real,             parameter   :: PICKER_SHRINK_HERE   = 2.
+real,             parameter   :: PICKER_SHRINK_HERE   = 4.
 ! OTHER PARAMS
 integer,          parameter   :: NSTAT   = 4
 integer,          parameter   :: MAXKMIT = 20
@@ -26,34 +26,35 @@ type(image),      allocatable :: refs(:)
 logical,          allocatable :: selected_peak_positions(:)
 real,             allocatable :: corrmat(:,:), peak_stats(:,:)
 integer,          allocatable :: peak_positions(:,:)
-character(len=:), allocatable :: micname, refsname
+character(len=:), allocatable :: micname
 character(len=LONGSTRLEN)     :: boxname
-integer                       :: ldim(3), ldim_refs(3), ldim_shrink(3)
+integer                       :: ldim(3), ldim_shrink(3)
 integer                       :: ntargets
-integer                       :: nrefs, npeaks, npeaks_sel, orig_box
+integer                       :: nrefs, npeaks, npeaks_sel
+integer                       :: orig_box, box_shrunken
+real                          :: min_rad, max_rad
 real                          :: smpd, smpd_shrunken
-real                          :: msk, hp,lp, distthr, ndev
+real                          :: lp, distthr, ndev
 
 contains
 
-    subroutine init_phasecorr_picker( micfname, refsfname, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
+    subroutine init_phasecorr_segpicker( micfname, minrad, maxrad, smpd_in, lp_in, distthr_in, ndev_in, dir_out )
         use simple_procimgfile, only :  clip_imgfile
-        character(len=*),           intent(in) :: micfname, refsfname
+        character(len=*),           intent(in) :: micfname
+        real,                       intent(in) :: minrad, maxrad ! in pixels
         real,                       intent(in) :: smpd_in
         real,             optional, intent(in) :: lp_in, distthr_in, ndev_in
         character(len=*), optional, intent(in) :: dir_out
-        type(image)       :: refimg
-        integer           :: ifoo, iref
-        real              :: sigma
-        logical, allocatable :: lmsk(:,:,:)
-        type(image)          :: mskimg
+        integer           :: ifoo
+        real              :: hp
         allocate(micname,  source=trim(micfname), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('picker;init, 1',alloc_stat)
-        allocate(refsname, source=trim(refsfname), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk('picker;init, 2')
         boxname = basename( fname_new_ext(micname,'box') )
         if( present(dir_out) )boxname = trim(dir_out)//trim(boxname)
         smpd = smpd_in
+        orig_box = round2even(4.*maxrad)
+        min_rad = minrad/(PICKER_SHRINK_HERE) !in pixels, shrunken dimensions
+        max_rad = maxrad/(PICKER_SHRINK_HERE) !in pixels, shrunken dimensions
         lp   = 20.0
         if( present(lp_in) ) lp = lp_in
         ndev = 2.0
@@ -62,49 +63,90 @@ contains
         call find_ldim_nptcls(micname, ldim, ifoo)
         call micrograph%new(ldim, smpd)
         call micrograph%read(micname)
-        ! find reference dimensions
-        call find_ldim_nptcls(refsname, ldim_refs, nrefs)
-        orig_box              = ldim_refs(1)
+        box_shrunken = round2even(orig_box/PICKER_SHRINK_HERE)
         ! modify according to PICKER_SHRINK_HERE
-        ldim_refs(1)          = round2even(real(ldim_refs(1))/PICKER_SHRINK_HERE)
-        ldim_refs(2)          = round2even(real(ldim_refs(2))/PICKER_SHRINK_HERE)
-        ldim_refs(3)          = 1
         ldim_shrink(1)        = round2even(real(ldim(1))/PICKER_SHRINK_HERE)
         ldim_shrink(2)        = round2even(real(ldim(2))/PICKER_SHRINK_HERE)
         ldim_shrink(3)        = 1
         smpd_shrunken         = PICKER_SHRINK_HERE*smpd
-        msk                   = real(ldim_refs(1)/2-5)
-        msk                   = max(msk, real(ldim_refs(1)/2-2)) ! for tiny particles
-        distthr               = BOXFRAC*real(ldim_refs(1))
+        distthr               = BOXFRAC*real(box_shrunken) !In shrunken dimensions
         if( present(distthr_in) ) distthr = distthr_in/PICKER_SHRINK_HERE
-        ! read and shrink references
-        allocate( refs(nrefs), stat=alloc_stat )
-        if(alloc_stat.ne.0)call allocchk( "In: simple_picker :: init_picker, refs etc. ",alloc_stat)
-        call mskimg%disc([orig_box,orig_box,1], smpd, msk*real(orig_box)/real(ldim_refs(1)), lmsk)
-        call mskimg%kill
-        do iref=1,nrefs
-            call refs(iref)%new(ldim_refs, smpd_shrunken)
-            call refimg%new([orig_box,orig_box,1], smpd)
-            call refimg%read(refsname, iref)
-            call refimg%noise_norm(lmsk)
-            call refimg%mask(msk*real(orig_box)/real(ldim_refs(1)), 'soft')
-            call refimg%fft()
-            call refimg%clip(refs(iref))
-            call refs(iref)%ifft()
-            call refs(iref)%mask(msk, 'soft')
-        end do
-        call refimg%kill
+        ! generate references
+        call generate_gaussian_refs(refs,min_rad,max_rad)
         ! pre-process micrograph
         call micrograph%fft()
         call mic_shrunken%new(ldim_shrink, smpd_shrunken)
         call mic_shrunken%set_ft(.true.)
         call micrograph%clip(mic_shrunken)
         hp = real(ldim_shrink(1) / 2) * smpd_shrunken
-        call mic_shrunken%fft
         call mic_shrunken%bp(hp, lp)
-    end subroutine init_phasecorr_picker
+        call mic_shrunken%ifft()
+    contains
+        subroutine generate_gaussian_refs(refs,min_rad,max_rad)
+            type(image), allocatable, intent(inout) :: refs(:)
+            real,   intent(in) :: min_rad, max_rad
+            real,  allocatable :: rmat_out(:,:,:) !to use rtsq_serial
+            integer, parameter :: STEP = 2
+            real    :: sigma_x, sigma_y
+            real    :: rad_x, rad_y
+            integer :: i, j
+            logical :: rotate_ref
+            nrefs = 0
+            do i = 0, STEP-1
+                rad_x   = (min_rad + real(i*STEP))
+                sigma_x = rad_x/(sqrt(2.*log(2.)))           !FWHM = 2*min_rad (see Wiki formula)
+                if(rad_x < max_rad+STEP) then
+                    do j = 0, STEP-1
+                        rad_y   = (min_rad + real(j*STEP))
+                        sigma_y = rad_y/(sqrt(2.*log(2.)))   !FWHM = 2*min_rad (see Wiki formula)
+                        if(rad_y < max_rad+STEP) then
+                            nrefs = nrefs + 1
+                            if(rad_y/rad_x > 1.5) rotate_ref = .true.
+                            if(rotate_ref) nrefs = nrefs + 2 !total 3 references
+                        endif
+                        rotate_ref = .false.                 !restore
+                    enddo
+                endif
+            enddo
+            if(allocated(refs)) deallocate(refs)
+            allocate( refs(nrefs) )
+            allocate(rmat_out(ldim_shrink(1),ldim_shrink(2),1), source = 0.)
+            nrefs = 0
+            do i = 0, STEP-1
+                rad_x = (min_rad + real(i*STEP))
+                sigma_x = rad_x/(sqrt(2.*log(2.))) ! FWHM = 2*min_rad (see Wiki formula)
+                if(rad_x < max_rad+STEP) then      !+STEP tollerance
+                    do j = 0, STEP-1
+                        rad_y = (min_rad + real(j*STEP))
+                        sigma_y = rad_y/(sqrt(2.*log(2.))) !FWHM = 2*min_rad (see Wiki formula)
+                        if(rad_y < max_rad+STEP) then
+                             if(rad_y/rad_x > 1.5) rotate_ref = .true.
+                             nrefs = nrefs + 1
+                             call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
+                             call refs(nrefs)%gauimg2D(sigma_x,sigma_y,(rad_x+rad_y)/2.+5.) !five pxls cutoff
+                             call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
+                             if(rotate_ref) then
+                                 call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
+                                 nrefs = nrefs + 1
+                                 call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
+                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
+                                 call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
+                                 nrefs = nrefs + 1
+                                 call refs(nrefs)%new(ldim_shrink,smpd_shrunken)
+                                 call refs(nrefs)%set_rmat(rmat_out)
+                                 call refs(nrefs)%write(PATH_HERE//'_GaussianReference.mrc',nrefs)
+                             endif
+                        endif
+                        rotate_ref = .false. !restore
+                    enddo
+                endif
+            enddo
+            deallocate(rmat_out)
+        end subroutine generate_gaussian_refs
+    end subroutine init_phasecorr_segpicker
 
-    subroutine exec_phasecorr_picker( boxname_out, nptcls_out )
+    subroutine exec_phasecorr_segpicker( boxname_out, nptcls_out )
         character(len=LONGSTRLEN), intent(out) :: boxname_out
         integer,                   intent(out) :: nptcls_out
         call extract_peaks
@@ -113,24 +155,25 @@ contains
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
-        peak_positions = nint(PICKER_SHRINK_HERE)*(peak_positions-ldim_refs(1)/2)
+        peak_positions = nint(PICKER_SHRINK_HERE*(real(peak_positions)))-orig_box/2
         call write_boxfile
         ! returns absolute path
         call make_relativepath(CWD_GLOB, boxname, boxname_out)
-    end subroutine exec_phasecorr_picker
+    end subroutine exec_phasecorr_segpicker
 
     subroutine extract_peaks
-        real    :: means(2)
-        integer :: xind, yind, alloc_stat, i
+        type(image) :: mask_img
         integer, allocatable :: labels(:), target_positions(:,:)
+        logical, allocatable :: mask(:,:)
         real,    allocatable :: target_corrs(:)
         real,    pointer     :: rmat_phasecorr(:,:,:)
-        type(image) :: mask_img
-        logical, allocatable :: mask(:,:)
         real    :: ave, sdev, maxv, minv
+        real    :: means(2)
+        integer :: xind, yind, alloc_stat, i
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         call gen_phase_correlation(mic_shrunken,mask_img)
         call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
+        call mask_img%kill
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
@@ -177,19 +220,14 @@ contains
         subroutine gen_phase_correlation(field,mask)
             type(image),         intent(inout) :: field
             type(image),optional,intent(inout) :: mask
-            type(image)   :: phasecorr, aux, ref_ext
+            type(image)   :: phasecorr, aux
             real, pointer :: mask_rmat(:,:,:)
             integer :: iref
-            integer :: border
-            border =  max(ldim_refs(1),ldim_refs(2))
             call phasecorr%new(ldim_shrink, smpd_shrunken)
             call aux%new(ldim_shrink, smpd_shrunken)
-            call ref_ext%new(ldim_shrink, smpd_shrunken)
             do iref = 1, nrefs
-                call refs(iref)%pad(ref_ext, 0.) ! zero padding
-                call refs(iref)%fft
-                call refs(iref)%bp(hp,lp) ! zero padding
-                aux = field%phase_corr(ref_ext,border=max(ldim_refs(1),ldim_refs(2))/2,lp=lp) !phase correlation
+                aux = field%phase_corr(refs(iref),border=box_shrunken/2,lp=lp) !phase correlation
+                if(DOWRITEIMGS)  call aux%write(PATH_HERE//'PhaseCorrs.mrc',iref)
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else
@@ -197,15 +235,13 @@ contains
                 endif
             enddo
             call field%copy(phasecorr)
+            call field%neg() !The correlations are inverted because the references are white particles on black backgound
             if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)
                 call mask%get_rmat_ptr(mask_rmat)
-                mask_rmat(border+1:ldim_shrink(1)-border,border+1:ldim_shrink(2)-border,1)=1.
+                mask_rmat(box_shrunken/2+1:ldim_shrink(1)-box_shrunken/2,box_shrunken/2+1:ldim_shrink(2)-box_shrunken/2,1)=1.
             endif
-            call phasecorr%kill
-            call aux%kill
-            call ref_ext%kill
         end subroutine gen_phase_correlation
 
         ! This subroutine creates an image in which each pixel value
@@ -259,6 +295,7 @@ contains
         end do
         npeaks_sel = count(selected_peak_positions)
         write(logfhandle,'(a,1x,I5)') 'peak positions left after distance filtering: ', npeaks_sel
+        deallocate(mask,corrs)
     end subroutine distance_filter
 
     subroutine gather_stats
@@ -268,14 +305,14 @@ contains
         real, allocatable :: spec(:)
         type(image)       :: ptcl_target
         write(logfhandle,'(a)') '>>> GATHERING REMAINING STATS'
-        call ptcl_target%new(ldim_refs, smpd_shrunken)
+        call ptcl_target%new([box_shrunken,box_shrunken,1], smpd_shrunken)
         cnt = 0
         allocate( peak_stats(npeaks_sel,NSTAT) )
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
                 cnt = cnt + 1
-                call mic_shrunken%window_slim(peak_positions(ipeak,:)-ldim_refs(1),&
-                    &ldim_refs(1), ptcl_target, outside)
+                call mic_shrunken%window_slim(peak_positions(ipeak,:)-box_shrunken,&
+                    &box_shrunken, ptcl_target, outside)
                 call ptcl_target%spectrum('power', spec)
                 peak_stats(cnt,SSCORE) = sum(spec)/real(size(spec))
                 call ptcl_target%stats('background', ave, peak_stats(cnt,SDEV), maxv, minv)
@@ -287,6 +324,7 @@ contains
             call normalize_minmax(peak_stats(:,istat))
         end do
         call ptcl_target%kill()
+        deallocate(spec)
     end subroutine gather_stats
 
     subroutine one_cluster_clustering
@@ -316,6 +354,7 @@ contains
         end do
         npeaks_sel = count(selected_peak_positions)
         write(logfhandle,'(a,1x,I5)') 'peak positions left after one cluster clustering: ', npeaks_sel
+        deallocate(dmat)
     end subroutine one_cluster_clustering
 
     subroutine write_boxfile
@@ -324,21 +363,21 @@ contains
         call fileiochk('phasecorr_picker; write_boxfile ', iostat)
         do ipeak=1,npeaks
             if( selected_peak_positions(ipeak) )then
-                write(funit,'(I7,I7,I7,I7,I7)') peak_positions(ipeak,1),&
-                peak_positions(ipeak,2), orig_box, orig_box, -3
+                write(funit,'(I7,I7,I7,I7,I7)') peak_positions(ipeak,1)-1,&
+                peak_positions(ipeak,2)-1, orig_box, orig_box, -3
             endif
         end do
         call fclose(funit,errmsg='picker; write_boxfile end')
     end subroutine write_boxfile
 
-    subroutine kill_phasecorr_picker
+    subroutine kill_phasecorr_segpicker
         integer :: iref
         if( allocated(micname) )then
             call micrograph%kill
             call mic_shrunken%kill
             deallocate(selected_peak_positions,corrmat, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 1',alloc_stat)
-            deallocate(peak_positions,micname,refsname,peak_stats, stat=alloc_stat)
+            deallocate(peak_positions,micname,peak_stats, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('phasecorr_picker kill, 2',alloc_stat)
             do iref=1,nrefs
                 call refs(iref)%kill
@@ -346,5 +385,5 @@ contains
             deallocate(refs, stat=alloc_stat)
             if(alloc_stat.ne.0)call allocchk('phasecorr_picker; kill 3',alloc_stat)
         endif
-    end subroutine kill_phasecorr_picker
-end module simple_phasecorr_picker
+    end subroutine kill_phasecorr_segpicker
+end module simple_phasecorr_segpicker

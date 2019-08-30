@@ -6113,17 +6113,23 @@ contains
     !> if border is present, then it calculates it discarding
     !> the external frame in self1 self2 with width border.
     ! FORMULA: phasecorr = ifft2(fft2(self1).*conj(fft2(self2)));
-    ! Returns real images
+    ! Preserves Fourier state
+    ! Optional lp: frequencies below lp are set to 0 in a
+    ! smooth way (cos edge).
     function phase_corr(self1,self2,border,lp) result(pc)
         class(image),      intent(inout) :: self1, self2
         integer, optional, intent(in)    :: border
         real,    optional, intent(in)    :: lp
+        real, parameter :: width = 3.
         type(image) :: pc
-        ! type(image) :: aux
-        complex :: c1,c2
-        real :: rw,sqsum1,sqsum2
-        integer     :: nrflims(3,2),i, j,h,k, phys(3), shlim,shlimsq,npix
-        logical     :: ft1, ft2
+        complex     :: c1,c2
+        real        :: w,rw
+        real(dp)    :: sqsum1,sqsum2
+        integer     :: nrflims(3,2),phys(3),npix
+        integer     :: shlim,shlimsq,shlimbpsq,shlimbp
+        integer     :: i,j,h,k
+        integer     :: hsq_ksq
+        logical     :: ft1, ft2,l_lp
         if(self1.eqdims.self2) then
             if(self1%ldim(3) > 1) THROW_HARD('Just for 2D images! phase_corr')
             if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2)) &
@@ -6135,32 +6141,45 @@ contains
             call self2%fft()
             call pc%new(self1%ldim, self1%smpd)
             call pc%set_ft(.true.)
-            if(present(lp)) then
+            l_lp    = present(lp)
+            shlimsq = huge(shlimsq)
+            if(l_lp) then
                 shlim = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
-                shlimsq = shlim*shlim
+                shlimbpsq = shlim*shlim
+                shlimbp   = shlim+nint(width)
+                shlimbpsq = shlimbp*shlimbp
             endif
-            sqsum1 = 0.
-            sqsum2 = 0.
+            sqsum1 = 0.d0
+            sqsum2 = 0.d0
             nrflims = self1%loop_lims(2)
-            !$omp parallel do default(shared) private(h,k,rw,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
+            !$omp parallel do default(shared) private(h,k,w,rw,hsq_ksq,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
             do h = nrflims(1,1),nrflims(1,2)
                 rw = merge(1., 2., h==0)
                 do k = nrflims(2,1),nrflims(2,2)
+                    hsq_ksq = h*h+k*k
                     phys = pc%comp_addr_phys(h,k,0)
-                    if( (h==0 .and. k==0) .or. ( present(lp) .and. (h*h+k*k > shlimsq)))then
+                    w = 1.
+                    if( h==0 .and. k==0 )then
                         pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                         cycle
+                    else if( l_lp ) then
+                        if(hsq_ksq > shlimbpsq)then
+                            pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            cycle
+                        elseif( hsq_ksq > shlimsq  )then
+                            w = (cos(((sqrt(real(hsq_ksq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
+                        endif
                     endif
-                    c1 = self1%cmat(phys(1),phys(2),phys(3))
-                    c2 = self2%cmat(phys(1),phys(2),phys(3))
+                    c1 = w*self1%cmat(phys(1),phys(2),phys(3))
+                    c2 = w*self2%cmat(phys(1),phys(2),phys(3))
                     pc%cmat(phys(1),phys(2),phys(3)) = c1 * conjg(c2)
-                    sqsum1 = sqsum1 + rw*csq(c1)
-                    sqsum2 = sqsum2 + rw*csq(c2)
+                    sqsum1 = sqsum1 + real(rw*csq(c1),dp)
+                    sqsum2 = sqsum2 + real(rw*csq(c2),dp)
                 enddo
             enddo
             !$omp end parallel do
             call pc%ifft()
-            call pc%div(sqrt(sqsum1*sqsum2/real(product(pc%ldim))))
+            call pc%div(sqrt(real(sqsum1*sqsum2)/real(product(pc%ldim))))
             if( .not.ft1 )call self1%ifft()
             if( .not.ft2 )call self2%ifft()
             if(present(border) .and. border > 1) then
@@ -7055,20 +7074,24 @@ contains
         self%ft = .false.
     end subroutine gauimg_2
 
-    subroutine gauimg2D( self, xsigma, ysigma )
-        class(image), intent(inout) :: self
-        real,         intent(in)    :: xsigma, ysigma
-        real    :: x, y
+    subroutine gauimg2D( self, xsigma, ysigma, cutoff )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: xsigma, ysigma
+        real, optional, intent(in)    :: cutoff
+        real    :: xx, x, y, cutoffsq_here, center(2)
         integer :: i, j
-        x = -real(self%ldim(1))/2.
+        cutoffsq_here = huge(cutoffsq_here)
+        if(present(cutoff)) cutoffsq_here = cutoff*cutoff
+        ! Center of the img is assumed self%ldim/2 + 1
+        center = real(self%ldim(1:2))/2.+1.
         do i=1,self%ldim(1)
-            y = -real(self%ldim(2))/2.
+            x = real(i)-center(1)
             do j=1,self%ldim(2)
+                y = real(j)-center(2)
+                if(x*x+y*y > cutoffsq_here) cycle
                 self%rmat(i,j,1) = gaussian2D( [0.,0.], x, y, xsigma, ysigma )
-                y = y+1.
-            end do
-            x = x+1.
-        end do
+            enddo
+        enddo
         self%ft = .false.
     end subroutine gauimg2D
 
@@ -7934,8 +7957,8 @@ contains
         shx = amod(shxi,float(self_in%ldim(1)))
         shy = amod(shyi,float(self_in%ldim(2)))
         ! spider image center
-        iycen = self_in%ldim(1)/2+1
-        ixcen = self_in%ldim(2)/2+1
+        ixcen = self_in%ldim(1)/2+1
+        iycen = self_in%ldim(2)/2+1
         ! image dimensions around origin
         rx1 = -self_in%ldim(1)/2
         rx2 =  self_in%ldim(1)/2
@@ -8015,8 +8038,8 @@ contains
         shx = amod(shxi,float(self_in%ldim(1)))
         shy = amod(shyi,float(self_in%ldim(2)))
         ! spider image center
-        iycen = self_in%ldim(1)/2+1
-        ixcen = self_in%ldim(2)/2+1
+        ixcen = self_in%ldim(1)/2+1
+        iycen = self_in%ldim(2)/2+1
         ! image dimensions around origin
         rx1 = -self_in%ldim(1)/2
         rx2 =  self_in%ldim(1)/2

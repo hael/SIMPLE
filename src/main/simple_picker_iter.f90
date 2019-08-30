@@ -3,6 +3,7 @@ module simple_picker_iter
 include 'simple_lib.f08'
 use simple_picker
 use simple_phasecorr_picker
+use simple_phasecorr_segpicker
 use simple_segpicker,  only: segpicker
 use simple_parameters, only: params_glob
 implicit none
@@ -60,26 +61,39 @@ subroutine iterate( self, cline, moviename_intg, boxfile, nptcls_out, dir_out )
         if( .not. cline%defined('min_rad') .or.  .not. cline%defined('max_rad'))then
             THROW_HARD('ERROR! min_rad and max_rad need to be present; iterate')
         endif
-        if( cline%defined('thres') .and. params_glob%detector .ne. 'sobel')then
-            THROW_HARD('ERROR! thres is compatible only with sobel detector; iterate')
-        endif
-        if(cline%defined('draw_color')) then
-            call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
-                &params_glob%smpd, params_glob%draw_color)
+        if(params_glob%phasecorr .ne. 'yes') then
+            ! reference free picking
+            if( cline%defined('thres') .and. params_glob%detector .ne. 'sobel')then
+                THROW_HARD('ERROR! thres is compatible only with sobel detector; iterate')
+            endif
+            if(cline%defined('draw_color')) then
+                call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
+                    &params_glob%smpd, params_glob%draw_color)
+            else
+                call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
+                    &params_glob%smpd)
+            endif
+            if(cline%defined('detector')) then
+                call seg_picker%preprocess_mic(params_glob%detector)
+            else
+                call seg_picker%preprocess_mic(params_glob%detector)
+            endif
+            call seg_picker%identify_particle_positions()
+            call seg_picker%output_identified_particle_positions()
+            call seg_picker%write_boxfile()
+            call seg_picker%print_info()
+            call seg_picker%kill !HEREEEE
         else
-            call seg_picker%new(moviename_intg, params_glob%min_rad, params_glob%max_rad,&
-                &params_glob%smpd)
+            ! reference free picking
+            if( cline%defined('thres') )then
+                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, params_glob%smpd, lp_in=params_glob%lp,&
+                    &distthr_in=params_glob%thres, ndev_in=params_glob%ndev, dir_out=dir_out)
+            else
+                call init_phasecorr_segpicker(moviename_intg, params_glob%min_rad, params_glob%max_rad, params_glob%smpd, lp_in=params_glob%lp, ndev_in=params_glob%ndev, dir_out=dir_out)
+            endif
+            call exec_phasecorr_segpicker(boxfile, nptcls_out)
+            call kill_phasecorr_segpicker
         endif
-        if(cline%defined('detector')) then
-            call seg_picker%preprocess_mic(params_glob%detector)
-        else
-            call seg_picker%preprocess_mic(params_glob%detector)
-        endif
-        call seg_picker%identify_particle_positions()
-        call seg_picker%output_identified_particle_positions()
-        call seg_picker%write_boxfile()
-        call seg_picker%print_info()
-        call seg_picker%kill
     endif
 end subroutine iterate
 
