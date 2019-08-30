@@ -312,6 +312,7 @@ contains
             call hybrid_srch%set_bfactor(bfactor)
             call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
             call hybrid_srch%set_rand_init_shifts(.true.)
+            call hybrid_srch%set_downscale(.true.)
             call hybrid_srch%set_shsrch_tol(TOL_ISO)
             call hybrid_srch%set_fitshifts(FITSHIFTS)
             call hybrid_srch%set_fixed_frame(fixed_frame)
@@ -557,7 +558,7 @@ contains
         call movie_sum_ctf%set_rmat(rmat_sum)
         ! micrograph
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        if( params_glob%l_dose_weight ) call gen_dose_weight_filter(filtarr, movie_frames_shifted_patched)
+        if( params_glob%l_dose_weight ) call gen_dose_weight_filter(filtarr, movie_frames_shifted_saved)
         rmat_sum = 0.
         !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=1,nframes

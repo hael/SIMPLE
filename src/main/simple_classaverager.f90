@@ -638,11 +638,11 @@ contains
     !>  \brief  calculates Fourier ring correlations
     subroutine cavger_calc_and_write_frcs_and_eoavg( fname )
         character(len=*), intent(in) :: fname
-        type(image), allocatable     :: even_imgs(:), odd_imgs(:), shnorm_imgs(:)
+        type(image), allocatable     :: even_imgs(:), odd_imgs(:)
         real,        allocatable     :: frc(:)
         integer :: icls, find, find_plate
         ! serial code for allocation/copy
-        allocate(even_imgs(ncls), odd_imgs(ncls), shnorm_imgs(ncls), frc(filtsz))
+        allocate(even_imgs(ncls), odd_imgs(ncls), frc(filtsz))
         do icls=1,ncls
             call even_imgs(icls)%copy(cavgs_even(icls))
             call odd_imgs(icls)%copy(cavgs_odd(icls))
@@ -682,9 +682,8 @@ contains
         do icls=1,ncls
             call even_imgs(icls)%kill
             call odd_imgs(icls)%kill
-            call shnorm_imgs(icls)%kill
         end do
-        deallocate(even_imgs, odd_imgs, shnorm_imgs, frc)
+        deallocate(even_imgs, odd_imgs, frc)
     end subroutine cavger_calc_and_write_frcs_and_eoavg
 
     ! I/O

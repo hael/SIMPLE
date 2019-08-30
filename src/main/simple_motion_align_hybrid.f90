@@ -43,7 +43,7 @@ type :: motion_align_hybrid
     real                           :: resstep        = 0.               !< resolution step
     real                           :: corr           = -1.              !< correlation
     real                           :: shsrch_tol     = SRCH_TOL         !< tolerance parameter for continuous srch update
-    real                           :: smpd = 0., smpd_sc =0.            !< sampling distance
+    real                           :: smpd = 0.                         !< sampling distance
     real                           :: scale_factor   = 1.               !< local frame scaling
     real                           :: trs            = 30.              !< half correlation disrete search bound
     integer                        :: ldim(3) = 0, ldim_sc(3) = 0       !< frame dimensions
@@ -57,7 +57,8 @@ type :: motion_align_hybrid
     logical                        :: group_frames     = .false.        !< whether to group frames
     logical                        :: fitshifts        = .false.        ! whether to perform iterative incremental shifts fitting
     logical                        :: rand_init_shifts = .false.        !< randomize initial condition?
-    logical, public                :: existence        = .false.
+    logical                        :: downscale        = .false.
+    logical                        :: existence        = .false.
 
 contains
     ! Constructor
@@ -95,6 +96,7 @@ contains
     procedure          :: get_shifts_toplot
     procedure          :: set_fixed_frame
     procedure          :: set_fitshifts
+    procedure          :: set_downscale
     procedure          :: set_coords
     procedure          :: get_coords
     procedure          :: is_fitshifts
@@ -142,31 +144,38 @@ contains
         self%fitshifts        = .false.
         self%group_frames     = .false.
         self%rand_init_shifts = .false.
+        self%downscale        = .false.
         self%l_bfac           = .false.
         self%existence        = .true.
     end subroutine new
 
     subroutine init_images( self )
         class(motion_align_hybrid), intent(inout) :: self
-        integer :: cdim(3), iframe,box
+        real    :: smpd_sc
+        integer :: cdim(3), iframe,box,nind
         call self%dealloc_images
-        ! works out dimensions for Fourier cropping
-        self%scale_factor = sqrt(-log(1.e-9) / (2.*self%bfactor*params_glob%scale**2.))
-        box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
-        self%scale_factor = min(1.,real(box)/real(maxval(self%ldim(1:2))))
-        self%smpd_sc = self%smpd / self%scale_factor
-        if( 2.*self%smpd_sc > self%lpstop )then
-            self%smpd_sc = self%lpstop/2.
-            self%scale_factor = min(1.,self%smpd/self%smpd_sc)
+        if( self%downscale )then
+            ! works out dimensions for Fourier cropping
+            self%scale_factor = max(1./sqrt(2.), sqrt(-log(1.e-9) / (2.*self%bfactor*params_glob%scale**2.)))
             box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
-        endif
-        if( self%ldim(1) > self%ldim(2) )then
-            self%ldim_sc = [box, round2even(self%scale_factor*real(self%ldim(2))), 1]
+            self%scale_factor = min(1.,real(box)/real(maxval(self%ldim(1:2))))
+            smpd_sc = self%smpd / self%scale_factor
+            if( 2.*smpd_sc > self%lpstop )then
+                smpd_sc = self%lpstop/2.
+                self%scale_factor = min(1.,self%smpd/smpd_sc)
+                box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
+            endif
+            if( self%ldim(1) > self%ldim(2) )then
+                self%ldim_sc = [box, round2even(self%scale_factor*real(self%ldim(2))), 1]
+            else
+                self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
+            endif
         else
-            self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
+            self%scale_factor = 1.
+            self%ldim_sc      = self%ldim
         endif
-        self%smpd_sc = self%smpd / self%scale_factor
-        self%trs     = self%scale_factor*self%trs
+        smpd_sc  = self%smpd / self%scale_factor
+        self%trs = self%scale_factor*self%trs
         ! allocate & set
         call self%reference%new(self%ldim_sc,self%smpd,wthreads=.false.)
         call self%reference%zero_and_flag_ft
@@ -179,7 +188,7 @@ contains
         do iframe = 1,self%nframes
             call self%frames_orig(iframe)%fft
             call self%frames(iframe)%new(self%ldim_sc,self%smpd,wthreads=.false.)
-            call self%frames_sh(iframe)%new(self%ldim_sc,self%smpd_sc,wthreads=.false.)
+            call self%frames_sh(iframe)%new(self%ldim_sc,self%smpd,wthreads=.false.)
             call self%frames(iframe)%zero_and_flag_ft
             call self%frames_sh(iframe)%zero_and_flag_ft
             call self%frames_orig(iframe)%clip(self%frames(iframe))
@@ -549,7 +558,7 @@ contains
                 phys = self%reference%comp_addr_phys(h,k,0)
                 if( self%resmask(phys(1),phys(2)) ) then
                     w = self%weights(phys(1),phys(2))
-                    if( w < 1.e-10 ) cycle
+                    if( w < 1.e-12 ) cycle
                     cref   = self%reference%get_cmat_at(phys)
                     cframe = frame%get_cmat_at(phys)
                     cref   = cref - weight*cframe
@@ -584,7 +593,7 @@ contains
             do k = nrflims(2,1),nrflims(2,2)
                 phys = self%reference%comp_addr_phys(h,k,0)
                 w    = self%weights(phys(1),phys(2))
-                if( w < 1.e-10 )then
+                if( w < 1.e-12 )then
                     call self%frames_sh(iframe)%set_cmat_at(phys, cmplx(0.,0.))
                     cycle
                 endif
@@ -814,9 +823,15 @@ contains
 
     subroutine set_fitshifts( self, fitshifts )
         class(motion_align_hybrid), intent(inout) :: self
-        logical,                 intent(in)    :: fitshifts
+        logical,                    intent(in)    :: fitshifts
         self%fitshifts = fitshifts
     end subroutine set_fitshifts
+
+    subroutine set_downscale( self, downscale )
+        class(motion_align_hybrid), intent(inout) :: self
+        logical,                    intent(in)    :: downscale
+        self%downscale = downscale
+    end subroutine set_downscale
 
     subroutine set_shsrch_tol( self, shsrch_tol )
         class(motion_align_hybrid), intent(inout) :: self
@@ -916,7 +931,6 @@ contains
         self%resstep = 0.
         self%bfactor = -1.
         self%smpd    = 0.
-        self%smpd_sc = 0.
         self%ldim    = 0
         self%ldim_sc = 0
         call self%dealloc_images
@@ -927,6 +941,7 @@ contains
         if( allocated(self%frameweights) )  deallocate(self%frameweights)
         self%l_bfac    = .false.
         self%fitshifts = .false.
+        self%downscale = .false.
         self%existence = .false.
     end subroutine kill
 

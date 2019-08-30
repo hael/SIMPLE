@@ -706,6 +706,7 @@ contains
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
                 call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
                 call align_hybrid(i,j)%set_bfactor(self%bfactor)
+                call align_hybrid(i,j)%set_downscale(.not.(trim(params_glob%groupframes).eq.'yes'))
                 ! align
                 call align_hybrid(i,j)%align(frameweights=self%frameweights)
                 ! fetch info
