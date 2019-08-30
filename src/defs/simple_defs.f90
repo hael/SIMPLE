@@ -63,7 +63,7 @@ end enum
 
 ! type for CTF parameters
 type ctfparams
-    integer(kind(ENUM_CTFFLAG)) :: ctfflag = CTFFLAG_NO
+    integer(kind(ENUM_CTFFLAG)) :: ctfflag = CTFFLAG_YES
     real    :: smpd    = 0.
     real    :: kv      = 0.
     real    :: cs      = 0.

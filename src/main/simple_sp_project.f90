@@ -44,6 +44,7 @@ contains
     procedure          :: map_cavgs_selection
     ! os_mic related methods
     procedure          :: add_single_movie
+    procedure          :: add_single_movie_frame
     procedure          :: add_movies
     procedure          :: add_intgs
     procedure          :: get_movies_table
@@ -512,10 +513,10 @@ contains
         integer :: n_os_mic, ldim(3), nframes
         ! oris object pointer
         os_ptr => self%os_mic
-        ! check that stk field is empty
+        ! check that os_mic field is empty
         n_os_mic = os_ptr%get_noris()
         if( n_os_mic > 0 )then
-            write(logfhandle,*) 'stack field (self%os_stk) already populated with # entries: ', n_os_mic
+            write(logfhandle,*) 'mic field (self%os_mic) already populated with # entries: ', n_os_mic
             THROW_HARD('add_single_movie')
         endif
         ! update ori
@@ -556,6 +557,44 @@ contains
         end select
         call os_ptr%set(1,'state',1.) ! default on import
     end subroutine add_single_movie
+
+    subroutine add_single_movie_frame( self, framename, ctfvars )
+        class(sp_project), target, intent(inout) :: self
+        character(len=*),          intent(in)    :: framename
+        type(ctfparams),           intent(in)    :: ctfvars
+        class(oris),      pointer :: os_ptr
+        character(len=LONGSTRLEN) :: rel_fname
+        integer :: n_os_mic, ldim(3), nframes
+        ! oris object pointer
+        os_ptr => self%os_mic
+        ! check that mic field is empty
+        n_os_mic = os_ptr%get_noris()
+        if( n_os_mic > 0 )then
+            write(logfhandle,*) 'mic field (self%os_mic) already populated with # entries: ', n_os_mic
+            THROW_HARD('add_single_movie_frame')
+        endif
+        ! update ori
+        call os_ptr%new(1)
+        call make_relativepath(CWD_GLOB, framename, rel_fname)
+        call find_ldim_nptcls(trim(rel_fname), ldim, nframes)
+        if( nframes <= 0 )then
+            THROW_WARN('# frames in movie: '//trim(rel_fname)//' <= zero, omitting')
+        else if( nframes == 1 )then
+            call os_ptr%set(1, 'frame', trim(rel_fname))
+            call os_ptr%set(1, 'imgkind', 'frame')
+        else
+            THROW_HARD('multiple frames ('//int2str(nframes)//') not supported; add_single_movie_frame')
+        endif
+        ! updates segment
+        call os_ptr%set(1, 'xdim',  real(ldim(1)))
+        call os_ptr%set(1, 'ydim',  real(ldim(2)))
+        call os_ptr%set(1, 'smpd',  ctfvars%smpd)
+        call os_ptr%set(1, 'kv',    ctfvars%kv)
+        call os_ptr%set(1, 'cs',    ctfvars%cs)
+        call os_ptr%set(1, 'fraca', ctfvars%fraca)
+        ! CTF flag not set at this point
+        call os_ptr%set(1,'state',1.) ! default on import
+    end subroutine add_single_movie_frame
 
     !> Add/append movies or micrographs without ctf parameters
     subroutine add_movies( self, movies_array, ctfvars )

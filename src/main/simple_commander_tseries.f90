@@ -8,7 +8,7 @@ use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 implicit none
 
-public :: tseries_import_commander
+public :: import_tseries_commander
 public :: tseries_track_commander
 public :: tseries_ctf_estimate_commander
 public :: tseries_split_commander
@@ -17,10 +17,10 @@ public :: detect_atoms_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: tseries_import_commander
+type, extends(commander_base) :: import_tseries_commander
   contains
-    procedure :: execute      => exec_tseries_import
-end type tseries_import_commander
+    procedure :: execute      => exec_import_tseries
+end type import_tseries_commander
 type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
@@ -48,40 +48,19 @@ end type detect_atoms_commander
 
 contains
 
-    !> for creating a new project
-    subroutine exec_tseries_import( self, cline )
-        use simple_sp_project,        only: sp_project
-        use simple_image,             only: image
-        class(tseries_import_commander), intent(inout) :: self
+    subroutine exec_import_tseries( self, cline )
+        use simple_sp_project, only: sp_project
+        class(import_tseries_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
-        type(parameters)            :: params
-        type(sp_project)            :: spproj
-        type(image)                 :: frame_img
-        type(ctfparams)             :: ctfvars
-        character(len=LONGSTRLEN), allocatable :: filenames(:), movfnames(:)
-        character(len=LONGSTRLEN)              :: outfname
-        integer          :: ldim(3), nframes, frame_from, frame_to, numlen, cnt
-        integer          :: iframe, jframe, nfiles, endit
-        if( cline%defined('ctf') )then
-            select case(trim(cline%get_carg('ctf')))
-            case('no','flip')
-                ! all good
-            case DEFAULT
-                THROW_HARD('Only CTF=NO|FLIP are allowed!')
-            end select
-        endif
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(ctfparams)  :: ctfvars
+        character(len=LONGSTRLEN), allocatable :: filenames(:)
+        integer :: iframe, nfiles, numlen
         call cline%set('oritype','mic')
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        ! check input
-        if( cline%defined('nframesgrp') )then
-            if( nint(cline%get_rarg('nframesgrp')) < 3 )then
-                THROW_HARD('nframesgrp integer (nr of frames to average) needs to be >= 3; exec_tseries_extract')
-            endif
-        else
-            THROW_HARD('need nframesgrp integer input = nr of frames to average; exec_tseries_extract')
-        endif
-        ! build parameters
         call params%new(cline)
+        ! read files
         call read_filetable(params%filetab, filenames)
         nfiles = size(filenames)
         numlen = len(int2str(nfiles))
@@ -90,54 +69,20 @@ contains
                 if(filenames(iframe)(1:1).ne.'/') filenames(iframe) = '../'//trim(filenames(iframe))
             enddo
         endif
-        call find_ldim_nptcls(filenames(1),ldim,nframes)
-        if( nframes == 1 .and. ldim(3) == 1 )then
-            ! all ok
-            call frame_img%new(ldim, params%smpd)
-        else
-            write(logfhandle,*) 'ldim(3): ', ldim(3)
-            write(logfhandle,*) 'nframes: ', nframes
-            THROW_HARD('exec_tseries_import assumes one frame per file')
-        endif
-        ! generates 'movies' to import
+        ! set CTF parameters
+        ctfvars%smpd  = params%smpd
+        ctfvars%cs    = params%cs
+        ctfvars%kv    = params%kv
+        ctfvars%fraca = params%fraca
+        ! import the individual frames
         call spproj%read(params%projfile)
-        endit = nfiles - params%nframesgrp + 1
-        allocate(movfnames(endit))
-        do iframe=1,endit
-            call progress(iframe, endit)
-            if( cline%defined('fbody') )then
-                outfname = 'tseries_frames'//int2str_pad(iframe,numlen)//params%ext
-            else
-                outfname = trim(params%fbody)//'tseries_frames'//int2str_pad(iframe,numlen)//params%ext
-            endif
-            movfnames(iframe) = trim(outfname)
-            frame_from = iframe
-            frame_to   = iframe + params%nframesgrp - 1
-            cnt = 0
-            do jframe=frame_from,frame_to
-                cnt = cnt + 1
-                call frame_img%read(filenames(jframe),1)
-                call frame_img%write(movfnames(iframe),cnt)
-            end do
+        do iframe=1,nfiles
+            call spproj%add_single_movie_frame(filenames(iframe), ctfvars)
         end do
-        call frame_img%kill
-        ! import
-        ctfvars%ctfflag = CTFFLAG_NO
-        ctfvars%smpd    = params%smpd
-        ctfvars%cs      = params%cs
-        ctfvars%kv      = params%kv
-        ctfvars%fraca   = params%fraca
-        ctfvars%l_phaseplate = .false.
-        ctfvars%dfx     = 0.
-        ctfvars%dfy     = 0.
-        ctfvars%angast  = 0.
-        ctfvars%phshift = 0.
-        call spproj%add_movies( movfnames, ctfvars )
-        !final write
         call spproj%write
         ! end gracefully
-        call simple_end('**** TSERIES_IMPORT NORMAL STOP ****')
-    end subroutine exec_tseries_import
+        call simple_end('**** IMPORT_TSERIES NORMAL STOP ****')
+    end subroutine exec_import_tseries
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
@@ -461,7 +406,7 @@ contains
 
     ! for comparison of atomic models of 2nanoparticles
     subroutine exec_compare_nano( self, cline )
-    use simple_nanoparticles_mod
+        use simple_nanoparticles_mod
         use simple_image, only : image
         class(compare_nano_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline !< command line input
@@ -523,4 +468,5 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
 end module simple_commander_tseries

@@ -82,7 +82,7 @@ type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
-type(tseries_import_commander)       :: xtseries_import
+type(import_tseries_commander)       :: ximport_tseries
 type(tseries_ctf_estimate_commander) :: xtseries_ctf_estimate
 type(detect_atoms_commander)         :: xdetect_atoms
 type(compare_nano_commander)         :: xcompare_nano
@@ -215,8 +215,8 @@ select case(prg)
         call xsimulate_subtomogram%execute(cline)
 
     ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
-    case( 'tseries_import' )
-        call xtseries_import%execute(cline)
+    case( 'import_tseries' )
+        call ximport_tseries%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
     case('detect_atoms')

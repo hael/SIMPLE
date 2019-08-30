@@ -143,7 +143,7 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
-type(simple_program), target :: tseries_import
+type(simple_program), target :: import_tseries
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
@@ -324,7 +324,7 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_tseries_import
+        call new_import_tseries
         call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
@@ -567,8 +567,8 @@ contains
                 ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
-            case('tseries_import')
-                ptr2prg => tseries_import
+            case('import_tseries')
+                ptr2prg => import_tseries
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
@@ -660,7 +660,7 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') import_tseries%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
@@ -3360,26 +3360,25 @@ contains
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
 
-    subroutine new_tseries_import
+    subroutine new_import_tseries
         ! PROGRAM SPECIFICATION
-        call tseries_import%new(&
-        &'tseries_import',&                                                       ! name
-        &'Import & prepares time-series datasets',&                               ! descr_short
-        &'is a workflow for importing and preparing time-series data',&           ! descr_long
-        &'simple_exec',&                                                         ! executable
-        &1, 5, 0, 0, 0, 0, 0, .true.)                                           ! # entries in each group, requires sp_project
+        call import_tseries%new(&
+        &'import_tseries',&                               ! name
+        &'Imports time-series datasets',&                 ! descr_short
+        &'is a workflow for importing time-series data',& ! descr_long
+        &'simple_exec',&                                  ! executable
+        &1, 4, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_import%set_input('img_ios', 1, 'filetab', 'file', 'List of movie files', 'List of movie files (*.mrcs) to import', 'e.g. movies.txt', .true., '')
+        call import_tseries%set_input('img_ios', 1, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
         ! parameter input/output
-        call tseries_import%set_input('parm_ios', 1, smpd)
-        call tseries_import%set_input('parm_ios', 2, kv)
-        tseries_import%parm_ios(2)%required = .true.
-        call tseries_import%set_input('parm_ios', 3, cs)
-        tseries_import%parm_ios(3)%required = .true.
-        call tseries_import%set_input('parm_ios', 4, fraca)
-        tseries_import%parm_ios(4)%required = .true.
-        call tseries_import%set_input('parm_ios', 5, 'nframesgrp', 'num', 'Number of contigous frames to align', '# contigous frames for alignment', '{3}', .true., 3.)
+        call import_tseries%set_input('parm_ios', 1, smpd)
+        call import_tseries%set_input('parm_ios', 2, kv)
+        import_tseries%parm_ios(2)%required = .true.
+        call import_tseries%set_input('parm_ios', 3, cs)
+        import_tseries%parm_ios(3)%required = .true.
+        call import_tseries%set_input('parm_ios', 4, fraca)
+        import_tseries%parm_ios(4)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3390,7 +3389,7 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_tseries_import
+    end subroutine new_import_tseries
 
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION
