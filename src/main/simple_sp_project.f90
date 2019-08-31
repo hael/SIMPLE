@@ -79,6 +79,7 @@ contains
     procedure          :: get_smpd
     procedure          :: get_nmovies
     procedure          :: get_nintgs
+    procedure          :: get_nframes
     procedure          :: get_nstks
     procedure          :: get_ctfflag
     procedure          :: get_ctfflag_type
@@ -1924,6 +1925,15 @@ contains
             if( self%os_mic%isthere(i,'intg') )get_nintgs = get_nintgs + 1
         enddo
     end function get_nintgs
+
+    integer function get_nframes( self )
+        class(sp_project), target, intent(inout) :: self
+        integer :: i
+        get_nframes = 0
+        do i=1,self%os_mic%get_noris()
+            if( self%os_mic%isthere(i,'frame') )get_nframes = get_nframes + 1
+        enddo
+    end function get_nframes
 
     integer function get_nstks( self )
         class(sp_project), target, intent(in) :: self

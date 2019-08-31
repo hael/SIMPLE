@@ -90,17 +90,13 @@ contains
         use simple_sp_project, only: sp_project
         class(tseries_track_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(tseries_backgr_subtr_commander)   :: backgr_subtracter
-        type(cmdline)                          :: cline_backgrsubtr
         type(sp_project)                       :: spproj
         type(parameters)                       :: params
-        type(ctfparams)                        :: ctfvars
         type(nrtxtfile)                        :: boxfile
-        type(oris)                             :: deftab
-        character(len=:),          allocatable :: dir, stk, outstk, ext, stkneigh
+        character(len=:),          allocatable :: dir
         character(len=LONGSTRLEN), allocatable :: framenames(:)
         real,                      allocatable :: boxdata(:,:)
-        integer :: i, iframe, ndatlines, j, orig_box, numlen, nmovs, ineigh
+        integer :: i, iframe, ndatlines, j, orig_box, numlen, nframes
         call params%new(cline)
         numlen   = 5 ! default value
         orig_box = params%box
@@ -132,76 +128,31 @@ contains
         endif
         ! frames input
         call spproj%read(params%projfile)
-        nmovs = spproj%get_nintgs()
-        allocate(framenames(nmovs))
+        nframes = spproj%get_nframes()
+        allocate(framenames(nframes))
         iframe = 0
         do i = 1,spproj%os_mic%get_noris()
-            if( spproj%os_mic%isthere(i,'intg') )then
+            if( spproj%os_mic%isthere(i,'frame') )then
                 iframe = iframe + 1
                 framenames(iframe) = trim(spproj%os_mic%get_static(i,'frame'))
             endif
         enddo
-        ! for background subtraction in time-series data. The goal is to subtract the two graphene
-        ! peaks @ 2.14 A and @ 1.23 A. This is done by band-pass filtering the background image,
-        ! recommended (and default settings) are hp=5.0 lp=1.1 and width=5.0.
-        cline_backgrsubtr = cline
-        call cline_backgrsubtr%set('projfile',params%projfile)
-        if( cline%defined('lp_backgr') )then
-            call cline_backgrsubtr%set('lp', params%lp_backgr)
-        else
-            call cline_backgrsubtr%set('lp', 1.1)
-        endif
-        if( .not.cline%defined('hp')    ) call cline_backgrsubtr%set('hp',5.0)
-        if( .not.cline%defined('width') ) call cline_backgrsubtr%set('width',5.0)
-        if( .not.cline%defined('ctf')   ) call cline_backgrsubtr%set('ctf', 'no')
         ! actual tracking
         do j=1,ndatlines
-            ! extract stack
-            call init_tracker( nint(boxdata(j,1:2)), framenames)
-            call track_particle
             if( cline%defined('ind') )then
                 dir = trim(params%fbody)//int2str(params%ind)
                 call simple_mkdir(dir)
                 if( .not. cline%defined('numlen') ) THROW_HARD('need numlen to be part of command line if ind is; exec_tseries_track')
-                call write_tracked_series(dir,trim(params%fbody)//int2str_pad(params%ind,params%numlen))
             else
                 dir = trim(params%fbody)//int2str(params%ind)
                 call simple_mkdir(dir)
-                call write_tracked_series(dir,trim(params%fbody)//int2str_pad(j,numlen))
             endif
-            ! perform background substraction
-            stk = trim(tracker_get_stkname())
-            call cline_backgrsubtr%set('stk', stk)
-            do ineigh=1,tracker_get_nnn()
-                stkneigh = trim(tracker_get_nnfname(ineigh))
-                call cline_backgrsubtr%set('stk_backgr', stkneigh)
-                ext    = fname2ext(stkneigh)
-                outstk = trim(get_fbody(stkneigh,ext,.true.))//'_stk.'//trim(ext)
-                call cline_backgrsubtr%set('outstk', outstk)
-                call backgr_subtracter%execute( cline_backgrsubtr )
-            enddo
+            call init_tracker( nint(boxdata(j,1:2)), framenames, dir, trim(params%fbody)//int2str_pad(j,numlen))
+            call track_particle
             ! clean
             call kill_tracker
         end do
-        call qsys_job_finished(  'simple_commander_tseries :: exec_tseries_track')
-        ! updates project
-        if( spproj%os_mic%isthere('dfx') )then
-            if( params%ctf.eq.'flip' )then
-                ! the stacks have been phase-flipped in backgr_subtracter
-                do i = 1,nmovs
-                    call spproj%os_mic%set(i,'ctf','flip')
-                enddo
-                call spproj%write
-            endif
-            ! write defocus for convenience
-            call deftab%new(nmovs)
-            do i = 1,nmovs
-                ctfvars = spproj%os_mic%get_ctfvars(i)
-                call deftab%set_ctfvars(i,ctfvars)
-            enddo
-            call deftab%write('deftab.txt')
-            call deftab%kill
-        endif
+        call qsys_job_finished('simple_commander_tseries :: exec_tseries_track')
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track

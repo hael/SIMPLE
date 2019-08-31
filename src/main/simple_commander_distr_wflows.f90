@@ -1503,17 +1503,15 @@ contains
         type(chash), allocatable      :: part_params(:)
         integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
         call cline%set('nthr', 1.0)
-        if( .not. cline%defined('neg')      ) call cline%set('neg',     'yes')
-        if( .not. cline%defined('lp')       ) call cline%set('lp',       2.0)
-        if( .not. cline%defined('lp_backgr')) call cline%set('lp_backgr',1.1)
-        if( .not. cline%defined('hp')       ) call cline%set('hp',       5.0)
-        if( .not. cline%defined('width')    ) call cline%set('width',    1.1)
-        if( .not. cline%defined('cenlp')    ) call cline%set('cenlp',    5.0)
-        if( .not. cline%defined('ctf')      ) call cline%set('ctf',      'no')
+        if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',         2.0)
+        if( .not. cline%defined('width')     ) call cline%set('width',      1.1)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 10.)
         call params%new(cline)
         ! set mkdir to no (to avoid nested directory structure)
         call cline%set('mkdir', 'no')
-        !if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
+        if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
         if( nlines(params%boxfile) > 0 )then
             call boxfile%new(params%boxfile, 1)
             ndatlines = boxfile%get_ndatalines()
@@ -1534,8 +1532,6 @@ contains
         call cline%delete('boxfile')
         params%nptcls = ndatlines
         params%nparts = params%nptcls
-        !if( params%ncunits > params%nparts )&
-        !&THROW_HARD('# computational units (ncunits) mjust be <= number of entries in boxfiles')
         ! box and numlen need to be part of command line
         call cline%set('box',    real(orig_box))
         call cline%set('numlen', real(numlen)  )

@@ -3430,7 +3430,7 @@ contains
         &'Track particles in time-series',&                                      ! descr_short
         &'is a distributed workflow for particle tracking in time-series data',& ! descr_long
         &'simple_distr_exec',&                                                   ! executable
-        &0, 3, 0, 1, 6, 0, 2, .true.)                                           ! # entries in each group, requires sp_project
+        &0, 3, 0, 2, 6, 0, 2, .true.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -3441,11 +3441,13 @@ contains
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call tseries_track%set_input('parm_ios', 3, 'ctf', 'binary', 'CTF status of output stacks',&
         &'CTF status of output stacks(flip|no)', '(flip|no)', .true., '')
+
         ! alternative inputs
         ! <empty>
         ! search controls
         call tseries_track%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
+        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking', '{10}', .false., 10.)
         ! <empty>
         ! filter controls
         call tseries_track%set_input('filt_ctrls', 1, lp)

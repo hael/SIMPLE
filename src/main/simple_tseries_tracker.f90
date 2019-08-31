@@ -7,34 +7,41 @@ use simple_image,      only: image
 use simple_tvfilter
 implicit none
 
-public :: init_tracker, track_particle, write_tracked_series, tracker_get_nnn
+public :: init_tracker, track_particle, tracker_get_nnn
 public :: tracker_get_nnfname, tracker_get_stkname, kill_tracker
 private
 #include "simple_local_flags.inc"
 
-real,                      parameter   :: EPS=0.1
-logical,                   parameter   :: DOPRINT=.true.
-integer,                   parameter   :: CENRATE=15, NNN=8
+real,    parameter :: EPS     = 0.1
+real,    parameter :: SPECW   = 0.0001
+logical, parameter :: DOPRINT = .true.
+integer, parameter :: CENRATE = 15, NNN = 8
 
 integer,                   allocatable :: particle_locations(:,:)
-character(len=LONGSTRLEN), allocatable :: framenames(:)
-type(image)               :: frame_img      ! for reading & updating the nearest neighbouring params_glob%boxes
-type(image)               :: frame_img_filt ! for performing the actual tracking
+character(len=LONGSTRLEN), pointer     :: framenames(:)
+character(len=:),          allocatable :: dir, fbody
+type(image)               :: frame_img      ! individual frame image
+type(image)               :: frame_avg      ! average over time window
+type(image)               :: frame_avg_filt ! filered version of time window average actually used for tracking
 type(image)               :: reference, tmp_img, ptcl_target
-type(image)               :: neigh_imgs_mean(NNN), diff_img
+type(image)               :: neigh_imgs(NNN), backgr_img, pspec
 type(tvfilter)            :: tv
-character(len=LONGSTRLEN) :: neighfnames(NNN), stkname
-integer                   :: ldim(3), nframes, nx, ny
-real                      :: sxx, sumw
+character(len=LONGSTRLEN) :: neighstknames(NNN), stkname
+integer                   :: ldim(3), nframes, nx, ny, neigh_cnt
+real                      :: sxx
 logical                   :: l_neg
 
 contains
 
-    subroutine init_tracker( boxcoord, fnames )
-        integer,                   intent(in) :: boxcoord(2)
-        character(len=LONGSTRLEN), intent(in) :: fnames(:)
+    subroutine init_tracker( boxcoord, fnames, dir_in, fbody_in )
+        integer,                           intent(in) :: boxcoord(2)
+        character(len=LONGSTRLEN), target, intent(in) :: fnames(:)
+        character(len=*),                  intent(in)  :: dir_in, fbody_in
+        character(len=:), allocatable :: fname
         integer :: n, i
         ! set constants
+        dir    = trim(dir_in)
+        fbody  = trim(fbody_in)
         l_neg  = .false.
         if( trim(params_glob%neg) .eq. 'yes' ) l_neg = .true.
         select case(trim(params_glob%filter))
@@ -47,10 +54,7 @@ contains
         end select
         ! names & dimensions
         nframes = size(fnames)
-        allocate(framenames(nframes))
-        do i = 1,nframes
-            framenames(i) = trim(fnames(i))
-        enddo
+        framenames => fnames(:)
         call find_ldim_nptcls(framenames(1),ldim,n)
         if( n == 1 .and. ldim(3) == 1 )then
             ! all ok
@@ -62,38 +66,44 @@ contains
         nx = ldim(1) - params_glob%box
         ny = ldim(2) - params_glob%box
         ! construct
-        allocate(particle_locations(nframes,2), stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("In: simple_tseries_tracker :: init_tracker",alloc_stat)
-        particle_locations = 0
+        allocate(particle_locations(nframes,2), source=0)
         call frame_img%new(ldim, params_glob%smpd)
-        call frame_img_filt%new(ldim, params_glob%smpd)
+        call frame_avg%new(ldim, params_glob%smpd)
+        call frame_avg_filt%new(ldim, params_glob%smpd)
         call tmp_img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call reference%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         call ptcl_target%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-        call diff_img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call backgr_img%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+        call pspec%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         do i=1,NNN
-            call neigh_imgs_mean(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd)
-            neighfnames(i) = ''
+            call neigh_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd)
+            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//'.mrcs'
+            neighstknames(i) = trim(fname)
         end do
         particle_locations(:,1) = boxcoord(1)
         particle_locations(:,2) = boxcoord(2)
     end subroutine init_tracker
 
     subroutine track_particle
-        integer :: pos(2), pos_refined(2), iframe
+        character(len=:), allocatable :: fname
+        integer :: funit, io_stat, iframe, xind, yind, i
+        integer :: pos(2), pos_refined(2)
+        logical :: outside
         ! extract first reference
-        call update_frame(1)
+        call update_frame_images(1)
         pos = particle_locations(1,:)
         call update_reference(1, pos)
-        sumw = 1.0
-        call update_background_images(1, pos)
+        call write_background_images_and_update_pspec(1, pos)
+        ! init pspec
+        call pspec%zero_and_unflag_ft
+        ! init neigh counter
+        neigh_cnt = 0
         ! track
         write(logfhandle,'(a)') ">>> TRACKING PARTICLE"
         do iframe=2,nframes
-            sumw = sumw + 1.0
             call progress(iframe,nframes)
-            ! update frame & refine position
-            call update_frame(iframe)
+            ! update frame images & refine position
+            call update_frame_images(iframe)
             call refine_position( pos, pos_refined )
             ! update position & reference
             pos = pos_refined
@@ -101,15 +111,9 @@ contains
             particle_locations(iframe:,1) = pos(1)
             particle_locations(iframe:,2) = pos(2)
             call update_reference(iframe, pos)
-            call update_background_images(iframe, pos)
+            call write_background_images_and_update_pspec(iframe, pos)
         end do
-    end subroutine track_particle
-
-    subroutine write_tracked_series( dir, fbody )
-        character(len=*), intent(in)  :: dir, fbody
-        character(len=:), allocatable :: fname
-        integer :: funit, io_stat, iframe, xind, yind, i
-        logical :: outside
+        ! write box file and tracked particles
         fname = trim(dir)//'/'//trim(fbody)//'.box'
         call fopen(funit, status='REPLACE', action='WRITE', file=fname,iostat=io_stat)
         call fileiochk("tseries tracker ; write_tracked_series ", io_stat)
@@ -119,24 +123,22 @@ contains
             yind = particle_locations(iframe,2)
             write(funit,'(I7,I7,I7,I7,I7)') xind, yind, params_glob%box, params_glob%box, -3
             call frame_img%read(framenames(iframe),1)
-            call frame_img%window_slim([xind,yind,1], params_glob%box, reference, outside)
-            if( l_neg ) call reference%neg()
-            call reference%write(stkname, iframe)
+            call frame_img%window_slim([xind,yind,1], params_glob%box, ptcl_target, outside)
+            if( l_neg ) call ptcl_target%neg()
+            call ptcl_target%write(stkname, iframe)
         end do
         call fclose(funit, errmsg="tseries tracker ; write_tracked_series end")
-        do i=1,NNN
-            fname = trim(dir)//'/'//trim(fbody)//'_background_nn'//int2str(i)//'.mrc'
-            if( l_neg ) call neigh_imgs_mean(i)%neg()
-            call neigh_imgs_mean(i)%write(fname)
-            neighfnames(i) = trim(fname)
-        end do
-    end subroutine write_tracked_series
+        ! average and write power spectrum for CTF estimation
+        call pspec%div(SPECW * real(neigh_cnt))
+        fname = trim(dir)//'/'//trim(fbody)//'_pspec4ctf_estimation.mrc'
+        call pspec%write(fname, 1)
+    end subroutine track_particle
 
     subroutine update_reference( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
         real    :: xyz(3)
         logical :: outside
-        call frame_img_filt%window_slim(pos, params_glob%box, tmp_img, outside)
+        call frame_avg_filt%window_slim(pos, params_glob%box, tmp_img, outside)
         call tmp_img%prenorm4real_corr(sxx)
         if( iframe == 1 )then
             reference = tmp_img
@@ -152,17 +154,26 @@ contains
         endif
     end subroutine update_reference
 
-    subroutine update_background_images( iframe, pos )
+    subroutine write_background_images_and_update_pspec( iframe, pos )
         integer, intent(in) :: iframe, pos(2)
         integer :: neigh(NNN,2), i
         logical :: outside
         call identify_neighbours
         do i=1,NNN
-            call frame_img%window_slim(neigh(i,:), params_glob%box, diff_img, outside)
+            call frame_img%window_slim(neigh(i,:), params_glob%box, backgr_img, outside)
+            if( outside ) call backgr_img%zero
+            if( l_neg )   call backgr_img%neg()
+            call backgr_img%write(neighstknames(i), iframe)
             if( .not. outside )then
-                call diff_img%subtr(neigh_imgs_mean(i))
-                call diff_img%div(sumw)
-                call neigh_imgs_mean(i)%add(diff_img)
+                neigh_cnt = neigh_cnt + 1
+                if( l_neg ) call backgr_img%neg()
+                call backgr_img%norm()
+                call backgr_img%zero_edgeavg
+                call backgr_img%fft()
+                call backgr_img%ft2img('sqrt', tmp_img)
+                call pspec%add(tmp_img, SPECW)
+                call backgr_img%zero_and_unflag_ft
+                call tmp_img%zero_and_unflag_ft
             endif
         end do
 
@@ -195,31 +206,54 @@ contains
                 neigh(8,2) = pos(2) - params_glob%box
             end subroutine identify_neighbours
 
-    end subroutine update_background_images
+    end subroutine write_background_images_and_update_pspec
 
-    subroutine update_frame( iframe )
+    subroutine update_frame_images( iframe )
         integer, intent(in) :: iframe
+        integer :: fromto(2), i
+        real    :: w
+        fromto(1) = iframe
+        fromto(2) = iframe + params_glob%nframesgrp - 1
+        do while(fromto(2) > nframes)
+            fromto = fromto - 1
+        end do
+        ! create frame_avg
+        call frame_avg%zero
+        w = 1. / real(params_glob%nframesgrp)
+        do i=fromto(1),fromto(2)
+            call frame_img%read(framenames(i),1)
+            call frame_avg%add(frame_img, w)
+        end do
+        call frame_avg%div(real(params_glob%nframesgrp))
+        ! frame_img should correspond to the current frame
         call frame_img%read(framenames(iframe),1)
-        call frame_img_filt%copy(frame_img)
+        ! make filtered average
+        call frame_avg_filt%copy(frame_avg)
         select case(trim(params_glob%filter))
             case('tv')
-                call tv%apply_filter(frame_img_filt, 5.)
+                call frame_avg_filt%fft()
+                call tv%apply_filter(frame_avg_filt, 5.)
+                ! always low-pass filter
+                call frame_avg_filt%bp(0., params_glob%lp)
             case('nlmean')
-                call frame_img_filt%nlmean
+                call frame_avg_filt%nlmean
+                call frame_avg_filt%fft()
+                ! always low-pass filter
+                call frame_avg_filt%bp(0., params_glob%lp)
             case DEFAULT
-                ! defaults to low-pass filtering
-                call frame_img_filt%fft()
-                call frame_img_filt%bp(0., params_glob%lp)
+                ! defaults to just low-pass filtering
+                call frame_avg_filt%fft()
+                call frame_avg_filt%bp(0., params_glob%lp)
         end select
-        call frame_img_filt%ifft()
-    end subroutine update_frame
+        call frame_avg_filt%ifft()
+    end subroutine update_frame_images
 
     subroutine refine_position( pos, pos_refined )
         integer, intent(in)  :: pos(2)
         integer, intent(out) :: pos_refined(2)
-        integer     :: xind, yind, xrange(2), yrange(2)
-        real        :: corr, target_corr
-        logical     :: outside
+        integer :: xind, yind, xrange(2), yrange(2)
+        real    :: corr, target_corr
+        logical :: outside
         ! set srch range
         xrange(1) = max(0,  pos(1) - params_glob%offset)
         xrange(2) = min(nx, pos(1) + params_glob%offset)
@@ -229,7 +263,7 @@ contains
         corr = -1
         do xind=xrange(1),xrange(2)
             do yind=yrange(1),yrange(2)
-                call frame_img_filt%window_slim([xind,yind,1], params_glob%box, ptcl_target, outside)
+                call frame_avg_filt%window_slim([xind,yind,1], params_glob%box, ptcl_target, outside)
                 target_corr = reference%real_corr_prenorm(ptcl_target, sxx)
                 if( target_corr > corr )then
                     pos_refined = [xind,yind]
@@ -246,7 +280,7 @@ contains
     character(len=LONGSTRLEN) function tracker_get_nnfname(i)
         integer, intent(in) :: i
         if( i<1 .or. i>NNN )THROW_HARD('neighbour index out of range')
-        tracker_get_nnfname = trim(neighfnames(i))
+        tracker_get_nnfname = trim(neighstknames(i))
     end function tracker_get_nnfname
 
     character(len=LONGSTRLEN) function tracker_get_stkname()
@@ -254,13 +288,20 @@ contains
     end function tracker_get_stkname
 
     subroutine kill_tracker
-        deallocate(particle_locations, framenames, stat=alloc_stat)
-        if(alloc_stat.ne.0)call allocchk("simple_tseries_tracker::kill_tracker dealloc",alloc_stat)
+        integer :: i
+        deallocate(particle_locations)
+        framenames => null()
+        do i=1,NNN
+            call neigh_imgs(i)%kill
+        end do
         call frame_img%kill
-        call frame_img_filt%kill
+        call frame_avg%kill
+        call frame_avg_filt%kill
         call reference%kill
         call tmp_img%kill
         call ptcl_target%kill
+        call backgr_img%kill
+        call pspec%kill
         call tv%kill
     end subroutine kill_tracker
 
