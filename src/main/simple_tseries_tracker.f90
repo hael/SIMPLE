@@ -212,8 +212,11 @@ contains
         integer, intent(in) :: iframe
         integer :: fromto(2), i
         real    :: w
-        fromto(1) = iframe
-        fromto(2) = iframe + params_glob%nframesgrp - 1
+        fromto(1) = iframe - params_glob%nframesgrp/2
+        fromto(2) = iframe + params_glob%nframesgrp/2 - 1
+        do while(fromto(1) < 1)
+            fromto = fromto + 1
+        end do
         do while(fromto(2) > nframes)
             fromto = fromto - 1
         end do
