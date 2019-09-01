@@ -195,6 +195,7 @@ end interface mode
 interface otsu
     module procedure otsu_1
     module procedure otsu_2
+    module procedure otsu_3
 end interface otsu
 
 interface pixels_dist
@@ -2372,6 +2373,21 @@ contains
         endwhere
         if(present(thresh)) thresh = threshold
     end subroutine otsu_2
+
+    ! Otsu's method, see above
+    subroutine otsu_3(x, mask)
+        real,                 intent(inout) :: x(:)
+        logical, allocatable, intent(out)   :: mask(:)
+        real :: threshold ! threshold for binarisation
+        call otsu_1(x, threshold)
+        if( allocated(mask) ) deallocate(mask)
+        allocate(mask(size(x)), source=.false.)
+        where(x > threshold)
+            mask = .true.
+        elsewhere
+            mask = .false.
+        endwhere
+    end subroutine otsu_3
 
     !>   calculates the euclidean distance between one pixel and a list of other pixels.
     ! if which == 'max' then distance is the maximum value of the distance between

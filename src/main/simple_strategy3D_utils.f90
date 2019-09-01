@@ -13,6 +13,8 @@ public :: set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
+logical, parameter :: DEBUG_HERE = .false.
+
 contains
 
     subroutine extract_peaks( s, corrs, multistates )
@@ -109,7 +111,8 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real, allocatable :: ws_nonzero(:)
+        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:)
+        logical, allocatable :: included(:)
         real    :: dists(s%npeaks), arg4softmax(s%npeaks)
         real    :: wsum, thres, wavg_left, wavg_right
         integer :: npeaks
@@ -125,24 +128,34 @@ contains
             call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
             ! define a threshold using Otsu's algorithm
             ws_nonzero   = pack(ws, mask=ws > TINY)
-            call otsu(ws_nonzero, thres)
-            wavg_left    = sum(ws, ws > TINY .and. ws >  thres)
-            wavg_right   = sum(ws, ws > TINY .and. ws <= thres)
-            s%npeaks_eff = count(ws   > TINY .and. ws >  thres)
-            print *, 'otsu_thres: ', thres
-            print *, 'wavg_left:  ', wavg_left
-            print *, 'wavg_right: ', wavg_right
-            print *, '# weights >  thres: ', s%npeaks_eff
-            print *, '# weights <= thres: ', count(ws > TINY .and. ws <= thres)
+            allocate(ws_nonzero_cp(count(ws > TINY)), source=ws_nonzero)
+            call otsu(ws_nonzero, included)
+            s%npeaks_eff = count(included)
+            thres        = minval(ws_nonzero_cp, included)
+            if( DEBUG_HERE )then
+                wavg_left    = sum(ws_nonzero_cp,       included) / real(count(      included))
+                wavg_right   = sum(ws_nonzero_cp, .not. included) / real(count(.not. included))
+                print *, 'otsu_thres: ', thres
+                print *, 'wavg_left:  ', wavg_left
+                print *, 'wavg_right: ', wavg_right
+                print *, '# weights >= thres: ', s%npeaks_eff
+                print *, '# weights <  thres: ', count(.not. included)
+            endif
             ! zero weights below the threshold and re-normalize
-            where(ws <= thres) ws = 0.
+            where(ws < thres) ws = 0.
             wsum = sum(ws)
             if( wsum > TINY )then
                 ws = ws / wsum
             else
                 ws = 0.
             endif
-            deallocate(ws_nonzero)
+            if( DEBUG_HERE )then
+                ws_nonzero = pack(ws, mask=ws > TINY)
+                call normalize_minmax(ws_nonzero)
+                call hpsort(ws_nonzero)
+                print *, ws_nonzero
+            endif
+            deallocate(ws_nonzero, ws_nonzero_cp, included)
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
