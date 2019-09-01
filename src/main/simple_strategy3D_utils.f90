@@ -62,10 +62,23 @@ contains
         enddo
     end subroutine extract_peaks
 
+    ! wrapper calc_softmax_weights subroutine
+    subroutine calc_softmax_weights( s, corrs, ws, best_loc, best_corr )
+        class(strategy3D_srch), intent(inout) :: s
+        real,                   intent(in)    :: corrs(s%npeaks)
+        real,                   intent(out)   :: ws(s%npeaks), best_corr
+        integer,                intent(out)   :: best_loc(1)
+        if( WEIGHT_SCHEME_GLOBAL )then
+            call calc_softmax_weights_glob( s, corrs, ws, best_loc, best_corr )
+        else
+            call calc_softmax_weights_loc( s, corrs, ws, best_loc, best_corr )
+        endif
+    end subroutine calc_softmax_weights
+
     ! for dealing with the weights in a global sense:
     ! (1) Calculate normalised softmax weights per particle
     ! (2) Select the fraction (16%) of highest weights globally for inclusion in the 3D rec
-    subroutine calc_softmax_weights( s, corrs, ws, best_loc, best_corr )
+    subroutine calc_softmax_weights_glob( s, corrs, ws, best_loc, best_corr )
         use simple_ori, only: ori
         class(strategy3D_srch), intent(inout) :: s
         real,                   intent(in)    :: corrs(s%npeaks)
@@ -85,7 +98,55 @@ contains
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
-    end subroutine calc_softmax_weights
+    end subroutine calc_softmax_weights_glob
+
+    ! for dealing with the weights in a local sense:
+    ! (1) Calculate normalised softmax weights per particle
+    ! (2) Use Otsu's algorithm to detect correlation peaks
+    subroutine calc_softmax_weights_loc( s, corrs, ws, best_loc, best_corr )
+        use simple_ori, only: ori
+        class(strategy3D_srch), intent(inout) :: s
+        real,                   intent(in)    :: corrs(s%npeaks)
+        real,                   intent(out)   :: ws(s%npeaks), best_corr
+        integer,                intent(out)   :: best_loc(1)
+        real, allocatable :: ws_nonzero(:)
+        real    :: dists(s%npeaks), arg4softmax(s%npeaks)
+        real    :: wsum, thres, wavg_left, wavg_right
+        integer :: npeaks
+        s%npeaks_eff = 1
+        if( s%npeaks == 1 )then
+            best_loc(1)  = 1
+            ws(1)        = 1.
+        else
+            ! find highest corr pos
+            best_loc  = maxloc(corrs)
+            best_corr = corrs(best_loc(1))
+            ! calculate weights
+            call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
+            ! define a threshold using Otsu's algorithm
+            ws_nonzero   = pack(ws, mask=ws > TINY)
+            call otsu(ws_nonzero, thres)
+            wavg_left    = sum(ws, ws > TINY .and. ws >  thres)
+            wavg_right   = sum(ws, ws > TINY .and. ws <= thres)
+            s%npeaks_eff = count(ws   > TINY .and. ws >  thres)
+            print *, 'otsu_thres: ', thres
+            print *, 'wavg_left:  ', wavg_left
+            print *, 'wavg_right: ', wavg_right
+            print *, '# weights >  thres: ', s%npeaks_eff
+            print *, '# weights <= thres: ', count(ws > TINY .and. ws <= thres)
+            ! zero weights below the threshold and re-normalize
+            where(ws <= thres) ws = 0.
+            wsum = sum(ws)
+            if( wsum > TINY )then
+                ws = ws / wsum
+            else
+                ws = 0.
+            endif
+            deallocate(ws_nonzero)
+        endif
+        ! update npeaks individual weights
+        call s3D%o_peaks(s%iptcl)%set_all('ow', ws)
+    end subroutine calc_softmax_weights_loc
 
     subroutine update_softmax_weights( iptcl, npeaks )
         integer, intent(in) :: iptcl, npeaks

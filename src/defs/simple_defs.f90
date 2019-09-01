@@ -112,11 +112,11 @@ end enum
 integer(kind=kind(ENUM_STARTYPE)), parameter :: GENERIC_STAR = PTCL_STAR
 
 ! general parameters
-real,   parameter :: PRUNE_FRAC             = 0.3     !< fraction of particles after which a project is automatically pruned
+real,   parameter :: PRUNE_FRAC             = 0.3      !< fraction of particles after which a project is automatically pruned
 
 ! power spectrum related stuff
-real,    parameter :: SMPD4VIZ              = 1.25    !< default sampling distance for powerspectrum visualisation
-real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.     !< default low-pass limit for power spectrum background subtraction
+real,    parameter :: SMPD4VIZ              = 1.25     !< default sampling distance for powerspectrum visualisation
+real,    parameter :: LP_PSPEC_BACKGR_SUBTR = 20.      !< default low-pass limit for power spectrum background subtraction
 
 ! constants for picker & extraction
 real,    parameter :: PICKER_SHRINK        = 4.        !< picker shrink factor
@@ -164,6 +164,7 @@ integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systemati
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 
 ! orientation weighting scheme
+logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< use global orientation weights extracted from pool of all weights or local scheme
 real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
 real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
 real, parameter    :: SIGMA2_FUDGE_DEFAULT = 50.       !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
