@@ -111,7 +111,7 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:)
+        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:), rank_ws(:)
         logical, allocatable :: included(:)
         real    :: dists(s%npeaks), arg4softmax(s%npeaks)
         real    :: wsum, thres, wavg_left, wavg_right
@@ -148,6 +148,16 @@ contains
                 ws = ws / wsum
             else
                 ws = 0.
+            endif
+            if( params_glob%l_rankw )then
+                allocate(rank_ws(s%npeaks), source=0.)
+                if( params_glob%rankw_crit == RANK_EXP_CRIT )then
+                    call conv2rank_weights(s%npeaks, ws, params_glob%rankw_crit, rank_ws, RANKW_EXP)
+                else
+                    call conv2rank_weights(s%npeaks, ws, params_glob%rankw_crit, rank_ws)
+                endif
+                ws = rank_ws
+                deallocate(rank_ws)
             endif
             if( DEBUG_HERE )then
                 ws_nonzero = pack(ws, mask=ws > TINY)
