@@ -44,6 +44,7 @@ type :: parameters
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
+    character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
     character(len=3)      :: locres='no'          !< filter based on local resolution or not(yes|no){no}
@@ -526,6 +527,7 @@ contains
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)
+        call check_carg('keepvol',        self%keepvol)
         call check_carg('keys',           self%keys)
         call check_carg('kmeans',         self%kmeans)
         call check_carg('label',          self%label)

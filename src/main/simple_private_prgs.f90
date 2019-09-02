@@ -330,6 +330,7 @@ contains
         call cmd_dict%push('inner',         'inner mask radius(in pixels)')
         call cmd_dict%push('job_memory_per_task', 'memory in MB per task in distributed exec (typically memory per socket)')
         call cmd_dict%push('jumpsz',        'size of contigous segment')
+        call cmd_dict%push('keepvol',       'whether to keep iterative volumes')
         call cmd_dict%push('keys',          'keys of values to print')
         call cmd_dict%push('kv',            'acceleration voltage(in kV){300.}')
         call cmd_dict%push('label',         'discrete label(class|state){class}')
