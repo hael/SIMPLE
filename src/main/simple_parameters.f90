@@ -200,6 +200,7 @@ type :: parameters
     character(len=STDLEN) :: stk_part=''
     character(len=STDLEN) :: tomoseries=''        !< filetable of filetables of tomograms
     character(len=STDLEN) :: wfun='kb'
+    character(len=4)      :: wscheme=WSCHEME_DEFAULT !< orientation weighting scheme, global or local(glob|loc)
     character(len=:), allocatable :: last_prev_dir !< last previous execution directory
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
@@ -429,6 +430,7 @@ type :: parameters
     logical :: l_rankw          = .true.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
+    logical :: l_wglob          = .true.
     logical :: sp_required      = .false.
   contains
     procedure          :: new
@@ -601,6 +603,7 @@ contains
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
         call check_carg('wfun',           self%wfun)
+        call check_carg('wscheme',        self%wscheme)
         call check_carg('zero',           self%zero)
         ! File args
         call check_file('boxfile',        self%boxfile,      'T')
@@ -1232,6 +1235,15 @@ contains
                     THROW_HARD('unsupported correlation weighting method')
             end select
         endif
+        ! set orientation weighting scheme
+        select case(trim(self%wscheme))
+            case('glob')
+                self%l_wglob = .true.
+            case('loc')
+                self%l_wglob = .false.
+            case DEFAULT
+                THROW_HARD('unsupported orientation weighting scheme (wscheme)')
+        end select
         ! set graphene flag
         self%l_graphene = self%graphene_filt .ne. 'no'
         ! boxmatch

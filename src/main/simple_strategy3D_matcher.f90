@@ -359,7 +359,7 @@ contains
         end select
 
         ! CALCULATE GLOBAL ORIENTATION WEIGHTS
-        if( WEIGHT_SCHEME_GLOBAL ) call calc_global_ori_weights
+        if( params_glob%l_wglob ) call calc_global_ori_weights
 
         ! CALCULATE PROJECTION DIRECTION WEIGHTS
         ! call calc_proj_weights !!!!!!!!!! turned off 4 now, needs integration and testing

@@ -70,7 +70,7 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        if( WEIGHT_SCHEME_GLOBAL )then
+        if( params_glob%l_wglob )then
             call calc_softmax_weights_glob( s, corrs, ws, best_loc, best_corr )
         else
             call calc_softmax_weights_loc( s, corrs, ws, best_loc, best_corr )

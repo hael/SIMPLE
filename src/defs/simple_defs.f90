@@ -163,13 +163,13 @@ integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systemati
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
 
 ! orientation weighting scheme
-logical, parameter :: WEIGHT_SCHEME_GLOBAL = .true.    !< use global orientation weights extracted from pool of all weights or local scheme
-real,    parameter :: GLOBAL_WEIGHT_FRAC   = 0.16      !< corresponds to threshold of mean + one sigma
-real,    parameter :: RANKW_EXP            = 2.0       !< Exponent for exponential rank orientation weights
-real, parameter    :: SIGMA2_FUDGE_DEFAULT = 50.       !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
-                                                       !! smaller number means sharper distribution
-real, parameter    :: TAU_DEFAULT          = 0.01      !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
-                                                       !! smaller number means sharper distribution
+character(len=*), parameter :: WSCHEME_DEFAULT      = 'glob'!< use global orientation weights extracted from pool of all weights by default
+real,             parameter :: GLOBAL_WEIGHT_FRAC   = 0.16  !< corresponds to threshold of mean + one sigma
+real,             parameter :: RANKW_EXP            = 2.0   !< Exponent for exponential rank orientation weights
+real,             parameter :: SIGMA2_FUDGE_DEFAULT = 50.   !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
+                                                            !! smaller number means sharper distribution
+real, parameter    :: TAU_DEFAULT          = 0.01           !< controls the sharpeness of the orientation weight distribution when objfun .ne. euclid
+                                                            !! smaller number means sharper distribution
 ! Graphene
 real, parameter    :: GRAPHENE_BAND1       = 2.14      !< graphene band 1 for omission in score function
 real, parameter    :: GRAPHENE_BAND2       = 1.23      !< graphene band 2 for omission in score function
