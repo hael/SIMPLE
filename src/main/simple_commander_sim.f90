@@ -15,7 +15,7 @@ public :: simulate_noise_commander
 public :: simulate_particles_commander
 public :: simulate_movie_commander
 public :: simulate_subtomogram_commander
-public :: simulate_fcc_commander
+public :: simulate_atoms_commander
 private
 #include "simple_local_flags.inc"
 
@@ -35,10 +35,10 @@ type, extends(commander_base) :: simulate_subtomogram_commander
   contains
     procedure :: execute      => exec_simulate_subtomogram
 end type simulate_subtomogram_commander
-type, extends(commander_base) :: simulate_fcc_commander
+type, extends(commander_base) :: simulate_atoms_commander
   contains
-    procedure :: execute      => exec_simulate_fcc
-end type simulate_fcc_commander
+    procedure :: execute      => exec_simulate_atoms
+end type simulate_atoms_commander
 
 contains
 
@@ -378,13 +378,13 @@ contains
         call simple_end('**** SIMPLE_SIMULATE_SUBTOMOGRAM NORMAL STOP ****')
     end subroutine exec_simulate_subtomogram
 
-    subroutine exec_simulate_fcc( self, cline )
+    subroutine exec_simulate_atoms( self, cline )
         use simple_atoms, only: atoms
-        class(simulate_fcc_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline
+        class(simulate_atoms_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(image)      :: vol
-        type(atoms)      :: lattice
+        type(atoms)      :: atoms_obj
         real             :: center(3),radius,hlfcc,lfcc,x,x1,x2,x3,y,y1,y2,y3,z,z1,z2,z3,msksq,cutoff
         integer          :: i,j,k,n,ncubes
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
@@ -393,102 +393,112 @@ contains
             THROW_HARD('BOX must be even')
         endif
         call vol%new([params%box,params%box,params%box], params%smpd)
-        call lattice%new(1)
-        call lattice%set_element(1,params%element)
-        if( lattice%get_atomicnumber(1) == 0 )then
-            THROW_HARD('Unsupported element for now')
+        if( cline%defined('element') )then
+            if( .not.cline%defined('moldiam') )then
+                THROW_HARD('MOLDIAM must be provided for FFC lattice!')
+            endif
+            ! FCC lattice
+            call atoms_obj%new(1)
+            call atoms_obj%set_element(1,params%element)
+            if( atoms_obj%get_atomicnumber(1) == 0 )then
+                THROW_HARD('Unsupported element for now')
+            endif
+            ! works out atoms_obj dimension
+            msksq  = (params%moldiam/2.)**2.
+            radius = atoms_obj%get_radius(1)
+            lfcc   = 2.*sqrt(2.)*radius
+            hlfcc  = lfcc/2.
+            ncubes = floor(real(params%box) * params%smpd / lfcc)
+            ! atoms at edges
+            n = 0
+            center = (real([params%box,params%box,params%box]/2 + 1)-1.)*params%smpd
+            do i=1,ncubes
+                x  = real(i-1)*lfcc
+                x1 = x+hlfcc
+                x2 = x
+                x3 = x+hlfcc
+                do j=1,ncubes
+                    y  = real(j-1)*lfcc
+                    y1 = y+hlfcc
+                    y2 = y+hlfcc
+                    y3 = y
+                    do k=1,ncubes
+                        z  = real(k-1)*lfcc
+                        z1 = z
+                        z2 = z+hlfcc
+                        z3 = z+hlfcc
+                        ! edge
+                        if( sum(([x ,y ,z ]-center)**2.) <= msksq ) n = n+1
+                        ! face-centered
+                        if( sum(([x1,y1,z1]-center)**2.) <= msksq ) n = n+1
+                        if( sum(([x2,y2,z2]-center)**2.) <= msksq ) n = n+1
+                        if( sum(([x3,y3,z3]-center)**2.) <= msksq ) n = n+1
+                    enddo
+                enddo
+            enddo
+            ! build atoms_obj
+            call atoms_obj%new(n)
+            do i = 1,n
+                call atoms_obj%set_name(i,params%element//'  ')
+                call atoms_obj%set_element(i,params%element)
+            enddo
+            n = 0
+            do i=1,ncubes
+                x  = real(i-1)*lfcc
+                x1 = x+hlfcc
+                x2 = x
+                x3 = x+hlfcc
+                do j=1,ncubes
+                    y  = real(j-1)*lfcc
+                    y1 = y+hlfcc
+                    y2 = y+hlfcc
+                    y3 = y
+                    do k=1,ncubes
+                        z  = real(k-1)*lfcc
+                        z1 = z
+                        z2 = z+hlfcc
+                        z3 = z+hlfcc
+                        if( sum(([x ,y ,z ]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x,y,z])
+                        endif
+                        if( sum(([x1,y1,z1]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x1,y1,z1])
+                        endif
+                        if( sum(([x2,y2,z2]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x2,y2,z2])
+                        endif
+                        if( sum(([x3,y3,z3]-center)**2.) <= msksq )then
+                            n = n+1
+                            call atoms_obj%set_coord(n, [x3,y3,z3])
+                        endif
+                    enddo
+                enddo
+            enddo
+            call atoms_obj%writePDB(params%outvol)
+            ! convolution
+            cutoff = 3.*lfcc
+        else if( cline%defined('pdbfile') )then
+            if( .not.file_exists(params%pdbfile) )then
+                THROW_HARD('Could not find: '//trim(params%pdbfile))
+            endif
+            call atoms_obj%new(params%pdbfile)
+            cutoff = 12.*params%smpd
         endif
-        ! works out lattice dimension
-        msksq  = (params%msk*params%smpd)**2.
-        radius = lattice%get_radius(1)
-        lfcc   = 2.*sqrt(2.)*radius
-        hlfcc  = lfcc/2.
-        ncubes = floor(real(params%box) * params%smpd / lfcc)
-        ! atoms at edges
-        n = 0
-        center = (real([params%box,params%box,params%box]/2 + 1)-1.)*params%smpd
-        do i=1,ncubes
-            x  = real(i-1)*lfcc
-            x1 = x+hlfcc
-            x2 = x
-            x3 = x+hlfcc
-            do j=1,ncubes
-                y  = real(j-1)*lfcc
-                y1 = y+hlfcc
-                y2 = y+hlfcc
-                y3 = y
-                do k=1,ncubes
-                    z  = real(k-1)*lfcc
-                    z1 = z
-                    z2 = z+hlfcc
-                    z3 = z+hlfcc
-                    ! edge
-                    if( sum(([x ,y ,z ]-center)**2.) <= msksq ) n = n+1
-                    ! face-centered
-                    if( sum(([x1,y1,z1]-center)**2.) <= msksq ) n = n+1
-                    if( sum(([x2,y2,z2]-center)**2.) <= msksq ) n = n+1
-                    if( sum(([x3,y3,z3]-center)**2.) <= msksq ) n = n+1
-                enddo
-            enddo
-        enddo
-        ! build lattice
-        call lattice%new(n)
-        do i = 1,n
-            call lattice%set_name(i,params%element//'  ')
-            call lattice%set_element(i,params%element)
-        enddo
-        n = 0
-        do i=1,ncubes
-            x  = real(i-1)*lfcc
-            x1 = x+hlfcc
-            x2 = x
-            x3 = x+hlfcc
-            do j=1,ncubes
-                y  = real(j-1)*lfcc
-                y1 = y+hlfcc
-                y2 = y+hlfcc
-                y3 = y
-                do k=1,ncubes
-                    z  = real(k-1)*lfcc
-                    z1 = z
-                    z2 = z+hlfcc
-                    z3 = z+hlfcc
-                    if( sum(([x ,y ,z ]-center)**2.) <= msksq )then
-                        n = n+1
-                        call lattice%set_coord(n, [x,y,z])
-                    endif
-                    if( sum(([x1,y1,z1]-center)**2.) <= msksq )then
-                        n = n+1
-                        call lattice%set_coord(n, [x1,y1,z1])
-                    endif
-                    if( sum(([x2,y2,z2]-center)**2.) <= msksq )then
-                        n = n+1
-                        call lattice%set_coord(n, [x2,y2,z2])
-                    endif
-                    if( sum(([x3,y3,z3]-center)**2.) <= msksq )then
-                        n = n+1
-                        call lattice%set_coord(n, [x3,y3,z3])
-                    endif
-                enddo
-            enddo
-        enddo
-        call lattice%writePDB(params%outvol)
-        ! convolution
-        cutoff = 3.*lfcc
         if( cline%defined('lp') )then
             cutoff = max(cutoff,4.*params%lp)
-            call lattice%convolve(vol,cutoff,lp=params%lp)
+            call atoms_obj%convolve(vol,cutoff,lp=params%lp)
         else
-            call lattice%convolve(vol,cutoff)
+            call atoms_obj%convolve(vol,cutoff)
         endif
-        call vol%mask(params%msk,'soft',backgr=0.)
-        call vol%norm
         call vol%write(params%outvol)
         ! cleanup
-        call lattice%kill
+        call atoms_obj%kill
         call vol%kill
         ! end gracefully
         call simple_end('**** SIMPLE_SIMULATE_FCC NORMAL STOP ****')
-    end subroutine exec_simulate_fcc
+    end subroutine exec_simulate_atoms
 
 end module simple_commander_sim

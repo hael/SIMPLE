@@ -15,7 +15,7 @@ private
 character(len=74), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
 character(len=74), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
 character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3
-character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"   ! custom 3.3
+character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I1,A4,3X,3F8.3,2F6.2,10x,A2)"   ! custom 3.3
 real,              parameter :: bohr_radius     = 0.5292    ! Angstroms
 
 !>  \brief type for dealing with atomic structures
@@ -127,7 +127,7 @@ contains
                 &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
                 &self%occupancy(i), self%beta(i)
             else
-                read(line,pdbfmt_read, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
+                read(line,pdbfmt_longread, iostat=io_stat)elevenfirst, self%name(i), self%altloc(i),&
                 &self%resname(i), self%chain(i), self%resnum(i), self%icode(i), self%xyz(i,:),&
                 &self%occupancy(i), self%beta(i), self%element(i)
             endif
@@ -451,13 +451,13 @@ contains
             Z = 16; r = 1.05
         ! metals
         case('FE')
-            Z = 26; r = 1.16
+            Z = 26; r = 1.02
         case('PD')
-            Z = 46; r = 1.2
+            Z = 46; r = 1.12
         case('PT')
-            Z = 78; r = 1.23
+            Z = 78; r = 1.10
         case('AU')
-            Z = 79; r = 1.24
+            Z = 79; r = 1.23
         end select
     end subroutine Z_and_radius_from_name
 
@@ -485,12 +485,11 @@ contains
         real, allocatable :: rmat(:,:,:)
         real    :: a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2
         integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff, cutoffsq
-        logical :: l_bfac
         if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         smpd = vol%get_smpd()
         ldim = vol%get_ldim()
-        l_bfac = present(lp)
-        if( l_bfac ) bfac = (4.*lp)**2.
+        bfac = (4.*2.*smpd)**2.
+        if( present(lp) ) bfac = max(bfac,(4.*lp)**2.)
         allocate(rmat(ldim(1),ldim(2),ldim(3)),source=0.)
         icutoff  = ceiling(cutoff/smpd)
         cutoffsq = cutoff*cutoff
@@ -528,8 +527,8 @@ contains
             case DEFAULT
                 cycle
             end select
-            if( l_bfac ) b = b + bfac   ! eq B.6
-            aterm = a/b**1.5            ! eq B.6
+            b = b + bfac        ! eq B.6
+            aterm = a/b**1.5    ! eq B.6
             xyz   = self%xyz(i,:)/smpd
             pos   = floor(xyz)
             bbox(:,1) = pos   - icutoff
