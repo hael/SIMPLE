@@ -241,6 +241,7 @@ type :: parameters
     integer :: lp_iters=1          !< # iters low-pass limited refinement
     integer :: maxits=500          !< maximum # iterations
     integer :: maxp=0
+    integer :: minnrefs2eval=40    !< minimum # references to evaluate in stochastic search
     integer :: minp=10             !< minimum cluster population
     integer :: mrcmode=2
     integer :: navgs=1
@@ -289,7 +290,7 @@ type :: parameters
     integer :: recl_cgrid=-1
     integer :: ring1=2
     integer :: ring2=0
-    integer :: rndfac=RANDOMNESS_FAC !< randomness factor in stochastic search, the higher the greedier
+    integer :: rndfac=0            !< randomness factor in stochastic search, the higher the greedier
     integer :: spec=0
     integer :: startit=1           !< start iterating from here
     integer :: state=1             !< state to extract
@@ -384,6 +385,7 @@ type :: parameters
     real    :: power=2.
     real    :: scale=1.            !< image scale factor{1}
     real    :: scale2=1.           !< image scale factor 2nd{1}
+    real    :: shcfrac=SHCFRAC_DEFAULT !< min % of projection directions evaluated in stochastic search
     real    :: sherr=0.            !< shift error(in pixels){2}
     real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
@@ -711,7 +713,6 @@ contains
         call check_iarg('pspecsz',        self%pspecsz)
         call check_iarg('ring1',          self%ring1)
         call check_iarg('ring2',          self%ring2)
-        call check_iarg('rndfac',         self%rndfac)
         call check_iarg('startit',        self%startit)
         call check_iarg('state',          self%state)
         call check_iarg('state2split',    self%state2split)
@@ -794,6 +795,7 @@ contains
         call check_rarg('power',          self%power)
         call check_rarg('scale',          self%scale)
         call check_rarg('scale2',         self%scale2)
+        call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
         call check_rarg('sigma2_fudge',   self%sigma2_fudge)
@@ -1271,7 +1273,6 @@ contains
         self%kfromto(2) = int(self%dstep/self%lp)        ! low-pass Fourier index set according to lp
         self%kstop      = self%kfromto(2)                ! -"-
         self%lp         = max(self%fny,self%lp)          ! lowpass limit
-        ! self%lp_dyn     = self%lp                        ! dynamic lowpass limit
         self%lpmed      = self%lp                        ! median lp
         if( .not. cline%defined('ydim') ) self%ydim = self%xdim
         ! set ldim
@@ -1288,6 +1289,9 @@ contains
         if(self%npeaks<=0) THROW_HARD('Invalid number of peaks')
         if(self%ninplpeaks<=0 .or. self%ninplpeaks>NINPLPEAKS2SORT)&
             &THROW_HARD('Invalid number of in-plane peaks')
+        ! set minimum # of projection directions to search
+        self%minnrefs2eval = ceiling(real(NPEAKS2REFINE) / real(self%ninplpeaks))
+        self%rndfac = ceiling((self%shcfrac / 100.) * self%nspace)
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
             self%nran = self%nptcls

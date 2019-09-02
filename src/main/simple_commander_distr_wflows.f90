@@ -1367,8 +1367,8 @@ contains
         ! dynamic parameters
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
         if( .not. cline%defined('globwfrac')   ) call cline%set('globwfrac',   0.03)
-        if( .not. cline%defined('rndfac')      ) call cline%set('rndfac',       30.)
-        if( .not. cline%defined('rankw')       ) call cline%set('rankw',      'cen')
+        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      30.)
+        if( .not. cline%defined('rankw')       ) call cline%set('rankw',       'no')
         if( .not. cline%defined('trs')         ) call cline%set('trs',          2.0)
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
         if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
