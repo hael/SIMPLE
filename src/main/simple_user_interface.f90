@@ -750,7 +750,7 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
-        call set_param(groupframes,      'groupframes',    'binary', 'Motion correction frames averaging', 'Whether to perform frames averaging during motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
+        call set_param(groupframes,    'groupframes',  'str',    'Motion correction frames averaging', 'Whether to perform frames averaging during motion correction for patches only(patch), always(all) or never(no)(patch|all|no){patch}', '(patch|all|no){patch}', .false., 'patch')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
         call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{3}', .false., 3.)
         call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{3}', .false., 3.)
@@ -2019,9 +2019,9 @@ contains
         call motion_correct%set_input('srch_ctrls', 9, groupframes)
         ! filter controls
         call motion_correct%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 15.)
+        &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
-        &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 5.)
+        &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
         call motion_correct%set_input('filt_ctrls', 3, corrw)
         call motion_correct%set_input('filt_ctrls', 4, rankw_general)
         ! mask controls
@@ -2278,7 +2278,7 @@ contains
         call preprocess%set_input('srch_ctrls', 16, groupframes)
         ! filter controls
         call preprocess%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call preprocess%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
         call preprocess%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&
@@ -2353,7 +2353,7 @@ contains
         call preprocess_stream%set_input('srch_ctrls',17, groupframes)
         ! filter controls
         call preprocess_stream%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit for movie alignment', 'Low-pass limit to be applied in the first &
-        &iterations of movie alignment(in Angstroms){15}', 'in Angstroms{15}', .false., 15.)
+        &iterations of movie alignment(in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call preprocess_stream%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit for movie alignment', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment(in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
         call preprocess_stream%set_input('filt_ctrls', 3, 'lp_ctf_estimate', 'num', 'Low-pass limit for CTF parameter estimation',&

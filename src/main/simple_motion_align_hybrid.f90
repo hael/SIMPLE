@@ -57,7 +57,6 @@ type :: motion_align_hybrid
     logical                        :: group_frames     = .false.        !< whether to group frames
     logical                        :: fitshifts        = .false.        ! whether to perform iterative incremental shifts fitting
     logical                        :: rand_init_shifts = .false.        !< randomize initial condition?
-    logical                        :: downscale        = .false.
     logical                        :: existence        = .false.
 
 contains
@@ -96,7 +95,6 @@ contains
     procedure          :: get_shifts_toplot
     procedure          :: set_fixed_frame
     procedure          :: set_fitshifts
-    procedure          :: set_downscale
     procedure          :: set_coords
     procedure          :: get_coords
     procedure          :: is_fitshifts
@@ -144,7 +142,6 @@ contains
         self%fitshifts        = .false.
         self%group_frames     = .false.
         self%rand_init_shifts = .false.
-        self%downscale        = .false.
         self%l_bfac           = .false.
         self%existence        = .true.
     end subroutine new
@@ -152,27 +149,24 @@ contains
     subroutine init_images( self )
         class(motion_align_hybrid), intent(inout) :: self
         real    :: smpd_sc
-        integer :: cdim(3), iframe,box,nind
+        integer :: cdim(3), iframe,box,ind,maxldim
         call self%dealloc_images
-        if( self%downscale )then
-            ! works out dimensions for Fourier cropping
-            self%scale_factor = max(1./sqrt(2.), sqrt(-log(1.e-9) / (2.*self%bfactor*params_glob%scale**2.)))
-            box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
-            self%scale_factor = min(1.,real(box)/real(maxval(self%ldim(1:2))))
-            smpd_sc = self%smpd / self%scale_factor
-            if( 2.*smpd_sc > self%lpstop )then
-                smpd_sc = self%lpstop/2.
-                self%scale_factor = min(1.,self%smpd/smpd_sc)
-                box = round2even(self%scale_factor*real(maxval(self%ldim(1:2))))
-            endif
-            if( self%ldim(1) > self%ldim(2) )then
-                self%ldim_sc = [box, round2even(self%scale_factor*real(self%ldim(2))), 1]
-            else
-                self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
-            endif
+        ! works out dimensions for Fourier cropping
+        maxldim           = maxval(self%ldim(1:2))
+        ind               = calc_fourier_index(self%lpstop, maxldim, self%smpd)
+        self%scale_factor = min(1., real(2*(ind+4))/real(maxldim))
+        box               = round2even(self%scale_factor*real(maxldim))
+        self%scale_factor = min(1.,real(box)/real(maxldim))
+        smpd_sc           = self%smpd / self%scale_factor
+        if( 2.*smpd_sc > self%lpstop )then
+            smpd_sc           = self%lpstop/2.
+            self%scale_factor = min(1.,self%smpd/smpd_sc)
+            box               = round2even(self%scale_factor*real(maxldim))
+        endif
+        if( self%ldim(1) > self%ldim(2) )then
+            self%ldim_sc = [box, round2even(self%scale_factor*real(self%ldim(2))), 1]
         else
-            self%scale_factor = 1.
-            self%ldim_sc      = self%ldim
+            self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
         endif
         smpd_sc  = self%smpd / self%scale_factor
         self%trs = self%scale_factor*self%trs
@@ -393,7 +387,6 @@ contains
         logical :: l_calc_frameweights
         ! frameweights
         l_calc_frameweights = .not.present(frameweights)
-        self%frameweights   = 1./real(self%nframes)
         if( .not.l_calc_frameweights ) self%frameweights = frameweights
         frameweights_saved = self%frameweights
         ! shift boundaries
@@ -562,9 +555,10 @@ contains
                     cref   = self%reference%get_cmat_at(phys)
                     cframe = frame%get_cmat_at(phys)
                     cref   = cref - weight*cframe
-                    num         = num         + rw * w * real(cref*conjg(cframe))
-                    sumsq_ref   = sumsq_ref   + rw * w * csq(cref)
-                    sumsq_frame = sumsq_frame + rw * w * csq(cframe)
+                    w      = w*rw
+                    num         = num         + w * real(cref*conjg(cframe))
+                    sumsq_ref   = sumsq_ref   + w * csq(cref)
+                    sumsq_frame = sumsq_frame + w * csq(cframe)
                 endif
             enddo
         enddo
@@ -579,14 +573,15 @@ contains
         class(motion_align_hybrid), intent(inout) :: self
         integer,                    intent(inout) :: iframe
         real, pointer :: pcorrs(:,:,:)
-        complex :: cref, cframe
-        real    :: dshift(2),corr,alpha,beta,gamma,weight,w,sqsum_ref,sqsum_frame,rw
-        integer :: pos(2),center(2),trs,h,k,phys(3),nrflims(3,2)
+        complex  :: cref, cframe
+        real(dp) :: sqsum_ref,sqsum_frame
+        real     :: dshift(2),alpha,beta,gamma,weight,w,rw
+        integer  :: pos(2),center(2),trs,h,k,phys(3),nrflims(3,2)
         weight = self%frameweights(iframe)
         trs    = min(ceiling(self%trs),minval(self%ldim_sc(1:2)/2))
         ! correlations
-        sqsum_ref   = 0.
-        sqsum_frame = 0.
+        sqsum_ref   = 0.d0
+        sqsum_frame = 0.d0
         nrflims = self%reference%loop_lims(2)
         do h = nrflims(1,1),nrflims(1,2)
             rw = merge(1., 2., h==0) ! redundancy
@@ -601,33 +596,32 @@ contains
                 cframe = self%frames_sh(iframe)%get_cmat_at(phys)
                 cref   = cref - weight*cframe
                 call self%frames_sh(iframe)%set_cmat_at(phys, w*cref*conjg(cframe))
-                sqsum_ref   = sqsum_ref   + rw*w*csq(cref)
-                sqsum_frame = sqsum_frame + rw*w*csq(cframe)
+                sqsum_ref   = sqsum_ref   + real(rw*w*csq(cref),dp)
+                sqsum_frame = sqsum_frame + real(rw*w*csq(cframe),dp)
             enddo
         enddo
         if( sqsum_ref<1.e-6 .or. sqsum_frame<1.e-6 )then
-            call self%frames_sh(iframe)%zero_and_flag_ft
-            return
+            ! most likely corrupted frame
+        else
+            call self%frames_sh(iframe)%ifft
+            call self%frames_sh(iframe)%div(sqrt(real(sqsum_ref*sqsum_frame/real(product(self%ldim_sc),dp))))
+            ! find peak
+            call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
+            center = self%ldim_sc(1:2)/2+1
+            pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
+            dshift = real(pos)
+            ! interpolate
+            alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
+            beta  = pcorrs(pos(1)+center(1)  ,pos(2)+center(2),1)
+            gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
+            dshift(1) = dshift(1) + interp_peak()
+            alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
+            beta  = pcorrs(pos(1)+center(1),pos(2)+center(2)  ,1)
+            gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
+            dshift(2) = dshift(2) + interp_peak()
+            ! update shift
+            self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         endif
-        call self%frames_sh(iframe)%ifft
-        call self%frames_sh(iframe)%div(sqrt(sqsum_ref*sqsum_frame/real(product(self%ldim_sc))))
-        ! find peak
-        call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
-        center = self%ldim_sc(1:2)/2+1
-        pos    = maxloc(pcorrs(center(1)-trs:center(1)+trs, center(2)-trs:center(2)+trs, 1))-trs-1
-        corr   = pcorrs(center(1)+pos(1),center(2)+pos(2),1)
-        dshift = real(pos)
-        ! interpolate
-        alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
-        beta  = pcorrs(pos(1)+center(1)  ,pos(2)+center(2),1)
-        gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
-        dshift(1) = dshift(1) + interp_peak()
-        alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
-        beta  = pcorrs(pos(1)+center(1),pos(2)+center(2)  ,1)
-        gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
-        dshift(2) = dshift(2) + interp_peak()
-        ! update shift
-        self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         ! cleanup
         nullify(pcorrs)
         call self%frames_sh(iframe)%zero_and_flag_ft
@@ -669,9 +663,8 @@ contains
                 shsq = h*h+k*k
                 if( shsq < bphplimsq ) cycle
                 if( shsq > bplplimsq ) cycle
-                if( shsq == 0 )        cycle
+                if( shsq == 0 )        cycle ! toss central spot
                 phys = self%reference%comp_addr_phys([h,k,0])
-                rsh  = sqrt(real(shsq))
                 spafreqsq = real(shsq) / spadenomsq
                 ! B-factor weight
                 bfacw = min(1.,exp(-spafreqsq*self%bfactor))
@@ -679,9 +672,11 @@ contains
                 w = 1.
                 if( shsq < hplimsq )then
                     ! high-pass
+                    rsh  = sqrt(real(shsq))
                     w = (1. - cos(((rsh-rhplim)/width)*PI))/2.
                 else if( shsq > lplimsq )then
                     ! low_pass
+                    rsh  = sqrt(real(shsq))
                     w = (cos(((rsh-(rlplim-width))/width)*PI) + 1.)/2.
                 else
                     self%resmask(phys(1),phys(2)) = .true.
@@ -831,12 +826,6 @@ contains
         self%fitshifts = fitshifts
     end subroutine set_fitshifts
 
-    subroutine set_downscale( self, downscale )
-        class(motion_align_hybrid), intent(inout) :: self
-        logical,                    intent(in)    :: downscale
-        self%downscale = downscale
-    end subroutine set_downscale
-
     subroutine set_shsrch_tol( self, shsrch_tol )
         class(motion_align_hybrid), intent(inout) :: self
         real, intent(in) :: shsrch_tol
@@ -945,7 +934,6 @@ contains
         if( allocated(self%frameweights) )  deallocate(self%frameweights)
         self%l_bfac    = .false.
         self%fitshifts = .false.
-        self%downscale = .false.
         self%existence = .false.
     end subroutine kill
 

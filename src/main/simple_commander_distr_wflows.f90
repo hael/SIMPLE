@@ -110,10 +110,10 @@ contains
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         ! mnotion correction
         if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
-        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',          15.)
+        if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',            150.)
-        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',      'yes')
+        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',  'patch')
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
@@ -530,10 +530,10 @@ contains
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
         if( .not. cline%defined('trs')        ) call cline%set('trs',           30.)
-        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',       15.)
+        if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',         150.)
-        if( .not. cline%defined('groupframes')) call cline%set('groupframes', 'yes')
+        if( .not. cline%defined('groupframes')) call cline%set('groupframes','patch')
         if( .not. cline%defined('corrw')      ) call cline%set('corrw',   'softmax')
         if( .not. cline%defined('rankw')      ) call cline%set('rankw',        'no')
         call cline%set('oritype', 'mic')

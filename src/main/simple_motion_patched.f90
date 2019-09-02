@@ -679,6 +679,8 @@ contains
         real, allocatable :: opt_shifts(:,:), res(:)
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
+        logical           :: l_groupframes
+        l_groupframes = (trim(params_glob%groupframes).eq.'patch') .or. (trim(params_glob%groupframes).eq.'all')
         self%shifts_patches = 0.
         allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
@@ -697,7 +699,7 @@ contains
                 self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
                 call self%gen_patch(frames,i,j)
                 call align_hybrid(i,j)%new(self%frame_patches(i,j)%stack)
-                call align_hybrid(i,j)%set_group_frames(trim(params_glob%groupframes).eq.'yes')
+                call align_hybrid(i,j)%set_group_frames(l_groupframes)
                 call align_hybrid(i,j)%set_rand_init_shifts(.true.)
                 call align_hybrid(i,j)%set_reslims(self%hp, self%lp(i,j), params_glob%lpstop)
                 call align_hybrid(i,j)%set_trs(params_glob%scale*params_glob%trs)
@@ -706,7 +708,6 @@ contains
                 call align_hybrid(i,j)%set_fitshifts(self%fitshifts)
                 call align_hybrid(i,j)%set_fixed_frame(self%fixed_frame)
                 call align_hybrid(i,j)%set_bfactor(self%bfactor)
-                call align_hybrid(i,j)%set_downscale(.not.(trim(params_glob%groupframes).eq.'yes'))
                 ! align
                 call align_hybrid(i,j)%align(frameweights=self%frameweights)
                 ! fetch info

@@ -307,12 +307,11 @@ contains
             call align_iso_polyn_direct%kill
         else
             call hybrid_srch%new(movie_frames_scaled)
-            call hybrid_srch%set_group_frames(.false.)
+            call hybrid_srch%set_group_frames(trim(params_glob%groupframes).eq.'all')
             call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
             call hybrid_srch%set_bfactor(bfactor)
             call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
             call hybrid_srch%set_rand_init_shifts(.true.)
-            call hybrid_srch%set_downscale(.true.)
             call hybrid_srch%set_shsrch_tol(TOL_ISO)
             call hybrid_srch%set_fitshifts(FITSHIFTS)
             call hybrid_srch%set_fixed_frame(fixed_frame)
