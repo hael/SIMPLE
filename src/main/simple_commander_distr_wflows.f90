@@ -1325,6 +1325,10 @@ contains
                         call job_descr%delete('lp')
                         call cline_postprocess%delete('lp')
                     endif
+                else
+                    call cline%delete('lp')
+                    call job_descr%delete('lp')
+                    call cline_postprocess%delete('lp')
                 endif
                 if( params%l_frac_update )then
                     call job_descr%set('update_frac', real2str(params%update_frac))

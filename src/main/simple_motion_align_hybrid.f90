@@ -605,6 +605,10 @@ contains
                 sqsum_frame = sqsum_frame + rw*w*csq(cframe)
             enddo
         enddo
+        if( sqsum_ref<1.e-6 .or. sqsum_frame<1.e-6 )then
+            call self%frames_sh(iframe)%zero_and_flag_ft
+            return
+        endif
         call self%frames_sh(iframe)%ifft
         call self%frames_sh(iframe)%div(sqrt(sqsum_ref*sqsum_frame/real(product(self%ldim_sc))))
         ! find peak
