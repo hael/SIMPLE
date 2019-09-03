@@ -39,15 +39,19 @@ type :: motion_align_iso_polyn_direct
     real                                              :: ftol                              !< tolerance parameter for minimizer
     real                                              :: gtol                              !< tolerance parameter for minimizer
     real(dp)                                          :: factr, pgtol                      !< tolerance parameters for LBFGSB convergence
-    real                                              :: hp = -1.                          !< high pass value
-    real                                              :: lp = -1.                          !< low pass value
+    real                                              :: hp      = -1.                     !< high pass value
+    real                                              :: lp      = -1.                     !< low pass value
+    real                                              :: bfactor = -1.                     !< b-factor for alignment weights
     integer                                           :: coord_x, coord_y                  !< x,y coordinates for patch-based alignment callback
     real,              allocatable                    :: opt_shifts(:,:)                   !< shifts identified
     real(dp),          allocatable, public            :: shifts(:,:)                       !< for contribs functions !****TODO**** remove
     real,              allocatable                    :: corrs(:)                          !< per-frame correlations
     real,              allocatable                    :: frameweights(:)                   !< weights per frame
     real                                              :: corr                              !< total correlation
-    type(ft_expanded), allocatable                    :: movie_frames_Ij(:)                !< movie frames
+    logical                                           :: group_frames = .false.            !< whether to group frames
+    integer                                           :: lp_updates   = 0                  !< # of resolution updates performed [0;3]
+    type(ft_expanded), allocatable                    :: movie_frames_Ij(:)
+    type(ft_expanded), allocatable                    :: movie_frames_Ij_saved(:)          !< movie frames; saved for group frames
     type(ft_expanded), allocatable                    :: movie_frames_Ij_sh(:)             !< shifted movie frames
     type(ft_expanded), allocatable                    :: movie_frames_dIj_sh(:,:)          !< gradients of shifted movie frames
     type(ft_expanded), allocatable                    :: movie_frames_R                    !< reference movie frame
@@ -82,6 +86,8 @@ contains
     procedure                                         :: get_coords           => motion_align_iso_polyn_direct_get_coords
     procedure                                         :: set_callback         => motion_align_iso_polyn_direct_set_callback
     procedure                                         :: get_weights          => motion_align_iso_polyn_direct_get_weights
+    procedure                                         :: set_group_frames     => motion_align_iso_polyn_direct_set_group_frames
+    procedure                                         :: set_bfactor          => motion_align_iso_polyn_direct_set_bfactor
     procedure                                         :: motion_align_iso_polyn_direct_cost
     procedure                                         :: motion_align_iso_polyn_direct_gcost
     procedure                                         :: motion_align_iso_polyn_direct_fdf
@@ -116,6 +122,9 @@ contains
         self%callback              => null()
         self%hp                    = -1.
         self%lp                    = -1.
+        self%bfactor               = -1.
+        self%lp_updates            = 0
+        self%group_frames          = .false.
         self%existence             = .true.
     end subroutine motion_align_iso_polyn_direct_new
 
@@ -144,7 +153,8 @@ contains
         if (( self%hp < 0. ) .or. ( self%lp < 0.)) then
             THROW_HARD('hp or lp < 0; simple_motion_align_iso_polyn_direct: align')
         end if
-        self%iter = 0
+        self%iter       = 0
+        self%lp_updates = 0
         call self%create_ftexp_objs
         self%opt_shifts = 0.
         opt_lims(:,1) = -self%trs
@@ -175,6 +185,7 @@ contains
             end if
             if (.not. convergd) then
                 call self%create_ftexp_objs    ! lp should have changed, otherwise it should have converged
+                self%lp_updates = self%lp_updates + 1
             end if
             ospec%ftol = self%ftol
             ospec%gtol = self%gtol
@@ -199,6 +210,7 @@ contains
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         allocate(&
             self%movie_frames_Ij(self%nframes),       &
+            self%movie_frames_Ij_saved(self%nframes), &
             self%movie_frames_Ij_sh(self%nframes),    &
             self%movie_frames_dIj_sh(self%nframes,2), &
             self%movie_frames_R,                      &
@@ -217,6 +229,7 @@ contains
         if (self%nframes_allocd > 0) then
             do i = 1, self%nframes_allocd
                 call self%movie_frames_Ij(i)%kill
+                call self%movie_frames_Ij_saved(i)%kill
                 call self%movie_frames_Ij_sh(i)%kill
                 do j = 1, 2
                     call self%movie_frames_dIj_sh(i,j)%kill
@@ -224,14 +237,15 @@ contains
             end do
             call self%movie_frames_R%kill
             call self%movie_frames_dR%kill
-            deallocate( self%movie_frames_Ij, self%movie_frames_Ij_sh,                        &
-                self%movie_frames_dIj_sh, self%movie_frames_R,                                &
+            deallocate( self%movie_frames_Ij, self%movie_frames_Ij_saved, self%movie_frames_Ij_sh, &
+                self%movie_frames_dIj_sh, self%movie_frames_R,                                     &
                 self%movie_frames_dR, self%opt_shifts, self%shifts, self%corrs, self%frameweights )
         else
             if ( allocated(self%movie_frames_Ij)     .or. allocated(self%movie_frames_Ij_sh) .or. &
                  allocated(self%movie_frames_dIj_sh) .or. allocated(self%movie_frames_R)     .or. &
                  allocated(self%movie_frames_dR)     .or. allocated(self%opt_shifts)         .or. &
                  allocated(self%shifts)              .or. allocated(self%corrs)              .or. &
+                 allocated(self%movie_frames_Ij_saved)                                       .or. &
                  allocated(self%frameweights)                                                      ) then
                 THROW_HARD('inconsistency; simple_motion_align_iso_polyn_direct: deallocate_fields')
             end if
@@ -289,16 +303,60 @@ contains
     subroutine create_ftexp_objs( self )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         integer :: j, xy
+        real    :: w, sumw
+        !$omp parallel do default(shared) private(j,xy) schedule(static) proc_bind(close)
         do j=1,self%nframes
-            call self%movie_frames_Ij(j)%new(self%frames(j), self%hp, self%lp, .true.)
-            call self%movie_frames_Ij(j)%normalize_mat
+            if( self%group_frames )then
+                call self%movie_frames_Ij_saved(j)%new(self%frames(j), self%hp, self%lp, .true., bfac=self%bfactor)
+                call self%movie_frames_Ij      (j)%new(self%frames(j), self%hp, self%lp, .false.)
+            else
+                call self%movie_frames_Ij(j)%new(self%frames(j), self%hp, self%lp, .true., bfac=self%bfactor)
+                call self%movie_frames_Ij(j)%normalize_mat
+            end if
             call self%movie_frames_Ij_sh(j)%new(self%frames(j), self%hp, self%lp, .false.)
             do xy = 1,2
                 call self%movie_frames_dIj_sh(j, xy)%new(self%frames(j), self%hp, self%lp, .false.)
             end do
         end do
-        call self%movie_frames_R%new(self%frames(1), self%hp, self%lp, .false.)
+        !$omp end parallel do
+        call self%movie_frames_R%new(self%frames(1),  self%hp, self%lp, .false.)
         call self%movie_frames_dR%new(self%frames(1), self%hp, self%lp, .false.)
+        if( self%group_frames )then
+            w = 0.5 * exp(-real(self%lp_updates))
+            do j=1,self%nframes
+                sumw = 1.
+                if( j == 1 )then
+                    sumw = sumw + 1.2*w
+                    call add_shifted_frame(1,2,    w/sumw)
+                    call add_shifted_frame(1,3,0.2*w/sumw)
+                elseif( j == self%nframes )then
+                    sumw = sumw + 1.2*w
+                    call add_shifted_frame(self%nframes,self%nframes-1,    w/sumw)
+                    call add_shifted_frame(self%nframes,self%nframes-2,0.2*w/sumw)
+                else
+                    sumw = sumw + 2.*w
+                    call add_shifted_frame(j,j-1,w/sumw)
+                    call add_shifted_frame(j,j+1,w/sumw)
+                end if
+                call self%movie_frames_Ij(j)%add(self%movie_frames_Ij_saved(j), w=1./sumw)
+                call self%movie_frames_Ij(j)%normalize_mat
+            end do
+        end if
+
+    contains
+
+        subroutine add_shifted_frame(ii, jj, w_here)
+            integer, intent(in) :: ii,jj
+            real,    intent(in) :: w_here
+            real :: shvec(3)
+            shvec(1:2) = self%opt_shifts(ii,:) - self%opt_shifts(jj,:)
+            shvec(3)   = 0.
+             call self%movie_frames_Ij_saved(jj)%shift(-shvec, self%movie_frames_Ij_sh(ii))
+             ! shift the SAVED one by -shvec and store
+             call self%movie_frames_Ij(ii)%add(self%movie_frames_Ij_sh(ii),w=w_here)
+            ! add to the one to be update
+        end subroutine add_shifted_frame
+
     end subroutine create_ftexp_objs
 
     subroutine coeffs_to_shifts( self, vec, ashifts )
@@ -483,6 +541,18 @@ contains
         real, allocatable,                    intent(out)   :: frameweights(:)
         allocate(frameweights(self%nframes), source=self%frameweights)
     end subroutine motion_align_iso_polyn_direct_get_weights
+
+    subroutine motion_align_iso_polyn_direct_set_group_frames( self, group_frames )
+        class(motion_align_iso_polyn_direct), intent(inout) :: self
+        logical,                              intent(in)    :: group_frames
+        self%group_frames = group_frames
+    end subroutine motion_align_iso_polyn_direct_set_group_frames
+
+    subroutine motion_align_iso_polyn_direct_set_bfactor( self, bfac )
+        class(motion_align_iso_polyn_direct), intent(inout) :: self
+        real,                                 intent(in)    :: bfac
+        self%bfactor = bfac
+    end subroutine motion_align_iso_polyn_direct_set_bfactor
 
     subroutine motion_align_iso_polyn_direct_refine_direct( self )
         use simple_opt_factory, only: opt_factory

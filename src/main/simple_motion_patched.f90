@@ -184,13 +184,17 @@ contains
                     x(3,idx) = real(iframe-self%fixed_frame,dp)
                 end do
             end do
-            if( self%frameweights(iframe) < 1.e-6 ) sig(iframe) = 1.d6
+            if( self%has_frameweights ) then
+                if( self%frameweights(iframe) < 1.e-6 ) sig(iframe) = 1.d6
+            end if
         end do
         call svd_multifit(x,yx,sig,self%poly_coeffs(:,1),v,w,chisq,patch_poly)
         self%poly_chisq(1) = real(chisq)
         call svd_multifit(x,yy,sig,self%poly_coeffs(:,2),v,w,chisq,patch_poly)
         self%poly_chisq(2) = real(chisq)
-        self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) ) ! average difference in pixels
+        if( self%has_frameweights ) then
+            self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) ) ! average difference in pixels
+        end if
     end subroutine fit_polynomial
 
     subroutine plot_shifts(self)
@@ -261,7 +265,9 @@ contains
                 call CDataSet__AddDataPoint(patch_start, p_fit)
                 call CDataPoint__delete(p_fit)
                 do iframe = 1, self%nframes
-                    if( self%frameweights(iframe) < 1.e-6 ) cycle
+                    if( self%has_frameweights ) then
+                        if( self%frameweights(iframe) < 1.e-6 ) cycle
+                    end if
                     call CDataPoint__new2(real(cx + SCALE*shifts(iframe,1), c_double),&
                                          &real(cy + SCALE*shifts(iframe,2), c_double), p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
@@ -731,45 +737,53 @@ contains
         deallocate(align_hybrid,res)
     end subroutine det_shifts
 
-    subroutine det_shifts_polyn( self )
+    subroutine det_shifts_polyn( self, frames )
         class(motion_patched), target, intent(inout) :: self
+        type(image),      allocatable, intent(inout) :: frames(:)
         real, allocatable :: opt_shifts(:,:)
+        real, allocatable :: res(:)
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         self%shifts_patches = 0.
+        corr_avg = 0.
         allocate( self%align_iso_polyn_direct(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
+        write (*,*) '**************** self%smpd = ', self%smpd
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd)
+        ! initialize transfer matrix to correct dimensions
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
+        res = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp = min(self%hp,res(1))
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched_polyn')
-        !$omp parallel do collapse(2) default(shared) private(j,i) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(j,i,iframe,opt_shifts) proc_bind(close) schedule(static) reduction(+:corr_avg)
         do i = 1, params_glob%nxpatch
             do j = 1, params_glob%nypatch
+                self%lp(i,j) = (params_glob%lpstart+params_glob%lpstop)/2.
+                call self%gen_patch(frames,i,j)
                 call self%align_iso_polyn_direct(i,j)%new
                 call self%align_iso_polyn_direct(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
+                call self%align_iso_polyn_direct(i,j)%set_group_frames(trim(params_glob%groupframes).eq.'yes')
+                call self%align_iso_polyn_direct(i,j)%set_bfactor(self%bfactor)
                 call self%align_iso_polyn_direct(i,j)%set_hp_lp(self%hp, self%lp(i,j))
                 call self%align_iso_polyn_direct(i,j)%set_trs(self%trs)
                 call self%align_iso_polyn_direct(i,j)%set_ftol_gtol(TOL, TOL)
                 call self%align_iso_polyn_direct(i,j)%set_coords(i,j)
                 call self%align_iso_polyn_direct(i,j)%set_callback(motion_patched_polyn_callback_wrapper)
                 call self%align_iso_polyn_direct(i,j)%align_polyn(self)
-            end do
-        end do
-        !$omp end parallel do
-        corr_avg = 0.
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
                 corr_avg = corr_avg + self%align_iso_polyn_direct(i,j)%get_corr()
-            enddo
-        enddo
-        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
-        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
-        ! Set the first shift to 0.
-        do i = 1, params_glob%nxpatch
-            do j = 1, params_glob%nypatch
                 call self%align_iso_polyn_direct(i,j)%get_opt_shifts(opt_shifts)
                 do iframe = 1, self%nframes
                     self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:)
                 end do
+                call self%align_iso_polyn_direct(i,j)%kill
+                do iframe=1,self%nframes
+                    call self%frame_patches(i,j)%stack(iframe)%kill
+                end do
             end do
         end do
+        !$omp end parallel do
+        corr_avg = corr_avg / real(params_glob%nxpatch*params_glob%nypatch)
+        write(logfhandle,'(A,F6.3)')'>>> AVERAGE PATCH & FRAMES CORRELATION: ', corr_avg
+        ! Set the first shift to 0.
         do iframe = self%nframes, 1, -1
             self%shifts_patches(:,iframe,:,:) = self%shifts_patches(:,iframe,:,:)-self%shifts_patches(:,1,:,:)
         enddo
@@ -967,7 +981,8 @@ contains
             self%has_global_shifts = .false.
         end if
         self%nframes = size(frames,dim=1)
-        self%ldim   = frames(1)%get_ldim()
+        self%ldim    = frames(1)%get_ldim()
+        self%smpd    = frames(1)%get_smpd()
         do i = 1,self%nframes
             ldim_frames = frames(i)%get_ldim()
             if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
@@ -975,11 +990,10 @@ contains
             end if
         end do
         call self%allocate_fields()
+        ! determines patch geometry
         call self%set_size_frames_ref()
-        ! divide the reference into patches & updates high-pass accordingly
-        call self%set_patches(frames)
         ! determine shifts for patches
-        call self%det_shifts_polyn()
+        call self%det_shifts_polyn(frames)
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
         write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^ fitted polynomial; poly_coeffs(:, 1)=', self%poly_coeffs(:,1), 'poly_coeffs(:, 2)=', self%poly_coeffs(:,2)

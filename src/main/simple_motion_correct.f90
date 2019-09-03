@@ -290,6 +290,7 @@ contains
             call align_iso_polyn_direct%set_hp_lp(hp,lp)
             updateres = 0
             call align_iso_polyn_direct%set_callback( motion_correct_iso_polyn_direct_callback )
+            call align_iso_polyn_direct%set_group_frames(trim(params_glob%groupframes).eq.'yes')
             call align_iso_polyn_direct%align_polyn(callback_ptr)
             if (ISO_UNCONSTR_AFTER) then
                 call align_iso_polyn_direct%refine_direct
@@ -518,6 +519,7 @@ contains
             &params_glob%nxpatch,' x ',params_glob%nxpatch,')'
         PRINT_NEVALS = .false.
         if (DO_PATCHED_POLYN) then
+            call motion_patch%set_bfactor(bfac)
             call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted_saved,&
                 &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
             chisq = 0.
