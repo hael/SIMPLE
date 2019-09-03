@@ -704,7 +704,9 @@ contains
     end subroutine read_o_peaks
 
     subroutine calc_global_ori_weights
-        real, allocatable :: weights_glob(:), weights(:), rank_weights(:)
+        real,    allocatable :: weights_glob(:), weights(:), rank_weights(:)
+        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:)
+        logical, allocatable :: included(:)
         real    :: weight_thres, wsum
         integer :: nweights, cnt, iptcl, i, nw
         select case(params_glob%refine)
@@ -724,9 +726,18 @@ contains
                         end do
                     endif
                 end do
-                ! find threshold
-                call hpsort(weights_glob(:cnt))
-                weight_thres = weights_glob(cnt - nint(real(cnt) * params_glob%globwfrac))
+                if( WGLOB_OTSU )then
+                    ! define a threshold using Otsu's algorithm
+                    ws_nonzero = pack(weights_glob(:cnt), mask=weights_glob(:cnt) > TINY)
+                    allocate(ws_nonzero_cp(count(weights_glob(:cnt) > TINY)), source=ws_nonzero)
+                    call otsu(ws_nonzero, included)
+                    weight_thres = minval(ws_nonzero_cp, included)
+                    deallocate(ws_nonzero, ws_nonzero_cp, included)
+                else
+                    ! find threshold based on pre-defined params_glob%globwfrac (0.16 by default)
+                    call hpsort(weights_glob(:cnt))
+                    weight_thres = weights_glob(cnt - nint(real(cnt) * params_glob%globwfrac))
+                endif
                 if( weight_thres <= TINY ) weight_thres = SMALL
                 ! zero and normalize weights, apply rank-based weighting scheme if so specified
                 do iptcl=params_glob%fromp,params_glob%top
