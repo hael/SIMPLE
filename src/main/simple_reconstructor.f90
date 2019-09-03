@@ -141,7 +141,7 @@ contains
             !$omp end parallel do
         endif
         ! generate index map
-        allocate( self%ind_map(self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2),3), source=0)
+        allocate( self%ind_map(3,self%cyc_lims(1,1):self%cyc_lims(1,2),self%cyc_lims(2,1):self%cyc_lims(2,2)), source=0)
         call self%get_2Dphys_ind_mapping(self%cyc_lims(1:2,:), self%ind_map)
         call self%reset
     end subroutine alloc_rho
@@ -322,7 +322,7 @@ contains
                     ! consistent with compress_exp
                     if( win(2,1) < self%lims(1,1) )cycle
                     ! Fourier component
-                    phys = self%ind_map(h,k,:)
+                    phys = self%ind_map(:,h,k)
                     comp = fpl%get_fcomp(logi, phys)
                     ! shift
                     arg    = dot_product(shconst_here, vec(1:2))
@@ -445,7 +445,7 @@ contains
                         ! consistent with compress_exp
                         if( win(2,1) < self%lims(1,1) )cycle
                         ! Fourier component
-                        comp   = fpl%get_fcomp(logi, self%ind_map(h,k,:))
+                        comp   = fpl%get_fcomp(logi, self%ind_map(:,h,k))
                         ! shift
                         arg    = dot_product(shifts(iori,:), vec(1:2))
                         oshift = cmplx(cos(arg), sin(arg))

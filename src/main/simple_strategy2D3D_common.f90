@@ -94,6 +94,7 @@ contains
                     params_glob%boxmatch, params_glob%smpd))
             endif
             params_glob%kstop = params_glob%kfromto(2)
+            if( params_glob%l_needs_sigma ) params_glob%kfromto(2) = k_nyq
         else
             ! check all fsc_state*.bin exist
             all_fsc_bin_exist = .true.
@@ -431,7 +432,7 @@ contains
     !>  \brief  initializes all volumes for reconstruction
     subroutine preprecvols( wcluster )
         real, optional, intent(in)    :: wcluster
-        character(len=:), allocatable :: recname, rhoname, part_str
+        character(len=:), allocatable :: part_str
         real,    allocatable :: resarr(:)
         integer, allocatable :: pops(:)
         real    :: lplim_rec, fsc05, fsc0143

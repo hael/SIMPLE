@@ -1157,6 +1157,7 @@ contains
         if( l_switch2euclid )then
             iter_switch2euclid = 1
             if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+            if( l_projection_matching .and. cline%defined('lp_iters') ) iter_switch2euclid = params%lp_iters
             call cline%set('needs_sigma','yes')
         endif
         ! prepare job description
@@ -1343,9 +1344,12 @@ contains
                 write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
                 call cline%set('objfun','euclid')
                 call cline%set('match_filt','no')
+                call cline%delete('lp')
                 call job_descr%set('objfun','euclid')
                 call job_descr%set('match_filt','no')
+                call job_descr%delete('lp')
                 call cline_volassemble%set('objfun','euclid')
+                call cline_postprocess%delete('lp')
                 params%objfun    = 'euclid'
                 params%cc_objfun = OBJFUN_EUCLID
                 l_switch2euclid  = .false.

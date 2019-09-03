@@ -5919,11 +5919,11 @@ contains
     subroutine get_2Dphys_ind_mapping( self, lims, ind_map )
         class(image), intent(in)  :: self
         integer,      intent(in)  :: lims(2,2)
-        integer,      intent(out) :: ind_map(lims(1,1):lims(1,2),lims(2,1):lims(2,2),3)
+        integer,      intent(out) :: ind_map(3,lims(1,1):lims(1,2),lims(2,1):lims(2,2))
         integer :: h, k
         do h=lims(1,1),lims(1,2)
             do k=lims(2,1),lims(2,2)
-                ind_map(h,k,:) = self%fit%comp_addr_phys([h,k,0])
+                ind_map(:,h,k) = self%fit%comp_addr_phys([h,k,0])
             end do
         end do
     end subroutine get_2Dphys_ind_mapping
