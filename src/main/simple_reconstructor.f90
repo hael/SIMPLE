@@ -678,11 +678,12 @@ contains
         class(reconstructor), intent(inout) :: self !< this instance
         real,    allocatable, intent(in)    :: fsc(:)
         real, allocatable :: optlp(:), ssnr(:)
-        real    :: rsum(self%nyq), invtau2, tau2(self%nyq), sig2
-        integer :: cnt(self%nyq), i,h,k,m, sh, phys(3), sz, reslim_ind
-        sz = size(fsc)
+        real(dp) :: rsum(0:self%nyq)
+        real     :: tau2(0:self%nyq), invtau2, sig2,ri,d,ssnri
+        integer  :: cnt(0:self%nyq), h,k,m, sh, phys(3), sz, reslim_ind, il,ir
+        sz = size(fsc) ! original image size
         allocate(optlp(sz), ssnr(sz), source=0.)
-        rsum = 0.
+        rsum = 0.d0
         cnt  = 0
         !$omp parallel do collapse(3) default(shared) schedule(static)&
         !$omp private(h,k,m,phys,sh) proc_bind(close) reduction(+:cnt,rsum)
@@ -693,32 +694,40 @@ contains
                     if( sh > self%nyq ) cycle
                     phys     = self%comp_addr_phys(h, k, m)
                     cnt(sh)  = cnt(sh) + 1
-                    rsum(sh) = rsum(sh) + self%rho(phys(1),phys(2),phys(3))
+                    rsum(sh) = rsum(sh) + real(self%rho(phys(1),phys(2),phys(3)),dp)
                 enddo
             enddo
         enddo
         !$omp end parallel do
-        ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal 2002)
+        ! tau2 & ssnr are determined from the corrected fsc (Henderson & Rosenthal, JMB, 2002)
         call fsc2optlp_sub(sz, fsc, optlp)
         ssnr = optlp / (1.-optlp)
         do k = 1,self%nyq
-            i = min(max(1,nint(real(k*sz)/real(self%nyq))), sz)
-            sig2 = real(cnt(k)) / rsum(k) ! voxel average power of noise
-            tau2(k) = ssnr(i) * sig2
+            ! SSNR linear interpolation
+            ri = real(k*sz)/real(self%nyq)
+            il = max( 1, floor(ri))
+            ir = min(sz, ceiling(ri))
+            d  = ri-real(il)
+            ssnri = ssnr(il)*(1.-d) + ssnr(ir)*d
+            ! Voxel average noise power
+            sig2 = real(real(cnt(k),dp) / rsum(k)) ! voxel average power of noise
+            ! Signal power
+            tau2(k) = ssnri * sig2
         enddo
         ! add Tau2 inverse to denominator
         ! because signal assumed infinite at very low resolution there is no addition
         reslim_ind = max(6,calc_fourier_index(params_glob%hp,self%ldim_img(1),params_glob%smpd))
+        tau2(:reslim_ind-1) = 1.
         !$omp parallel do collapse(3) default(shared) schedule(static)&
-        !$omp private(h,k,m,phys,sh) proc_bind(close)
+        !$omp private(h,k,m,phys,sh,invtau2) proc_bind(close)
         do h = self%lims(1,1),self%lims(1,2)
             do k = self%lims(2,1),self%lims(2,2)
                 do m = self%lims(3,1),self%lims(3,2)
                     sh = nint(sqrt(real(h*h + k*k + m*m)))
                     if( (sh < reslim_ind) .or. (sh > self%nyq) ) cycle
                     phys = self%comp_addr_phys(h, k, m)
-                    if( tau2(k) > TINY )then
-                        invtau2 = 1./ tau2(k)
+                    if( tau2(sh) > TINY )then
+                        invtau2 = 1./ tau2(sh)
                     else
                         invtau2 = min(1000.,1000.*self%rho(phys(1),phys(2),phys(3)))
                     endif

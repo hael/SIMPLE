@@ -127,6 +127,7 @@ type :: polarft_corrcalc
     ! GETTERS
     procedure          :: get_nrots
     procedure          :: get_pdim
+    procedure          :: get_pftsz
     procedure          :: get_box
     procedure          :: get_rot
     procedure          :: get_roind
@@ -562,12 +563,18 @@ contains
         nrots = self%nrots
     end function get_nrots
 
-    ! !>  \brief  for getting the dimensions of the reference polar FT
+    !>  \brief  for getting the dimensions of the reference polar FT
     pure function get_pdim( self ) result( pdim )
         class(polarft_corrcalc), intent(in) :: self
         integer :: pdim(3)
         pdim = [self%pftsz,params_glob%kfromto(1),params_glob%kfromto(2)]
     end function get_pdim
+
+    ! !>  \brief  for getting the dimension of the reference polar FT
+    pure integer function get_pftsz( self )
+        class(polarft_corrcalc), intent(in) :: self
+        get_pftsz = self%pftsz
+    end function get_pftsz
 
     pure function get_box( self ) result( box )
         class(polarft_corrcalc), intent(in) :: self

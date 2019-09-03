@@ -21,6 +21,7 @@ type euclid_sigma2
     integer               :: kfromto(2)     = 0
     integer               :: headsz         = 0
     integer               :: sigmassz       = 0
+    integer               :: pftsz          = 0     !< dimension of PFT in pftcc (half # of rotations)
     character(len=STDLEN) :: fname
     logical               :: do_divide = .false.
     logical               :: exists    = .false.
@@ -51,8 +52,8 @@ contains
 
     subroutine new( self, fname )
         class(euclid_sigma2), target, intent(inout) :: self
-        character(len=*),            intent(in)    :: fname
-        real(sp)                                   :: r
+        character(len=*),             intent(in)    :: fname
+        real(sp) :: r
         call self%kill
         self%kfromto = params_glob%kfromto
         allocate( self%sigma2_noise(self%kfromto(1):self%kfromto(2),1:pftcc_glob%get_nptcls()),&
@@ -67,6 +68,7 @@ contains
         self%file_header(3:4) = self%kfromto
         self%headsz           = sizeof(self%file_header)
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+        self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
         self%do_divide          = .false.
         self%sigma2_exists_msk  = .false.
@@ -283,7 +285,7 @@ contains
         end if
     end subroutine set_sigma2
 
-    !>  fetch sigma2 average from buffer
+    !>  fetch sigma2 average from buffer for reconstruction
     subroutine get_sigma2( self, nyq, sigma2 )
         class(euclid_sigma2), intent(in)  :: self
         integer,              intent(in)  :: nyq ! oversampling nyquist limit
@@ -293,7 +295,10 @@ contains
         sigma2 = 1.
         if( .not.self%exists )return
         if( nyq == self%kfromto(2) )then
-            sigma2(self%kfromto(1):self%kfromto(2)) = self%divide_by
+            do k = self%kfromto(1),self%kfromto(2)
+                ! polar point to cartesian pixel
+                sigma2(k) = (real(self%pftsz)/TWOPI*real(k)) * self%divide_by(k)
+            enddo
         else if( nyq > self%kfromto(2) )then
             ! resampling
             scale  = real(self%kfromto(2)) / real(nyq)
@@ -303,7 +308,10 @@ contains
                 loc = real(k)*scale
                 lk  = floor(loc)
                 ld  = loc-real(lk)
+                ! linear interpolation
                 sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
+                ! polar point to cartesian pixel
+                sigma2(k) = (real(self%pftsz)/TWOPI*real(k)) * sigma2(k)
             enddo
         else
             THROW_HARD('Incompatible requested size; get_sigma2')
@@ -330,6 +338,7 @@ contains
             self%headsz       = 0
             self%sigmassz     = 0
             self%kfromto      = 0
+            self%pftsz        = 0
             self%do_divide    = .false.
             self%exists       = .false.
             eucl_sigma2_glob  => null()

@@ -471,7 +471,7 @@ contains
 
     ! simulate electrostatic potential from elastic scattering
     ! Using 5-gaussian atomic scattering factors from Rullgard et al, J of Microscopy, 2011
-    ! and aparmetrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
+    ! and parametrization from Peng, Acta Cryst, 1996, A52, Table 1 (also in ITC)
     subroutine convolve( self, vol, cutoff, lp )
         !$ use omp_lib
         !$ use omp_lib_kinds

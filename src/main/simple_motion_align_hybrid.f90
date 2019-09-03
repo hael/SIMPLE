@@ -600,7 +600,7 @@ contains
                 sqsum_frame = sqsum_frame + real(rw*w*csq(cframe),dp)
             enddo
         enddo
-        if( sqsum_ref<1.e-6 .or. sqsum_frame<1.e-6 )then
+        if( sqsum_ref<1.d-6 .or. sqsum_frame<1.d-6 )then
             ! most likely corrupted frame
         else
             call self%frames_sh(iframe)%ifft
