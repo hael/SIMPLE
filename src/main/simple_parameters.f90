@@ -1305,7 +1305,7 @@ contains
             &THROW_HARD('Invalid number of in-plane peaks')
         ! set minimum # of projection directions to search
         self%minnrefs2eval = ceiling(real(NPEAKS2REFINE) / real(self%ninplpeaks))
-        self%rndfac = ceiling((self%shcfrac / 100.) * self%nspace)
+        self%rndfac = max(3,ceiling((self%shcfrac / 100.) * real(self%nspace)))
         ! set default size of random sample
         if( .not. cline%defined('nran') )then
             self%nran = self%nptcls
