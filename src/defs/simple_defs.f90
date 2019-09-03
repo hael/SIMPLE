@@ -165,7 +165,7 @@ integer, parameter :: MC_NPATCH            = 5         !< number of patches in x
 ! orientation weighting scheme
 character(len=*), parameter :: WSCHEME_DEFAULT      = 'glob' !< use global orientation weights extracted from pool of all weights by default
 real,             parameter :: GLOBAL_WEIGHT_FRAC   = 0.16   !< corresponds to threshold of mean + one sigma
-logical,          parameter :: WGLOB_OTSU           = .true. !< logical flag for wheather to use Otsu's algorithm to find a global weight threshold
+logical,          parameter :: WGLOB_OTSU           = .false. !< logical flag for wheather to use Otsu's algorithm to find a global weight threshold
 real,             parameter :: RANKW_EXP            = 2.0    !< Exponent for exponential rank orientation weights
 real,             parameter :: SIGMA2_FUDGE_DEFAULT = 50.    !< controls the sharpeness of the orientation weight distribution when objfun .eq. euclid
                                                              !! smaller number means sharper distribution
