@@ -115,12 +115,12 @@ contains
         &ctfsqsums_odd(ncls), ctfsqsums_merged(ncls), stat=alloc_stat)
         if(alloc_stat .ne. 0)call allocchk('cavger_new; simple_classaverager', alloc_stat)
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_even(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_odd(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
-            call ctfsqsums_merged(icls)%new(ldim,params_glob%smpd,wthreads=.false.)
+            call cavgs_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call cavgs_odd(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call cavgs_merged(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_even(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_odd(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
+            call ctfsqsums_merged(icls)%new(ldim_pd,params_glob%smpd,wthreads=.false.)
         end do
         ! flag existence
         exists = .true.
@@ -247,9 +247,9 @@ contains
     subroutine init_cavgs_sums
         integer :: icls
         do icls=1,ncls
-            call cavgs_even(icls)%new(ldim,smpd,wthreads=.false.)
-            call cavgs_odd(icls)%new(ldim,smpd,wthreads=.false.)
-            call cavgs_merged(icls)%new(ldim,smpd,wthreads=.false.)
+            call cavgs_even(icls)%new(ldim_pd,smpd,wthreads=.false.)
+            call cavgs_odd(icls)%new(ldim_pd,smpd,wthreads=.false.)
+            call cavgs_merged(icls)%new(ldim_pd,smpd,wthreads=.false.)
             call cavgs_even(icls)%zero_and_flag_ft
             call cavgs_odd(icls)%zero_and_flag_ft
             call cavgs_merged(icls)%zero_and_flag_ft
@@ -347,7 +347,7 @@ contains
         complex,     parameter   :: zero = cmplx(0.,0.)
         complex :: fcomp
         real    :: loc(2), mat(2,2), dist(2), pw, add_phshift
-        integer :: lims(3,2), lims_small(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
+        integer :: lims(3,2), phys_cmat(3), win_corner(2), cyc_limsR(2,2),cyc_lims(3,2)
         integer :: cnt_progress, nbatches, batch, icls_pop, iprec, iori, i, batchsz, fnr, sh, iwinsz, nyq
         integer :: alloc_stat, wdim, h, k, l, m, ll, mm, incr, icls, iptcl, batchsz_max, interp_shlim, interp_shlim_sq
         if( .not. params_glob%l_distr_exec ) write(logfhandle,'(a)') '>>> ASSEMBLING CLASS SUMS'
@@ -387,7 +387,6 @@ contains
             call cgrid_imgs(i)%new(ldim_pd, params_glob%smpd, wthreads=.false.)
         end do
         ! limits
-        lims_small = batch_imgs(1)%loop_lims(2)
         lims       = cgrid_imgs(1)%loop_lims(2)
         cyc_lims   = cgrid_imgs(1)%loop_lims(3)
         cmat_even  = cgrid_imgs(1)%get_cmat()
@@ -397,9 +396,9 @@ contains
         interp_shlim_sq = interp_shlim**2
         cyc_limsR(:,1) = cyc_lims(1,:)  ! limits in fortran layered format
         cyc_limsR(:,2) = cyc_lims(2,:)  ! to avoid copy on cyci_1d call
-        allocate( rho(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                 &rho_even(lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)),&
-                 &rho_odd( lims_small(1,1):lims_small(1,2),lims_small(2,1):lims_small(2,2)), stat=alloc_stat)
+        allocate( rho(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
+                 &rho_even(lims(1,1):lims(1,2),lims(2,1):lims(2,2)),&
+                 &rho_odd( lims(1,1):lims(1,2),lims(2,1):lims(2,2)), stat=alloc_stat)
         if( L_BENCH )then
             rt_batch_loop = 0.
             rt_gridding   = 0.
@@ -444,24 +443,23 @@ contains
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     iprec = iprecs(batches(batch,1) + i - 1)
                     iori  = ioris(batches(batch,1) + i - 1)
+                    ! normalize & pad
+                    call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! FFT
-                    call batch_imgs(i)%fft()
+                    call cgrid_imgs(i)%fft()
                     ! apply CTF, shift
-                    if( phaseplate )then
-                        add_phshift = precs(iprec)%phshift
-                    else
-                        add_phshift = 0.
-                    endif
+                    add_phshift = 0.
+                    if( phaseplate ) add_phshift = precs(iprec)%phshift
                     if( ctfflag /= CTFFLAG_NO )then
                         if( ctfflag == CTFFLAG_FLIP )then
-                            call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 1, lims_small, rho, -precs(iprec)%shifts(iori,1),&
+                            call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(i), 1, lims, rho, -precs(iprec)%shifts(iori,1),&
                             &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                         else
-                            call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 2, lims_small, rho, -precs(iprec)%shifts(iori,1),&
+                            call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(i), 2, lims, rho, -precs(iprec)%shifts(iori,1),&
                             &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                         endif
                     else
-                        call precs(iprec)%tfun%apply_and_shift(batch_imgs(i), 3, lims_small, rho, -precs(iprec)%shifts(iori,1),&
+                        call precs(iprec)%tfun%apply_and_shift(cgrid_imgs(i), 3, lims, rho, -precs(iprec)%shifts(iori,1),&
                         &-precs(iprec)%shifts(iori,2), precs(iprec)%dfx, precs(iprec)%dfy, precs(iprec)%angast, add_phshift)
                     endif
                     ! prep weight
@@ -477,9 +475,6 @@ contains
                         case(1)
                             rho_odd  = rho_odd + pw * rho
                     end select
-                    ! reverse FFT and prepare for gridding
-                    call batch_imgs(i)%ifft()
-                    call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
                     ! rotation
                     call rotmat2d(-precs(iprec)%e3s(iori), mat)
                     ! Interpolation
@@ -562,18 +557,16 @@ contains
             ! real space & clipping
             call cls_imgsum_even%ifft()
             call cls_imgsum_odd%ifft()
-            call cls_imgsum_even%clip_inplace(ldim)
-            call cls_imgsum_odd%clip_inplace(ldim)
             ! back to Fourier space
             call cls_imgsum_even%fft()
             call cls_imgsum_odd%fft()
             ! updates cavgs & rhos
             if( do_frac_update )then
                 call cavgs_even(icls)%add_cmats_to_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
-                    &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
+                    &cls_imgsum_even,cls_imgsum_odd, lims, rho_even, rho_odd)
             else
                 call cavgs_even(icls)%set_cmats_from_cmats(cavgs_odd(icls), ctfsqsums_even(icls), ctfsqsums_odd(icls),&
-                    &cls_imgsum_even,cls_imgsum_odd, lims_small, rho_even, rho_odd)
+                    &cls_imgsum_even,cls_imgsum_odd, lims, rho_even, rho_odd)
             endif
             deallocate(ptcls_inds, batches, iprecs, ioris)
         enddo ! class loop
@@ -631,6 +624,9 @@ contains
                 call cavgs_odd(icls)%ifft()
                 call cavgs_merged(icls)%ifft()
             endif
+            call cavgs_even(icls)%clip_inplace(ldim)
+            call cavgs_odd(icls)%clip_inplace(ldim)
+            call cavgs_merged(icls)%clip_inplace(ldim)
         end do
         !$omp end parallel do
     end subroutine cavger_merge_eos_and_norm
@@ -836,13 +832,13 @@ contains
         integer :: ipart,  icls
         call init_cavgs_sums
         allocate(imgs4read(4))
-        call imgs4read(1)%new(ldim, smpd)
+        call imgs4read(1)%new(ldim_pd, smpd)
         call imgs4read(1)%set_ft(.true.)
-        call imgs4read(2)%new(ldim, smpd)
+        call imgs4read(2)%new(ldim_pd, smpd)
         call imgs4read(2)%set_ft(.true.)
-        call imgs4read(3)%new(ldim, smpd)
+        call imgs4read(3)%new(ldim_pd, smpd)
         call imgs4read(3)%set_ft(.true.)
-        call imgs4read(4)%new(ldim, smpd)
+        call imgs4read(4)%new(ldim_pd, smpd)
         call imgs4read(4)%set_ft(.true.)
         do ipart=1,params_glob%nparts
             allocate(cae, source='cavgs_even_part'//int2str_pad(ipart,params_glob%numlen)//params_glob%ext)

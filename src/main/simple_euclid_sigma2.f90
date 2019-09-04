@@ -296,8 +296,7 @@ contains
         if( .not.self%exists )return
         if( nyq == self%kfromto(2) )then
             do k = self%kfromto(1),self%kfromto(2)
-                ! polar point to cartesian pixel
-                sigma2(k) = (real(self%pftsz)/TWOPI*real(k)) * self%divide_by(k)
+                sigma2(k) = self%divide_by(k)
             enddo
         else if( nyq > self%kfromto(2) )then
             ! resampling
@@ -310,8 +309,6 @@ contains
                 ld  = loc-real(lk)
                 ! linear interpolation
                 sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
-                ! polar point to cartesian pixel
-                sigma2(k) = (real(self%pftsz)/TWOPI*real(k)) * sigma2(k)
             enddo
         else
             THROW_HARD('Incompatible requested size; get_sigma2')

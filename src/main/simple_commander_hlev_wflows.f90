@@ -582,7 +582,7 @@ contains
         integer,          allocatable :: states(:), tmp_iarr(:)
         type(qsys_env)        :: qenv
         type(parameters)      :: params
-        type(ctfparams)       :: ctfvars ! ctf=no by default
+        type(ctfparams)       :: ctfvars ! ctf=yes by default
         type(sp_project)      :: spproj, work_proj1, work_proj2
         type(oris)            :: os
         type(ori)             :: o_tmp
@@ -596,6 +596,8 @@ contains
         if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
         ! hard set oritype
         call cline%set('oritype', 'out') ! because cavgs are part of out segment
+        ! class averages, so no CTF!!
+        ctfvars%ctfflag = CTFFLAG_NO
         ! auto-scaling prep
         do_autoscale = (cline%get_carg('autoscale').eq.'yes')
         ! now, remove autoscale flag from command line, since no scaled partial stacks
