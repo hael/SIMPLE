@@ -1391,6 +1391,7 @@ contains
         call cline%set('ninplpeaks',      1.0)
         call cline%set('graphene_filt', 'yes')
         call cline%set('ptclw',          'no')
+        call cline%set('keepvol',       'yes')
         ! dynamic parameters
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
         if( .not. cline%defined('wscheme')     ) call cline%set('wscheme',    'loc')
