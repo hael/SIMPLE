@@ -1268,7 +1268,7 @@ contains
         else
             rot = irot
         end if
-        euclid = 1.
+        euclid = 0.
         do k = params_glob%kfromto(1), params_glob%kstop
             if( irot == 1 )then
                 tmp =       sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
@@ -1296,7 +1296,7 @@ contains
         else
             rot = irot
         end if
-        euclid = 1.d0
+        euclid = 0.d0
         do k = params_glob%kfromto(1), params_glob%kstop
             if( irot == 1 )then
                 tmp =       sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))

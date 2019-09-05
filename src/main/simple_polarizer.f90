@@ -58,8 +58,7 @@ contains
                   &self%polcyc2_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wdim),&
                   &self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen),&
                   &w(1:self%wdim,1:self%wdim), self%comps(1:self%wdim,1:self%wdim),&
-                  &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), self%wnorms(1:self%pdim(1),&
-                  &self%pdim(2):self%pdim(3)), stat=alloc_stat)
+                  &self%pft(self%pdim(1),self%pdim(2):self%pdim(3)), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk('in simple_projector :: init_imgpolarizer',alloc_stat)
         !$omp parallel do collapse(2) schedule(static) default(shared)&
         !$omp private(i,k,l,w,loc,cnt,win) proc_bind(close)
@@ -79,8 +78,7 @@ contains
                     self%polcyc1_mat(i, k, cnt) = cyci_1d(lims(1,:), win(1,1)+l-1)
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
-                self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
-                self%wnorms(i,k)           = sum(self%polweights_mat(i,k,:))
+                self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/)) / sum(w)
             enddo
         enddo
         !$omp end parallel do
@@ -99,7 +97,6 @@ contains
         allocate( self%polweights_mat(1:self%pdim(1), self%pdim(2):self%pdim(3), 1:self%wlen), source=self_in%polweights_mat )
         allocate( self%comps(1:self%wdim,1:self%wdim),                                         source=CMPLX_ZERO )
         allocate( self%pft(self%pdim(1),self%pdim(2):self%pdim(3)),                            source=CMPLX_ZERO )
-        allocate( self%wnorms(1:self%pdim(1),self%pdim(2):self%pdim(3)),                       source=self_in%wnorms )
     end subroutine copy_polarizer
 
     !> \brief  creates the polar Fourier transform
@@ -125,7 +122,7 @@ contains
                         enddo
                     enddo
                     self%pft(i,k) = dot_product(self%polweights_mat(i,k,:),&
-                    &reshape(self%comps,(/self%wlen/))) / self%wnorms(i,k)
+                    &reshape(self%comps,(/self%wlen/)))
                 else
                     self%pft(i,k) = CMPLX_ZERO
                 endif
@@ -148,7 +145,6 @@ contains
         if( allocated(self%polcyc2_mat)    ) deallocate(self%polcyc2_mat)
         if( allocated(self%pft)            ) deallocate(self%pft)
         if( allocated(self%comps)          ) deallocate(self%comps)
-        if( allocated(self%wnorms)         ) deallocate(self%wnorms)
     end subroutine kill_polarizer
 
 end module simple_polarizer
