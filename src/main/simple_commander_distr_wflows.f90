@@ -1378,13 +1378,13 @@ contains
         ! dynamic parameters
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
         if( .not. cline%defined('wscheme')     ) call cline%set('wscheme',    'loc')
-        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      30.)
+        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      10.)
         if( .not. cline%defined('rankw')       ) call cline%set('rankw',       'no')
         if( .not. cline%defined('trs')         ) call cline%set('trs',          2.0)
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
         if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',         5.)
-        if( .not. cline%defined('maxits')      ) call cline%set('maxits',       10.)
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',       15.)
         if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
         call xrefine3D_distr%execute(cline)
     end subroutine exec_refine3D_nano_distr
