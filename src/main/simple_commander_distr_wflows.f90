@@ -1195,6 +1195,22 @@ contains
             call cline%set('which_iter', real(params%which_iter))
             call job_descr%set( 'startit', trim(int2str(iter)))
             call cline%set('startit', real(iter))
+            ! switch to refine=greedy_* when frac >= 99 and iter >= 5
+            if( cline_check_3Dconv%defined('frac') )then
+                if( iter >= MIN_ITERS_SHC )then
+                    if( cline_check_3Dconv%get_rarg('frac') >= FRAC_GREEDY_LIM )then
+                        select case(trim(params%refine))
+                            case('single')
+                                params%refine = 'greedy_single'
+                            case('multi')
+                                params%refine = 'greedy_multi'
+                        end select
+                        call job_descr%set( 'refine', params%refine )
+                        call cline%set('refine', params%refine)
+                        call cline_check_3Dconv%set('refine',params%refine)
+                    endif
+                endif
+            endif
             ! FRCs
             if( cline%defined('frcs') )then
                 ! all good
@@ -1310,20 +1326,6 @@ contains
                 str = real2str(cline_check_3Dconv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
-            endif
-            if( cline_check_3Dconv%defined('frac') )then
-                ! switch to refine=greedy_* when frac >= 99
-                if( cline_check_3Dconv%get_rarg('frac') >= FRAC_GREEDY_LIM )then
-                    select case(trim(params%refine))
-                        case('single')
-                            params%refine = 'greedy_single'
-                        case('multi')
-                            params%refine = 'greedy_multi'
-                    end select
-                    call job_descr%set( 'refine', params%refine )
-                    call cline%set('refine', params%refine)
-                    call cline_check_3Dconv%set('refine',params%refine)
-                endif
             endif
             if( l_projection_matching .and. cline%defined('lp_iters') .and. (niters == params%lp_iters ) )then
                 ! e/o projection matching
