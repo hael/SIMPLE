@@ -328,6 +328,13 @@ contains
                         call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
                     case('nlmean')
                         call nlmean_imgfile(params%stk, params%outstk, params%smpd)
+                    case('corr')
+                        if( .not. cline%defined('stk2') ) THROW_HARD('Need to define stk2 in this case')
+                        if( cline%defined('lp') ) then
+                            call corr_imgfile(params%stk,params%stk2,params%outstk, params%smpd, lp=params%lp)
+                        else
+                            call corr_imgfile(params%stk,params%stk2,params%outstk, params%smpd)
+                        endif
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
                 end select

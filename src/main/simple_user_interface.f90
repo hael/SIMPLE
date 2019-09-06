@@ -1380,11 +1380,12 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 2, 0, 13, 0, 1, .false.)               ! # entries in each group, requires sp_project
+        &3, 1, 2, 0, 13, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call filter%set_input('img_ios', 1, outstk)
-        call filter%set_input('img_ios', 2, outvol)
+        call filter%set_input('img_ios', 1, 'stk2', 'file', 'Stack to correlate with in corr filter',  'Stack of images to correlate with', 'e.g. gauss.mrc', .false., '')
+        call filter%set_input('img_ios', 2, outstk)
+        call filter%set_input('img_ios', 3, outvol)
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs
@@ -1406,7 +1407,7 @@ contains
         call filter%set_input('filt_ctrls', 8, 'fsc', 'file', 'FSC file', 'FSC file',          'e.g. fsc_state01.bin file', .false., '')
         call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
         call filter%set_input('filt_ctrls',10, frcs)
-        call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|no){no}', 'Filter type(tv|nlmean|no){no}', '(tv|nlmean|no){no}', .false., 'no')
+        call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda','Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
         ! mask controls

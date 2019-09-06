@@ -402,7 +402,6 @@ contains
         type(nanoparticle) :: nano
         integer :: ldim(3), nptcls
         real    :: smpd
-        real, parameter :: SCALE_FACTOR = 1.0
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -410,7 +409,7 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call nano%new(params%vols(1), params%smpd, SCALE_FACTOR)
+        call nano%new(params%vols(1), params%smpd)
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
         ! execute
         call nano%detect_atoms()

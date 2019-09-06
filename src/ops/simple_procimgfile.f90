@@ -17,7 +17,7 @@ public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
-public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile
+public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corr_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
 private
 
@@ -851,7 +851,7 @@ contains
         call tv%kill
     end subroutine tvfilter_imgfile
 
-    !>  \brief  is for apply the tv filter to an image file
+    !>  \brief  is for apply the non-local mean filter to an image file
     subroutine nlmean_imgfile( fname2process, fname, smpd )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd
@@ -870,6 +870,41 @@ contains
         end do
         call img%kill
     end subroutine nlmean_imgfile
+
+    !>  \brief  is for apply the correlation filter to an image file
+    !    fname2process: images to be processed
+    !    fname2process: images to be processed
+    !    fname        : output images
+    subroutine corr_imgfile( fname2process, fname2corr, fname, smpd, lp )
+        character(len=*), intent(in) :: fname2process,fname2corr, fname
+        real,             intent(in) :: smpd
+        real, optional,   intent(in) :: lp
+        type(image)    :: imgproc, imgcorr, imgresult
+        integer        :: n1,n2, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n1)
+        call find_ldim_nptcls(fname2process, ldim, n2)
+        if(n1 /= n2) THROW_HARD('Stk and Stk2 have to have the same nb of images! corr_imgfile')
+        ldim(3)     = 1
+        call raise_exception_imgfile( n1, ldim, 'corr_imgfile' )
+        call imgproc%new(ldim,smpd)
+        call imgcorr%new(ldim,smpd)
+        call imgresult%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO IMAGES'
+        do i=1,n1
+            call progress(i,n1)
+            call imgproc%read(fname2process, i)
+            call imgcorr%read(fname2corr, i)
+            if(present(lp)) then
+                imgresult = imgproc%phase_corr(imgcorr,lp=lp)
+            else
+                imgresult = imgproc%phase_corr(imgcorr)
+            endif
+            call imgresult%write(fname, i)
+        end do
+        call imgproc%kill
+        call imgcorr%kill
+        call imgresult%kill
+    end subroutine corr_imgfile
 
     !>  \brief  is for applying CTF
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )

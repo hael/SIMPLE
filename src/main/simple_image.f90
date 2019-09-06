@@ -249,6 +249,7 @@ contains
     procedure          :: hannw
     procedure          :: real_space_filter
     procedure          :: NLmean
+    procedure          :: NLmean3D
     ! CALCULATORS
     procedure          :: minmax
     procedure          :: rmsd
@@ -322,6 +323,7 @@ contains
     procedure, private :: gauimg_2
     generic            :: gauimg => gauimg_1, gauimg_2
     procedure          :: gauimg2D
+    procedure          :: gauimg3D
     procedure          :: subtr_backgr
     procedure          :: subtr_avg_and_square
     procedure          :: resmsk
@@ -4595,13 +4597,13 @@ contains
         real               :: z, sigma, h, h_sq
         integer            :: i, j, m, n, pad, indi, indj
         if( self%is_3d() ) THROW_HARD('2D images only; NLmean')
-        if( .not.self%ft ) THROW_HARD('Real space only;NLmean')
+        if( self%ft )      THROW_HARD('Real space only;NLmean')
         pad   = (DIM_SW-1)/2
         sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
         h     = 4.*sigma
         h_sq  = h**2.
         allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad), source=0.)
-        rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(:,:,1)
+        rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad) = self%rmat(1:self%ldim(1),1:self%ldim(2),1)
         !$omp parallel do default(shared) private(m,n,sw_px,exponentials,i,j,indi,indj,z) schedule(static)&
         !$omp collapse(2) proc_bind(close)
         do m = cfr_box+1,self%ldim(1)-cfr_box-1             !fix pixel (m,n)
@@ -4619,12 +4621,62 @@ contains
             enddo
             z = sum(exponentials)
             if(z < 0.0001) cycle
-            self%rmat(m,n,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
+            self%rmat(m-1,n-1,1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box)) / z
         enddo
         enddo
         !$omp end parallel do
         deallocate(rmat_pad)
     end subroutine NLmean
+
+    !>  \brief Non-local mean filter
+    subroutine NLmean3D(self)
+        class(image), intent(inout) :: self
+        real,  allocatable :: rmat_pad(:,:,:)
+        integer, parameter :: DIM_SW  = 3   !Good if use Euclidean distance
+        integer, parameter :: cfr_box = 10  !As suggested in the paper, consider a box 21x21
+        real               :: exponentials(2*cfr_box+1,2*cfr_box+1,2*cfr_box+1), sw_px(DIM_SW,DIM_SW,DIM_SW)
+        real               :: z, sigma, h, h_sq
+        integer            :: i, j, k, m, n, o, pad, indi, indj, indk
+        if( .not. self%is_3d() ) then
+            call self%NLmean()
+            return
+        endif
+        if( self%ft ) THROW_HARD('Real space only;NLmean')
+        pad   = (DIM_SW-1)/2
+        sigma = self%noisesdev(3.) !estimation of noise, TO CHANGE
+        h     = 4.*sigma
+        h_sq  = h**2.
+        allocate(rmat_pad(self%ldim(1)+2*pad,self%ldim(2)+2*pad,self%ldim(3)+2*pad), source=0.)
+        rmat_pad(pad+1:self%ldim(1)+pad,pad+1:self%ldim(2)+pad,pad+1:self%ldim(3)+pad) = self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        !$omp parallel do default(shared) private(m,n,o,sw_px,exponentials,i,j,k,indi,indj,indk,z) schedule(static)&
+        !$omp collapse(3) proc_bind(close)
+        do m = cfr_box+1,self%ldim(1)-cfr_box-1  !fix pixel (m,n,o)
+        do n = cfr_box+1,self%ldim(2)-cfr_box-1
+        do o = cfr_box+1,self%ldim(3)-cfr_box-1
+            sw_px        = rmat_pad(m:m+DIM_SW-1,n:n+DIM_SW-1,o:o+DIM_SW-1)
+            exponentials = 0.
+            do i = -cfr_box,cfr_box       !As suggested in the paper, consider a box 21x21
+              indi = i+cfr_box+1
+              do j = -cfr_box,cfr_box
+                  indj = j+cfr_box+1
+                  do k = -cfr_box,cfr_box
+                      indk = k+cfr_box+1
+                      if( i==0 .and. j==0 .and. k==0.)cycle
+                      exponentials(indi,indj,indk) = &
+                      & exp( -sum( (sw_px - rmat_pad(m+i:m+i+DIM_SW-1,n+j:n+j+DIM_SW-1,o+k:o+k+DIM_SW-1))**2. )/h_sq) !euclidean norm
+                  enddo
+              enddo
+            enddo
+            z = sum(exponentials)
+            if(z < 0.0001) cycle
+            !HEREE
+            self%rmat(m-1,n-1,o-1) = sum( exponentials * rmat_pad(m-cfr_box:m+cfr_box,n-cfr_box:n+cfr_box,o-cfr_box:o+cfr_box)) / z
+        enddo
+        enddo
+        enddo
+        !$omp end parallel do
+        deallocate(rmat_pad)
+    end subroutine NLmean3D
 
     ! CALCULATORS
 
@@ -6141,6 +6193,8 @@ contains
     ! Preserves Fourier state
     ! Optional lp: frequencies below lp are set to 0 in a
     ! smooth way (cos edge).
+    ! elementwise: yes --> phase correlation
+    ! elementwise: no  --> correlation
     function phase_corr(self1,self2,border,lp) result(pc)
         class(image),      intent(inout) :: self1, self2
         integer, optional, intent(in)    :: border
@@ -6152,12 +6206,11 @@ contains
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3),npix
         integer     :: shlim,shlimsq,shlimbpsq,shlimbp
-        integer     :: i,j,h,k
-        integer     :: hsq_ksq
+        integer     :: h,k,l
+        integer     :: hsq_ksq_lsq
         logical     :: ft1, ft2,l_lp
         if(self1.eqdims.self2) then
-            if(self1%ldim(3) > 1) THROW_HARD('Just for 2D images! phase_corr')
-            if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2)) &
+            if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 .or. border >= self1%ldim(3)/2) ) &
             & THROW_HARD('Input border parameter too big; phase_corr')
             call pc%new(self1%ldim, self1%smpd)
             ft1 = self1%is_ft()
@@ -6169,7 +6222,7 @@ contains
             l_lp    = present(lp)
             shlimsq = huge(shlimsq)
             if(l_lp) then
-                shlim = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
+                shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
                 shlimbpsq = shlim*shlim
                 shlimbp   = shlim+nint(width)
                 shlimbpsq = shlimbp*shlimbp
@@ -6177,29 +6230,31 @@ contains
             sqsum1 = 0.d0
             sqsum2 = 0.d0
             nrflims = self1%loop_lims(2)
-            !$omp parallel do default(shared) private(h,k,w,rw,hsq_ksq,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
+            !$omp parallel do default(shared) private(h,k,l,w,rw,hsq_ksq_lsq,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
             do h = nrflims(1,1),nrflims(1,2)
                 rw = merge(1., 2., h==0)
                 do k = nrflims(2,1),nrflims(2,2)
-                    hsq_ksq = h*h+k*k
-                    phys = pc%comp_addr_phys(h,k,0)
-                    w = 1.
-                    if( h==0 .and. k==0 )then
-                        pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
-                        cycle
-                    else if( l_lp ) then
-                        if(hsq_ksq > shlimbpsq)then
+                    do l = nrflims(3,1),nrflims(3,2)
+                        hsq_ksq_lsq = h*h+k*k+l*l
+                        phys = pc%comp_addr_phys(h,k,l)
+                        w = 1.
+                        if( h==0 .and. k==0 .and. l==0 )then
                             pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                             cycle
-                        elseif( hsq_ksq > shlimsq  )then
-                            w = (cos(((sqrt(real(hsq_ksq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
+                        else if( l_lp ) then
+                            if(hsq_ksq_lsq > shlimbpsq)then
+                                pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                                cycle
+                            elseif( hsq_ksq_lsq > shlimsq  )then
+                                w = (cos(((sqrt(real(hsq_ksq_lsq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
+                            endif
                         endif
-                    endif
-                    c1 = w*self1%cmat(phys(1),phys(2),phys(3))
-                    c2 = w*self2%cmat(phys(1),phys(2),phys(3))
-                    pc%cmat(phys(1),phys(2),phys(3)) = c1 * conjg(c2)
-                    sqsum1 = sqsum1 + real(rw*csq(c1),dp)
-                    sqsum2 = sqsum2 + real(rw*csq(c2),dp)
+                        c1 = w*self1%cmat(phys(1),phys(2),phys(3))
+                        c2 = w*self2%cmat(phys(1),phys(2),phys(3))
+                        sqsum1 = sqsum1 + real(rw*csq(c1),dp)
+                        sqsum2 = sqsum2 + real(rw*csq(c2),dp)
+                        pc%cmat(phys(1),phys(2),phys(3)) = c1 * conjg(c2)
+                    enddo
                 enddo
             enddo
             !$omp end parallel do
@@ -6208,10 +6263,12 @@ contains
             if( .not.ft1 )call self1%ifft()
             if( .not.ft2 )call self2%ifft()
             if(present(border) .and. border > 1) then
-                pc%rmat(1:border,:,1) = 0.
-                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
-                pc%rmat(:,1:border,1) = 0.
-                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
+                pc%rmat(1:border,:,:) = 0.
+                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,:) = 0.
+                pc%rmat(:,1:border,:) = 0.
+                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),:) = 0.
+                pc%rmat(:,:,1:border) = 0.
+                pc%rmat(:,:,pc%ldim(3)-border:pc%ldim(3)) = 0.
             endif
         else
             THROW_HARD('Cannot be performed on images with different dims; phase_corr')
@@ -7121,14 +7178,45 @@ contains
         center = real(self%ldim(1:2))/2.+1.
         do i=1,self%ldim(1)
             x = real(i)-center(1)
+            xx = x*x
             do j=1,self%ldim(2)
                 y = real(j)-center(2)
-                if(x*x+y*y > cutoffsq_here) cycle
+                if(xx+y*y > cutoffsq_here) cycle
                 self%rmat(i,j,1) = gaussian2D( [0.,0.], x, y, xsigma, ysigma )
             enddo
         enddo
         self%ft = .false.
     end subroutine gauimg2D
+
+    subroutine gauimg3D( self, xsigma, ysigma, zsigma, cutoff )
+        class(image),   intent(inout) :: self
+        real,           intent(in)    :: xsigma, ysigma, zsigma
+        real, optional, intent(in)    :: cutoff
+        real    :: xx, x, yy, y, z, cutoffsq_here, center(3)
+        integer :: i, j, k
+        if(self%ldim(3) == 1) then
+            call self%gauimg2D(xsigma, ysigma, cutoff)
+            return
+        endif
+        cutoffsq_here = huge(cutoffsq_here)
+        if(present(cutoff)) cutoffsq_here = cutoff*cutoff
+        ! Center of the img is assumed self%ldim/2 + 1
+        center = real(self%ldim(1:3))/2.+1.
+        do i=1,self%ldim(1)
+            x = real(i)-center(1)
+            xx = x*x
+            do j=1,self%ldim(2)
+                y = real(j)-center(2)
+                yy = y*y
+                do k=1,self%ldim(3)
+                    z = real(k)-center(3)
+                    if(xx+yy+z*z > cutoffsq_here) cycle
+                    self%rmat(i,j,k) = gaussian3D( [0.,0.,0.], x, y, z, xsigma, ysigma, zsigma )
+                enddo
+            enddo
+        enddo
+        self%ft = .false.
+    end subroutine gauimg3D
 
     subroutine fwd_ft(self)
         class(image), intent(inout) :: self
@@ -7798,10 +7886,10 @@ contains
           class(image), intent(inout) :: self
           real,         intent(in)    :: new_range(2)
           real :: old_range(2), sc
-          old_range(1) = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
-          old_range(2) = maxval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+          old_range(1) = minval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
+          old_range(2) = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
           sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
-          self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = sc*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))+new_range(1)-sc*old_range(1)
+          self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = sc*self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))+new_range(1)-sc*old_range(1)
     end subroutine scale_pixels
 
     !>  \brief  is for mirroring an image

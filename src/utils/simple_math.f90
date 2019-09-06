@@ -778,8 +778,8 @@ contains
     real function gaussian3D( center_coords, x, y, z, xsigma, ysigma, zsigma )
         real, intent(in) :: center_coords(3), x, y, z, xsigma, ysigma, zsigma
         gaussian3D = exp( -((x - center_coords(1))**2.0 / (2.0 * xsigma * xsigma) +&
-                            (y - center_coords(2))**2.0 / (2.0 * ysigma * ysigma) +&
-                            (z - center_coords(3))**2.0 / (2.0 * zsigma * zsigma)) )
+                           &(y - center_coords(2))**2.0 / (2.0 * ysigma * ysigma) +&
+                           &(z - center_coords(3))**2.0 / (2.0 * zsigma * zsigma)) )
     end function gaussian3D
 
     ! COMPLEX STUFF
@@ -2285,77 +2285,87 @@ contains
     end subroutine find_stretch_minmax
 
     ! rescales the vector to a new input range
-    subroutine scale_vector( x, new_range )
+    ! optional output: scale factor and oldrange(2)
+    subroutine scale_vector( x, new_range, ssc ,oold_range)
         real, intent(inout) :: x(:)
         real, intent(in)    :: new_range(2)
+        real, optional, intent(out) :: oold_range(2), ssc
         real :: old_range(2), sc
         old_range(1) = minval(x)
         old_range(2) = maxval(x)
         sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
         x(:) = sc*x(:)+new_range(1)-sc*old_range(1)
+        if(present(ssc)) ssc = sc
+        if(present(oold_range)) oold_range = old_range
     end subroutine scale_vector
 
-    ! Otsu's method
-    ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
-    ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
-    subroutine otsu_1( x, thresh )
-        real, intent(inout) :: x(:)
-        real, intent(out)   :: thresh ! threshold for binarisation
-        integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255
-        integer :: i, T
-        real    :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
-        real,    allocatable :: p(:), xhist(:)
-        integer, allocatable :: yhist(:)
-        call scale_vector(x,real([MIN_VAL,MAX_VAL]))
-        allocate(p(MIN_VAL:MAX_VAL), source=0.)
-        call create_hist_vector(x, MAX_VAL-MIN_VAL+1, xhist, yhist)
-        do i = MIN_VAL, MAX_VAL
-            p(i) = yhist(i+1)
-        enddo
-        deallocate(xhist,yhist)
-        p    = p / size(x, dim = 1) ! normalise, it's a probability
-        q1   = 0.
-        q2   = sum(p)
-        sum1 = 0.
-        sum2 = 0.
-        do i = MIN_VAL, MAX_VAL
-            sum2 = sum2 + i * p(i)
-        enddo
-        sigma = HUGE(sigma) ! initialisation, to get into the loop
-        do T = MIN_VAL, MAX_VAL - 1
-          q1   = q1 + p(T)
-          q2   = q2 - p(T)
-          sum1 = sum1 + T*p(T)
-          sum2 = sum2 - T*p(T)
-          m1   = sum1/q1
-          m2   = sum2/q2
+! ! Otsu's method
+! ! the algorithm assumes that x contains two classes of numbers following bi-modal histogram (foreground and background)
+! ! it then calculates the optimum threshold separating the two classes so that their combined spread (intra-class variance) is minimal
+subroutine otsu_1( x, thresh )
+    real, intent(inout) :: x(:)
+    real, intent(out)   :: thresh ! threshold for binarisation, in the old value range
+    integer, parameter  :: MIN_VAL = 0, MAX_VAL = 255
+    real, allocatable   :: x_copy(:)
+    integer :: i, T
+    real    :: q1, q2, m1, m2, sigma1, sigma2, sigma, sigma_next, sum1, sum2
+    real,    allocatable :: p(:), xhist(:)
+    integer, allocatable :: yhist(:)
+    real :: sc, old_range(2) !scale factor and old pixel range
+    allocate(x_copy(size(x)), source = x)
+    call scale_vector(x_copy,real([MIN_VAL,MAX_VAL]), sc, old_range)
+    allocate(p(MIN_VAL:MAX_VAL), source=0.)
+    call create_hist_vector(x_copy, MAX_VAL-MIN_VAL+1, xhist, yhist)
+    do i = MIN_VAL, MAX_VAL
+        p(i) = yhist(i+1)
+    enddo
+    deallocate(xhist,yhist)
+    p    = p / size(x_copy, dim = 1) ! normalise, it's a probability
+    q1   = 0.
+    q2   = sum(p)
+    sum1 = 0.
+    sum2 = 0.
+    do i = MIN_VAL, MAX_VAL
+        sum2 = sum2 + i * p(i)
+    enddo
+    sigma = HUGE(sigma) ! initialisation, to get into the loop
+    do T = MIN_VAL, MAX_VAL - 1
+      q1   = q1 + p(T)
+      q2   = q2 - p(T)
+      sum1 = sum1 + T*p(T)
+      sum2 = sum2 - T*p(T)
+      m1   = sum1/q1
+      m2   = sum2/q2
+      sigma1 = 0.
+      if( T > MIN_VAL )then ! do not know if it is necessary
+          do i = MIN_VAL, T
+              sigma1 = sigma1 + (i - m1)**2 * p(i)
+          enddo
+      else
           sigma1 = 0.
-          if( T > MIN_VAL )then ! do not know if it is necessary
-              do i = MIN_VAL, T
-                  sigma1 = sigma1 + (i - m1)**2 * p(i)
-              enddo
-          else
-              sigma1 = 0.
-          endif
-          sigma1 = sigma1 / q1
+      endif
+      sigma1 = sigma1 / q1
+      sigma2 = 0.
+      if( T < MAX_VAL - 1 )then
+          do i = T + 1, MAX_VAL
+              sigma2 = sigma2 + (i - m2)**2 * p(i)
+          enddo
+      else
           sigma2 = 0.
-          if( T < MAX_VAL - 1 )then
-              do i = T + 1, MAX_VAL
-                  sigma2 = sigma2 + (i - m2)**2 * p(i)
-              enddo
-          else
-              sigma2 = 0.
-          endif
-          sigma2 = sigma2 / q2
-          sigma_next = q1 * sigma1 + q2 * sigma2
-          if( sigma_next < sigma .and. T > MIN_VAL )then
-              thresh = T ! keep the minimum
-              sigma  = sigma_next
-          elseif( T == MIN_VAL )then
-              sigma = sigma_next
-          endif
-        enddo
-    end subroutine otsu_1
+      endif
+      sigma2 = sigma2 / q2
+      sigma_next = q1 * sigma1 + q2 * sigma2
+      if( sigma_next < sigma .and. T > MIN_VAL )then
+          thresh = T ! keep the minimum
+          sigma  = sigma_next
+      elseif( T == MIN_VAL )then
+          sigma = sigma_next
+      endif
+    enddo
+    ! rescale in the old range
+    thresh = thresh/sc+old_range(1)
+    deallocate(x_copy)
+end subroutine otsu_1
 
     ! Otsu's method, see above
     subroutine otsu_2(x, x_out, thresh)

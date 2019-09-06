@@ -126,195 +126,157 @@ end subroutine laplacian_filt
         enddo
     end subroutine circumference
 
-    subroutine calc_percentage_phiber(imgfile_jpeg)
-         use simple_jpg
-         character(len=*), intent(inout) :: imgfile_jpeg
-         type(image) :: img
-         type(image) :: img_aux ! TO REMOVE
-         integer     :: ldim(3)
-         integer     :: n_images
-         integer     :: i, j
-         integer     :: cnt
-         real        :: smpd
-         real        :: means(3)
-         logical, allocatable :: msk(:,:,:)
-         integer, allocatable :: labels(:)
-         integer, allocatable :: imat(:,:,:)
-         real,    allocatable :: x(:)
-         real,    allocatable :: rmat(:,:,:)
-         integer, parameter   :: MAXIT = 100
-         call img%new([256,256,1],1.)
-         ! call img%read_jpg(imgfile_jpeg)
-         !call find_ldim_nptcls(imgfile_jpeg, ldim, n_images, smpd)
-         ! call img%new(ldim, smpd)
-         call img%write_jpg('Fuck.jpg')
-         ! call img%read_jpg(imgfile_jpeg)
-         call img%write('InputImgMrcFormat.mrc')
-         rmat = img%get_rmat()
-         allocate(msk(ldim(1),ldim(2),1), source = .true.)
-         x = pack(rmat, msk)
-         call classify_3objects(x,MAXIT, means,labels)
-         call img_aux%new(ldim, smpd)
-         cnt = 0
-         do i = 1, ldim(1)
-             do j = 1, ldim(2)
-                 cnt = cnt + 1
-                 rmat(j,i,1) = labels(cnt)
-             enddo
-         enddo
-         call img_aux%set_rmat(rmat)
-         call img_aux%write('LabelsImg.mrc')
-         imat = nint(img_aux%get_rmat())
-         print *, 'Minval(imat) = ', minval(imat), 'maxval(imat) = ', maxval(imat)
-         print *, 'Void   = ', count(imat == 1), 'percent ',real(count(imat == 1))/real(size(imat))
-         print *, 'Phiber = ', count(imat == 2), 'percent ',real(count(imat == 2))/real(size(imat))
-         print *, 'Brown  =',  count(imat == 3), 'percent ',real(count(imat == 3))/real(size(imat))
-       contains
-         !implements the sortmeans algorithm
-         subroutine classify_3objects( dat, maxits, means, labels )
-             real,                 intent(in)  :: dat(:)    !< array for input
-             integer,              intent(in)  :: maxits    !< limit sort
-             real,                 intent(out) :: means(:)  !< array for output
-             integer, allocatable, intent(out) :: labels(:) !< labels for output
-             logical, allocatable :: mask(:)
-             real, parameter :: TOLL = 0.1
-             integer :: ncls, ndat, clssz, i, j, cnt_means, loc(1), changes
-             ncls = size(means)
-             ndat = size(dat)
-             if( allocated(labels) ) deallocate(labels)
-             allocate(  mask(ndat), labels(ndat), stat=alloc_stat )
-             if(alloc_stat /= 0) call allocchk("sortmeans; simple_math", alloc_stat)
-             ! initialization by sorting
-             !In this way I don't need to sort the data
-             mask = .true.
-             means(1) = minval(dat, mask) !void
-             where(abs(dat-means(1))<TINY) mask = .false.
-             means(2) = maxval(dat, mask) !phiber
-             where(abs(dat-means(2))<TINY) mask = .false.
-             means(3) = sum(dat, mask)/real(count(mask))
-             print *, 'means = ', means
-             ! the kmeans step
-             labels = 1
-             do j=1,maxits
-                 changes = 0
-                 ! find closest
-                 do i=1,ndat
-                     loc = minloc((means-dat(i))**2.0)
-                     if( labels(i) /= loc(1) ) changes = changes + 1
-                     labels(i) = loc(1)
-                 end do
-                 ! update means
-                 do i=1,ncls
-                     where( labels == i )
-                         mask = .true.
-                     else where
-                         mask = .false.
-                     end where
-                     means(i) = sum(dat, mask=mask)/real(count(mask))
-                 end do
-                 if( changes == 0 ) exit
-             end do
-             deallocate(mask)
-         end subroutine classify_3objects
-       end subroutine calc_percentage_phiber
-
-       subroutine generate_gaussian_refs(refs,ldim,smpd,min_rad,max_rad)
-           type(image), allocatable, intent(inout) :: refs(:)
-           integer,     intent(in) :: ldim(3)
-           real,        intent(in) :: smpd
-           real,        intent(in) :: min_rad, max_rad
-           integer, parameter :: STEP = 5
-           integer :: nrefs
-           real    :: sigma_x, sigma_y
-           integer :: i, j
-           logical :: rotate_ref
-           real, allocatable :: rmat_out(:,:,:) !to use rtsq_serial
-           nrefs = 0
-           do i = 0, STEP-1
-               sigma_x = min_rad + i*STEP
-               if(sigma_x < max_rad) then
-                   do j = 0, STEP-1
-                       sigma_y = min_rad + j*STEP
-                       if(sigma_y < max_rad) then
-                           nrefs = nrefs + 1
-                           if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
-                           if(rotate_ref) nrefs = nrefs + 2 !total 3 references
-                       endif
-                       rotate_ref = .false. !restore
-                   enddo
-               endif
-           enddo
-           if(allocated(refs)) deallocate(refs)
-           allocate( refs(nrefs) )
-           allocate(rmat_out(ldim(1),ldim(2),1), source = 0.)
-           nrefs = 0
-           do i = 0, STEP-1
-               sigma_x = min_rad + i*STEP
-               if(sigma_x < max_rad) then
-                   do j = 0, STEP-1
-                       sigma_y = min_rad + j*STEP
-                       if(sigma_y < max_rad) then
-                            print *, 'generating ref with sigmax = ', sigma_x, 'sigmay = ', sigma_y
-                            if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
-                            nrefs = nrefs + 1
-                            call refs(nrefs)%new(ldim,smpd)
-                            call refs(nrefs)%gauimg2D(sigma_x,sigma_y)
-                            call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                            if(rotate_ref) then
-                                call refs(nrefs)%rtsq_serial( 45., 0., 0., rmat_out )
-                                nrefs = nrefs + 1
-                                call refs(nrefs)%new(ldim,smpd)
-                                call refs(nrefs)%set_rmat(rmat_out)
-                                call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                                call refs(nrefs)%rtsq_serial( 90., 0., 0., rmat_out )
-                                nrefs = nrefs + 1
-                                call refs(nrefs)%new(ldim,smpd)
-                                call refs(nrefs)%set_rmat(rmat_out)
-                                call refs(nrefs)%write('_GaussianReference.mrc',nrefs)
-                            endif
-                       endif
-                       rotate_ref = .false. !restore
-                   enddo
-               endif
-           enddo
-           deallocate(rmat_out)
-           ! sigma_x = (self%min_rad)/2. ! half of the radius
-           ! sigma_y = (self%max_rad)/2.
-           ! rotate_ref = .false.
-           ! if(sigma_y/sigma_x > 1.5) rotate_ref = .true.
-           ! print *, 'sigma_x = ', sigma_x, 'sigma_y = ', sigma_y
-           ! rot_step = 180./real(N_ROT) !it's gaussian, so rotate just 180 degrees
-           ! call self%reference%gauimg2D(sigma_x,sigma_y)
-           ! call self%reference%write(PATH_HERE//basename(trim(self%fbody))//'_GaussianReference.mrc')
-           ! call field%fft()
-           ! allocate(rmat_out(self%ldim_shrunken(1),self%ldim_shrunken(2),1), source = 0.)
-           ! call self%phasecorr%zero_and_unflag_ft()
-           ! print *, 'rotate_ref = ', rotate_ref
-       end subroutine generate_gaussian_refs
-       end module simple_test_chiara_try_mod
+    subroutine exec_symmetry_test_try(lp, msk)
+        use simple_symanalyzer
+        use simple_cmdline
+        use simple_parameters
+        use simple_builder
+        real, intent(in) :: lp
+        real, intent(in) :: msk ! radius in pixels
+        type(cmdline) :: cline
+        type(parameters)      :: params
+        type(builder)         :: build
+        character(len=STDLEN) :: fbody
+        character(len=3)      :: pgrp
+        real                  :: shvec(3), scale, smpd
+        integer               :: ldim(3)
+        integer, parameter    :: MAXBOX = 128
+        !call cline%new()
+        call cline%set('mkdir',  'yes')
+        call cline%set('cenlp',    20.)
+        call cline%set('center', 'yes')
+        call cline%set('vol1', 'particle1.mrc')
+        ! call cline%set('vol1', './AutoSymmetryDetection/particle1BIN.mrc')
+        call cline%set('smpd', 0.358)
+        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+        call build%vol%read(params%vols(1))
+        ! possible downscaling of input vol
+        ldim = build%vol%get_ldim()
+        scale = 1.
+        params%msk = msk
+        params%lp = lp
+        if( ldim(1) > MAXBOX )then
+            scale = real(MAXBOX) / real(ldim(1))
+            call build%vol%fft
+            call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
+            call build%vol%ifft
+            smpd         = build%vol%get_smpd()
+            print *, 'smpd = ', smpd
+            params%msk   = round2even(scale * params%msk)
+            params%inner = round2even(scale * params%inner)
+            params%width = scale * params%width
+        endif
+        ! low-pass limit safety
+        params%lp = max(2. * smpd, params%lp)
+        ! centering
+        shvec = 0.
+        if( params%center.eq.'yes' )then
+            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+            call build%vol%shift(shvec)
+            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+            ! call build%vol%write(trim(fbody)//'_centered.mrc')
+        endif
+        ! mask volume
+        if( params_glob%l_innermsk )then
+            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+        else
+            call build%vol%mask(params%msk, 'soft')
+        endif
+        ! run test
+        print *, 'DEBUGGING'
+        print *, 'params%msk = ', params%msk
+        print *, 'params%lp  = ', params%lp
+        print *, 'params%hp  = ', params%hp
+        print *, 'params%cn_stop = ', params%cn_stop
+        print *, 'params%platonic = ', params%platonic
+        print *, 'pgrp ', pgrp
+        call symmetry_tester(build%vol, params%msk, params%hp,&
+        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
+        ! end gracefully
+        call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
+    end subroutine exec_symmetry_test_try
+end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
        include 'simple_lib.f08'
        use simple_math
-       use simple_jpg
+       use simple_atoms
        use simple_test_chiara_try_mod
-       use simple_micops
        use simple_image, only : image
        use simple_tvfilter, only : tvfilter
        use simple_nanoparticles_mod, only : nanoparticle
-       type(image), allocatable :: refs(:)
-       integer :: i,j, cnt, ldim(3)
-       character(len=100) :: fname
-       real :: smpd, min_rad, max_rad
-       smpd    = 1.
-       min_rad = 10.
-       max_rad = 40.
-       ldim(1) = 256
-       ldim(2) = 256
-       ldim(3) = 1
-       call generate_gaussian_refs(refs,ldim,smpd,min_rad,max_rad)
+       use simple_segmentation
+       type(image) :: img
+       type(tvfilter) :: tvf
+       integer     :: ldim(3), n
+       real        :: smpd, cutoff, msk
+       real, pointer :: rmat(:,:,:)
+       real :: x(10)
+       real, allocatable :: x_sorted(:)
+       real :: ave, sdev, maxv, minv
+       real :: lambda
+       real :: hp, lp
+       real :: thresh
 
-       !fname = 'ImgTest.jpg'
+       x = [1.,2.,3.,4.,1.,2.,3.,4.,5.,6.]
+       call otsu(x,thresh)
+       print *, 'x = ', x
+       print *, 'Thresh = ', thresh
+       call otsu(x, x_sorted, thresh=thresh)
+       print *, 'x        = ', x
+       print *, 'x_sorted = ', x_sorted
+       print *, 'Thresh = ', thresh
+       ! hp = real(464/ 2) * 28.088
+       ! lp = 20.
+       ! lambda = 5.
+       !
+       ! call tvf%new()
+       !
+       !
+       ! call img%new([480,464,1], 28.088)
+       ! call img%read('tomo_2_full_backp_flip_bin4.mrc', 20) !20th plane
+       ! call img%neg()
+       ! call img%write('TwentiethPlane.mrc')
+       ! call img%bp(hp,lp)
+       ! call img%write('TwentiethPlaneBP.mrc')
+       ! call tvf%apply_filter(img, lambda)
+       ! call img%write('TwentiethPlaneTVF.mrc')
+       ! call img%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
+       ! call img%bin(ave+.2*sdev)
+       ! ! call canny(img)
+       ! call img%write('TwentiethPlaneBIN2sigma.mrc')
+       ! call img%real_space_filter(2,'median')
+       ! call img%write('TwentiethPlaneBIN2sigmaMedian.mrc')
+       !
+       !
+       ! call img%read('tomo_2_full_backp_flip_bin4.mrc', 246)
+       ! call img%neg()
+       ! call img%write('246Plane.mrc')
+       ! call img%bp(hp,lp)
+       ! call img%write('246PlaneBP.mrc')
+       ! call tvf%apply_filter(img, lambda)
+       ! call img%write('246PlaneTVF.mrc')
+       ! call img%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
+       ! call img%bin(ave+.2*sdev)
+       ! ! call canny(img)
+       ! call img%write('246PlaneCannyBIN2sigma.mrc')
+       ! call img%real_space_filter(2,'median')
+       ! call img%write('246PlaneBIN2sigmaMedian.mrc')
+
+
+       ! call nano%new('../particle1.mrc', smpd)
+       ! call nano%binarize()
+       ! call nano%discard_outliers()
+       ! call nano%radial_dependent_stats()
+
+       ! call exec_symmetry_test_try(lp, msk)
+
+       ! call a%new(n, dummy=.true.)
+       ! call a%convolve(nano,cutoff)
+       ! call nano%write('SimulatedAtoms.mrc')
+!simple_private_exec prg=symmetrize_map lp=1 msk=40 pgrp=c3 smpd=0.358 vol1=particle1.mrc cenlp=3 hp=5 outvol=particle1_c3.mrc nthr=0
+
+   !fname = 'ImgTest.jpg'
        !call calc_percentage_phiber(fname)
 
     !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION

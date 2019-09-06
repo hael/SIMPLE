@@ -377,16 +377,24 @@ contains
     end subroutine iterative_thresholding
 
    !Otsu binarization for images
-    subroutine otsu_img(img)
+    subroutine otsu_img(img, thresh)
         use simple_math, only : otsu
-        class(image), intent(inout) :: img
-        real, allocatable :: rmat(:,:,:), x(:), x_out(:)
-        rmat = img%get_rmat()
-        x = pack(rmat(:,:,:), .true.)
-        call otsu(x, x_out)
+        class(image),   intent(inout) :: img
+        real, optional, intent(out)   :: thresh
+        real, pointer     :: rmat(:,:,:)
+        real, allocatable :: x(:)
+        integer           :: ldim(3)
+        real :: selected_t
+        ldim = img%get_ldim()
+        call img%get_rmat_ptr(rmat)
+        x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+        call otsu(x, selected_t)
+        if(present(thresh)) thresh= selected_t
         deallocate(x)
-        rmat = reshape(x_out, shape(rmat))
-        call img%set_rmat(rmat)
-        deallocate(rmat,x_out)
+        where(rmat(1:ldim(1),1:ldim(2),1:ldim(3))>=selected_t)
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 1.
+        elsewhere
+            rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
+        endwhere
     end subroutine otsu_img
 end module simple_segmentation
