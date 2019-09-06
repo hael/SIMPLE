@@ -5,12 +5,12 @@ use simple_strings, only: int2str, int2str_pad
 use simple_error,   only: allocchk
 use simple_fileio,  only: fopen, fileiochk, fclose, file2rarr
 use simple_jiffys,  only: progress
-
+use simple_math,    only: hpsort
 implicit none
 private
 #include "simple_local_flags.inc"
 public ::  split_nobjs_even,split_pairs_in_parts,merge_similarities_from_parts,&
-&merge_rmat_from_parts,merge_nnmat_from_parts
+&merge_rmat_from_parts,merge_nnmat_from_parts, approx_balanced_partitioning_prob
 contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
@@ -47,6 +47,29 @@ contains
         if( present(szmax) ) szmax = sszmax
     end function split_nobjs_even
 
+    subroutine approx_balanced_partitioning_prob( nrs, n, k, kassgn )
+        integer,  intent(in)    :: n, k
+        real,     intent(inout) :: nrs(n)
+        integer,  intent(inout) :: kassgn(n)
+        integer, allocatable :: inds(:)
+        real,    allocatable :: sums(:)
+        integer :: i, loc(1)
+        allocate(inds(n), source=(/(i,i=1,n)/))
+        allocate(sums(k), source=0.)
+        call hpsort(nrs, inds)
+        do i=n,1,-1 ! traverse in descending order
+            if( nrs(i) > TINY )then
+                loc = minloc(sums)
+                ! assignment
+                kassgn(inds(i)) = loc(1)
+                ! update sum
+                sums(loc(1)) = sums(loc(1)) + nrs(i)
+            else
+                kassgn(inds(i)) = 0
+            endif
+        end do
+    end subroutine approx_balanced_partitioning_prob
+
     !>  \brief  for generating balanced partitions for pairwise calculations on nobjs ojects
     subroutine split_pairs_in_parts( nobjs, nparts )
         integer, intent(in)  :: nobjs  !< number objects to analyse in pairs
@@ -55,7 +78,6 @@ contains
         integer              :: ipart, io_stat, numlen
         integer, allocatable :: pairs(:,:), parts(:,:)
         character(len=:), allocatable :: fname
-
         ! generate all pairs
         DebugPrint  ' split_pairs_in_parts nobjs: ', nobjs
         npairs = (nobjs*(nobjs-1))/2
