@@ -111,10 +111,9 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:), rank_ws(:)
-        logical, allocatable :: included(:)
+        real,    allocatable :: ws_nonzero(:), rank_ws(:)
         real    :: dists(s%npeaks), arg4softmax(s%npeaks)
-        real    :: wsum, thres, wavg_left, wavg_right
+        real    :: wsum, thres, wavg_peak, wavg_nonpeak
         integer :: npeaks
         s%npeaks_eff = 1
         if( s%npeaks == 1 )then
@@ -127,22 +126,20 @@ contains
             ! calculate weights
             call calc_ori_weights( s%iptcl, s%npeaks, corrs, ws )
             ! define a threshold using Otsu's algorithm
-            ws_nonzero   = pack(ws, mask=ws > TINY)
-            allocate(ws_nonzero_cp(count(ws > TINY)), source=ws_nonzero)
-            call otsu(ws_nonzero, included)
-            s%npeaks_eff = count(included)
-            thres        = minval(ws_nonzero_cp, included)
+            ws_nonzero = pack(ws, mask=ws > TINY)
+            call otsu(ws_nonzero, thres)
+            s%npeaks_eff = count(ws_nonzero > thres)
             if( DEBUG_HERE )then
-                wavg_left    = sum(ws_nonzero_cp,       included) / real(count(      included))
-                wavg_right   = sum(ws_nonzero_cp, .not. included) / real(count(.not. included))
-                print *, 'otsu_thres: ', thres
-                print *, 'wavg_left:  ', wavg_left
-                print *, 'wavg_right: ', wavg_right
-                print *, '# weights >= thres: ', s%npeaks_eff
-                print *, '# weights <  thres: ', count(.not. included)
+                wavg_peak    = sum(ws_nonzero, mask=ws_nonzero >  thres) / real(count(ws_nonzero >  thres))
+                wavg_nonpeak = sum(ws_nonzero, mask=ws_nonzero <= thres) / real(count(ws_nonzero <= thres))
+                print *, 'otsu_thres:         ', thres
+                print *, 'wavg_peak:          ', wavg_peak
+                print *, 'wavg_nonpeak:       ', wavg_nonpeak
+                print *, '# weights >  thres: ', s%npeaks_eff
+                print *, '# weights <= thres: ', count(ws_nonzero <= thres)
             endif
             ! zero weights below the threshold and re-normalize
-            where(ws < thres) ws = 0.
+            where(ws <= thres) ws = 0.
             wsum = sum(ws)
             if( wsum > TINY )then
                 ws = ws / wsum
@@ -165,7 +162,7 @@ contains
                 call hpsort(ws_nonzero)
                 print *, ws_nonzero
             endif
-            deallocate(ws_nonzero, ws_nonzero_cp, included)
+            deallocate(ws_nonzero)
         endif
         ! update npeaks individual weights
         call s3D%o_peaks(s%iptcl)%set_all('ow', ws)

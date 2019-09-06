@@ -704,9 +704,7 @@ contains
     end subroutine read_o_peaks
 
     subroutine calc_global_ori_weights
-        real,    allocatable :: weights_glob(:), weights(:), rank_weights(:)
-        real,    allocatable :: ws_nonzero(:), ws_nonzero_cp(:)
-        logical, allocatable :: included(:)
+        real,    allocatable :: weights_glob(:), weights(:), rank_weights(:), ws_nonzero(:)
         real    :: weight_thres, wsum
         integer :: nweights, cnt, iptcl, i, nw
         select case(params_glob%refine)
@@ -729,10 +727,8 @@ contains
                 if( WGLOB_OTSU )then
                     ! define a threshold using Otsu's algorithm
                     ws_nonzero = pack(weights_glob(:cnt), mask=weights_glob(:cnt) > TINY)
-                    allocate(ws_nonzero_cp(count(weights_glob(:cnt) > TINY)), source=ws_nonzero)
-                    call otsu(ws_nonzero, included)
-                    weight_thres = minval(ws_nonzero_cp, included)
-                    deallocate(ws_nonzero, ws_nonzero_cp, included)
+                    call otsu(ws_nonzero, weight_thres)
+                    deallocate(ws_nonzero)
                 else
                     ! find threshold based on pre-defined params_glob%globwfrac (0.16 by default)
                     call hpsort(weights_glob(:cnt))
@@ -744,7 +740,7 @@ contains
                     if( ptcl_mask(iptcl) )then
                         weights = s3D%o_peaks(iptcl)%get_all('ow')
                         nw = size(weights)
-                        where( weights < weight_thres ) weights = 0.
+                        where( weights <= weight_thres ) weights = 0.
                         wsum = sum(weights)
                         if( wsum > TINY )then
                             weights = weights / wsum
