@@ -1380,12 +1380,13 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &3, 1, 2, 0, 13, 0, 1, .false.)               ! # entries in each group, requires sp_project
+        &4, 1, 2, 0, 13, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, 'stk2', 'file', 'Stack to correlate with in corr filter',  'Stack of images to correlate with', 'e.g. gauss.mrc', .false., '')
-        call filter%set_input('img_ios', 2, outstk)
-        call filter%set_input('img_ios', 3, outvol)
+        call filter%set_input('img_ios', 2, 'vol2', 'file', 'Volume to correlate with in corr filter', 'Volume to correlate with',          'e.g. vol2.mrc file', .false., '')
+        call filter%set_input('img_ios', 3, outstk)
+        call filter%set_input('img_ios', 4, outvol)
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
         ! alternative inputs

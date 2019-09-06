@@ -305,6 +305,7 @@ contains
 
     subroutine exec_filter( self, cline )
         use simple_procimgfile
+        use simple_image, only : image
         use simple_estimate_ssnr, only: fsc2optlp
         use simple_tvfilter,      only: tvfilter
         class(filter_commander), intent(inout) :: self
@@ -315,6 +316,7 @@ contains
         real, allocatable :: fsc(:), optlp(:), res(:)
         real              :: width, fsc05, fsc0143
         integer           :: find
+        type(image)       :: outputvol
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         width = 10.
         if( cline%defined('stk') )then
@@ -382,7 +384,25 @@ contains
                 else if( params%tophat .eq. 'yes' .and. cline%defined('find') )then
                     call build%vol%tophat(params%find)
                 else if( cline%defined('lp') )then
-                    call build%vol%bp(0., params%lp, width=width)
+                    if(cline%defined('filter') .and. (trim(params%filter) .eq. 'corr')) then
+                        call build%vol2%read(params%vols(2))
+                        outputvol = build%vol%phase_corr(build%vol2, lp=params%lp)
+                        if( params%outvol .ne. '' ) then
+                            call outputvol%write(params%outvol, del_if_exists=.true.)
+                            call outputvol%kill
+                            ! end gracefully
+                            call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
+                            return
+                        else
+                            THROW_WARN('Nothing has been written, need to define outvol in this case')
+                            call outputvol%kill
+                            ! end gracefully
+                            call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
+                            return
+                        endif
+                    else
+                        call build%vol%bp(0., params%lp, width=width)
+                    endif
                 ! real-space
                 else if( cline%defined('real_filter') )then
                     if( .not. cline%defined('winsz') ) THROW_HARD('need winsz input for real-space filtering')
@@ -409,6 +429,24 @@ contains
                             call tvfilt%new
                             call tvfilt%apply_filter_3d(build%vol, params%lambda)
                             call tvfilt%kill
+                        case('nlmean')
+                            call build%vol%NLmean3D()
+                        case('corr')
+                            call build%vol2%read(params%vols(2))
+                            outputvol = build%vol%phase_corr(build%vol2)
+                            if( params%outvol .ne. '' ) then
+                                call outputvol%write(params%outvol, del_if_exists=.true.)
+                                call outputvol%kill
+                                ! end gracefully
+                                call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
+                                return
+                            else
+                                THROW_WARN('Nothing has been written, need to define outvol in this case')
+                                call outputvol%kill
+                                ! end gracefully
+                                call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
+                                return
+                            endif
                         case DEFAULT
                             THROW_HARD('Unknown filter!')
                     end select
