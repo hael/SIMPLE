@@ -1388,15 +1388,15 @@ contains
         ! static parameters
         call cline%set('prg',      'refine3D')
         call cline%set('match_filt',     'no')
-        call cline%set('ninplpeaks',      1.0)
         call cline%set('graphene_filt', 'yes')
         call cline%set('ptclw',          'no')
         call cline%set('keepvol',       'yes')
         ! dynamic parameters
+        if( .not. cline%defined('ninplpeaks')  ) call cline%set('ninplpeaks',   1.0)
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
         if( .not. cline%defined('wscheme')     ) call cline%set('wscheme',    'loc')
         if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      10.)
-        if( .not. cline%defined('rankw')       ) call cline%set('rankw',       'no')
+        if( .not. cline%defined('rankw')       ) call cline%set('rankw',      'exp')
         if( .not. cline%defined('trs')         ) call cline%set('trs',          2.0)
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
         if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)

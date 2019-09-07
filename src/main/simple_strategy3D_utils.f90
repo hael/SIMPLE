@@ -128,7 +128,7 @@ contains
             ! define a threshold using Otsu's algorithm
             ws_nonzero = pack(ws, mask=ws > TINY)
             call otsu(ws_nonzero, thres)
-            s%npeaks_eff = count(ws_nonzero > thres)
+            s%npeaks_eff = max(1,count(ws_nonzero > thres))
             if( DEBUG_HERE )then
                 wavg_peak    = sum(ws_nonzero, mask=ws_nonzero >  thres) / real(count(ws_nonzero >  thres))
                 wavg_nonpeak = sum(ws_nonzero, mask=ws_nonzero <= thres) / real(count(ws_nonzero <= thres))
@@ -139,7 +139,11 @@ contains
                 print *, '# weights <= thres: ', count(ws_nonzero <= thres)
             endif
             ! zero weights below the threshold and re-normalize
-            where(ws <= thres) ws = 0.
+            if( s%npeaks_eff == 1 )then
+                where(ws < maxval(ws) ) ws = 0. ! always one nonzero weight
+            else
+                where(ws <= thres) ws = 0.
+            endif
             wsum = sum(ws)
             if( wsum > TINY )then
                 ws = ws / wsum
