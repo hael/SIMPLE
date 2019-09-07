@@ -1664,7 +1664,6 @@ contains
         class(image),      intent(inout) :: self
         logical,           intent(in)    :: l_msk(self%ldim(1),self%ldim(2),self%ldim(3))
         real, allocatable, intent(in)    :: pcavec(:)
-        !real    :: field(self%ldim(1),self%ldim(2),self%ldim(3))
         integer :: sz, sz_msk, i, j, k, cnt
         if( allocated(pcavec) )then
             sz     = size(pcavec)

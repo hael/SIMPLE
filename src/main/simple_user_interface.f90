@@ -143,7 +143,8 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
-type(simple_program), target :: import_tseries
+type(simple_program), target :: tseries_import
+type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
@@ -324,7 +325,8 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_import_tseries
+        call new_tseries_import
+        call new_tseries_average
         call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
@@ -567,8 +569,10 @@ contains
                 ptr2prg => symmetrize_map
             case('symmetry_test')
                 ptr2prg => symmetry_test
-            case('import_tseries')
-                ptr2prg => import_tseries
+            case('tseries_import')
+                ptr2prg => tseries_import
+            case('tseries_average')
+                ptr2prg => tseries_average
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
@@ -660,7 +664,8 @@ contains
         write(logfhandle,'(A)') symaxis_search%name
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
-        write(logfhandle,'(A)') import_tseries%name
+        write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
@@ -2012,7 +2017,7 @@ contains
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
         call motion_correct%set_input('srch_ctrls', 2, startit)
-        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call motion_correct%set_input('srch_ctrls', 4, nsig)
         call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', '{50}', .false., 50.)
         call motion_correct%set_input('srch_ctrls', 6, mcpatch)
@@ -2068,7 +2073,7 @@ contains
         ! search controls
         call motion_correct_tomo%set_input('srch_ctrls', 1, trs)
         call motion_correct_tomo%set_input('srch_ctrls', 2, startit)
-        call motion_correct_tomo%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call motion_correct_tomo%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call motion_correct_tomo%set_input('srch_ctrls', 4, nsig)
         ! filter controls
         call motion_correct_tomo%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
@@ -2262,7 +2267,7 @@ contains
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
         call preprocess%set_input('srch_ctrls', 2, startit)
-        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess%set_input('srch_ctrls', 4, nsig)
         call preprocess%set_input('srch_ctrls', 5, dfmin)
         call preprocess%set_input('srch_ctrls', 6, dfmax)
@@ -2336,7 +2341,7 @@ contains
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
         call preprocess_stream%set_input('srch_ctrls', 2, nsig)
-        call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3)', '{0}', .false., 0.)
+        call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls', 4, dfmin)
         call preprocess_stream%set_input('srch_ctrls', 5, dfmax)
         call preprocess_stream%set_input('srch_ctrls', 6, astigtol)
@@ -3363,25 +3368,25 @@ contains
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
 
-    subroutine new_import_tseries
+    subroutine new_tseries_import
         ! PROGRAM SPECIFICATION
-        call import_tseries%new(&
-        &'import_tseries',&                               ! name
+        call tseries_import%new(&
+        &'tseries_import',&                               ! name
         &'Imports time-series datasets',&                 ! descr_short
         &'is a workflow for importing time-series data',& ! descr_long
         &'simple_exec',&                                  ! executable
         &1, 4, 0, 0, 0, 0, 0, .true.)                     ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call import_tseries%set_input('img_ios', 1, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
+        call tseries_import%set_input('img_ios', 1, 'filetab', 'file', 'List of individual movie frame files', 'List of frame files (*.mrcs) to import', 'e.g. movie_frames.txt', .true., '')
         ! parameter input/output
-        call import_tseries%set_input('parm_ios', 1, smpd)
-        call import_tseries%set_input('parm_ios', 2, kv)
-        import_tseries%parm_ios(2)%required = .true.
-        call import_tseries%set_input('parm_ios', 3, cs)
-        import_tseries%parm_ios(3)%required = .true.
-        call import_tseries%set_input('parm_ios', 4, fraca)
-        import_tseries%parm_ios(4)%required = .true.
+        call tseries_import%set_input('parm_ios', 1, smpd)
+        call tseries_import%set_input('parm_ios', 2, kv)
+        tseries_import%parm_ios(2)%required = .true.
+        call tseries_import%set_input('parm_ios', 3, cs)
+        tseries_import%parm_ios(3)%required = .true.
+        call tseries_import%set_input('parm_ios', 4, fraca)
+        tseries_import%parm_ios(4)%required = .true.
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3392,7 +3397,34 @@ contains
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_import_tseries
+    end subroutine new_tseries_import
+
+    subroutine new_tseries_average
+        ! PROGRAM SPECIFICATION
+        call tseries_average%new(&
+        &'tseries_average',&                                                                                         ! name
+        &'Average particle extracted from time-series',&                                                             ! descr_short
+        &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
+        &'simple_exec',&                                                                                             ! executable
+        &2, 1, 0, 1, 2, 1, 1, .true.)                                            ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_average%set_input('img_ios', 1, stk)
+        call tseries_average%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call tseries_average%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
+        ! filter controls
+        call tseries_average%set_input('filt_ctrls', 1, corrw)
+        call tseries_average%set_input('filt_ctrls', 2, rankw_general)
+        ! mask controls
+        call tseries_average%set_input('mask_ctrls', 1, msk)
+        ! computer controls
+        call tseries_average%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_average
 
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION
@@ -3450,7 +3482,7 @@ contains
         ! search controls
         call tseries_track%set_input('srch_ctrls', 1, 'offset', 'num', 'Shift half-width search bound', 'Shift half-width search bound(in pixels)',&
         'e.g. pixels window halfwidth', .false., 10.)
-        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking', '{10}', .false., 10.)
+        call tseries_track%set_input('srch_ctrls', 2, 'nframesgrp', 'num', 'Number of contigous frames to average', '# contigous frames to average before tracking{10}', '{10}', .false., 10.)
         ! <empty>
         ! filter controls
         call tseries_track%set_input('filt_ctrls', 1, lp)

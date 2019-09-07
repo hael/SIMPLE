@@ -8,8 +8,9 @@ use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
 implicit none
 
-public :: import_tseries_commander
+public :: tseries_import_commander
 public :: tseries_track_commander
+public :: tseries_average_commander
 public :: tseries_ctf_estimate_commander
 public :: tseries_split_commander
 public :: compare_nano_commander
@@ -17,10 +18,14 @@ public :: detect_atoms_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: import_tseries_commander
+type, extends(commander_base) :: tseries_import_commander
   contains
-    procedure :: execute      => exec_import_tseries
-end type import_tseries_commander
+    procedure :: execute      => exec_tseries_import
+end type tseries_import_commander
+type, extends(commander_base) :: tseries_average_commander
+  contains
+    procedure :: execute      => exec_tseries_average
+end type tseries_average_commander
 type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
@@ -48,9 +53,9 @@ end type detect_atoms_commander
 
 contains
 
-    subroutine exec_import_tseries( self, cline )
+    subroutine exec_tseries_import( self, cline )
         use simple_sp_project, only: sp_project
-        class(import_tseries_commander), intent(inout) :: self
+        class(tseries_import_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         type(parameters) :: params
         type(sp_project) :: spproj
@@ -81,8 +86,8 @@ contains
         end do
         call spproj%write
         ! end gracefully
-        call simple_end('**** IMPORT_TSERIES NORMAL STOP ****')
-    end subroutine exec_import_tseries
+        call simple_end('**** tseries_import NORMAL STOP ****')
+    end subroutine exec_tseries_import
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
@@ -156,6 +161,22 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
+
+    subroutine exec_tseries_average( self, cline )
+        use simple_tseries_averager
+        class(tseries_average_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters) :: params
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
+        if( .not. cline%defined('corrw')      ) call cline%set('corrw', 'softmax')
+        if( .not. cline%defined('rankw')      ) call cline%set('rankw',      'no')
+        if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_wavgs.mrcs')
+        call params%new(cline)
+        call init_tseries_averager
+        call tseries_average
+        call kill_tseries_averager
+        call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
+    end subroutine exec_tseries_average
 
     subroutine exec_tseries_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene
