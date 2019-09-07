@@ -61,7 +61,7 @@ contains
     end subroutine read_imgbatch_1
 
     subroutine read_imgbatch_2( n, pinds, batchlims )
-        integer,       intent(in)     :: n, pinds(n), batchlims(2)
+        integer,          intent(in)  :: n, pinds(n), batchlims(2)
         character(len=:), allocatable :: stkname
         integer :: ind_in_stk, i, ii
         do i=batchlims(1),batchlims(2)

@@ -119,6 +119,7 @@ type :: oris
     procedure          :: merge
     procedure          :: clean_updatecnt
     procedure          :: partition_eo
+    procedure          :: partition_based_on_npeaks
     procedure          :: str2ori
     procedure          :: str2ori_ctfparams_state_eo
     procedure          :: set_ctfvars
@@ -1864,6 +1865,21 @@ contains
         call self%set_all('eo', real(eopart))
         deallocate(eopart)
     end subroutine partition_eo
+
+    ! pinds is particle indices
+    ! nparts is number of k-partitions
+    ! part_assgn is assignment to part, resulting in balancing based on npeaks
+    subroutine partition_based_on_npeaks( self, nparts, part_assgn )
+        class(oris), intent(in)    :: self
+        integer,     intent(in)    :: nparts
+        integer,     intent(inout) :: part_assgn(self%n)
+        real    :: npeaks_arr(self%n)
+        integer :: i
+        do i=1,self%n
+            npeaks_arr(i) = self%o(i)%get('npeaks')
+        end do
+        call approx_balanced_partitioning(npeaks_arr, self%n, nparts, part_assgn)
+    end subroutine partition_based_on_npeaks
 
     subroutine str2ori( self, i, line )
         class(oris),      intent(inout) :: self

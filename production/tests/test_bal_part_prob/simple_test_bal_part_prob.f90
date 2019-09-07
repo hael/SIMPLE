@@ -11,7 +11,7 @@ do i=1,NPTCLS
     npeaks(i) = nint(ran3()*MAXNPEAKS)
 end do
 npeaks_copy = npeaks
-call approx_balanced_partitioning_prob(npeaks, NPTCLS, NPARTS, kassgn)
+call approx_balanced_partitioning(npeaks, NPTCLS, NPARTS, kassgn)
 ! regenerate the sums
 print *, 'presumably approximatively balanced sums'
 do i=1,NPARTS

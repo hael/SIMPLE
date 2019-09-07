@@ -10,7 +10,7 @@ implicit none
 private
 #include "simple_local_flags.inc"
 public ::  split_nobjs_even,split_pairs_in_parts,merge_similarities_from_parts,&
-&merge_rmat_from_parts,merge_nnmat_from_parts, approx_balanced_partitioning_prob
+&merge_rmat_from_parts,merge_nnmat_from_parts, approx_balanced_partitioning
 contains
 
     !>  \brief  for generating balanced partitions of nobjs objects
@@ -47,7 +47,7 @@ contains
         if( present(szmax) ) szmax = sszmax
     end function split_nobjs_even
 
-    subroutine approx_balanced_partitioning_prob( nrs, n, k, kassgn )
+    subroutine approx_balanced_partitioning( nrs, n, k, kassgn )
         integer,  intent(in)    :: n, k
         real,     intent(inout) :: nrs(n)
         integer,  intent(inout) :: kassgn(n)
@@ -68,7 +68,7 @@ contains
                 kassgn(inds(i)) = 0
             endif
         end do
-    end subroutine approx_balanced_partitioning_prob
+    end subroutine approx_balanced_partitioning
 
     !>  \brief  for generating balanced partitions for pairwise calculations on nobjs ojects
     subroutine split_pairs_in_parts( nobjs, nparts )
