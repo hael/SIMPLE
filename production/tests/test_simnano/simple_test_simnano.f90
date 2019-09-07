@@ -24,9 +24,6 @@ real             :: snr_pink, snr_detector, x,y
 integer          :: i,envstat
 character(len=LONGSTRLEN), parameter :: graphene_fname = 'sheet.mrc'
 character(len=LONGSTRLEN), parameter :: particle_fname = 'ptcl.mrc'
-call cline%set('prg','simnano')
-call cline%set('ctf','yes')
-call cline%set('box', 512.)
 call cline%checkvar('smpd',      1)
 call cline%checkvar('nptcls',    2)
 call cline%checkvar('snr',       3)
@@ -37,6 +34,9 @@ call cline%checkvar('element',   7)
 call cline%checkvar('outstk',    8)
 call cline%parse_oldschool
 call cline%check
+call cline%set('prg','simnano')
+call cline%set('ctf','yes')
+call cline%set('box', 512.)
 call params%new(cline)
 ! init
 snr_pink     = params%snr/0.2
