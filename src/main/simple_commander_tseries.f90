@@ -171,6 +171,7 @@ contains
         if( .not. cline%defined('corrw')      ) call cline%set('corrw', 'softmax')
         if( .not. cline%defined('rankw')      ) call cline%set('rankw',      'no')
         if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_wavgs.mrcs')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         call params%new(cline)
         call init_tseries_averager
         call tseries_average
