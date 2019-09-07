@@ -3406,10 +3406,11 @@ contains
         &'Average particle extracted from time-series',&                                                             ! descr_short
         &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
         &'simple_exec',&                                                                                             ! executable
-        &2, 1, 0, 1, 2, 1, 1, .true.)                                            ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 2, 1, 1, .false.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_average%set_input('img_ios', 1, stk)
+        tseries_average%img_ios(1)%required = .true.
         call tseries_average%set_input('img_ios', 2, outstk)
         ! parameter input/output
         call tseries_average%set_input('parm_ios', 1, smpd)

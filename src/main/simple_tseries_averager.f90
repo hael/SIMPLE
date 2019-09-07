@@ -45,6 +45,7 @@ contains
         integer :: fromto(2), ind_last, i, iframe, ind
         real    :: w, sumw
         do iframe=1,params_glob%nptcls
+            call progress(iframe, params_glob%nptcls)
             ! set time window
             fromto(1) = iframe - params_glob%nframesgrp/2
             fromto(2) = iframe + params_glob%nframesgrp/2 - 1
@@ -76,7 +77,7 @@ contains
                 ! calculate weighted average
                 call calc_wavg
             end do
-            call ptcl_avg%write(params_glob%outstk)
+            call ptcl_avg%write(params_glob%outstk, iframe)
         end do
 
 
