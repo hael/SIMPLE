@@ -4,27 +4,39 @@ use simple_ctf
 include 'simple_lib.f08'
 implicit none
 
-public :: prep_nano_tseries_subs, subtr_graphene_backgr
+public :: prep_nano_tseries_subs, calc_neigh_weights, subtr_graphene_backgr
 private
 
-integer, parameter :: NNN=8
-integer, parameter :: NITERS=3
-type(image)        :: subtracted(NNN)
-type(ctf)          :: tfun
-type(ctfparams)    :: ctfvars
-logical            :: do_flip = .false.
+integer, parameter :: NNN = 8
+integer, parameter :: NITERS = 3
+
+type(ctf)            :: tfun
+type(ctfparams)      :: ctfvars
+logical, allocatable :: corr_mask(:,:,:), corr_mask_inv(:,:,:)
+real                 :: neigh_weights(NNN)
+logical              :: do_flip = .false.
 integer(kind=kind(ENUM_WCRIT)), parameter :: WCRITS(2) = [CORRW_CRIT,RANK_INV_CRIT]
 
 contains
 
-    subroutine prep_nano_tseries_subs( ldim, ctfvars_in )
+    subroutine prep_nano_tseries_subs( ldim, mskrad, ctfvars_in )
         integer,         intent(in) :: ldim(3)
+        real,            intent(in) :: mskrad
         type(ctfparams), intent(in) :: ctfvars_in
+        type(image) :: img_msk
         integer :: i
-        ! create images for subtraction
-        do i=1,NNN
-            call subtracted(i)%new(ldim, ctfvars%smpd, wthreads=.false.)
-        end do
+        ! create real-space correlation masks
+        call img_msk%new(ldim, ctfvars%smpd)
+        img_msk = 1.0
+        call img_msk%mask(mskrad, 'hard')
+        corr_mask = img_msk%bin2logical()
+        allocate(corr_mask_inv(ldim(1),ldim(2),ldim(3)))
+        where( corr_mask )
+            corr_mask_inv = .false.
+        elsewhere
+            corr_mask_inv = .true.
+        endwhere
+        call img_msk%kill
         ! create CTF object
         ctfvars = ctfvars_in
         tfun    = ctf(ctfvars%smpd, ctfvars%kv, ctfvars%cs, ctfvars%fraca)
@@ -32,52 +44,41 @@ contains
         do_flip = ctfvars%ctfflag.eq.CTFFLAG_FLIP
     end subroutine prep_nano_tseries_subs
 
-    subroutine subtr_graphene_backgr( particle, neighs, mask, corrected )
-        class(image), intent(inout) :: particle, neighs(NNN), corrected
-        logical,      intent(in)    :: mask(NNN)
+    subroutine calc_neigh_weights( particle, neighs, neigh_mask )
+        class(image), intent(inout) :: particle, neighs(NNN)
+        logical,      intent(in)    :: neigh_mask(NNN)
         integer :: i, j
-        real    :: ws(NNN)
-        real    :: corrs(NNN)
-        ! Fourier transformation
-        call particle%fft
-        do i=1,NNN
-            if( mask(i) ) call neighs(i)%fft
-        end do
-        ! CTF correction
+        real    :: neigh_corrs(NNN), sxx
+        ! CTF correction by phase-flipping
         if( do_flip )then
+            call particle%fft
             call tfun%apply_serial(particle, 'flip', ctfvars)
+            call particle%ifft
             do i=1,NNN
-                if( mask(i) ) call tfun%apply_serial(neighs(i), 'flip', ctfvars)
+                if( neigh_mask(i) )then
+                    call neighs(i)%fft
+                    call tfun%apply_serial(neighs(i), 'flip', ctfvars)
+                    call neighs(i)%ifft
+                endif
             end do
         endif
-        ! create subtracted images and corrected average
-        call corrected%zero
-        ws = 1. / real(count(mask))
+        ! calculate background correlations
+        call particle%prenorm4real_corr(sxx, corr_mask_inv)
+        neigh_corrs = -1.
         do i=1,NNN
-            if( mask(i) )then
-                call subtracted(i)%set(particle)
-                call subtracted(i)%subtr(neighs(i))
-                call corrected%add(subtracted(i), ws(i))
-            endif
+            if( neigh_mask(i) ) neigh_corrs(i) = particle%real_corr_prenorm(neighs(i), sxx, corr_mask_inv)
         end do
-        ! optimise weights
-        do j=1,NITERS
-            ! (1) calc corrs
-            corrs = 0.
-            do i=1,NNN
-                if( mask(i) ) corrs(i) = corrected%corr_serial(subtracted(i))
-            end do
-            ! (2) derive weights from corrs
-            ws = corrs2weights(corrs, WCRITS(1), WCRITS(2))
-            ! (3) update weighted average
-            call corrected%zero
-            do i=1,NNN
-                if( mask(i) ) call corrected%add(subtracted(i), ws(i))
-            end do
-        end do
-        ! return in real-space & normalize
-        call corrected%ifft
-        call corrected%norm
+        ! calculate background weights
+        neigh_weights = corrs2weights(neigh_corrs, WCRITS(1), WCRITS(2))
+    end subroutine calc_neigh_weights
+
+    subroutine subtr_graphene_backgr( particle, neighs, corrected )
+        class(image), intent(inout) :: particle, neighs(NNN), corrected
+
+
+
+
+
     end subroutine subtr_graphene_backgr
 
 end module simple_nano_tseries_subs
