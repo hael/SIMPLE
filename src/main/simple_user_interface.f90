@@ -2848,17 +2848,15 @@ contains
         call refine3D_nano%set_input('srch_ctrls', 5, update_frac)
         call refine3D_nano%set_input('srch_ctrls', 6, frac)
         call refine3D_nano%set_input('srch_ctrls', 7, pgrp)
-        call refine3D_nano%set_input('srch_ctrls', 8, objfun)
-        call refine3D_nano%set_input('srch_ctrls', 9, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call refine3D_nano%set_input('srch_ctrls', 10, sigma2_fudge)
+        call refine3D_nano%set_input('srch_ctrls', 8, 'continue', 'binary', 'Continue previous refinement', 'Continue previous refinement(yes|no){no}', '(yes|no){no}', .false., 'no')
         ! filter controls
         call refine3D_nano%set_input('filt_ctrls', 1, hp)
         call refine3D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
         &prior to determination of the center of gravity of the reference volume(s) and centering', 'centering low-pass limit in &
         &Angstroms{30}', .false., 30.)
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
-        call refine3D_nano%set_input('filt_ctrls', 4,  projw)
-        call refine3D_nano%set_input('filt_ctrls', 5, rankw_general)
+        call refine3D_nano%set_input('filt_ctrls', 4, projw)
+        call refine3D_nano%set_input('filt_ctrls', 5, rankw)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, msk)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
