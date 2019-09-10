@@ -443,10 +443,8 @@ contains
                     iptcl = ptcls_inds(batches(batch,1) + i - 1)
                     iprec = iprecs(batches(batch,1) + i - 1)
                     iori  = ioris(batches(batch,1) + i - 1)
-                    ! normalize & pad
+                    ! normalize & pad & FFT
                     call batch_imgs(i)%noise_norm_pad_fft(build_glob%lmsk, cgrid_imgs(i))
-                    ! FFT
-                    call cgrid_imgs(i)%fft()
                     ! apply CTF, shift
                     add_phshift = 0.
                     if( phaseplate ) add_phshift = precs(iprec)%phshift

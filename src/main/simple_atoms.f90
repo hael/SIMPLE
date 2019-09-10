@@ -549,14 +549,13 @@ contains
             enddo
         enddo
         !$omp end parallel do
-        rmat = C*rmat
         call vol%set_rmat(rmat)
         deallocate(rmat)
     contains
         ! potential assuming static atoms (eq B.6)
         real function epot(r2,aterm,b)
             real, intent(in) :: r2, aterm(5),b(5)
-            epot = sum( aterm * exp(-fourpisq*r2/b) )
+            epot = C * sum( aterm * exp(-fourpisq*r2/b) )
         end function epot
 
     end subroutine convolve

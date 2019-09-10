@@ -14,13 +14,13 @@ implicit none
 type(simulate_atoms_commander) :: xsim_atoms
 type(parameters) :: params
 type(cmdline)    :: cline, cline_graphene, cline_particle
-type(image)      :: graphene, graphene_vol, particle_vol, particle, img, imgpd
+type(image)      :: graphene, graphene_vol, particle_vol, particle, img
 type(ori)        :: orientation
 type(oris)       :: spiral
 type(ctf)        :: tfun
 type(projector)  :: vol_pad
 character(len=:), allocatable :: path
-real             :: snr_pink, snr_detector, x,y
+real             :: snr_pink, snr_detector, x,y, crosssection_C, crosssection, scalefactor
 integer          :: i,envstat
 character(len=LONGSTRLEN), parameter :: graphene_fname = 'sheet.mrc'
 character(len=LONGSTRLEN), parameter :: particle_fname = 'ptcl.mrc'
@@ -62,6 +62,20 @@ call cline_particle%set('moldiam', real(params%moldiam))
 call cline_particle%set('box',real(params%box))
 call cline_particle%set('nthr',real(params%nthr))
 call xsim_atoms%execute(cline_particle)
+! cross sections
+crosssection_C = 1.79 !(x 2.8e-21 m2)
+crosssection   = crosssection_C
+select case(uppercase(trim(params%element)))
+case('FE')
+    crosssection = 1.43
+case('PT')
+    crosssection = 5.12
+case('PD')
+    crosssection = 2.88
+case('AU')
+    crosssection = 5.14
+end select
+scalefactor = crosssection_C / crosssection
 ! graphene slice
 call graphene_vol%new([params%box,params%box,params%box],params%smpd)
 call graphene%new([params%boxpd,params%boxpd,1],params%smpd)
@@ -76,13 +90,14 @@ call vol_pad%fft
 call vol_pad%expand_cmat(params%alpha)
 call vol_pad%fproject(orientation, graphene)
 ! prep particle
-tfun = ctf(params%smpd, 200., 0.0, 0.5)
+tfun = ctf(params%smpd, 200., 0.0, 0.4)
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call particle_vol%new([params%box,params%box,params%box],params%smpd)
 call particle%new([params%boxpd,params%boxpd,1],params%smpd)
 call img%new([params%box,params%box,1],params%smpd)
 call particle_vol%read(particle_fname)
 call particle_vol%pad(vol_pad)
+call vol_pad%mul(scalefactor)
 call particle_vol%kill
 call del_file(particle_fname)
 call vol_pad%fft
@@ -93,9 +108,9 @@ do i=1,params%nptcls
     particle = cmplx(0.,0.)
     img = 0.
     ! extract ori
-    call spiral%set(i,'dfx',0.05+(ran3()-0.5)/1000.)
+    call spiral%set(i,'dfx',0.03+(ran3()-0.5)/5000.)
     call spiral%get_ori(i, orientation)
-    ! project vol
+    ! project volume
     call vol_pad%fproject(orientation, particle)
     ! shift
     x = 20.*cos(real(i-1)/real(params%nptcls)*PI)        +(ran3()-0.5)/2.

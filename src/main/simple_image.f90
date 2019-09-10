@@ -278,7 +278,6 @@ contains
     generic            :: comp_addr_phys =>  comp_addr_phys1, comp_addr_phys2
     procedure          :: get_2Dphys_ind_mapping
     procedure          :: corr
-    procedure          :: corr_serial
     procedure          :: corr_shifted
     procedure, private :: real_corr_1
     procedure, private :: real_corr_2
@@ -312,8 +311,8 @@ contains
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
     procedure          :: zero_env_background
+    procedure          :: noise_norm_instrfun_pad_fft
     procedure          :: noise_norm_pad_fft
-    procedure          :: noise_norm_pad
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: draw_picked
@@ -6042,20 +6041,6 @@ contains
         endif
     end function corr
 
-    !>  \brief corr is for correlating two images assumed to be Fourier transformed
-    function corr_serial( self1, self2 ) result( r )
-        class(image), intent(inout) :: self1, self2
-        real :: r, sumasq, sumbsq
-        r      = sum(real(self1%cmat)*conjg(self2%cmat))
-        sumasq = sum(csq(self2%cmat))
-        sumbsq = sum(csq(self1%cmat))
-        if( sumasq < TINY .or. sumbsq < TINY )then
-            r = 0.
-        else
-            r = r / sqrt(sumasq * sumbsq)
-        endif
-    end function corr_serial
-
     function corr_shifted( self_ref, self_ptcl, shvec, lp_dyn, hp_dyn ) result( r )
         class(image),   intent(inout) :: self_ref, self_ptcl
         real,           intent(in)    :: shvec(3)
@@ -6738,6 +6723,23 @@ contains
         deallocate(vals)
     end subroutine zero_env_background
 
+    subroutine noise_norm_instrfun_pad_fft( self, lmsk, instrfun_img, self_out )
+        class(image), intent(inout) :: self
+        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
+        class(image), intent(in)    :: instrfun_img
+        class(image), intent(inout) :: self_out
+        integer :: starts(3), stops(3)
+        call self%noise_norm(lmsk)
+        call self%div(instrfun_img)
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%ft   = .false.
+        self_out%rmat = 0.
+        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
+            &self%rmat(:self%ldim(1),:self%ldim(2),1)
+        call self_out%fft
+    end subroutine noise_norm_instrfun_pad_fft
+
     subroutine noise_norm_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
         logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
@@ -6752,21 +6754,6 @@ contains
             &self%rmat(:self%ldim(1),:self%ldim(2),1)
         call self_out%fft
     end subroutine noise_norm_pad_fft
-
-    subroutine noise_norm_pad( self, lmsk, self_out )
-        class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(inout) :: self_out
-        integer :: starts(3), stops(3)
-        call self%noise_norm(lmsk)
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
-        self_out%ft   = .false.
-        self_out%rmat = 0.
-        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
-            &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        call self_out%fft
-    end subroutine noise_norm_pad
 
     !>  \brief  Taper edges of image so that there are no sharp discontinuities in real space
     !!          This is a re-implementation of the MRC program taperedgek.for (Richard Henderson, 1987)

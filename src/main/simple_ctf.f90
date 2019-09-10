@@ -197,6 +197,11 @@ contains
         endif
         ctfvars%smpd = self%smpd
         ctfvars%dfx  = dfx
+        ! defaults
+        ctfvars%dfy     = ctfvars%dfx
+        ctfvars%angast  = 0.
+        ctfvars%phshift = 0.
+        ! optionals
         if(present(dfy))         ctfvars%dfy     = dfy
         if(present(angast))      ctfvars%angast  = angast
         if(present(add_phshift)) ctfvars%phshift = add_phshift
