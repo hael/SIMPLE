@@ -167,6 +167,7 @@ type(simple_input_param) :: dferr
 type(simple_input_param) :: dfmax
 type(simple_input_param) :: dfmin
 type(simple_input_param) :: e1, e2, e3
+type(simple_input_param) :: element
 type(simple_input_param) :: eo
 type(simple_input_param) :: focusmsk
 type(simple_input_param) :: frac
@@ -784,6 +785,7 @@ contains
         call set_param(graphene_filt, 'graphene_filt', 'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(corrw,          'corrw',        'multi',  'Weights based on correlations', 'Weights based on correlations(softmax|zscore|no){softmax}',  '(softmax|zscore|no){softmax}',  .false., 'softmax')
         call set_param(rankw_general,  'rankw',        'multi',  'Weights based on ranks', 'Weights based on ranks, independent of objective function magnitude(sum|cen|exp|inv|no){sum}',  '(sum|cen|exp|inv|no){no}',  .false., 'no')
+        call set_param(element, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1311,8 +1313,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call detect_atoms%set_input('filt_ctrls', 1, 'element', 'character', 'Atom element', 'Atom element', &
-        & 'atom composition e.g. pt', .false., '')        ! mask controls
+        call detect_atoms%set_input('filt_ctrls', 1, element)        ! mask controls
         ! <empty>
         ! computer controls
         !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
@@ -1413,10 +1414,9 @@ contains
         call filter%set_input('filt_ctrls', 9, 'vol_filt', 'file', 'Volume filter', 'Volume filter',          'e.g. aniso_optlp.mrc file', .false., '')
         call filter%set_input('filt_ctrls',10, frcs)
         call filter%set_input('filt_ctrls',11, 'filter', 'multi', 'Filter type(tv|nlmean|corr|no){no}', 'Filter type(tv|nlmean|corr|no){no}', '(tv|nlmean|corr|no){no}', .false., 'no')
-        call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda','Strength of noise reduction', '{0.5}', .false., 0.5)
+        call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
-        call filter%set_input('filt_ctrls', 14, 'element', 'character', 'Atom element', 'Atom element', &
-        & 'atom composition e.g. pt', .false., '')
+        call filter%set_input('filt_ctrls', 14, element)
         call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for gaussian generation', 'sigma, for gaussian generation', &
         & '{1.}', .false., 1.0)
         ! mask controls

@@ -189,7 +189,7 @@ contains
                 call refs(iref)%pad(ref_ext, 0.) ! zero padding
                 call refs(iref)%fft
                 call refs(iref)%bp(hp,lp) ! zero padding
-                aux = field%phase_corr(ref_ext,border=max(ldim_refs(1),ldim_refs(2))/2,lp=lp) !phase correlation
+                aux = field%phase_corr(ref_ext,lp,border=max(ldim_refs(1),ldim_refs(2))/2) !phase correlation
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else

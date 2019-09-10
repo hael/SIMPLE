@@ -314,11 +314,13 @@ contains
         type(builder)     :: build
         type(tvfilter)    :: tvfilt
         real, allocatable :: fsc(:), optlp(:), res(:)
+        real, parameter   :: SIGMA_DEFAULT=1.0
         real              :: width, fsc05, fsc0143
         integer           :: find
         type(image)       :: outputvol
-        real              :: sigma
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'filtered.mrcs')
+        if( .not. cline%defined('outvol') ) call cline%set('outvol', 'filtered.mrc')
         width = 10.
         if( cline%defined('stk') )then
             ! 2D
@@ -333,17 +335,16 @@ contains
                         call nlmean_imgfile(params%stk, params%outstk, params%smpd)
                     case('corr')
                         if( .not. cline%defined('sigma') ) then
-                            sigma = 1.
                             if( cline%defined('lp') ) then
-                                call corr_imgfile(params%stk,sigma,params%outstk, params%smpd, lp=params%lp)
+                                call corrfilt_imgfile(params%stk,SIGMA_DEFAULT,params%outstk, params%smpd, params%lp)
                             else
-                                call corr_imgfile(params%stk,sigma,params%outstk, params%smpd)
+                                THROW_HARD('correlation filter requires lp (low-pass limit) input; exec_filter')
                             endif
                         else
                             if( cline%defined('lp') ) then
-                                call corr_imgfile(params%stk,params%sigma,params%outstk, params%smpd, lp=params%lp)
+                                call corrfilt_imgfile(params%stk,params%sigma,params%outstk, params%smpd, params%lp)
                             else
-                                call corr_imgfile(params%stk,params%sigma,params%outstk, params%smpd)
+                                THROW_HARD('correlation filter requires lp (low-pass limit) input; exec_filter')
                             endif
                         endif
                     case DEFAULT
@@ -395,14 +396,13 @@ contains
                 else if( cline%defined('lp') )then
                     if(cline%defined('filter') .and. (trim(params%filter) .eq. 'corr')) then
                         if(cline%defined('sigma')) then
-                            call corr_imgfile(params%vols(1),params%sigma,params%outvol, params%smpd, lp=params%lp)
+                            call corrfilt_imgfile(params%vols(1),params%sigma,params%outvol, params%smpd, lp=params%lp)
                             call build%vol%read(params%outvol)
                         elseif(cline%defined('element')) then
-                            call corr_imgfile(params%vols(1),params%element,params%outvol,params%smpd,lp=params%lp)
+                            call corrfilt_imgfile(params%vols(1),params%element,params%outvol,params%smpd,lp=params%lp)
                             call build%vol%read(params%outvol)
                         else
-                            sigma = 1.
-                            call corr_imgfile(params%vols(1),sigma,params%outvol, params%smpd, lp=params%lp)
+                            call corrfilt_imgfile(params%vols(1),SIGMA_DEFAULT,params%outvol, params%smpd, lp=params%lp)
                             call build%vol%read(params%outvol)
                         endif
                     else

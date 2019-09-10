@@ -6,7 +6,6 @@ module simple_nanoparticles_mod
 include 'simple_lib.f08'
 use simple_image,         only : image
 use simple_atoms,         only : atoms
-
 implicit none
 
 private
@@ -429,10 +428,10 @@ contains
         ! call phasecorr%new(self%ldim, self%smpd)
         ! call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
         ! call gau3D%fft()
-        ! phasecorr = self%img%phase_corr(gau3D,lp=1.)
+        ! phasecorr = self%img%phase_corr(gau3D,1.)
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%img%fft()
-        phasecorr = self%img%phase_corr(one_atom,lp=1.)
+        phasecorr = self%img%phase_corr(one_atom,1.)
         if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorrOneAtom.mrc')
         call self%img%copy(phasecorr)
         call otsu_nano(self%img,o_t)

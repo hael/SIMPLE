@@ -6179,7 +6179,7 @@ contains
     ! smooth way (cos edge).
     ! elementwise: yes --> phase correlation
     ! elementwise: no  --> correlation
-    function phase_corr(self1,self2,border,lp) result(pc)
+    function phase_corr(self1,self2,lp,border) result(pc)
         class(image),      intent(inout) :: self1, self2
         real,              intent(in)    :: lp
         integer, optional, intent(in)    :: border

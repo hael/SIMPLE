@@ -229,7 +229,7 @@ contains
                 call pickref%pad(pickref_ext, 0.) ! zero padding
                 call pickref_ext%mask(mskrad=maskrad, which='soft', backgr=0.)
                 call pickref_ext%write('pickref_extended_masked.mrc', n_ref)
-                aux = field%phase_corr(pickref_ext,border=border,lp=params_glob%lp) !correlation
+                aux = field%phase_corr(pickref_ext,params_glob%lp,border=border) !correlation
                 if(n_ref > 1) then
                     call max_image(self%phasecorr,self%phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else
