@@ -317,6 +317,7 @@ contains
         real              :: width, fsc05, fsc0143
         integer           :: find
         type(image)       :: outputvol
+        real              :: sigma
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
         width = 10.
         if( cline%defined('stk') )then
@@ -331,11 +332,19 @@ contains
                     case('nlmean')
                         call nlmean_imgfile(params%stk, params%outstk, params%smpd)
                     case('corr')
-                        if( .not. cline%defined('stk2') ) THROW_HARD('Need to define stk2 in this case')
-                        if( cline%defined('lp') ) then
-                            call corr_imgfile(params%stk,params%stk2,params%outstk, params%smpd, lp=params%lp)
+                        if( .not. cline%defined('sigma') ) then
+                            sigma = 1.
+                            if( cline%defined('lp') ) then
+                                call corr_imgfile(params%stk,sigma,params%outstk, params%smpd, lp=params%lp)
+                            else
+                                call corr_imgfile(params%stk,sigma,params%outstk, params%smpd)
+                            endif
                         else
-                            call corr_imgfile(params%stk,params%stk2,params%outstk, params%smpd)
+                            if( cline%defined('lp') ) then
+                                call corr_imgfile(params%stk,params%sigma,params%outstk, params%smpd, lp=params%lp)
+                            else
+                                call corr_imgfile(params%stk,params%sigma,params%outstk, params%smpd)
+                            endif
                         endif
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
@@ -385,20 +394,16 @@ contains
                     call build%vol%tophat(params%find)
                 else if( cline%defined('lp') )then
                     if(cline%defined('filter') .and. (trim(params%filter) .eq. 'corr')) then
-                        call build%vol2%read(params%vols(2))
-                        outputvol = build%vol%phase_corr(build%vol2, lp=params%lp)
-                        if( params%outvol .ne. '' ) then
-                            call outputvol%write(params%outvol, del_if_exists=.true.)
-                            call outputvol%kill
-                            ! end gracefully
-                            call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
-                            return
+                        if(cline%defined('sigma')) then
+                            call corr_imgfile(params%vols(1),params%sigma,params%outvol, params%smpd, lp=params%lp)
+                            call build%vol%read(params%outvol)
+                        elseif(cline%defined('element')) then
+                            call corr_imgfile(params%vols(1),params%element,params%outvol,params%smpd,lp=params%lp)
+                            call build%vol%read(params%outvol)
                         else
-                            THROW_WARN('Nothing has been written, need to define outvol in this case')
-                            call outputvol%kill
-                            ! end gracefully
-                            call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
-                            return
+                            sigma = 1.
+                            call corr_imgfile(params%vols(1),sigma,params%outvol, params%smpd, lp=params%lp)
+                            call build%vol%read(params%outvol)
                         endif
                     else
                         call build%vol%bp(0., params%lp, width=width)
@@ -432,20 +437,8 @@ contains
                         case('nlmean')
                             call build%vol%NLmean3D()
                         case('corr')
-                            call build%vol2%read(params%vols(2))
-                            outputvol = build%vol%phase_corr(build%vol2)
-                            if( params%outvol .ne. '' ) then
-                                call outputvol%write(params%outvol, del_if_exists=.true.)
-                                call outputvol%kill
-                                ! end gracefully
-                                call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
-                                return
-                            else
-                                THROW_WARN('Nothing has been written, need to define outvol in this case')
-                                call outputvol%kill
-                                ! end gracefully
-                                call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')
-                                return
+                            if(.not. cline%defined('lp')) then
+                                THROW_HARD('Correlation filter needs lp as input!; exec_filter')
                             endif
                         case DEFAULT
                             THROW_HARD('Unknown filter!')
@@ -457,7 +450,7 @@ contains
                 if( .not. cline%defined('lp') )THROW_HARD('low-pass limit needed 4 phase randomization')
                 call build%vol%phase_rand(params%lp)
             endif
-            if( params%outvol .ne. '' )call build%vol%write(params%outvol, del_if_exists=.true.)
+            if( params%outvol .ne. '' ) call build%vol%write(params%outvol, del_if_exists=.true.)
         endif
         ! end gracefully
         call simple_end('**** SIMPLE_FILTER NORMAL STOP ****')

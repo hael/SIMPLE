@@ -389,6 +389,7 @@ type :: parameters
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: shcfrac=SHCFRAC_DEFAULT !< min % of projection directions evaluated in stochastic search
     real    :: sherr=0.            !< shift error(in pixels){2}
+    real    :: sigma               !< for gaussian function generation {1.}
     real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
@@ -803,6 +804,7 @@ contains
         call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
+        call check_rarg('sigma',          self%sigma)
         call check_rarg('sigma2_fudge',   self%sigma2_fudge)
         call check_rarg('snr',            self%snr)
         call check_rarg('tau',            self%tau)

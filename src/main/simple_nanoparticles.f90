@@ -15,10 +15,10 @@ public :: nanoparticle
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,    parameter :: MAX_INTERAT_DIST   = 3.    !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
-real               :: THEORETICAL_RADIUS = 1.2   !For platinum nano (see simple_atoms for other types)
-integer, parameter :: N_THRESH           = 20    !number of thresholds for binarization
-logical, parameter :: DEBUG_HERE         = .false.!for debugging purposes
+real,    parameter :: MAX_INTERAT_DIST      = 3.    !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
+real               :: THEORETICAL_RADIUS    = 1.1   !Default platinum, theoretical atom radius
+integer, parameter :: N_THRESH              = 20    !number of thresholds for binarization
+logical, parameter :: DEBUG_HERE            = .false.!for debugging purposes
 
 type :: nanoparticle
     private
@@ -29,16 +29,17 @@ type :: nanoparticle
     real        :: nanop_mass_cen(3) = 0.!coordinates of the center of mass of the nanoparticle
     real        :: avg_dist_atoms    = 0.
     real        :: med_longest_dim   = 0.!for phase correlation approach
-    real        :: sigma             = 0.!for gaussian generation for correlation calculation
     integer     :: n_cc              = 0 !number of atoms (connected components
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
     real,    allocatable  :: ang_var(:)
     real,    allocatable  :: dists(:)
     integer, allocatable  :: loc_longest_dist(:,:)   !for indentific of the vxl that determins the longest dim of the atom
-    character(len=STDLEN) :: partname   = ''   !fname
-    character(len=STDLEN) :: fbody      = ''   !fbody
-    character(len=STDLEN) :: output_dir = ''
+    character(len=2)      :: element     = ' '
+    character(len=4)      :: atom_name   = '    '
+    character(len=STDLEN) :: partname    = ''     !fname
+    character(len=STDLEN) :: fbody       = ''     !fbody
+    character(len=STDLEN) :: output_dir  = ''
 
   contains
     ! constructor
@@ -66,6 +67,8 @@ type :: nanoparticle
     procedure, private :: affprop_cluster_ang
     procedure, private :: affprop_cluster_dist_distr
     procedure          :: search_polarization
+    ! automatic symmetry detection
+    ! procedure          :: detect_symmetry
     ! execution
     procedure          :: detect_atoms
     ! comparison
@@ -83,21 +86,45 @@ end type nanoparticle
 contains
 
     !constructor
-    subroutine new_nanoparticle(self, fname, cline_smpd)
+    subroutine new_nanoparticle(self, fname, cline_smpd, element)
         use simple_syslib
-        class(nanoparticle), intent(inout) :: self
-        character(len=*),    intent(in)    :: fname
-        real,                intent(in)    :: cline_smpd
+        class(nanoparticle),      intent(inout) :: self
+        character(len=*),         intent(in)    :: fname
+        real,                     intent(in)    :: cline_smpd
+        character(len=2),optional,intent(in)    :: element
         integer :: nptcls
-        real    :: ssc_fac
         real    :: smpd
         call self%kill
         call simple_getcwd(self%output_dir)
-        ssc_fac = 1.
         call self%set_partname(fname)
         self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
-        self%sigma = 0.8*THEORETICAL_RADIUS/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
+        if(.not. present(element)) then
+            self%element = 'pt'
+            self%atom_name = ' pt '
+        else !default is pt
+            select case(element)
+            case('pt')
+                self%element       = 'pt'
+                self%atom_name     = ' pt '
+                ! thoretical radius is already set
+            case('pd')
+                self%element       = 'pd'
+                self%atom_name     = ' pd '
+                THEORETICAL_RADIUS = 1.12
+            case('fe')
+                self%element       = 'fe'
+                self%atom_name     = ' fe '
+                THEORETICAL_RADIUS = 1.02
+            case('au')
+                self%element       = 'au'
+                self%atom_name     = ' au '
+                THEORETICAL_RADIUS = 1.23
+            case default
+                THROW_HARD('Unknown atom element; new_nanoparticle')
+           end select
+        endif
+        !self%sigma = 0.8*THEORETICAL_RADIUS/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new         (self%ldim, self%smpd)
         call self%img_bin%new     (int(real(self%ldim)), self%smpd)
@@ -281,13 +308,14 @@ contains
         class(nanoparticle),        intent(inout) :: self
         character(len=*), optional, intent(in)    :: fname
         integer :: cc
-        call self%centers_pdb%kill
         call self%centers_pdb%new(self%n_cc, dummy=.true.)
-        !$omp do collapse(1) schedule(static) private(cc)
+        !$omp parallel do schedule(static) private(cc)
         do cc=1,self%n_cc
+            call self%centers_pdb%set_name(cc,self%atom_name)
+            call self%centers_pdb%set_element(cc,self%element)
             call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
         enddo
-        !$omp end do
+        !$omp end parallel do
         if(present(fname)) then
             call self%centers_pdb%writepdb(fname)
         else
@@ -380,24 +408,36 @@ contains
     end function ang3D_vecs
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
-    subroutine phasecorrelation_nano_gaussian(self,sigma,otsu_thresh)
+    subroutine phasecorrelation_nano_gaussian(self,otsu_thresh)
         class(nanoparticle), intent(inout) :: self
-        real,                intent(in)    :: sigma
         real,                intent(out)   :: otsu_thresh
-        type(image) :: gau3D
+        type(image) :: one_atom
         type(image) :: phasecorr
-        real, pointer :: rmat(:,:,:), rmat_bin(:,:,:)
-        real :: o_t
-        call gau3D%new(self%ldim, self%smpd)
+        type(atoms) :: atom
+        real :: cutoff, o_t
         call phasecorr%new(self%ldim, self%smpd)
-        call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
-        call gau3D%fft()
+        call one_atom%new(self%ldim,self%smpd)
+        cutoff = 8.*self%smpd
+        call atom%new(1)
+        call atom%set_element(1,self%element)
+        call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
+        call atom%convolve(one_atom, cutoff)
+        if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
+        call one_atom%fft()
+        !!!!!!!!!!!!!!!!!!!!!!!!
+        ! call gau3D%new(self%ldim, self%smpd)
+        ! call phasecorr%new(self%ldim, self%smpd)
+        ! call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
+        ! call gau3D%fft()
+        ! phasecorr = self%img%phase_corr(gau3D,lp=1.)
+        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%img%fft()
-        phasecorr = self%img%phase_corr(gau3D,lp=1.)
-        if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorr.mrc')
+        phasecorr = self%img%phase_corr(one_atom,lp=1.)
+        if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorrOneAtom.mrc')
         call self%img%copy(phasecorr)
         call otsu_nano(self%img,o_t)
         otsu_thresh = o_t
+        call one_atom%kill()
     contains
         !Otsu binarization for nanoparticle maps
         !It considers the gray level value just in the positive range.
@@ -718,7 +758,9 @@ contains
         self%n_cc = nint(maxval(rmat_cc)) !update
         call self%find_centers()
         call self%write_centers()
-        call self%img_bin%write(basename(trim(self%fbody))//'BIN.mrc')
+        !root folder
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
+        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
         write(logfhandle, *) '****outliers discarding, completed'
     end subroutine discard_outliers
 
@@ -735,7 +777,7 @@ contains
         call self%img%get_rmat_ptr(rmat_pc)    !now img contains the phase correlation
         imat = nint(self%img_cc%get_rmat())
         call self%img_cc%get_rmat_ptr(rmat_cc) !to pass to the subroutine split_atoms
-        if(DEBUG_HERE) call self%img_cc%write(basename(trim(self%fbody))//'OldImgCc.mrc')
+        if(DEBUG_HERE) call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'OldImgCc.mrc')
         cnt = 0
         ! Remember to update the centers
         do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
@@ -761,8 +803,7 @@ contains
         enddo
         self%n_cc = cnt !update
         call self%write_centers()
-        if(DEBUG_HERE) call self%img_cc%write(basename(trim(self%fbody))//'NewImgCc.mrc')
-        call self%img_cc%write(basename(trim(self%fbody))//'NewImgCc.mrc')
+        if(DEBUG_HERE) call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'NewImgCc.mrc')
     contains
         subroutine split_atom(rmat_pc, rmat_cc, imat,n_cc,new_centers,cnt)
             real,    intent(in)    :: rmat_pc(:,:,:)
@@ -820,47 +861,133 @@ contains
     subroutine radial_dependent_stats(self,volume)
         class(nanoparticle), intent(inout) :: self
         integer, optional,   intent(in)    :: volume !volume identifier, when input is more than one map
-        type(atoms)        :: radial_atoms5A, radial_atoms7A, radial_atoms9A,radial_atoms12A
+        type(atoms)        :: radial_atoms5A_all,  radial_atoms7A_all,  radial_atoms9A_all, radial_atoms12A_all  !full shell
+        type(atoms)        :: radial_atoms5A_just, radial_atoms7A_just, radial_atoms9A_just,radial_atoms12A_just !empty shell
         real, allocatable  :: coords(:,:) !coordinates of the centers of the atoms according to radial distances
         real    :: m(3)    !mass center of c3 map
         real    :: d       !distance atoms from the center
         real    :: radius  !radius of the sphere to consider
-        integer :: N       !number of atoms c3 map
+        ! integer :: N       !number of atoms c3 map
         integer :: cc
-        integer :: cnt, cnt5, cnt7, cnt9, cnt12 ! nu,ber of atoms in radial shells
+        integer :: cnt
+        integer :: cnt5_all,  cnt7_all,  cnt9_all,  cnt12_all  ! number of atoms in radial shells, full shell
+        integer :: cnt5_just, cnt7_just, cnt9_just, cnt12_just ! number of atoms in radial shells, only in rad indicated, empty shell
+
         write(logfhandle, *) '****radial atom-to-atom distances estimation, init'
         ! Radial dependent statistics
-        N = self%n_cc
-        call radial_atoms5A%new (N, dummy=.true.)
-        call radial_atoms7A%new (N, dummy=.true.)
-        call radial_atoms9A%new (N, dummy=.true.)
-        call radial_atoms12A%new(N, dummy=.true.)
-        cnt5  = 0
-        cnt7  = 0
-        cnt9  = 0
-        cnt12 = 0
+        cnt5_all   = 0
+        cnt7_all   = 0
+        cnt9_all   = 0
+        cnt12_all  = 0
+        cnt5_just  = 0
+        cnt7_just  = 0
+        cnt9_just  = 0
+        cnt12_just = 0
         m = self%nanopart_masscen()
         !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, self%n_cc
             d = euclid(self%centers(:,cc), m)*self%smpd
            if(d<=5.) then
-               call radial_atoms5A%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
-               cnt5 = cnt5+1
-               cnt7 = cnt7+1
-               cnt9 = cnt9+1
-               cnt12 = cnt12+1
+               cnt5_just = cnt5_just+1
+               cnt5_all  = cnt5_all+1
+               cnt7_all  = cnt7_all +1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
            elseif(d>5. .and. d<=7.) then
-               cnt7 = cnt7+1
-               cnt9 = cnt9+1
-               cnt12 = cnt12+1
-               call radial_atoms7A%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
+               cnt7_just = cnt7_just+1
+               cnt7_all  = cnt7_all +1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
            elseif(d>7. .and. d<=9.) then
-               cnt9 = cnt9+1
-               cnt12 = cnt12+1
-               call radial_atoms9A%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
+               cnt9_just = cnt9_just+1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
            elseif(d>9. .and. d<=12.) then
-               cnt12 = cnt12+1
-               call radial_atoms12A%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
+               cnt12_just = cnt12_just+1
+               cnt12_all  = cnt12_all+1
+           endif
+        enddo
+        !$omp end do
+        call radial_atoms5A_all%new (cnt5_all ,  dummy=.true.)
+        call radial_atoms7A_all%new (cnt7_all ,  dummy=.true.)
+        call radial_atoms9A_all%new (cnt9_all ,  dummy=.true.)
+        call radial_atoms12A_all%new(cnt12_all,  dummy=.true.)
+        call radial_atoms5A_just%new (cnt5_just , dummy=.true.)
+        call radial_atoms7A_just%new (cnt7_just , dummy=.true.)
+        call radial_atoms9A_just%new (cnt9_just , dummy=.true.)
+        call radial_atoms12A_just%new(cnt12_just, dummy=.true.)
+        cnt5_all   = 0
+        cnt7_all   = 0
+        cnt9_all   = 0
+        cnt12_all  = 0
+        cnt5_just  = 0
+        cnt7_just  = 0
+        cnt9_just  = 0
+        cnt12_just = 0
+        ! Save coords
+        !$omp do collapse(1) schedule(static) private(cc)
+        do cc = 1, self%n_cc
+            d = euclid(self%centers(:,cc), m)*self%smpd
+           if(d<=5.) then
+               cnt5_just = cnt5_just+1
+               cnt5_all  = cnt5_all +1
+               cnt7_all  = cnt7_all +1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
+               call radial_atoms5A_just%set_name(cnt5_just,self%atom_name)
+               call radial_atoms5A_just%set_element(cnt5_just,self%element)
+               call radial_atoms5A_just%set_coord(cnt5_just,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms5A_all%set_name(cnt5_all,self%atom_name)
+               call radial_atoms5A_all%set_element(cnt5_all,self%element)
+               call radial_atoms5A_all%set_coord(cnt5_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms7A_all%set_name(cnt7_all,self%atom_name)
+               call radial_atoms7A_all%set_element(cnt7_all,self%element)
+               call radial_atoms7A_all%set_coord(cnt7_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms9A_all%set_name(cnt9_all,self%atom_name)
+               call radial_atoms9A_all%set_element(cnt9_all,self%element)
+               call radial_atoms9A_all%set_coord(cnt9_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms12A_all%set_name(cnt12_all,self%atom_name)
+               call radial_atoms12A_all%set_element(cnt12_all,self%element)
+               call radial_atoms12A_all%set_coord(cnt12_all,(self%centers(:,cc)-1.)*self%smpd)
+           elseif(d>5. .and. d<=7.) then
+               cnt7_just = cnt7_just+1
+               cnt7_all  = cnt7_all +1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
+               call radial_atoms7A_just%set_name(cnt7_just,self%atom_name)
+               call radial_atoms7A_just%set_element(cnt7_just,self%element)
+               call radial_atoms7A_just%set_coord(cnt7_just,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms7A_all%set_name(cnt7_all,self%atom_name)
+               call radial_atoms7A_all%set_element(cnt7_all,self%element)
+               call radial_atoms7A_all%set_coord(cnt7_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms9A_all%set_name(cnt9_all,self%atom_name)
+               call radial_atoms9A_all%set_element(cnt9_all,self%element)
+               call radial_atoms9A_all%set_coord(cnt9_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms12A_all%set_name(cnt12_all,self%atom_name)
+               call radial_atoms12A_all%set_element(cnt12_all,self%element)
+               call radial_atoms12A_all%set_coord(cnt12_all,(self%centers(:,cc)-1.)*self%smpd)
+           elseif(d>7. .and. d<=9.) then
+               cnt9_just = cnt9_just+1
+               cnt9_all  = cnt9_all +1
+               cnt12_all = cnt12_all+1
+               call radial_atoms9A_just%set_name(cnt9_just,self%atom_name)
+               call radial_atoms9A_just%set_element(cnt9_just,self%element)
+               call radial_atoms9A_just%set_coord(cnt9_just,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms9A_all%set_name(cnt9_all,self%atom_name)
+               call radial_atoms9A_all%set_element(cnt9_all,self%element)
+               call radial_atoms9A_all%set_coord(cnt9_all,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms12A_all%set_name(cnt12_all,self%atom_name)
+               call radial_atoms12A_all%set_element(cnt12_all,self%element)
+               call radial_atoms12A_all%set_coord(cnt12_all,(self%centers(:,cc)-1.)*self%smpd)
+           elseif(d>9. .and. d<=12.) then
+               cnt12_just = cnt12_just+1
+               cnt12_all  = cnt12_all+1
+               call radial_atoms12A_just%set_name(cnt12_just,self%atom_name)
+               call radial_atoms12A_just%set_element(cnt12_just,self%element)
+               call radial_atoms12A_just%set_coord(cnt12_just,(self%centers(:,cc)-1.)*self%smpd)
+               call radial_atoms12A_all%set_name(cnt12_all,self%atom_name)
+               call radial_atoms12A_all%set_element(cnt12_all,self%element)
+               call radial_atoms12A_all%set_coord(cnt12_all,(self%centers(:,cc)-1.)*self%smpd)
            endif
         enddo
         !$omp end do
@@ -871,15 +998,23 @@ contains
         call simple_chdir(trim(self%output_dir)//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         open(11, file='RadialDependentStat', position= 'append')
         if(present(volume)) then
-            call radial_atoms5A%writepdb('vol'//int2str(volume)//'_radial_atoms5A')
-            call radial_atoms7A%writepdb('vol'//int2str(volume)//'_radial_atoms7A')
-            call radial_atoms9A%writepdb('vol'//int2str(volume)//'_radial_atoms9A')
-            call radial_atoms12A%writepdb('vol'//int2str(volume)//'_radial_atoms12A')
+            call radial_atoms5A_just%writepdb('vol'//int2str(volume)//'_radial_atoms5A_just')
+            call radial_atoms7A_just%writepdb('vol'//int2str(volume)//'_radial_atoms7A_just')
+            call radial_atoms9A_just%writepdb('vol'//int2str(volume)//'_radial_atoms9A_just')
+            call radial_atoms12A_just%writepdb('vol'//int2str(volume)//'_radial_atoms12A_just')
+            call radial_atoms5A_all%writepdb('vol'//int2str(volume)//'_radial_atoms5A_all')
+            call radial_atoms7A_all%writepdb('vol'//int2str(volume)//'_radial_atoms7A_all')
+            call radial_atoms9A_all%writepdb('vol'//int2str(volume)//'_radial_atoms9A_all')
+            call radial_atoms12A_all%writepdb('vol'//int2str(volume)//'_radial_atoms12A_all')
         else
-            call radial_atoms5A%writepdb('radial_atoms5A')
-            call radial_atoms7A%writepdb('radial_atoms7A')
-            call radial_atoms9A%writepdb('radial_atoms9A')
-            call radial_atoms12A%writepdb('radial_atoms12A')
+            call radial_atoms5A_just%writepdb('radial_atoms5A_just')
+            call radial_atoms7A_just%writepdb('radial_atoms7A_just')
+            call radial_atoms9A_just%writepdb('radial_atoms9A_just')
+            call radial_atoms12A_just%writepdb('radial_atoms12A_just')
+            call radial_atoms5A_all%writepdb('radial_atoms5A_all')
+            call radial_atoms7A_all%writepdb('radial_atoms7A_all')
+            call radial_atoms9A_all%writepdb('radial_atoms9A_all')
+            call radial_atoms12A_all%writepdb('radial_atoms12A_all')
         endif
         ! Estimation of avg distance and stdev among atoms in radial dependent shells
         if(present(volume)) then
@@ -887,7 +1022,7 @@ contains
         else
             write(unit = 11, fmt = '(a)') 'Estimation of atom-to-atom statistics in 5A radius shell'
         endif
-        allocate(coords(3,cnt5), source = 0.)
+        allocate(coords(3,cnt5_all), source = 0.)
         cnt = 0
         !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, self%n_cc
@@ -909,7 +1044,7 @@ contains
         else
             write(unit = 11, fmt = '(a)') 'Estimation of atom-to-atom statistics in 7A radius shell'
         endif
-        allocate(coords(3,cnt7), source = 0.)
+        allocate(coords(3,cnt7_all), source = 0.)
         cnt = 0
         !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, self%n_cc
@@ -931,7 +1066,7 @@ contains
         else
             write(unit = 11, fmt = '(a)') 'Estimation of atom-to-atom statistics in 9A radius shell'
         endif
-        allocate(coords(3,cnt9), source = 0.)
+        allocate(coords(3,cnt9_all), source = 0.)
         cnt = 0
         !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, self%n_cc
@@ -953,7 +1088,7 @@ contains
         else
             write(unit = 11, fmt = '(a)') 'Estimation of atom-to-atom statistics in 12A radius shell'
         endif
-        allocate(coords(3,cnt12), source = 0.)
+        allocate(coords(3,cnt12_all), source = 0.)
         cnt = 0
         !$omp do collapse(1) schedule(static) private(cc)
         do cc = 1, self%n_cc
@@ -971,10 +1106,14 @@ contains
         endif
         deallocate(coords)
         close(11)
-        call radial_atoms5A%kill
-        call radial_atoms7A%kill
-        call radial_atoms9A%kill
-        call radial_atoms12A%kill
+        call radial_atoms5A_all%kill
+        call radial_atoms7A_all%kill
+        call radial_atoms9A_all%kill
+        call radial_atoms12A_all%kill
+        call radial_atoms5A_just%kill
+        call radial_atoms7A_just%kill
+        call radial_atoms9A_just%kill
+        call radial_atoms12A_just%kill
         ! Come back to root directory
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         write(logfhandle, *) '****radial atom-to-atom distances estimation, completed'
@@ -1729,6 +1868,65 @@ contains
         end subroutine atomic_position_rmsd
     end subroutine compare_atomic_models
 
+    ! Check for symmetry at different radii.
+    ! radii: 5, 7, 9, 12 A
+    ! The idea is to identify the atomic positions
+    ! contained in a certain radius, generate a distribution
+    ! ! based on that and check for symmetry.
+    ! subroutine detect_symmetry(self, fname_coords_pdb)
+    !     class(nanoparticle), intent(inout) :: self
+    !     character(len=*),    intent(in)    :: fname_coords_pdb
+    !     type(atoms) :: atom
+    !     type(image) :: simulated_distrib
+    !     real        :: cutoff
+    !     ! Generate distribution based on atomic position
+    !     call simulated_distrib%new(self%ldim,self%smpd)
+    !     cutoff = 8.*self%smpd
+    !     call atom%new(fname_coords_pdb)
+    !     call atom%convolve(simulated_distrib, cutoff)
+    !     call simulated_distrib%write(basename(trim(fname_coords_pdb))//'Convoluted.mrc') !if(DEBUG_HERE)
+    !     ! Check for symmetry
+    !     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !     call exec_symmetry_test_try(simulated_distrib,hp=10.,lp=1.,msk=3.5*THEORETICAL_RADIUS) !SET REASONABLE HP
+    !     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    !     call simulated_distrib%kill
+    !     call atom%kill
+    ! contains
+    !         subroutine symmetry_test(vol,hp,lp,msk)
+    !             use simple_symanalyzer
+    !             use simple_cmdline
+    !             use simple_parameters
+    !             use simple_builder
+    !             type(image), intent(inout) :: vol
+    !             real,        intent(inout) :: hp,lp
+    !             real,        intent(in)    :: msk ! radius in pixels
+    !             character(len=3)      :: pgrp
+    !             real                  :: scale, smpd
+    !             integer, parameter    :: MAXBOX = 128
+    !             integer :: cn_stop
+    !             ! possible downscaling of input vol
+    !             scale = 1.
+    !             cn_stop = 50
+    !             if( self%ldim(1) > MAXBOX )then
+    !                 scale = real(MAXBOX) / real(self%ldim(1))
+    !                 call vol%fft
+    !                 call vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
+    !                 call vol%ifft
+    !                 smpd = vol%get_smpd() !it's smpd after clipping
+    !                 msk  = round2even(scale*msk)
+    !             endif
+    !             ! low-pass limit safety
+    !             lp = max(2.*smpd, lp)
+    !             ! mask volume
+    !             call vol%mask(msk, 'soft')
+    !             ! run test
+    !             ! NEED TO KEEP THE BUILDER
+    !             call symmetry_tester(vol_in=vol,msk=msk,hp=hp,lp=lp,cn_stop=cn_stop,platonic='yes',pgrp_out=pgrp)
+    !             ! end gracefully
+    !             call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
+    !         end subroutine symmetry_test
+    ! end subroutine detect_symmetry
+
     ! This is the subroutine that executes all the steps
     ! for the structural analysis of one nananoparticle
     ! 3D reconstruction.
@@ -1736,7 +1934,7 @@ contains
          class(nanoparticle), intent(inout) :: self
          real :: otsu_thresh
          ! Phase correlations approach
-         call self%phasecorrelation_nano_gaussian(self%sigma, otsu_thresh)
+         call self%phasecorrelation_nano_gaussian(otsu_thresh)
          ! Nanoparticle binarization
          call self%binarize(otsu_thresh)
          ! Atom-to-atom distances distribution estimation
@@ -1767,7 +1965,6 @@ contains
         self%avg_dist_atoms    = 0.
         self%med_longest_dim   = 0.
         self%n_cc              = 0
-        self%sigma             = 0.
         call self%img%kill()
         call self%img_bin%kill()
         call self%img_cc%kill()

@@ -431,7 +431,11 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        call nano%new(params%vols(1), params%smpd)
+        if( cline%defined('element') )then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd) !default pt
+        endif
         call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
         ! execute
         call nano%detect_atoms()

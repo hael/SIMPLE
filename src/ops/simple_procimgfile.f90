@@ -27,6 +27,10 @@ interface subtr_backgr_imgfile
     module procedure subtr_backgr_imgfile_2
 end interface
 
+interface corr_imgfile
+    module procedure corr_imgfile_1
+    module procedure corr_imgfile_2
+end interface
 #include "simple_local_flags.inc"
 
 contains
@@ -873,38 +877,85 @@ contains
 
     !>  \brief  is for apply the correlation filter to an image file
     !    fname2process: images to be processed
-    !    fname2process: images to be processed
     !    fname        : output images
-    subroutine corr_imgfile( fname2process, fname2corr, fname, smpd, lp )
-        character(len=*), intent(in) :: fname2process,fname2corr, fname
+    subroutine corr_imgfile_1( fname2process, sigma, fname, smpd, lp )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: sigma
         real,             intent(in) :: smpd
         real, optional,   intent(in) :: lp
-        type(image)    :: imgproc, imgcorr, imgresult
-        integer        :: n1,n2, i, ldim(3)
-        call find_ldim_nptcls(fname2process, ldim, n1)
-        call find_ldim_nptcls(fname2process, ldim, n2)
-        if(n1 /= n2) THROW_HARD('Stk and Stk2 have to have the same nb of images! corr_imgfile')
-        ldim(3)     = 1
-        call raise_exception_imgfile( n1, ldim, 'corr_imgfile' )
+        type(image)    :: imgproc, gau, imgresult
+        integer        :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        call raise_exception_imgfile( n, ldim, 'corr_imgfile_1' )
+        call gau%new(ldim, smpd)
         call imgproc%new(ldim,smpd)
-        call imgcorr%new(ldim,smpd)
         call imgresult%new(ldim,smpd)
-        write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO IMAGES'
-        do i=1,n1
-            call progress(i,n1)
-            call imgproc%read(fname2process, i)
-            call imgcorr%read(fname2corr, i)
-            if(present(lp)) then
-                imgresult = imgproc%phase_corr(imgcorr,lp=lp)
+        if(ldim(3) == 1) then !2D case
+            call gau%gauimg2D(sigma, sigma, cutoff=5.)
+            write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO IMAGES'
+            do i=1,n
+                call progress(i,n)
+                call imgproc%read(fname2process, i)
+                if(present(lp)) then
+                    imgresult = imgproc%phase_corr(gau,lp=lp)
+                else
+                    THROW_HARD('Need to define lp; corr_imgfile_1')
+                endif
+                call imgresult%write(fname, i)
+            end do
+        else !3D case
+            call gau%gauimg3D(sigma, sigma, sigma, cutoff=5.)
+            write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO VOLUME'
+            call imgproc%read(fname2process)
+            if(.not. present(lp)) then
+                THROW_HARD('Need to define lp; corr_imgfile_1')
             else
-                imgresult = imgproc%phase_corr(imgcorr)
+                imgresult = imgproc%phase_corr(gau,lp=lp)
             endif
-            call imgresult%write(fname, i)
-        end do
+            call imgproc%copy(imgresult)
+            call imgproc%write(fname)
+        endif
         call imgproc%kill
-        call imgcorr%kill
+        call gau%kill
         call imgresult%kill
-    end subroutine corr_imgfile
+    end subroutine corr_imgfile_1
+
+    subroutine corr_imgfile_2( fname2process, element, fname, smpd, lp )
+        use simple_atoms, only : atoms
+        character(len=*), intent(in) :: fname2process, fname
+        character(len=2), intent(in) :: element
+        real,             intent(in) :: smpd
+        real, optional,   intent(in) :: lp
+        type(image)    :: imgproc, img_atom, imgresult
+        type(atoms)    :: atom
+        integer        :: n, i, ldim(3)
+        real           :: cutoff
+        call find_ldim_nptcls(fname2process, ldim, n)
+        call raise_exception_imgfile( n, ldim, 'corr_imgfile_2' )
+        if(ldim(3) == 1) then !2D case
+            THROW_HARD('Convolution with atom is possible just in 3D; corr_imgfile_2')
+        else !3D case
+            write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO VOLUME'
+            call img_atom%new(ldim, smpd)
+            call imgproc%new(ldim,smpd)
+            call imgresult%new(ldim,smpd)
+            cutoff = 12.*smpd
+            call imgproc%read(fname2process)
+            call atom%new(1)
+            call atom%set_element(1,element)
+            call atom%set_coord(1,smpd*(real(ldim)/2.)) !DO NOT NEED THE +1
+            call atom%convolve(img_atom, cutoff)
+            if(present(lp)) then
+                imgresult = imgproc%phase_corr(img_atom, lp=lp)
+            else
+                THROW_HARD('Need to define lp; corr_imgfile_2')
+            endif
+            call imgresult%write(fname)
+        endif
+        call imgproc%kill
+        call img_atom%kill
+        call imgresult%kill
+    end subroutine corr_imgfile_2
 
     !>  \brief  is for applying CTF
     subroutine apply_ctf_imgfile( fname2process, fname, o, smpd, mode, bfac )

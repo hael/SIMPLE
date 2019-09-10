@@ -6196,8 +6196,8 @@ contains
     ! elementwise: no  --> correlation
     function phase_corr(self1,self2,border,lp) result(pc)
         class(image),      intent(inout) :: self1, self2
+        real,              intent(in)    :: lp
         integer, optional, intent(in)    :: border
-        real,    optional, intent(in)    :: lp
         real, parameter :: width = 3.
         type(image) :: pc
         complex     :: c1,c2
@@ -6207,7 +6207,7 @@ contains
         integer     :: shlim,shlimsq,shlimbpsq,shlimbp
         integer     :: h,k,l
         integer     :: hsq_ksq_lsq
-        logical     :: ft1, ft2,l_lp
+        logical     :: ft1, ft2
         if(self1.eqdims.self2) then
             if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 .or. border >= self1%ldim(3)/2) ) &
             & THROW_HARD('Input border parameter too big; phase_corr')
@@ -6218,14 +6218,11 @@ contains
             call self2%fft()
             call pc%new(self1%ldim, self1%smpd)
             call pc%set_ft(.true.)
-            l_lp    = present(lp)
-            shlimsq = huge(shlimsq)
-            if(l_lp) then
-                shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
-                shlimbpsq = shlim*shlim
-                shlimbp   = shlim+nint(width)
-                shlimbpsq = shlimbp*shlimbp
-            endif
+            shlimsq   = huge(shlimsq)
+            shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
+            shlimbpsq = shlim*shlim
+            shlimbp   = shlim+nint(width)
+            shlimbpsq = shlimbp*shlimbp
             sqsum1 = 0.d0
             sqsum2 = 0.d0
             nrflims = self1%loop_lims(2)
@@ -6240,7 +6237,7 @@ contains
                         if( h==0 .and. k==0 .and. l==0 )then
                             pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                             cycle
-                        else if( l_lp ) then
+                        else
                             if(hsq_ksq_lsq > shlimbpsq)then
                                 pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
                                 cycle

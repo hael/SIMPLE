@@ -774,7 +774,6 @@ contains
                             (y - center_coords(2))**2.0 / (2.0 * ysigma * ysigma)) )
     end function gaussian2D
 
-    !CHIARAA (for nanoparticles work with phase correlations)
     real function gaussian3D( center_coords, x, y, z, xsigma, ysigma, zsigma )
         real, intent(in) :: center_coords(3), x, y, z, xsigma, ysigma, zsigma
         gaussian3D = exp( -((x - center_coords(1))**2.0 / (2.0 * xsigma * xsigma) +&

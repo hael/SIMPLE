@@ -126,75 +126,92 @@ end subroutine laplacian_filt
         enddo
     end subroutine circumference
 
-    subroutine exec_symmetry_test_try(lp, msk)
-        use simple_symanalyzer
-        use simple_cmdline
-        use simple_parameters
-        use simple_builder
-        real, intent(in) :: lp
-        real, intent(in) :: msk ! radius in pixels
-        type(cmdline) :: cline
-        type(parameters)      :: params
-        type(builder)         :: build
-        character(len=STDLEN) :: fbody
-        character(len=3)      :: pgrp
-        real                  :: shvec(3), scale, smpd
-        integer               :: ldim(3)
-        integer, parameter    :: MAXBOX = 128
-        !call cline%new()
-        call cline%set('mkdir',  'yes')
-        call cline%set('cenlp',    20.)
-        call cline%set('center', 'yes')
-        call cline%set('vol1', 'particle1.mrc')
-        ! call cline%set('vol1', './AutoSymmetryDetection/particle1BIN.mrc')
-        call cline%set('smpd', 0.358)
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
-        call build%vol%read(params%vols(1))
-        ! possible downscaling of input vol
-        ldim = build%vol%get_ldim()
-        scale = 1.
-        params%msk = msk
-        params%lp = lp
-        if( ldim(1) > MAXBOX )then
-            scale = real(MAXBOX) / real(ldim(1))
-            call build%vol%fft
-            call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
-            call build%vol%ifft
-            smpd         = build%vol%get_smpd()
-            print *, 'smpd = ', smpd
-            params%msk   = round2even(scale * params%msk)
-            params%inner = round2even(scale * params%inner)
-            params%width = scale * params%width
-        endif
-        ! low-pass limit safety
-        params%lp = max(2. * smpd, params%lp)
-        ! centering
-        shvec = 0.
-        if( params%center.eq.'yes' )then
-            shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
-            call build%vol%shift(shvec)
-            ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
-            ! call build%vol%write(trim(fbody)//'_centered.mrc')
-        endif
-        ! mask volume
-        if( params_glob%l_innermsk )then
-            call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
-        else
-            call build%vol%mask(params%msk, 'soft')
-        endif
-        ! run test
-        print *, 'DEBUGGING'
-        print *, 'params%msk = ', params%msk
-        print *, 'params%lp  = ', params%lp
-        print *, 'params%hp  = ', params%hp
-        print *, 'params%cn_stop = ', params%cn_stop
-        print *, 'params%platonic = ', params%platonic
-        print *, 'pgrp ', pgrp
-        call symmetry_tester(build%vol, params%msk, params%hp,&
-        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
-        ! end gracefully
-        call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
-    end subroutine exec_symmetry_test_try
+    ! subroutine exec_symmetry_test_try(lp, msk)
+    !     use simple_symanalyzer
+    !     use simple_cmdline
+    !     use simple_parameters
+    !     use simple_builder
+    !     real, intent(in) :: lp
+    !     real, intent(in) :: msk ! radius in pixels
+    !     type(parameters)      :: params
+    !     type(image)           :: vol
+    !     type(cmdline)         :: cline
+    !     type(builder)         :: build
+    !     character(len=STDLEN) :: fbody
+    !     character(len=3)      :: pgrp
+    !     real                  :: shvec(3), scale, smpd
+    !     integer               :: ldim(3)
+    !     integer, parameter    :: MAXBOX = 128
+    !     !call cline%new()
+    !     call cline%set('mkdir',  'yes')
+    !     call cline%set('cenlp',     1.)
+    !     call cline%set('center', 'yes')
+    !     call cline%set('vol1', 'AutoSymmDetect/Convoluted.mrc')
+    !     call cline%set('smpd', 0.358)
+    !     call vol%new(self%ldim,self%smpd)
+    !     call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
+    !     call build%vol%read(params%vols(1))
+    !     ! possible downscaling of input vol
+    !     ldim = build%vol%get_ldim()
+    !     scale = 1.
+    !     params%msk = msk
+    !     params%lp = lp
+    !     if( ldim(1) > MAXBOX )then
+    !         scale = real(MAXBOX) / real(ldim(1))
+    !         call build%vol%fft
+    !         call build%vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
+    !         call build%vol%ifft
+    !         smpd         = build%vol%get_smpd()
+    !         print *, 'smpd = ', smpd
+    !         params%msk   = round2even(scale * params%msk)
+    !         params%inner = round2even(scale * params%inner)
+    !         params%width = scale * params%width
+    !     endif
+    !     ! low-pass limit safety
+    !     params%lp = max(2. * smpd, params%lp)
+    !     ! centering
+    !     shvec = 0.
+    !     if( params%center.eq.'yes' )then
+    !         shvec = build%vol%calc_shiftcen(params%cenlp,params%msk)
+    !         call build%vol%shift(shvec)
+    !         ! fbody = get_fbody(params%vols(1),fname2ext(params%vols(1)))
+    !         ! call build%vol%write(trim(fbody)//'_centered.mrc')
+    !     endif
+    !     ! mask volume
+    !     if( params_glob%l_innermsk )then
+    !         call build%vol%mask(params%msk, 'soft', inner=params%inner, width=params%width)
+    !     else
+    !         call build%vol%mask(params%msk, 'soft')
+    !     endif
+    !     ! run test
+    !     print *, 'DEBUGGING'
+    !     print *, 'params%msk = ', params%msk
+    !     print *, 'params%lp  = ', params%lp
+    !     print *, 'params%hp  = ', params%hp
+    !     print *, 'params%cn_stop = ', params%cn_stop
+    !     print *, 'params%platonic = ', params%platonic
+    !     print *, 'pgrp ', pgrp
+    !     call symmetry_tester(build%vol, params%msk, params%hp,&
+    !     &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
+    ! end subroutine exec_symmetry_test_try
+
+    subroutine generate_distribution(fname_coords_pdb, ldim, smpd)
+        use simple_atoms, only: atoms
+           character(len=*), intent(in) :: fname_coords_pdb
+           integer,          intent(in) :: ldim(3)
+           real,             intent(in) :: smpd
+           type(atoms) :: atom
+           type(image) :: vol !simulated distribution
+           real        :: cutoff
+           ! Generate distribution based on atomic position
+           call vol%new(ldim,smpd)
+           cutoff = 8.*smpd
+           call atom%new(fname_coords_pdb)
+           call atom%convolve(vol, cutoff)
+           call vol%write('Convoluted.mrc')
+   end subroutine generate_distribution
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
@@ -205,27 +222,23 @@ end module simple_test_chiara_try_mod
        use simple_image, only : image
        use simple_tvfilter, only : tvfilter
        use simple_nanoparticles_mod, only : nanoparticle
-       use simple_segmentation
-       type(image) :: img
-       type(tvfilter) :: tvf
-       integer     :: ldim(3), n
-       real        :: smpd, cutoff, msk
-       real, pointer :: rmat(:,:,:)
-       real :: x(10)
-       real, allocatable :: x_sorted(:)
-       real :: ave, sdev, maxv, minv
-       real :: lambda
-       real :: hp, lp
-       real :: thresh
+       type(atoms) :: atom
+       type(image) :: vol
+       integer     :: ldim(3)
+       real        :: lp, msk, smpd
+       lp  = 1.
+       msk = 5.
+       ldim(:) = 160
+       smpd = 0.358
+       call generate_distribution('radial_atoms9A_all.pdb', ldim, smpd)
+       ! call exec_symmetry_test_try(lp, msk)
 
-       x = [1.,2.,3.,4.,1.,2.,3.,4.,5.,6.]
-       call otsu(x,thresh)
-       print *, 'x = ', x
-       print *, 'Thresh = ', thresh
-       call otsu(x, x_sorted, thresh=thresh)
-       print *, 'x        = ', x
-       print *, 'x_sorted = ', x_sorted
-       print *, 'Thresh = ', thresh
+
+       ! subroutine convolve( self, vol, cutoff, lp )
+       !     class(image),   intent(inout) :: vol
+       !     real,           intent(in)    :: cutoff
+       !     real, optional, intent(in)    :: lp
+
        ! hp = real(464/ 2) * 28.088
        ! lp = 20.
        ! lambda = 5.
@@ -269,7 +282,6 @@ end module simple_test_chiara_try_mod
        ! call nano%discard_outliers()
        ! call nano%radial_dependent_stats()
 
-       ! call exec_symmetry_test_try(lp, msk)
 
        ! call a%new(n, dummy=.true.)
        ! call a%convolve(nano,cutoff)

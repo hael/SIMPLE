@@ -12,11 +12,10 @@ public :: atoms
 private
 #include "simple_local_flags.inc"
 
-character(len=74), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
-character(len=74), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)" ! custom 3.3
-character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"   ! custom 3.3
+character(len=78), parameter :: pdbfmt          = "(A6,I5,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)"        ! custom 3.3
+character(len=78), parameter :: pdbfmt_long     = "(A5,I6,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2,10x,A2)" ! custom 3.3
+character(len=74), parameter :: pdbfmt_read     = "(A11,1X,A4,A1,A3,1X,A1,I4,A1,3X,3F8.3,2F6.2)"          ! custom 3.3
 character(len=78), parameter :: pdbfmt_longread = "(A11,1X,A4,A1,A3,1X,A1,I1,A4,3X,3F8.3,2F6.2,10x,A2)"   ! custom 3.3
-real,              parameter :: bohr_radius     = 0.5292    ! Angstroms
 
 !>  \brief type for dealing with atomic structures
 type :: atoms
@@ -179,14 +178,14 @@ contains
         self%het    = .false.
         if(ddummy)then
             do i=1,self%n
-                self%name(i)    = ' X  '
-                self%resname(:) = ' X '
-                self%chain(:)   = 'A'
-                self%beta      = 1.
-                self%occupancy = 1.
-                self%radius    = 1.
-                self%num    = i
-                self%resnum = 1
+                self%name(i)      = ' X  '
+                self%resname(i)   = ' X '
+                self%chain(i)     = 'A'
+                self%beta(i)      = 1.
+                self%occupancy(i) = 1.
+                self%radius(i)    = 1.
+                self%num(i)       = i
+                self%resnum(i)    = 1
             enddo
         endif
         self%exists = .true.
@@ -369,7 +368,7 @@ contains
         call fclose(funit, errmsg='writepdb; simple_atoms closing '//trim(fname))
         contains
 
-            character(len=76) function pdbstr( ind )
+            character(len=78) function pdbstr( ind )
                 integer,           intent(in)  :: ind
                 character(len=6) :: atom_field
                 if(self%het(ind))then
@@ -382,12 +381,12 @@ contains
                         atom_field(1:5) = 'ATOM '
                         write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
                             self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                            self%occupancy(ind), self%beta(ind)
+                            self%occupancy(ind), self%beta(ind),self%element(ind)
                     else
                         atom_field(1:6) = 'ATOM  '
-                        write(pdbstr,pdbfmt)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
+                        write(pdbstr,pdbfmt_long)atom_field,self%num(ind),self%name(ind),self%altloc(ind),&
                             self%resname(ind),self%chain(ind), self%resnum(ind), self%icode(ind), self%xyz(ind,:),&
-                            self%occupancy(ind), self%beta(ind)
+                            self%occupancy(ind), self%beta(ind),self%element(ind)
                     endif
                 endif
             end function pdbstr
@@ -513,8 +512,6 @@ contains
                 !     Z = 16; r = 1.05
                 ! case('PD')
                 !     Z = 46; r = 1.2
-                ! case('PT')
-                !     Z = 78; r = 1.23
             case(26) ! Fe
                 a = [0.3946, 1.2725, 1.7031,  2.3140,  1.4795]
                 b = [0.2717, 2.0443, 7.6007, 29.9714, 86.2265]
