@@ -10,10 +10,9 @@ use simple_commander_tseries
 use simple_commander_refine3D
 use simple_commander_rec
 use simple_commander_project
+use simple_commander_abinitio_wflows
+use simple_commander_cluster3D_wflows
 use simple_spproj_hlev
-use simple_commander_distr_wflows
-use simple_commander_stream_wflows
-use simple_commander_hlev_wflows
 implicit none
 #include "simple_local_flags.inc"
 

@@ -1,7 +1,6 @@
 module simple_test_chiara_try_mod
     include 'simple_lib.f08'
     ! use simple_aff_prop
-    ! use simple_commander_distr_wflows
     ! use gnufor2
     ! use simple_ctf
     ! use simple_micops

@@ -242,7 +242,6 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
 
-    !> for distributed cleanup2D optimized for time-series of nanoparticles
     subroutine exec_cleanup2D_nano( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
         class(cleanup2D_nano_commander), intent(inout) :: self
@@ -545,7 +544,6 @@ contains
         call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
     end subroutine exec_tseries_split
 
-    ! for comparison of atomic models of 2nanoparticles
     subroutine exec_compare_nano( self, cline )
         use simple_nanoparticles_mod
         use simple_image, only : image
@@ -582,7 +580,6 @@ contains
         call simple_end('**** SIMPLE_COMPARE_NANO NORMAL STOP ****')
     end subroutine exec_compare_nano
 
-    ! for binarizing a nanoparticle and identiying its atomic positions
     subroutine exec_detect_atoms( self, cline )
         use simple_nanoparticles_mod
         use simple_image, only : image

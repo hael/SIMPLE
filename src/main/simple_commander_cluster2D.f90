@@ -10,13 +10,13 @@ use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
 
-public :: make_cavgs_commander_distr
-public :: make_cavgs_commander
 public :: cleanup2D_commander
 public :: cluster2D_commander_stream
 public :: cluster2D_autoscale_commander
 public :: cluster2D_commander_distr
 public :: cluster2D_commander
+public :: make_cavgs_commander_distr
+public :: make_cavgs_commander
 public :: cavgassemble_commander
 public :: check_2Dconv_commander
 public :: rank_cavgs_commander
@@ -24,14 +24,6 @@ public :: cluster_cavgs_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: make_cavgs_commander_distr
-  contains
-    procedure :: execute      => exec_make_cavgs_distr
-end type make_cavgs_commander_distr
-type, extends(commander_base) :: make_cavgs_commander
-  contains
-    procedure :: execute      => exec_make_cavgs
-end type make_cavgs_commander
 type, extends(commander_base) :: cleanup2D_commander
   contains
     procedure :: execute      => exec_cleanup2D
@@ -52,6 +44,14 @@ type, extends(commander_base) :: cluster2D_commander
   contains
     procedure :: execute      => exec_cluster2D
 end type cluster2D_commander
+type, extends(commander_base) :: make_cavgs_commander_distr
+  contains
+    procedure :: execute      => exec_make_cavgs_distr
+end type make_cavgs_commander_distr
+type, extends(commander_base) :: make_cavgs_commander
+  contains
+    procedure :: execute      => exec_make_cavgs
+end type make_cavgs_commander
 type, extends(commander_base) :: cavgassemble_commander
   contains
     procedure :: execute      => exec_cavgassemble

@@ -11,17 +11,17 @@ use simple_qsys_env,       only: qsys_env
 use simple_qsys_funs
 implicit none
 
+public :: new_project_commander
 public :: print_project_info_commander
-public :: selection_commander
 public :: print_project_vals_commander
 public :: print_project_field_commander
-public :: new_project_commander
 public :: update_project_commander
 public :: import_movies_commander
 public :: import_boxes_commander
 public :: import_particles_commander
 public :: import_cavgs_commander
 public :: export_cavgs_commander
+public :: selection_commander
 public :: merge_stream_projects_commander
 public :: replace_project_field_commander
 public :: scale_project_commander_distr
@@ -30,6 +30,10 @@ public :: prune_project_commander
 private
 #include "simple_local_flags.inc"
 
+type, extends(commander_base) :: new_project_commander
+  contains
+    procedure :: execute      => exec_new_project
+end type new_project_commander
 type, extends(commander_base) :: print_project_info_commander
   contains
     procedure :: execute      => exec_print_project_info
@@ -42,14 +46,6 @@ type, extends(commander_base) :: print_project_field_commander
   contains
     procedure :: execute      => exec_print_project_field
 end type print_project_field_commander
-type, extends(commander_base) :: selection_commander
-  contains
-    procedure :: execute      => exec_selection
-end type selection_commander
-type, extends(commander_base) :: new_project_commander
-  contains
-    procedure :: execute      => exec_new_project
-end type new_project_commander
 type, extends(commander_base) :: update_project_commander
   contains
     procedure :: execute      => exec_update_project
@@ -74,6 +70,10 @@ type, extends(commander_base) :: export_cavgs_commander
   contains
     procedure :: execute      => exec_export_cavgs
 end type export_cavgs_commander
+type, extends(commander_base) :: selection_commander
+  contains
+    procedure :: execute      => exec_selection
+end type selection_commander
 type, extends(commander_base) :: merge_stream_projects_commander
   contains
     procedure :: execute      => exec_merge_stream_projects
@@ -94,9 +94,49 @@ type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project
 end type prune_project_commander
+
 contains
 
-    !> convert binary (.simple) oris doc to text (.txt)
+    subroutine exec_new_project( self, cline )
+        class(new_project_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        call params%new(cline)
+        if( cline%defined('projname') .and. cline%defined('dir') )then
+            THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
+        else if( cline%defined('projname') )then
+            if( file_exists(PATH_HERE//trim(params%projname)) )then
+                write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
+                write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            ! make project directory
+            call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
+            ! change to project directory
+            call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
+        else if( cline%defined('dir') )then
+            params%dir = simple_abspath(trim(params%dir))
+            if( .not. file_exists(trim(params%dir)) )then
+                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
+                THROW_HARD('ABORTING... exec_new_project')
+            endif
+            call cline%set('projname', basename(params%dir))
+            ! change to project directory
+            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
+        else
+            THROW_HARD('neither projname nor dir defined on comman line; exec_new_project')
+        endif
+        ! update project info
+        call spproj%update_projinfo( cline )
+        ! update computer environment
+        call spproj%update_compenv( cline )
+        ! write project file
+        call spproj%write
+        ! end gracefully
+        call simple_end('**** NEW_PROJECT NORMAL STOP ****')
+    end subroutine exec_new_project
+
     subroutine exec_print_project_info( self, cline )
         class(print_project_info_commander), intent(inout) :: self
         class(cmdline),                      intent(inout) :: cline
@@ -108,7 +148,6 @@ contains
         ! no additional printing
     end subroutine exec_print_project_info
 
-    !> prints the values of inputted keys in the inputted segment
     subroutine exec_print_project_vals( self, cline )
         use simple_binoris,    only: binoris
         use simple_sp_project, only: oritype2segment
@@ -202,112 +241,6 @@ contains
         call spproj%kill
     end subroutine exec_print_project_field
 
-    subroutine exec_selection( self, cline )
-        use simple_sp_project, only: sp_project, oritype2segment
-        class(selection_commander), intent(inout) :: self
-        class(cmdline),                    intent(inout) :: cline
-        type(parameters)                :: params
-        type(sp_project)                :: spproj
-        integer,            allocatable :: states(:)
-        integer(kind=kind(ENUM_ORISEG)) :: iseg
-        integer                         :: n_lines,fnr,noris,i,nstks
-        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
-        call params%new(cline, silent=.true.)
-        ! read the state-flags
-        n_lines = nlines(trim(params%infile))
-        allocate(states(n_lines))
-        call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
-        do i=1,n_lines
-            read(fnr,*) states(i)
-        end do
-        call fclose(fnr)
-        iseg = oritype2segment(trim(params%oritype))
-        ! read project (almost all or largest segments are updated)
-        call spproj%read(params%projfile)
-        ! sanity check
-        noris = spproj%get_n_insegment(params%oritype)
-        if( noris /= n_lines )then
-            write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
-            write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
-            THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
-            return
-        endif
-        ! updates relevant segments
-        select case(iseg)
-            case(MIC_SEG)
-                call spproj%os_mic%set_all('state', real(states))
-                nstks = spproj%os_stk%get_noris()
-                if(nstks > 0)then
-                    if( noris /= nstks )then
-                        THROW_HARD('This project file has already undergone some selection, use parent project instead')
-                    endif
-                    call spproj%report_state2stk(states)
-                endif
-            case(STK_SEG)
-                call spproj%report_state2stk(states) ! is this segment update necessary?
-            case(CLS2D_SEG)
-                call spproj%os_cls2D%set_all('state', real(states))
-                call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
-            case(CLS3D_SEG)
-                if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
-                    call spproj%os_cls2D%set_all('state', real(states))
-                    call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
-                else
-                    ! class averages
-                    call spproj%os_cls3D%set_all('state', real(states))
-                endif
-            case(PTCL2D_SEG,PTCL3D_SEG)
-                call spproj%os_ptcl2D%set_all('state', real(states))
-                call spproj%os_ptcl3D%set_all('state', real(states))
-            case DEFAULT
-                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
-        end select
-        ! final full write
-        call spproj%write(params%projfile)
-    end subroutine exec_selection
-
-    !> for creating a new project
-    subroutine exec_new_project( self, cline )
-        class(new_project_commander), intent(inout) :: self
-        class(cmdline),               intent(inout) :: cline
-        type(parameters) :: params
-        type(sp_project) :: spproj
-        call params%new(cline)
-        if( cline%defined('projname') .and. cline%defined('dir') )then
-            THROW_HARD('both projname and dir defined on command line, use either or; exec_new_project')
-        else if( cline%defined('projname') )then
-            if( file_exists(PATH_HERE//trim(params%projname)) )then
-                write(logfhandle,*) 'project directory: ', trim(params%projname), ' already exists in cwd: ', trim(params%cwd)
-                write(logfhandle,*) 'If you intent to overwrite the existing file, please remove it and re-run new_project'
-                THROW_HARD('ABORTING... exec_new_project')
-            endif
-            ! make project directory
-            call simple_mkdir(trim(params%projname), errmsg="commander_project :: new_project;")
-            ! change to project directory
-            call simple_chdir(trim(params%projname), errmsg="commander_project :: new_project;")
-        else if( cline%defined('dir') )then
-            params%dir = simple_abspath(trim(params%dir))
-            if( .not. file_exists(trim(params%dir)) )then
-                write(logfhandle,*) 'input project directory (dir): ', trim(params%dir), ' does not exist'
-                THROW_HARD('ABORTING... exec_new_project')
-            endif
-            call cline%set('projname', basename(params%dir))
-            ! change to project directory
-            call simple_chdir(trim(params%dir), errmsg="commander_project :: new_project;")
-        else
-            THROW_HARD('neither projname nor dir defined on comman line; exec_new_project')
-        endif
-        ! update project info
-        call spproj%update_projinfo( cline )
-        ! update computer environment
-        call spproj%update_compenv( cline )
-        ! write project file
-        call spproj%write
-        ! end gracefully
-        call simple_end('**** NEW_PROJECT NORMAL STOP ****')
-    end subroutine exec_new_project
-
-    !> for updating an existing project
     subroutine exec_update_project( self, cline )
         class(update_project_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -325,7 +258,6 @@ contains
         ! no printing for this program
     end subroutine exec_update_project
 
-    !> for importing movies/integrated movies(micrographs)
     subroutine exec_import_movies( self, cline )
         class(import_movies_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
@@ -444,7 +376,6 @@ contains
         call simple_end('**** IMPORT_MOVIES NORMAL STOP ****')
     end subroutine exec_import_movies
 
-    !> for importing particle coordinates (boxes) in EMAN1.9 format
     subroutine exec_import_boxes( self, cline )
         class(import_boxes_commander), intent(inout) :: self
         class(cmdline),                intent(inout) :: cline
@@ -481,7 +412,6 @@ contains
         call simple_end('**** IMPORT_BOXES NORMAL STOP ****')
     end subroutine exec_import_boxes
 
-    !> for importing extracted particles
     subroutine exec_import_particles( self, cline )
         use simple_oris,      only: oris
         use simple_nrtxtfile, only: nrtxtfile
@@ -725,7 +655,6 @@ contains
         call simple_end('**** IMPORT_PARTICLES NORMAL STOP ****')
     end subroutine exec_import_particles
 
-    !> for importing class-averages projects
     subroutine exec_import_cavgs( self, cline )
         class(import_cavgs_commander), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
@@ -744,7 +673,6 @@ contains
         call simple_end('**** IMPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_import_cavgs
 
-    !> for exporting class-averages from a project
     subroutine exec_export_cavgs( self, cline )
         use simple_image, only: image
         class(export_cavgs_commander), intent(inout) :: self
@@ -788,7 +716,70 @@ contains
         call simple_end('**** EXPORT_CAVGS NORMAL STOP ****')
     end subroutine exec_export_cavgs
 
-    !> for appending one project from preprocess_stream to another
+    subroutine exec_selection( self, cline )
+        use simple_sp_project, only: sp_project, oritype2segment
+        class(selection_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(parameters)                :: params
+        type(sp_project)                :: spproj
+        integer,            allocatable :: states(:)
+        integer(kind=kind(ENUM_ORISEG)) :: iseg
+        integer                         :: n_lines,fnr,noris,i,nstks
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline, silent=.true.)
+        ! read the state-flags
+        n_lines = nlines(trim(params%infile))
+        allocate(states(n_lines))
+        call fopen(fnr, FILE=trim(params%infile), STATUS='OLD', action='READ')
+        do i=1,n_lines
+            read(fnr,*) states(i)
+        end do
+        call fclose(fnr)
+        iseg = oritype2segment(trim(params%oritype))
+        ! read project (almost all or largest segments are updated)
+        call spproj%read(params%projfile)
+        ! sanity check
+        noris = spproj%get_n_insegment(params%oritype)
+        if( noris /= n_lines )then
+            write(logfhandle,*) '# lines in infile '//trim(params%infile)//': ', n_lines
+            write(logfhandle,*) '# entries in '//trim(params%oritype)//' segment: ', noris
+            THROW_WARN('# entries in infile/project file '//trim(params%oritype)//' segment do not match, aborting; exec_selection')
+            return
+        endif
+        ! updates relevant segments
+        select case(iseg)
+            case(MIC_SEG)
+                call spproj%os_mic%set_all('state', real(states))
+                nstks = spproj%os_stk%get_noris()
+                if(nstks > 0)then
+                    if( noris /= nstks )then
+                        THROW_HARD('This project file has already undergone some selection, use parent project instead')
+                    endif
+                    call spproj%report_state2stk(states)
+                endif
+            case(STK_SEG)
+                call spproj%report_state2stk(states) ! is this segment update necessary?
+            case(CLS2D_SEG)
+                call spproj%os_cls2D%set_all('state', real(states))
+                call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+            case(CLS3D_SEG)
+                if(spproj%os_cls3D%get_noris() == spproj%os_cls2D%get_noris())then
+                    call spproj%os_cls2D%set_all('state', real(states))
+                    call spproj%map2ptcls_state ! map states to ptcl2D/3D & cls3D segments
+                else
+                    ! class averages
+                    call spproj%os_cls3D%set_all('state', real(states))
+                endif
+            case(PTCL2D_SEG,PTCL3D_SEG)
+                call spproj%os_ptcl2D%set_all('state', real(states))
+                call spproj%os_ptcl3D%set_all('state', real(states))
+            case DEFAULT
+                THROW_HARD('Cannot report selection to segment '//trim(params%oritype)//'; exec_selection')
+        end select
+        ! final full write
+        call spproj%write(params%projfile)
+    end subroutine exec_selection
+
     subroutine exec_merge_stream_projects( self, cline )
         class(merge_stream_projects_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
@@ -804,7 +795,6 @@ contains
         call simple_end('**** MERGE_STREAMS_PROJECTS NORMAL STOP ****')
     end subroutine exec_merge_stream_projects
 
-    !> for substituting one project field for another, for dev only
     subroutine exec_replace_project_field( self, cline )
         class(replace_project_field_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
@@ -898,7 +888,6 @@ contains
         call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
     end subroutine exec_scale_project_distr
 
-    !> for discarding state=0 particles & stacks
     subroutine exec_prune_project_distr( self, cline )
         use simple_oris,      only: oris
         use simple_ori,       only: ori
@@ -1055,7 +1044,6 @@ contains
         call simple_end('**** SIMPLE_PRUNE_PROJECT_DISTR NORMAL STOP ****')
     end subroutine exec_prune_project_distr
 
-    ! subroutine exec_prune_project( self_in, cline, projout_fname, dir )
     subroutine exec_prune_project( self, cline )
         use simple_qsys_funs,  only: qsys_job_finished
         use simple_binoris_io, only: binwrite_oritab

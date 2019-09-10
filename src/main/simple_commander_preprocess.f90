@@ -49,14 +49,14 @@ type, extends(commander_base) :: preprocess_commander
   contains
     procedure :: execute      => exec_preprocess
 end type preprocess_commander
-type, extends(commander_base) :: motion_correct_tomo_commander_distr
-  contains
-    procedure :: execute      => exec_motion_correct_tomo_distr
-end type motion_correct_tomo_commander_distr
 type, extends(commander_base) :: motion_correct_commander_distr
   contains
     procedure :: execute      => exec_motion_correct_distr
 end type motion_correct_commander_distr
+type, extends(commander_base) :: motion_correct_tomo_commander_distr
+  contains
+    procedure :: execute      => exec_motion_correct_tomo_distr
+end type motion_correct_tomo_commander_distr
 type, extends(commander_base) :: motion_correct_commander
   contains
     procedure :: execute      => exec_motion_correct
@@ -756,7 +756,7 @@ contains
         params%nptcls = nseries
         ! prepare part-dependent parameters
         allocate(part_params(params%nparts), stat=alloc_stat) ! -1. is default excluded value
-        if(alloc_stat.ne.0)call allocchk("simple_commander_distr_wflows::motion_correct_tomo_moview_distr ", alloc_stat)
+        if(alloc_stat.ne.0)call allocchk("exec_motion_correct_tomo_distr ", alloc_stat)
         do ipart=1,params%nparts
             call part_params(ipart)%new(4)
             call part_params(ipart)%set('filetab', trim(tomonames(ipart)))

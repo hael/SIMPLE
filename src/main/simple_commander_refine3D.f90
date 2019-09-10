@@ -113,7 +113,7 @@ contains
             case('cls3D')
                 fall_over = build%spproj%os_out%get_noris() == 0
             case DEFAULT
-                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_refine3D :: exec_refine3D_distr'
         end select
         if( fall_over )then
             THROW_HARD('no particles found! :exec_refine3D_distr')
@@ -140,8 +140,7 @@ contains
         call cline_postprocess%set('imgkind', 'vol')
         if( trim(params%oritype).eq.'cls3D' ) call cline_postprocess%set('imgkind', 'vol_cavg')
         ! for parallel volassemble over states
-        allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
-        if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
+        allocate(state_assemble_finished(params%nstates))
         ! removes unnecessary volume keys and generates volassemble finished names
         do state = 1,params%nstates
             vol = 'vol'//int2str( state )
