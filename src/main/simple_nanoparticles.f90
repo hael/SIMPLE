@@ -27,7 +27,6 @@ type :: nanoparticle
     real        :: smpd              = 0.
     real        :: nanop_mass_cen(3) = 0.!coordinates of the center of mass of the nanoparticle
     real        :: avg_dist_atoms    = 0.
-    real        :: med_longest_dim   = 0.!for phase correlation approach
     integer     :: n_cc              = 0 !number of atoms (connected components
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
@@ -49,6 +48,7 @@ type :: nanoparticle
     procedure          :: set_partname
     ! segmentation and statistics
     procedure          :: binarize => nanopart_binarization
+    procedure          :: iterative_bin
     ! procedure          :: size_filtering
     procedure          :: find_centers
     procedure, private :: nanopart_masscen
@@ -453,6 +453,73 @@ contains
              call otsu(x, scaled_thresh)
          end subroutine otsu_nano
     end subroutine phasecorrelation_nano_gaussian
+
+
+    ! Alternative approaach to binarization. It consists in
+    ! iterations of correlation filter and otsu
+    subroutine iterative_bin(self)
+        class(nanoparticle), intent(inout) :: self
+        type(image) :: one_atom
+        type(image) :: phasecorr
+        type(atoms) :: atom
+        real        :: cutoff
+        real        :: o_t !otsu threshold
+        integer     :: i
+        integer, parameter :: NB_IT = 10 !number of iterations
+        type(image) :: img_t !thresholded nanoparticle (NOT binary)
+        type(image) :: img_b !thresholded nanoparticle (binary)
+        real, pointer :: rmat_t(:,:,:)
+        real, pointer :: rmat_b(:,:,:)
+        real, pointer :: rmat(:,:,:)
+        call phasecorr%new(self%ldim, self%smpd)
+        call phasecorr%get_rmat_ptr(rmat)
+        call one_atom%new(self%ldim,self%smpd)
+        cutoff = 8.*self%smpd
+        call atom%new(1)
+        call atom%set_element(1,self%element)
+        call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
+        call atom%convolve(one_atom, cutoff)
+        if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
+        call one_atom%fft()
+        call img_t%new(self%ldim, self%smpd)
+        call img_b%new(self%ldim, self%smpd)
+        call img_t%get_rmat_ptr(rmat_t)
+        call img_b%get_rmat_ptr(rmat_b)
+        call img_t%copy(self%img)
+        do i = 1, NB_IT
+            call img_t%fft()
+            phasecorr = img_t%phase_corr(one_atom,lp=1.)
+            call img_t%ifft()
+            call otsu_nano(phasecorr,o_t)
+            where(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))>o_t)
+                rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+            elsewhere
+                rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+            endwhere
+            call img_b%write(int2str(i)//'B.mrc')
+            rmat_t(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))*rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+            call img_t%write(int2str(i)//'T.mrc')
+        enddo
+        call phasecorr%kill
+        call img_t%kill
+        call img_b%kill
+        call one_atom%kill()
+    contains
+        !Otsu binarization for nanoparticle maps
+        !It considers the gray level value just in the positive range.
+        !It doesn't threshold the map. It just returns the ideal threshold.
+         subroutine otsu_nano(img, scaled_thresh)
+             use simple_math, only : otsu
+             type(image),    intent(inout) :: img
+             real,           intent(out)   :: scaled_thresh !returns the threshold in the correct range
+             real, pointer     :: rmat(:,:,:)
+             real, allocatable :: x(:)
+             call img%get_rmat_ptr(rmat)
+             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
+             call otsu(x, scaled_thresh)
+         end subroutine otsu_nano
+
+    end subroutine iterative_bin
 
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
@@ -1126,6 +1193,7 @@ contains
        real, pointer     :: rmat_cc(:,:,:)
        real, allocatable :: longest_dist(:)
        integer       :: label
+       real :: avg_diameter, median_diameter, min_diameter, max_diameter, stdev_diameter
        call self%img_bin%find_connected_comps(self%img_cc) ! TO REMOVE??
        call self%img_cc%get_rmat_ptr(rmat_cc)
        self%n_cc = int(maxval(rmat_cc))
@@ -1137,9 +1205,23 @@ contains
            call calc_aspect_ratio_private(label, self%ratios(label), ld=longest_dist(label), print_ar=print_ar)
        enddo
        !$omp end do
-       print *, 'median value longest dimension', median(longest_dist)
-       ! print *, 'Therefore consider median radius to be ', 2.*median(longest_dist)
-       self%med_longest_dim =  median(longest_dist) !It's a diameter
+       print *, 'self%n_cc = ', self%n_cc
+       longest_dist = 2.*longest_dist ! radius --> diameter
+       min_diameter = minval(longest_dist(1:self%n_cc))
+       max_diameter = maxval(longest_dist(1:self%n_cc))
+       median_diameter = median(longest_dist(1:self%n_cc))
+       avg_diameter    = sum(longest_dist(1:self%n_cc))/real(self%n_cc)
+       stdev_diameter = 0.
+       do label = 1, self%n_cc
+           stdev_diameter = stdev_diameter + (avg_diameter-longest_dist(label))**2
+       enddo
+       stdev_diameter = sqrt(stdev_diameter/real(self%n_cc-1))
+       print *, 'minimum  value diameter ', min_diameter
+       print *, 'maximum  value diameter ', max_diameter
+       print *, 'median   value diameter ', median_diameter
+       print *, 'average  value diameter ', avg_diameter
+       print *, 'stdev    value diameter ', stdev_diameter
+       print *, 'longest_dist = ',longest_dist
        call hist(self%ratios, 20)
        ! To dump some of the analysis on aspect ratios on file compatible
        ! with Matlab.
@@ -1198,13 +1280,16 @@ contains
                 ratio = 0.
                 if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
             endif
-            if(present(ld)) ld=longest_dist
+            longest_dist  = longest_dist*self%smpd
+            shortest_dist = shortest_dist*self%smpd
            if(present(print_ar) .and. (print_ar .eqv. .true.)) then
                 write(logfhandle,*) 'ATOM #          ', label
-                write(logfhandle,*) 'shortest dist = ', shortest_dist*self%smpd
-                write(logfhandle,*) 'longest  dist = ', longest_dist*self%smpd
-                write(logfhandle,*) 'RATIO         = ', ratio
+                ! write(logfhandle,*) 'shortest dist = ', shortest_dist
+                write(logfhandle,*) 'longest  dist = ', longest_dist
+                !write(logfhandle,*) 'RATIO         = ', ratio
            endif
+           if(present(ld)) ld=longest_dist
+           print *, 'ld = ',longest_dist
             deallocate(imat_cc, border, pos, mask_dist)
         end subroutine calc_aspect_ratio_private
    end subroutine calc_aspect_ratio
@@ -1933,6 +2018,8 @@ contains
      subroutine detect_atoms(self)
          class(nanoparticle), intent(inout) :: self
          real :: otsu_thresh
+         ! call self%iterative_bin()
+         ! stop
          ! Phase correlations approach
          call self%phasecorrelation_nano_gaussian(otsu_thresh)
          ! Nanoparticle binarization
@@ -1946,7 +2033,7 @@ contains
          ! Radial dependent statistics calculation
          call self%radial_dependent_stats()
          ! Aspect ratios calculations
-         call self%calc_aspect_ratio()
+         call self%calc_aspect_ratio(print_ar=.false.)
          ! Atomic intensity stats calculation
          call self%atom_intensity_stats()
          ! Polarization search
@@ -1963,7 +2050,6 @@ contains
         self%smpd              = 0.
         self%nanop_mass_cen(3) = 0.
         self%avg_dist_atoms    = 0.
-        self%med_longest_dim   = 0.
         self%n_cc              = 0
         call self%img%kill()
         call self%img_bin%kill()
