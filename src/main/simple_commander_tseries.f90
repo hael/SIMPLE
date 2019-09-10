@@ -1,17 +1,22 @@
 ! concrete commander: time-series analysis
 module simple_commander_tseries
 include 'simple_lib.f08'
-use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
 use simple_commander_base, only: commander_base
 use simple_oris,           only: oris
+use simple_parameters,     only: parameters
+use simple_sp_project,     only: sp_project
+use simple_qsys_funs
 implicit none
 
 public :: tseries_import_commander
+public :: tseries_track_commander_distr
 public :: tseries_track_commander
+public :: cleanup2D_nano_commander
 public :: tseries_average_commander
 public :: tseries_ctf_estimate_commander
+public :: refine3D_nano_commander_distr
 public :: tseries_split_commander
 public :: compare_nano_commander
 public :: detect_atoms_commander
@@ -22,14 +27,22 @@ type, extends(commander_base) :: tseries_import_commander
   contains
     procedure :: execute      => exec_tseries_import
 end type tseries_import_commander
-type, extends(commander_base) :: tseries_average_commander
+type, extends(commander_base) :: tseries_track_commander_distr
   contains
-    procedure :: execute      => exec_tseries_average
-end type tseries_average_commander
+    procedure :: execute      => exec_tseries_track_distr
+end type tseries_track_commander_distr
 type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
 end type tseries_track_commander
+type, extends(commander_base) :: cleanup2D_nano_commander
+  contains
+    procedure :: execute      => exec_cleanup2D_nano
+end type cleanup2D_nano_commander
+type, extends(commander_base) :: tseries_average_commander
+  contains
+    procedure :: execute      => exec_tseries_average
+end type tseries_average_commander
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
@@ -38,6 +51,10 @@ type, extends(commander_base) :: tseries_ctf_estimate_commander
   contains
     procedure :: execute      => exec_tseries_ctf_estimate
 end type tseries_ctf_estimate_commander
+type, extends(commander_base) :: refine3D_nano_commander_distr
+  contains
+    procedure :: execute      => exec_refine3D_nano_distr
+end type refine3D_nano_commander_distr
 type, extends(commander_base) :: tseries_split_commander
   contains
     procedure :: execute      => exec_tseries_split
@@ -88,6 +105,69 @@ contains
         ! end gracefully
         call simple_end('**** tseries_import NORMAL STOP ****')
     end subroutine exec_tseries_import
+
+    subroutine exec_tseries_track_distr( self, cline )
+        use simple_nrtxtfile, only: nrtxtfile
+        use simple_qsys_env,  only: qsys_env
+        class(tseries_track_commander_distr), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(parameters)              :: params
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
+        type(nrtxtfile)               :: boxfile
+        real,        allocatable      :: boxdata(:,:)
+        type(chash), allocatable      :: part_params(:)
+        integer :: ndatlines, numlen, alloc_stat, j, orig_box, ipart
+        call cline%set('nthr', 1.0)
+        if( .not. cline%defined('neg')       ) call cline%set('neg',      'yes')
+        if( .not. cline%defined('lp')        ) call cline%set('lp',         2.0)
+        if( .not. cline%defined('width')     ) call cline%set('width',      1.1)
+        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      5.0)
+        if( .not. cline%defined('nframesgrp')) call cline%set('nframesgrp', 10.)
+        call params%new(cline)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        if( .not. file_exists(params%boxfile) ) THROW_HARD('inputted boxfile does not exist in cwd')
+        if( nlines(params%boxfile) > 0 )then
+            call boxfile%new(params%boxfile, 1)
+            ndatlines = boxfile%get_ndatalines()
+            numlen    = len(int2str(ndatlines))
+            allocate( boxdata(ndatlines,boxfile%get_nrecs_per_line()), stat=alloc_stat)
+            if(alloc_stat.ne.0)call allocchk('In: simple_commander_tseries :: exec_tseries_track', alloc_stat)
+            do j=1,ndatlines
+                call boxfile%readNextDataLine(boxdata(j,:))
+                orig_box = nint(boxdata(j,3))
+                if( nint(boxdata(j,3)) /= nint(boxdata(j,4)) )then
+                    THROW_HARD('Only square windows allowed!')
+                endif
+            end do
+        else
+            THROW_HARD('inputted boxfile is empty; exec_tseries_track')
+        endif
+        call boxfile%kill
+        call cline%delete('boxfile')
+        params%nptcls = ndatlines
+        params%nparts = params%nptcls
+        ! box and numlen need to be part of command line
+        call cline%set('box',    real(orig_box))
+        call cline%set('numlen', real(numlen)  )
+        ! prepare part-dependent parameters
+        allocate(part_params(params%nparts))
+        do ipart=1,params%nparts
+            call part_params(ipart)%new(3)
+            call part_params(ipart)%set('xcoord', real2str(boxdata(ipart,1)))
+            call part_params(ipart)%set('ycoord', real2str(boxdata(ipart,2)))
+            call part_params(ipart)%set('ind',    int2str(ipart))
+        end do
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! schedule & clean
+        call cline%gen_job_descr(job_descr)
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params)
+        call qsys_cleanup
+        ! end gracefully
+        call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
+    end subroutine exec_tseries_track_distr
 
     subroutine exec_tseries_track( self, cline )
         use simple_tseries_tracker
@@ -161,6 +241,67 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
+
+    !> for distributed cleanup2D optimized for time-series of nanoparticles
+    subroutine exec_cleanup2D_nano( self, cline )
+        use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
+        class(cleanup2D_nano_commander), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        ! commanders
+        type(cluster2D_commander_distr) :: xcluster2D_distr
+        ! other variables
+        type(parameters)              :: params
+        type(sp_project)              :: spproj
+        character(len=:), allocatable :: orig_projfile
+        character(len=LONGSTRLEN)     :: finalcavgs
+        integer  :: nparts, last_iter_stage2
+        call cline%set('center',    'yes')
+        call cline%set('autoscale', 'no')
+        call cline%set('refine',    'greedy')
+        call cline%set('tseries',   'yes')
+        if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
+        if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
+        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+        call params%new(cline)
+        nparts = params%nparts
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! read project file
+        call spproj%read(params%projfile)
+        orig_projfile = trim(params%projfile)
+        ! sanity checks
+        if( spproj%get_nptcls() == 0 )then
+            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_nano')
+        endif
+        ! delete any previous solution
+        if( .not. spproj%is_virgin_field(params%oritype) )then
+            ! removes previous cluster2D solution (states are preserved)
+            call spproj%os_ptcl2D%delete_2Dclustering
+            call spproj%write_segment_inside(params%oritype)
+        endif
+        ! splitting
+        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        ! no auto-scaling
+        call cline%set('prg', 'cluster2D')
+        call xcluster2D_distr%execute(cline)
+        last_iter_stage2 = nint(cline%get_rarg('endit'))
+        finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+        ! adding cavgs & FRCs to project
+        params%projfile = trim(orig_projfile)
+        call spproj%read( params%projfile )
+        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+        ! transfer 2D shifts to 3D field
+        call spproj%map2Dshifts23D
+        call spproj%write
+        call spproj%kill
+        ! cleanup
+        call del_file('start2Drefs'//params%ext)
+        ! end gracefully
+        call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
+    end subroutine exec_cleanup2D_nano
 
     subroutine exec_tseries_average( self, cline )
         use simple_tseries_averager
@@ -326,6 +467,33 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_TSERIES_CTF_ESTIMATE NORMAL STOP ****')
     end subroutine exec_tseries_ctf_estimate
+
+    subroutine exec_refine3D_nano_distr( self, cline )
+        use simple_commander_refine3D, only: refine3D_commander_distr
+        class(refine3D_nano_commander_distr), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        ! commander
+        type(refine3D_commander_distr) :: xrefine3D_distr
+        ! static parameters
+        call cline%set('prg',      'refine3D')
+        call cline%set('match_filt',     'no')
+        call cline%set('graphene_filt', 'yes')
+        call cline%set('ptclw',          'no')
+        call cline%set('keepvol',       'yes')
+        call cline%set('ninplpeaks',      1.0)
+        call cline%set('wscheme',       'loc')
+        ! dynamic parameters
+        if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
+        if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      10.)
+        if( .not. cline%defined('rankw')       ) call cline%set('rankw',      'exp')
+        if( .not. cline%defined('trs')         ) call cline%set('trs',          2.0)
+        if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
+        if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
+        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',         5.)
+        if( .not. cline%defined('maxits')      ) call cline%set('maxits',       15.)
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl3D')
+        call xrefine3D_distr%execute(cline)
+    end subroutine exec_refine3D_nano_distr
 
     subroutine exec_tseries_split( self, cline )
         use simple_ori, only: ori

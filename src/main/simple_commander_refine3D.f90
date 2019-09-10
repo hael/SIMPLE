@@ -1,15 +1,18 @@
 ! concrete commander: refine3D for ab initio 3D reconstruction and 3D refinement
 module simple_commander_refine3D
 include 'simple_lib.f08'
-use simple_parameters,     only: parameters
 use simple_builder,        only: builder
 use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
 use simple_ori,            only: ori
 use simple_oris,           only: oris
-use simple_commander_base, only: commander_base
+use simple_parameters,     only: parameters
+use simple_qsys_env,       only: qsys_env
+use simple_qsys_funs
 implicit none
 
 public :: nspace_commander
+public :: refine3D_commander_distr
 public :: refine3D_commander
 public :: check_3Dconv_commander
 private
@@ -19,6 +22,10 @@ type, extends(commander_base) :: nspace_commander
  contains
    procedure :: execute      => exec_nspace
 end type nspace_commander
+type, extends(commander_base) :: refine3D_commander_distr
+  contains
+    procedure :: execute      => exec_refine3D_distr
+end type refine3D_commander_distr
 type, extends(commander_base) :: refine3D_commander
   contains
     procedure :: execute      => exec_refine3D
@@ -46,6 +53,457 @@ contains
         end do
         call simple_end('**** SIMPLE_NSPACE NORMAL STOP ****')
     end subroutine exec_nspace
+
+    subroutine exec_refine3D_distr( self, cline )
+        use simple_commander_volops, only: postprocess_commander
+        use simple_commander_rec,    only: reconstruct3D_commander_distr
+        class(refine3D_commander_distr), intent(inout) :: self
+        class(cmdline),                  intent(inout) :: cline
+        ! commanders
+        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
+        type(check_3Dconv_commander)        :: xcheck_3Dconv
+        type(postprocess_commander)         :: xpostprocess
+        ! command lines
+        type(cmdline)    :: cline_reconstruct3D_distr
+        type(cmdline)    :: cline_check_3Dconv
+        type(cmdline)    :: cline_volassemble
+        type(cmdline)    :: cline_postprocess
+        ! other variables
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(chash)      :: job_descr
+        character(len=:),          allocatable :: vol_fname, prev_refine_path, target_name
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=STDLEN),     allocatable :: state_assemble_finished(:)
+        integer,                   allocatable :: state_pops(:)
+        character(len=STDLEN)     :: vol, vol_iter, str, str_iter, optlp_file
+        character(len=STDLEN)     :: vol_even, vol_odd, str_state, fsc_file, volpproc
+        character(len=LONGSTRLEN) :: volassemble_output
+        real    :: corr, corr_prev, smpd
+        integer :: i, state, iter, iostat, box, nfiles, niters, iter_switch2euclid
+        logical :: err, vol_defined, have_oris, do_abinitio, converged, fall_over
+        logical :: l_projection_matching, l_switch2euclid, l_continue
+        if( .not. cline%defined('refine') )then
+            call cline%set('refine',  'single')
+        else
+            if( cline%get_carg('refine').eq.'multi' .and. .not. cline%defined('nstates') )then
+                THROW_HARD('refine=MULTI requires specification of NSTATES')
+            endif
+        endif
+        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp', 30.)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        ! objfun=euclid logics, part 1
+        l_switch2euclid  = .false.
+        if( cline%defined('objfun') )then
+            l_continue = .false.
+            if( cline%defined('continue') ) l_continue = trim(cline%get_carg('continue')).eq.'yes'
+            if( (trim(cline%get_carg('objfun')).eq.'euclid') .and. .not.l_continue )then
+                l_switch2euclid = .true.
+                call cline%set('objfun','cc')
+            endif
+        endif
+        ! init
+        call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case('cls3D')
+                fall_over = build%spproj%os_out%get_noris() == 0
+            case DEFAULT
+                write(logfhandle,*)'Unsupported ORITYPE; simple_commander_distr_wflows::exec_refine3D_distr'
+        end select
+        if( fall_over )then
+            THROW_HARD('no particles found! :exec_refine3D_distr')
+        endif
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        ! splitting
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
+        ! prepare command lines from prototype master
+        cline_reconstruct3D_distr = cline
+        cline_check_3Dconv        = cline
+        cline_volassemble         = cline
+        cline_postprocess         = cline
+        ! initialise static command line parameters and static job description parameter
+        call cline_reconstruct3D_distr%set( 'prg', 'reconstruct3D' ) ! required for distributed call
+        call cline_postprocess%set('prg', 'postprocess' )            ! required for local call
+        if( trim(params%refine).eq.'clustersym' ) call cline_reconstruct3D_distr%set( 'pgrp', 'c1' )
+        call cline_postprocess%set('mirr',    'no')
+        call cline_postprocess%set('mkdir',   'no')
+        call cline_postprocess%set('imgkind', 'vol')
+        if( trim(params%oritype).eq.'cls3D' ) call cline_postprocess%set('imgkind', 'vol_cavg')
+        ! for parallel volassemble over states
+        allocate(state_assemble_finished(params%nstates) , stat=alloc_stat)
+        if(alloc_stat /= 0)call allocchk("simple_commander_distr_wflows::exec_refine3D_distr state_assemble ",alloc_stat)
+        ! removes unnecessary volume keys and generates volassemble finished names
+        do state = 1,params%nstates
+            vol = 'vol'//int2str( state )
+            call cline_check_3Dconv%delete( vol )
+            call cline_volassemble%delete( vol )
+            call cline_postprocess%delete( vol )
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+        enddo
+        ! E/O PARTITIONING
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            if( params%tseries .eq. 'yes' )then
+                call build%spproj_field%partition_eo(tseries=.true.)
+            else
+                call build%spproj_field%partition_eo
+            endif
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
+        ! GENERATE STARTING MODELS & ORIENTATIONS
+        if( params%continue .eq. 'yes' )then
+            ! we are continuing from a previous refinement round,
+            ! i.e. projfile is fetched from a X_refine3D dir
+            ! set starting volume(s), iteration number & previous refinement path
+            do state=1,params%nstates
+                ! volume(s)
+                vol = 'vol' // int2str(state)
+                if( trim(params%oritype).eq.'cls3D' )then
+                    call build%spproj%get_vol('vol_cavg', state, vol_fname, smpd, box)
+                else
+                    call build%spproj%get_vol('vol', state, vol_fname, smpd, box)
+                endif
+                call cline%set(trim(vol), vol_fname)
+                params%vols(state) = vol_fname
+            end do
+            prev_refine_path = get_fpath(vol_fname)
+            ! carry over FRCs/FSCs
+            ! one FSC file per state
+            do state=1,params%nstates
+                str_state = int2str_pad(state,2)
+                fsc_file  = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                call simple_copy_file(trim(prev_refine_path)//trim(fsc_file), fsc_file)
+            end do
+            ! one FRC file for all states
+            call simple_copy_file(trim(prev_refine_path)//trim(FRCS_FILE), trim(FRCS_FILE))
+            ! carry over the oridistributions_part* files
+            call simple_list_files(prev_refine_path//'oridistributions_part*', list)
+            nfiles = size(list)
+            err    = params%nparts /= nfiles
+            if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
+            do i=1,nfiles
+                target_name = PATH_HERE//basename(trim(list(i)))
+                call simple_copy_file(trim(list(i)), target_name)
+            end do
+            deallocate(list)
+            ! if we are doing fractional volume update, partial reconstructions need to be carried over
+            if( params%l_frac_update )then
+                call simple_list_files(prev_refine_path//'*recvol_state*part*', list)
+                nfiles = size(list)
+                err = params%nparts * 4 /= nfiles
+                if( err ) THROW_HARD('# partitions not consistent with previous refinement round')
+                do i=1,nfiles
+                    target_name = PATH_HERE//basename(trim(list(i)))
+                    call simple_copy_file(trim(list(i)), target_name)
+                end do
+                deallocate(list)
+            endif
+            ! if we are doing objfun=euclid the sigm estimates need to be carried over
+            if( trim(params%objfun) .eq. 'euclid' )then
+                call simple_list_files(prev_refine_path//trim(SIGMA2_FBODY)//'*', list)
+                nfiles = size(list)
+                if( nfiles /= params%nparts ) THROW_HARD('# partitions not consistent with previous refinement round')
+                do i=1,nfiles
+                    target_name = PATH_HERE//basename(trim(list(i)))
+                    call simple_copy_file(trim(list(i)), target_name)
+                end do
+                deallocate(list)
+            endif
+        endif
+        vol_defined = .false.
+        do state = 1,params%nstates
+            vol = 'vol' // int2str(state)
+            if( cline%defined(trim(vol)) ) vol_defined = .true.
+        enddo
+        have_oris   = .not. build%spproj%is_virgin_field(params%oritype)
+        do_abinitio = .not. have_oris .and. .not. vol_defined
+        if( do_abinitio )then
+            call build%spproj_field%rnd_oris
+            call build%spproj_field%zero_shifts
+            have_oris = .true.
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
+        l_projection_matching = .false.
+        if( have_oris .and. .not. vol_defined )then
+            ! reconstructions needed
+            call xreconstruct3D_distr%execute( cline_reconstruct3D_distr )
+            do state = 1,params%nstates
+                ! rename volumes and update cline
+                str_state = int2str_pad(state,2)
+                vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+                str = trim(STARTVOL_FBODY)//trim(str_state)//params%ext
+                iostat = simple_rename( trim(vol), trim(str) )
+                vol = 'vol'//trim(int2str(state))
+                call cline%set( trim(vol), trim(str) )
+                vol_even = trim(VOL_FBODY)//trim(str_state)//'_even'//params%ext
+                str = trim(STARTVOL_FBODY)//trim(str_state)//'_even'//params%ext
+                iostat= simple_rename( trim(vol_even), trim(str) )
+                vol_odd  = trim(VOL_FBODY)//trim(str_state)//'_odd' //params%ext
+                str = trim(STARTVOL_FBODY)//trim(str_state)//'_odd'//params%ext
+                iostat =  simple_rename( trim(vol_odd), trim(str) )
+            enddo
+        else if( vol_defined .and. params%continue .ne. 'yes' )then
+            ! projection matching
+            l_projection_matching = .true.
+            if( .not. have_oris )then
+                select case( params%neigh )
+                    case( 'yes' )
+                        THROW_HARD('refinement method requires input orientations')
+                    case DEFAULT
+                        ! all good
+                end select
+            endif
+            if( .not.cline%defined('lp') ) THROW_HARD('LP needs be defined for the first step of projection matching!')
+            call cline%delete('update_frac')
+            if( params%neigh .ne. 'yes' )then
+                ! this forces the first round of alignment on the starting model(s)
+                ! to be greedy and the subseqent ones to be whatever the refinement flag is set to
+                call build%spproj%os_ptcl3D%delete_3Dalignment(keepshifts=.true.)
+                call build%spproj%write_segment_inside(params%oritype)
+            endif
+        endif
+        ! EXTREMAL DYNAMICS
+        if( cline%defined('extr_iter') )then
+            params%extr_iter = params%extr_iter - 1
+        else
+            params%extr_iter = params%startit - 1
+        endif
+        ! objfun=euclid logics, part 2
+        iter_switch2euclid = -1
+        if( l_switch2euclid )then
+            iter_switch2euclid = 1
+            if( cline%defined('update_frac') ) iter_switch2euclid = ceiling(1./(params%update_frac+0.001))
+            if( l_projection_matching .and. cline%defined('lp_iters') ) iter_switch2euclid = params%lp_iters
+            call cline%set('needs_sigma','yes')
+        endif
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! MAIN LOOP
+        niters = 0
+        iter   = params%startit - 1
+        corr   = -1.
+        do
+            niters            = niters + 1
+            iter              = iter + 1
+            params%which_iter = iter
+            str_iter          = int2str_pad(iter,3)
+            write(logfhandle,'(A)')   '>>>'
+            write(logfhandle,'(A,I6)')'>>> ITERATION ', iter
+            write(logfhandle,'(A)')   '>>>'
+            if( have_oris .or. iter > params%startit )then
+                call build%spproj%read(params%projfile)
+                if( params%refine .eq. 'snhc' )then
+                    ! update stochastic neighborhood size if corr is not improving
+                    corr_prev = corr
+                    corr      = build%spproj_field%get_avg('corr')
+                    if( iter > 1 .and. corr <= corr_prev )then
+                        params%szsn = min(SZSN_MAX,params%szsn + SZSN_STEP)
+                    endif
+                    call job_descr%set('szsn', int2str(params%szsn))
+                    call cline%set('szsn', real(params%szsn))
+                endif
+            endif
+            ! exponential cooling of the randomization rate
+            params%extr_iter = params%extr_iter + 1
+            call job_descr%set('extr_iter', trim(int2str(params%extr_iter)))
+            call cline%set('extr_iter', real(params%extr_iter))
+            call job_descr%set('which_iter', trim(int2str(params%which_iter)))
+            call cline%set('which_iter', real(params%which_iter))
+            call job_descr%set( 'startit', trim(int2str(iter)))
+            call cline%set('startit', real(iter))
+            ! switch to refine=greedy_* when frac >= 99 and iter >= 5
+            if( cline_check_3Dconv%defined('frac_srch') )then
+                if( iter >= MIN_ITERS_SHC )then
+                    if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
+                        select case(trim(params%refine))
+                            case('single')
+                                params%refine = 'greedy_single'
+                            case('multi')
+                                params%refine = 'greedy_multi'
+                        end select
+                        call job_descr%set( 'refine', params%refine )
+                        call cline%set('refine', params%refine)
+                        call cline_check_3Dconv%set('refine',params%refine)
+                    endif
+                endif
+            endif
+            ! FRCs
+            if( cline%defined('frcs') )then
+                ! all good
+            else
+                call job_descr%set('frcs', trim(FRCS_FILE))
+            endif
+            ! schedule
+            call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
+            ! ASSEMBLE ALIGNMENT DOCS
+            call build%spproj%merge_algndocs(params%nptcls, params%nparts, params%oritype, ALGN_FBODY)
+            ! ASSEMBLE VOLUMES
+            select case(trim(params%refine))
+            case('eval')
+                ! nothing to do
+            case DEFAULT
+                call cline_volassemble%set( 'prg', 'volassemble' ) ! required for cmdline exec
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    if( str_has_substr(params%refine,'snhc') )then
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+                    else
+                        volassemble_output = 'RESOLUTION_STATE'//trim(str_state)//'_ITER'//trim(str_iter)
+                    endif
+                    call cline_volassemble%set( 'state', real(state) )
+                    if( params%nstates>1 )call cline_volassemble%set('part', real(state))
+                    call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+                    &'simple_script_state'//trim(str_state), volassemble_output)
+                end do
+                call qsys_watcher(state_assemble_finished)
+                ! rename & add volumes to project & update job_descr
+                call build%spproj_field%get_pops(state_pops, 'state')
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    if( state_pops(state) == 0 )then
+                        ! cleanup for empty state
+                        vol = 'vol'//trim(int2str(state))
+                        call cline%delete( vol )
+                        call job_descr%delete( vol )
+                    else
+                        ! rename state volume
+                        vol = trim(VOL_FBODY)//trim(str_state)//params%ext
+                        if( params%refine .eq. 'snhc' )then
+                            vol_iter = trim(SNHCVOL)//trim(str_state)//params%ext
+                            iostat   = simple_rename( vol, vol_iter )
+                        else
+                            vol_iter = trim(vol)
+                        endif
+                        fsc_file   = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                        optlp_file = ANISOLP_FBODY//trim(str_state)//params%ext
+                        ! add filters to os_out
+                        call build%spproj%add_fsc2os_out(fsc_file, state, params%box)
+                        call build%spproj%add_vol2os_out(optlp_file, params%smpd, state, 'vol_filt', box=params%box)
+                        ! add state volume to os_out
+                        if( trim(params%oritype).eq.'cls3D' )then
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol_cavg')
+                        else
+                            call build%spproj%add_vol2os_out(vol_iter, params%smpd, state, 'vol')
+                        endif
+                        ! updates cmdlines & job description
+                        vol = 'vol'//trim(int2str(state))
+                        call job_descr%set( vol, vol_iter )
+                        call cline%set(vol, vol_iter )
+                        if( params%keepvol.ne.'no' )then
+                            call simple_copy_file(vol_iter,trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//params%ext)
+                        endif
+                    endif
+                enddo
+                ! volume mask, one for all states
+                if( cline%defined('mskfile') )call build%spproj%add_vol2os_out(trim(params%mskfile), params%smpd, 1, 'vol_msk')
+                ! writes os_out
+                call build%spproj%write_segment_inside('out')
+                ! per state post-process
+                do state = 1,params%nstates
+                    str_state = int2str_pad(state,2)
+                    if( state_pops(state) == 0 )cycle
+                    call cline_postprocess%set('state', real(state))
+                    if( cline%defined('lp') ) call cline_postprocess%set('lp', params%lp)
+                    call xpostprocess%execute(cline_postprocess)
+                    ! for gui visualization
+                    if( params%refine .ne. 'snhc' )then
+                        volpproc = trim(VOL_FBODY)//trim(str_state)//PPROC_SUFFIX//params%ext
+                        vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter,3)//PPROC_SUFFIX//params%ext
+                        call simple_copy_file(volpproc, vol_iter) ! for GUI visualization
+                        if( iter > 1 )then
+                            vol_iter = trim(VOL_FBODY)//trim(str_state)//'_iter'//int2str_pad(iter-1,3)//PPROC_SUFFIX//params%ext
+                            call del_file(vol_iter)
+                        endif
+                    endif
+                enddo
+            end select
+            ! CONVERGENCE
+            converged = .false.
+            select case(trim(params%refine))
+                case('eval')
+                    ! nothing to do
+                case DEFAULT
+                    if( str_has_substr(params%refine,'cluster')) call cline_check_3Dconv%delete('update_res')
+                    call xcheck_3Dconv%execute(cline_check_3Dconv)
+                    if( iter >= params%startit + 2 )then
+                        ! after a minimum of 2 iterations
+                        if( cline_check_3Dconv%get_carg('converged') .eq. 'yes' ) converged = .true.
+                    endif
+            end select
+            if( iter >= params%maxits ) converged = .true.
+            if( converged )then
+                ! safest to write the whole thing here as multiple fields updated
+                call build%spproj%write
+                exit ! main loop
+            endif
+            ! ITERATION DEPENDENT UPDATES
+            if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
+                ! activates shift search if frac_srch >= 90
+                str = real2str(cline_check_3Dconv%get_rarg('trs'))
+                call job_descr%set( 'trs', trim(str) )
+                call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )
+            endif
+            if( l_projection_matching .and. cline%defined('lp_iters') .and. (niters == params%lp_iters ) )then
+                ! e/o projection matching
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO EVEN/ODD RESOLUTION LIMIT'
+                write(logfhandle,'(A)')'>>>'
+                l_projection_matching = .false.
+                if( cline%defined('match_filt') )then
+                    if( cline%get_carg('match_filt').eq.'no' )then
+                        ! flags are kept so match_filt is not used
+                        call job_descr%set('match_filt','no')
+                    else
+                        call cline%delete('lp')
+                        call job_descr%delete('lp')
+                        call cline_postprocess%delete('lp')
+                    endif
+                else
+                    call cline%delete('lp')
+                    call job_descr%delete('lp')
+                    call cline_postprocess%delete('lp')
+                endif
+                if( params%l_frac_update )then
+                    call job_descr%set('update_frac', real2str(params%update_frac))
+                    call cline%set('update_frac', params%update_frac)
+                    call cline_check_3Dconv%set('update_frac', params%update_frac)
+                    call cline_volassemble%set('update_frac', params%update_frac)
+                endif
+            endif
+            ! objfun=euclid, part 3: actual switch
+            if( l_switch2euclid .and. niters.eq.iter_switch2euclid )then
+                write(logfhandle,'(A)')'>>>'
+                write(logfhandle,'(A)')'>>> SWITCHING TO OBJFUN=EUCLID'
+                call cline%set('objfun','euclid')
+                call cline%set('match_filt','no')
+                call cline%delete('lp')
+                call job_descr%set('objfun','euclid')
+                call job_descr%set('match_filt','no')
+                call job_descr%delete('lp')
+                call cline_volassemble%set('objfun','euclid')
+                call cline_postprocess%delete('lp')
+                params%objfun    = 'euclid'
+                params%cc_objfun = OBJFUN_EUCLID
+                l_switch2euclid  = .false.
+            endif
+        end do
+        call qsys_cleanup
+        ! report the last iteration on exit
+        call cline%delete( 'startit' )
+        call cline%set('endit', real(iter))
+        ! end gracefully
+        call build%spproj_field%kill
+        call simple_end('**** SIMPLE_DISTR_REFINE3D NORMAL STOP ****')
+    end subroutine exec_refine3D_distr
 
     subroutine exec_refine3D( self, cline )
         use simple_strategy3D_matcher, only: refine3D_exec
@@ -117,7 +575,7 @@ contains
         ! reports convergence, shift activation, resolution update and
         ! fraction of search space scanned to the distr commander
         if( params_glob%l_doshift )then
-            call cline%set('trs', params_glob%trs)        ! activates shift search
+            call cline%set('trs', params_glob%trs) ! activates shift search
         endif
         if( converged )then
             call cline%set('converged', 'yes')

@@ -4,6 +4,12 @@ include 'simple_lib.f08'
 use simple_user_interface, only: make_user_interface, list_distr_prgs_in_ui
 use simple_cmdline,        only: cmdline, cmdline_err
 use simple_commander_base, only: execute_commander
+use simple_commander_preprocess
+use simple_commander_cluster2D
+use simple_commander_tseries
+use simple_commander_refine3D
+use simple_commander_rec
+use simple_commander_project
 use simple_spproj_hlev
 use simple_commander_distr_wflows
 use simple_commander_stream_wflows
@@ -12,42 +18,42 @@ implicit none
 #include "simple_local_flags.inc"
 
 ! PRE-PROCESSING WORKFLOWS
-type(preprocess_distr_commander)            :: xpreprocess
-type(preprocess_stream_commander)           :: xpreprocess_stream
-type(extract_distr_commander)               :: xextract_distr
-type(reextract_distr_commander)             :: xreextract_distr
-type(motion_correct_distr_commander)        :: xmotion_correct_distr
-type(gen_pspecs_and_thumbs_distr_commander) :: xgen_pspecs_and_thumbs
-type(motion_correct_tomo_distr_commander)   :: xmotion_correct_tomo_distr
-type(ctf_estimate_distr_commander)          :: xctf_estimate_distr
-type(pick_distr_commander)                  :: xpick_distr
-type(pick_extract_stream_distr_commander)   :: xpick_extract_stream_distr
+type(preprocess_commander_distr)            :: xpreprocess
+type(preprocess_commander_stream)           :: xpreprocess_stream
+type(extract_commander_distr)               :: xextract_distr
+type(reextract_commander_distr)             :: xreextract_distr
+type(motion_correct_commander_distr)        :: xmotion_correct_distr
+type(gen_pspecs_and_thumbs_commander_distr) :: xgen_pspecs_and_thumbs
+type(motion_correct_tomo_commander_distr)   :: xmotion_correct_tomo_distr
+type(ctf_estimate_commander_distr)          :: xctf_estimate_distr
+type(pick_commander_distr)                  :: xpick_distr
+type(pick_extract_commander_stream)         :: xpick_extract_stream
 
 ! CLUSTER2D WORKFLOWS
-type(make_cavgs_distr_commander)            :: xmake_cavgs_distr
+type(make_cavgs_commander_distr)            :: xmake_cavgs_distr
 type(cluster2D_autoscale_commander)         :: xcluster2D_distr
-type(cluster2D_stream_distr_commander)      :: xcluster2D_stream_distr
+type(cluster2D_commander_stream)            :: xcluster2D_stream
 type(cleanup2D_commander)                   :: xcleanup2D_distr
 
 ! AB INITIO 3D RECONSTRUCTION WORKFLOW
 type(initial_3Dmodel_commander)             :: xinitial_3Dmodel
 
 ! REFINE3D WORKFLOWS
-type(refine3D_distr_commander)              :: xrefine3D_distr
-type(reconstruct3D_distr_commander)         :: xreconstruct3D_distr
+type(refine3D_commander_distr)              :: xrefine3D_distr
+type(reconstruct3D_commander_distr)         :: xreconstruct3D_distr
 
 ! CLUSTER3D WORKFLOWS
 type(cluster3D_commander)                   :: xcluster3D
 type(cluster3D_refine_commander)            :: xcluster3D_refine
 
 ! TIME-SERIES (NANO-PARTICLE) WORKFLOWS
-type(tseries_track_distr_commander)         :: xtseries_track_distr
+type(tseries_track_commander_distr)         :: xtseries_track_distr
 type(cleanup2D_nano_commander)              :: xcleanup2D_nano
-type(refine3D_nano_distr_commander)         :: xrefine3D_nano_distr
+type(refine3D_nano_commander_distr)         :: xrefine3D_nano_distr
 
 ! MISCELLANEOUS WORKFLOWS
-type(scale_project_distr_commander)         :: xscale_project
-type(prune_project_distr_commander)         :: xprune_project
+type(scale_project_commander_distr)         :: xscale_project
+type(prune_project_commander_distr)         :: xprune_project
 
 ! OTHER DECLARATIONS
 character(len=STDLEN) :: args, prg, entire_line
@@ -93,7 +99,7 @@ select case(prg)
     case( 'pick' )
         call xpick_distr%execute(cline)
     case( 'pick_extract_stream' )
-        call xpick_extract_stream_distr%execute(cline)
+        call xpick_extract_stream%execute(cline)
 
     ! CLUSTER2D WORKFLOWS
     case( 'make_cavgs' )
@@ -103,7 +109,7 @@ select case(prg)
     case( 'cluster2D' )
         call execute_commander(xcluster2D_distr, cline)
     case( 'cluster2D_stream' )
-        call xcluster2D_stream_distr%execute(cline)
+        call xcluster2D_stream%execute(cline)
 
     ! AB INITIO 3D RECONSTRUCTION WORKFLOW
     case( 'initial_3Dmodel' )

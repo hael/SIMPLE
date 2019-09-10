@@ -1,33 +1,34 @@
 ! concrete commander: high-level workflows
 module simple_commander_hlev_wflows
 include 'simple_lib.f08'
-use simple_commander_base, only: commander_base
 use simple_cmdline,        only: cmdline
-use simple_sp_project,     only: sp_project
+use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters
+use simple_sp_project,     only: sp_project
+use simple_qsys_funs
 implicit none
 
-public :: cleanup2D_commander
-public :: cleanup2D_nano_commander
-public :: cluster2D_autoscale_commander
+! public :: cleanup2D_commander
+! public :: cleanup2D_nano_commander
+! public :: cluster2D_autoscale_commander
 public :: initial_3Dmodel_commander
 public :: cluster3D_commander
 public :: cluster3D_refine_commander
 private
 #include "simple_local_flags.inc"
 
-type, extends(commander_base) :: cleanup2D_commander
-  contains
-    procedure :: execute      => exec_cleanup2D
-end type cleanup2D_commander
-type, extends(commander_base) :: cleanup2D_nano_commander
-  contains
-    procedure :: execute      => exec_cleanup2D_nano
-end type cleanup2D_nano_commander
-type, extends(commander_base) :: cluster2D_autoscale_commander
-  contains
-    procedure :: execute      => exec_cluster2D_autoscale
-end type cluster2D_autoscale_commander
+! type, extends(commander_base) :: cleanup2D_commander
+!   contains
+!     procedure :: execute      => exec_cleanup2D
+! end type cleanup2D_commander
+! type, extends(commander_base) :: cleanup2D_nano_commander
+!   contains
+!     procedure :: execute      => exec_cleanup2D_nano
+! end type cleanup2D_nano_commander
+! type, extends(commander_base) :: cluster2D_autoscale_commander
+!   contains
+!     procedure :: execute      => exec_cluster2D_autoscale
+! end type cluster2D_autoscale_commander
 type, extends(commander_base) :: initial_3Dmodel_commander
   contains
     procedure :: execute      => exec_initial_3Dmodel
@@ -44,511 +45,509 @@ end type cluster3D_refine_commander
 contains
 
     ! !> for distributed CLEANUP2D with two-stage autoscaling
-    subroutine exec_cleanup2D( self, cline )
-        use simple_commander_distr_wflows, only: cluster2D_distr_commander,scale_project_distr_commander
-        use simple_procimgfile,            only: random_selection_from_imgfile, random_cls_from_imgfile
-        use simple_commander_cluster2D,    only: rank_cavgs_commander
-        class(cleanup2D_commander), intent(inout) :: self
-        class(cmdline),             intent(inout) :: cline
-        ! commanders
-        type(cluster2D_distr_commander)     :: xcluster2D_distr
-        type(scale_project_distr_commander) :: xscale_distr
-        type(rank_cavgs_commander)          :: xrank_cavgs
-        ! command lines
-        type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
-        type(cmdline)                       :: cline_rank_cavgs, cline_scale
-        ! other variables
-        type(parameters)                    :: params
-        type(sp_project)                    :: spproj, spproj_sc
-        character(len=:),       allocatable :: projfile, orig_projfile
-        character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs
-        real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
-        integer                             :: last_iter, box, status
-        logical                             :: do_scaling
-        ! parameters
-        character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
-        integer, parameter    :: MINBOX      = 92
-        real,    parameter    :: TARGET_LP   = 15.
-        real,    parameter    :: MINITS      = 5.
-        real,    parameter    :: MAXITS      = 15.
-        real                  :: SMPD_TARGET = 4.
-        if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
-        if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
-        if( .not. cline%defined('center')    ) call cline%set('center',     'no')
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     15. )
-        if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
-        call params%new(cline)
-        orig_projfile = params%projfile
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        ! read project file
-        call spproj%read(params%projfile)
-        ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
-        endif
-        ! delete any previous solution
-        call spproj%os_ptcl2D%delete_2Dclustering
-        call spproj%write_segment_inside(params%oritype)
-        ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! first stage
-        ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
-        ! no incremental learning, objective function is standard cross-correlation (cc), no centering
-        cline_cluster2D1 = cline
-        cline_cluster2D2 = cline
-        cline_scale      = cline
-        call cline_cluster2D1%set('prg',        'cluster2D')
-        call cline_cluster2D1%set('refine',     'greedy')
-        call cline_cluster2D1%set('maxits',     MINITS)
-        call cline_cluster2D1%set('objfun',     'cc')
-        call cline_cluster2D1%set('match_filt', 'no')
-        call cline_cluster2D1%set('center',     'no')
-        call cline_cluster2D1%set('autoscale',  'no')
-        call cline_cluster2D1%set('ptclw',      'no')
-        call cline_cluster2D1%delete('update_frac')
-        ! second stage
-        ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
-        ! objective function default is standard cross-correlation (cc)
-        call cline_cluster2D2%set('prg',        'cluster2D')
-        call cline_cluster2D2%set('refine',     'greedy')
-        call cline_cluster2D2%set('match_filt', 'no')
-        call cline_cluster2D2%set('autoscale',  'no')
-        call cline_cluster2D2%set('trs',         MINSHIFT)
-        call cline_cluster2D2%set('objfun',     'cc')
-        if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
-        if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
-        ! Scaling
-        do_scaling = .true.
-        if( params%box < MINBOX .or. params%autoscale.eq.'no')then
-            do_scaling   = .false.
-            smpd         = params%smpd
-            scale_factor = 1.
-            box          = params%box
-            projfile     = trim(params%projfile)
-        else
-            call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor)
-            if( box < MINBOX ) SMPD_TARGET = params%smpd * real(params%box) / real(MINBOX)
-            call spproj%scale_projfile(SMPD_TARGET, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
-            call spproj%kill
-            scale_factor = cline_scale%get_rarg('scale')
-            smpd         = cline_scale%get_rarg('smpd')
-            box          = nint(cline_scale%get_rarg('newbox'))
-            call cline_scale%set('state',1.)
-            call cline_scale%delete('smpd') !!
-            call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-            call xscale_distr%execute( cline_scale )
-            ! rename scaled projfile and stash original project file
-            ! such that the scaled project file has the same name as the original and can be followed from the GUI
-            call simple_copy_file(orig_projfile, orig_projfile_bak)
-            call spproj%read_non_data_segments(projfile)
-            call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
-            call spproj%projinfo%set(1,'projfile',orig_projfile)
-            call spproj%write_non_data_segments(projfile)
-            call spproj%kill
-            status   = simple_rename(projfile,orig_projfile)
-            projfile = trim(orig_projfile)
-        endif
-        if( cline%defined('msk') )then
-            msk = params%msk*scale_factor
-        else
-            msk = real(box/2)-COSMSKHALFWIDTH
-        endif
-        ring2 = 0.8*msk
-        lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
-        lp2   = max(2.*smpd, params%lp)
-        ! execute initialiser
-        params%refs = 'start2Drefs' // params%ext
-        call spproj%read(projfile)
-        if( params%avg.eq.'yes' )then
-            call random_cls_from_imgfile(spproj, params%refs, params%ncls)
-        else
-            call random_selection_from_imgfile(spproj, params%refs, box, params%ncls)
-        endif
-        call spproj%kill
-        ! updates command-lines
-        call cline_cluster2D1%set('refs',   params%refs)
-        call cline_cluster2D1%set('msk',    msk)
-        call cline_cluster2D1%set('ring2',  ring2)
-        call cline_cluster2D1%set('lp',     lp1)
-        call cline_cluster2D2%set('msk',    msk)
-        call cline_cluster2D2%set('lp',     lp2)
-        ! execution 1
-        write(logfhandle,'(A)') '>>>'
-        write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
-        write(logfhandle,'(A)') '>>>'
-        call cline_cluster2D1%set('projfile', trim(projfile))
-        call xcluster2D_distr%execute(cline_cluster2D1)
-        last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
-        finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
-        ! execution 2
-        if( cline%defined('maxits') )then
-            if( last_iter < params%maxits )then
-                write(logfhandle,'(A)') '>>>'
-                write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
-                write(logfhandle,'(A)') '>>>'
-                call cline_cluster2D2%set('projfile', trim(projfile))
-                call cline_cluster2D2%set('startit',  real(last_iter+1))
-                call cline_cluster2D2%set('refs',     trim(finalcavgs))
-                call xcluster2D_distr%execute(cline_cluster2D2)
-                last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
-                finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
-            endif
-        endif
-        ! restores project file name
-        params%projfile = trim(orig_projfile)
-        ! update original project
-        if( do_scaling )then
-            call spproj_sc%read(projfile)
-            call spproj%read(orig_projfile_bak)
-            call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
-            call rescale_cavgs(finalcavgs)
-            cavgs = add2fbody(finalcavgs,params%ext,'_even')
-            call rescale_cavgs(cavgs)
-            cavgs = add2fbody(finalcavgs,params%ext,'_odd')
-            call rescale_cavgs(cavgs)
-            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
-            spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-            spproj%os_cls2D  = spproj_sc%os_cls2D
-            ! restores original project and deletes backup & scaled
-            call spproj%write(params%projfile)
-            call del_file(orig_projfile_bak)
-        else
-            call spproj%read_segment('out', params%projfile)
-            call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
-            call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-            call spproj%write_segment_inside('out', params%projfile)
-        endif
-        call spproj_sc%kill
-        call spproj%kill
-        ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
-        call cline_rank_cavgs%set('projfile', trim(params%projfile))
-        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call xrank_cavgs%execute(cline_rank_cavgs)
-        ! cleanup
-        if( do_scaling ) call simple_rmdir(STKPARTSDIR)
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
-        contains
+    ! subroutine exec_cleanup2D( self, cline )
+    !     use simple_commander_distr_wflows, only: scale_project_commander_distr
+    !     use simple_procimgfile,            only: random_selection_from_imgfile, random_cls_from_imgfile
+    !     class(cleanup2D_commander), intent(inout) :: self
+    !     class(cmdline),             intent(inout) :: cline
+    !     ! commanders
+    !     type(cluster2D_commander_distr)     :: xcluster2D_distr
+    !     type(scale_project_commander_distr) :: xscale_distr
+    !     type(rank_cavgs_commander)          :: xrank_cavgs
+    !     ! command lines
+    !     type(cmdline)                       :: cline_cluster2D1, cline_cluster2D2
+    !     type(cmdline)                       :: cline_rank_cavgs, cline_scale
+    !     ! other variables
+    !     type(parameters)                    :: params
+    !     type(sp_project)                    :: spproj, spproj_sc
+    !     character(len=:),       allocatable :: projfile, orig_projfile
+    !     character(len=LONGSTRLEN)           :: finalcavgs, finalcavgs_ranked, cavgs
+    !     real                                :: scale_factor, smpd, msk, ring2, lp1, lp2
+    !     integer                             :: last_iter, box, status
+    !     logical                             :: do_scaling
+    !     ! parameters
+    !     character(len=STDLEN) :: orig_projfile_bak = 'orig_bak.simple'
+    !     integer, parameter    :: MINBOX      = 92
+    !     real,    parameter    :: TARGET_LP   = 15.
+    !     real,    parameter    :: MINITS      = 5.
+    !     real,    parameter    :: MAXITS      = 15.
+    !     real                  :: SMPD_TARGET = 4.
+    !     if( .not. cline%defined('lp')        ) call cline%set('lp',         15. )
+    !     if( .not. cline%defined('ncls')      ) call cline%set('ncls',      200. )
+    !     if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      20. )
+    !     if( .not. cline%defined('center')    ) call cline%set('center',     'no')
+    !     if( .not. cline%defined('maxits')    ) call cline%set('maxits',     15. )
+    !     if( .not. cline%defined('center')    ) call cline%set('center',    'no' )
+    !     if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+    !     if( .not. cline%defined('oritype')   ) call cline%set('oritype', 'ptcl2D')
+    !     call params%new(cline)
+    !     orig_projfile = params%projfile
+    !     ! set mkdir to no (to avoid nested directory structure)
+    !     call cline%set('mkdir', 'no')
+    !     ! read project file
+    !     call spproj%read(params%projfile)
+    !     ! sanity checks
+    !     if( spproj%get_nptcls() == 0 )then
+    !         THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_autoscale')
+    !     endif
+    !     ! delete any previous solution
+    !     call spproj%os_ptcl2D%delete_2Dclustering
+    !     call spproj%write_segment_inside(params%oritype)
+    !     ! splitting
+    !     call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+    !     ! first stage
+    !     ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
+    !     ! no incremental learning, objective function is standard cross-correlation (cc), no centering
+    !     cline_cluster2D1 = cline
+    !     cline_cluster2D2 = cline
+    !     cline_scale      = cline
+    !     call cline_cluster2D1%set('prg',        'cluster2D')
+    !     call cline_cluster2D1%set('refine',     'greedy')
+    !     call cline_cluster2D1%set('maxits',     MINITS)
+    !     call cline_cluster2D1%set('objfun',     'cc')
+    !     call cline_cluster2D1%set('match_filt', 'no')
+    !     call cline_cluster2D1%set('center',     'no')
+    !     call cline_cluster2D1%set('autoscale',  'no')
+    !     call cline_cluster2D1%set('ptclw',      'no')
+    !     call cline_cluster2D1%delete('update_frac')
+    !     ! second stage
+    !     ! down-scaling for fast execution, greedy optimisation, no match filter, bi-linear interpolation,
+    !     ! objective function default is standard cross-correlation (cc)
+    !     call cline_cluster2D2%set('prg',        'cluster2D')
+    !     call cline_cluster2D2%set('refine',     'greedy')
+    !     call cline_cluster2D2%set('match_filt', 'no')
+    !     call cline_cluster2D2%set('autoscale',  'no')
+    !     call cline_cluster2D2%set('trs',         MINSHIFT)
+    !     call cline_cluster2D2%set('objfun',     'cc')
+    !     if( .not.cline%defined('maxits') ) call cline_cluster2D2%set('maxits', MAXITS)
+    !     if( cline%defined('update_frac') )call cline_cluster2D2%set('update_frac',params%update_frac)
+    !     ! Scaling
+    !     do_scaling = .true.
+    !     if( params%box < MINBOX .or. params%autoscale.eq.'no')then
+    !         do_scaling   = .false.
+    !         smpd         = params%smpd
+    !         scale_factor = 1.
+    !         box          = params%box
+    !         projfile     = trim(params%projfile)
+    !     else
+    !         call autoscale(params%box, params%smpd, SMPD_TARGET, box, smpd, scale_factor)
+    !         if( box < MINBOX ) SMPD_TARGET = params%smpd * real(params%box) / real(MINBOX)
+    !         call spproj%scale_projfile(SMPD_TARGET, projfile, cline_cluster2D1, cline_scale, dir=trim(STKPARTSDIR))
+    !         call spproj%kill
+    !         scale_factor = cline_scale%get_rarg('scale')
+    !         smpd         = cline_scale%get_rarg('smpd')
+    !         box          = nint(cline_scale%get_rarg('newbox'))
+    !         call cline_scale%set('state',1.)
+    !         call cline_scale%delete('smpd') !!
+    !         call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
+    !         call xscale_distr%execute( cline_scale )
+    !         ! rename scaled projfile and stash original project file
+    !         ! such that the scaled project file has the same name as the original and can be followed from the GUI
+    !         call simple_copy_file(orig_projfile, orig_projfile_bak)
+    !         call spproj%read_non_data_segments(projfile)
+    !         call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
+    !         call spproj%projinfo%set(1,'projfile',orig_projfile)
+    !         call spproj%write_non_data_segments(projfile)
+    !         call spproj%kill
+    !         status   = simple_rename(projfile,orig_projfile)
+    !         projfile = trim(orig_projfile)
+    !     endif
+    !     if( cline%defined('msk') )then
+    !         msk = params%msk*scale_factor
+    !     else
+    !         msk = real(box/2)-COSMSKHALFWIDTH
+    !     endif
+    !     ring2 = 0.8*msk
+    !     lp1   = max(2.*smpd, max(params%lp,TARGET_LP))
+    !     lp2   = max(2.*smpd, params%lp)
+    !     ! execute initialiser
+    !     params%refs = 'start2Drefs' // params%ext
+    !     call spproj%read(projfile)
+    !     if( params%avg.eq.'yes' )then
+    !         call random_cls_from_imgfile(spproj, params%refs, params%ncls)
+    !     else
+    !         call random_selection_from_imgfile(spproj, params%refs, box, params%ncls)
+    !     endif
+    !     call spproj%kill
+    !     ! updates command-lines
+    !     call cline_cluster2D1%set('refs',   params%refs)
+    !     call cline_cluster2D1%set('msk',    msk)
+    !     call cline_cluster2D1%set('ring2',  ring2)
+    !     call cline_cluster2D1%set('lp',     lp1)
+    !     call cline_cluster2D2%set('msk',    msk)
+    !     call cline_cluster2D2%set('lp',     lp2)
+    !     ! execution 1
+    !     write(logfhandle,'(A)') '>>>'
+    !     write(logfhandle,'(A,F6.1)') '>>> STAGE 1, LOW-PASS LIMIT: ',lp1
+    !     write(logfhandle,'(A)') '>>>'
+    !     call cline_cluster2D1%set('projfile', trim(projfile))
+    !     call xcluster2D_distr%execute(cline_cluster2D1)
+    !     last_iter  = nint(cline_cluster2D1%get_rarg('endit'))
+    !     finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+    !     ! execution 2
+    !     if( cline%defined('maxits') )then
+    !         if( last_iter < params%maxits )then
+    !             write(logfhandle,'(A)') '>>>'
+    !             write(logfhandle,'(A,F6.1)') '>>> STAGE 2, LOW-PASS LIMIT: ',lp2
+    !             write(logfhandle,'(A)') '>>>'
+    !             call cline_cluster2D2%set('projfile', trim(projfile))
+    !             call cline_cluster2D2%set('startit',  real(last_iter+1))
+    !             call cline_cluster2D2%set('refs',     trim(finalcavgs))
+    !             call xcluster2D_distr%execute(cline_cluster2D2)
+    !             last_iter  = nint(cline_cluster2D2%get_rarg('endit'))
+    !             finalcavgs = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//params%ext
+    !         endif
+    !     endif
+    !     ! restores project file name
+    !     params%projfile = trim(orig_projfile)
+    !     ! update original project
+    !     if( do_scaling )then
+    !         call spproj_sc%read(projfile)
+    !         call spproj%read(orig_projfile_bak)
+    !         call spproj_sc%os_ptcl2D%mul_shifts(1./scale_factor)
+    !         call rescale_cavgs(finalcavgs)
+    !         cavgs = add2fbody(finalcavgs,params%ext,'_even')
+    !         call rescale_cavgs(cavgs)
+    !         cavgs = add2fbody(finalcavgs,params%ext,'_odd')
+    !         call rescale_cavgs(cavgs)
+    !         call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+    !         spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+    !         spproj%os_cls2D  = spproj_sc%os_cls2D
+    !         ! restores original project and deletes backup & scaled
+    !         call spproj%write(params%projfile)
+    !         call del_file(orig_projfile_bak)
+    !     else
+    !         call spproj%read_segment('out', params%projfile)
+    !         call spproj%add_cavgs2os_out(trim(finalcavgs), params%smpd, imgkind='cavg')
+    !         call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+    !         call spproj%write_segment_inside('out', params%projfile)
+    !     endif
+    !     call spproj_sc%kill
+    !     call spproj%kill
+    !     ! ranking
+    !     finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter,3)//'_ranked'//params%ext
+    !     call cline_rank_cavgs%set('projfile', trim(params%projfile))
+    !     call cline_rank_cavgs%set('stk',      trim(finalcavgs))
+    !     call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
+    !     call xrank_cavgs%execute(cline_rank_cavgs)
+    !     ! cleanup
+    !     if( do_scaling ) call simple_rmdir(STKPARTSDIR)
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_CLEANUP2D NORMAL STOP ****')
+    !     contains
+    !
+    !         subroutine rescale_cavgs(cavgs)
+    !             use simple_image, only: image
+    !             character(len=*), intent(in) :: cavgs
+    !             type(image)                  :: img, img_pad
+    !             integer                      :: icls, iostat
+    !             call img%new([box,box,1],smpd)
+    !             call img_pad%new([params%box,params%box,1],params%smpd)
+    !             do icls = 1,params%ncls
+    !                 call img%read(cavgs,icls)
+    !                 call img%fft
+    !                 call img%pad(img_pad, backgr=0.)
+    !                 call img_pad%ifft
+    !                 call img_pad%write('tmp_cavgs.mrc',icls)
+    !             enddo
+    !             iostat = simple_rename('tmp_cavgs.mrc',cavgs)
+    !             call img%kill
+    !             call img_pad%kill
+    !         end subroutine
+    !
+    ! end subroutine exec_cleanup2D
 
-            subroutine rescale_cavgs(cavgs)
-                use simple_image, only: image
-                character(len=*), intent(in) :: cavgs
-                type(image)                  :: img, img_pad
-                integer                      :: icls, iostat
-                call img%new([box,box,1],smpd)
-                call img_pad%new([params%box,params%box,1],params%smpd)
-                do icls = 1,params%ncls
-                    call img%read(cavgs,icls)
-                    call img%fft
-                    call img%pad(img_pad, backgr=0.)
-                    call img_pad%ifft
-                    call img_pad%write('tmp_cavgs.mrc',icls)
-                enddo
-                iostat = simple_rename('tmp_cavgs.mrc',cavgs)
-                call img%kill
-                call img_pad%kill
-            end subroutine
+    ! !> for distributed cleanup2D optimized for time-series of nanoparticles
+    ! subroutine exec_cleanup2D_nano( self, cline )
+    !     use simple_commander_distr_wflows, only: make_cavgs_commander_distr,cluster2D_commander_distr
+    !     class(cleanup2D_nano_commander), intent(inout) :: self
+    !     class(cmdline),                  intent(inout) :: cline
+    !     ! commanders
+    !     type(cluster2D_commander_distr) :: xcluster2D_distr
+    !     ! other variables
+    !     type(parameters)              :: params
+    !     type(sp_project)              :: spproj
+    !     character(len=:), allocatable :: orig_projfile
+    !     character(len=LONGSTRLEN)     :: finalcavgs
+    !     integer  :: nparts, last_iter_stage2
+    !     call cline%set('center',    'yes')
+    !     call cline%set('autoscale', 'no')
+    !     call cline%set('refine',    'greedy')
+    !     call cline%set('tseries',   'yes')
+    !     if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
+    !     if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
+    !     if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
+    !     if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
+    !     if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+    !     call params%new(cline)
+    !     nparts = params%nparts
+    !     ! set mkdir to no (to avoid nested directory structure)
+    !     call cline%set('mkdir', 'no')
+    !     ! read project file
+    !     call spproj%read(params%projfile)
+    !     orig_projfile = trim(params%projfile)
+    !     ! sanity checks
+    !     if( spproj%get_nptcls() == 0 )then
+    !         THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_nano')
+    !     endif
+    !     ! delete any previous solution
+    !     if( .not. spproj%is_virgin_field(params%oritype) )then
+    !         ! removes previous cluster2D solution (states are preserved)
+    !         call spproj%os_ptcl2D%delete_2Dclustering
+    !         call spproj%write_segment_inside(params%oritype)
+    !     endif
+    !     ! splitting
+    !     call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+    !     ! no auto-scaling
+    !     call cline%set('prg', 'cluster2D')
+    !     call xcluster2D_distr%execute(cline)
+    !     last_iter_stage2 = nint(cline%get_rarg('endit'))
+    !     finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+    !     ! adding cavgs & FRCs to project
+    !     params%projfile = trim(orig_projfile)
+    !     call spproj%read( params%projfile )
+    !     call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+    !     call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+    !     ! transfer 2D shifts to 3D field
+    !     call spproj%map2Dshifts23D
+    !     call spproj%write
+    !     call spproj%kill
+    !     ! cleanup
+    !     call del_file('start2Drefs'//params%ext)
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
+    ! end subroutine exec_cleanup2D_nano
 
-    end subroutine exec_cleanup2D
-
-    !> for distributed cleanup2D optimized for time-series of nanoparticles
-    subroutine exec_cleanup2D_nano( self, cline )
-        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander
-        class(cleanup2D_nano_commander), intent(inout) :: self
-        class(cmdline),                  intent(inout) :: cline
-        ! commanders
-        type(cluster2D_distr_commander) :: xcluster2D_distr
-        ! other variables
-        type(parameters)              :: params
-        type(sp_project)              :: spproj
-        character(len=:), allocatable :: orig_projfile
-        character(len=LONGSTRLEN)     :: finalcavgs
-        integer  :: nparts, last_iter_stage2
-        call cline%set('center',    'yes')
-        call cline%set('autoscale', 'no')
-        call cline%set('refine',    'greedy')
-        call cline%set('tseries',   'yes')
-        if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
-        if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
-        if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
-        if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        call params%new(cline)
-        nparts = params%nparts
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        ! read project file
-        call spproj%read(params%projfile)
-        orig_projfile = trim(params%projfile)
-        ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cleanup2D_nano')
-        endif
-        ! delete any previous solution
-        if( .not. spproj%is_virgin_field(params%oritype) )then
-            ! removes previous cluster2D solution (states are preserved)
-            call spproj%os_ptcl2D%delete_2Dclustering
-            call spproj%write_segment_inside(params%oritype)
-        endif
-        ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! no auto-scaling
-        call cline%set('prg', 'cluster2D')
-        call xcluster2D_distr%execute(cline)
-        last_iter_stage2 = nint(cline%get_rarg('endit'))
-        finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
-        ! adding cavgs & FRCs to project
-        params%projfile = trim(orig_projfile)
-        call spproj%read( params%projfile )
-        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
-        ! transfer 2D shifts to 3D field
-        call spproj%map2Dshifts23D
-        call spproj%write
-        call spproj%kill
-        ! cleanup
-        call del_file('start2Drefs'//params%ext)
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
-    end subroutine exec_cleanup2D_nano
-
-    !> for distributed CLUSTER2D with two-stage autoscaling
-    subroutine exec_cluster2D_autoscale( self, cline )
-        use simple_commander_distr_wflows, only: make_cavgs_distr_commander,cluster2D_distr_commander,&
-            &scale_project_distr_commander, prune_project_distr_commander
-        use simple_commander_cluster2D,    only: rank_cavgs_commander
-        use simple_commander_imgproc,      only: scale_commander
-        class(cluster2D_autoscale_commander), intent(inout) :: self
-        class(cmdline),                       intent(inout) :: cline
-        ! constants
-        integer,               parameter :: MAXITS_STAGE1      = 10
-        integer,               parameter :: MAXITS_STAGE1_EXTR = 15
-        character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
-        ! commanders
-        type(prune_project_distr_commander) :: xprune_project
-        type(make_cavgs_distr_commander)    :: xmake_cavgs
-        type(cluster2D_distr_commander)     :: xcluster2D_distr
-        type(rank_cavgs_commander)          :: xrank_cavgs
-        type(scale_commander)               :: xscale
-        type(scale_project_distr_commander) :: xscale_distr
-        ! command lines
-        type(cmdline) :: cline_cluster2D_stage1
-        type(cmdline) :: cline_cluster2D_stage2
-        type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
-        type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_prune_project
-        ! other variables
-        type(parameters)              :: params
-        type(sp_project)              :: spproj, spproj_sc
-        character(len=:), allocatable :: projfile_sc, orig_projfile
-        character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
-        real     :: scale_stage1, scale_stage2, trs_stage2
-        integer  :: nparts, last_iter_stage1, last_iter_stage2, status
-        integer  :: nptcls_sel
-        logical  :: scaling
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
-        if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
-        if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
-        if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
-        if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
-        if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
-        call cline%delete('clip')
-        ! master parameters
-        call params%new(cline)
-        nparts = params%nparts
-        ! set mkdir to no (to avoid nested directory structure)
-        call cline%set('mkdir', 'no')
-        ! read project file
-        call spproj%read(params%projfile)
-        orig_projfile = trim(params%projfile)
-        ! sanity checks
-        if( spproj%get_nptcls() == 0 )then
-            THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
-        endif
-        ! delete any previous solution
-        if( .not. spproj%is_virgin_field(params%oritype) )then
-            ! removes previous cluster2D solution (states are preserved)
-            call spproj%os_ptcl2D%delete_2Dclustering
-            call spproj%write_segment_inside(params%oritype)
-        endif
-        ! automated pruning
-        nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
-        if( nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())) )then
-            write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
-            call spproj%kill
-            cline_prune_project = cline
-            call xprune_project%execute(cline_prune_project)
-            call spproj%read(params%projfile)
-            params%nptcls = nptcls_sel
-        endif
-        ! refinement flag
-        if(.not.cline%defined('refine')) call cline%set('refine','snhc')
-        ! splitting
-        call spproj%split_stk(params%nparts, dir=PATH_PARENT)
-        ! general options planning
-        if( params%l_autoscale )then
-            ! this workflow executes two stages of CLUSTER2D
-            ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
-            !          improved population distribution of clusters, no incremental learning,
-            !          objective function is standard cross-correlation (cc)
-            cline_cluster2D_stage1 = cline
-            call cline_cluster2D_stage1%set('objfun',     'cc')
-            call cline_cluster2D_stage1%set('match_filt', 'no')
-            if( params%l_frac_update )then
-                call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
-                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
-            else
-                call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
-            endif
-            ! Scaling
-            call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
-                &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
-            call spproj%kill
-            scale_stage1 = cline_scale1%get_rarg('scale')
-            scaling      = basename(projfile_sc) /= basename(orig_projfile)
-            if( scaling )then
-                call cline_scale1%delete('smpd') !!
-                call cline_scale1%set('state',1.)
-                call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
-                call xscale_distr%execute( cline_scale1 )
-                ! rename scaled projfile and stash original project file
-                ! such that the scaled project file has the same name as the original and can be followed from the GUI
-                call simple_copy_file(orig_projfile, orig_projfile_bak)
-                call spproj%read_non_data_segments(projfile_sc)
-                call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
-                call spproj%projinfo%set(1,'projfile',orig_projfile)
-                call spproj%write_non_data_segments(projfile_sc)
-                call spproj%kill
-                status = simple_rename(projfile_sc,orig_projfile)
-                deallocate(projfile_sc)
-                ! scale references
-                if( cline%defined('refs') )then
-                    call cline_scalerefs%set('stk', trim(params%refs))
-                    refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
-                    call cline_scalerefs%set('outstk', trim(refs_sc))
-                    call cline_scalerefs%set('smpd', params%smpd)
-                    call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
-                    call xscale%execute(cline_scalerefs)
-                    call cline_cluster2D_stage1%set('refs',trim(refs_sc))
-                endif
-            endif
-            ! execution
-            call cline_cluster2D_stage1%set('projfile', trim(orig_projfile))
-            call xcluster2D_distr%execute(cline_cluster2D_stage1)
-            last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
-            ! update original project backup and copy to original project file
-            if( scaling )then
-                call spproj_sc%read_segment('ptcl2D', orig_projfile)
-                call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage1)
-                call spproj%read(orig_projfile_bak)
-                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
-                call spproj%kill()
-                call simple_copy_file(orig_projfile_bak, orig_projfile)
-                ! clean stacks
-                call simple_rmdir(STKPARTSDIR)
-            endif
-            ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
-            !          learning for acceleration
-            cline_cluster2D_stage2 = cline
-            call cline_cluster2D_stage2%delete('refs')
-            call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
-            if( cline%defined('update_frac') )then
-                call cline_cluster2D_stage2%set('update_frac', params%update_frac)
-            endif
-            ! Scaling
-            call spproj%read(orig_projfile)
-            call spproj%scale_projfile( params%smpd_targets2D(2), projfile_sc,&
-                &cline_cluster2D_stage2, cline_scale2, dir=trim(STKPARTSDIR))
-            call spproj%kill
-            scale_stage2 = cline_scale2%get_rarg('scale')
-            scaling      = basename(projfile_sc) /= basename(orig_projfile)
-            if( scaling )then
-                call cline_scale2%delete('smpd') !!
-                call cline_scale2%set('state',1.)
-                call xscale_distr%execute( cline_scale2 )
-                ! rename scaled projfile and stash original project file
-                ! such that the scaled project file has the same name as the original and can be followed from the GUI
-                call spproj%read_non_data_segments(projfile_sc)
-                call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
-                call spproj%projinfo%set(1,'projfile',orig_projfile)
-                call spproj%write_non_data_segments(projfile_sc)
-                call spproj%kill
-                status = simple_rename(projfile_sc,orig_projfile)
-                deallocate(projfile_sc)
-            endif
-            trs_stage2 = MSK_FRAC*cline_cluster2D_stage2%get_rarg('msk')
-            trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
-            call cline_cluster2D_stage2%set('trs', trs_stage2)
-            ! execution
-            call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
-            call xcluster2D_distr%execute(cline_cluster2D_stage2)
-            last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
-            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
-            ! Updates project and references
-            if( scaling )then
-                ! shift modulation
-                call spproj_sc%read_segment('ptcl2D', orig_projfile)
-                call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage2)
-                call spproj%read(orig_projfile_bak)
-                spproj%os_ptcl2D = spproj_sc%os_ptcl2D
-                call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
-                call spproj%kill()
-                call spproj_sc%kill()
-                status = simple_rename(orig_projfile_bak,orig_projfile)
-                ! clean stacks
-                call simple_rmdir(STKPARTSDIR)
-                ! original scale references
-                cline_make_cavgs = cline ! ncls is transferred here
-                call cline_make_cavgs%delete('autoscale')
-                call cline_make_cavgs%delete('balance')
-                call cline_make_cavgs%set('prg',      'make_cavgs')
-                call cline_make_cavgs%set('projfile', orig_projfile)
-                call cline_make_cavgs%set('nparts',   real(nparts))
-                call cline_make_cavgs%set('refs',     trim(finalcavgs))
-                call xmake_cavgs%execute(cline_make_cavgs)
-            endif
-        else
-            ! no auto-scaling
-            call xcluster2D_distr%execute(cline)
-            last_iter_stage2 = nint(cline%get_rarg('endit'))
-            finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
-        endif
-        ! adding cavgs & FRCs to project
-        params%projfile = trim(orig_projfile)
-        call spproj%read( params%projfile )
-        call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
-        call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
-        call spproj%write_segment_inside('out')
-        call spproj%kill()
-        ! ranking
-        finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
-        call cline_rank_cavgs%set('projfile', trim(params%projfile))
-        call cline_rank_cavgs%set('stk',      trim(finalcavgs))
-        call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
-        call xrank_cavgs%execute( cline_rank_cavgs )
-        ! cleanup
-        call del_file('start2Drefs'//params%ext)
-        ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
-    end subroutine exec_cluster2D_autoscale
+    ! !> for distributed CLUSTER2D with two-stage autoscaling
+    ! subroutine exec_cluster2D_autoscale( self, cline )
+    !     use simple_commander_distr_wflows, only: scale_project_commander_distr, prune_project_commander_distr
+    !     use simple_commander_imgproc,      only: scale_commander
+    !     class(cluster2D_autoscale_commander), intent(inout) :: self
+    !     class(cmdline),                       intent(inout) :: cline
+    !     ! constants
+    !     integer,               parameter :: MAXITS_STAGE1      = 10
+    !     integer,               parameter :: MAXITS_STAGE1_EXTR = 15
+    !     character(len=STDLEN), parameter :: orig_projfile_bak  = 'orig_bak.simple'
+    !     ! commanders
+    !     type(prune_project_commander_distr) :: xprune_project
+    !     type(make_cavgs_commander_distr)    :: xmake_cavgs
+    !     type(cluster2D_commander_distr)     :: xcluster2D_distr
+    !     type(rank_cavgs_commander)          :: xrank_cavgs
+    !     type(scale_commander)               :: xscale
+    !     type(scale_project_commander_distr) :: xscale_distr
+    !     ! command lines
+    !     type(cmdline) :: cline_cluster2D_stage1
+    !     type(cmdline) :: cline_cluster2D_stage2
+    !     type(cmdline) :: cline_scalerefs, cline_scale1, cline_scale2
+    !     type(cmdline) :: cline_make_cavgs, cline_rank_cavgs, cline_prune_project
+    !     ! other variables
+    !     type(parameters)              :: params
+    !     type(sp_project)              :: spproj, spproj_sc
+    !     character(len=:), allocatable :: projfile_sc, orig_projfile
+    !     character(len=LONGSTRLEN)     :: finalcavgs, finalcavgs_ranked, refs_sc
+    !     real     :: scale_stage1, scale_stage2, trs_stage2
+    !     integer  :: nparts, last_iter_stage1, last_iter_stage2, status
+    !     integer  :: nptcls_sel
+    !     logical  :: scaling
+    !     if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
+    !     if( .not. cline%defined('lpstart')   ) call cline%set('lpstart',    15. )
+    !     if( .not. cline%defined('lpstop')    ) call cline%set('lpstop',      8. )
+    !     if( .not. cline%defined('cenlp')     ) call cline%set('cenlp',      30. )
+    !     if( .not. cline%defined('maxits')    ) call cline%set('maxits',     30. )
+    !     if( .not. cline%defined('autoscale') ) call cline%set('autoscale', 'yes')
+    !     call cline%delete('clip')
+    !     ! master parameters
+    !     call params%new(cline)
+    !     nparts = params%nparts
+    !     ! set mkdir to no (to avoid nested directory structure)
+    !     call cline%set('mkdir', 'no')
+    !     ! read project file
+    !     call spproj%read(params%projfile)
+    !     orig_projfile = trim(params%projfile)
+    !     ! sanity checks
+    !     if( spproj%get_nptcls() == 0 )then
+    !         THROW_HARD('No particles found in project file: '//trim(params%projfile)//'; exec_cluster2D_autoscale')
+    !     endif
+    !     ! delete any previous solution
+    !     if( .not. spproj%is_virgin_field(params%oritype) )then
+    !         ! removes previous cluster2D solution (states are preserved)
+    !         call spproj%os_ptcl2D%delete_2Dclustering
+    !         call spproj%write_segment_inside(params%oritype)
+    !     endif
+    !     ! automated pruning
+    !     nptcls_sel = spproj%os_ptcl2D%get_noris(consider_state=.true.)
+    !     if( nptcls_sel < nint(PRUNE_FRAC*real(spproj%os_ptcl2D%get_noris())) )then
+    !         write(logfhandle,'(A)')'>>> AUTO-PRUNING PROJECT FILE'
+    !         call spproj%kill
+    !         cline_prune_project = cline
+    !         call xprune_project%execute(cline_prune_project)
+    !         call spproj%read(params%projfile)
+    !         params%nptcls = nptcls_sel
+    !     endif
+    !     ! refinement flag
+    !     if(.not.cline%defined('refine')) call cline%set('refine','snhc')
+    !     ! splitting
+    !     call spproj%split_stk(params%nparts, dir=PATH_PARENT)
+    !     ! general options planning
+    !     if( params%l_autoscale )then
+    !         ! this workflow executes two stages of CLUSTER2D
+    !         ! Stage 1: high down-scaling for fast execution, hybrid extremal/SHC optimisation for
+    !         !          improved population distribution of clusters, no incremental learning,
+    !         !          objective function is standard cross-correlation (cc)
+    !         cline_cluster2D_stage1 = cline
+    !         call cline_cluster2D_stage1%set('objfun',     'cc')
+    !         call cline_cluster2D_stage1%set('match_filt', 'no')
+    !         if( params%l_frac_update )then
+    !             call cline_cluster2D_stage1%delete('update_frac') ! no incremental learning in stage 1
+    !             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1_EXTR))
+    !         else
+    !             call cline_cluster2D_stage1%set('maxits', real(MAXITS_STAGE1))
+    !         endif
+    !         ! Scaling
+    !         call spproj%scale_projfile(params%smpd_targets2D(1), projfile_sc,&
+    !             &cline_cluster2D_stage1, cline_scale1, dir=trim(STKPARTSDIR))
+    !         call spproj%kill
+    !         scale_stage1 = cline_scale1%get_rarg('scale')
+    !         scaling      = basename(projfile_sc) /= basename(orig_projfile)
+    !         if( scaling )then
+    !             call cline_scale1%delete('smpd') !!
+    !             call cline_scale1%set('state',1.)
+    !             call simple_mkdir(trim(STKPARTSDIR),errmsg="commander_hlev_wflows :: exec_cluster2D_autoscale;  ")
+    !             call xscale_distr%execute( cline_scale1 )
+    !             ! rename scaled projfile and stash original project file
+    !             ! such that the scaled project file has the same name as the original and can be followed from the GUI
+    !             call simple_copy_file(orig_projfile, orig_projfile_bak)
+    !             call spproj%read_non_data_segments(projfile_sc)
+    !             call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
+    !             call spproj%projinfo%set(1,'projfile',orig_projfile)
+    !             call spproj%write_non_data_segments(projfile_sc)
+    !             call spproj%kill
+    !             status = simple_rename(projfile_sc,orig_projfile)
+    !             deallocate(projfile_sc)
+    !             ! scale references
+    !             if( cline%defined('refs') )then
+    !                 call cline_scalerefs%set('stk', trim(params%refs))
+    !                 refs_sc = 'refs'//trim(SCALE_SUFFIX)//params%ext
+    !                 call cline_scalerefs%set('outstk', trim(refs_sc))
+    !                 call cline_scalerefs%set('smpd', params%smpd)
+    !                 call cline_scalerefs%set('newbox', cline_scale1%get_rarg('newbox'))
+    !                 call xscale%execute(cline_scalerefs)
+    !                 call cline_cluster2D_stage1%set('refs',trim(refs_sc))
+    !             endif
+    !         endif
+    !         ! execution
+    !         call cline_cluster2D_stage1%set('projfile', trim(orig_projfile))
+    !         call xcluster2D_distr%execute(cline_cluster2D_stage1)
+    !         last_iter_stage1 = nint(cline_cluster2D_stage1%get_rarg('endit'))
+    !         ! update original project backup and copy to original project file
+    !         if( scaling )then
+    !             call spproj_sc%read_segment('ptcl2D', orig_projfile)
+    !             call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage1)
+    !             call spproj%read(orig_projfile_bak)
+    !             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+    !             call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
+    !             call spproj%kill()
+    !             call simple_copy_file(orig_projfile_bak, orig_projfile)
+    !             ! clean stacks
+    !             call simple_rmdir(STKPARTSDIR)
+    !         endif
+    !         ! Stage 2: refinement stage, less down-scaling, no extremal updates, incremental
+    !         !          learning for acceleration
+    !         cline_cluster2D_stage2 = cline
+    !         call cline_cluster2D_stage2%delete('refs')
+    !         call cline_cluster2D_stage2%set('startit', real(last_iter_stage1 + 1))
+    !         if( cline%defined('update_frac') )then
+    !             call cline_cluster2D_stage2%set('update_frac', params%update_frac)
+    !         endif
+    !         ! Scaling
+    !         call spproj%read(orig_projfile)
+    !         call spproj%scale_projfile( params%smpd_targets2D(2), projfile_sc,&
+    !             &cline_cluster2D_stage2, cline_scale2, dir=trim(STKPARTSDIR))
+    !         call spproj%kill
+    !         scale_stage2 = cline_scale2%get_rarg('scale')
+    !         scaling      = basename(projfile_sc) /= basename(orig_projfile)
+    !         if( scaling )then
+    !             call cline_scale2%delete('smpd') !!
+    !             call cline_scale2%set('state',1.)
+    !             call xscale_distr%execute( cline_scale2 )
+    !             ! rename scaled projfile and stash original project file
+    !             ! such that the scaled project file has the same name as the original and can be followed from the GUI
+    !             call spproj%read_non_data_segments(projfile_sc)
+    !             call spproj%projinfo%set(1,'projname',get_fbody(orig_projfile,METADATA_EXT,separator=.false.))
+    !             call spproj%projinfo%set(1,'projfile',orig_projfile)
+    !             call spproj%write_non_data_segments(projfile_sc)
+    !             call spproj%kill
+    !             status = simple_rename(projfile_sc,orig_projfile)
+    !             deallocate(projfile_sc)
+    !         endif
+    !         trs_stage2 = MSK_FRAC*cline_cluster2D_stage2%get_rarg('msk')
+    !         trs_stage2 = min(MAXSHIFT,max(MINSHIFT,trs_stage2))
+    !         call cline_cluster2D_stage2%set('trs', trs_stage2)
+    !         ! execution
+    !         call cline_cluster2D_stage2%set('projfile', trim(orig_projfile))
+    !         call xcluster2D_distr%execute(cline_cluster2D_stage2)
+    !         last_iter_stage2 = nint(cline_cluster2D_stage2%get_rarg('endit'))
+    !         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+    !         ! Updates project and references
+    !         if( scaling )then
+    !             ! shift modulation
+    !             call spproj_sc%read_segment('ptcl2D', orig_projfile)
+    !             call spproj_sc%os_ptcl2D%mul_shifts(1./scale_stage2)
+    !             call spproj%read(orig_projfile_bak)
+    !             spproj%os_ptcl2D = spproj_sc%os_ptcl2D
+    !             call spproj%write_segment_inside('ptcl2D',fname=orig_projfile_bak)
+    !             call spproj%kill()
+    !             call spproj_sc%kill()
+    !             status = simple_rename(orig_projfile_bak,orig_projfile)
+    !             ! clean stacks
+    !             call simple_rmdir(STKPARTSDIR)
+    !             ! original scale references
+    !             cline_make_cavgs = cline ! ncls is transferred here
+    !             call cline_make_cavgs%delete('autoscale')
+    !             call cline_make_cavgs%delete('balance')
+    !             call cline_make_cavgs%set('prg',      'make_cavgs')
+    !             call cline_make_cavgs%set('projfile', orig_projfile)
+    !             call cline_make_cavgs%set('nparts',   real(nparts))
+    !             call cline_make_cavgs%set('refs',     trim(finalcavgs))
+    !             call xmake_cavgs%execute(cline_make_cavgs)
+    !         endif
+    !     else
+    !         ! no auto-scaling
+    !         call xcluster2D_distr%execute(cline)
+    !         last_iter_stage2 = nint(cline%get_rarg('endit'))
+    !         finalcavgs       = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//params%ext
+    !     endif
+    !     ! adding cavgs & FRCs to project
+    !     params%projfile = trim(orig_projfile)
+    !     call spproj%read( params%projfile )
+    !     call spproj%add_frcs2os_out( trim(FRCS_FILE), 'frc2D')
+    !     call spproj%add_cavgs2os_out(trim(finalcavgs), spproj%get_smpd(), imgkind='cavg')
+    !     call spproj%write_segment_inside('out')
+    !     call spproj%kill()
+    !     ! ranking
+    !     finalcavgs_ranked = trim(CAVGS_ITER_FBODY)//int2str_pad(last_iter_stage2,3)//'_ranked'//params%ext
+    !     call cline_rank_cavgs%set('projfile', trim(params%projfile))
+    !     call cline_rank_cavgs%set('stk',      trim(finalcavgs))
+    !     call cline_rank_cavgs%set('outstk',   trim(finalcavgs_ranked))
+    !     call xrank_cavgs%execute( cline_rank_cavgs )
+    !     ! cleanup
+    !     call del_file('start2Drefs'//params%ext)
+    !     ! end gracefully
+    !     call simple_end('**** SIMPLE_CLUSTER2D NORMAL STOP ****')
+    ! end subroutine exec_cluster2D_autoscale
 
     !> for generation of an initial 3d model from class averages
     subroutine exec_initial_3Dmodel( self, cline )
-        use simple_commander_distr_wflows, only: reconstruct3D_distr_commander
-        use simple_commander_distr_wflows, only: refine3D_distr_commander, scale_project_distr_commander
-        use simple_oris,                   only: oris
-        use simple_ori,                    only: ori
-        use simple_image,                  only: image
-        use simple_commander_volops,       only: reproject_commander, symaxis_search_commander, postprocess_commander
-        use simple_parameters,             only: params_glob
-        use simple_qsys_env,               only: qsys_env
-        use simple_sym,                    only: sym
+        use simple_commander_rec,      only: reconstruct3D_commander_distr
+        use simple_commander_project,  only: scale_project_commander_distr
+        use simple_commander_refine3D, only: refine3D_commander_distr
+        use simple_oris,               only: oris
+        use simple_ori,                only: ori
+        use simple_image,              only: image
+        use simple_commander_volops,   only: reproject_commander, symaxis_search_commander, postprocess_commander
+        use simple_parameters,         only: params_glob
+        use simple_qsys_env,           only: qsys_env
+        use simple_sym,                only: sym
         class(initial_3Dmodel_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         ! constants
@@ -562,9 +561,9 @@ contains
         character(len=STDLEN), parameter :: REC_PPROC_MIRR_FBODY = trim(REC_PPROC_FBODY)//trim(MIRR_SUFFIX)
         character(len=2) :: str_state
         ! distributed commanders
-        type(refine3D_distr_commander)      :: xrefine3D_distr
-        type(scale_project_distr_commander) :: xscale_distr
-        type(reconstruct3D_distr_commander) :: xreconstruct3D_distr
+        type(refine3D_commander_distr)      :: xrefine3D_distr
+        type(scale_project_commander_distr) :: xscale_distr
+        type(reconstruct3D_commander_distr) :: xreconstruct3D_distr
         ! shared-mem commanders
         type(symaxis_search_commander) :: xsymsrch
         type(reproject_commander)      :: xreproject
@@ -1100,10 +1099,11 @@ contains
     !> for heterogeinity analysis
     subroutine exec_cluster3D( self, cline )
         use simple_o_peaks_io
-        use simple_oris,                   only: oris
-        use simple_sym,                    only: sym
-        use simple_cluster_seed,           only: gen_labelling
-        use simple_commander_distr_wflows, only: refine3D_distr_commander, reconstruct3D_distr_commander
+        use simple_oris,               only: oris
+        use simple_sym,                only: sym
+        use simple_cluster_seed,       only: gen_labelling
+        use simple_commander_refine3D, only: refine3D_commander_distr
+        use simple_commander_rec,      only: reconstruct3D_commander_distr
         class(cluster3D_commander), intent(inout) :: self
         class(cmdline),             intent(inout) :: cline
         ! constants
@@ -1112,8 +1112,8 @@ contains
         character(len=*),  parameter :: one            = '01'
         character(len=12), parameter :: cls3D_projfile = 'cls3D.simple'
         ! distributed commanders
-        type(refine3D_distr_commander)         :: xrefine3D_distr
-        type(reconstruct3D_distr_commander)    :: xreconstruct3D_distr
+        type(refine3D_commander_distr)         :: xrefine3D_distr
+        type(reconstruct3D_commander_distr)    :: xreconstruct3D_distr
         ! command lines
         type(cmdline)                          :: cline_refine3D1, cline_refine3D2
         type(cmdline)                          :: cline_reconstruct3D_mixed_distr
@@ -1412,17 +1412,17 @@ contains
 
     !> multi-particle refinement after cluster3D
     subroutine exec_cluster3D_refine( self, cline )
-        use simple_oris,                   only: oris
-        use simple_ori,                    only: ori
-        use simple_parameters,             only: params_glob
-        use simple_commander_distr_wflows, only: refine3D_distr_commander
+        use simple_oris,               only: oris
+        use simple_ori,                only: ori
+        use simple_parameters,         only: params_glob
+        use simple_commander_refine3D, only: refine3D_commander_distr
         class(cluster3D_refine_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         ! constants
         integer,                     parameter :: MAXITS = 40
         character(len=12),           parameter :: cls3D_projfile = 'cls3D.simple'
         ! distributed commanders
-        type(refine3D_distr_commander)         :: xrefine3D_distr
+        type(refine3D_commander_distr)         :: xrefine3D_distr
         ! command lines
         type(cmdline),             allocatable :: cline_refine3D(:)
         ! other variables

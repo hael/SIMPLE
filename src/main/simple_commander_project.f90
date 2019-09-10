@@ -1,12 +1,14 @@
 ! concrete commander: operations on projects (spproject) and associated files
 module simple_commander_project
 include 'simple_lib.f08'
-use simple_commander_base, only: commander_base
-use simple_cmdline,        only: cmdline
-use simple_sp_project,     only: sp_project
-use simple_oris,           only: oris
 use simple_binoris_io,     only: binread_nlines, binread_oritab
+use simple_cmdline,        only: cmdline
+use simple_commander_base, only: commander_base
+use simple_oris,           only: oris
 use simple_parameters,     only: parameters
+use simple_sp_project,     only: sp_project
+use simple_qsys_env,       only: qsys_env
+use simple_qsys_funs
 implicit none
 
 public :: print_project_info_commander
@@ -22,6 +24,8 @@ public :: import_cavgs_commander
 public :: export_cavgs_commander
 public :: merge_stream_projects_commander
 public :: replace_project_field_commander
+public :: scale_project_commander_distr
+public :: prune_project_commander_distr
 public :: prune_project_commander
 private
 #include "simple_local_flags.inc"
@@ -78,6 +82,14 @@ type, extends(commander_base) :: replace_project_field_commander
   contains
     procedure :: execute      => exec_replace_project_field
 end type replace_project_field_commander
+type, extends(commander_base) :: scale_project_commander_distr
+  contains
+    procedure :: execute      => exec_scale_project_distr
+end type scale_project_commander_distr
+type, extends(commander_base) :: prune_project_commander_distr
+  contains
+    procedure :: execute      => exec_prune_project_distr
+end type prune_project_commander_distr
 type, extends(commander_base) :: prune_project_commander
   contains
     procedure :: execute      => exec_prune_project
@@ -806,6 +818,242 @@ contains
         call spproj%write
         call simple_end('**** REPLACE_PROJECT_FIELD NORMAL STOP ****')
     end subroutine exec_replace_project_field
+
+    subroutine exec_scale_project_distr( self, cline )
+        use simple_builder, only: builder
+        class(scale_project_commander_distr), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        type(qsys_env)                     :: qenv
+        type(chash)                        :: job_descr
+        type(cmdline)                      :: cline_scale
+        type(chash),      allocatable :: part_params(:)
+        character(len=:), allocatable :: projfile_sc
+        integer,          allocatable :: parts(:,:)
+        type(parameters) :: params
+        type(builder)    :: build
+        real             :: smpd, smpd_target
+        integer          :: ipart, nparts, nstks, box, newbox
+        logical          :: gen_sc_project
+        ! mkdir=yes: a new *_sc project + stacks are generated
+        ! mkdir=no : only stacks are scaled
+        gen_sc_project = cline%get_carg('mkdir').eq.'yes'
+        ! make parameters and project
+        call build%init_params_and_build_spproj(cline, params)
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! copy command line
+        cline_scale = cline
+        ! prepare part-dependent parameters
+        nstks = build%spproj%os_stk%get_noris()
+        if( nstks == 0 ) THROW_HARD('os_stk field of spproj empty; exec_scale_distr')
+        if( cline%defined('nparts') )then
+            nparts = min(params%nparts, nstks)
+            call cline_scale%set('nparts', real(nparts))
+        else
+            nparts = 1
+        endif
+        smpd = build%spproj%get_smpd()
+        box  = build%spproj%get_box()
+        if( gen_sc_project )then
+            ! make new project & scales
+            smpd_target = max(smpd, smpd * real(box)/real(params%newbox))
+            call simple_mkdir(filepath(PATH_PARENT,'stack_parts_sc'), errmsg="commander_distr_wflows::exec_scale_project_distr ")
+            call build%spproj%scale_projfile(smpd_target, projfile_sc, cline, cline_scale,&
+                dir=filepath(PATH_PARENT,'stack_parts_sc'))
+            newbox = nint(cline_scale%get_rarg('newbox'))
+            if( newbox == box )then
+                write(logfhandle,*)'Inconsistent input dimensions: from ',box,' to ',newbox
+                THROW_HARD('inconsistent input dimensions; exec_scale_project_distr')
+            endif
+        else
+            newbox = params%newbox
+        endif
+        ! needs to be re-set
+        call cline_scale%set('smpd', smpd)
+        call cline_scale%set('box',  real(box))
+        ! setup the environment for distributed execution
+        params%nparts = nparts
+        call qenv%new(nparts)
+        ! prepares stack-based parts
+        parts = split_nobjs_even(nstks, nparts)
+        allocate(part_params(nparts))
+        do ipart=1,nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
+            call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
+        end do
+        ! prepare job description
+        call cline_scale%gen_job_descr(job_descr)
+        call job_descr%set('prg',      'scale')
+        call job_descr%set('newbox',   int2str(newbox))
+        call job_descr%set('autoscale','no')
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr, part_params=part_params)
+        ! delete copy in working directory
+        if( gen_sc_project )call del_file(params%projfile)
+        ! clean
+        call qsys_cleanup
+        ! end gracefully
+        call build%spproj%kill
+        call simple_end('**** SIMPLE_DISTR_SCALE NORMAL STOP ****')
+    end subroutine exec_scale_project_distr
+
+    !> for discarding state=0 particles & stacks
+    subroutine exec_prune_project_distr( self, cline )
+        use simple_oris,      only: oris
+        use simple_ori,       only: ori
+        class(prune_project_commander_distr), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline !< command line input
+        type(parameters)              :: params
+        type(cmdline)                 :: cline_distr
+        type(sp_project)              :: spproj
+        type(sp_project), allocatable :: spproj_part(:)
+        type(qsys_env)                :: qenv
+        type(chash)                   :: job_descr
+        type(ori)                     :: o_stk, o_mic, o
+        type(chash),      allocatable :: part_params(:)
+        integer,          allocatable :: parts(:,:)
+        character(len=:), allocatable :: fname
+        integer :: imic,nmics,cnt,istk,nstks,ipart,nptcls,nparts,iptcl
+        integer :: nstks_orig, nptcls_orig, nmics_orig
+        ! init
+        call params%new(cline)
+        call cline%set('mkdir', 'no')
+        ! sanity checks
+        call spproj%read(params%projfile)
+        nstks = spproj%get_n_insegment('stk')
+        if( nstks == 0 ) THROW_HARD('No stack to process!')
+        nptcls = spproj%get_n_insegment('ptcl2D')
+        if( nstks == 0 ) THROW_HARD('No particles to process!')
+        nmics = spproj%get_nintgs()
+        nstks_orig  = nstks
+        nptcls_orig = nptcls
+        nmics_orig  = nmics
+        ! DISTRIBUTED EXECUTION
+        ! setup the environment for distributed execution
+        cline_distr = cline
+        call cline_distr%set('prg',  'prune_project')
+        call cline_distr%set('nthr', 1.)
+        call cline_distr%set('oritype', 'stk')
+        nparts = min(params%nparts, nstks)
+        allocate(spproj_part(nparts))
+        parts = split_nobjs_even(nstks, nparts)
+        allocate(part_params(nparts))
+        do ipart=1,nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
+            call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
+        end do
+        call qenv%new(nparts)
+        ! prepare job description
+        call cline_distr%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, part_params=part_params )
+        ! ASSEMBLY
+        ! copy updated micrographs
+        nstks = 0
+        if( nmics > 0 )then
+            cnt = 0
+            do ipart = 1,nparts
+                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                if( file_exists(fname) )then
+                    call spproj_part(ipart)%read_segment('mic',fname)
+                    cnt = cnt + spproj_part(ipart)%os_mic%get_noris()
+                endif
+            enddo
+            nmics = cnt
+            if( cnt > 0 )then
+                call spproj%os_mic%new(nmics)
+                cnt = 0
+                do ipart = 1,nparts
+                    if( spproj_part(ipart)%os_mic%get_noris() == 0 ) cycle
+                    do imic = 1,spproj_part(ipart)%os_mic%get_noris()
+                        cnt = cnt + 1
+                        call spproj_part(ipart)%os_mic%get_ori(imic, o_mic)
+                        call spproj%os_mic%set_ori(cnt,o_mic)
+                        if( nint(o_mic%get('nptcls')) > 0 ) nstks = nstks + 1
+                    enddo
+                    call spproj_part(ipart)%kill
+                enddo
+                if( nstks /= nmics ) THROW_HARD('Inconsistent number of stacks and micrographs!')
+            endif
+            write(logfhandle,'(A,I8,A,I8)')'>>> # OF MICROGRAPHS:',nmics_orig,' -> ', nmics
+        endif
+        ! copy updated stacks
+        cnt = 0
+        do ipart = 1,nparts
+            fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+            if( file_exists(fname) )then
+                call spproj_part(ipart)%read_segment('stk',fname)
+                cnt = cnt + spproj_part(ipart)%os_stk%get_noris()
+            endif
+        enddo
+        nstks = cnt
+        write(logfhandle,'(A,I8,A,I8)')'>>> # OF STACKS     :',nstks_orig,' -> ', nstks
+        if( nstks > 0 )then
+            call spproj%os_stk%new(nstks)
+            cnt = 0
+            do ipart = 1,nparts
+                if( spproj_part(ipart)%os_stk%get_noris() == 0 ) cycle
+                do istk = 1,spproj_part(ipart)%os_stk%get_noris()
+                    cnt = cnt + 1
+                    call spproj_part(ipart)%os_stk%get_ori(istk, o_stk)
+                    call spproj%os_stk%set_ori(cnt,o_stk)
+                enddo
+                call spproj_part(ipart)%kill
+            enddo
+            ! copy updated particles segments
+            cnt = 0
+            do ipart = 1,nparts
+                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                if( file_exists(fname) )then
+                    call spproj_part(ipart)%read_segment('ptcl2D',fname)
+                    cnt = cnt + spproj_part(ipart)%os_ptcl2D%get_noris()
+                endif
+            enddo
+            nptcls = cnt
+            call spproj%os_ptcl2D%new(nptcls)
+            call spproj%os_ptcl3D%new(nptcls)
+            cnt = 0
+            do ipart = 1,nparts
+                if( spproj_part(ipart)%os_ptcl2D%get_noris() == 0 ) cycle
+                do iptcl = 1,spproj_part(ipart)%os_ptcl2D%get_noris()
+                    cnt = cnt + 1
+                    call spproj_part(ipart)%os_ptcl2D%get_ori(iptcl, o)
+                    call spproj%os_ptcl2D%set_ori(cnt,o)
+                enddo
+                call spproj_part(ipart)%kill
+            enddo
+            cnt = 0
+            do ipart = 1,nparts
+                fname = trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT
+                call spproj_part(ipart)%read_segment('ptcl3D',fname)
+                if( spproj_part(ipart)%os_ptcl3D%get_noris() == 0 ) cycle
+                do iptcl = 1,spproj_part(ipart)%os_ptcl3D%get_noris()
+                    cnt = cnt + 1
+                    call spproj_part(ipart)%os_ptcl3D%get_ori(iptcl, o)
+                    call spproj%os_ptcl3D%set_ori(cnt,o)
+                enddo
+                call spproj_part(ipart)%kill
+            enddo
+        endif
+        write(logfhandle,'(A,I8,A,I8)')'>>> # OF PARTICLES  :',nptcls_orig,' -> ', nptcls
+        ! final write
+        call spproj%write
+        ! clean up
+        call o_stk%kill
+        call o_mic%kill
+        call o%kill
+        call spproj%kill
+        call qsys_cleanup
+        do ipart = 1,nparts
+            call part_params(ipart)%kill
+            call del_file(trim(ALGN_FBODY)//int2str(ipart)//METADATA_EXT)
+        enddo
+        deallocate(spproj_part,part_params)
+        ! end gracefully
+        call simple_end('**** SIMPLE_PRUNE_PROJECT_DISTR NORMAL STOP ****')
+    end subroutine exec_prune_project_distr
 
     ! subroutine exec_prune_project( self_in, cline, projout_fname, dir )
     subroutine exec_prune_project( self, cline )

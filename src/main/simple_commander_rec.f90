@@ -1,19 +1,26 @@
 ! concrete commander: 3D reconstruction routines
 module simple_commander_rec
 include 'simple_lib.f08'
-use simple_parameters,          only: parameters
 use simple_builder,             only: builder
 use simple_cmdline,             only: cmdline
 use simple_commander_base,      only: commander_base
-use simple_projection_frcs,     only: projection_frcs
 use simple_strategy2D3D_common, only: gen_projection_frcs
+use simple_parameters,          only: parameters
+use simple_projection_frcs,     only: projection_frcs
+use simple_qsys_env,            only: qsys_env
+use simple_qsys_funs
 implicit none
 
+public :: reconstruct3D_commander_distr
 public :: reconstruct3D_commander
 public :: volassemble_commander
 private
 #include "simple_local_flags.inc"
 
+type, extends(commander_base) :: reconstruct3D_commander_distr
+  contains
+    procedure :: execute      => exec_reconstruct3D_distr
+end type reconstruct3D_commander_distr
 type, extends(commander_base) :: reconstruct3D_commander
   contains
     procedure :: execute      => exec_reconstruct3D
@@ -25,7 +32,119 @@ end type volassemble_commander
 
 contains
 
-    !> for reconstructing volumes from image stacks and their estimated orientations
+    subroutine exec_reconstruct3D_distr( self, cline )
+        class(reconstruct3D_commander_distr), intent(inout) :: self
+        class(cmdline),                       intent(inout) :: cline
+        character(len=LONGSTRLEN), allocatable :: list(:)
+        character(len=:),          allocatable :: target_name
+        character(len=STDLEN),     allocatable :: state_assemble_finished(:)
+        character(len=LONGSTRLEN) :: refine_path
+        character(len=STDLEN)     :: volassemble_output, str_state, fsc_file, optlp_file
+        type(parameters) :: params
+        type(builder)    :: build
+        type(qsys_env)   :: qenv
+        type(cmdline)    :: cline_volassemble
+        type(chash)      :: job_descr
+        integer          :: state, ipart
+        logical          :: fall_over
+        if( .not. cline%defined('trs')     ) call cline%set('trs', 5.) ! to assure that shifts are being used
+        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl3D')
+        call cline%delete('refine')
+        call build%init_params_and_build_spproj(cline, params)
+        ! sanity check
+        fall_over = .false.
+        select case(trim(params%oritype))
+            case('ptcl3D')
+                fall_over = build%spproj%get_nptcls() == 0
+            case('cls3D')
+                fall_over = build%spproj%os_out%get_noris() == 0
+        case DEFAULT
+            THROW_HARD('unsupported ORITYPE')
+        end select
+        if( fall_over ) THROW_HARD('No images found!')
+        ! soft reconstruction from o_peaks in dir_refine?
+        if( params%l_rec_soft )then
+            call make_relativepath(CWD_GLOB,params%dir_refine,refine_path)
+            call simple_list_files(trim(refine_path)//'/oridistributions_part*', list)
+            if( size(list) == 0 )then
+                THROW_HARD('No oridistributions can be found in '//trim(params%dir_refine))
+            elseif( size(list) /= params%nparts )then
+                THROW_HARD('# partitions not consistent with that in '//trim(params%dir_refine))
+            endif
+            ! copy the orientation peak distributions
+            if( trim(params%dir_refine).eq.trim(CWD_GLOB) )then
+                ! already here
+            else
+                do ipart=1,params%nparts
+                    target_name = PATH_HERE//basename(trim(list(ipart)))
+                    call simple_copy_file(trim(list(ipart)), target_name)
+                end do
+            endif
+        endif
+        ! set mkdir to no (to avoid nested directory structure)
+        call cline%set('mkdir', 'no')
+        ! setup the environment for distributed execution
+        call qenv%new(params%nparts)
+        call cline%gen_job_descr(job_descr)
+        ! splitting
+        if( trim(params%oritype).eq.'ptcl3D' )then
+            call build%spproj%split_stk(params%nparts, dir=PATH_PARENT)
+        endif
+        ! eo partitioning
+        if( build%spproj_field%get_nevenodd() == 0 )then
+            if( params%tseries .eq. 'yes' )then
+                call build%spproj_field%partition_eo(tseries=.true.)
+            else
+                call build%spproj_field%partition_eo
+            endif
+            call build%spproj%write_segment_inside(params%oritype)
+        endif
+        ! schedule
+        call qenv%gen_scripts_and_schedule_jobs(job_descr)
+        ! assemble volumes
+        ! this is for parallel volassemble over states
+        allocate(state_assemble_finished(params%nstates) )
+        do state = 1, params%nstates
+            state_assemble_finished(state) = 'VOLASSEMBLE_FINISHED_STATE'//int2str_pad(state,2)
+        enddo
+        cline_volassemble = cline
+        call cline_volassemble%set('prg', 'volassemble')
+        call cline_volassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
+        ! parallel assembly
+        do state = 1,params%nstates
+            str_state = int2str_pad(state,2)
+            volassemble_output = 'RESOLUTION_STATE'//trim(str_state)
+            call cline_volassemble%set( 'state', real(state) )
+            if( params%nstates>1 )call cline_volassemble%set('part', real(state))
+            call qenv%exec_simple_prg_in_queue_async(cline_volassemble,&
+            'simple_script_state'//trim(str_state), trim(volassemble_output))
+        end do
+        call qsys_watcher(state_assemble_finished)
+        ! updates project file only if called from another workflow
+        if( params%mkdir.eq.'yes' )then
+            do state = 1,params%nstates
+                fsc_file      = FSC_FBODY//trim(str_state)//trim(BIN_EXT)
+                optlp_file    = ANISOLP_FBODY//trim(str_state)//params%ext
+                call build%spproj%add_fsc2os_out(trim(fsc_file), state, params%box)
+                call build%spproj%add_vol2os_out(trim(optlp_file), params%smpd, state, 'vol_filt', box=params%box)
+                if( trim(params%oritype).eq.'cls3D' )then
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol_cavg')
+                else
+                    call build%spproj%add_vol2os_out(trim(VOL_FBODY)//trim(str_state)//params%ext, params%smpd, state, 'vol')
+                endif
+            enddo
+            call build%spproj%write_segment_inside('out',params%projfile)
+            if( params%l_rec_soft )then
+                ! ptcl3D segment may have been updated and needs to be written
+                call build%spproj%write_segment_inside('ptcl3D',params%projfile)
+            endif
+        endif
+        ! termination
+        call qsys_cleanup
+        call build%spproj_field%kill
+        call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_reconstruct3D_distr
+
     subroutine exec_reconstruct3D( self, cline )
         use simple_rec_master, only: exec_rec, exec_rec_soft
         class(reconstruct3D_commander), intent(inout) :: self
@@ -44,7 +163,6 @@ contains
         call simple_end('**** SIMPLE_RECONSTRUCT3D NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_reconstruct3D
 
-    !> for assembling even/odd volumes generated with distributed execution
     subroutine exec_volassemble( self, cline )
         use simple_reconstructor_eo, only: reconstructor_eo
         use simple_filterer,         only: gen_anisotropic_optlp
