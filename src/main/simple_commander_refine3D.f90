@@ -129,7 +129,7 @@ contains
         else
             call cline%set('update_res', 'no')
         endif
-        call cline%set('frac', conv%get('frac'))
+        call cline%set('frac_srch', conv%get('frac_srch'))
         ! end gracefully
         call build%kill_general_tbox
         call simple_end('**** SIMPLE_CHECK_3DCONV NORMAL STOP ****', print_simple=.false.)

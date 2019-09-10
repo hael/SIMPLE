@@ -178,7 +178,7 @@ contains
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         ! convergence check
         converged = conv%check_conv2D(cline, build%spproj_field%get_n('class'), params%msk)
-        call cline%set('frac', conv%get('frac'))
+        call cline%set('frac_srch', conv%get('frac_srch'))
         if( params_glob%l_doshift )then
             ! activates shift search
             call cline%set('trs', params_glob%trs)

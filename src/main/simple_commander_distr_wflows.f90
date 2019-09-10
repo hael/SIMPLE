@@ -906,7 +906,7 @@ contains
             ! check convergence
             call xcheck_2Dconv%execute(cline_check_2Dconv)
             frac_srch_space = 0.
-            if( iter > 1 ) frac_srch_space = cline_check_2Dconv%get_rarg('frac')
+            if( iter > 1 ) frac_srch_space = cline_check_2Dconv%get_rarg('frac_srch')
             ! the below activates shifting & automasking
             if( iter > 3 .and. (frac_srch_space >= FRAC_SH_LIM .or. cline_check_2Dconv%defined('trs')) )then
                 if( .not.job_descr%isthere('trs') )then
@@ -1196,9 +1196,9 @@ contains
             call job_descr%set( 'startit', trim(int2str(iter)))
             call cline%set('startit', real(iter))
             ! switch to refine=greedy_* when frac >= 99 and iter >= 5
-            if( cline_check_3Dconv%defined('frac') )then
+            if( cline_check_3Dconv%defined('frac_srch') )then
                 if( iter >= MIN_ITERS_SHC )then
-                    if( cline_check_3Dconv%get_rarg('frac') >= FRAC_GREEDY_LIM )then
+                    if( cline_check_3Dconv%get_rarg('frac_srch') >= FRAC_GREEDY_LIM )then
                         select case(trim(params%refine))
                             case('single')
                                 params%refine = 'greedy_single'
@@ -1322,7 +1322,7 @@ contains
             endif
             ! ITERATION DEPENDENT UPDATES
             if( cline_check_3Dconv%defined('trs') .and. .not.job_descr%isthere('trs') )then
-                ! activates shift search if frac >= 90
+                ! activates shift search if frac_srch >= 90
                 str = real2str(cline_check_3Dconv%get_rarg('trs'))
                 call job_descr%set( 'trs', trim(str) )
                 call cline%set( 'trs', cline_check_3Dconv%get_rarg('trs') )

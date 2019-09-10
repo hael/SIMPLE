@@ -16,7 +16,7 @@ type convergence
     type(stats_struct) :: dist      !< angular distance stats
     type(stats_struct) :: dist_inpl !< in-plane angular distance stats
     type(stats_struct) :: npeaks    !< # peaks stats
-    type(stats_struct) :: frac      !< fraction of search space scanned stats
+    type(stats_struct) :: frac_srch !< fraction of search space scanned stats
     type(stats_struct) :: specscore !< spectral score stats
     type(stats_struct) :: spread    !< angular spread stats
     type(stats_struct) :: shwmean   !< shift increment, weighted mean stats
@@ -53,7 +53,7 @@ contains
         call build_glob%spproj_field%stats('corr',      self%corr,      mask=mask)
         call build_glob%spproj_field%stats('specscore', self%specscore, mask=mask)
         call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
-        call build_glob%spproj_field%stats('frac',      self%frac,      mask=mask)
+        call build_glob%spproj_field%stats('frac',      self%frac_srch, mask=mask)
         call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
         self%mi_class  = build_glob%spproj_field%get_avg('mi_class',  mask=mask)
         write(logfhandle,601) '>>> CLASS OVERLAP:                          ', self%mi_class
@@ -63,13 +63,13 @@ contains
         write(logfhandle,604) '>>> PARTICLE WEIGHT        AVG/SDEV/MIN/MAX:',&
         &self%pw%avg, self%pw%sdev, self%pw%minv, self%pw%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
-        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
+        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> CORRELATION            AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SPECSCORE              AVG/SDEV/MIN/MAX:',&
         &self%specscore%avg, self%specscore%sdev, self%specscore%minv, self%specscore%maxv
         ! dynamic shift search range update
-        if( self%frac%avg >= FRAC_SH_LIM )then
+        if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
                 params_glob%trs = MSK_FRAC*msk
@@ -83,9 +83,9 @@ contains
         if( ncls > 1 )then
             converged = .false.
             if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac%avg > FRAC_LIM_FRAC )converged = .true.
+                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )converged = .true.
             else
-                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac%avg > FRAC_LIM )converged = .true.
+                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )converged = .true.
             endif
             if( converged )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
@@ -107,7 +107,7 @@ contains
         call self%ostats%set(1,'PARTICLE_UPDATES',avg_updatecnt)
         call self%ostats%set(1,'IN-PLANE_DIST',self%dist_inpl%avg)
         call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
         call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
         call self%ostats%write(STATS_FILE)
@@ -133,7 +133,7 @@ contains
         call build_glob%spproj_field%stats('dist',      self%dist,      mask=mask)
         call build_glob%spproj_field%stats('dist_inpl', self%dist_inpl, mask=mask)
         call build_glob%spproj_field%stats('npeaks',    self%npeaks,    mask=mask)
-        call build_glob%spproj_field%stats('frac',      self%frac,      mask=mask)
+        call build_glob%spproj_field%stats('frac',      self%frac_srch, mask=mask)
         call build_glob%spproj_field%stats('w',         self%pw,        mask=mask)
         call build_glob%spproj_field%stats('ow',        self%ow,        mask=mask)
         call build_glob%spproj_field%stats('spread',    self%spread,    mask=mask)
@@ -159,7 +159,7 @@ contains
         write(logfhandle,604) '>>> ORIENTATION WEIGHT MAX   AVG/SDEV/MIN/MAX:',&
         &self%ow%avg, self%ow%sdev, self%ow%minv, self%ow%maxv
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED   AVG/SDEV/MIN/MAX:',&
-        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
+        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         write(logfhandle,604) '>>> CORRELATION              AVG/SDEV/MIN/MAX:',&
         &self%corr%avg, self%corr%sdev, self%corr%minv, self%corr%maxv
         write(logfhandle,604) '>>> SPECSCORE                AVG/SDEV/MIN/MAX:',&
@@ -169,7 +169,7 @@ contains
         write(logfhandle,604) '>>> SDEV SHIFT INCR PEAKS    AVG/SDEV/MIN/MAX:',&
         &self%shwstdev%avg, self%shwstdev%sdev, self%shwstdev%minv, self%shwstdev%maxv
         ! dynamic shift search range update
-        if( self%frac%avg >= FRAC_SH_LIM )then
+        if( self%frac_srch%avg >= FRAC_SH_LIM )then
             if( .not. cline%defined('trs') .or. &
                 & params_glob%trs <  MINSHIFT )then
                 ! determine shift bounds
@@ -182,7 +182,7 @@ contains
         endif
         ! determine convergence
         if( params_glob%nstates == 1 )then
-            if( self%frac%avg > FRAC_LIM .and.&
+            if( self%frac_srch%avg > FRAC_LIM .and.&
                 self%mi_proj  > MI_CLASS_LIM_3D )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
@@ -214,7 +214,7 @@ contains
             end do
             if( min_state_mi_joint > MI_STATE_JOINT_LIM .and.&
                 self%mi_state      > MI_STATE_LIM .and.&
-                self%frac%avg      > FRAC_LIM      )then
+                self%frac_srch%avg      > FRAC_LIM      )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
                 converged = .true.
             else
@@ -234,7 +234,7 @@ contains
         call self%ostats%set(1,'#_PEAKS',self%npeaks%avg)
         call self%ostats%set(1,'PARTICLE_WEIGHT',self%pw%avg)
         call self%ostats%set(1,'ORIENTATION_WEIGHT_MAX',self%ow%avg)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',self%corr%avg)
         call self%ostats%set(1,'SPECSCORE',self%specscore%avg)
         call self%ostats%set(1,'AVG_SHIFT_INCR_PEAKS',self%shwmean%avg)
@@ -253,11 +253,11 @@ contains
         integer :: istate
         601 format(A,1X,F8.3)
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
-        call build_glob%spproj_field%stats('frac', self%frac)
+        call build_glob%spproj_field%stats('frac', self%frac_srch)
         self%mi_state  = build_glob%spproj_field%get_avg('mi_state')
         write(logfhandle,601) '>>> STATE OVERLAP:                          ', self%mi_state
         write(logfhandle,604) '>>> % SEARCH SPACE SCANNED AVG/SDEV/MIN/MAX:',&
-        &self%frac%avg, self%frac%sdev, self%frac%minv, self%frac%maxv
+        &self%frac_srch%avg, self%frac_srch%sdev, self%frac_srch%minv, self%frac_srch%maxv
         ! provides convergence stats for multiple states
         ! by calculating mi_joint for individual states
         call build_glob%spproj_field%get_pops(statepops,'state')
@@ -269,7 +269,7 @@ contains
             write(logfhandle,'(A,I2,1X,A,1X,I8)') '>>> STATE ',istate,'POPULATION:', statepops(istate)
         end do
         if( self%mi_state > HET_MI_STATE_LIM .and.&
-            self%frac%avg > HET_FRAC_LIM     )then
+            self%frac_srch%avg > HET_FRAC_LIM     )then
             write(logfhandle,'(A)') '>>> CONVERGED: .YES.'
             converged = .true.
         else
@@ -279,7 +279,7 @@ contains
         ! stats
         call self%ostats%new(1)
         call self%ostats%set(1,'STATE_OVERLAP',       self%mi_state)
-        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac%avg)
+        call self%ostats%set(1,'SEARCH_SPACE_SCANNED',self%frac_srch%avg)
         call self%ostats%set(1,'CORRELATION',         self%corr%avg)
         do istate=1,params_glob%nstates
             call self%ostats%set(1,'STATE_POPULATION_'//int2str(istate), real(statepops(istate)))
@@ -293,6 +293,7 @@ contains
     real function get( self, which )
         class(convergence), intent(in) :: self
         character(len=*),   intent(in) :: which
+        get = 0.
         select case(which)
             case('corr')
                 get = self%corr%avg
@@ -300,8 +301,8 @@ contains
                 get = self%dist%avg
             case('dist_inpl')
                 get = self%dist_inpl%avg
-            case('frac')
-                get = self%frac%avg
+            case('frac_srch')
+                get = self%frac_srch%avg
             case('mi_class')
                 get = self%mi_class
             case('mi_proj')
@@ -310,8 +311,6 @@ contains
                 get = self%mi_state
             case('spread')
                 get = self%spread%avg
-            case DEFAULT
-                get = 0.
         end select
     end function get
 
