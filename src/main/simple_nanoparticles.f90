@@ -471,16 +471,15 @@ contains
         real, pointer :: rmat_t(:,:,:)
         real, pointer :: rmat_b(:,:,:)
         real, pointer :: rmat(:,:,:)
+        real :: sigma
+        type(image) :: gau3D
+        !!!!!!!!!!!!!!!!!!!!!!!!!!
+        !!!!!!!!!!!!!!!!!!!!!!!!
+        sigma = 1.
+        call gau3D%new(self%ldim, self%smpd)
         call phasecorr%new(self%ldim, self%smpd)
-        call phasecorr%get_rmat_ptr(rmat)
-        call one_atom%new(self%ldim,self%smpd)
-        cutoff = 8.*self%smpd
-        call atom%new(1)
-        call atom%set_element(1,self%element)
-        call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
-        call atom%convolve(one_atom, cutoff)
-        if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
-        call one_atom%fft()
+        call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
+        call gau3D%fft()
         call img_t%new(self%ldim, self%smpd)
         call img_b%new(self%ldim, self%smpd)
         call img_t%get_rmat_ptr(rmat_t)
@@ -488,7 +487,7 @@ contains
         call img_t%copy(self%img)
         do i = 1, NB_IT
             call img_t%fft()
-            phasecorr = img_t%phase_corr(one_atom,lp=1.)
+            call img_t%phase_corr(gau3D,phasecorr,lp=1.)
             call img_t%ifft()
             call otsu_nano(phasecorr,o_t)
             where(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))>o_t)
@@ -496,14 +495,48 @@ contains
             elsewhere
                 rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
             endwhere
-            call img_b%write(int2str(i)//'B.mrc')
+            call img_b%write(int2str(i)//'BGauss.mrc')
             rmat_t(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))*rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-            call img_t%write(int2str(i)//'T.mrc')
+            call img_t%write(int2str(i)//'TGauss.mrc')
         enddo
         call phasecorr%kill
         call img_t%kill
         call img_b%kill
-        call one_atom%kill()
+        call gau3D%kill()
+        !!!!!!!!!!!!!!!!!!!!!!!
+        ! call phasecorr%new(self%ldim, self%smpd)
+        ! call phasecorr%get_rmat_ptr(rmat)
+        ! call one_atom%new(self%ldim,self%smpd)
+        ! cutoff = 8.*self%smpd
+        ! call atom%new(1)
+        ! call atom%set_element(1,self%element)
+        ! call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
+        ! call atom%convolve(one_atom, cutoff)
+        ! if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
+        ! call one_atom%fft()
+        ! call img_t%new(self%ldim, self%smpd)
+        ! call img_b%new(self%ldim, self%smpd)
+        ! call img_t%get_rmat_ptr(rmat_t)
+        ! call img_b%get_rmat_ptr(rmat_b)
+        ! call img_t%copy(self%img)
+        ! do i = 1, NB_IT
+        !     call img_t%fft()
+        !     phasecorr = img_t%phase_corr(one_atom,lp=1.)
+        !     call img_t%ifft()
+        !     call otsu_nano(phasecorr,o_t)
+        !     where(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))>o_t)
+        !         rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+        !     elsewhere
+        !         rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+        !     endwhere
+        !     call img_b%write(int2str(i)//'B.mrc')
+        !     rmat_t(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))*rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        !     call img_t%write(int2str(i)//'T.mrc')
+        ! enddo
+        ! call phasecorr%kill
+        ! call img_t%kill
+        ! call img_b%kill
+        ! call one_atom%kill()
     contains
         !Otsu binarization for nanoparticle maps
         !It considers the gray level value just in the positive range.
@@ -1256,6 +1289,9 @@ contains
             integer :: location(1) !location of the farest vxls of the atom from its center
             integer :: i
             real    :: shortest_dist, longest_dist
+            !!!!!!!!!!!!!!!!!!!!!!!!!!!!!DEBUGGING
+            ! type(image) :: img_aux, img_center
+            ! real, pointer :: rmat_center(:,:,:)
             imat_cc = int(self%img_cc%get_rmat())
             call self%img_cc%border_mask(border, label, .true.) !use 4neigh instead of 8neigh
             where(border .eqv. .true.)
@@ -1263,6 +1299,11 @@ contains
             elsewhere
                 imat_cc = 0
             endwhere
+            !!!!!!!!!!!!!!!!!!
+            ! call img_aux%new(self%ldim, self%smpd)
+            ! call img_center%new(self%ldim, self%smpd)
+            ! call img_aux%set_rmat(real(imat_cc))
+            ! call img_aux%write(int2str(label)//'cc.mrc')
             call get_pixel_pos(imat_cc,pos)   !pxls positions of the shell
             if(allocated(mask_dist)) deallocate(mask_dist)
             allocate(mask_dist(size(pos, dim = 2)), source = .true. )
@@ -1275,11 +1316,22 @@ contains
                 self%loc_longest_dist(:3, label) =  pos(:3,location(1))
             endif
             if(abs(longest_dist) > TINY) then
-                ratio = shortest_dist/longest_dist
+                if(size(pos,2) == 1) then
+                    ratio = 1.
+                    print *, 'shortest_dist = ', shortest_dist,'longest_dist', longest_dist
+                else
+                    ratio = shortest_dist/longest_dist
+                endif
             else
                 ratio = 0.
                 if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
             endif
+            ! call img_center%get_rmat_ptr(rmat_center)
+            ! rmat_center(self%loc_longest_dist(1,label),self%loc_longest_dist(2,label),self%loc_longest_dist(3,label)) = 1.
+            ! call img_center%write(int2str(label)//'center.mrc')
+            ! call img_center%kill
+            ! call img_aux%kill
+            ! stop
             longest_dist  = longest_dist*self%smpd
             shortest_dist = shortest_dist*self%smpd
            if(present(print_ar) .and. (print_ar .eqv. .true.)) then
@@ -1683,6 +1735,7 @@ contains
         integer :: i
         logical :: print_ar ! for printing aspect ratios statistics
         logical :: print_as ! for printing asymmetric units in c3-sym nanoparticles
+        real    :: ot1, ot2 ! otsh thresholds
         print_ar = .false.
         print_as = .false.
         if(print_as) then
@@ -1697,18 +1750,29 @@ contains
         write(unit = 121, fmt = '(a)') 'and'
         write(unit = 121, fmt = '(a,a)') trim(nano2%fbody), ' ---> vol2'
         write(unit = 121, fmt = '(a)')  '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
-        ! call nano1%binarize()
-        ! call nano2%binarize()
-        ! TO FIX!!!!!!!!!!!!!!
-        ! Outliers discarding (and size filtering)
-        ! call nano1%discard_outliers()
-        ! call nano2%discard_outliers()
+        call nano1%phasecorrelation_nano_gaussian(ot1)
+        call nano2%phasecorrelation_nano_gaussian(ot2)
+        call nano1%binarize(ot1)
+        call nano2%binarize(ot2)
+        ! TO FIX!!!!!!!!!!!!!! HEREEE
+        !Distance distribution calculation
+        call nano1%distances_distribution()
+        call nano2%distances_distribution()
+        ! Outliers discarding
+        call nano1%discard_outliers()
+        call nano2%discard_outliers()
+        ! Validate identified positions
+        call nano1%validate_atomic_positions()
+        call nano2%validate_atomic_positions()
         ! Radial dependent statistics calculation
         call nano1%radial_dependent_stats(1)
         call nano2%radial_dependent_stats(2)
         ! Aspect ratios calculations
         call nano1%calc_aspect_ratio(print_ar)
         call nano2%calc_aspect_ratio(print_ar)
+        ! Atomic intensity stats
+        call nano1%atom_intensity_stats()
+        call nano2%atom_intensity_stats()
         ! Ouput file, come back to initial folder
         call simple_chdir(trim(nano1%output_dir), errmsg="simple_nanoparticles :: compare_atomic_models, simple_chdir; ")
         write(unit = 121, fmt = '(a,f6.3,a)') 'avg dist between atoms in vol1:', nano1%avg_dist_atoms*nano1%smpd,' A'
