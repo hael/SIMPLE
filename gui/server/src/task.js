@@ -119,21 +119,31 @@ class Task{
   start(arg){
         arg['userdata'] = global.userdata
         if(global.exe.includes('simple_multiuser')){
-			var promise = spawn('node', [global.exe, 'execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
-		}else{
-			var promise = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
-		}
+		var promise = spawn("export", ["PKG_EXECPATH=''", '&&', 'simple_multiuser', 'execute', "'" + JSON.stringify(arg) + "'"], {detached: true, shell: true, cwd:arg['projectfolder']})
+	}else{
+		var promise = spawn(global.exe, ['execute', JSON.stringify(arg)], {detached: true, cwd:global.appPath})
+	}
         var executeprocess = promise.childProcess
+	promise.catch(error => {
+		console.log('ERROR', error)
+	})
         executeprocess.stdout.on('data', data => {
 			console.log('DATA', data.toString())
 		})
+	executeprocess.stderr.on('data', data => {
+                        console.log('DATA ERROR', data.toString())
+                })
 	//	return new Promise((resolve, reject) => {
 	//		resolve({status:'running', jobid:})
 	//	})
-		return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
-		.then(rows => {
+	return sqlite.sqlQuery("SELECT seq FROM sqlite_sequence WHERE name='" + arg['projecttable'] + "'")
+	.then(rows => {
+		if(rows != undefined){
+			return({status:'running', jobid: 1})
+		}else{
 			return({status:'running', jobid: rows[0]['seq'] + 1})
-		})
+		}
+	})
   }
   
   kill(arg){

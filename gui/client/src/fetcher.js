@@ -2,7 +2,9 @@ class Fetcher{
   constructor() {}
 
   fetchJSON (request) {
-    return fetch("/", {
+    var url = window.location.href
+	console.log('URL', url)
+    return fetch(url, {
       method: 'POST',
       body: JSON.stringify(request),
       headers: new Headers({
@@ -28,7 +30,7 @@ class Fetcher{
         function processQueue(){
           var queueElement = loadQueue[0]
           loadQueue.shift()
-          return fetch('` + window.location.origin  + `' + queueElement[0], {credentials: 'include'})
+          return fetch(queueElement[0], {credentials: 'include'})
             .then(() => {
               postMessage({id : queueElement[1], source : queueElement[0]})
               return
@@ -54,9 +56,9 @@ class Fetcher{
     var sources = []
     for (var image of images){
 	  if(image.dataset.path && image.dataset.thumb && image.dataset.boxfile){
-		sources.push("/image?stackfile=" + image.dataset.path + "&boxfile=" + image.dataset.boxfile + "&width=" + image.clientWidth + "&thumb=" + image.dataset.thumb)
+		sources.push(window.location.href + "/image?stackfile=" + image.dataset.path + "&boxfile=" + image.dataset.boxfile + "&width=" + image.clientWidth + "&thumb=" + image.dataset.thumb)
 	  }else if(image.dataset.path){
-        sources.push(image.dataset.path + "&width=" + this.imagewidth)
+        sources.push(image.dataset.path.replace('//image', '/image') + "&width=" + this.imagewidth)
       }
       //}else if(image.dataset.sprite){
      //   sources.push("/image?stackfile=" + image.dataset.sprite + "&frame=0&width=" + Number(image.clientWidth) * Number(image.dataset.spritewidth))

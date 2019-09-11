@@ -137,8 +137,6 @@ class SimpleView {
   }
   
   getManualPickMicrograph(selector, next, previous){
-	  console.log('SDELS', next, previous)
-	  
 	  var selectedindex = selector.selectedIndex
 	  if(next != undefined && next == true && selectedindex < selector.length - 1){
 		  selector.selectedIndex = selectedindex + 1
@@ -158,7 +156,8 @@ class SimpleView {
       canvas.style.height = mindim + 'px'
       this.currentmic = selector.options[selector.selectedIndex].value
 	  this.background = new Image()
-	  this.background.src = "/image?stackfile=" + intg + "&frame=0&width=" + xdim
+	  var url = window.location.href + "/image?stackfile=" + intg + "&frame=0&width=" + xdim
+	  this.background.src = url.replace('//image','/image')
 	  if(!this.boxes[this.currentmic]){
 		this.boxes[this.currentmic] = []
 	  }
@@ -271,7 +270,7 @@ class SimpleView {
 					container.appendChild(containerloader)
 					var containerimg = document.createElement('img')
 					containerimg.className = "thumbnailcontainerimg pspec"
-					containerimg.dataset.path = "/image?stackfile=" + micrograph.thumb + "&spriteframe=0"
+					containerimg.dataset.path = window.location.href + "/image?stackfile=" + micrograph.thumb + "&spriteframe=0"
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 					var container = document.createElement('div')
@@ -283,7 +282,7 @@ class SimpleView {
 					container.appendChild(containerloader)
 					var containerimg = document.createElement('img')
 					containerimg.className = "thumbnailcontainerimg micrograph"
-					containerimg.dataset.path = "/image?stackfile=" + micrograph.thumb + "&spriteframe=1"
+					containerimg.dataset.path = window.location.href + "/image?stackfile=" + micrograph.thumb + "&spriteframe=1"
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 				}else{
@@ -297,7 +296,7 @@ class SimpleView {
 					container.appendChild(containerloader)
 					var containerimg = document.createElement('img')
 					containerimg.className = "thumbnailcontainerimg micrograph"
-					containerimg.dataset.path = "/image?stackfile=" + micrograph.intg + "&frame=0"
+					containerimg.dataset.path = window.location.href + "/image?stackfile=" + micrograph.intg + "&frame=0"
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 				}
@@ -312,7 +311,7 @@ class SimpleView {
 					container.appendChild(containerloader)
 					var containerimg = document.createElement('img')
 					containerimg.className = "thumbnailcontainerimg ctffit"
-					containerimg.dataset.path = "/image?stackfile=" + micrograph.ctfjpg + "&frame=0"
+					containerimg.dataset.path = window.location.href + "/image?stackfile=" + micrograph.ctfjpg + "&frame=0"
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 				}
@@ -331,7 +330,7 @@ class SimpleView {
 					container.appendChild(containerloader)
 					var containerimg = document.createElement('img')
 					containerimg.className = "thumbnailcontainerimg boxes"
-					containerimg.dataset.path = "/image?stackfile=" + micrograph.thumb + "&frame=0&boxfile=" + micrograph.boxfile + "&intg=" + micrograph.intg
+					containerimg.dataset.path = window.location.href + "/image?stackfile=" + micrograph.thumb + "&frame=0&boxfile=" + micrograph.boxfile + "&intg=" + micrograph.intg
 					container.appendChild(containerimg)
 					thumbnail.appendChild(container)
 				}
@@ -431,7 +430,7 @@ class SimpleView {
 				  container.appendChild(containerloader)
 				  var containerimg = document.createElement('img')
 				  containerimg.className = "thumbnailcontainerimg cls2D"
-				  containerimg.dataset.path = "/image?stackfile=" + selected.dataset.projections + "&frame=" + Number(thumbcount * 2)
+				  containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.projections + "&frame=" + Number(thumbcount * 2)
 				  container.appendChild(containerimg)
 				  thumbnail.appendChild(container)
 				  var container = document.createElement('div')
@@ -443,7 +442,7 @@ class SimpleView {
 				  container.appendChild(containerloader)
 				  var containerimg = document.createElement('img')
 				  containerimg.className = "thumbnailcontainerimg cls2D"
-				  containerimg.dataset.path = "/image?stackfile=" + selected.dataset.projections + "&frame=" + Number((thumbcount * 2) + 1)
+				  containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.projections + "&frame=" + Number((thumbcount * 2) + 1)
 				  container.appendChild(containerimg)
 				  thumbnail.appendChild(container)
 				  if(stats){
@@ -477,8 +476,10 @@ class SimpleView {
 		  this.plugin = LiteMol.Plugin.create({ target: '#litemol' })
 		  var detail = document.getElementById('quality').value
 		  this.mdb = json['mdb']
+		  var url = window.location.href + "/DensityServer/local/"
+		   console.log('HREF', url)
 		  var surface = this.plugin.createTransform()
-		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
+		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: url.replace('//DensityServer', '/DensityServer') + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Data.ParseBinaryCif, {id:"density3dcif"}, {})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateFromCif, {id:"density3dd", blockIndex: 1})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateVisual, {
@@ -560,8 +561,9 @@ class SimpleView {
 		  this.plugin = LiteMol.Plugin.create({ target: '#litemol' })
 		  var detail = document.getElementById('quality').value
 		  this.mdb = json['mdb']
+		  var url = window.location.href + "/DensityServer/local/"
 		  var surface = this.plugin.createTransform()
-		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
+		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: url.replace('//DensityServer', '/DensityServer') + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Data.ParseBinaryCif, {id:"density3dcif"}, {})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateFromCif, {id:"density3dd", blockIndex: 1})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateVisual, {
@@ -623,8 +625,9 @@ class SimpleView {
 		  this.plugin = LiteMol.Plugin.create({ target: '#litemol' })
 		  var detail = document.getElementById('quality').value
 		  this.mdb = json['mdb']
+		  var url = window.location.href + "/DensityServer/local/"
 		  var surface = this.plugin.createTransform()
-		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
+		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: url.replace('//DensityServer', '/DensityServer') + json['mdb'] + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Data.ParseBinaryCif, {id:"density3dcif"}, {})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateFromCif, {id:"density3dd", blockIndex: 1})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateVisual, {
@@ -659,8 +662,9 @@ class SimpleView {
   reloadIsoSurface() {
 		  var detail = document.getElementById('quality').value
 		  this.plugin.clear()
+		  var url = window.location.href + "/DensityServer/local/"
 		  var surface = this.plugin.createTransform()
-		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + this.mdb + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
+		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: url.replace('//DensityServer', '/DensityServer') + this.mdb + "/cell?detail=" + detail, type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Data.ParseBinaryCif, {id:"density3dcif"}, {})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateFromCif, {id:"density3dd", blockIndex: 1})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateVisual, {
@@ -754,7 +758,7 @@ class SimpleView {
 		  container.appendChild(containerloader)
 		  var containerimg = document.createElement('img')
 		  containerimg.className = "thumbnailcontainerimg cls2D"
-		  containerimg.dataset.path = "/image?stackfile=" + selected.dataset.file + "&frame=" + thumbcount
+		  containerimg.dataset.path = window.location.href + "/image?stackfile=" + selected.dataset.file + "&frame=" + thumbcount
 		  container.appendChild(containerimg)
 		  
 		  if(stats){
@@ -870,7 +874,7 @@ class SimpleView {
 			  container.appendChild(containerloader)
 			  var containerimg = document.createElement('img')
 			  containerimg.className = "thumbnailcontainerimg cls2D"
-			  containerimg.dataset.path = "/image?stackfile=" + this.stks[Number(this.particles[particle]['stkind']) - 1]['file']  + "&frame=" + Number(particle - Number(this.stks[Number(this.particles[particle]['stkind']) - 1]['fromp']) + 1)
+			  containerimg.dataset.path = window.location.href + "/image?stackfile=" + this.stks[Number(this.particles[particle]['stkind']) - 1]['file']  + "&frame=" + Number(particle - Number(this.stks[Number(this.particles[particle]['stkind']) - 1]['fromp']) + 1)
 			  for(var key of Object.keys(this.particles[particle])){
 				 thumbnail.title += key + " : " + this.particles[particle][key] + "\n"
 				 thumbnail.dataset[key] = Number(this.particles[particle][key])
@@ -1891,7 +1895,7 @@ class SimpleView {
 		  container.appendChild(containerloader)
 		  var containerimg = document.createElement('img')
 		  containerimg.className = "thumbnailcontainerimg cls2D"
-		  containerimg.dataset.path = "/image?stackfile=" + browser.selection + "&frame=" + thumbcount
+		  containerimg.dataset.path = window.location.href + "/image?stackfile=" + browser.selection + "&frame=" + thumbcount
 		  container.appendChild(containerimg)
 		  thumbnail.appendChild(container)
 		  thumbnails.appendChild(thumbnail)
@@ -1937,9 +1941,10 @@ class SimpleView {
 		  }
 		  this.plugin = LiteMol.Plugin.create({ target: '#mainpane' })
 		  this.mdb = json['mdb']
+		  var url = window.location.href + "/DensityServer/local/"
 		  var surface = this.plugin.createTransform()
 		//  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=4", type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
-		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: "/DensityServer/local/" + json['mdb'] + "/cell?detail=4", type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
+		  .add(this.plugin.root, LiteMol.Bootstrap.Entity.Transformer.Data.Download, { url: url.replace('//DensityServer', '/DensityServer') + json['mdb'] + "/cell?detail=4", type: 'Binary', description: 'local Density', title: "joe2", id:"density3ddata"})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Data.ParseBinaryCif, {id:"density3dcif"}, {})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateFromCif, {id:"density3dd", blockIndex: 1})
 		  .then(LiteMol.Bootstrap.Entity.Transformer.Density.CreateVisual, {
