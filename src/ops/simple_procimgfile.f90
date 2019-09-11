@@ -17,7 +17,7 @@ public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
-public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corrfilt_imgfile
+public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corrfilt_imgfile, corrfilt_tseries_imgfile
 public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
 private
 
@@ -875,10 +875,10 @@ contains
         call img%kill
     end subroutine nlmean_imgfile
 
-    !>  \brief  is for apply the correlation filter to an image file
-    !    fname2process: images to be processed
-    !    fname        : output images
-    subroutine corrfilt_imgfile_1( fname2process, sigma, fname, smpd, lp )
+    ! convolution-based filtering globally over the entire time-series to make maximum
+    ! use of the redundancu in the data. Discovered by mistake and we are surprised it works
+    ! since SIMPLE is not supposed to support non-square transforms
+    subroutine corrfilt_tseries_imgfile( fname2process, sigma, fname, smpd, lp )
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: sigma
         real,             intent(in) :: smpd
@@ -886,26 +886,61 @@ contains
         type(image)    :: imgproc, gau, imgresult
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
-        call raise_exception_imgfile( n, ldim, 'corrfilt_imgfile_1' )
+        call raise_exception_imgfile( n, ldim, 'corrfilt_tseries_imgfile' )
         call gau%new(ldim, smpd)
         call imgproc%new(ldim,smpd)
         call imgresult%new(ldim,smpd)
+        call imgresult%set_ft(.true.)
+        call gau%gauimg3D(sigma, sigma, sigma, cutoff=5.)
+        call gau%fft
+        write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO TIME-SERIES'
+        call imgproc%read(fname2process)
+        call imgproc%fft
+        call imgproc%phase_corr(gau,imgresult,lp)
+        call imgresult%write(fname)
+        call imgproc%kill
+        call gau%kill
+        call imgresult%kill
+    end subroutine corrfilt_tseries_imgfile
+
+    !>  \brief  is for apply the correlation filter to an image file
+    !    fname2process: images to be processed
+    !    fname        : output images
+    subroutine corrfilt_imgfile_1( fname2process, sigma, fname, smpd, lp, isvol )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: sigma
+        real,             intent(in) :: smpd
+        real,             intent(in) :: lp
+        logical,          intent(in) :: isvol
+        type(image)    :: imgproc, gau, imgresult
+        integer        :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        call raise_exception_imgfile( n, ldim, 'corrfilt_imgfile_1' )
+        if( .not. isvol ) ldim(3) = 1
+        call gau%new(ldim, smpd)
+        call imgproc%new(ldim,smpd)
+        call imgresult%new(ldim,smpd)
+        call imgresult%set_ft(.true.)
         if(ldim(3) == 1) then !2D case
             call gau%gauimg2D(sigma, sigma, cutoff=5.)
+            call gau%fft
             write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO IMAGES'
             do i=1,n
                 call progress(i,n)
                 call imgproc%read(fname2process, i)
-                imgresult = imgproc%phase_corr(gau,lp)
+                call imgproc%fft
+                call imgproc%phase_corr(gau,imgresult,lp)
                 call imgresult%write(fname, i)
+                call imgresult%zero_and_flag_ft
             end do
         else !3D case
             call gau%gauimg3D(sigma, sigma, sigma, cutoff=5.)
+            call gau%fft
             write(logfhandle,'(a)') '>>> APPLYING CORR FILTER TO VOLUME'
             call imgproc%read(fname2process)
-            imgresult = imgproc%phase_corr(gau,lp)
-            call imgproc%copy(imgresult)
-            call imgproc%write(fname)
+            call imgproc%fft
+            call imgproc%phase_corr(gau,imgresult,lp)
+            call imgresult%write(fname)
         endif
         call imgproc%kill
         call gau%kill
@@ -931,13 +966,16 @@ contains
             call img_atom%new(ldim, smpd)
             call imgproc%new(ldim,smpd)
             call imgresult%new(ldim,smpd)
+            call imgresult%set_ft(.true.)
             cutoff = 12.*smpd
             call imgproc%read(fname2process)
+            call imgproc%fft
             call atom%new(1)
             call atom%set_element(1,element)
             call atom%set_coord(1,smpd*(real(ldim)/2.)) !DO NOT NEED THE +1
             call atom%convolve(img_atom, cutoff)
-            imgresult = imgproc%phase_corr(img_atom,lp)
+            call img_atom%fft
+            call imgproc%phase_corr(img_atom,imgresult,lp)
             call imgresult%write(fname)
         endif
         call imgproc%kill

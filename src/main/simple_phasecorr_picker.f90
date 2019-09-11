@@ -184,12 +184,15 @@ contains
             border =  max(ldim_refs(1),ldim_refs(2))
             call phasecorr%new(ldim_shrink, smpd_shrunken)
             call aux%new(ldim_shrink, smpd_shrunken)
+            call aux%set_ft(.true.)
             call ref_ext%new(ldim_shrink, smpd_shrunken)
+            call field%fft
             do iref = 1, nrefs
                 call refs(iref)%pad(ref_ext, 0.) ! zero padding
-                call refs(iref)%fft
+                call refs(iref)%fft ! WASSSAAP
                 call refs(iref)%bp(hp,lp) ! zero padding
-                aux = field%phase_corr(ref_ext,lp,border=max(ldim_refs(1),ldim_refs(2))/2) !phase correlation
+                call ref_ext%fft
+                call field%phase_corr(ref_ext,aux,lp,border=max(ldim_refs(1),ldim_refs(2))/2) !phase correlation
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else

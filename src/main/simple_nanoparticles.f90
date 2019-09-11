@@ -415,6 +415,7 @@ contains
         type(atoms) :: atom
         real :: cutoff, o_t
         call phasecorr%new(self%ldim, self%smpd)
+        call phasecorr%set_ft(.true.)
         call one_atom%new(self%ldim,self%smpd)
         cutoff = 8.*self%smpd
         call atom%new(1)
@@ -431,7 +432,7 @@ contains
         ! phasecorr = self%img%phase_corr(gau3D,1.)
         !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%img%fft()
-        phasecorr = self%img%phase_corr(one_atom,1.)
+        call self%img%phase_corr(one_atom,phasecorr,1.)
         if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorrOneAtom.mrc')
         call self%img%copy(phasecorr)
         call otsu_nano(self%img,o_t)

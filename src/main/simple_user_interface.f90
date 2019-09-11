@@ -239,6 +239,7 @@ type(simple_input_param) :: stk
 type(simple_input_param) :: stktab
 type(simple_input_param) :: time_per_image
 type(simple_input_param) :: trs
+type(simple_input_param) :: tseries
 type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
@@ -786,6 +787,7 @@ contains
         call set_param(corrw,          'corrw',        'multi',  'Weights based on correlations', 'Weights based on correlations(softmax|zscore|no){softmax}',  '(softmax|zscore|no){softmax}',  .false., 'softmax')
         call set_param(rankw_general,  'rankw',        'multi',  'Weights based on ranks', 'Weights based on ranks, independent of objective function magnitude(sum|cen|exp|inv|no){sum}',  '(sum|cen|exp|inv|no){no}',  .false., 'no')
         call set_param(element, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call set_param(tseries, 'tseries', 'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -1387,13 +1389,14 @@ contains
         &'Filter stack/volume',&                      ! descr_short
         &'is a program for filtering stack/volume',&  ! descr_long
         &'simple_exec',&                              ! executable
-        &2, 1, 2, 0, 15, 0, 1, .false.)               ! # entries in each group, requires sp_project
+        &2, 2, 2, 0, 15, 0, 1, .false.)               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call filter%set_input('img_ios', 1, outstk)
         call filter%set_input('img_ios', 2, outvol)
         ! parameter input/output
         call filter%set_input('parm_ios', 1, smpd)
+        call filter%set_input('parm_ios', 2, tseries)
         ! alternative inputs
         call filter%set_input('alt_ios', 1, 'stk',  'file', 'Stack to filter',  'Stack of images to filter', 'e.g. refs.mrc',     .false., '')
         call filter%set_input('alt_ios', 2, 'vol1', 'file', 'Volume to filter', 'Volume to filter',          'e.g. vol.mrc file', .false., '')

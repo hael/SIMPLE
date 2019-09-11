@@ -207,7 +207,7 @@ contains
             ! call self%reference%gauimg2D(sigma_x,sigma_y)
             ! call self%reference%scale_pixels([minv,maxv]) !should I??
             ! call self%reference%write(PATH_HERE//basename(trim(self%fbody))//'_GaussianReference.mrc')
-            ! call field%fft()
+            call field%fft()
             ! allocate(rmat_out(self%ldim_shrunken(1),self%ldim_shrunken(2),1), source = 0.)
             ! call self%phasecorr%zero_and_unflag_ft()
             ! print *, 'rotate_ref = ', rotate_ref
@@ -215,6 +215,7 @@ contains
             !call aux2%new(self%ldim_shrunken, self%smpd_shrunken)
             call pickref_ext%new(self%ldim_shrunken, self%smpd_shrunken)
             call aux%new        (self%ldim_shrunken, self%smpd_shrunken)
+            call aux%set_ft(.true.)
             call find_ldim_nptcls('../pickrefs.mrc', ref_dim, nptcls, ref_smpd)
             NREFS = nptcls
             shrink_factor = self%smpd_shrunken/ref_smpd
@@ -229,7 +230,8 @@ contains
                 call pickref%pad(pickref_ext, 0.) ! zero padding
                 call pickref_ext%mask(mskrad=maskrad, which='soft', backgr=0.)
                 call pickref_ext%write('pickref_extended_masked.mrc', n_ref)
-                aux = field%phase_corr(pickref_ext,params_glob%lp,border=border) !correlation
+                call pickref_ext%fft
+                call field%phase_corr(pickref_ext,aux,params_glob%lp,border=border) !correlation
                 if(n_ref > 1) then
                     call max_image(self%phasecorr,self%phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else

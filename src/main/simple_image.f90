@@ -6175,42 +6175,33 @@ contains
     !> the external frame in self1 self2 with width border.
     ! FORMULA: phasecorr = ifft2(fft2(self1).*conj(fft2(self2)));
     ! Preserves Fourier state
-    ! Optional lp: frequencies below lp are set to 0 in a
+    ! lp: frequencies below lp are set to 0 in a
     ! smooth way (cos edge).
-    ! elementwise: yes --> phase correlation
-    ! elementwise: no  --> correlation
-    function phase_corr(self1,self2,lp,border) result(pc)
-        class(image),      intent(inout) :: self1, self2
+    subroutine phase_corr(self1, self2, pc, lp, border )
+        class(image),      intent(inout) :: self1, self2, pc
         real,              intent(in)    :: lp
         integer, optional, intent(in)    :: border
         real, parameter :: width = 3.
-        type(image) :: pc
         complex     :: c1,c2
         real        :: w,rw
         real(dp)    :: sqsum1,sqsum2
-        integer     :: nrflims(3,2),phys(3),npix
-        integer     :: shlim,shlimsq,shlimbpsq,shlimbp
-        integer     :: h,k,l
-        integer     :: hsq_ksq_lsq
+        integer     :: nrflims(3,2),phys(3),npix,shlim,shlimsq
+        integer     :: shlimbpsq,shlimbp,h,k,l,hsq_ksq_lsq
         logical     :: ft1, ft2
-        if(self1.eqdims.self2) then
-            if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 .or. border >= self1%ldim(3)/2) ) &
-            & THROW_HARD('Input border parameter too big; phase_corr')
-            call pc%new(self1%ldim, self1%smpd)
-            ft1 = self1%is_ft()
-            ft2 = self2%is_ft()
-            call self1%fft()
-            call self2%fft()
-            call pc%new(self1%ldim, self1%smpd)
-            call pc%set_ft(.true.)
-            shlimsq   = huge(shlimsq)
-            shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
-            shlimbpsq = shlim*shlim
-            shlimbp   = shlim+nint(width)
-            shlimbpsq = shlimbp*shlimbp
-            sqsum1 = 0.d0
-            sqsum2 = 0.d0
-            nrflims = self1%loop_lims(2)
+        if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 .or. border >= self1%ldim(3)/2) ) &
+        & THROW_HARD('Input border parameter too big; phase_corr')
+        if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
+            THROW_HARD('All inputted images must be FTed')
+        endif
+        shlimsq   = huge(shlimsq)
+        shlim     = calc_fourier_index(lp,self1%ldim(1),self1%smpd)
+        shlimbpsq = shlim*shlim
+        shlimbp   = shlim+nint(width)
+        shlimbpsq = shlimbp*shlimbp
+        sqsum1 = 0.d0
+        sqsum2 = 0.d0
+        nrflims = self1%loop_lims(2)
+        if( self1%wthreads .or. self2%wthreads )then
             !$omp parallel do default(shared) private(h,k,l,w,rw,hsq_ksq_lsq,phys,c1,c2) proc_bind(close) schedule(static) reduction(+:sqsum1,sqsum2)
             do h = nrflims(1,1),nrflims(1,2)
                 rw = merge(1., 2., h==0)
@@ -6239,22 +6230,45 @@ contains
                 enddo
             enddo
             !$omp end parallel do
-            call pc%ifft()
-            call pc%div(sqrt(real(sqsum1*sqsum2)/real(product(pc%ldim))))
-            if( .not.ft1 )call self1%ifft()
-            if( .not.ft2 )call self2%ifft()
-            if(present(border) .and. border > 1) then
-                pc%rmat(1:border,:,:) = 0.
-                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,:) = 0.
-                pc%rmat(:,1:border,:) = 0.
-                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),:) = 0.
-                pc%rmat(:,:,1:border) = 0.
-                pc%rmat(:,:,pc%ldim(3)-border:pc%ldim(3)) = 0.
-            endif
         else
-            THROW_HARD('Cannot be performed on images with different dims; phase_corr')
+            do h = nrflims(1,1),nrflims(1,2)
+                rw = merge(1., 2., h==0)
+                do k = nrflims(2,1),nrflims(2,2)
+                    do l = nrflims(3,1),nrflims(3,2)
+                        hsq_ksq_lsq = h*h+k*k+l*l
+                        phys = pc%comp_addr_phys(h,k,l)
+                        w = 1.
+                        if( h==0 .and. k==0 .and. l==0 )then
+                            pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                            cycle
+                        else
+                            if(hsq_ksq_lsq > shlimbpsq)then
+                                pc%cmat(phys(1),phys(2),phys(3)) = cmplx(0.,0.)
+                                cycle
+                            elseif( hsq_ksq_lsq > shlimsq  )then
+                                w = (cos(((sqrt(real(hsq_ksq_lsq))-(real(shlimbp)-width))/width)*PI)+1.)/2.
+                            endif
+                        endif
+                        c1 = w*self1%cmat(phys(1),phys(2),phys(3))
+                        c2 = w*self2%cmat(phys(1),phys(2),phys(3))
+                        sqsum1 = sqsum1 + real(rw*csq(c1),dp)
+                        sqsum2 = sqsum2 + real(rw*csq(c2),dp)
+                        pc%cmat(phys(1),phys(2),phys(3)) = c1 * conjg(c2)
+                    enddo
+                enddo
+            enddo
         endif
-    end function phase_corr
+        call pc%ifft()
+        call pc%div(sqrt(real(sqsum1*sqsum2)/real(product(pc%ldim))))
+        if(present(border) .and. border > 1) then
+            pc%rmat(1:border,:,:) = 0.
+            pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,:) = 0.
+            pc%rmat(:,1:border,:) = 0.
+            pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),:) = 0.
+            pc%rmat(:,:,1:border) = 0.
+            pc%rmat(:,:,pc%ldim(3)-border:pc%ldim(3)) = 0.
+        endif
+    end subroutine phase_corr
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
     subroutine prenorm4real_corr_1( self, sxx )

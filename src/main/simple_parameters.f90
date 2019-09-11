@@ -3,6 +3,7 @@ module simple_parameters
 include 'simple_lib.f08'
 use simple_cmdline,        only: cmdline
 use simple_user_interface, only: simple_program, get_prg_ptr
+use simple_atoms,          only: atoms
 !$ use omp_lib
 !$ use omp_lib_kinds
 implicit none
@@ -26,6 +27,7 @@ type :: parameters
     character(len=3)      :: clustvalid='no'      !< validate clustering(yes|homo|no){no}
     character(len=3)      :: compare='no'         !< do comparison(yes|no){no}
     character(len=3)      :: continue='no'        !< continue previous refinement(yes|no){no}
+    character(len=3)      :: corr_filt='no'       !< phase corr filtering in refinement(yes|no){no}
     character(len=3)      :: countvox='no'        !< count # voxels(yes|no){no}
     character(len=3)      :: ctfstats='no'        !< calculate ctf statistics(yes|no){no}
     character(len=3)      :: ctfpatch='no'        !< whether to perform patched CTF estimation(yes|no){no}
@@ -170,7 +172,7 @@ type :: parameters
     character(len=STDLEN) :: executable=''        !< name of executable
     character(len=STDLEN) :: exp_doc=''           !< specifying exp_time and dose_rate per tomogram
     character(len=STDLEN) :: startype=''          !< export type for STAR format (micrograph|select|extract|class2d|initmodel|refine3d|post){all}
-    character(len=2)      :: element='  '         !< file extension{.mrc}
+    character(len=2)      :: element='  '         !< atom kind
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
@@ -408,25 +410,27 @@ type :: parameters
     real    :: xsh=0.              !< x shift(in pixels){0}
     real    :: ysh=0.              !< y shift(in pixels){0}
     real    :: zsh=0.              !< z shift(in pixels){0}
-    ! logical variables in ascending alphabetical order
+    ! logical variables in (roughly) ascending alphabetical order
     logical :: l_autoscale      = .false.
     logical :: l_corrw          = .false.
+    logical :: l_corr_filt      = .false.
     logical :: l_distr_exec     = .false.
     logical :: l_dev            = .false.
     logical :: l_dose_weight    = .false.
     logical :: l_doshift        = .false.
-    logical :: l_lpset          = .false.
+    logical :: l_envfsc         = .false.
     logical :: l_focusmsk       = .false.
     logical :: l_frac_update    = .false.
+    logical :: l_graphene       = .false.
+    logical :: l_has_element    = .false.
     logical :: l_innermsk       = .false.
+    logical :: l_lpset          = .false.
     logical :: l_locres         = .false.
     logical :: l_match_filt     = .true.
-    logical :: l_envfsc         = .false.
+    logical :: l_needs_sigma    = .false.
     logical :: l_pssnr          = .false.
     logical :: l_ptclw          = .true.
-    logical :: l_needs_sigma    = .false.
     logical :: l_phaseplate     = .false.
-    logical :: l_graphene       = .false.
     logical :: l_projw          = .false.
     logical :: l_rankw          = .true.
     logical :: l_remap_cls      = .false.
@@ -458,6 +462,7 @@ contains
         type(binoris)    :: bos
         type(sp_project) :: spproj
         type(ori)        :: o
+        type(atoms)      :: atoms_obj
         real             :: smpd
         integer          :: i, ncls, ifoo, lfoo(3), cntfile, istate
         integer          :: idir, nsp_files, box, nptcls, nthr
@@ -501,6 +506,7 @@ contains
         call check_carg('clustvalid',     self%clustvalid)
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
+        call check_carg('corr_filt',      self%continue)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
@@ -1392,18 +1398,32 @@ contains
         ! matched filter and sigma needs flags
         select case(self%cc_objfun)
             case(OBJFUN_EUCLID)
+                self%l_corr_filt   = .false.
                 self%l_match_filt  = .false.
                 self%l_pssnr       = .false.
                 self%l_needs_sigma = .true.
             case(OBJFUN_CC)
-                self%l_match_filt  = (trim(self%match_filt).eq.'yes') .and. (.not.self%l_lpset)
-                self%l_pssnr       = (trim(self%pssnr).eq.'yes') .and. self%l_match_filt
+                self%l_corr_filt   = (trim(self%corr_filt)  .eq.'yes') .and.       self%l_lpset
+                self%l_match_filt  = (trim(self%match_filt) .eq.'yes') .and. (.not.self%l_lpset)
+                self%l_pssnr       = (trim(self%pssnr)      .eq.'yes') .and. self%l_match_filt
                 self%l_needs_sigma = (trim(self%needs_sigma).eq.'yes')
                 if( self%l_needs_sigma )then
                     self%l_match_filt = .false.
                     self%l_pssnr      = .false.
                 endif
         end select
+        ! atoms
+        self%l_has_element = .false.
+        if( cline%defined('element') )then
+            call atoms_obj%new(1)
+            call atoms_obj%set_element(1,self%element)
+            if( atoms_obj%get_atomicnumber(1) == 0 )then
+                THROW_HARD('Element: '//trim(self%element)//' unsupported for for now')
+            else
+                self%l_has_element = .true.
+            endif
+            call atoms_obj%kill
+        endif
         ! local resolution for filtering or  not
         self%l_locres = .false.
         if( trim(self%locres) .eq. 'yes' ) self%l_locres = .true.

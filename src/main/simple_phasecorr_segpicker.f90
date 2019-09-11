@@ -225,8 +225,11 @@ contains
             integer :: iref
             call phasecorr%new(ldim_shrink, smpd_shrunken)
             call aux%new(ldim_shrink, smpd_shrunken)
+            call aux%set_ft(.true.)
+            call field%fft
             do iref = 1, nrefs
-                aux = field%phase_corr(refs(iref),lp,border=box_shrunken/2) !phase correlation
+                call refs(iref)%fft
+                call field%phase_corr(refs(iref),aux,lp,border=box_shrunken/2) !phase correlation
                 if(DOWRITEIMGS)  call aux%write(PATH_HERE//'PhaseCorrs.mrc',iref)
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
