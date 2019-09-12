@@ -68,10 +68,10 @@ type(starfile_table_type)     :: mc_starfile              !< starfile for motion
 real,    parameter :: NSIGMAS                       = 5.       !< Number of standard deviations for outliers detection
 real,    parameter :: SMALLSHIFT                    = 1.       !< small initial shift to blur out fixed pattern noise
 logical, parameter :: FITSHIFTS                     = .true.
-logical, parameter :: ISO_POLYN_DIRECT              = .true.   !< use polynomial constraint for isotropic motion correction
+logical, parameter :: ISO_POLYN_DIRECT              = .false.   !< use polynomial constraint for isotropic motion correction
 logical, parameter :: ISO_UNCONSTR_AFTER            = .false.  !< run a unconstrained (direct) as the second step (at highest resolution)
-logical, parameter :: DO_PATCHED_POLYN              = .true.   !< run polynomially constrained motion correction for patch-based motion correction
-logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .true.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
+logical, parameter :: DO_PATCHED_POLYN              = .false.   !< run polynomially constrained motion correction for patch-based motion correction
+logical, parameter :: DO_PATCHED_POLYN_DIRECT_AFTER = .false.   !< run a direct polynomial optimization for patch-based motion correction as the second step (at highest resolution)
 contains
 
     ! PUBLIC METHODS, ISOTROPIC MOTION CORRECTION

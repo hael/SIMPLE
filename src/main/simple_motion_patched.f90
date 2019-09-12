@@ -248,8 +248,8 @@ contains
                 shifts(:,2) = self%shifts_patches_for_fit(2,:,ipx,ipy)
                 shifts(:,1) = shifts(:,1) - shifts(1,1)
                 shifts(:,2) = shifts(:,2) - shifts(1,2)
-                call self%get_local_shift(self%fixed_frame,cx,cy, ref_shift)
-                ref_shift = ref_shift - shifts(self%fixed_frame,:)
+                call self%get_local_shift(1,cx,cy, ref_shift)
+                ref_shift = ref_shift - shifts(1,:)
                 ! plot
                 call CDataSet__new(patch_start)
                 call CDataSet__SetDrawMarker(patch_start,C_TRUE)
@@ -265,9 +265,6 @@ contains
                 call CDataSet__AddDataPoint(patch_start, p_fit)
                 call CDataPoint__delete(p_fit)
                 do iframe = 1, self%nframes
-                    if( self%has_frameweights ) then
-                        if( self%frameweights(iframe) < 1.e-6 ) cycle
-                    end if
                     call CDataPoint__new2(real(cx + SCALE*shifts(iframe,1), c_double),&
                                          &real(cy + SCALE*shifts(iframe,2), c_double), p_obs)
                     call CDataSet__AddDataPoint(obs, p_obs)
