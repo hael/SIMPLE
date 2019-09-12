@@ -1569,20 +1569,19 @@ contains
     end subroutine set_smpd
 
     !> \brief get_slice is for getting a slice from a volume
-    function get_slice( self3d, slice ) result( self2d )
-        class(image), intent(in) :: self3d
-        integer,      intent(in) :: slice
-        type(image)              :: self2d
-        call self2d%new([self3d%ldim(1),self3d%ldim(2),1],self3d%smpd)
-        self2d%rmat(:,:,1) = self3d%rmat(:,:,slice)
-    end function get_slice
+    subroutine get_slice( self3D, slice, self2D )
+        class(image), intent(in)    :: self3D
+        integer,      intent(in)    :: slice
+        class(image), intent(inout) :: self2D
+        self2D%rmat(:,:,1) = self3D%rmat(:,:,slice)
+    end subroutine get_slice
 
     !>  \brief set_slice is for putting a slice into a volume
-    subroutine set_slice( self3d, slice, self2d )
-        class(image), intent(in)    :: self2d
+    subroutine set_slice( self3D, slice, self2D )
+        class(image), intent(in)    :: self2D
         integer,      intent(in)    :: slice
-        class(image), intent(inout) :: self3d
-        self3d%rmat(:,:,slice) = self2d%rmat(:,:,1)
+        class(image), intent(inout) :: self3D
+        self3D%rmat(:,:,slice) = self2D%rmat(:,:,1)
     end subroutine set_slice
 
     pure function get_lfny( self, which ) result( fnyl )
@@ -1998,25 +1997,6 @@ contains
             self%rmat = 0.
         end where
     end subroutine sq_rt
-
-    !>  \brief  l1norm_1 is for l1 norm calculation
-    function l1norm_1( self1, self2 ) result( self )
-        class(image), intent(in) :: self1, self2
-        type(image) :: self
-        if( self1.eqdims.self2 )then
-            call self%new(self1%ldim, self1%smpd)
-            if( self1%ft .neqv. self2%ft )then
-                THROW_HARD('cannot process images of different FT state; l1norm_1')
-            endif
-            if( self1%ft )then
-                self%cmat = cabs(self1%cmat-self2%cmat)
-            else
-                self%rmat = abs(self1%rmat-self2%rmat)
-            endif
-        else
-            THROW_HARD('cannot process images of different dims; l1norm_1')
-        endif
-    end function l1norm_1
 
     !>  \brief add_1 is for image summation, not overloaded
     subroutine add_1( self, self_to_add, w )

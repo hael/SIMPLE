@@ -15,6 +15,7 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander
 public :: tseries_average_commander
+public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 public :: tseries_split_commander
@@ -43,6 +44,10 @@ type, extends(commander_base) :: tseries_average_commander
   contains
     procedure :: execute      => exec_tseries_average
 end type tseries_average_commander
+type, extends(commander_base) :: tseries_corrfilt_commander
+  contains
+    procedure :: execute      => exec_tseries_corrfilt
+end type tseries_corrfilt_commander
 type, extends(commander_base) :: tseries_backgr_subtr_commander
   contains
     procedure :: execute      => exec_tseries_backgr_subtr
@@ -254,10 +259,13 @@ contains
         character(len=:), allocatable :: orig_projfile
         character(len=LONGSTRLEN)     :: finalcavgs
         integer  :: nparts, last_iter_stage2
-        call cline%set('center',    'yes')
-        call cline%set('autoscale', 'no')
-        call cline%set('refine',    'greedy')
-        call cline%set('tseries',   'yes')
+        call cline%set('match_filt',     'no')
+        call cline%set('graphene_filt', 'yes')
+        call cline%set('ptclw',          'no')
+        call cline%set('center',        'yes')
+        call cline%set('autoscale',      'no')
+        call cline%set('refine',     'greedy')
+        call cline%set('tseries',       'yes')
         if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
@@ -318,6 +326,22 @@ contains
         call kill_tseries_averager
         call simple_end('**** SIMPLE_TSERIES_AVERAGE NORMAL STOP ****')
     end subroutine exec_tseries_average
+
+    subroutine exec_tseries_corrfilt( self, cline )
+        use simple_tseries_gauconvolver
+        class(tseries_corrfilt_commander), intent(inout) :: self
+        class(cmdline),                    intent(inout) :: cline
+        type(parameters) :: params
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  100.)
+        if( .not. cline%defined('sigma')      ) call cline%set('sigma',        0.5)
+        if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_corrfilted.mrcs')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
+        call params%new(cline)
+        call init_tseries_gauconvolver
+        call tseries_gauconvolve
+        call kill_tseries_gauconvolver
+        call simple_end('**** SIMPLE_TSERIES_CORRFILT NORMAL STOP ****')
+    end subroutine exec_tseries_corrfilt
 
     subroutine exec_tseries_backgr_subtr( self, cline )
         ! for background subtraction in time-series data. The goal is to subtract the two graphene

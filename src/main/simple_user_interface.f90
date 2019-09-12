@@ -145,6 +145,7 @@ type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_average
+type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
 type(simple_program), target :: update_project
@@ -330,6 +331,7 @@ contains
         call new_symmetry_test
         call new_tseries_import
         call new_tseries_average
+        call new_tseries_corrfilt
         call new_tseries_ctf_estimate
         call new_tseries_track
         call new_update_project
@@ -576,6 +578,8 @@ contains
                 ptr2prg => tseries_import
             case('tseries_average')
                 ptr2prg => tseries_average
+            case('tseries_corrfilt')
+                ptr2prg => tseries_corrfilt
             case('tseries_ctf_estimate')
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
@@ -669,6 +673,7 @@ contains
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
         write(logfhandle,'(A)') tseries_average%name
+        write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
@@ -1420,7 +1425,7 @@ contains
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
         call filter%set_input('filt_ctrls', 14, element)
-        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for gaussian generation', 'sigma, for gaussian generation', &
+        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation', &
         & '{1.}', .false., 1.0)
         ! mask controls
         ! <empty>
@@ -3430,6 +3435,34 @@ contains
         ! computer controls
         call tseries_average%set_input('comp_ctrls', 1, nthr)
     end subroutine new_tseries_average
+
+    subroutine new_tseries_corrfilt
+        ! PROGRAM SPECIFICATION
+        call tseries_corrfilt%new(&
+        &'tseries_corrfilt',&                                                                   ! name
+        &'Convolute particle windows extracted from time-series with a Gaussian function',&     ! descr_short
+        &'is a program for particle SNR enhancement through time window Gaussian convolution',& ! descr_long
+        &'simple_exec',&                                                                        ! executable
+        &2, 1, 0, 1, 1, 0, 1, .false.)                                                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_corrfilt%set_input('img_ios', 1, stk)
+        tseries_corrfilt%img_ios(1)%required = .true.
+        call tseries_corrfilt%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call tseries_corrfilt%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call tseries_corrfilt%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to convolve', 'Number of contigous frames to convolve with a Gaussian function{100}', '{100}', .false., 100.)
+        ! filter controls
+        call tseries_corrfilt%set_input('filt_ctrls', 1, 'sigma', 'num', 'sigma, for 3D Gaussian generation', 'sigma, for 3D Gaussian generation', &
+        & '{0.5}', .false., 0.5)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_corrfilt%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_corrfilt
 
     subroutine new_tseries_ctf_estimate
         ! PROGRAM SPECIFICATION

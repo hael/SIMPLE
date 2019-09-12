@@ -391,7 +391,7 @@ type :: parameters
     real    :: scale2=1.           !< image scale factor 2nd{1}
     real    :: shcfrac=SHCFRAC_DEFAULT !< min % of projection directions evaluated in stochastic search
     real    :: sherr=0.            !< shift error(in pixels){2}
-    real    :: sigma               !< for gaussian function generation {1.}
+    real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)

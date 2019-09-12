@@ -84,6 +84,7 @@ type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)       :: xtseries_import
 type(tseries_average_commander)      :: xtseries_avg
+type(tseries_corrfilt_commander)     :: xtseries_corrfilt
 type(tseries_ctf_estimate_commander) :: xtseries_ctf_estimate
 type(detect_atoms_commander)         :: xdetect_atoms
 type(compare_nano_commander)         :: xcompare_nano
@@ -220,6 +221,8 @@ select case(prg)
         call xtseries_import%execute(cline)
     case( 'tseries_average')
         call xtseries_avg%execute(cline)
+    case( 'tseries_corrfilt')
+        call xtseries_corrfilt%execute(cline)
     case( 'tseries_ctf_estimate' )
         call xtseries_ctf_estimate%execute(cline)
     case('detect_atoms')
