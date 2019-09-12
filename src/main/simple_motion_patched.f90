@@ -774,6 +774,7 @@ contains
                 do iframe = 1, self%nframes
                     self%shifts_patches(:,iframe,i,j) = opt_shifts(iframe,:)
                 end do
+                ! cleanup
                 call self%align_iso_polyn_direct(i,j)%kill
                 do iframe=1,self%nframes
                     call self%frame_patches(i,j)%stack(iframe)%kill
@@ -791,15 +792,40 @@ contains
             self%shifts_patches_for_fit(1,iframe,:,:) = self%shifts_patches(1,iframe,:,:) + 0.5*self%shifts_patches(1,1,:,:)
             self%shifts_patches_for_fit(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:) + 0.5*self%shifts_patches(2,1,:,:)
         enddo
-        ! no cleanup yet
+        deallocate( self%align_iso_polyn_direct )
     end subroutine det_shifts_polyn
 
-    subroutine det_shifts_direct( self )
+    subroutine det_shifts_direct( self, frames )
         class(motion_patched), target, intent(inout) :: self
+        type(image), allocatable,      intent(inout) :: frames(:)
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
         class(optimizer), pointer :: nlopt
         real                      :: opt_lims(PATCH_PDIM*2, 2), lowest_cost
+        integer                   :: i, j, iframe
+        real, allocatable         :: res(:)
+        logical                   :: nested_prior
+        allocate( self%align_iso_polyn_direct(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
+        call self%frame_patches(1,1)%stack(1)%new(self%ldim_patch, self%smpd)
+        ! initialize transfer matrix to correct dimensions
+        call ftexp_transfmat_init(self%frame_patches(1,1)%stack(1))
+        res = self%frame_patches(1,1)%stack(1)%get_res()
+        self%hp = min(self%hp,res(1))
+        do i = 1, params_glob%nxpatch
+            do j = 1, params_glob%nypatch
+                call self%gen_patch(frames,i,j)
+                call self%align_iso_polyn_direct(i,j)%new
+                call self%align_iso_polyn_direct(i,j)%set_frames(self%frame_patches(i,j)%stack, self%nframes)
+                call self%align_iso_polyn_direct(i,j)%set_group_frames(.false.)
+                call self%align_iso_polyn_direct(i,j)%set_bfactor(self%bfactor)
+                call self%align_iso_polyn_direct(i,j)%set_hp_lp(self%hp, self%lp(i,j))
+                call self%align_iso_polyn_direct(i,j)%set_trs(self%trs)
+                call self%align_iso_polyn_direct(i,j)%set_ftol_gtol(TOL, TOL)
+                call self%align_iso_polyn_direct(i,j)%set_coords(i,j)
+                call self%align_iso_polyn_direct(i,j)%create_ftexp_objs
+                call self%align_iso_polyn_direct(i,j)%create_ftexp_dR_s
+            end do
+        end do
         opt_lims(:,1) = -self%trs
         opt_lims(:,2) =  self%trs
         call ospec%specify('lbfgsb', PATCH_PDIM*2, ftol=self%motion_patched_direct_ftol, &
@@ -814,7 +840,17 @@ contains
         call nlopt%minimize(ospec, self, lowest_cost)
         self%poly_coeffs(:,1) = ospec%x_8(           1:PATCH_PDIM  )
         self%poly_coeffs(:,2) = ospec%x_8(PATCH_PDIM+1:PATCH_PDIM*2)
+        call nlopt%kill
         nlopt => null()
+        do i = 1, params_glob%nxpatch
+            do j = 1, params_glob%nypatch
+                call self%align_iso_polyn_direct(i,j)%kill
+                do iframe=1,self%nframes
+                    call self%frame_patches(i,j)%stack(iframe)%kill
+                end do
+            end do
+        end do
+        deallocate( self%align_iso_polyn_direct )
     end subroutine det_shifts_direct
 
     subroutine cleanup_polyn( self )
@@ -999,10 +1035,8 @@ contains
         write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^ fitted polynomial; poly_coeffs(:, 1)=', self%poly_coeffs(:,1), 'poly_coeffs(:, 2)=', self%poly_coeffs(:,2)
         if ( refine_direct ) then
             write (*,*) '^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ patched direct ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ '
-            call self%det_shifts_direct()
+            call self%det_shifts_direct(frames)
         end if
-        ! clean up align_iso_polyn_direct objects
-        call self%cleanup_polyn()
         ! report visual results
         call self%plot_shifts()
     end subroutine motion_patched_correct_polyn
@@ -1189,7 +1223,7 @@ contains
         f       = 0.d0
         grad(:) = 0.d0
         ! convert polynomial coefficients into shifts
-        !$omp parallel do collapse(2) default(shared) private(xi,yi,j,t,x,y,ashift,ftmp,grad_contrib,grad_full_tmp) reduction(+:f,grad) proc_bind(close) schedule(static)
+!foo        !$omp parallel do collapse(2) default(shared) private(xi,yi,j,t,x,y,ashift,ftmp,grad_contrib,grad_full_tmp) reduction(+:f,grad) proc_bind(close) schedule(static)
         do xi = 1, params_glob%nxpatch
             do yi = 1, params_glob%nypatch
                 do j = 1, self%nframes
@@ -1205,7 +1239,7 @@ contains
                 grad(:) = grad(:) + (- grad_full_tmp(:))
             end do
         end do
-        !$omp end parallel do
+!foo        !$omp end parallel do
     end subroutine motion_patched_direct_fdf
 
     subroutine patched_direct_fdf_wrapper( self, vec, f, grad, D )
