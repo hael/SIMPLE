@@ -172,12 +172,16 @@ contains
         integer :: xind, yind, alloc_stat, i
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         call gen_phase_correlation(mic_shrunken,mask_img)
-        call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
+        call mic_shrunken%stats(ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
         call mask_img%kill
         call mic_shrunken%get_rmat_ptr(rmat_phasecorr)
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
         call mic_shrunken%bin(ave+.8*sdev)
+        rmat_phasecorr(1:box_shrunken/2,:,1) = 0. !set to zero the borders
+        rmat_phasecorr(ldim_shrink(1)-box_shrunken/2:ldim_shrink(1),:,1) = 0. !set to zero the borders
+        rmat_phasecorr(:,1:box_shrunken/2,1) = 0. !set to zero the borders
+        rmat_phasecorr(:,ldim_shrink(2)-box_shrunken/2:ldim_shrink(2),1) = 0. !set to zero the borders
         if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ntargets = 0
@@ -236,6 +240,7 @@ contains
                 else
                     phasecorr   = aux
                 endif
+                call aux%fft
             enddo
             call field%copy(phasecorr)
             call field%neg() !The correlations are inverted because the references are white particles on black backgound

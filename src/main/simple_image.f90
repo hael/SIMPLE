@@ -6188,7 +6188,8 @@ contains
         integer     :: nrflims(3,2),phys(3),npix,shlim,shlimsq
         integer     :: shlimbpsq,shlimbp,h,k,l,hsq_ksq_lsq
         logical     :: ft1, ft2
-        if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 .or. border >= self1%ldim(3)/2) ) &
+        if(present(border) .and. self1%ldim(3) > 1) THROW_HARD('Border discarding not implemented for 3D; phase_corr')
+        if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 ))&
         & THROW_HARD('Input border parameter too big; phase_corr')
         if( .not. all([self1%is_ft(),self2%is_ft(),pc%is_ft()]) )then
             THROW_HARD('All inputted images must be FTed')
@@ -6261,12 +6262,10 @@ contains
         call pc%ifft()
         call pc%div(sqrt(real(sqsum1*sqsum2)/real(product(pc%ldim))))
         if(present(border) .and. border > 1) then
-            pc%rmat(1:border,:,:) = 0.
-            pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,:) = 0.
-            pc%rmat(:,1:border,:) = 0.
-            pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),:) = 0.
-            pc%rmat(:,:,1:border) = 0.
-            pc%rmat(:,:,pc%ldim(3)-border:pc%ldim(3)) = 0.
+                pc%rmat(1:border,:,1) = 0.
+                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
+                pc%rmat(:,1:border,1) = 0.
+                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
         endif
     end subroutine phase_corr
 

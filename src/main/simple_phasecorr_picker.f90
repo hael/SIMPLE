@@ -113,7 +113,7 @@ contains
         call one_cluster_clustering
         nptcls_out = count(selected_peak_positions)
         ! bring back coordinates to original sampling
-        peak_positions = nint(PICKER_SHRINK_HERE)*(peak_positions-ldim_refs(1)/2)
+        peak_positions = nint(PICKER_SHRINK_HERE*(real(peak_positions)))-orig_box/2
         call write_boxfile
         ! returns absolute path
         call make_relativepath(CWD_GLOB, boxname, boxname_out)
@@ -128,6 +128,7 @@ contains
         type(image) :: mask_img
         logical, allocatable :: mask(:,:)
         real    :: ave, sdev, maxv, minv
+        integer :: border
         write(logfhandle,'(a)') '>>> EXTRACTING PEAKS'
         call gen_phase_correlation(mic_shrunken,mask_img)
         call mic_shrunken%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv,mskimg=mask_img)
@@ -135,6 +136,11 @@ contains
         allocate(corrmat(1:ldim_shrink(1),1:ldim_shrink(2)))
         corrmat(1:ldim_shrink(1),1:ldim_shrink(2)) = rmat_phasecorr(1:ldim_shrink(1),1:ldim_shrink(2),1)
         call mic_shrunken%bin(ave+.8*sdev)
+        border = max(ldim_refs(1)/2,ldim_refs(2)/2)
+        rmat_phasecorr(1:border,:,1) = 0. !set to zero the borders
+        rmat_phasecorr(ldim_shrink(1)-border:ldim_shrink(1),:,1) = 0. !set to zero the borders
+        rmat_phasecorr(:,1:border,1) = 0. !set to zero the borders
+        rmat_phasecorr(:,ldim_shrink(2)-border:ldim_shrink(2),1) = 0. !set to zero the borders
         if(DOWRITEIMGS) call mic_shrunken%write(PATH_HERE//basename(trim(micname))//'_shrunken_bin.mrc')
         allocate(mask(1:ldim_shrink(1), 1:ldim_shrink(2)), source = .false.)
         ntargets = 0
@@ -189,17 +195,19 @@ contains
             call field%fft
             do iref = 1, nrefs
                 call refs(iref)%pad(ref_ext, 0.) ! zero padding
-                call refs(iref)%fft ! WASSSAAP
-                call refs(iref)%bp(hp,lp) ! zero padding
+                ! call refs(iref)%fft ! WASSSAAP
+                ! call refs(iref)%bp(hp,lp)
                 call ref_ext%fft
-                call field%phase_corr(ref_ext,aux,lp,border=max(ldim_refs(1),ldim_refs(2))/2) !phase correlation
+                call field%phase_corr(ref_ext,aux,lp,border=max(ldim_refs(1)/2,ldim_refs(2)/2)) !phase correlation
                 if(iref > 1) then
                     call max_image(phasecorr,phasecorr,aux) !save in phasecorr the maximum value between previous phasecorr and new phasecorr
                 else
                     phasecorr   = aux
                 endif
+                call aux%fft
             enddo
             call field%copy(phasecorr)
+            call field%neg() !The correlations are inverted because the references are white particles on black backgound
             if(DOWRITEIMGS) call field%write(PATH_HERE//basename(trim(micname))//'MaxValPhaseCorr.mrc')
             if(present(mask)) then
                 call mask%new(ldim_shrink, smpd_shrunken)

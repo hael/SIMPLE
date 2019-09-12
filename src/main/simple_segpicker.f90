@@ -238,6 +238,7 @@ contains
                     self%phasecorr = aux
                 endif
                 call self%phasecorr%write('MaxValPhaseCorr.mrc',n_ref)
+                call aux%fft()
             enddo
             call self%phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'MaxValPhaseCorr.mrc')
             call field%copy(self%phasecorr)

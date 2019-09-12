@@ -2455,7 +2455,9 @@ contains
             !to calculation of the 'min' excluding the pixel itself, otherwise it d always be 0
             do i = 1, size(vec, dim = 2)
                 if(      abs(px(1)-vec(1,i)) < TINY .and. abs(px(2)-vec(2,i)) < TINY  &
-                &  .and. abs(px(3)-vec(3,i)) < TINY ) mask(i) = .false.
+                &  .and. abs(px(3)-vec(3,i)) < TINY )then
+                    mask(i) = .false.
+                endif
             enddo
             dist =  minval(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
             if(present(location)) location = minloc(sqrt((px(1)-vec(1,:))**2+(px(2)-vec(2,:))**2+(px(3)-vec(3,:))**2), mask)
