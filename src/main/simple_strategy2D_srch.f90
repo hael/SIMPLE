@@ -85,29 +85,35 @@ contains
         self%prev_class = nint(build_glob%spproj_field%get(self%iptcl,'class'))                ! class index
         prev_roind      = pftcc_glob%get_roind(360.-build_glob%spproj_field%e3get(self%iptcl)) ! in-plane angle index
         self%prev_shvec = build_glob%spproj_field%get_2Dshift(self%iptcl)                      ! shift vector
+        if( self%prev_class > 0 )then
+            if( s2D%cls_pops(self%prev_class) > 0 )then
+                ! all done
+            else
+                ! for limiting cases
+                self%prev_class = irnd_uni(self%nrefs)
+                do while( s2D%cls_pops(self%prev_class) <= 0 )
+                    self%prev_class = irnd_uni(self%nrefs)
+                enddo
+            endif
+        else
+            ! initialization
+            self%prev_class = irnd_uni(self%nrefs)
+            do while( s2D%cls_pops(self%prev_class) <= 0 )
+                self%prev_class = irnd_uni(self%nrefs)
+            enddo
+        endif
         ! set best to previous best by default
         self%best_class = self%prev_class
         self%best_rot   = prev_roind
         ! calculate previous best corr (treshold for better)
         call pftcc_glob%prep_matchfilt(self%iptcl, self%prev_class, prev_roind)
-        if( self%prev_class > 0 )then
-            call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                self%prev_corr  = corrs(prev_roind)
-            else
-                self%prev_corr  = max(0., corrs(prev_roind))
-            endif
-            self%best_corr  = self%prev_corr
+        call pftcc_glob%gencorrs(self%prev_class, self%iptcl, corrs)
+        if( params_glob%cc_objfun == OBJFUN_EUCLID )then
+            self%prev_corr  = corrs(prev_roind)
         else
-            self%prev_class = irnd_uni(self%nrefs)
-            if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-                self%prev_corr  = -huge(self%prev_corr)
-                self%best_corr  = -huge(self%best_corr)
-            else
-                self%prev_corr  = 0.
-                self%best_corr  = 0.
-            endif
+            self%prev_corr  = max(0., corrs(prev_roind))
         endif
+        self%best_corr  = self%prev_corr
         ! calculate spectral score
         self%specscore = pftcc_glob%specscore(self%prev_class, self%iptcl, prev_roind)
         if( DEBUG ) write(logfhandle,*) '>>> strategy2D_srch::PREPARED FOR SIMPLE_strategy2D_srch'

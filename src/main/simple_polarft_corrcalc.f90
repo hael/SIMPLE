@@ -1369,32 +1369,29 @@ contains
         corr = real(tmp)
     end function calc_corrk_for_rot_8
 
-    function calc_euclidk_for_rot( self, pft_ref, i, k, irot ) result( euclid )
+    real(sp) function calc_euclidk_for_rot( self, pft_ref, i, k, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: i, irot, k
         complex(sp),             intent(in)    :: pft_ref(1:self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
-        integer     :: rot
-        real(sp)    :: euclid
-        complex(sp) :: tmp
-        euclid = 0.
-        tmp = 0.
+        real    :: euclid
+        integer :: rot
         if( irot >= self%pftsz + 1 )then
             rot = irot - self%pftsz
         else
             rot = irot
         end if
         if( irot == 1 )then
-            tmp = sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
+            euclid = sum(csq(pft_ref(:,k) - self%pfts_ptcls(:,k,i)))
         else if( irot <= self%pftsz )then
-            tmp =       sum(csq(pft_ref(               1:self%pftsz-rot+1,k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
+            euclid =          sum(csq(pft_ref(               1:self%pftsz-rot+1,k) -       self%pfts_ptcls(rot:self%pftsz,k,i)))
+            euclid = euclid + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) - conjg(self%pfts_ptcls(  1:rot-1,     k,i))))
         else if( irot == self%pftsz + 1 )then
-            tmp = sum(csq(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
+            euclid = sum(csq(pft_ref(:,k) - conjg(self%pfts_ptcls(:,k,i))))
         else
-            tmp =       sum(csq(pft_ref(               1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
-            tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
+            euclid =          sum(csq(pft_ref(               1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
+            euclid = euclid + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
         end if
-        euclid = real(tmp)
+        calc_euclidk_for_rot = euclid
     end function calc_euclidk_for_rot
 
     subroutine genfrc( self, iref, iptcl, irot, frc )

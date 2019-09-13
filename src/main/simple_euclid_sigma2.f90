@@ -21,7 +21,6 @@ type euclid_sigma2
     integer               :: kfromto(2)     = 0
     integer               :: headsz         = 0
     integer               :: sigmassz       = 0
-    integer               :: pftsz          = 0     !< dimension of PFT in pftcc (half # of rotations)
     character(len=STDLEN) :: fname
     logical               :: do_divide = .false.
     logical               :: exists    = .false.
@@ -68,7 +67,6 @@ contains
         self%file_header(3:4) = self%kfromto
         self%headsz           = sizeof(self%file_header)
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
-        self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
         self%do_divide          = .false.
         self%sigma2_exists_msk  = .false.
@@ -335,7 +333,6 @@ contains
             self%headsz       = 0
             self%sigmassz     = 0
             self%kfromto      = 0
-            self%pftsz        = 0
             self%do_divide    = .false.
             self%exists       = .false.
             eucl_sigma2_glob  => null()

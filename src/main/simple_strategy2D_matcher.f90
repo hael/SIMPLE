@@ -114,12 +114,9 @@ contains
 
         ! CHUNKS
         chunk_id = 1
-        ! in dev
-        ! if( cline%defined('chunksz') .and. which_iter<=5 )then
-        !     do iptcl=params_glob%fromp,params_glob%top
-        !         chunk_id(iptcl) = mod(iptcl,params_glob%chunksz)+1
-        !     enddo
-        ! endif
+
+        ! ARRAY ALLOCATION FOR STRATEGY2D prior to weights
+        call prep_strategy2D( ptcl_mask, which_iter )
 
         ! SETUP WEIGHTS
         ! this needs to be done prior to search such that each part
@@ -171,8 +168,6 @@ contains
 
         ! INITIALIZE STOCHASTIC IMAGE ALIGNMENT
         write(logfhandle,'(A,1X,I3)') '>>> CLUSTER2D DISCRETE STOCHASTIC SEARCH, ITERATION:', which_iter
-        ! array allocation for strategy2D
-        call prep_strategy2D( ptcl_mask, which_iter )
         ! switch for polymorphic strategy2D construction
         allocate(strategy2Dsrch(params_glob%fromp:params_glob%top))
         select case(trim(params_glob%neigh))
