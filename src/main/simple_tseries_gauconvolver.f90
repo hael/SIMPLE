@@ -23,7 +23,7 @@ logical                  :: existence = .false. ! to flag existence
 contains
 
     subroutine init_tseries_gauconvolver
-        integer     :: fromto(2), i
+        integer :: fromto(2), i
         ! first, kill pre-existing
         call kill_tseries_gauconvolver
         ! create image objects
@@ -93,58 +93,6 @@ contains
                     call ptcl_sect%write('ptcls_denoised'//int2str_pad(iframe,6)//'.mrcs', slice)
                 end do
             endif
-
-            ! calculate correlations to central section of time window
-            ! call ptcl_sect%prenorm4real_corr(sxx, l_msk)
-            ! !$omp parallel do default(shared) private(i,slice) schedule(static) proc_bind(close)
-            ! do i=fromto(1),fromto(2)
-            !     slice = i - fromto(1) + 1
-            !     call ptcl_slices_conv%get_slice(slice, ptcls_twin_corr(slice))
-            !     corrs(slice) = ptcl_sect%real_corr_prenorm(ptcls_twin_corr(slice), sxx, l_msk)
-            ! end do
-            ! !$omp end parallel do
-            ! ! derive weights from correlations
-            ! weights = corrs2weights(corrs, CORRW_ZSCORE_CRIT, RANK_INV_CRIT)
-            ! ! check weights backward in time
-            ! renorm     = .false.
-            ! fromtowavg = fromto
-            ! do i=fromto(1) + nz/2,fromto(1),-1
-            !     slice = i - fromto(1) + 1
-            !     if( weights(slice) <= TINY )then
-            !         weights(:slice) = 0.
-            !         fromtowavg(1) = slice
-            !         renorm = .true.
-            !         exit
-            !     endif
-            ! end do
-            ! ! check weights forward in time
-            ! do i=fromto(1) + nz/2,fromto(2)
-            !     slice = i - fromto(1) + 1
-            !     if( weights(slice) <= TINY )then
-            !         weights(slice:) = 0.
-            !         fromtowavg(2) = slice
-            !         renorm = .true.
-            !         exit
-            !     endif
-            ! end do
-            ! sumw = sum(weights)
-            ! if( renorm ) weights = weights / sumw
-            ! ! create weighted average
-            ! ! if( DEBUG_HERE ) print *, 'range for weighted avg calc: ', fromtowavg(1), fromtowavg(2)
-            ! call ptcl_avg%zero_and_unflag_ft
-            ! ! would  have to do a proper reductio with pointers here to parallelise
-            ! do i=fromtowavg(1),fromtowavg(2)
-            !     slice = i - fromto(1) + 1
-            !     call ptcl_avg%add(ptcls_twin_corr(slice), weights(slice))
-            ! end do
-            ! call ptcl_avg%div(sumw)
-            ! if( DEBUG_HERE )then
-            !     do i=fromto(1),fromto(2)
-            !         slice = i - fromto(1) + 1
-            !         ! print *, 'slice/corr/weight: ', slice, corrs(slice), weights(slice)
-            !     end do
-            ! endif
-
             ! write
             call ptcl_slices_conv%get_slice(sec_ind, ptcl_sect)
             call ptcl_sect%write(params_glob%outstk, iframe)
