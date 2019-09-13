@@ -35,11 +35,11 @@ contains
         logical, intent(in)  :: ptcl_mask(params_glob%fromp:params_glob%top)
         integer, intent(in)  :: which_iter
         type(ran_tabu)       :: rt
-        integer              :: iptcl,prev_class,cnt,nptcls,ipart
+        integer              :: iptcl,prev_class,cnt,nptcls
         nptcls = count(ptcl_mask)
         ! gather class populations
         if( build_glob%spproj_field%isthere('class') )then
-            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=.false., maxn=params_glob%ncls)
+            call build_glob%spproj_field%get_pops(s2D%cls_pops, 'class', consider_w=params_glob%l_ptclw, maxn=params_glob%ncls)
         else
             ! first iteration, no class assignment: all classes are up for grab
             allocate(s2D%cls_pops(params_glob%ncls), source=MINCLSPOPLIM+1, stat=alloc_stat)

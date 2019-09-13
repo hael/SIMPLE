@@ -1744,8 +1744,10 @@ contains
         type(chash)                             :: job_descr
         type(ori)                               :: o_mic, o, o_tmp
         type(oris)                              :: os_stk
+        type(chash),                allocatable :: part_params(:)
         character(len=LONGSTRLEN),  allocatable :: boxfiles(:), stktab(:), parts_fname(:)
         character(len=:),           allocatable :: mic_name, imgkind
+        integer,                    allocatable :: parts(:,:)
         integer :: boxcoords(2)
         integer :: imic,i,nmics_tot,numlen,nmics,cnt,state,istk,nstks,ipart
         if( cline%defined('ctf') )then
@@ -1754,8 +1756,8 @@ contains
             endif
         endif
         if( .not. cline%defined('pcontrast') ) call cline%set('pcontrast', 'black')
+        if( .not. cline%defined('oritype')   ) call cline%set('oritype',   'ptcl3D')
         call cline%set('nthr',1.)
-        call cline%set('oritype', 'mic')
         call params%new(cline)
         call cline%set('mkdir', 'no')
         ! read in integrated movies
@@ -1785,21 +1787,29 @@ contains
             call spproj%os_mic%delete_entry(imic,'boxfile')
         enddo
         if( nmics == 0 )then
-            THROW_WARN('No particles to re-extract! exec_extract')
+            THROW_WARN('No particles to re-extract! exec_reextract')
             return
         endif
-        ! DISTRIBUTED EXTRACTION
-        ! setup the environment for distributed execution
-        call qenv%new(params%nparts)
-        ! prepare job description
-        call cline%gen_job_descr(job_descr)
-        ! schedule & clean
-        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY))
-        ! ASSEMBLY
         call spproj%os_mic%kill
         call spproj%os_stk%kill
         call spproj%os_ptcl2D%kill
         call spproj%os_ptcl3D%kill
+        ! DISTRIBUTED EXTRACTION
+        ! setup the environment for distributed execution
+        parts = split_nobjs_even(nmics_tot, params%nparts)
+        allocate(part_params(params%nparts))
+        do ipart=1,params%nparts
+            call part_params(ipart)%new(2)
+            call part_params(ipart)%set('fromp',int2str(parts(ipart,1)))
+            call part_params(ipart)%set('top',  int2str(parts(ipart,2)))
+        end do
+        call qenv%new(params%nparts)
+        ! prepare job description
+        call cline%gen_job_descr(job_descr)
+        ! schedule & clean
+        call qenv%gen_scripts_and_schedule_jobs( job_descr, algnfbody=trim(ALGN_FBODY),&
+            &part_params=part_params)
+        ! ASSEMBLY
         allocate(spproj_parts(params%nparts),parts_fname(params%nparts))
         numlen = len(int2str(params%nparts))
         do ipart = 1,params%nparts
@@ -1876,12 +1886,14 @@ contains
         call spproj%write
         ! clean-up
         call qsys_cleanup
+        call spproj%kill
+        deallocate(spproj_parts,part_params)
         call o_mic%kill
         call o%kill
         call o_tmp%kill
+        call os_stk%kill
         ! end gracefully
         call simple_end('**** SIMPLE_REEXTRACT_DISTR NORMAL STOP ****')
-
         contains
 
             character(len=LONGSTRLEN) function boxfile_from_mic(mic)
@@ -2037,10 +2049,9 @@ contains
                         prev_shift = spproj_in%os_ptcl2D%get_2Dshift(iptcl)
                     endif
                     ! calc new position & shift
-                    center  = prev_pos + prev_box/2 - 1
                     ishift  = nint(prev_shift)
-                    center  = center - ishift
-                    new_pos = center - params%box/2 + 1
+                    new_pos = prev_pos - ishift
+                    if( prev_box /= params%box ) new_pos = new_pos + (prev_box-params%box)/2
                     if( box_inside(ldim, new_pos, params%box) )then
                         ! included
                         nptcls = nptcls+1

@@ -2533,6 +2533,7 @@ contains
         call reextract%set_input('parm_ios', 1, box)
         reextract%parm_ios(1)%required = .false.
         call reextract%set_input('parm_ios', 2, oritype)
+        reextract%parm_ios(2)%descr_placeholder = '(ptcl2D|ptcl3D){ptcl3D}'
         call reextract%set_input('parm_ios', 3, pcontrast)
         call reextract%set_input('parm_ios', 4, 'ctf', 'multi', 'Whether to extract particles with phases flipped', 'Whether to extract particles with phases flipped(flip|no){no}', '(flip|no){no}', .false., 'no')
         ! alternative inputs
