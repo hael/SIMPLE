@@ -332,10 +332,10 @@ contains
         class(tseries_corrfilt_commander), intent(inout) :: self
         class(cmdline),                    intent(inout) :: cline
         type(parameters) :: params
-        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  100.)
-        if( .not. cline%defined('sigma')      ) call cline%set('sigma',        0.5)
+        if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp', 20.)
+        if( .not. cline%defined('sigma')      ) call cline%set('sigma',      0.5)
         if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_corrfilted.mrcs')
-        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
+        if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',    'yes')
         call params%new(cline)
         call init_tseries_gauconvolver
         call tseries_gauconvolve

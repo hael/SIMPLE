@@ -6253,12 +6253,11 @@ contains
     subroutine prenorm4real_corr_1( self, sxx )
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
-        real :: diff(self%ldim(1),self%ldim(2),self%ldim(3))
         real :: npix, ax
         npix = real(product(self%ldim))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))) / npix
-        diff = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
-        sxx  = sum(diff * diff)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
     end subroutine prenorm4real_corr_1
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
@@ -6266,12 +6265,11 @@ contains
         class(image), intent(inout) :: self
         real,         intent(out)   :: sxx
         logical,      intent(in)    :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
-        real :: diff(self%ldim(1),self%ldim(2),self%ldim(3))
         real :: npix, ax
         npix = real(count(mask))
         ax   = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask) / npix
-        where( mask ) diff = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
-        sxx  = sum(diff * diff, mask=mask)
+        self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) - ax
+        sxx  = sum(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3))*self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)), mask=mask)
     end subroutine prenorm4real_corr_2
 
     !>  \brief real_corr_prenorm is for calculating a real-space correlation coefficient between images (reference is pre-normalised)

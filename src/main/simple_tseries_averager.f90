@@ -98,12 +98,11 @@ contains
             subroutine calc_wavg
                 integer :: i, ind
                 call ptcl_avg%zero_and_unflag_ft
-                !$omp parallel do default(shared) private(i,ind) schedule(static) proc_bind(close)
+                ! HAVE TO DO A PROPER REDUCTION WITH PTRS TO PARALLELIZE THIS ONE
                 do i=fromto(1),fromto(2)
                     ind = i - fromto(1) + 1
                     call ptcl_avg%add(ptcl_imgs(ind), weights(ind))
                 end do
-                !$omp end parallel do
                 call ptcl_avg%div(sumw)
             end subroutine calc_wavg
 

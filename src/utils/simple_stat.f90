@@ -489,7 +489,7 @@ contains
         integer(kind=kind(ENUM_WCRIT)),           intent(in) :: crit
         integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: rankw_crit
         real,                           optional, intent(in) :: p
-        real, allocatable :: weights(:), corrs_copy(:), rank_weights(:)
+        real, allocatable :: weights(:), corrs_copy(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, corrmax, corrmin, minw
         integer :: ncorrs
@@ -534,11 +534,7 @@ contains
                 where( corrs_copy <= 0. ) weights = 0.
         end select
         ! convert to rank-based weights
-        if( present(rankw_crit) )then
-            allocate(rank_weights(ncorrs), source=0.)
-            call conv2rank_weights( ncorrs, weights, rankw_crit, rank_weights, p )
-            weights = rank_weights
-        endif
+        if( present(rankw_crit) ) call conv2rank_weights( ncorrs, weights, rankw_crit, p )
     end function corrs2weights
 
     ! integer STUFF
@@ -739,16 +735,15 @@ contains
 
     ! RANK STUFF
 
-    subroutine conv2rank_weights( n, weights, crit, rank_weights, p )
-        integer,                        intent(in)  :: n
-        real,                           intent(in)  :: weights(n)
-        integer(kind=kind(ENUM_WCRIT)), intent(in)  :: crit
-        real,                           intent(out) :: rank_weights(n)
+    subroutine conv2rank_weights( n, weights, crit, p )
+        integer,                        intent(in)     :: n
+        real,                           intent(inout)  :: weights(n)
+        integer(kind=kind(ENUM_WCRIT)), intent(in)     :: crit
         real, optional,                 intent(in)  :: p
-        real,    allocatable :: weights_nonzero(:), weights_tmp(:)
-        integer, allocatable :: ranks(:)
+        real    :: weights_sorted(n), rank_weights(n)
+        integer :: ranks(n)
         logical :: mask(n)
-        integer :: n_nonzero, i, cnt
+        integer :: n_nonzero, i
         mask = weights > TINY
         n_nonzero = count(mask)
         if( n_nonzero == 1 )then
@@ -759,45 +754,39 @@ contains
             endwhere
             return
         else if( n_nonzero < 1 )then
-            rank_weights = 0.
+            rank_weights = 1 / real(n) ! weighting doesn't make sense
             return
         endif
-        ! extract the nonzero weights
-        weights_nonzero = pack(weights, mask=mask)
-        ! sanity check
-        if( n_nonzero /= size(weights_nonzero) ) THROW_HARD('inconsistent size of array and # true mask elements; conv2rank_weights')
-        ! produce ranking
-        allocate(ranks(n_nonzero),       source=(/(i,i=1,n_nonzero)/))
-        allocate(weights_tmp(n_nonzero), source=weights_nonzero)
-        call hpsort(weights_tmp, ranks) ! largest last
-        call reverse(ranks)             ! largest first
+        ranks = (/(i,i=1,n)/)
+        weights_sorted = weights
+        call hpsort(weights_sorted, ranks) ! largest last
+        call reverse(ranks)
         ! calculate weights from ranks
         select case(crit)
             case(RANK_SUM_CRIT)
-                call rank_sum_weights(n_nonzero, weights_nonzero)
+                call rank_sum_weights(n, rank_weights)
             case(RANK_CEN_CRIT)
-                call rank_centroid_weights(n_nonzero, weights_nonzero)
+                call rank_centroid_weights(n, rank_weights)
             case(RANK_EXP_CRIT)
                 if( present(p) )then
-                    call rank_exponent_weights(n_nonzero, p, weights_nonzero)
+                    call rank_exponent_weights(n, p, rank_weights)
                 else
                     THROW_HARD('need exponent (p) for rank exponent weight calculation; conv2rank_weights')
                 endif
             case(RANK_INV_CRIT)
-                call rank_inverse_weights(n_nonzero, weights_nonzero)
+                call rank_inverse_weights(n, rank_weights)
             case DEFAULT
                 THROW_HARD('unsupported rank ordering criteria weighting method; conv2rank_weights')
         end select
-        cnt = 0
         do i=1,n
-            if( mask(i) )then
-                cnt = cnt + 1
-                rank_weights(i) = weights_nonzero(ranks(cnt))
+            if( weights(ranks(i)) > TINY )then
+                weights(ranks(i)) = rank_weights(i)
             else
-                rank_weights(i) = 0.
+                weights(ranks(i)) = 0.
             endif
         end do
-        deallocate(weights_nonzero, weights_tmp, ranks)
+        ! re-normalize
+        weights = weights / sum(weights)
     end subroutine conv2rank_weights
 
     subroutine rank_sum_weights( n, weights )
