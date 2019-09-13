@@ -76,6 +76,7 @@ type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
 type(simple_program), target :: cleanup2D_nano
 type(simple_program), target :: cluster2D
+type(simple_program), target :: cluster2D_nano
 type(simple_program), target :: cluster2D_stream
 type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
@@ -262,6 +263,7 @@ contains
         call new_cleanup2D
         call new_cleanup2D_nano
         call new_cluster2D
+        call new_cluster2D_nano
         call new_cluster2D_stream
         call new_cluster3D
         call new_cluster3D_refine
@@ -346,6 +348,7 @@ contains
         call push2prg_ptr_array(cleanup2D)
         call push2prg_ptr_array(cleanup2D_nano)
         call push2prg_ptr_array(cluster2D)
+        call push2prg_ptr_array(cluster2D_nano)
         call push2prg_ptr_array(cluster2D_stream)
         call push2prg_ptr_array(cluster3D)
         call push2prg_ptr_array(cluster3D_refine)
@@ -440,6 +443,8 @@ contains
                 ptr2prg => cleanup2D_nano
             case('cluster2D')
                 ptr2prg => cluster2D
+            case('cluster2D_nano')
+                ptr2prg => cluster2D_nano
             case('cluster2D_stream')
                 ptr2prg => cluster2D_stream
             case('cluster3D')
@@ -599,6 +604,7 @@ contains
         write(logfhandle,'(A)') cleanup2D%name
         write(logfhandle,'(A)') cleanup2D_nano%name
         write(logfhandle,'(A)') cluster2D%name
+        write(logfhandle,'(A)') cluster2D_nano%name
         write(logfhandle,'(A)') cluster2D_stream%name
         write(logfhandle,'(A)') cluster3D%name
         write(logfhandle,'(A)') cluster3D_refine%name
@@ -1001,6 +1007,46 @@ contains
         call cluster2D%set_input('comp_ctrls', 1, nparts)
         call cluster2D%set_input('comp_ctrls', 2, nthr)
     end subroutine new_cluster2D
+
+    subroutine new_cluster2D_nano
+        ! PROGRAM SPECIFICATION
+        call cluster2D_nano%new(&
+        &'cluster2D_nano',&                                                                 ! name
+        &'Simultaneous 2D alignment and clustering of time-series of nanoparticle images',& ! descr_short
+        &'is a distributed workflow implementing a reference-free 2D alignment/clustering algorithm adopted from the prime3D &
+        &probabilistic ab initio 3D reconstruction algorithm',&                            ! descr_long
+        &'simple_distr_exec',&                                                             ! executable
+        &0, 0, 0, 2, 5, 2, 2, .true.)                                                      ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        call cluster2D_nano%set_input('srch_ctrls', 1, ncls)
+        call cluster2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
+        &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
+        ! filter controls
+        call cluster2D_nano%set_input('filt_ctrls', 1, hp)
+        call cluster2D_nano%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the class averages and centering', 'centering low-pass limit in &
+        &Angstroms{30}', .false., 30.)
+        call cluster2D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit to apply to diagnose possible &
+        &issues with the dynamic update scheme used by default', 'low-pass limit in Angstroms', .false., 20.)
+        call cluster2D_nano%set_input('filt_ctrls', 4, 'lpstart', 'num', 'Initial low-pass limit', 'Low-pass limit to be applied in the first &
+        &few iterations of search, before the automatic scheme kicks in. Also controls the degree of downsampling in the first &
+        &phase', 'initial low-pass limit in Angstroms', .false., 15.)
+        call cluster2D_nano%set_input('filt_ctrls', 5, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit that controls the degree of &
+        &downsampling in the second phase. Give estimated best final resolution', 'final low-pass limit in Angstroms', .false., 8.)
+        ! mask controls
+        call cluster2D_nano%set_input('mask_ctrls', 1, msk)
+        call cluster2D_nano%set_input('mask_ctrls', 2, inner)
+        ! computer controls
+        call cluster2D_nano%set_input('comp_ctrls', 1, nparts)
+        call cluster2D_nano%set_input('comp_ctrls', 2, nthr)
+    end subroutine new_cluster2D_nano
 
     subroutine new_cluster2D_stream
         ! PROGRAM SPECIFICATION

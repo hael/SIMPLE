@@ -13,7 +13,8 @@ implicit none
 public :: tseries_import_commander
 public :: tseries_track_commander_distr
 public :: tseries_track_commander
-public :: cleanup2D_nano_commander
+public :: cleanup2D_nano_commander_distr
+public :: cluster2D_nano_commander_distr
 public :: tseries_average_commander
 public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
@@ -36,10 +37,14 @@ type, extends(commander_base) :: tseries_track_commander
   contains
     procedure :: execute      => exec_tseries_track
 end type tseries_track_commander
-type, extends(commander_base) :: cleanup2D_nano_commander
+type, extends(commander_base) :: cleanup2D_nano_commander_distr
   contains
-    procedure :: execute      => exec_cleanup2D_nano
-end type cleanup2D_nano_commander
+    procedure :: execute      => exec_cleanup2D_nano_distr
+end type cleanup2D_nano_commander_distr
+type, extends(commander_base) :: cluster2D_nano_commander_distr
+  contains
+    procedure :: execute      => exec_cluster2D_nano_distr
+end type cluster2D_nano_commander_distr
 type, extends(commander_base) :: tseries_average_commander
   contains
     procedure :: execute      => exec_tseries_average
@@ -247,9 +252,9 @@ contains
         call simple_end('**** SIMPLE_TSERIES_TRACK NORMAL STOP ****')
     end subroutine exec_tseries_track
 
-    subroutine exec_cleanup2D_nano( self, cline )
+    subroutine exec_cleanup2D_nano_distr( self, cline )
         use simple_commander_cluster2D, only: make_cavgs_commander_distr,cluster2D_commander_distr
-        class(cleanup2D_nano_commander), intent(inout) :: self
+        class(cleanup2D_nano_commander_distr), intent(inout) :: self
         class(cmdline),                  intent(inout) :: cline
         ! commanders
         type(cluster2D_commander_distr) :: xcluster2D_distr
@@ -308,7 +313,30 @@ contains
         call del_file('start2Drefs'//params%ext)
         ! end gracefully
         call simple_end('**** SIMPLE_CLEANUP2D_NANO NORMAL STOP ****')
-    end subroutine exec_cleanup2D_nano
+    end subroutine exec_cleanup2D_nano_distr
+
+    subroutine exec_cluster2D_nano_distr( self, cline )
+        use simple_commander_cluster2D, only: cluster2D_commander_distr
+        class(cluster2D_nano_commander_distr), intent(inout) :: self
+        class(cmdline),                        intent(inout) :: cline
+        ! commander
+        type(cluster2D_commander_distr) :: xcluster2D_distr
+        ! static parameters
+        call cline%set('prg',     'cluster2D')
+        call cline%set('match_filt',     'no')
+        call cline%set('graphene_filt', 'yes')
+        call cline%set('ptclw',          'no')
+        call cline%set('tseries',       'yes')
+        ! dynamic parameters
+        if( .not. cline%defined('ncls')        ) call cline%set('ncls',        100.)
+        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',   'no')
+        if( .not. cline%defined('lpstart')     ) call cline%set('lpstart',       1.)
+        if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',        1.)
+        if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
+        if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',         5.)
+        if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl2D')
+        call xcluster2D_distr%execute(cline)
+    end subroutine exec_cluster2D_nano_distr
 
     subroutine exec_tseries_average( self, cline )
         use simple_tseries_averager
