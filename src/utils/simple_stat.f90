@@ -484,21 +484,25 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
 
-    function corrs2weights( corrs, crit, rankw_crit, p ) result( weights )
+    function corrs2weights( corrs, crit, rankw_crit, p, norm_sigm ) result( weights )
         real,                                     intent(in) :: corrs(:) !< correlation input
         integer(kind=kind(ENUM_WCRIT)),           intent(in) :: crit
         integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: rankw_crit
         real,                           optional, intent(in) :: p
+        logical,                        optional, intent(in) :: norm_sigm
         real, allocatable :: weights(:), corrs_copy(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, corrmax, corrmin, minw
         integer :: ncorrs
+        logical :: nnorm_sigm
         select case(crit)
             case(CORRW_CRIT,CORRW_ZSCORE_CRIT)
                 ! all good
             case DEFAULT
                 THROW_HARD('Only CORRW_CRIT & CORRW_ZSCORE_CRIT allowed for crit dummy argument; corrs2weights')
         end select
+        nnorm_sigm = .true.
+        if( present(norm_sigm) ) nnorm_sigm = norm_sigm
         ncorrs = size(corrs)
         allocate(weights(ncorrs), source=0.)
         allocate(corrs_copy(ncorrs), source=corrs,stat=alloc_stat)
@@ -509,15 +513,17 @@ contains
             return
         endif
         ! remove negatives to prevent corrs around zero to recieve any weight power
-        where( corrs_copy <= 0. ) corrs_copy = 0.
+        where( corrs_copy <= TINY ) corrs_copy = 0.
         ! correlation-based weights
         select case(crit)
             case(CORRW_CRIT)
-                corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
-                maxminratio = corrmax / corrmin
-                if( maxminratio >= THRESHOLD )then
-                   ! min/max normalise the correlations
-                   call normalize_sigm(corrs_copy)
+                if( nnorm_sigm )then
+                    corrmin     = minval(corrs_copy, mask=corrs_copy > TINY)
+                    maxminratio = corrmax / corrmin
+                    if( maxminratio >= THRESHOLD )then
+                       ! min/max normalise the correlations
+                       call normalize_sigm(corrs_copy)
+                    endif
                 endif
                 ! calculate the exponential of the negative distances
                 where( corrs_copy > TINY )

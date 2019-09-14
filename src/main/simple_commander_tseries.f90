@@ -344,8 +344,7 @@ contains
         class(cmdline),                   intent(inout) :: cline
         type(parameters) :: params
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
-        if( .not. cline%defined('corrw')      ) call cline%set('corrw', 'softmax')
-        if( .not. cline%defined('rankw')      ) call cline%set('rankw',      'no')
+        if( .not. cline%defined('rankw')      ) call cline%set('rankw',     'cen')
         if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_wavgs.mrcs')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         call params%new(cline)

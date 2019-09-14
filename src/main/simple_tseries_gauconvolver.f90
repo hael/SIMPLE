@@ -50,7 +50,7 @@ contains
 
     subroutine tseries_gauconvolve
         real, allocatable :: weights(:)
-        integer :: fromto(2), fromtowavg(2), i, iframe, slice, sec_ind
+        integer :: fromto(2), i, iframe, slice, sec_ind
         real    :: sxx, sumw
         logical :: renorm
         do iframe=1,params_glob%nptcls
@@ -65,8 +65,9 @@ contains
                 ! move downward in Z-direction when fromto(2) > nptcls (higher index)
                 sec_ind = nz/2 + (params_glob%nptcls - fromto(2))
             else
-                sec_ind = nz / 2
+                sec_ind = nz/2
             endif
+            ! shift the window if it's outside the time-series
             do while(fromto(1) < 1)
                 fromto = fromto + 1
             end do

@@ -3462,7 +3462,7 @@ contains
         &'Average particle extracted from time-series',&                                                             ! descr_short
         &'is a program for particle SNR enhancement through time window averaging using correlation-based weights',& ! descr_long
         &'simple_exec',&                                                                                             ! executable
-        &2, 1, 0, 1, 2, 1, 1, .false.)                                            ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 1, 1, 1, .false.)                                            ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_average%set_input('img_ios', 1, stk)
@@ -3475,8 +3475,7 @@ contains
         ! search controls
         call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
         ! filter controls
-        call tseries_average%set_input('filt_ctrls', 1, corrw)
-        call tseries_average%set_input('filt_ctrls', 2, rankw_general)
+        call tseries_average%set_input('filt_ctrls', 1, rankw_general)
         ! mask controls
         call tseries_average%set_input('mask_ctrls', 1, msk)
         ! computer controls

@@ -507,6 +507,7 @@ contains
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
         call check_carg('corr_filt',      self%continue)
+        call check_carg('corrw',          self%corrw)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
