@@ -766,7 +766,6 @@ contains
         type(parameters)      :: params
         character(len=STDLEN) :: fbody
         character(len=3)      :: pgrp
-        character(len=100)    :: fname_coords_pdb
         type(nanoparticle)    :: nano
         type(atoms) :: atom
         type(image) :: simulated_distrib
@@ -776,7 +775,6 @@ contains
         real        :: radius
         character(len=100) :: atomic_pos
         character(len=100) :: fname_conv
-        character(len=100) :: fname_conv_pdb
         character(len=100) :: output_dir
         call params%new(cline)
         call simple_getcwd(output_dir)
@@ -796,19 +794,19 @@ contains
           if(radius <= max_rad) then
             ! Come back to root directory
             call simple_chdir(trim(output_dir),errmsg="simple_commander_volops :: exec_radial_sym_test, simple_chdir; ")
-            fname_conv = trim(int2str(nint(radius))//'_coords')
-            print *, 'fname_conv ', fname_conv
-            fname_conv_pdb = fname_new_ext(fname_conv,'pdb')
-            print *, 'fname_convpdb ', fname_conv_pdb ! TO FIX
+             fname_conv = 'coords_'//trim(int2str(nint(radius))//'A')
             call nano%keep_atomic_pos_at_radius(radius, params%element, fname_conv)
             ! Generate distribution based on atomic position
-            call atom%new(trim(int2str(nint(radius))//'_coords.pdb')) !TO MODIFY
+            call atom%new('coords_'//trim(int2str(nint(radius))//'A.pdb')) !TO MODIFY
             call atom%convolve(simulated_distrib, cutoff)
-            call simulated_distrib%write(trim(int2str(nint(radius))//'_coords.mrc'))
+            call simulated_distrib%write('density_'//trim(int2str(nint(radius))//'A.mrc'))
             ! Prepare for calling exec_symmetry_test
-            call cline%set('vol1', trim(int2str(nint(radius))//'_coords.mrc'))
+            call cline%set('vol1','density_'//trim(int2str(nint(radius))//'A.mrc'))
             ! Check for symmetry
-            call cline%set('fname',int2str(nint(radius))//'_sym_test.txt')
+            call cline%set('fname','sym_test_'//int2str(nint(radius))//'A.txt')
+            if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'yes')
+            call cline%set('center', 'no')
+            call cline%set('msk', radius/params%smpd+5.) !+5 to be sure
             call symtstcmd%execute(cline)
             call atom%kill
           endif

@@ -808,9 +808,9 @@ contains
         call set_param(rankw_general,  'rankw',        'multi',  'Weights based on ranks', 'Weights based on ranks, independent of objective function magnitude(sum|cen|exp|inv|no){sum}',  '(sum|cen|exp|inv|no){no}',  .false., 'no')
         call set_param(element, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         call set_param(tseries, 'tseries', 'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
-        call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {100.}', '{100.}', .false., 100.)
-        call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {10.} ', '{10.}',  .false., 10.)
-        call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {10.} ', '{10.}',  .false., 10.)
+        call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
+        call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
+        call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3451,33 +3451,26 @@ contains
         & Input is a volume reconstructed without symmetry (c1), minimum radius, maximum radius and step. &
         & Output is the most likely point-group symmetry',& ! descr long
         &'simple_exec',&                                                                                             ! executable
-        &1, 4, 0, 3, 4, 2, 1, .false.)                                                                               ! # entries in each group, requires sp_project
+        &1, 4, 0, 1, 3, 0, 1, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call radial_sym_test%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
         & 'input volume e.g. vol_C1.mrc', .true., '')
         ! parameter input/output
         call radial_sym_test%set_input('parm_ios', 1, smpd)
-        call radial_sym_test%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {10.} ', '{10.}',  .true., 10.)
-        call radial_sym_test%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {100.} ', '{100.}',  .true., 100.)
-        call radial_sym_test%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {10} ', '{10}',  .true., 10.)
+        call radial_sym_test%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
+        call radial_sym_test%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
+        call radial_sym_test%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
         ! alternative inputs
         ! <empty>
         ! search controls
         call radial_sym_test%set_input('srch_ctrls', 1, 'cn_stop',  'num', 'Rotational symmetry order stop index',  'Rotational symmetry order stop index',  'give stop index',  .false., 10.)
-        call radial_sym_test%set_input('srch_ctrls', 2, 'center', 'binary', 'Center input volume', 'Center input volume by its &
-        &center of gravity before symmetry axis search(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        call radial_sym_test%set_input('srch_ctrls', 3, 'platonic', 'binary', 'Search for Platonic symmetries', 'Search for Platonic symmetries(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
-        ! filter controls
+              ! filter controls
         call radial_sym_test%set_input('filt_ctrls', 1, lp)
         call radial_sym_test%set_input('filt_ctrls', 2, hp)
-        call radial_sym_test%set_input('filt_ctrls', 3, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the input volume and centering', 'centering low-pass limit in &
-        &Angstroms{30}', .false., 30.)
-        call radial_sym_test%set_input('filt_ctrls', 4, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call radial_sym_test%set_input('filt_ctrls', 3, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
-        call radial_sym_test%set_input('mask_ctrls', 1, msk)
-        call radial_sym_test%set_input('mask_ctrls', 2, inner)
+        ! <empty>
         ! computer controls
         call radial_sym_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_radial_sym_test

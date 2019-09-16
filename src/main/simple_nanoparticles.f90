@@ -580,15 +580,13 @@ contains
         real, allocatable    :: x_mat(:)  !vectorization of the volume
         integer, allocatable :: imat_t(:,:,:)
         integer, allocatable :: sz(:)   !size of the ccs and correspondent label
-        logical, allocatable :: yes_no(:)
         real    :: step                 !histogram disretization step
         real    :: avg_sz, stdev_sz
         real    :: t
         real    :: x_thresh(N_THRESH/2-1), y_med(N_THRESH/2-1)
         integer :: location_maximum(1)
-        integer :: ind(3)               !selected indexes corresponding to threshold for nanoparticle binarization
+        integer :: ind(1)               !selected indexes corresponding to threshold for nanoparticle binarization
         integer :: position(1)
-        integer :: cent_outside_atom(3)
         integer ::  i, cc
         write(logfhandle,*) '****binarization, init'
         call self%img%get_rmat_ptr(rmat)
@@ -619,25 +617,10 @@ contains
         write(logfhandle,*)'Intial threshold selected, starting refinement'
         !two consecutive thresholds after the ideal one
         ind(1:1) = maxloc(y_med)
-        ind(2:2) = ind(1:1)+1
-        ind(3:3) = ind(2:2)+1
         if(DEBUG_HERE) call img_bin_thresh(ind(1))%write(basename(trim(self%fbody))//'IdealThresh.mrc')
-        !$omp do collapse(1) schedule(static) private(i)
-        do i = 1, 3
-            imat_t = nint(img_ccs_thresh(ind(i))%get_rmat())
-            self%n_cc = maxval(imat_t)
-            call self%find_centers(img_bin_thresh(ind(i)),img_ccs_thresh(ind(i)))
-            allocate(yes_no(self%n_cc))
-            yes_no = is_center_inside_atom(self,img_bin_thresh(ind(i)))
-            cent_outside_atom(i) = count(yes_no .eqv. .false.)
-            write(logfhandle,*)'For thresh ',trim(real2str(x_thresh(ind(i)))),', ', trim(int2str(cent_outside_atom(i))), ' centers are not inside the atom'
-            deallocate(yes_no)
-        enddo
-        !$omp end do
-        position(:) =  minloc(cent_outside_atom)
-        write(logfhandle,*) 'Final threshold for binarization', x_thresh(ind(position(1)))
-        call self%img_bin%copy(img_bin_thresh(ind(position(1))))
-        call self%img_cc%copy(img_ccs_thresh(ind(position(1))))
+        write(logfhandle,*) 'Final threshold for binarization', x_thresh(ind(1)+2)
+        call self%img_bin%copy(img_bin_thresh(ind(1)+2))
+        call self%img_cc%copy(img_ccs_thresh(ind(1)+2))
         if(DEBUG_HERE) call self%img_bin%write(basename(trim(self%fbody))//'BinSelectedThresh.mrc')
         !kill images
         !$omp parallel do schedule(static) private(i)
@@ -677,7 +660,6 @@ contains
         ! deallocate
         if(allocated(sz))       deallocate(sz)
         if(allocated(imat_t))   deallocate(imat_t)
-        if(allocated(yes_no))   deallocate(yes_no)
         write(logfhandle,*) '****binarization, completed'
     contains
 
@@ -685,23 +667,23 @@ contains
         ! centers lies inside the atom or not. The result is
         ! saved in yes_no(:). The entry of yes_no corresponds
         ! to the connected component label of the atom.
-        function is_center_inside_atom(self, img_bin) result(yes_no)
-            class(nanoparticle), intent(inout) :: self
-            type(image),         intent(in)    :: img_bin
-            logical :: yes_no(self%n_cc)
-            integer :: cc
-            real, pointer :: rmat(:,:,:)
-            call img_bin%get_rmat_ptr(rmat)
-            !$omp parallel do schedule(static) private(cc) !maybe yes_no?
-            do cc = 1, self%n_cc
-                if(rmat(nint(self%centers(1,cc)),nint(self%centers(2,cc)),nint(self%centers(3,cc))) > 0.5) then
-                    yes_no(cc) = .true.
-                else
-                    yes_no(cc) = .false.
-                endif
-            enddo
-            !$omp end parallel do
-        end function is_center_inside_atom
+        ! function is_center_inside_atom(self, img_bin) result(yes_no)
+        !     class(nanoparticle), intent(inout) :: self
+        !     type(image),         intent(in)    :: img_bin
+        !     logical :: yes_no(self%n_cc)
+        !     integer :: cc
+        !     real, pointer :: rmat(:,:,:)
+        !     call img_bin%get_rmat_ptr(rmat)
+        !     !$omp parallel do schedule(static) private(cc) !maybe yes_no?
+        !     do cc = 1, self%n_cc
+        !         if(rmat(nint(self%centers(1,cc)),nint(self%centers(2,cc)),nint(self%centers(3,cc))) > 0.5) then
+        !             yes_no(cc) = .true.
+        !         else
+        !             yes_no(cc) = .false.
+        !         endif
+        !     enddo
+        !     !$omp end parallel do
+        ! end function is_center_inside_atom
     end subroutine nanopart_binarization
 
     ! This subroutine calculates the histogram of the within-atoms
