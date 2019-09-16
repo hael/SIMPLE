@@ -8,13 +8,17 @@ public :: init_tseries_averager, tseries_average, kill_tseries_averager
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .false.
+logical, parameter :: DEBUG_HERE = .true.
 integer, parameter :: MAXITS = 5
 
 type(image), allocatable :: ptcl_imgs(:)        ! all particles in the time-series
 type(image)              :: ptcl_avg            ! average over time window
+type(stats_struct)       :: cstats              ! correlation statistics
+type(stats_struct)       :: wstats              ! weight statistics
 logical,     allocatable :: corr_mask(:,:,:)    ! logical mask for corr calc
 real,        allocatable :: corrs(:)            ! correlations to weighted average over time window
+real,        allocatable :: rmat_sum(:,:,:)     ! for OpenMP reduction
+integer                  :: ldim(3)             ! logical dimension of 2D image
 integer                  :: nz = 0              ! size of time window
 logical                  :: existence = .false. ! to flag existence
 
@@ -42,17 +46,19 @@ contains
         call img_tmp%mask(params_glob%msk, 'hard')
         corr_mask = img_tmp%bin2logical()
         call img_tmp%kill
+        ! allocate real matrix for OpenMP reduction
+        ldim = ptcl_avg%get_ldim()
+        allocate(rmat_sum(ldim(1),ldim(2),ldim(3)), source=0.)
         ! flag existence
         existence = .true.
-        if( DEBUG_HERE ) print *, 'init_tseries_averager, done'
     end subroutine init_tseries_averager
 
     subroutine tseries_average
         real, allocatable :: weights(:)
         integer :: fromto(2), i, iframe, ind, ref_ind
         real    :: w, sumw
+        604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         do iframe=1,params_glob%nptcls
-            call progress(iframe, params_glob%nptcls)
             ! set time window
             fromto(1) = iframe - params_glob%nframesgrp/2
             fromto(2) = iframe + params_glob%nframesgrp/2 - 1
@@ -63,7 +69,6 @@ contains
             do while(fromto(2) > params_glob%nptcls)
                 fromto = fromto - 1
             end do
-            if( DEBUG_HERE ) print *, 'time window: ', fromto(1), fromto(2)
             ! set average to the particle in the current frame to initialize the process
             call ptcl_avg%copy(ptcl_imgs(iframe))
             ! de-noise through weighted averaging in time window
@@ -75,9 +80,13 @@ contains
                 ! calculate weighted average
                 call calc_wavg
             end do
+            call calc_stats(corrs,   cstats)
+            call calc_stats(weights, wstats)
+            write(logfhandle,'(A,1X,I7)') '>>> FRAME', iframe
+            write(logfhandle,604)         '>>> CORR    AVG/SDEV/MIN/MAX:', cstats%avg, cstats%sdev, cstats%minv, cstats%maxv
+            write(logfhandle,604)         '>>> WEIGHT  AVG/SDEV/MIN/MAX:', wstats%avg, wstats%sdev, wstats%minv, wstats%maxv
             call ptcl_avg%write(params_glob%outstk, iframe)
         end do
-
 
         contains
 
@@ -96,10 +105,6 @@ contains
             subroutine calc_weights
                 logical :: renorm
                 integer :: i, ind
-                if( DEBUG_HERE )then
-                    print *, 'corrw_crit: ',  params_glob%ccw_crit
-                    print *, 'rankw_crit: ',  params_glob%rankw_crit
-                endif
                 ! calculate weights
                 if( params_glob%l_rankw )then
                     weights = corrs2weights(corrs, params_glob%ccw_crit, params_glob%rankw_crit, norm_sigm=.false.)
@@ -127,25 +132,20 @@ contains
                 end do
                 sumw = sum(weights)
                 if( renorm ) weights = weights / sumw
-                if( DEBUG_HERE )then
-                    print *, '*********************'
-                    do i=fromto(1),fromto(2)
-                        ind = i - fromto(1) + 1
-                        print *, 'i/corr/weight: ', i, corrs(ind), weights(ind)
-                    end do
-                endif
             end subroutine calc_weights
 
             subroutine calc_wavg
                 integer :: i, ind
-                call ptcl_avg%zero_and_unflag_ft
-                ! HAVE TO DO A PROPER REDUCTION WITH PTRS TO PARALLELIZE THIS ONE
+                real(kind=c_float), pointer :: rmat_ptr(:,:,:) => null()
+                rmat_sum = 0.
+                !$omp parallel do default(shared) private(i,ind,rmat_ptr) proc_bind(close) schedule(static) reduction(+:rmat_sum)
                 do i=fromto(1),fromto(2)
                     ind = i - fromto(1) + 1
-                    call ptcl_avg%add(ptcl_imgs(i), weights(ind))
+                    call ptcl_imgs(i)%get_rmat_ptr(rmat_ptr)
+                    rmat_sum = rmat_sum + rmat_ptr(:ldim(1),:ldim(2),:ldim(3)) * weights(ind)
                 end do
-                call ptcl_avg%div(sumw)
-                ! if( DEBUG_HERE ) call ptcl_avg%write('ptcl_avg.mrc')
+                !$omp end parallel do
+                call ptcl_avg%set_rmat(rmat_sum)
             end subroutine calc_wavg
 
     end subroutine tseries_average
@@ -156,7 +156,7 @@ contains
             do i=1,size(ptcl_imgs)
                 call ptcl_imgs(i)%kill
             end do
-            deallocate(ptcl_imgs, corr_mask, corrs)
+            deallocate(ptcl_imgs, corr_mask, corrs, rmat_sum)
             call ptcl_avg%kill
         endif
     end subroutine kill_tseries_averager

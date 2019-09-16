@@ -9,7 +9,7 @@ public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights
+public :: conv2rank_weights, calc_stats
 private
 #include "simple_local_flags.inc"
 
@@ -241,6 +241,24 @@ contains
             sdev = 0.
         endif
     end subroutine moment_4
+
+    !>  \brief  is for calculating variable statistics
+    subroutine calc_stats(arr, statvars, mask )
+        real,               intent(inout) :: arr(:)
+        type(stats_struct), intent(out)   :: statvars
+        logical, optional,  intent(in)    :: mask(:)
+        real    :: var
+        logical :: err
+        if( present(mask) )then
+            call moment(arr, statvars%avg, statvars%sdev, var, err, mask)
+            statvars%minv = minval(arr, mask)
+            statvars%maxv = maxval(arr, mask)
+        else
+            call moment(arr, statvars%avg, statvars%sdev, var, err)
+            statvars%minv = minval(arr)
+            statvars%maxv = maxval(arr)
+        endif
+    end subroutine calc_stats
 
     !>    is for statistical normalization of an array
     subroutine normalize_1( arr, err )
