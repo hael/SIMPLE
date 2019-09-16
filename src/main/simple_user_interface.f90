@@ -3552,7 +3552,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_corrfilt%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to convolve', 'Number of contigous frames to convolve with a Gaussian function{100}', '{100}', .false., 100.)
+        call tseries_corrfilt%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to convolve', 'Number of contigous frames to convolve with a Gaussian function{100}', '{100}', .false., 20.)
         ! filter controls
         call tseries_corrfilt%set_input('filt_ctrls', 1, 'sigma', 'num', 'sigma, for 3D Gaussian generation', 'sigma, for 3D Gaussian generation', &
         & '{0.5}', .false., 0.5)

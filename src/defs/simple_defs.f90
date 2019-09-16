@@ -162,7 +162,7 @@ integer, parameter :: MAXIMGBATCHSZ        = 500       !< max # images in batch
 integer, parameter :: MAX_EXTRLIM2D        = 15        !< maximum # of iterations for which 2D extremal opt is performed
 integer, parameter :: STREAM_SRCHLIM       = 15        !< maximum # of systematic iterations for streaming 2D pool
 integer, parameter :: MC_NPATCH            = 5         !< number of patches in x/y-direction for motion correction
-integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastioc search        
+integer, parameter :: MIN_ITERS_SHC        = 5         !< minimum number of iterations of stochastioc search
 
 ! orientation weighting scheme
 character(len=*), parameter :: WSCHEME_DEFAULT      = 'glob' !< use global orientation weights extracted from pool of all weights by default

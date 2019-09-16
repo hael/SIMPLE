@@ -55,7 +55,7 @@ contains
 
     subroutine tseries_average
         real, allocatable :: weights(:)
-        integer :: fromto(2), i, iframe, ind, ref_ind
+        integer :: fromto(2), i, iframe, ind, ref_ind, n_nonzero
         real    :: w, sumw
         604 format(A,1X,F8.3,1X,F8.3,1X,F8.3,1X,F8.3)
         do iframe=1,params_glob%nptcls
@@ -80,11 +80,13 @@ contains
                 ! calculate weighted average
                 call calc_wavg
             end do
+            n_nonzero = count(weights > TINY)
             call calc_stats(corrs,   cstats)
             call calc_stats(weights, wstats)
             write(logfhandle,'(A,1X,I7)') '>>> FRAME', iframe
             write(logfhandle,604)         '>>> CORR    AVG/SDEV/MIN/MAX:', cstats%avg, cstats%sdev, cstats%minv, cstats%maxv
             write(logfhandle,604)         '>>> WEIGHT  AVG/SDEV/MIN/MAX:', wstats%avg, wstats%sdev, wstats%minv, wstats%maxv
+            write(logfhandle,'(A,1X,I5)') '>>> # NONZERO WEIGHTS:       ', n_nonzero
             call ptcl_avg%write(params_glob%outstk, iframe)
         end do
 

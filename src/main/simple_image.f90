@@ -3370,8 +3370,8 @@ contains
         if(present(min_rad)) call self%elim_cc([ int(min_rad*max_rad/4.) , int(2*3.14*(3*max_rad)**2) ])
     end subroutine polish_cc
 
-     ! This subroutine is ment for 2D binary images. It implements
-     ! the morphological operation dilatation.
+    ! This subroutine is ment for 2D binary images. It implements
+    ! the morphological operation dilatation.
     subroutine dilatation(self)
         class(image), intent(inout) :: self
         integer     :: neigh_8(3,8,1)
@@ -3394,8 +3394,8 @@ contains
         call self_copy%kill
     end subroutine dilatation
 
-     ! This subroutine is ment for 2D binary images. It implements
-     ! the morphological operation erosion.
+    ! This subroutine is ment for 2D binary images. It implements
+    ! the morphological operation erosion.
     subroutine erosion(self, label)
         class(image) :: self
         integer, optional, intent(in) :: label
@@ -3413,9 +3413,8 @@ contains
         self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(:,:,:)
     end subroutine erosion
 
-
-     ! This subroutine implements morphological operation of closing
-     ! on the image self.
+    ! This subroutine implements morphological operation of closing
+    ! on the image self.
     subroutine morpho_closing(self)
         class(image), intent(inout) :: self
         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_closing')
@@ -3425,9 +3424,8 @@ contains
         call self%erosion()
     end subroutine morpho_closing
 
-
-     ! This subroutine implements morphological operation of opening
-     ! on the image self.
+    ! This subroutine implements morphological operation of opening
+    ! on the image self.
     subroutine morpho_opening(self)
         class(image), intent(inout) :: self
         if(self%ldim(3) /= 1) THROW_HARD('This subroutine is for 2D images!; morpho_opening')
@@ -3437,8 +3435,7 @@ contains
         call self%dilatation()
     end subroutine morpho_opening
 
-
-    ! This subroutine builds the logical array 'border' of the same dims of
+   ! This subroutine builds the logical array 'border' of the same dims of
    ! the input image self. Border is true in corrispondence of
    ! the border pixels in self. Self is meant to be binary.
    ! It is necessary for erosion operation.

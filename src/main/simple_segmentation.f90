@@ -3,14 +3,15 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-logical, parameter :: IMPROVED = .true.
 public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img
-
 private
 #include "simple_local_flags.inc"
+
+logical, parameter :: IMPROVED = .true.
+
 contains
 
-    ! Classic Sobel edge detection routine.
+    ! Classic Sobel edge detection routine
     subroutine sobel(img_in,thresh)
         class(image), intent(inout) :: img_in           !image input and output
         real,         intent(in)    :: thresh(1)        !threshold for Sobel algorithm
@@ -103,93 +104,93 @@ contains
         deallocate(grad)
     end subroutine automatic_thresh_sobel
 
-  ! Canny edge detection.
-  ! Performs canny edge detection on img_in and saves the result in img_out.
-  ! PARAMETERS:
-  !     -) 'thresh': optional.
-  !                 If present the algorithm performs canny
-  !                 with thresh as double threshold. If thresh
-  !                 isn't present, then the double threshold for
-  !                 is automatically selected.
-  ! Note: 'sigma'.
-  !        It is meaningful when the threshold has to be automatically
-  !        selected. It determines 'how much' has to be detected.
-  !        It could be changed by the user, but in this version of
-  !        the algorithm it is fixed to its default value (= 0.33)
-  !        as suggested in the source.
-  ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
-  subroutine canny(img_in,img_out,scale_range,thresh,lp)
-      type(image),           intent(inout) :: img_in
-      type(image), optional, intent(out)   :: img_out
-      real, optional, intent(in)    :: scale_range(2)
-      real, optional, intent(in)    :: thresh(2)
-      real, optional, intent(in)    :: lp(1)
-      real              :: tthresh(2),  sigma, m
-      real, allocatable :: grad(:,:,:), vector(:)
-      integer           :: ldim(3)
-      logical           :: debug
-      real              :: sscale_range(2)
-      real              :: smpd
-      debug = .false.
-      ldim  = img_in%get_ldim()
-      smpd  = img_in%get_smpd()
-      sscale_range = [1.,real(ldim(1))] !real(ldim(1))*2.+1., modification 25/07
-      if(present(scale_range)) sscale_range = scale_range
-      if(present(img_out)) then
-          call img_out%new(ldim, smpd)
-          call img_out%copy(img_in)
-          call img_out%scale_pixels([sscale_range(1),sscale_range(2)])
-          if(present(thresh)) then
-                 call canny_edge(img_out,thresh)
-                 return
-          endif
-          sigma = 0.33
-          allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-          if(IMPROVED) then
-              call img_out%calc_gradient_improved(grad)
-          else
-              call img_out%calc_gradient(grad)
-          endif
-          allocate(vector(size(grad)), source = 0.)
-          vector(:) = pack(grad, .true.)
-          m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
-          !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-          tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
-          tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
-          if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
-          if (present(lp)) then
-              call canny_edge(img_out,tthresh,lp)
-          else
-              call canny_edge(img_out,tthresh)
-          endif
-      else
-          call img_in%scale_pixels([sscale_range(1),sscale_range(2)]) !to be coherent with the other case
-          if(present(thresh)) then
-                 call canny_edge(img_in,thresh)
-                 return
-          endif
-          sigma = 0.33
-          allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
-          if(IMPROVED) then
-              call img_in%calc_gradient_improved(grad)
-          else
-              call img_in%calc_gradient(grad)
-          endif
-          allocate(vector(size(grad)), source = 0.)!= pack(grad, .true.))
-          vector(:) = pack(grad, .true.)
-          m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
-          !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
-          tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
-          tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
-          if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
-          if (present(lp)) then
-              call canny_edge(img_in,tthresh,lp)
-          else
-              call canny_edge(img_in,tthresh)
-          endif
-      endif
-      deallocate(vector,grad)
-  end subroutine canny
+    ! Canny edge detection.
+    ! Performs canny edge detection on img_in and saves the result in img_out.
+    ! PARAMETERS:
+    !     -) 'thresh': optional.
+    !                 If present the algorithm performs canny
+    !                 with thresh as double threshold. If thresh
+    !                 isn't present, then the double threshold for
+    !                 is automatically selected.
+    ! Note: 'sigma'.
+    !        It is meaningful when the threshold has to be automatically
+    !        selected. It determines 'how much' has to be detected.
+    !        It could be changed by the user, but in this version of
+    !        the algorithm it is fixed to its default value (= 0.33)
+    !        as suggested in the source.
+    ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
+    subroutine canny(img_in,img_out,scale_range,thresh,lp)
+        type(image),           intent(inout) :: img_in
+        type(image), optional, intent(out)   :: img_out
+        real, optional, intent(in)    :: scale_range(2)
+        real, optional, intent(in)    :: thresh(2)
+        real, optional, intent(in)    :: lp(1)
+        real              :: tthresh(2),  sigma, m
+        real, allocatable :: grad(:,:,:), vector(:)
+        integer           :: ldim(3)
+        logical           :: debug
+        real              :: sscale_range(2)
+        real              :: smpd
+        debug = .false.
+        ldim  = img_in%get_ldim()
+        smpd  = img_in%get_smpd()
+        sscale_range = [1.,real(ldim(1))] !real(ldim(1))*2.+1., modification 25/07
+        if(present(scale_range)) sscale_range = scale_range
+        if(present(img_out)) then
+            call img_out%new(ldim, smpd)
+            call img_out%copy(img_in)
+            call img_out%scale_pixels([sscale_range(1),sscale_range(2)])
+            if(present(thresh)) then
+                call canny_edge(img_out,thresh)
+                return
+            endif
+            sigma = 0.33
+            allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
+            if(IMPROVED) then
+                call img_out%calc_gradient_improved(grad)
+            else
+                call img_out%calc_gradient(grad)
+            endif
+            allocate(vector(size(grad)), source = 0.)
+            vector(:) = pack(grad, .true.)
+            m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
+            !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+            tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
+            tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
+            if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
+            if (present(lp)) then
+                call canny_edge(img_out,tthresh,lp)
+            else
+                call canny_edge(img_out,tthresh)
+            endif
+        else
+            call img_in%scale_pixels([sscale_range(1),sscale_range(2)]) !to be coherent with the other case
+            if(present(thresh)) then
+                call canny_edge(img_in,thresh)
+                return
+            endif
+            sigma = 0.33
+            allocate(grad(ldim(1),ldim(2),ldim(3)), source = 0.)
+            if(IMPROVED) then
+                call img_in%calc_gradient_improved(grad)
+            else
+                call img_in%calc_gradient(grad)
+            endif
+            allocate(vector(size(grad)), source = 0.)!= pack(grad, .true.))
+            vector(:) = pack(grad, .true.)
+            m = median_nocopy(vector) !Use the gradient, the source talks about the image itself
+            !https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+            tthresh(1) = max(sscale_range(1), (1.-sigma)*m) !lower
+            tthresh(2) = min(sscale_range(2), (1.+sigma)*m) !upper
+            if(debug) write(logfhandle,*) 'Selected thresholds: ', tthresh
+            if( present(lp) )then
+                call canny_edge(img_in,tthresh,lp)
+            else
+                call canny_edge(img_in,tthresh)
+            endif
+        endif
+        deallocate(vector,grad)
+    end subroutine canny
 
     ! NON_MAX_SUPPRESSION
     ! using the estimates of the Gx and Gy image gradients and the edge direction angle
@@ -271,9 +272,9 @@ contains
         deallocate(tmp)
     end subroutine double_thresh
 
-  ! Canny routine for edge detection, in its classical verison.
-  ! It requires a double threshold.
-  subroutine canny_edge(img_in, thresh, lp)
+    ! Canny routine for edge detection, in its classical verison.
+    ! It requires a double threshold.
+    subroutine canny_edge(img_in, thresh, lp)
         type(image),    intent(inout) :: img_in     !input and output image
         real,           intent(in)    :: thresh(2)  !low and high thresholds
         real, optional, intent(in)    :: lp(1)        !lp filtering
@@ -337,7 +338,7 @@ contains
         call img_in%copy(Gr)
         deallocate(grad)
     end subroutine canny_edge
-  !
+
     !This subroutine binarises an image through iterative thresholding.
     !ALGORITHM: -) select initial threshold T
     !           -) split the image in 2 groups according to T
@@ -345,38 +346,38 @@ contains
     !           -) update T as the mean value of M1 and M2
     !           -) stop when 2 threshold in a row are 'similar'
     subroutine iterative_thresholding(img_in,img_out,thresh)
-      class(image),   intent(inout) :: img_in
-      type(image),    intent(out)   :: img_out
-      real, optional, intent(out)   :: thresh  !selected threshold for binarisation
-      real,    allocatable :: rmat(:,:,:)
-      logical, allocatable :: mask(:,:,:)
-      real, parameter :: TOLL = 0.05           !tollerance for threshold selection
-      real            :: T_n, T
-      integer         :: cnt
-      call img_out%new(img_in%get_ldim(),img_in%get_smpd())
-      rmat = img_in%get_rmat()
-      allocate(mask(size(rmat, dim =1), size(rmat, dim =1), size(rmat, dim = 3)), source = .false.)
-      T = (maxval(rmat) + minval(rmat))/2.    !initial guessing
-      T_n = T + 1                             !to get into the while loop
-      cnt = 0                                 !# of iterations
-      do while(abs(T-T_n)> TOLL)
-          cnt = cnt + 1
-          if(cnt > 0)  T = T_n
-          where(rmat <= T) mask = .true.                            !in order to distinguish the 2 groups
-          T_n = ((sum(rmat,       mask)/real(count(     mask))) + &
-               & (sum(rmat, .not. mask)/real(count(.not. mask))))/2.!new threshold
-      enddo
-      if(present(thresh)) thresh = T_n
-      where(rmat > T_n)  !thresholding
+        class(image),   intent(inout) :: img_in
+        type(image),    intent(out)   :: img_out
+        real, optional, intent(out)   :: thresh  !selected threshold for binarisation
+        real,    allocatable :: rmat(:,:,:)
+        logical, allocatable :: mask(:,:,:)
+        real, parameter :: TOLL = 0.05           !tollerance for threshold selection
+        real            :: T_n, T
+        integer         :: cnt
+        call img_out%new(img_in%get_ldim(),img_in%get_smpd())
+        rmat = img_in%get_rmat()
+        allocate(mask(size(rmat, dim =1), size(rmat, dim =1), size(rmat, dim = 3)), source = .false.)
+        T = (maxval(rmat) + minval(rmat))/2.    !initial guessing
+        T_n = T + 1                             !to get into the while loop
+        cnt = 0                                 !# of iterations
+        do while(abs(T-T_n)> TOLL)
+            cnt = cnt + 1
+            if(cnt > 0)  T = T_n
+            where(rmat <= T) mask = .true.                          ! in order to distinguish the 2 groups
+            T_n = ((sum(rmat,     mask)/real(count(     mask))) + &
+               & (sum(rmat, .not. mask)/real(count(.not. mask))))/2.! new threshold
+        enddo
+        if(present(thresh)) thresh = T_n
+        where(rmat > T_n)  !thresholding
           rmat = 1.
-      elsewhere
+        elsewhere
           rmat = 0.
-      endwhere
-      call img_out%set_rmat(rmat)
-      deallocate(rmat, mask)
+        endwhere
+        call img_out%set_rmat(rmat)
+        deallocate(rmat, mask)
     end subroutine iterative_thresholding
 
-   !Otsu binarization for images
+    ! otsu binarization for images
     subroutine otsu_img(img, thresh)
         use simple_math, only : otsu
         class(image),   intent(inout) :: img
@@ -397,4 +398,5 @@ contains
             rmat(1:ldim(1),1:ldim(2),1:ldim(3)) = 0.
         endwhere
     end subroutine otsu_img
+
 end module simple_segmentation
