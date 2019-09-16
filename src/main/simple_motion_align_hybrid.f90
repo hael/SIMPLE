@@ -27,7 +27,6 @@ type :: motion_align_hybrid
     type(image),       allocatable :: frames_sh(:)                      !< shifted cropped frames
     type(image)                    :: reference                         !< reference image
     real,              allocatable :: weights(:,:)                      !< weight matrix (b-factor*band-pass)
-    logical,           allocatable :: resmask(:,:)                      !< band-pass mask for correlation calculation
     type(ft_expanded), allocatable :: frames_ftexp(:)                   !< ft expanded of frames
     type(ft_expanded), allocatable :: frames_ftexp_sh(:)                !< ft expanded of shifted frames
     type(ft_expanded), allocatable :: references_ftexp(:)               !< ft expanded of references
@@ -127,6 +126,7 @@ contains
         self%smpd    = self%frames_orig(1)%get_smpd()
         self%ldim    = self%frames_orig(1)%get_ldim()
         self%hp      = min((real(minval(self%ldim(1:2))) * self%smpd)/4.,2000.)
+        self%hp      = min(params_glob%hp, self%hp)
         self%lp      = params_glob%lpstart
         self%lpstart = params_glob%lpstart
         self%lpstop  = params_glob%lpstop
@@ -154,7 +154,7 @@ contains
         ! works out dimensions for Fourier cropping
         maxldim           = maxval(self%ldim(1:2))
         ind               = calc_fourier_index(self%lpstop, maxldim, self%smpd)
-        self%scale_factor = min(1., real(2*(ind+4))/real(maxldim))
+        self%scale_factor = min(1., real(2*(ind+3))/real(maxldim))
         box               = round2even(self%scale_factor*real(maxldim))
         self%scale_factor = min(1.,real(box)/real(maxldim))
         smpd_sc           = self%smpd / self%scale_factor
@@ -168,16 +168,14 @@ contains
         else
             self%ldim_sc = [round2even(self%scale_factor*real(self%ldim(1))), box, 1]
         endif
-        smpd_sc  = self%smpd / self%scale_factor
         self%trs = self%scale_factor*self%trs
         ! allocate & set
         call self%reference%new(self%ldim_sc,self%smpd,wthreads=.false.)
         call self%reference%zero_and_flag_ft
         cdim = self%reference%get_array_shape()
         allocate(self%weights(cdim(1),cdim(2)),self%frames(self%nframes),&
-            &self%frames_sh(self%nframes),self%resmask(cdim(1),cdim(2)))
+            &self%frames_sh(self%nframes))
         self%weights = 0.
-        self%resmask = .false.
         !$omp parallel do default(shared) private(iframe) proc_bind(close)
         do iframe = 1,self%nframes
             call self%frames_orig(iframe)%fft
@@ -202,7 +200,6 @@ contains
         endif
         call self%reference%kill
         if( allocated(self%weights) )deallocate(self%weights)
-        if( allocated(self%resmask) )deallocate(self%resmask)
     end subroutine dealloc_images
 
     subroutine init_ftexps( self )
@@ -211,8 +208,13 @@ contains
         real    :: w1,w2,sumw
         call self%dealloc_ftexps
         allocate(self%frames_ftexp(self%nframes),self%frames_ftexp_sh(self%nframes),self%references_ftexp(self%nframes))
-        w1 = 0.5*exp(-real(self%lp_updates))
-        w2 = 0.5*exp(-real(self%lp_updates+1))
+        if( self%px == 0 .and. self%py == 0 )then
+            w1 = 0.5*exp(-real(self%lp_updates))
+            w2 = 0.5*exp(-real(self%lp_updates+1))
+        else
+            w1 = 0.5*exp(-real(self%lp_updates)/2.)
+            w2 = 0.5*exp(-real(self%lp_updates+1)/2.)
+        endif
         !$omp parallel default(shared) private(iframe,sumw) proc_bind(close)
         !$omp do schedule(static)
         do iframe=1,self%nframes
@@ -492,8 +494,13 @@ contains
         real    :: w1,w2,sumw
         integer :: iframe
         if( .not.self%group_frames ) return
-        w1 = 0.5*exp(-real(self%lp_updates))
-        w2 = 0.5*exp(-real(self%lp_updates+1))
+        if( self%px == 0 .and. self%py == 0 )then
+            w1 = 0.5*exp(-real(self%lp_updates))
+            w2 = 0.5*exp(-real(self%lp_updates+1))
+        else
+            w1 = 0.5*exp(-real(self%lp_updates)/2.)
+            w2 = 0.5*exp(-real(self%lp_updates+1)/2.)
+        endif
         !$omp parallel default(shared) private(iframe,sumw) proc_bind(close)
         !$omp do schedule(static)
         do iframe = 1,self%nframes
@@ -549,17 +556,15 @@ contains
             rw = merge(1., 2., h==0) ! redundancy weight
             do k = nrflims(2,1),nrflims(2,2)
                 phys = self%reference%comp_addr_phys(h,k,0)
-                if( self%resmask(phys(1),phys(2)) ) then
-                    w = self%weights(phys(1),phys(2))
-                    if( w < 1.e-12 ) cycle
-                    cref   = self%reference%get_cmat_at(phys)
-                    cframe = frame%get_cmat_at(phys)
-                    cref   = cref - weight*cframe
-                    w      = w*rw
-                    num         = num         + w * real(cref*conjg(cframe))
-                    sumsq_ref   = sumsq_ref   + w * csq(cref)
-                    sumsq_frame = sumsq_frame + w * csq(cframe)
-                endif
+                w    = self%weights(phys(1),phys(2))
+                if( w < 1.e-12 ) cycle
+                cref   = self%reference%get_cmat_at(phys)
+                cframe = frame%get_cmat_at(phys)
+                cref   = cref - weight*cframe
+                w      = w*rw
+                num         = num         + w * real(cref*conjg(cframe))
+                sumsq_ref   = sumsq_ref   + w * csq(cref)
+                sumsq_frame = sumsq_frame + w * csq(cframe)
             enddo
         enddo
         calc_corr2ref = 0.
@@ -616,7 +621,6 @@ contains
             gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
             dshift(1) = dshift(1) + interp_peak()
             alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
-            beta  = pcorrs(pos(1)+center(1),pos(2)+center(2)  ,1)
             gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
             dshift(2) = dshift(2) + interp_peak()
             ! update shift
@@ -641,45 +645,43 @@ contains
     subroutine gen_weights( self )
         class(motion_align_hybrid), intent(inout) :: self
         integer, parameter :: BPWIDTH = 3
-        real    :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spadenomsq
+        real    :: w, bfacw, rsh, rhplim, rlplim, width, spafreqsq,spafreqh,spafreqk
         integer :: phys(3),nr_lims(3,2), bphplimsq,hplimsq,bplplimsq,lplimsq, shsq, h,k, hplim,lplim
         self%weights = 0.
-        self%resmask = .false.
         width   = real(BPWIDTH)
         nr_lims = self%reference%loop_lims(2)
-        hplim   = max(1,calc_fourier_index(self%hp,self%ldim(1),self%smpd))
-        lplim   = calc_fourier_index(self%lp,self%ldim(1),self%smpd)
-        rhplim  = real(hplim)
-        rlplim  = real(lplim)
-        hplimsq = hplim*hplim
-        lplimsq = lplim*lplim
-        bphplimsq  = max(0,hplim-BPWIDTH)**2
-        bplplimsq  = min(minval(nr_lims(1:2,2)),lplim+BPWIDTH)**2
-        spadenomsq = real((maxval(self%ldim(1:2)))**2)
-        !$omp parallel do collapse(2) schedule(static) default(shared)&
-        !$omp private(h,k,shsq,phys,rsh,bfacw,w,spafreqsq) proc_bind(close)
+        hplim     = max(1,calc_fourier_index(self%hp,minval(self%ldim(1:2)),self%smpd))
+        rhplim    = real(hplim)
+        hplimsq   = hplim*hplim
+        bphplimsq = max(0,hplim+BPWIDTH)**2
+        lplim     = calc_fourier_index(self%lp,minval(self%ldim(1:2)),self%smpd)
+        rlplim    = real(lplim)
+        lplimsq   = lplim*lplim
+        bplplimsq = min(minval(nr_lims(1:2,2)),lplim-BPWIDTH)**2
+        !$omp parallel do collapse(2) schedule(static) default(shared) proc_bind(close)&
+        !$omp private(h,k,shsq,phys,rsh,bfacw,w,spafreqsq,spafreqh,spafreqk)
         do h = nr_lims(1,1),nr_lims(1,2)
             do k = nr_lims(2,1),nr_lims(2,2)
                 shsq = h*h+k*k
-                if( shsq < bphplimsq ) cycle
-                if( shsq > bplplimsq ) cycle
-                if( shsq == 0 )        cycle ! toss central spot
+                if( shsq < hplimsq ) cycle
+                if( shsq > lplimsq ) cycle
+                if( shsq == 0 )      cycle
                 phys = self%reference%comp_addr_phys([h,k,0])
-                spafreqsq = real(shsq) / spadenomsq
                 ! B-factor weight
-                bfacw = min(1.,exp(-spafreqsq*self%bfactor))
+                spafreqh  = real(h) / real(self%ldim(1)) / self%smpd
+                spafreqk  = real(k) / real(self%ldim(2)) / self%smpd
+                spafreqsq = spafreqh*spafreqh + spafreqk*spafreqk
+                bfacw     = max(0.,exp(-spafreqsq*self%bfactor/4.))
                 ! filter weight
                 w = 1.
-                if( shsq < hplimsq )then
+                if( shsq < bphplimsq )then
                     ! high-pass
-                    rsh  = sqrt(real(shsq))
-                    w = (1. - cos(((rsh-rhplim)/width)*PI))/2.
-                else if( shsq > lplimsq )then
+                    rsh = sqrt(real(shsq))
+                    w   = 0.5 * (1.-cos(PI*(rsh-rhplim)/width))
+                else if( shsq > bplplimsq )then
                     ! low_pass
-                    rsh  = sqrt(real(shsq))
-                    w = (cos(((rsh-(rlplim-width))/width)*PI) + 1.)/2.
-                else
-                    self%resmask(phys(1),phys(2)) = .true.
+                    rsh = sqrt(real(shsq))
+                    w   = 0.5*(1.+cos(PI*(rsh-(rlplim-width))/width))
                 endif
                 self%weights(phys(1),phys(2)) = bfacw*bfacw * w*w
             end do

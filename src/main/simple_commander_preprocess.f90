@@ -124,7 +124,7 @@ end type make_pickrefs_commander
 
 contains
 
-  subroutine exec_preprocess_stream( self, cline )
+    subroutine exec_preprocess_stream( self, cline )
         use simple_moviewatcher, only: moviewatcher
         class(preprocess_commander_stream), intent(inout) :: self
         class(cmdline),                     intent(inout) :: cline
@@ -148,12 +148,15 @@ contains
         if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
-        if( .not. cline%defined('bfac')            ) call cline%set('bfac',            150.)
-        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',  'patch')
+        if( .not. cline%defined('bfac')            ) call cline%set('bfac',            100.)
+        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes', 'always')
+        if( .not. cline%defined('nsig')            ) call cline%set('nsig',              5.)
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            0.3)
+        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            5.0)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         ! extraction
@@ -469,12 +472,15 @@ contains
         if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
-        if( .not. cline%defined('bfac')            ) call cline%set('bfac',            150.)
-        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes',  'patch')
+        if( .not. cline%defined('bfac')            ) call cline%set('bfac',            100.)
+        if( .not. cline%defined('groupframes')     ) call cline%set('groupframes', 'always')
+        if( .not. cline%defined('nsig')            ) call cline%set('nsig',              5.)
         ! ctf estimation
         if( .not. cline%defined('pspecsz')         ) call cline%set('pspecsz',         512.)
         if( .not. cline%defined('hp_ctf_estimate') ) call cline%set('hp_ctf_estimate',  30.)
         if( .not. cline%defined('lp_ctf_estimate') ) call cline%set('lp_ctf_estimate',   5.)
+        if( .not. cline%defined('dfmin')           ) call cline%set('dfmin',            0.3)
+        if( .not. cline%defined('dfmax')           ) call cline%set('dfmax',            5.0)
         ! picking
         if( .not. cline%defined('lp_pick')         ) call cline%set('lp_pick',          20.)
         ! extraction
@@ -683,10 +689,11 @@ contains
         if( .not. cline%defined('trs')        ) call cline%set('trs',           30.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
-        if( .not. cline%defined('bfac')       ) call cline%set('bfac',         150.)
-        if( .not. cline%defined('groupframes')) call cline%set('groupframes','patch')
-        if( .not. cline%defined('corrw')      ) call cline%set('corrw',   'softmax')
-        if( .not. cline%defined('rankw')      ) call cline%set('rankw',        'no')
+        if( .not. cline%defined('bfac')       ) call cline%set('bfac',         100.)
+        if( .not. cline%defined('nsig')       ) call cline%set('nsig',           5.)
+        if( .not. cline%defined('groupframes')) call cline%set('groupframes','always')
+        if( .not. cline%defined('corrw')      ) call cline%set('corrw',    'softmax')
+        if( .not. cline%defined('rankw')      ) call cline%set('rankw',         'no')
         call cline%set('oritype', 'mic')
         call params%new(cline)
         params%numlen = len(int2str(params%nparts))
@@ -970,7 +977,9 @@ contains
         type(qsys_env)                :: qenv
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
-        if( .not. cline%defined('lp')      ) call cline%set('lp',       5.)
+        if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
+        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',     0.3)
+        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',     5.0)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
         call params%new(cline)
         ! sanity check
@@ -1557,6 +1566,7 @@ contains
                 call boxfile%readNextDataLine(boxdata(1,:))
                 call boxfile%kill
                 params%box = nint(boxdata(1,3))
+                params%boxmatch = params%box
             endif
         enddo
         call spproj%write

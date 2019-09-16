@@ -308,7 +308,7 @@ contains
             call align_iso_polyn_direct%kill
         else
             call hybrid_srch%new(movie_frames_scaled)
-            call hybrid_srch%set_group_frames(trim(params_glob%groupframes).eq.'all')
+            call hybrid_srch%set_group_frames(trim(params_glob%groupframes).eq.'always')
             call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
             call hybrid_srch%set_bfactor(bfactor)
             call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
@@ -516,7 +516,7 @@ contains
             smpd4scale = smpd_scaled
         endif
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
-            &params_glob%nxpatch,' x ',params_glob%nxpatch,')'
+            &params_glob%nxpatch,' x ',params_glob%nypatch,')'
         PRINT_NEVALS = .false.
         if (DO_PATCHED_POLYN) then
             call motion_patch%set_bfactor(bfac)

@@ -76,7 +76,7 @@ contains
         real,               intent(in)    :: hp, lp
         logical,            intent(in)    :: fetch_comps
         real, optional,     intent(in)    :: bfac
-        real    :: lp_nyq, spafreq_denom_sq, spafreq_sq, w
+        real    :: lp_nyq, spafreq_sq, w, spafreqh,spafreqk
         integer :: h,k,i,hcnt,kcnt,lplim,hplim,hh,sqarg
         logical :: didft, l_bfac
         ! kill pre-existing object
@@ -110,7 +110,6 @@ contains
         if( present(bfac) )then
             if( bfac > 1.e-6) l_bfac = .true.
         endif
-        spafreq_denom_sq = real(maxval(self%ldim(1:2))**2)
         ! prepare image
         didft = .false.
         if( .not. img%is_ft() .and. fetch_comps )then
@@ -129,10 +128,12 @@ contains
         ! init matrices
         hcnt = 0
         do h=self%lims(1,1),self%lims(1,2)
+            spafreqh = real(h)/real(self%ldim(1))/self%smpd
             hh   = h * h
             hcnt = hcnt + 1
             kcnt = 0
             do k=self%lims(2,1),self%lims(2,2)
+                spafreqk = real(k)/real(self%ldim(2))/self%smpd
                 kcnt  = kcnt + 1
                 sqarg = hh +  k*k
                 if( sqarg < 1 )then
@@ -141,8 +142,8 @@ contains
                     if( fetch_comps )then
                         if( l_bfac )then
                             ! b-factor weight
-                            spafreq_sq = real(sqarg) / spafreq_denom_sq
-                            w =  min(1.,exp(-bfac*spafreq_sq))
+                            spafreq_sq = spafreqh*spafreqh + spafreqk*spafreqk
+                            w =  max(0.,exp(-spafreq_sq*bfac/4.))
                             self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
                         else
                             self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)

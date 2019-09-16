@@ -176,7 +176,7 @@ type :: parameters
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
-    character(len=STDLEN) :: groupframes='patch'  !< Whether to perform weighted frames averaging during motion correction(patch|all|no){patch}
+    character(len=STDLEN) :: groupframes='always' !< Whether to perform weighted frames averaging during motion correction(patch|all|no){patch}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}

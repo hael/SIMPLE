@@ -645,7 +645,7 @@ contains
         call self%cost2D%minimize(self%parms, self%cc_fit)
         call self%cost2D%kill
         call self%tfun%apply_convention(self%parms%dfx,self%parms%dfy,self%parms%angast)
-        ! refined solution & without circular issue
+        ! refined solution
         limits(1,1) = max(self%df_lims(1),self%parms%dfx - half_range)
         limits(2,1) = max(self%df_lims(1),self%parms%dfy - half_range)
         limits(1,2) = min(self%df_lims(2),self%parms%dfx + half_range)

@@ -778,12 +778,12 @@ contains
         call set_param(e1,             'e1',           'num',    'Rotation along Phi',  'Phi Euler angle',   'in degrees', .false., 0.)
         call set_param(e2,             'e2',           'num',    'Rotation along Theta','Theat Euler angle', 'in degrees', .false., 0.)
         call set_param(e3,             'e3',           'num',    'Rotation along Psi',  'Psi Euler angle',   'in degrees', .false., 0.)
-        call set_param(groupframes,    'groupframes',  'str',    'Motion correction frames averaging', 'Whether to perform frames averaging during motion correction for patches only(patch), always(all) or never(no)(patch|all|no){patch}', '(patch|all|no){patch}', .false., 'patch')
+        call set_param(groupframes,    'groupframes',  'str',    'Motion correction frames averaging', 'Whether to perform frames averaging during motion correction for patches only(patch), always, or never(no)(patch|always|no){always}', '(patch|always|no){always}', .false., 'always')
         call set_param(mcpatch,        'mcpatch',      'binary', 'Patch-based motion correction', 'Whether to perform Patch-based motion correction(yes|no){no}', '(yes|no){yes}', .false., 'yes')
-        call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{3}', .false., 3.)
-        call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{3}', .false., 3.)
+        call set_param(nxpatch,        'nxpatch',      'num',    '# of patches along x-axis', 'Motion correction # of patches along x-axis', '# x-patches{5}', .false., 5.)
+        call set_param(nypatch,        'nypatch',      'num',    '# of patches along y-axis', 'Motion correction # of patches along y-axis', '# y-patches{5}', .false., 5.)
         call set_param(numlen,         'numlen',       'num',    'Length of number string', 'Length of number string', '# characters', .false., 5.0)
-        call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{6}', .false., 6.)
+        call set_param(nsig,           'nsig',         'num',    'Number of sigmas for outlier removal', 'Number of standard deviations threshold for pixel outlier removal{6}', '# standard deviations{5}', .false., 5.)
         call set_param(neigh,          'neigh',        'binary', 'Neighbourhood refinement', 'Neighbourhood refinement(yes|no){yes}', '(yes|no){no}', .false., 'no')
         call set_param(projname,       'projname',     'str',    'Project name', 'Name of project to create ./myproject/myproject.simple file for',&
         &'e.g. to create ./myproject/myproject.simple', .true., '')
@@ -2085,10 +2085,12 @@ contains
         ! <empty>
         ! search controls
         call motion_correct%set_input('srch_ctrls', 1, trs)
+        motion_correct%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{30}'
+        motion_correct%srch_ctrls(1)%rval_default      = 30.
         call motion_correct%set_input('srch_ctrls', 2, startit)
         call motion_correct%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call motion_correct%set_input('srch_ctrls', 4, nsig)
-        call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', '{50}', .false., 50.)
+        call motion_correct%set_input('srch_ctrls', 5, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{100}', .false., 100.)
         call motion_correct%set_input('srch_ctrls', 6, mcpatch)
         call motion_correct%set_input('srch_ctrls', 7, nxpatch)
         call motion_correct%set_input('srch_ctrls', 8, nypatch)
@@ -2335,6 +2337,8 @@ contains
         ! <empty>
         ! search controls
         call preprocess%set_input('srch_ctrls', 1, trs)
+        preprocess%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{30}'
+        preprocess%srch_ctrls(1)%rval_default      = 30.
         call preprocess%set_input('srch_ctrls', 2, startit)
         call preprocess%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess%set_input('srch_ctrls', 4, nsig)
@@ -2347,7 +2351,7 @@ contains
         call preprocess%set_input('srch_ctrls',10, 'ndev', 'num', '# of sigmas for picking clustering', '# of standard deviations threshold for picking one cluster clustering{2}', '{2}', .false., 2.)
         call preprocess%set_input('srch_ctrls',11, pgrp)
         preprocess%srch_ctrls(11)%required = .false.
-        call preprocess%set_input('srch_ctrls', 12, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
+        call preprocess%set_input('srch_ctrls', 12, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{100}', .false., 100.)
         call preprocess%set_input('srch_ctrls', 13, mcpatch)
         call preprocess%set_input('srch_ctrls', 14, nxpatch)
         call preprocess%set_input('srch_ctrls', 15, nypatch)
@@ -2409,6 +2413,8 @@ contains
         ! <empty>
         ! search controls
         call preprocess_stream%set_input('srch_ctrls', 1, trs)
+        preprocess_stream%srch_ctrls(1)%descr_placeholder = 'max shift per iteration in pixels{30}'
+        preprocess_stream%srch_ctrls(1)%rval_default      = 30.
         call preprocess_stream%set_input('srch_ctrls', 2, nsig)
         call preprocess_stream%set_input('srch_ctrls', 3, 'nframesgrp', 'num', 'Number of contigous frames to sum', '# contigous frames to sum before motion_correct(Falcon 3){0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls', 4, dfmin)
@@ -2422,7 +2428,7 @@ contains
         preprocess_stream%srch_ctrls(10)%required = .false.
         call preprocess_stream%set_input('srch_ctrls',11, 'nptcls_trial', 'num', '# of particles after which streaming stops', '# of extracted particles to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
         call preprocess_stream%set_input('srch_ctrls',12, 'nmovies_trial', 'num', '# of movies after which streaming stops', '# of processed movies to reach for preprocess_stream to stop{0}', '{0}', .false., 0.)
-        call preprocess_stream%set_input('srch_ctrls',13, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2', .false., 50.)
+        call preprocess_stream%set_input('srch_ctrls',13, 'bfac', 'num', 'B-factor applied to frames', 'B-factor applied to frames (in Angstroms^2)', 'in Angstroms^2{100}', .false., 100.)
         call preprocess_stream%set_input('srch_ctrls',14, mcpatch)
         call preprocess_stream%set_input('srch_ctrls',15, nxpatch)
         call preprocess_stream%set_input('srch_ctrls',16, nypatch)

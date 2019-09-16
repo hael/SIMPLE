@@ -14,7 +14,7 @@ public :: motion_correct_iter
 private
 #include "simple_local_flags.inc"
 
-real,             parameter :: PATCH_FIT_THRESHOLD = 8.0 ! threshold for polynomial fitting in pixels
+real,             parameter :: PATCH_FIT_THRESHOLD = 10.0 ! threshold for polynomial fitting in pixels
 character(len=*), parameter :: speckind = 'sqrt'
 
 type :: motion_correct_iter
