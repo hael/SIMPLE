@@ -24,6 +24,8 @@ public :: dock_volpair_commander
 public :: symaxis_search_commander
 public :: symmetrize_map_commander
 public :: symmetry_test_commander
+public :: radial_sym_test_commander
+
 private
 #include "simple_local_flags.inc"
 
@@ -67,6 +69,10 @@ type, extends(commander_base) :: symmetry_test_commander
   contains
     procedure :: execute      => exec_symmetry_test
 end type symmetry_test_commander
+type, extends(commander_base) :: radial_sym_test_commander
+  contains
+    procedure :: execute      => exec_radial_sym_test
+end type radial_sym_test_commander
 
 contains
 
@@ -738,10 +744,76 @@ contains
             call build%vol%mask(params%msk, 'soft')
         endif
         ! run test
-        call symmetry_tester(build%vol, params%msk, params%hp,&
-        &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
+        if(cline%defined('fname')) then
+          call symmetry_tester(build%vol, params%msk, params%hp,&
+          &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp, params%fname)
+          print *, 'Right branch in exec_symmetry_test'
+        else
+          call symmetry_tester(build%vol, params%msk, params%hp,&
+            &params%lp, params%cn_stop, params%platonic .eq. 'yes', pgrp)
+            print *, 'Wrong branch in exec_symmetry_test'
+          endif
         ! end gracefully
         call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
     end subroutine exec_symmetry_test
 
+    subroutine exec_radial_sym_test( self, cline )
+      use simple_nanoparticles_mod, only : nanoparticle
+      use simple_atoms,         only : atoms
+        class(radial_sym_test_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(symmetry_test_commander) :: symtstcmd
+        type(parameters)      :: params
+        character(len=STDLEN) :: fbody
+        character(len=3)      :: pgrp
+        character(len=100)    :: fname_coords_pdb
+        type(nanoparticle)    :: nano
+        type(atoms) :: atom
+        type(image) :: simulated_distrib
+        real        :: cutoff
+        real        :: min_rad, max_rad, step
+        integer     :: i, ldim(3)
+        real        :: radius
+        character(len=100) :: atomic_pos
+        character(len=100) :: fname_conv
+        character(len=100) :: fname_conv_pdb
+        character(len=100) :: output_dir
+        call params%new(cline)
+        call simple_getcwd(output_dir)
+        call nano%new(params%vols(1), params%smpd,params%element)
+        !identifiy atomic positions
+        call nano%identify_atomic_pos(atomic_pos)
+        call nano%get_ldim(ldim)
+        min_rad = params%min_rad
+        max_rad = params%max_rad
+        step    = params%stepsz
+        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_sym_test')
+        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_sym_test')
+        cutoff = 8.*params%smpd
+        call simulated_distrib%new(ldim,params%smpd)
+        do i =1, nint((max_rad-min_rad)/step)
+          radius = min_rad+real(i-1)*step
+          if(radius <= max_rad) then
+            ! Come back to root directory
+            call simple_chdir(trim(output_dir),errmsg="simple_commander_volops :: exec_radial_sym_test, simple_chdir; ")
+            fname_conv = trim(int2str(nint(radius))//'_coords')
+            print *, 'fname_conv ', fname_conv
+            fname_conv_pdb = fname_new_ext(fname_conv,'pdb')
+            print *, 'fname_convpdb ', fname_conv_pdb ! TO FIX
+            call nano%keep_atomic_pos_at_radius(radius, params%element, fname_conv)
+            ! Generate distribution based on atomic position
+            call atom%new(trim(int2str(nint(radius))//'_coords.pdb')) !TO MODIFY
+            call atom%convolve(simulated_distrib, cutoff)
+            call simulated_distrib%write(trim(int2str(nint(radius))//'_coords.mrc'))
+            ! Prepare for calling exec_symmetry_test
+            call cline%set('vol1', trim(int2str(nint(radius))//'_coords.mrc'))
+            ! Check for symmetry
+            call cline%set('fname',int2str(nint(radius))//'_sym_test.txt')
+            call symtstcmd%execute(cline)
+            call atom%kill
+          endif
+        enddo
+        ! end gracefully
+        call simple_end('**** SIMPLE_RADIAL_SYM_TEST NORMAL STOP ****')
+    end subroutine exec_radial_sym_test
 end module simple_commander_volops

@@ -44,6 +44,7 @@ type :: nanoparticle
     procedure          :: new => new_nanoparticle
     ! getters/setters
     procedure          :: get_img
+    procedure          :: get_ldim
     procedure          :: set_img
     procedure          :: set_partname
     ! segmentation and statistics
@@ -66,9 +67,8 @@ type :: nanoparticle
     procedure, private :: affprop_cluster_ang
     procedure, private :: affprop_cluster_dist_distr
     procedure          :: search_polarization
-    ! automatic symmetry detection
-    ! procedure          :: detect_symmetry
     ! execution
+    procedure          :: identify_atomic_pos
     procedure          :: detect_atoms
     ! comparison
     procedure          :: compare_atomic_models
@@ -78,6 +78,7 @@ type :: nanoparticle
     ! others
     procedure          :: make_soft_mask
     procedure, private :: update_self_ncc
+    procedure          :: keep_atomic_pos_at_radius
     ! kill
     procedure          :: kill => kill_nanoparticle
 end type nanoparticle
@@ -149,6 +150,12 @@ contains
              THROW_HARD('Wrong input parameter img type; get_img')
      end select
      end subroutine get_img
+
+     subroutine get_ldim(self,ldim)
+       class(nanoparticle), intent(in)  :: self
+       integer,             intent(out) :: ldim(3)
+       ldim = self%img%get_ldim()
+     end subroutine get_ldim
 
      !set one of the images of the nanoparticle type
      subroutine set_img( self, img, which )
@@ -966,7 +973,6 @@ contains
         integer :: cnt
         integer :: cnt5_all,  cnt7_all,  cnt9_all,  cnt12_all  ! number of atoms in radial shells, full shell
         integer :: cnt5_just, cnt7_just, cnt9_just, cnt12_just ! number of atoms in radial shells, only in rad indicated, empty shell
-
         write(logfhandle, *) '****radial atom-to-atom distances estimation, init'
         ! Radial dependent statistics
         cnt5_all   = 0
@@ -1984,60 +1990,71 @@ contains
     ! radii: 5, 7, 9, 12 A
     ! The idea is to identify the atomic positions
     ! contained in a certain radius, generate a distribution
-    ! ! based on that and check for symmetry.
-    ! subroutine detect_symmetry(self, fname_coords_pdb)
-    !     class(nanoparticle), intent(inout) :: self
-    !     character(len=*),    intent(in)    :: fname_coords_pdb
-    !     type(atoms) :: atom
-    !     type(image) :: simulated_distrib
-    !     real        :: cutoff
-    !     ! Generate distribution based on atomic position
-    !     call simulated_distrib%new(self%ldim,self%smpd)
-    !     cutoff = 8.*self%smpd
-    !     call atom%new(fname_coords_pdb)
-    !     call atom%convolve(simulated_distrib, cutoff)
-    !     call simulated_distrib%write(basename(trim(fname_coords_pdb))//'Convoluted.mrc') !if(DEBUG_HERE)
-    !     ! Check for symmetry
-    !     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !     call exec_symmetry_test_try(simulated_distrib,hp=10.,lp=1.,msk=3.5*THEORETICAL_RADIUS) !SET REASONABLE HP
-    !     !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    !     call simulated_distrib%kill
-    !     call atom%kill
-    ! contains
-    !         subroutine symmetry_test(vol,hp,lp,msk)
-    !             use simple_symanalyzer
-    !             use simple_cmdline
-    !             use simple_parameters
-    !             use simple_builder
-    !             type(image), intent(inout) :: vol
-    !             real,        intent(inout) :: hp,lp
-    !             real,        intent(in)    :: msk ! radius in pixels
-    !             character(len=3)      :: pgrp
-    !             real                  :: scale, smpd
-    !             integer, parameter    :: MAXBOX = 128
-    !             integer :: cn_stop
-    !             ! possible downscaling of input vol
-    !             scale = 1.
-    !             cn_stop = 50
-    !             if( self%ldim(1) > MAXBOX )then
-    !                 scale = real(MAXBOX) / real(self%ldim(1))
-    !                 call vol%fft
-    !                 call vol%clip_inplace([MAXBOX,MAXBOX,MAXBOX])
-    !                 call vol%ifft
-    !                 smpd = vol%get_smpd() !it's smpd after clipping
-    !                 msk  = round2even(scale*msk)
-    !             endif
-    !             ! low-pass limit safety
-    !             lp = max(2.*smpd, lp)
-    !             ! mask volume
-    !             call vol%mask(msk, 'soft')
-    !             ! run test
-    !             ! NEED TO KEEP THE BUILDER
-    !             call symmetry_tester(vol_in=vol,msk=msk,hp=hp,lp=lp,cn_stop=cn_stop,platonic='yes',pgrp_out=pgrp)
-    !             ! end gracefully
-    !             call simple_end('**** SIMPLE_SYMMETRY_TEST NORMAL STOP ****')
-    !         end subroutine symmetry_test
-    ! end subroutine detect_symmetry
+    ! based on that and check for symmetry.
+    subroutine identify_atomic_pos(self, atomic_pos)
+        class(nanoparticle), intent(inout) :: self
+        character(len=100),  intent(inout) :: atomic_pos
+        real :: otsu_thresh
+        ! Phase correlations approach
+        call self%phasecorrelation_nano_gaussian(otsu_thresh)
+        ! Nanoparticle binarization
+        call self%binarize(otsu_thresh)
+        ! Atom-to-atom distances distribution estimation
+        call self%distances_distribution() !needed for discard_outliers
+        ! Outliers discarding
+        call self%discard_outliers()
+       ! Validation of the selected atomic positions
+        call self%validate_atomic_positions()
+        atomic_pos = trim(self%fbody)//'_atom_centers.pdb'
+    end subroutine identify_atomic_pos
+
+    subroutine keep_atomic_pos_at_radius(self, radius, element, fname)
+      class(nanoparticle), intent(inout) :: self
+      real,                intent(in)    :: radius
+      character(len=2),    intent(in)    :: element
+      character(len=*),    intent(in)    :: fname !name of the pdb file where to write the coords
+      character(len=4) :: atom_name
+      integer     :: n_cc,cnt
+      real        :: m(3) !coords of the center of mass of the nano
+      real        :: d    !distance of the atom from the center of mass
+      type(atoms) :: radial_atom
+      ! Make subroutine for set_atom_name()
+      select case(element)
+      case('pt')
+          atom_name     = ' pt '
+          ! thoretical radius is already set
+      case('pd')
+          atom_name     = ' pd '
+      case('fe')
+          atom_name     = 'fe'
+      case('au')
+          self%atom_name     = ' au '
+      case default
+          THROW_HARD('Unknown atom element; keep_atomic_pos_at_radius')
+     end select
+      cnt = 0
+      m = self%nanopart_masscen()
+      ! Count nb of atoms in the selected radius
+      do n_cc = 1, self%n_cc
+            d = euclid(self%centers(:,n_cc), m)*self%smpd
+           if(d<=radius) then
+               cnt = cnt+1
+           endif
+      enddo
+      call radial_atom%new (cnt, dummy=.true.)
+      cnt = 0
+      ! Fill in radial_atom with the atomic positions
+      do n_cc = 1, self%n_cc
+          d = euclid(self%centers(:,n_cc), m)*self%smpd
+          if(d<=radius) then
+             cnt = cnt+1
+             call radial_atom%set_element(cnt,element)
+             call radial_atom%set_name(cnt,atom_name)
+             call radial_atom%set_coord(cnt,(self%centers(:,n_cc)-1.)*self%smpd)
+           endif
+      enddo
+      call radial_atom%writepdb(fname)
+    end subroutine keep_atomic_pos_at_radius
 
     ! This is the subroutine that executes all the steps
     ! for the structural analysis of one nananoparticle
