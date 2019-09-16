@@ -65,7 +65,8 @@ contains
 
     !> for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
-        use simple_image, only: image
+        use simple_segmentation, only: otsu_img
+        use simple_image,        only: image
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
@@ -110,7 +111,7 @@ contains
                     call img_or_vol%stats( ave, sdev, maxv, minv)
                     call img_or_vol%bin(ave + params%ndev * sdev)
                 else
-                    call img_or_vol%bin_kmeans
+                    call otsu_img(img_or_vol)
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
