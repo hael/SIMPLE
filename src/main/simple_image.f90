@@ -3454,7 +3454,7 @@ contains
         real  :: radius
         imat_cc = int(self%get_rmat())
         where(imat_cc .ne. n_cc) imat_cc = 0
-        if(.not. any(imat_cc(:,:,:)) > 0) THROW_HARD('Inputted non-existent cc')
+        if(.not. any(imat_cc(:,:,:) > 0)) THROW_HARD('Inputted non-existent cc')
         ! Find center of mass of the cc
         call get_pixel_pos(imat_cc,pos)
         center_of_mass(1) = sum(pos(1,:))/real(size(pos,dim = 2))
