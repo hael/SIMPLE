@@ -436,7 +436,7 @@ contains
     subroutine write_iso2star( mc_starfile_fname, moviename, gainref_fname )
         character(len=*),           intent(in) :: mc_starfile_fname, moviename
         character(len=*), optional, intent(in) :: gainref_fname
-        real    :: doserateperframe
+        real    :: shift(2), doserateperframe
         integer :: iframe
         ! open as new file
         call starfile_table__new(mc_starfile)
@@ -470,10 +470,11 @@ contains
         call starfile_table__setIsList(mc_starfile, .false.)
         call starfile_table__setName(mc_starfile, "global_shift")
         do iframe = 1, nframes
+            shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shifts_toplot(iframe, 1), dp))
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shifts_toplot(iframe, 2), dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1), dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2), dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
     end subroutine write_iso2star

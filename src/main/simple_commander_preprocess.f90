@@ -145,7 +145,7 @@ contains
         logical                                :: l_pick
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         ! mnotion correction
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',            100.)
@@ -469,7 +469,7 @@ contains
         if( .not. cline%defined('oritype')         ) call cline%set('oritype',        'mic')
         if( .not. cline%defined('stream')          ) call cline%set('stream',          'no')
         ! mnotion correction
-        if( .not. cline%defined('trs')             ) call cline%set('trs',              30.)
+        if( .not. cline%defined('trs')             ) call cline%set('trs',              10.)
         if( .not. cline%defined('lpstart')         ) call cline%set('lpstart',           8.)
         if( .not. cline%defined('lpstop')          ) call cline%set('lpstop',            5.)
         if( .not. cline%defined('bfac')            ) call cline%set('bfac',            100.)
@@ -686,7 +686,7 @@ contains
         type(sp_project)              :: spproj
         type(qsys_env)                :: qenv
         type(chash)                   :: job_descr
-        if( .not. cline%defined('trs')        ) call cline%set('trs',           30.)
+        if( .not. cline%defined('trs')        ) call cline%set('trs',           10.)
         if( .not. cline%defined('lpstart')    ) call cline%set('lpstart',        8.)
         if( .not. cline%defined('lpstop')     ) call cline%set('lpstop',         5.)
         if( .not. cline%defined('bfac')       ) call cline%set('bfac',         100.)
@@ -732,7 +732,7 @@ contains
         character(len=KEYLEN)    :: str
         type(chash)              :: job_descr
         type(chash), allocatable :: part_params(:)
-        if( .not. cline%defined('trs')     ) call cline%set('trs',         30.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',         10.)
         if( .not. cline%defined('lpstart') ) call cline%set('lpstart',     20.)
         if( .not. cline%defined('lpstop')  ) call cline%set('lpstop',       6.)
         if( .not. cline%defined('tomo')    ) call cline%set('tomo',      'yes')
@@ -978,9 +978,9 @@ contains
         if( .not. cline%defined('pspecsz') ) call cline%set('pspecsz', 512.)
         if( .not. cline%defined('hp')      ) call cline%set('hp',       30.)
         if( .not. cline%defined('lp')      ) call cline%set('lp',        5.)
-        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',     0.3)
-        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',     5.0)
-        if( .not. cline%defined('oritype') ) call cline%set('oritype', 'mic')
+        if( .not. cline%defined('dfmin')   ) call cline%set('dfmin',    0.3)
+        if( .not. cline%defined('dfmax')   ) call cline%set('dfmax',    5.0)
+        if( .not. cline%defined('oritype') ) call cline%set('oritype','mic')
         call params%new(cline)
         ! sanity check
         call spproj%read_segment(params%oritype, params%projfile)
