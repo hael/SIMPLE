@@ -63,17 +63,34 @@ class View{
 
   getMRCJPEG(arg){
     var json = toPixels(arg['stackfile'], arg['frame'])
-    return sharp(json['pixbuf'], { raw : {
-      width : json['nx'],
-      height : json['ny'],
-      channels : 1
-    }})
-    .resize(Number(arg['width']))
-    .jpeg()
-    .toBuffer()
-    .then(function (image) {
-      return({image : image})
-    })
+    if(arg['pick']){
+	return sharp(json['pixbuf'], { raw : {
+	    width : json['nx'],
+            height : json['ny'],
+            channels : 1
+        }})
+        .resize(Number(arg['width']))
+        .blur(3)
+        .normalize()
+        .jpeg()
+        .toBuffer()
+        .then(function (image) {
+            return({image : image})
+        })
+
+    }else{
+        return sharp(json['pixbuf'], { raw : {
+            width : json['nx'],
+            height : json['ny'],
+            channels : 1
+        }})
+        .resize(Number(arg['width']))
+        .jpeg()
+        .toBuffer()
+        .then(function (image) {
+            return({image : image})
+        })
+    }
   }
   
   getJPEG(arg){

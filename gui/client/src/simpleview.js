@@ -156,7 +156,7 @@ class SimpleView {
       canvas.style.height = mindim + 'px'
       this.currentmic = selector.options[selector.selectedIndex].value
 	  this.background = new Image()
-	  var url = window.location.href + "/image?stackfile=" + intg + "&frame=0&width=" + xdim
+	  var url = window.location.href + "/image?stackfile=" + intg + "&frame=0&width=" + xdim + "&pick=true"
 	  this.background.src = url.replace('//image','/image')
 	  if(!this.boxes[this.currentmic]){
 		this.boxes[this.currentmic] = []
