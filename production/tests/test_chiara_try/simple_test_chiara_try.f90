@@ -211,76 +211,115 @@ end subroutine laplacian_filt
            call atom%convolve(vol, cutoff)
            call vol%write('Convoluted.mrc')
    end subroutine generate_distribution
+
+
+ ! My implementation of the Flood fill algorithm
+ ! Soille, P., Morphological Image Analysis: Principles and Applications, Springer-Verlag, 1999, pp. 173–174.
+ ! It's implemented for 8-neighbours, should I put the option for
+ ! 4 neigh? To test.
+   subroutine floodfill(img, px, tvalue, nb_modif)
+     type(image), intent(inout) :: img
+     integer,     intent(in)    :: px(3)
+     integer,     intent(in)    :: tvalue ! target value
+     integer,     intent(out)   :: nb_modif ! number of 8-neighbours which value has been modified
+     integer :: pvalue ! pixel color
+     integer :: ldim(3)
+     integer :: i, nsz
+     integer :: neigh_8(3,8,1) ! indeces of the 8 neigh
+     integer :: neigh_px(3)
+     nb_modif = 0
+     ldim = img%get_ldim()
+     if(ldim(3) > 1)  return!THROW_HARD('Not implemented for volumes! floodfill')
+     pvalue = img%get([px(1),px(2),1]) ! For 2d images
+     if (pvalue == tvalue) return
+     ! set pixel value to tvalue
+     call img%set(px(1:3),real(tvalue))
+     call img%calc_neigh_8(px, neigh_8, nsz)
+     do i = 1, nsz
+         neigh_px(1:3) = neigh_8(1:3,i,1)
+         if(nint(img%get(neigh_px(1:3))) /= tvalue ) then
+             nb_modif = nb_modif + 1
+             call img%set(neigh_px(1:3),real(tvalue))
+         endif
+     enddo
+   end subroutine floodfill
+
+   ! ! This subroutine calculates the diamenter of the
+   ! ! connected component labelled n_cc in the connected
+   ! ! component image img_cc
+   ! subroutine diameter_cc(img_cc, n_cc, diam)
+   !     type(image),  intent(inout) :: img_cc
+   !     integer,      intent(in)    :: n_cc
+   !     real,         intent(out)   :: diam
+   !     integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
+   !     integer, allocatable :: imat_cc(:,:,:)
+   !     logical, allocatable :: msk(:) ! For using function pixels_dist
+   !     real  :: center_of_mass(3) ! geometrical center of mass
+   !     real  :: radius
+   !     imat_cc = int(img_cc%get_rmat())
+   !     where(imat_cc .ne. n_cc) imat_cc = 0
+   !     ! if(.not. any(imat_cc(:,:,:)) > 0) THROW_HARD('Inputted non-existent cc')
+   !     ! Find center of mass of the cc
+   !     call get_pixel_pos(imat_cc,pos)
+   !     center_of_mass(1) = sum(pos(1,:))/real(size(pos,dim = 2))
+   !     center_of_mass(2) = sum(pos(2,:))/real(size(pos,dim = 2))
+   !     center_of_mass(3) = 1.
+   !     if(allocated(imat_cc)) deallocate(imat_cc)
+   !     allocate(msk(size(pos, dim =2)), source = .true.)
+   !     ! Calculate maximim radius
+   !     radius = pixels_dist(center_of_mass,real(pos),'max',msk)
+   !     ! Return diameter
+   !     diam = 2.*radius
+   !     if(allocated(msk)) deallocate(msk)
+   !     if(allocated(pos)) deallocate(pos)
+   ! end subroutine diameter_cc
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
        include 'simple_lib.f08'
        use simple_math
-       use simple_atoms
        use simple_test_chiara_try_mod
        use simple_image, only : image
-       use simple_tvfilter, only : tvfilter
-       use simple_nanoparticles_mod, only : nanoparticle
-       type(atoms) :: atom
-       type(image) :: vol
+       type(image) :: img, img_cc
+       integer     :: nb_modif
        integer     :: ldim(3)
-       real        :: lp, msk, smpd
-       lp  = 1.
-       msk = 5.
-       ldim(:) = 160
-       smpd = 0.358
-       call generate_distribution('radial_atoms9A_all.pdb', ldim, smpd)
-       ! call exec_symmetry_test_try(lp, msk)
+       integer, allocatable :: imat_cc(:,:,:)
+       real, allocatable :: rmat(:,:,:)
+       real :: diam
+       ldim(1) = 100
+       ldim(2) = 100
+       ldim(3) = 1
+       call img%disc(ldim, 1.,30.)
+       call img%set([50,50,1], 0.)
+       call img%set([50,51,1], 0.)
+       call img%set([51,51,1], 0.)
+       call img%set([52,52,1], 0.)
+       rmat = img%get_rmat()
+       rmat(90:95,20:27,1) = 1.
+       rmat(93,21,1) = 0.
+       rmat(94,22,1) = 0.
+       rmat(94,26,1) = 0.
+       rmat(15:22,94:97,1) = 1.
+       rmat(17,95,1) = 0.
+       rmat(18,95,1) = 0.
+       rmat(19,95,1) = 0.
+       call img%set_rmat(rmat)
+       call img%write('DiscHoled.mrc')
+       call img%find_connected_comps(img_cc)
+       call img_cc%write('Disc_ccs.mrc')
+       call img_cc%diameter_cc(2,diam)
+       print *, 'diameter = ', diam
+       stop
+
+        call img%fill_holes()
+        call img%write('FilledHoles.mrc')
 
 
-       ! subroutine convolve( self, vol, cutoff, lp )
-       !     class(image),   intent(inout) :: vol
-       !     real,           intent(in)    :: cutoff
-       !     real, optional, intent(in)    :: lp
-
-       ! hp = real(464/ 2) * 28.088
-       ! lp = 20.
-       ! lambda = 5.
-       !
-       ! call tvf%new()
-       !
-       !
-       ! call img%new([480,464,1], 28.088)
-       ! call img%read('tomo_2_full_backp_flip_bin4.mrc', 20) !20th plane
-       ! call img%neg()
-       ! call img%write('TwentiethPlane.mrc')
-       ! call img%bp(hp,lp)
-       ! call img%write('TwentiethPlaneBP.mrc')
-       ! call tvf%apply_filter(img, lambda)
-       ! call img%write('TwentiethPlaneTVF.mrc')
-       ! call img%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
-       ! call img%bin(ave+.2*sdev)
-       ! ! call canny(img)
-       ! call img%write('TwentiethPlaneBIN2sigma.mrc')
-       ! call img%real_space_filter(2,'median')
-       ! call img%write('TwentiethPlaneBIN2sigmaMedian.mrc')
-       !
-       !
-       ! call img%read('tomo_2_full_backp_flip_bin4.mrc', 246)
-       ! call img%neg()
-       ! call img%write('246Plane.mrc')
-       ! call img%bp(hp,lp)
-       ! call img%write('246PlaneBP.mrc')
-       ! call tvf%apply_filter(img, lambda)
-       ! call img%write('246PlaneTVF.mrc')
-       ! call img%stats( ave=ave, sdev=sdev, maxv=maxv, minv=minv)
-       ! call img%bin(ave+.2*sdev)
-       ! ! call canny(img)
-       ! call img%write('246PlaneCannyBIN2sigma.mrc')
-       ! call img%real_space_filter(2,'median')
-       ! call img%write('246PlaneBIN2sigmaMedian.mrc')
-
-
-       ! call nano%new('../particle1.mrc', smpd)
-       ! call nano%binarize()
-       ! call nano%discard_outliers()
-       ! call nano%radial_dependent_stats()
-
+           ! subroutine ellipse(self, center, axes, hole)
+       !     class(image),               intent(inout) :: self
+       !     real,                       intent(in)    :: axes(2)
+       !     integer,                    intent(in)    :: center(2)
+       !     character(len=*), optional, intent(in)    :: hole
 
        ! call a%new(n, dummy=.true.)
        ! call a%convolve(nano,cutoff)

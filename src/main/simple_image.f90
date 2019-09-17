@@ -214,11 +214,13 @@ contains
     procedure          :: elim_cc
     procedure          :: order_cc
     procedure          :: polish_cc
+    procedure          :: diameter_cc
     procedure          :: dilatation
     procedure          :: erosion
     procedure          :: morpho_closing
     procedure          :: morpho_opening
     procedure          :: border_mask
+    procedure          :: fill_holes
     ! FILTERS
     procedure          :: acf
     procedure          :: ccf
@@ -3168,9 +3170,11 @@ contains
     end subroutine collage
 
     ! Img_in should be a binary image. Img_out is the connected component image.
-    subroutine find_connected_comps(img_in, img_out)
-        class(image), intent(in)    :: img_in
-        type(image),  intent(inout) :: img_out
+    ! Black = yes finds the black connected components instead of the white ones
+    subroutine find_connected_comps(img_in, img_out, black)
+        class(image),      intent(in)    :: img_in
+        type(image),       intent(inout) :: img_out
+        logical, optional, intent(in)    :: black
         type(image)       :: img_cc   !in this img will be stored the cc with no specific order
         real, allocatable :: label_matrix(:,:,:),mat4compare(:,:,:)
         real              :: tmp, diff
@@ -3184,69 +3188,135 @@ contains
         else
             allocate(neigh_8(9),  source = 0.)
         endif
-        ! enumerate white pixels
-        cnt     = 0 ! # labels
-        n_maxit = 0
-        do i = 1, img_in%ldim(1)
-            do j = 1, img_in%ldim(2)
-                do k = 1, img_in%ldim(3)
-                    if( img_in%rmat(i,j,k) > 0.5 )then
-                        cnt = cnt + 1
-                        img_cc%rmat(i,j,k) = real(cnt)
-                        n_maxit = max(cnt,n_maxit)
-                    endif
-                enddo
-            enddo
-        enddo
-        ! find connected components in parallel
-        finished_job = .false.
-        allocate(mat4compare(img_cc%ldim(1),img_cc%ldim(2),img_cc%ldim(3)), source = 0.)
-        !$omp parallel default(shared) private(i,j,k,neigh_8,nsz) proc_bind(close)
-        do n_it = 1, n_maxit
-            if( .not. finished_job )then
-                !$omp workshare
-                mat4compare = img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))
-                !$omp end workshare nowait
-                !$omp single
-                diff = 0.
-                !$omp end single nowait
-                do i = 1, img_in%ldim(1)
-                    do j = 1, img_in%ldim(2)
-                        do k = 1, img_in%ldim(3)
-                            if( img_in%rmat(i,j,k) > 0.5) then ! not background
-                                if(img_in%ldim(3) > 1) then
-                                    call img_cc%calc3D_neigh_8([i,j,k], neigh_8, nsz)
-                                else
-                                    call img_cc%calc_neigh_8  ([i,j,1], neigh_8, nsz)
-                                endif
-                                img_cc%rmat(i,j,k) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
-                                diff = diff + abs(mat4compare(i,j,k) - img_cc%rmat(i,j,k))
-                            endif
-                        enddo
+        if(present(black) .and. black .eqv. .true.) then
+            ! enumerate black pixels
+            cnt     = 0 ! # labels
+            n_maxit = 0
+            do i = 1, img_in%ldim(1)
+                do j = 1, img_in%ldim(2)
+                    do k = 1, img_in%ldim(3)
+                        if( img_in%rmat(i,j,k) < 0.5 )then
+                            cnt = cnt + 1
+                            img_cc%rmat(i,j,k) = real(cnt)
+                            n_maxit = max(cnt,n_maxit)
+                        endif
                     enddo
                 enddo
-                !$omp single
-                if( diff <= TINY ) finished_job = .true.
-                !$omp end single nowait
-            endif
-        enddo
-        !$omp end parallel
-        ! enumerate connected components
-        cnt = 0
-        do i = 1, img_cc%ldim(1)
-            do j = 1, img_cc%ldim(2)
-                do k = 1, img_cc%ldim(3)
-                    if( img_cc%rmat(i,j,k) > 0.5 ) then  !rmat == 0  --> background
-                        cnt = cnt + 1
-                        tmp = img_cc%rmat(i,j,k)
-                        where(abs(img_cc%rmat - tmp) < TINY)
-                            img_out%rmat = cnt
-                            img_cc%rmat  = 0.            !Not to consider this cc again
-                        endwhere
-                    endif
+            enddo
+            ! find connected components in parallel
+            finished_job = .false.
+            allocate(mat4compare(img_cc%ldim(1),img_cc%ldim(2),img_cc%ldim(3)), source = 0.)
+            !$omp parallel default(shared) private(i,j,k,neigh_8,nsz) proc_bind(close)
+            do n_it = 1, n_maxit
+                if( .not. finished_job )then
+                    !$omp workshare
+                    mat4compare = img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))
+                    !$omp end workshare nowait
+                    !$omp single
+                    diff = 0.
+                    !$omp end single nowait
+                    do i = 1, img_in%ldim(1)
+                        do j = 1, img_in%ldim(2)
+                            do k = 1, img_in%ldim(3)
+                                if( img_in%rmat(i,j,k) < 0.5) then ! background
+                                    if(img_in%ldim(3) > 1) then
+                                        call img_cc%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                                    else
+                                        call img_cc%calc_neigh_8  ([i,j,1], neigh_8, nsz)
+                                    endif
+                                    img_cc%rmat(i,j,k) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
+                                    diff = diff + abs(mat4compare(i,j,k) - img_cc%rmat(i,j,k))
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                    !$omp single
+                    if( diff <= TINY ) finished_job = .true.
+                    !$omp end single nowait
+                endif
+            enddo
+            !$omp end parallel
+            ! enumerate connected components
+            cnt = 0
+            do i = 1, img_cc%ldim(1)
+                do j = 1, img_cc%ldim(2)
+                    do k = 1, img_cc%ldim(3)
+                        if( img_cc%rmat(i,j,k) > 0.5 ) then  !rmat == 0  --> background
+                            cnt = cnt + 1
+                            tmp = img_cc%rmat(i,j,k)
+                            where(abs(img_cc%rmat - tmp) < TINY)
+                                img_out%rmat = cnt
+                                img_cc%rmat  = 0.            !Not to consider this cc again
+                            endwhere
+                        endif
+                    enddo
                 enddo
             enddo
-        enddo
+        else
+            ! enumerate white pixels
+            cnt     = 0 ! # labels
+            n_maxit = 0
+            do i = 1, img_in%ldim(1)
+                do j = 1, img_in%ldim(2)
+                    do k = 1, img_in%ldim(3)
+                        if( img_in%rmat(i,j,k) > 0.5 )then
+                            cnt = cnt + 1
+                            img_cc%rmat(i,j,k) = real(cnt)
+                            n_maxit = max(cnt,n_maxit)
+                        endif
+                    enddo
+                enddo
+            enddo
+            ! find connected components in parallel
+            finished_job = .false.
+            allocate(mat4compare(img_cc%ldim(1),img_cc%ldim(2),img_cc%ldim(3)), source = 0.)
+            !$omp parallel default(shared) private(i,j,k,neigh_8,nsz) proc_bind(close)
+            do n_it = 1, n_maxit
+                if( .not. finished_job )then
+                    !$omp workshare
+                    mat4compare = img_cc%rmat(:img_cc%ldim(1),:img_cc%ldim(2),:img_cc%ldim(3))
+                    !$omp end workshare nowait
+                    !$omp single
+                    diff = 0.
+                    !$omp end single nowait
+                    do i = 1, img_in%ldim(1)
+                        do j = 1, img_in%ldim(2)
+                            do k = 1, img_in%ldim(3)
+                                if( img_in%rmat(i,j,k) > 0.5) then ! not background
+                                    if(img_in%ldim(3) > 1) then
+                                        call img_cc%calc3D_neigh_8([i,j,k], neigh_8, nsz)
+                                    else
+                                        call img_cc%calc_neigh_8  ([i,j,1], neigh_8, nsz)
+                                    endif
+                                    img_cc%rmat(i,j,k) = minval(neigh_8(:nsz), neigh_8(:nsz) > 0.5)
+                                    diff = diff + abs(mat4compare(i,j,k) - img_cc%rmat(i,j,k))
+                                endif
+                            enddo
+                        enddo
+                    enddo
+                    !$omp single
+                    if( diff <= TINY ) finished_job = .true.
+                    !$omp end single nowait
+                endif
+            enddo
+            !$omp end parallel
+            ! enumerate connected components
+            cnt = 0
+            do i = 1, img_cc%ldim(1)
+                do j = 1, img_cc%ldim(2)
+                    do k = 1, img_cc%ldim(3)
+                        if( img_cc%rmat(i,j,k) > 0.5 ) then  !rmat == 0  --> background
+                            cnt = cnt + 1
+                            tmp = img_cc%rmat(i,j,k)
+                            where(abs(img_cc%rmat - tmp) < TINY)
+                                img_out%rmat = cnt
+                                img_cc%rmat  = 0.            !Not to consider this cc again
+                            endwhere
+                        endif
+                    enddo
+                enddo
+            enddo
+        endif
         deallocate(mat4compare)
     end subroutine find_connected_comps
 
@@ -3370,6 +3440,37 @@ contains
         if(present(min_rad)) call self%elim_cc([ int(min_rad*max_rad/4.) , int(2*3.14*(3*max_rad)**2) ])
     end subroutine polish_cc
 
+    ! This subroutine calculates the diamenter of the
+    ! connected component labelled n_cc in the connected
+    ! component image img_cc
+    subroutine diameter_cc(self, n_cc, diam)
+        class(image), intent(inout) :: self
+        integer,      intent(in)    :: n_cc
+        real,         intent(out)   :: diam
+        integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
+        integer, allocatable :: imat_cc(:,:,:)
+        logical, allocatable :: msk(:) ! For using function pixels_dist
+        real  :: center_of_mass(3) ! geometrical center of mass
+        real  :: radius
+        imat_cc = int(self%get_rmat())
+        where(imat_cc .ne. n_cc) imat_cc = 0
+        if(.not. any(imat_cc(:,:,:)) > 0) THROW_HARD('Inputted non-existent cc')
+        ! Find center of mass of the cc
+        call get_pixel_pos(imat_cc,pos)
+        center_of_mass(1) = sum(pos(1,:))/real(size(pos,dim = 2))
+        center_of_mass(2) = sum(pos(2,:))/real(size(pos,dim = 2))
+        center_of_mass(3) = 1.
+        if(allocated(imat_cc)) deallocate(imat_cc)
+        allocate(msk(size(pos, dim =2)), source = .true.)
+        ! Calculate maximim radius
+        radius = pixels_dist(center_of_mass,real(pos),'max',msk)
+        ! Return diameter
+        diam = 2.*radius
+        if(allocated(msk)) deallocate(msk)
+        if(allocated(pos)) deallocate(pos)
+    end subroutine diameter_cc
+
+
     ! This subroutine is ment for 2D binary images. It implements
     ! the morphological operation dilatation.
     subroutine dilatation(self)
@@ -3482,6 +3583,33 @@ contains
            enddo
        enddo
   end subroutine border_mask
+
+  ! This subroutine fills the holes in a binary image
+  ! Idea: A hole is a set of background pixels that cannot be
+  ! reached by filling in the background from the edge of the image.
+  ! Find the cc to which the background belongs. Whatever is not background,
+  ! set it to foreground.
+  subroutine fill_holes(self)
+      class(image), intent(inout) :: self
+      type (image)         :: img_cc ! connected component image
+      real,    pointer     :: rmat(:,:,:)
+      integer, allocatable :: imat_cc(:,:,:)
+      integer              :: seed
+      if(self%ldim(3) > 1) THROW_HARD('Not implemented for volumes! fill_holes')
+      call self%get_rmat_ptr(rmat)
+      if(any(rmat(1:self%ldim(1),1:self%ldim(2),1) < -0.1) .or. any(rmat(1:self%ldim(1),1:self%ldim(2),1) > 1.1)) THROW_HARD('Only for binary images! fill_holes')
+      call self%find_connected_comps(img_cc, black=.true.) !detect the connnected components in the background as well
+      imat_cc = nint(img_cc%get_rmat())
+      call img_cc%kill
+      seed = imat_cc(1,1,1) !the pxl (1,1,1) should belong to the background
+      ! Set to foreground whatever is not background
+      where(imat_cc(1:self%ldim(1),1:self%ldim(2),1) == seed)
+           rmat(1:self%ldim(1),1:self%ldim(2),1) = 0.
+      elsewhere
+           rmat(1:self%ldim(1),1:self%ldim(2),1) = 1.
+      endwhere
+      if(allocated(imat_cc)) deallocate(imat_cc)
+    end subroutine fill_holes
 
     ! FILTERS
 
@@ -5247,6 +5375,79 @@ contains
         endif
     end subroutine calc_neigh_8_1
 
+
+        ! Returns 8-neighborhoods of the pixel position px in self
+        ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
+        ! starting from any 8-neigh. It doesn't consider the pixel itself.
+        subroutine calc_neigh_8_2(self, px, neigh_8, nsz)
+            class(image), intent(in)   :: self
+            integer,      intent(in)   :: px(3)
+            integer,      intent(inout):: neigh_8(3,8,1)
+            integer,      intent(out)  :: nsz
+            integer :: i, j
+            i = px(1)
+            j = px(2)            !Assumes to have a 2-dim matrix
+            if ( i-1 < 1 .and. j-1 < 1 ) then
+                neigh_8(1:3,1,1) = [i+1,j,1]
+                neigh_8(1:3,2,1) = [i+1,j+1,1]
+                neigh_8(1:3,3,1) = [i,j+1,1]
+                nsz = 3
+            else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
+                neigh_8(1:3,1,1) = [i-1,j,1]
+                neigh_8(1:3,2,1) = [i-1,j-1,1]
+                neigh_8(1:3,3,1) = [i,j-1,1]
+                nsz = 3
+            else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
+                neigh_8(1:3,3,1) = [i-1,j,1]
+                neigh_8(1:3,2,1) = [i-1,j+1,1]
+                neigh_8(1:3,1,1) = [i,j+1,1]
+                nsz = 3
+            else if (j+1 > self%ldim(2) .and. i-1 < 1) then
+                neigh_8(1:3,1,1) = [i,j-1,1]
+                neigh_8(1:3,2,1) = [i+1,j-1,1]
+                neigh_8(1:3,3,1) = [i+1,j,1]
+                nsz = 3
+            else if( j-1 < 1 ) then
+                neigh_8(1:3,5,1) = [i-1,j,1]
+                neigh_8(1:3,4,1) = [i-1,j+1,1]
+                neigh_8(1:3,3,1) = [i,j+1,1]
+                neigh_8(1:3,2,1) = [i+1,j+1,1]
+                neigh_8(1:3,1,1) = [i+1,j,1]
+                nsz = 5
+            else if ( j+1 > self%ldim(2) ) then
+                neigh_8(1:3,1,1) = [i-1,j,1]
+                neigh_8(1:3,2,1) = [i-1,j-1,1]
+                neigh_8(1:3,3,1) = [i,j-1,1]
+                neigh_8(1:3,4,1) = [i+1,j-1,1]
+                neigh_8(1:3,5,1) = [i+1,j,1]
+                nsz = 5
+            else if ( i-1 < 1 ) then
+                neigh_8(1:3,1,1) = [i,j-1,1]
+                neigh_8(1:3,2,1) = [i+1,j-1,1]
+                neigh_8(1:3,3,1) = [i+1,j,1]
+                neigh_8(1:3,4,1) = [i+1,j+1,1]
+                neigh_8(1:3,5,1) = [i,j+1,1]
+                nsz = 5
+            else if ( i+1 > self%ldim(1) ) then
+                neigh_8(1:3,1,1) = [i,j+1,1]
+                neigh_8(1:3,2,1) = [i-1,j+1,1]
+                neigh_8(1:3,3,1) = [i-1,j,1]
+                neigh_8(1:3,4,1) = [i-1,j-1,1]
+                neigh_8(1:3,5,1) = [i,j-1,1]
+                nsz = 5
+            else
+                neigh_8(1:3,1,1) = [i-1,j-1,1]
+                neigh_8(1:3,2,1) = [i,j-1,1]
+                neigh_8(1:3,3,1) = [i+1,j-1,1]
+                neigh_8(1:3,4,1) = [i+1,j,1]
+                neigh_8(1:3,5,1) = [i+1,j+1,1]
+                neigh_8(1:3,6,1) = [i,j+1,1]
+                neigh_8(1:3,7,1) = [i-1,j+1,1]
+                neigh_8(1:3,8,1) = [i-1,j,1]
+                nsz = 8
+            endif
+        end subroutine calc_neigh_8_2
+
     ! Returns 8-neighborhoods (in 3D they are 27) of the pixel position px in self
     ! it returns the INTENSITY values of the 8-neigh in a CLOCKWISE order, starting from any 4-neigh
     ! of the first slice, then central slice and finally third slice.
@@ -5853,78 +6054,6 @@ contains
         neigh_4(1:3,6) = [i-1,j,k]
         nsz = 6
     end subroutine calc3D_neigh_4_2
-
-    ! Returns 8-neighborhoods of the pixel position px in self
-    ! it returns the pixel INDECES of the 8-neigh in a CLOCKWISE order,
-    ! starting from any 8-neigh. It doesn't consider the pixel itself.
-    subroutine calc_neigh_8_2(self, px, neigh_8, nsz)
-        class(image), intent(in)   :: self
-        integer,      intent(in)   :: px(3)
-        integer,      intent(inout):: neigh_8(3,8,1)
-        integer,      intent(out)  :: nsz
-        integer :: i, j
-        i = px(1)
-        j = px(2)            !Assumes to have a 2-dim matrix
-        if ( i-1 < 1 .and. j-1 < 1 ) then
-            neigh_8(1:3,1,1) = [i+1,j,1]
-            neigh_8(1:3,2,1) = [i+1,j+1,1]
-            neigh_8(1:3,3,1) = [i,j+1,1]
-            nsz = 3
-        else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
-            neigh_8(1:3,1,1) = [i-1,j,1]
-            neigh_8(1:3,2,1) = [i-1,j-1,1]
-            neigh_8(1:3,3,1) = [i,j-1,1]
-            nsz = 3
-        else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
-            neigh_8(1:3,3,1) = [i-1,j,1]
-            neigh_8(1:3,2,1) = [i-1,j+1,1]
-            neigh_8(1:3,1,1) = [i,j+1,1]
-            nsz = 3
-        else if (j+1 > self%ldim(2) .and. i-1 < 1) then
-            neigh_8(1:3,1,1) = [i,j-1,1]
-            neigh_8(1:3,2,1) = [i+1,j-1,1]
-            neigh_8(1:3,3,1) = [i+1,j,1]
-            nsz = 3
-        else if( j-1 < 1 ) then
-            neigh_8(1:3,5,1) = [i-1,j,1]
-            neigh_8(1:3,4,1) = [i-1,j+1,1]
-            neigh_8(1:3,3,1) = [i,j+1,1]
-            neigh_8(1:3,2,1) = [i+1,j+1,1]
-            neigh_8(1:3,1,1) = [i+1,j,1]
-            nsz = 5
-        else if ( j+1 > self%ldim(2) ) then
-            neigh_8(1:3,1,1) = [i-1,j,1]
-            neigh_8(1:3,2,1) = [i-1,j-1,1]
-            neigh_8(1:3,3,1) = [i,j-1,1]
-            neigh_8(1:3,4,1) = [i+1,j-1,1]
-            neigh_8(1:3,5,1) = [i+1,j,1]
-            nsz = 5
-        else if ( i-1 < 1 ) then
-            neigh_8(1:3,1,1) = [i,j-1,1]
-            neigh_8(1:3,2,1) = [i+1,j-1,1]
-            neigh_8(1:3,3,1) = [i+1,j,1]
-            neigh_8(1:3,4,1) = [i+1,j+1,1]
-            neigh_8(1:3,5,1) = [i,j+1,1]
-            nsz = 5
-        else if ( i+1 > self%ldim(1) ) then
-            neigh_8(1:3,1,1) = [i,j+1,1]
-            neigh_8(1:3,2,1) = [i-1,j+1,1]
-            neigh_8(1:3,3,1) = [i-1,j,1]
-            neigh_8(1:3,4,1) = [i-1,j-1,1]
-            neigh_8(1:3,5,1) = [i,j-1,1]
-            nsz = 5
-        else
-            neigh_8(1:3,1,1) = [i-1,j-1,1]
-            neigh_8(1:3,2,1) = [i,j-1,1]
-            neigh_8(1:3,3,1) = [i+1,j-1,1]
-            neigh_8(1:3,4,1) = [i+1,j,1]
-            neigh_8(1:3,5,1) = [i+1,j+1,1]
-            neigh_8(1:3,6,1) = [i,j+1,1]
-            neigh_8(1:3,7,1) = [i-1,j+1,1]
-            neigh_8(1:3,8,1) = [i-1,j,1]
-            nsz = 8
-        endif
-    end subroutine calc_neigh_8_2
 
     !>  \brief  Convert logical address to physical address. Complex image.
     pure function comp_addr_phys1(self,logi) result(phys)
