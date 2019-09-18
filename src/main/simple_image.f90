@@ -215,6 +215,7 @@ contains
     procedure          :: order_cc
     procedure          :: polish_cc
     procedure          :: diameter_cc
+    procedure          :: cc2bin
     procedure          :: dilatation
     procedure          :: erosion
     procedure          :: morpho_closing
@@ -3470,6 +3471,18 @@ contains
         if(allocated(pos)) deallocate(pos)
     end subroutine diameter_cc
 
+    ! This subroutine modifies the input cc image by making it bin
+    ! where just the cc n_cc is kept.
+    subroutine cc2bin(self, n_cc)
+        class(image), intent(inout) :: self  !cc image
+        integer,      intent(in)    :: n_cc  !label of the cc to keep
+        integer,      allocatable   :: imat_cc(:,:,:)
+        imat_cc = int(self%get_rmat())
+        where(imat_cc .ne. n_cc) imat_cc = 0
+        where(imat_cc > 0) imat_cc = 1
+        call self%set_rmat(real(imat_cc))
+        deallocate(imat_cc)
+    end subroutine cc2bin
 
     ! This subroutine is ment for 2D binary images. It implements
     ! the morphological operation dilatation.

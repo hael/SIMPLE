@@ -74,7 +74,6 @@ type :: parameters
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
-    character(len=3)      :: rankw='sum'          !< orientation weights based on ranks(sum|cen|exp|no){sum}
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
@@ -163,7 +162,7 @@ type :: parameters
     character(len=4)      :: automatic='no'       !< automatic thres for edge detect (yes|no) {no}
     character(len=4)      :: automsk='no'
     character(len=STDLEN) :: boxtype='eman'
-    character(len=STDLEN) :: corrw = 'no'         !< correlation weighting scheme
+    character(len=STDLEN) :: wcrit = 'no'         !< correlation weighting scheme (softmax|zscore|sum|cen|exp|no){sum}
     character(len=STDLEN) :: ctf='no'             !< ctf flag(yes|no|flip)
     character(len=STDLEN) :: detector='bin'       !< detector for edge detection (sobel|bin|otsu)
     character(len=STDLEN) :: dfunit='microns'     !< defocus unit (A|microns){microns}
@@ -207,8 +206,7 @@ type :: parameters
     ! special integer kinds
     integer(kind(ENUM_ORISEG))     :: spproj_iseg  = PTCL3D_SEG    !< sp-project segments that b%a points to
     integer(kind(ENUM_OBJFUN))     :: cc_objfun    = OBJFUN_CC     !< objective function(OBJFUN_CC = 0, OBJFUN_EUCLID = 1)
-    integer(kind=kind(ENUM_WCRIT)) :: rankw_crit   = RANK_SUM_CRIT !< criterium for rank-based weights
-    integer(kind=kind(ENUM_WCRIT)) :: ccw_crit     = CORRW_CRIT    !< criterium for correlation-based weights
+    integer(kind=kind(ENUM_WCRIT)) :: wcrit_enum   = CORRW_CRIT    !< criterium for correlation-based weights
     ! integer variables in ascending alphabetical order
     integer :: astep=1
     integer :: avgsz=0
@@ -432,7 +430,6 @@ type :: parameters
     logical :: l_ptclw          = .true.
     logical :: l_phaseplate     = .false.
     logical :: l_projw          = .false.
-    logical :: l_rankw          = .true.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: l_wglob          = .true.
@@ -507,7 +504,6 @@ contains
         call check_carg('compare',        self%compare)
         call check_carg('continue',       self%continue)
         call check_carg('corr_filt',      self%continue)
-        call check_carg('corrw',          self%corrw)
         call check_carg('countvox',       self%countvox)
         call check_carg('ctf',            self%ctf)
         call check_carg('ctfpatch',       self%ctfpatch)
@@ -581,7 +577,6 @@ contains
         call check_carg('ptclw',          self%ptclw)
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
-        call check_carg('rankw',          self%rankw)
         call check_carg('readwrite',      self%readwrite)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
@@ -610,6 +605,7 @@ contains
         call check_carg('trsstats',       self%trsstats)
         call check_carg('tseries',        self%tseries)
         call check_carg('vis',            self%vis)
+        call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
         call check_carg('wscheme',        self%wscheme)
         call check_carg('zero',           self%zero)
@@ -1216,30 +1212,22 @@ contains
         self%l_projw  = self%projw  .ne. 'no'
         ! set particle weighting scheme
         self%l_ptclw  = self%ptclw  .ne. 'no'
-        ! set rank weighting scheme
-        self%l_rankw  = self%rankw  .ne. 'no'
-        if( self%l_rankw )then
-            select case(trim(self%rankw))
-                case('sum')
-                    self%rankw_crit = RANK_SUM_CRIT
-                case('cen')
-                    self%rankw_crit = RANK_CEN_CRIT
-                case('exp')
-                    self%rankw_crit = RANK_EXP_CRIT
-                case('inv')
-                    self%rankw_crit = RANK_INV_CRIT
-                case DEFAULT
-                    THROW_HARD('unsupported rank ordering criteria weighting method')
-            end select
-        endif
         ! set correlation weighting scheme
-        self%l_corrw = self%corrw .ne. 'no'
+        self%l_corrw = self%wcrit .ne. 'no'
         if( self%l_corrw )then
-            select case(trim(self%corrw))
+            select case(trim(self%wcrit))
                 case('softmax')
-                    self%ccw_crit = CORRW_CRIT
+                    self%wcrit_enum = CORRW_CRIT
                 case('zscore')
-                    self%ccw_crit = CORRW_ZSCORE_CRIT
+                    self%wcrit_enum = CORRW_ZSCORE_CRIT
+                case('sum')
+                    self%wcrit_enum = RANK_SUM_CRIT
+                case('cen')
+                    self%wcrit_enum = RANK_CEN_CRIT
+                case('exp')
+                    self%wcrit_enum = RANK_EXP_CRIT
+                case('inv')
+                    self%wcrit_enum = RANK_INV_CRIT
                 case DEFAULT
                     THROW_HARD('unsupported correlation weighting method')
             end select

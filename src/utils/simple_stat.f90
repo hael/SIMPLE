@@ -502,23 +502,16 @@ contains
         r = max(-1.,min(1.,sxy/sqrt(sxx*syy)))
     end function pearsn_3
 
-    function corrs2weights( corrs, crit, rankw_crit, p, norm_sigm ) result( weights )
-        real,                                     intent(in) :: corrs(:) !< correlation input
-        integer(kind=kind(ENUM_WCRIT)),           intent(in) :: crit
-        integer(kind=kind(ENUM_WCRIT)), optional, intent(in) :: rankw_crit
-        real,                           optional, intent(in) :: p
-        logical,                        optional, intent(in) :: norm_sigm
+    function corrs2weights( corrs, crit, p, norm_sigm ) result( weights )
+        real,                           intent(in) :: corrs(:) !< correlation input
+        integer(kind=kind(ENUM_WCRIT)), intent(in) :: crit
+        real,                 optional, intent(in) :: p
+        logical,              optional, intent(in) :: norm_sigm
         real, allocatable :: weights(:), corrs_copy(:)
         real, parameter   :: THRESHOLD=1.5
         real    :: maxminratio, corrmax, corrmin, minw
         integer :: ncorrs
         logical :: nnorm_sigm
-        select case(crit)
-            case(CORRW_CRIT,CORRW_ZSCORE_CRIT)
-                ! all good
-            case DEFAULT
-                THROW_HARD('Only CORRW_CRIT & CORRW_ZSCORE_CRIT allowed for crit dummy argument; corrs2weights')
-        end select
         nnorm_sigm = .true.
         if( present(norm_sigm) ) nnorm_sigm = norm_sigm
         ncorrs = size(corrs)
@@ -556,9 +549,13 @@ contains
                 minw    = minval(weights)
                 weights = weights + abs(minw)
                 where( corrs_copy <= 0. ) weights = 0.
+            case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
+                ! convert to rank-based weights
+                weights = corrs_copy
+                call conv2rank_weights(ncorrs, weights, crit, p)
+            case DEFAULT
+                THROW_HARD('Unsupported conversion criterion; corrs2weights')
         end select
-        ! convert to rank-based weights
-        if( present(rankw_crit) ) call conv2rank_weights( ncorrs, weights, rankw_crit, p )
     end function corrs2weights
 
     ! integer STUFF

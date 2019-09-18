@@ -13,8 +13,6 @@ public :: set_state_overlap, sort_corrs
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: DEBUG_HERE = .false.
-
 contains
 
     subroutine extract_peaks( s, corrs, multistates )
@@ -111,10 +109,10 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real,    allocatable :: ws_nonzero(:)
+        real,    allocatable :: ws_nonzero(:), corrs_nonzero(:)
         real    :: dists(s%npeaks), arg4softmax(s%npeaks)
         real    :: wsum, thres, wavg_peak, wavg_nonpeak
-        integer :: npeaks
+        integer :: npeaks, i
         s%npeaks_eff = 1
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
@@ -129,15 +127,6 @@ contains
             ws_nonzero = pack(ws, mask=ws > TINY)
             call otsu(ws_nonzero, thres)
             s%npeaks_eff = max(1,count(ws_nonzero > thres))
-            if( DEBUG_HERE )then
-                wavg_peak    = sum(ws_nonzero, mask=ws_nonzero >  thres) / real(count(ws_nonzero >  thres))
-                wavg_nonpeak = sum(ws_nonzero, mask=ws_nonzero <= thres) / real(count(ws_nonzero <= thres))
-                print *, 'otsu_thres:         ', thres
-                print *, 'wavg_peak:          ', wavg_peak
-                print *, 'wavg_nonpeak:       ', wavg_nonpeak
-                print *, '# weights >  thres: ', s%npeaks_eff
-                print *, '# weights <= thres: ', count(ws_nonzero <= thres)
-            endif
             ! zero weights below the threshold and re-normalize
             if( s%npeaks_eff == 1 )then
                 where(ws < maxval(ws) ) ws = 0. ! always one nonzero weight
@@ -150,19 +139,14 @@ contains
             else
                 ws = 0.
             endif
-            if( params_glob%l_rankw )then
-                if( params_glob%rankw_crit == RANK_EXP_CRIT )then
-                    call conv2rank_weights(s%npeaks, ws, params_glob%rankw_crit, RANKW_EXP)
-                else
-                    call conv2rank_weights(s%npeaks, ws, params_glob%rankw_crit)
-                endif
-            endif
-            if( DEBUG_HERE )then
-                ws_nonzero = pack(ws, mask=ws > TINY)
-                call normalize_minmax(ws_nonzero)
-                call hpsort(ws_nonzero)
-                print *, ws_nonzero
-            endif
+            select case(params_glob%wcrit_enum)
+                case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
+                    if( params_glob%wcrit_enum == RANK_EXP_CRIT )then
+                        call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum, RANKW_EXP)
+                    else
+                        call conv2rank_weights(s%npeaks, ws, params_glob%wcrit_enum)
+                    endif
+            end select
             deallocate(ws_nonzero)
         endif
         ! update npeaks individual weights

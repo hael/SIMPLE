@@ -744,22 +744,23 @@ contains
                         wsum = sum(weights)
                         if( wsum > TINY )then
                             weights = weights / wsum
-                            if( params_glob%l_rankw )then
-                                if( params_glob%rankw_crit == RANK_EXP_CRIT )then
-                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit, RANKW_EXP)
-                                else
-                                    call conv2rank_weights(nw, weights, params_glob%rankw_crit)
-                                endif
-                                call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                                call build_glob%spproj_field%set(iptcl, 'ow', maxval(weights))
-                                deallocate(weights)
-                            else
-                                call s3D%o_peaks(iptcl)%set_all('ow', weights)
-                                call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
-                                call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
-                                deallocate(weights)
-                            endif
+                            select case(params_glob%wcrit_enum)
+                                case(RANK_SUM_CRIT,RANK_CEN_CRIT,RANK_EXP_CRIT,RANK_INV_CRIT)
+                                    if( params_glob%wcrit_enum == RANK_EXP_CRIT )then
+                                        call conv2rank_weights(nw, weights, params_glob%wcrit_enum, RANKW_EXP)
+                                    else
+                                        call conv2rank_weights(nw, weights, params_glob%wcrit_enum)
+                                    endif
+                                    call s3D%o_peaks(iptcl)%set_all('ow', weights)
+                                    call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
+                                    call build_glob%spproj_field%set(iptcl, 'ow', maxval(weights))
+                                    deallocate(weights)
+                                case DEFAULT
+                                    call s3D%o_peaks(iptcl)%set_all('ow', weights)
+                                    call build_glob%spproj_field%set(iptcl, 'npeaks', real(count(weights > TINY)))
+                                    call build_glob%spproj_field%set(iptcl, 'ow',     maxval(weights))
+                                    deallocate(weights)
+                            end select
                         else
                             call s3D%o_peaks(iptcl)%set_all2single('ow', 0.)
                             call build_glob%spproj_field%set(iptcl, 'npeaks', 0.)

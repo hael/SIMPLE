@@ -15,7 +15,7 @@ type(ctfparams)      :: ctfvars
 logical, allocatable :: corr_mask(:,:,:), corr_mask_inv(:,:,:)
 real                 :: neigh_weights(NNN)
 logical              :: do_flip = .false.
-integer(kind=kind(ENUM_WCRIT)), parameter :: WCRITS(2) = [CORRW_CRIT,RANK_INV_CRIT]
+integer(kind=kind(ENUM_WCRIT)), parameter :: WCRIT = RANK_INV_CRIT
 
 contains
 
@@ -69,7 +69,7 @@ contains
             if( neigh_mask(i) ) neigh_corrs(i) = particle%real_corr_prenorm(neighs(i), sxx, corr_mask_inv)
         end do
         ! calculate background weights
-        neigh_weights = corrs2weights(neigh_corrs, WCRITS(1), WCRITS(2))
+        neigh_weights = corrs2weights(neigh_corrs, WCRIT)
     end subroutine calc_neigh_weights
 
     subroutine subtr_graphene_backgr( particle, neighs, corrected )

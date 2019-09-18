@@ -437,11 +437,7 @@ contains
 
     subroutine calc_weights( self )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        if( params_glob%l_rankw )then
-            self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit, params_glob%rankw_crit)
-        else
-            self%frameweights = corrs2weights(self%corrs, params_glob%ccw_crit)
-        endif
+        self%frameweights = corrs2weights(self%corrs, params_glob%wcrit_enum)
     end subroutine calc_weights
 
     subroutine motion_align_iso_polyn_direct_set_frames( self, frames_ptr, nframes )

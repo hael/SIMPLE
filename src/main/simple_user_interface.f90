@@ -146,10 +146,12 @@ type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: radial_sym_test
 type(simple_program), target :: tseries_import
+type(simple_program), target :: tseries_approx_mskrad
 type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
 type(simple_program), target :: tseries_track
+type(simple_program), target :: tseries_preproc
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
@@ -160,7 +162,6 @@ type(simple_input_param) :: astigtol
 type(simple_input_param) :: bfac
 type(simple_input_param) :: box
 type(simple_input_param) :: clip
-type(simple_input_param) :: corrw
 type(simple_input_param) :: cs
 type(simple_input_param) :: ctf
 type(simple_input_param) :: ctfpatch
@@ -228,8 +229,6 @@ type(simple_input_param) :: qsys_name
 type(simple_input_param) :: qsys_partition
 type(simple_input_param) :: qsys_qos
 type(simple_input_param) :: qsys_reservation
-type(simple_input_param) :: rankw
-type(simple_input_param) :: rankw_general
 type(simple_input_param) :: remap_cls
 type(simple_input_param) :: scale_movies
 type(simple_input_param) :: sherr
@@ -250,6 +249,7 @@ type(simple_input_param) :: update_frac
 type(simple_input_param) :: user_account
 type(simple_input_param) :: user_email
 type(simple_input_param) :: user_project
+type(simple_input_param) :: wcrit
 
 interface set_param
     module procedure set_param_1
@@ -337,10 +337,12 @@ contains
         call new_symmetry_test
         call new_radial_sym_test
         call new_tseries_import
+        call new_tseries_approx_mskrad
         call new_tseries_average
         call new_tseries_corrfilt
         call new_tseries_ctf_estimate
         call new_tseries_track
+        call new_tseries_preproc
         call new_update_project
         call new_vizoris
         call new_volops
@@ -589,6 +591,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
+            case('tseries_approx_mskrad')
+                ptr2prg => tseries_approx_mskrad
             case('tseries_average')
                 ptr2prg => tseries_average
             case('tseries_corrfilt')
@@ -597,6 +601,8 @@ contains
                 ptr2prg => tseries_ctf_estimate
             case('tseries_track')
                 ptr2prg => tseries_track
+            case('tseries_preproc')
+                ptr2prg => tseries_preproc
             case('update_project')
                 ptr2prg => update_project
             case('vizoris')
@@ -687,9 +693,11 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
+        write(logfhandle,'(A)') tseries_approx_mskrad%name
         write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
+        write(logfhandle,'(A)') tseries_preproc%name
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
@@ -799,13 +807,11 @@ contains
         call set_param(starfile,       'starfile',     'file',   'STAR-format file name', 'File name of STAR-formatted file', 'e.g. proj.star', .false., '')
         call set_param(startype,       'startype',     'str',    'STAR-format export type', 'STAR experiment type used to define variables in export file', 'e.g. micrographs or class2d or refine3d', .false., '')
         call set_param(scale_movies,   'scale',        'num',    'Down-scaling factor(0-1)', 'Down-scaling factor to apply to the movies(0-1)', '(0-1)', .false., 1.0)
-        call set_param(rankw,          'rankw',        'multi',  'Orientation weights based on ranks', 'Orientation weights based on ranks, independent of objective function magnitude(sum|cen|exp|no){sum}',  '(sum|cen|exp|no){sum}',  .false., 'sum')
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
         call set_param(graphene_filt, 'graphene_filt', 'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
-        call set_param(corrw,          'corrw',        'multi',  'Weights based on correlations', 'Weights based on correlations(softmax|zscore|no){softmax}',  '(softmax|zscore|no){softmax}',  .false., 'softmax')
-        call set_param(rankw_general,  'rankw',        'multi',  'Weights based on ranks', 'Weights based on ranks, independent of objective function magnitude(sum|cen|exp|inv|no){sum}',  '(sum|cen|exp|inv|no){no}',  .false., 'no')
+        call set_param(wcrit,  'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
         call set_param(element, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         call set_param(tseries, 'tseries', 'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
@@ -1633,7 +1639,7 @@ contains
             &'low-pass limit in Angstroms', .false., 0.)
         call initial_3Dmodel%set_input('filt_ctrls', 4, 'lpstop',  'num', 'Final low-pass limit', 'Final low-pass limit',&
             &'low-pass limit for the second stage (no e/o cavgs refinement) in Angstroms', .false., 8.)
-        call initial_3Dmodel%set_input('filt_ctrls', 5, rankw)
+        call initial_3Dmodel%set_input('filt_ctrls', 5, wcrit)
         call initial_3Dmodel%set_input('filt_ctrls', 6, ptclw)
         call initial_3Dmodel%set_input('filt_ctrls', 7, envfsc)
         ! mask controls
@@ -2070,7 +2076,7 @@ contains
         & the down-scaling factor (for super-resolution movies). If nframesgrp is given the frames will&
         & be pre-averaged in the given chunk size (Falcon 3 movies).',&                        ! descr_long
         &'simple_distr_exec',&                                                                 ! executable
-        &1, 5, 0, 9, 4, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
+        &1, 5, 0, 9, 3, 0, 2, .true.)                                                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call motion_correct%set_input('img_ios', 1, 'gainref', 'file', 'Gain reference', 'Gain reference image', 'input image e.g. gainref.mrc', .false., '')
@@ -2100,8 +2106,7 @@ contains
         &iterations of movie alignment (in Angstroms){8}', 'in Angstroms{8}', .false., 8.)
         call motion_correct%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment (in Angstroms){5}', 'in Angstroms{5}', .false., 5.)
-        call motion_correct%set_input('filt_ctrls', 3, corrw)
-        call motion_correct%set_input('filt_ctrls', 4, rankw_general)
+        call motion_correct%set_input('filt_ctrls', 3, wcrit)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2125,7 +2130,7 @@ contains
         &(for super-resolution movies). If nframesgrp is given the frames will be pre-averaged in the given &
         &chunk size (Falcon 3 movies)',& ! descr_long
         &'simple_distr_exec',&           ! executable
-        &0, 7, 0, 4, 5, 0, 1, .false.)   ! # entries in each group, requires sp_project
+        &0, 7, 0, 4, 4, 0, 1, .false.)   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -2152,8 +2157,7 @@ contains
         call motion_correct_tomo%set_input('filt_ctrls', 2, 'lpstop', 'num', 'Final low-pass limit', 'Low-pass limit to be applied in the last &
         &iterations of movie alignment (in Angstroms)', 'in Angstroms', .false., 8.)
         call motion_correct_tomo%set_input('filt_ctrls', 3, kv)
-        call motion_correct_tomo%set_input('filt_ctrls', 4, corrw)
-        call motion_correct_tomo%set_input('filt_ctrls', 5, rankw_general)
+        call motion_correct_tomo%set_input('filt_ctrls', 4, wcrit)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -2826,7 +2830,7 @@ contains
         call reconstruct3D%set_input('srch_ctrls', 4, sigma2_fudge)
         ! filter controls
         call reconstruct3D%set_input('filt_ctrls', 1, projw)
-        call reconstruct3D%set_input('filt_ctrls', 2, rankw)
+        call reconstruct3D%set_input('filt_ctrls', 2, wcrit)
         call reconstruct3D%set_input('filt_ctrls', 3, ptclw)
         call reconstruct3D%set_input('filt_ctrls', 4, envfsc)
         ! mask controls
@@ -2885,7 +2889,7 @@ contains
         call refine3D%set_input('filt_ctrls', 5,  lplim_crit)
         call refine3D%set_input('filt_ctrls', 6,  lp_backgr)
         call refine3D%set_input('filt_ctrls', 7,  projw)
-        call refine3D%set_input('filt_ctrls', 8,  rankw)
+        call refine3D%set_input('filt_ctrls', 8,  wcrit)
         call refine3D%set_input('filt_ctrls', 9,  ptclw)
         call refine3D%set_input('filt_ctrls', 10, envfsc)
         ! mask controls
@@ -2932,7 +2936,7 @@ contains
         &Angstroms{30}', .false., 30.)
         call refine3D_nano%set_input('filt_ctrls', 3, 'lp', 'num', 'Static low-pass limit', 'Static low-pass limit', 'low-pass limit in Angstroms', .false., 20.)
         call refine3D_nano%set_input('filt_ctrls', 4, projw)
-        call refine3D_nano%set_input('filt_ctrls', 5, rankw)
+        call refine3D_nano%set_input('filt_ctrls', 5, wcrit)
         ! mask controls
         call refine3D_nano%set_input('mask_ctrls', 1, msk)
         call refine3D_nano%set_input('mask_ctrls', 2, mskfile)
@@ -3526,7 +3530,7 @@ contains
         ! search controls
         call tseries_average%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to average', 'Number of contigous frames to average using correlation-based weights{10}', '{10}', .false., 10.)
         ! filter controls
-        call tseries_average%set_input('filt_ctrls', 1, rankw_general)
+        call tseries_average%set_input('filt_ctrls', 1, wcrit)
         ! mask controls
         call tseries_average%set_input('mask_ctrls', 1, msk)
         ! computer controls
@@ -3611,7 +3615,6 @@ contains
         &'.txt file with EMAN particle coordinates', 'e.g. coords.box', .true., '')
         call tseries_track%set_input('parm_ios', 3, 'ctf', 'binary', 'CTF status of output stacks',&
         &'CTF status of output stacks(flip|no)', '(flip|no)', .true., '')
-
         ! alternative inputs
         ! <empty>
         ! search controls
@@ -3636,6 +3639,65 @@ contains
         call tseries_track%set_input('comp_ctrls', 1, nparts)
         call tseries_track%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_track
+
+    subroutine new_tseries_approx_mskrad
+        ! PROGRAM SPECIFICATION
+        call tseries_approx_mskrad%new(&
+        &'tseries_approx_mskrad',&                                                                                    ! name
+        &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
+        &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
+        &'simple_exec',&                                                                                              ! executable
+        &2, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_approx_mskrad%set_input('img_ios', 1, stk)
+        tseries_approx_mskrad%img_ios(1)%required = .true.
+        call tseries_approx_mskrad%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call tseries_approx_mskrad%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call tseries_approx_mskrad%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the nanoparticles and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call tseries_approx_mskrad%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_approx_mskrad
+
+    subroutine new_tseries_preproc
+        ! PROGRAM SPECIFICATION
+        call tseries_preproc%new(&
+        &'tseries_preproc',&                                             ! name
+        &'Pre-processing of nanoparticle time-series',&                  ! descr_short
+        &'is a program for pre-processing of nanoparticle time-series',& ! descr_long
+        &'simple_exec',&                                                 ! executable
+        &2, 1, 0, 0, 1, 2, 1, .false.)                                   ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call tseries_preproc%set_input('img_ios', 1, stk)
+        tseries_preproc%img_ios(1)%required = .true.
+        call tseries_preproc%set_input('img_ios', 2, outstk)
+        ! parameter input/output
+        call tseries_preproc%set_input('parm_ios', 1, smpd)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call tseries_preproc%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
+        &prior to determination of the center of gravity of the nanoparticles and centering', 'centering low-pass limit in &
+        &Angstroms{5}', .false., 5.)
+        ! mask controls
+        call tseries_preproc%set_input('mask_ctrls', 1, msk)
+        call tseries_preproc%set_input('mask_ctrls', 2, 'width', 'num', 'Falloff cosine edge', 'Number of cosine edge pixels for smoothening', '# pixels cosine edge{12}', .false., 12.)
+        ! computer controls
+        call tseries_preproc%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_preproc
 
     subroutine new_update_project
         ! PROGRAM SPECIFICATION

@@ -15,6 +15,8 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
+public :: tseries_approx_mskrad_commander
+public :: tseries_preproc_commander
 public :: tseries_average_commander
 public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
@@ -45,6 +47,14 @@ type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
 end type cluster2D_nano_commander_distr
+type, extends(commander_base) :: tseries_approx_mskrad_commander
+  contains
+    procedure :: execute      => exec_tseries_approx_mskrad
+end type tseries_approx_mskrad_commander
+type, extends(commander_base) :: tseries_preproc_commander
+  contains
+    procedure :: execute      => exec_tseries_preproc
+end type tseries_preproc_commander
 type, extends(commander_base) :: tseries_average_commander
   contains
     procedure :: execute      => exec_tseries_average
@@ -338,13 +348,45 @@ contains
         call xcluster2D_distr%execute(cline)
     end subroutine exec_cluster2D_nano_distr
 
+    subroutine exec_tseries_approx_mskrad( self, cline )
+        use simple_tseries_preproc
+        class(tseries_approx_mskrad_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline
+        type(parameters) :: params
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp'  , 5.0)
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
+        call params%new(cline)
+        call init_tseries_preproc
+        call tseries_approx_mask_radius
+        call kill_tseries_preproc
+        call simple_end('**** SIMPLE_TSERIES_APPROX_MSKRAD NORMAL STOP ****')
+    end subroutine exec_tseries_approx_mskrad
+
+    subroutine exec_tseries_preproc( self, cline )
+        use simple_tseries_preproc
+        class(tseries_preproc_commander), intent(inout) :: self
+        class(cmdline),                   intent(inout) :: cline
+        type(parameters) :: params
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp',       5.0)
+        if( .not. cline%defined('width')  ) call cline%set('width',      12.0)
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'preproc_imgs.mrcs')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',     'yes')
+        call params%new(cline)
+        call init_tseries_preproc
+
+        ! to be filled in
+
+        call kill_tseries_preproc
+        call simple_end('**** SIMPLE_TSERIES_PREPROC NORMAL STOP ****')
+    end subroutine exec_tseries_preproc
+
     subroutine exec_tseries_average( self, cline )
         use simple_tseries_averager
         class(tseries_average_commander), intent(inout) :: self
         class(cmdline),                   intent(inout) :: cline
         type(parameters) :: params
         if( .not. cline%defined('nframesgrp') ) call cline%set('nframesgrp',  10.)
-        if( .not. cline%defined('rankw')      ) call cline%set('rankw',     'cen')
+        if( .not. cline%defined('wcrit')      ) call cline%set('wcrit',     'cen')
         if( .not. cline%defined('outstk')     ) call cline%set('outstk', 'time_window_wavgs.mrcs')
         if( .not. cline%defined('mkdir')      ) call cline%set('mkdir',     'yes')
         call params%new(cline)
@@ -535,7 +577,7 @@ contains
         ! dynamic parameters
         if( .not. cline%defined('nspace')      ) call cline%set('nspace',    10000.)
         if( .not. cline%defined('shcfrac')     ) call cline%set('shcfrac',      10.)
-        if( .not. cline%defined('rankw')       ) call cline%set('rankw',      'exp')
+        if( .not. cline%defined('wcrit')       ) call cline%set('wcrit',      'exp')
         if( .not. cline%defined('trs')         ) call cline%set('trs',          2.0)
         if( .not. cline%defined('update_frac') ) call cline%set('update_frac',  0.2)
         if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)

@@ -108,11 +108,7 @@ contains
                 logical :: renorm
                 integer :: i, ind
                 ! calculate weights
-                if( params_glob%l_rankw )then
-                    weights = corrs2weights(corrs, params_glob%ccw_crit, params_glob%rankw_crit, norm_sigm=.false.)
-                else
-                    weights = corrs2weights(corrs, params_glob%ccw_crit, norm_sigm=.false.)
-                endif
+                weights = corrs2weights(corrs, params_glob%wcrit_enum, norm_sigm=.false.)
                 ! check weights backward in time
                 renorm = .false.
                 do i=fromto(1) + nz/2,fromto(1),-1
