@@ -3027,26 +3027,39 @@ contains
         scalefactor = PI / rfalloff
         allocate( rmat(self%ldim(1),self%ldim(2),self%ldim(3)),stat=alloc_stat )
         if(alloc_stat /= 0)call allocchk("In simple_image::cos_edge")
-        rmat = self%rmat(1:self%ldim(1),:,:)
-        do i=1,self%ldim(1)
-            is = max(1,i-1)                  ! left neighbour
-            ie = min(i+1,self%ldim(1))       ! right neighbour
-            il = max(1,i-falloff)            ! left bounding box limit
-            ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
-            if( .not. any(is_equal(rmat(i,:,:),1.)) )cycle ! no values equal to one
-            do j=1,self%ldim(2)
-                js = max(1,j-1)
-                je = min(j+1,self%ldim(2))
-                jl = max(1,j-falloff)
-                jr = min(j+falloff,self%ldim(2))
-                if( self%ldim(3)==1 )then
-                    ! 2d
-                    if( is_equal(rmat(i,j,1), 1.) ) cycle ! cycle if not equal to one
-                    ! within mask region
-                    ! update if has a masked neighbour
-                    if( any( rmat(is:ie,js:je,1) < 1.) )call update_mask_2d
-                else
-                    ! 3d
+        rmat = self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
+        if( self%is_2d() )then
+            ! 2d
+            do i=1,self%ldim(1)
+                is = max(1,i-1)                  ! left neighbour
+                ie = min(i+1,self%ldim(1))       ! right neighbour
+                il = max(1,i-falloff)            ! left bounding box limit
+                ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
+                if( .not. any(is_equal(rmat(i,:,1),1.)) )cycle
+                do j=1,self%ldim(2)
+                    if( .not.is_equal(rmat(i,j,1), 1.) ) cycle
+                    js = max(1,j-1)
+                    je = min(j+1,self%ldim(2))
+                    if( any( rmat(is:ie,js:je,1) < 1.) )then
+                        jl = max(1,j-falloff)
+                        jr = min(j+falloff,self%ldim(2))
+                        call update_mask_2d
+                    endif
+                end do
+            end do
+        else
+            ! 3d
+            do i=1,self%ldim(1)
+                is = max(1,i-1)                  ! left neighbour
+                ie = min(i+1,self%ldim(1))       ! right neighbour
+                il = max(1,i-falloff)            ! left bounding box limit
+                ir = min(i+falloff,self%ldim(1)) ! right bounding box limit
+                if( .not. any(is_equal(rmat(i,:,:),1.)) )cycle ! no values equal to one
+                do j=1,self%ldim(2)
+                    js = max(1,j-1)
+                    je = min(j+1,self%ldim(2))
+                    jl = max(1,j-falloff)
+                    jr = min(j+falloff,self%ldim(2))
                     if(.not. any(is_equal(rmat(i,j,:), 1.)) )cycle ! cycle if equal to one
                     do k=1,self%ldim(3)
                         if(.not. is_equal(rmat(i,j,k) , 1.) )cycle
@@ -3060,12 +3073,11 @@ contains
                             call update_mask_3d
                         endif
                     end do
-                endif
+                end do
             end do
-        end do
+        endif
         self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)) = rmat
         deallocate(rmat)
-
     contains
 
         !> updates neighbours with cosine weight
@@ -3101,12 +3113,10 @@ contains
         end subroutine update_mask_3d
 
         !> Local elemental cosine edge function
-        !> this is not a replacement of math%cosedge, which is not applicable here
         elemental real function local_versine( r_sq )result( c )
             real, intent(in) :: r_sq
             c = 0.5 * (1. - cos(scalefactor*(sqrt(r_sq)-rfalloff)) )
         end function local_versine
-
     end subroutine cos_edge
 
     !>  \brief  remove edge from binary image
