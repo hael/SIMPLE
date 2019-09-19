@@ -286,6 +286,7 @@ contains
     procedure, private :: real_corr_2
     generic            :: real_corr => real_corr_1, real_corr_2
     procedure          :: phase_corr
+    procedure          :: fcorr_shift
     procedure          :: prenorm4real_corr_1
     procedure          :: prenorm4real_corr_2
     generic            :: prenorm4real_corr => prenorm4real_corr_1, prenorm4real_corr_2
@@ -314,8 +315,8 @@ contains
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
     procedure          :: zero_env_background
-    procedure          :: noise_norm_instrfun_pad_fft
     procedure          :: noise_norm_pad_fft
+    procedure          :: div_w_instrfun
     procedure          :: salt_n_pepper
     procedure          :: square
     procedure          :: draw_picked
@@ -6316,7 +6317,6 @@ contains
         real(dp)    :: sqsum1,sqsum2
         integer     :: nrflims(3,2),phys(3),npix,shlim,shlimsq
         integer     :: shlimbpsq,shlimbp,h,k,l,hsq_ksq_lsq
-        logical     :: ft1, ft2
         if(present(border) .and. self1%ldim(3) > 1) THROW_HARD('Border discarding not implemented for 3D; phase_corr')
         if(present(border) .and. (border >= self1%ldim(1)/2 .or. border >= self1%ldim(2)/2 ))&
         & THROW_HARD('Input border parameter too big; phase_corr')
@@ -6397,6 +6397,28 @@ contains
                 pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
         endif
     end subroutine phase_corr
+
+    ! returns the discrete shift that registers self2 to self1
+    subroutine fcorr_shift(self1, self2, trs, shift )
+        class(image),      intent(inout) :: self1, self2
+        real,              intent(in)    :: trs
+        real,              intent(inout) :: shift(2)
+        type(image) :: corr_img
+        integer     :: center(2), pos(2), itrs
+        if( self1%is_3d() .or. self2%is_3d() ) THROW_HARD('2d only supported')
+        if( .not.(self1.eqdims.self2) ) THROW_HARD('Inconsistent dimensions in fcorr_shift')
+        center = self1%ldim(1:2)/2+1
+        itrs   = min(floor(trs),minval(center)-1)
+        call corr_img%new(self1%ldim,1.)
+        call corr_img%zero_and_flag_ft
+        call self1%fft
+        call self2%fft
+        corr_img%cmat = self1%cmat * conjg(self2%cmat)
+        call corr_img%ifft
+        pos   = maxloc(corr_img%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
+        shift = -real(pos)
+        call corr_img%kill
+    end subroutine fcorr_shift
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm
     subroutine prenorm4real_corr_1( self, sxx )
@@ -6863,22 +6885,47 @@ contains
         deallocate(vals)
     end subroutine zero_env_background
 
-    subroutine noise_norm_instrfun_pad_fft( self, lmsk, instrfun_img, self_out )
+    !>  \brief generates instrument function image for division of real-space images
+    subroutine div_w_instrfun( self, alpha )
+        use simple_kbinterpol, only: kbinterpol
         class(image), intent(inout) :: self
-        logical,      intent(in)    :: lmsk(self%ldim(1),self%ldim(2),self%ldim(3))
-        class(image), intent(in)    :: instrfun_img
-        class(image), intent(inout) :: self_out
-        integer :: starts(3), stops(3)
-        call self%noise_norm(lmsk)
-        call self%div(instrfun_img)
-        starts        = (self_out%ldim - self%ldim) / 2 + 1
-        stops         = self_out%ldim - starts + 1
-        self_out%ft   = .false.
-        self_out%rmat = 0.
-        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
-            &self%rmat(:self%ldim(1),:self%ldim(2),1)
-        call self_out%fft
-    end subroutine noise_norm_instrfun_pad_fft
+        real,         intent(in)    :: alpha
+        type(kbinterpol)  :: kbwin
+        real, allocatable :: w(:)
+        real    :: arg
+        integer :: ldim(3), center(3), i,j,k
+        kbwin = kbinterpol(KBWINSZ,alpha)
+        if( any(self%ldim==0) .or. self%is_ft() .or. .not.self%square_dims() )then
+            THROW_HARD('Erroneous image in div_w_instrfun')
+        endif
+        allocate(w(self%ldim(1)),source=1.)
+        center = self%ldim/2+1
+        ! kaiser-besel window
+        do i = 1,self%ldim(1)
+            arg  = real(i-center(1))/real(self%ldim(1))
+            w(i) = kbwin%instr(arg)
+        end do
+        if( self%is_2d() )then
+            !$omp parallel do collapse(2) private(i,j) default(shared) proc_bind(close) schedule(static)
+            do i = 1,self%ldim(1)
+                do j = 1,self%ldim(2)
+                    self%rmat(i,j,1) = self%rmat(i,j,1) / (w(i)*w(j))
+                enddo
+            enddo
+            !$omp end parallel do
+        else
+            !$omp parallel do collapse(3) private(i,j,k) default(shared) proc_bind(close) schedule(static)
+            do i = 1,self%ldim(1)
+                do j = 1,self%ldim(2)
+                    do k = 1,self%ldim(3)
+                        self%rmat(i,j,k) = self%rmat(i,j,k) / (w(i)*w(j)*w(k))
+                    enddo
+                enddo
+            enddo
+            !$omp end parallel do
+        endif
+        deallocate(w)
+    end subroutine div_w_instrfun
 
     subroutine noise_norm_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
