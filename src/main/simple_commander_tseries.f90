@@ -357,6 +357,7 @@ contains
         if( .not. cline%defined('lp')     ) call cline%set('lp',    3.0)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','no')
         if( .not. cline%defined('sigma')  ) call cline%set('sigma', 2.0)
+        if( .not. cline%defined('trs')    ) call cline%set('trs',  10.0)
         if( .not. cline%defined('outstk') ) call cline%set('outstk', 'masked_tseries.mrcs')
         call params%new(cline)
         call init_tseries_preproc

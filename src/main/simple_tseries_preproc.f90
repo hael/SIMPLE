@@ -10,18 +10,20 @@ public :: init_tseries_preproc, kill_tseries_preproc, tseries_center_and_mask
 private
 #include "simple_local_flags.inc"
 
-logical,          parameter :: DEBUG_HERE = .true.
-integer,          parameter :: CHUNKSZ    = 500
-integer,          parameter :: STEPSZ     = 20
-real,             parameter :: EXTRA_EDGE = 6.0
+logical,          parameter :: DEBUG_HERE       = .true.
+integer,          parameter :: CHUNKSZ          = 500
+integer,          parameter :: STEPSZ           = 20
+real,             parameter :: EXTRA_EDGE       = 6.0
 character(len=*), parameter :: DENOISED_TSERIES = 'denoised_tseries.mrcs'
+character(len=*), parameter :: TWIN_AVGS        = 'time_window_avgs.mrcs'
 
 
 type(image), allocatable :: ptcl_imgs(:)        ! all particles in the time-series
 type(image), allocatable :: ptcl_imgs_den(:)    ! denoised particles
-type(image)              :: ptcl_avg            ! average over time window
+type(image), allocatable :: ptcl_avgs(:)        ! averages over time window
 type(image)              :: cc_img              ! connected components image
-real,        allocatable :: shifts(:,:)         ! shifts obtained throough center of mass centering
+integer,     allocatable :: avg_inds(:)         ! indices that map particles to averages
+real,        allocatable :: shifts(:,:)         ! shifts obtained through center of mass centering
 real,        allocatable :: rmat_sum(:,:,:)     ! for OpenMP reduction
 integer                  :: ldim(3)             ! logical dimension of 2D image
 logical                  :: existence = .false. ! to flag existence
@@ -29,27 +31,26 @@ logical                  :: existence = .false. ! to flag existence
 contains
 
     subroutine init_tseries_preproc
-        integer     :: i, fromto(2)
-        type(image) :: img_tmp
+        integer :: i
         ! first, kill pre-existing
         call kill_tseries_preproc
         ! denoise
         write(logfhandle,'(A)') '>>> DENOISING TIME-SERIES USING GLOBAL SPACE-TIME GAUSSIAN CONVOLUTION'
         call corrfilt_tseries_imgfile(params_glob%stk, params_glob%sigma, DENOISED_TSERIES, params_glob%smpd, params_glob%lp)
         ! create image objects & arrays
-        allocate(ptcl_imgs(params_glob%nptcls), ptcl_imgs_den(params_glob%nptcls), shifts(params_glob%nptcls,3))
+        allocate(ptcl_imgs(params_glob%nptcls), ptcl_imgs_den(params_glob%nptcls),&
+        &avg_inds(params_glob%nptcls), shifts(params_glob%nptcls,3))
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
             call ptcl_imgs_den(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
             call ptcl_imgs(i)%read(params_glob%stk, i)
             call ptcl_imgs_den(i)%read(DENOISED_TSERIES, i)
         end do
-        call ptcl_avg%new([params_glob%box,params_glob%box,1], params_glob%smpd)
         ! allocate real matrix for OpenMP reduction
-        ldim = ptcl_avg%get_ldim()
+        ldim = ptcl_imgs(1)%get_ldim()
         allocate(rmat_sum(ldim(1),ldim(2),ldim(3)), source=0.)
         ! prepare thread safe images
-        call ptcl_avg%construct_thread_safe_tmp_imgs(nthr_glob)
+        call ptcl_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! flag existence
         existence = .true.
     end subroutine init_tseries_preproc
@@ -59,20 +60,27 @@ contains
         real,    allocatable :: diams(:)
         logical, allocatable :: include_mask(:)
         real    :: diam_ave, diam_sdev, diam_var, mask_radius, nndiams(2)
-        real    :: one_sigma_thresh, boundary_avg, mskrad, mskrad_max
+        real    :: one_sigma_thresh, boundary_avg, mskrad
         integer :: iframe, i, j, fromto(2), cnt, loc(1), lb, rb
         logical :: err, l_nonzero(2)
-        ! allocate diameters array
+        ! allocate diameters and ptcl_avgs arrays
         cnt = 0
         do iframe=1,params_glob%nptcls,STEPSZ
             cnt = cnt + 1
         end do
-        allocate(diams(cnt), source=0.)
+        allocate(diams(cnt), ptcl_avgs(cnt))
+        diams = 0.
+        ! construct particle averages (used later for centering the individual particles)
+        do i=1,cnt
+            call ptcl_avgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
+        end do
         write(logfhandle,'(A)') '>>> ESTIMATING PARTICLE DIAMETERS THROUGH BINARY IMAGE PROCESSING'
         cnt = 0
         do iframe=1,params_glob%nptcls,STEPSZ
             call progress(iframe,params_glob%nptcls)
             cnt = cnt + 1
+            ! set indices that map particles to averages
+            avg_inds(iframe:) = cnt
             ! set time window
             fromto(1) = iframe - CHUNKSZ/2
             fromto(2) = iframe + CHUNKSZ/2 - 1
@@ -84,15 +92,19 @@ contains
                 fromto = fromto - 1
             end do
             call calc_avg
-            call ptcl_avg%bp(0., params_glob%cenlp)
-            call ptcl_avg%mask(real(params_glob%box/2) - EXTRA_EDGE, 'soft')
-            if( DEBUG_HERE ) call ptcl_avg%write('chunk_avgs.mrcs', cnt)
-            call otsu_img(ptcl_avg)
-            if( DEBUG_HERE ) call ptcl_avg%write('otsu.mrcs', cnt)
-            call ptcl_avg%find_connected_comps(cc_img)
+            call ptcl_avgs(cnt)%bp(0., params_glob%cenlp)
+            call ptcl_avgs(cnt)%write(TWIN_AVGS, cnt)
+            call ptcl_avgs(cnt)%mask(real(params_glob%box/2) - EXTRA_EDGE, 'soft')
+            call otsu_img(ptcl_avgs(cnt))
+            if( DEBUG_HERE ) call ptcl_avgs(cnt)%write('otsu.mrcs', cnt)
+            call ptcl_avgs(cnt)%find_connected_comps(cc_img)
             ccsizes = cc_img%size_connected_comps()
             loc = maxloc(ccsizes)
             call cc_img%diameter_cc(loc(1), diams(cnt))
+        end do
+        ! read the time window averages back in
+        do i=1,cnt
+            call ptcl_avgs(cnt)%read(TWIN_AVGS, i)
         end do
         write(logfhandle,'(A)') ''
         write(logfhandle,'(A)') '>>> CORRECTING FOR OUTLIERS WITH 1-SIGMA THRESHOLDING'
@@ -120,33 +132,23 @@ contains
             endif
         enddo
         diams(1) = diams(2)
-        write(logfhandle,'(A)') '>>> ESTIMATING MASS CENTERS'
-        mskrad_max = maxval(diams) /2. + EXTRA_EDGE
-        do iframe=1,params_glob%nptcls,STEPSZ
-            fromto(1) = iframe
-            fromto(2) = min(params_glob%nptcls, iframe + STEPSZ - 1)
-            !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
-            do i=fromto(1),fromto(2)
-                shifts(i,:) = ptcl_imgs(i)%calc_shiftcen_serial(params_glob%cenlp, mskrad_max)
-            end do
-            !$omp end parallel do
+        write(logfhandle,'(A)') '>>> MEDIAN RADIUS (IN PIXELS): ', median(diams) / 2.
+        write(logfhandle,'(A)') '>>> CENTERING BY PHASE CORRELATION'
+        !omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
+        do i=1,params_glob%nptcls
+            call ptcl_avgs(avg_inds(i))%fcorr_shift(ptcl_imgs(i), params_glob%trs, shifts(i,:))
         end do
+        !omp end parallel do
         write(logfhandle,'(A)') '>>> CENTERING AND MASKING THE ORIGINAL PARTICLE IMAGES'
-        cnt = 0
-        do iframe=1,params_glob%nptcls,STEPSZ
-            cnt = cnt + 1
-            fromto(1) = iframe
-            fromto(2) = min(params_glob%nptcls, iframe + STEPSZ - 1)
-            !$omp parallel do default(shared) private(i,mskrad) proc_bind(close) schedule(static)
-            do i=fromto(1),fromto(2)
-                call ptcl_imgs(i)%fft()
-                call ptcl_imgs(i)%shift2Dserial(shifts(i,1:2))
-                call ptcl_imgs(i)%ifft()
-                mskrad = diams(cnt) / 2. + EXTRA_EDGE
-                call ptcl_imgs(i)%mask(mskrad, 'soft')
-            end do
-            !$omp end parallel do
+        !$omp parallel do default(shared) private(i,mskrad) proc_bind(close) schedule(static)
+        do i=1,params_glob%nptcls
+            call ptcl_imgs(i)%fft()
+            call ptcl_imgs(i)%shift2Dserial(shifts(i,1:2))
+            call ptcl_imgs(i)%ifft()
+            mskrad = diams(cnt) / 2. + EXTRA_EDGE
+            call ptcl_imgs(i)%mask(mskrad, 'soft')
         end do
+        !$omp end parallel do
         write(logfhandle,'(A)') '>>> WRITING MASKED IMAGES TO DISK'
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%write(params_glob%outstk, i)
@@ -165,21 +167,25 @@ contains
                     rmat_sum = rmat_sum + rmat_ptr(:ldim(1),:ldim(2),:ldim(3))
                 end do
                 !$omp end parallel do
-                call ptcl_avg%set_rmat(rmat_sum)
-                call ptcl_avg%div(real(fromto(2) - fromto(1) + 1))
+                call ptcl_avgs(cnt)%set_rmat(rmat_sum)
+                call ptcl_avgs(cnt)%div(real(fromto(2) - fromto(1) + 1))
             end subroutine calc_avg
 
     end subroutine tseries_center_and_mask
 
     subroutine kill_tseries_preproc
-        integer :: i
+        integer :: i, cnt
         if( existence )then
             do i=1,size(ptcl_imgs)
                 call ptcl_imgs(i)%kill
                 call ptcl_imgs_den(i)%kill
             end do
-            deallocate(ptcl_imgs,ptcl_imgs_den,shifts,rmat_sum)
-            call ptcl_avg%kill
+            cnt = 0
+            do i=1,params_glob%nptcls,STEPSZ
+                cnt = cnt + 1
+                call ptcl_avgs(cnt)%kill
+            end do
+            deallocate(ptcl_imgs,ptcl_imgs_den,ptcl_avgs,avg_inds,shifts,rmat_sum)
             call cc_img%kill
         endif
     end subroutine kill_tseries_preproc

@@ -3646,7 +3646,7 @@ contains
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
         &'simple_exec',&                                                                                              ! executable
-        &2, 1, 0, 0, 3, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
+        &2, 1, 0, 1, 3, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call tseries_center_and_mask%set_input('img_ios', 1, stk)
@@ -3657,7 +3657,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        ! <empty>
+        call tseries_center_and_mask%set_input('srch_ctrls', 1, trs)
         ! filter controls
         call tseries_center_and_mask%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit',&
         &'Limit for low-pass filter used in binarisation prior to determination of the center of gravity of &
