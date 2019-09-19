@@ -724,16 +724,10 @@ contains
                         end do
                     endif
                 end do
-                if( WGLOB_OTSU )then
-                    ! define a threshold using Otsu's algorithm
-                    ws_nonzero = pack(weights_glob(:cnt), mask=weights_glob(:cnt) > TINY)
-                    call otsu(ws_nonzero, weight_thres)
-                    deallocate(ws_nonzero)
-                else
-                    ! find threshold based on pre-defined params_glob%globwfrac (0.16 by default)
-                    call hpsort(weights_glob(:cnt))
-                    weight_thres = weights_glob(cnt - nint(real(cnt) * params_glob%globwfrac))
-                endif
+                ! define a threshold using Otsu's algorithm
+                ws_nonzero = pack(weights_glob(:cnt), mask=weights_glob(:cnt) > TINY)
+                call otsu(ws_nonzero, weight_thres)
+                deallocate(ws_nonzero)
                 if( weight_thres <= TINY ) weight_thres = SMALL
                 ! zero and normalize weights, apply rank-based weighting scheme if so specified
                 do iptcl=params_glob%fromp,params_glob%top

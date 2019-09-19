@@ -84,7 +84,7 @@ type(simulate_subtomogram_commander) :: xsimulate_subtomogram
 
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)        :: xtseries_import
-type(tseries_approx_mskrad_commander) :: xtseries_approx_mskrad
+type(tseries_center_and_mask_commander) :: xtseries_center_and_mask
 type(tseries_preproc_commander)       :: xtseries_preproc
 type(tseries_average_commander)       :: xtseries_avg
 type(tseries_corrfilt_commander)      :: xtseries_corrfilt
@@ -224,8 +224,8 @@ select case(prg)
     ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
     case( 'tseries_import' )
         call xtseries_import%execute(cline)
-    case( 'tseries_approx_mskrad')
-        call xtseries_approx_mskrad%execute(cline)
+    case( 'tseries_center_and_mask')
+        call xtseries_center_and_mask%execute(cline)
     case( 'tseries_preproc')
         call xtseries_preproc%execute(cline)
     case( 'tseries_average')

@@ -3461,7 +3461,7 @@ contains
         integer, allocatable :: pos(:,:)         !position of the pixels of a fixed cc
         integer, allocatable :: imat_cc(:,:,:)
         logical, allocatable :: msk(:) ! For using function pixels_dist
-        real  :: center_of_mass(3) ! geometrical center of mass
+        real  :: center_of_mass(3)     ! geometrical center of mass
         real  :: radius
         imat_cc = int(self%get_rmat())
         where(imat_cc .ne. n_cc) imat_cc = 0

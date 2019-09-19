@@ -356,7 +356,6 @@ type :: parameters
     real    :: ftol=1e-6
     real    :: motion_correctftol = 1e-6   !< tolerance (gradient) for motion_correct
     real    :: motion_correctgtol = 1e-6   !< tolerance (function value) for motion_correct
-    real    :: globwfrac = GLOBAL_WEIGHT_FRAC !< global weight fraction (threshold of mean + one sigma)
     real    :: hp=100.             !< high-pass limit(in A)
     real    :: hp_fsc=0.           !< FSC high-pass limit(in A)
     real    :: hp_ctf_estimate=30. !< high-pass limit 4 ctf_estimate(in A)
@@ -776,7 +775,6 @@ contains
         call check_rarg('frac_outliers',  self%frac_outliers)
         call check_rarg('fraczero',       self%fraczero)
         call check_rarg('ftol',           self%ftol)
-        call check_rarg('globwfrac',      self%globwfrac)
         call check_rarg('hp',             self%hp)
         call check_rarg('hp_ctf_estimate',self%hp_ctf_estimate)
         call check_rarg('hp_fsc',         self%hp_fsc)
@@ -1443,7 +1441,6 @@ contains
         if( str_has_substr(self%refine, 'neigh') )then
             if( .not. cline%defined('nspace')    ) self%nspace = 10000
             if( .not. cline%defined('nnn')       ) self%nnn    = 3
-            if( .not. cline%defined('globwfrac') ) self%globwfrac = real(self%nnn) * GLOBAL_WEIGHT_FRAC
         else if( self%neigh .eq. 'yes' )then
             if( cline%defined('nnn') )then
                 ! must be at least NPEAKS2REFINE nnn:s

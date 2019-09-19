@@ -146,7 +146,7 @@ type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: radial_sym_test
 type(simple_program), target :: tseries_import
-type(simple_program), target :: tseries_approx_mskrad
+type(simple_program), target :: tseries_center_and_mask
 type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
@@ -337,7 +337,7 @@ contains
         call new_symmetry_test
         call new_radial_sym_test
         call new_tseries_import
-        call new_tseries_approx_mskrad
+        call new_tseries_center_and_mask
         call new_tseries_average
         call new_tseries_corrfilt
         call new_tseries_ctf_estimate
@@ -591,8 +591,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
-            case('tseries_approx_mskrad')
-                ptr2prg => tseries_approx_mskrad
+            case('tseries_center_and_mask')
+                ptr2prg => tseries_center_and_mask
             case('tseries_average')
                 ptr2prg => tseries_average
             case('tseries_corrfilt')
@@ -693,7 +693,7 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_approx_mskrad%name
+        write(logfhandle,'(A)') tseries_center_and_mask%name
         write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
@@ -1489,7 +1489,7 @@ contains
         call filter%set_input('filt_ctrls',12, 'lambda', 'num', 'Tv filter lambda', 'Strength of noise reduction', '{0.5}', .false., 0.5)
         call filter%set_input('filt_ctrls',13, envfsc)
         call filter%set_input('filt_ctrls', 14, element)
-        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation', &
+        call filter%set_input('filt_ctrls', 15, 'sigma', 'num', 'sigma, for Gaussian generation', 'sigma, for Gaussian generation(in pixels)', &
         & '{1.}', .false., 1.0)
         ! mask controls
         ! <empty>
@@ -3557,8 +3557,7 @@ contains
         ! search controls
         call tseries_corrfilt%set_input('srch_ctrls', 1, 'nframesgrp', 'num', '# contigous frames to convolve', 'Number of contigous frames to convolve with a Gaussian function{100}', '{100}', .false., 20.)
         ! filter controls
-        call tseries_corrfilt%set_input('filt_ctrls', 1, 'sigma', 'num', 'sigma, for 3D Gaussian generation', 'sigma, for 3D Gaussian generation', &
-        & '{0.5}', .false., 0.5)
+        call tseries_corrfilt%set_input('filt_ctrls', 1, 'sigma', 'num', 'sigma, for 3D Gaussian generation', 'sigma, for 3D Gaussian generation(in pixels)', '{0.5}', .false., 0.5)
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3640,34 +3639,37 @@ contains
         call tseries_track%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_track
 
-    subroutine new_tseries_approx_mskrad
+    subroutine new_tseries_center_and_mask
         ! PROGRAM SPECIFICATION
-        call tseries_approx_mskrad%new(&
-        &'tseries_approx_mskrad',&                                                                                    ! name
+        call tseries_center_and_mask%new(&
+        &'tseries_center_and_mask',&                                                                                    ! name
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
         &'simple_exec',&                                                                                              ! executable
-        &2, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 3, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_approx_mskrad%set_input('img_ios', 1, stk)
-        tseries_approx_mskrad%img_ios(1)%required = .true.
-        call tseries_approx_mskrad%set_input('img_ios', 2, outstk)
+        call tseries_center_and_mask%set_input('img_ios', 1, stk)
+        tseries_center_and_mask%img_ios(1)%required = .true.
+        call tseries_center_and_mask%set_input('img_ios', 2, outstk)
         ! parameter input/output
-        call tseries_approx_mskrad%set_input('parm_ios', 1, smpd)
+        call tseries_center_and_mask%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
         ! <empty>
         ! filter controls
-        call tseries_approx_mskrad%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &
-        &prior to determination of the center of gravity of the nanoparticles and centering', 'centering low-pass limit in &
-        &Angstroms{5}', .false., 5.)
+        call tseries_center_and_mask%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit',&
+        &'Limit for low-pass filter used in binarisation prior to determination of the center of gravity of &
+        &the nanoparticles and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
+        call tseries_center_and_mask%set_input('filt_ctrls', 2, lp)
+        tseries_center_and_mask%filt_ctrls(2)%required = .false.
+        call tseries_center_and_mask%set_input('filt_ctrls', 3, 'sigma', 'num', 'sigma, for Gaussian convolution', 'sigma, for Gaussian convolution(in pixels)','{2.}', .false., 2.0)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_approx_mskrad%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_approx_mskrad
+        call tseries_center_and_mask%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_center_and_mask
 
     subroutine new_tseries_preproc
         ! PROGRAM SPECIFICATION

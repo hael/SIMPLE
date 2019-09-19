@@ -15,7 +15,7 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
-public :: tseries_approx_mskrad_commander
+public :: tseries_center_and_mask_commander
 public :: tseries_preproc_commander
 public :: tseries_average_commander
 public :: tseries_corrfilt_commander
@@ -47,10 +47,10 @@ type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
 end type cluster2D_nano_commander_distr
-type, extends(commander_base) :: tseries_approx_mskrad_commander
+type, extends(commander_base) :: tseries_center_and_mask_commander
   contains
-    procedure :: execute      => exec_tseries_approx_mskrad
-end type tseries_approx_mskrad_commander
+    procedure :: execute      => exec_tseries_center_and_mask
+end type tseries_center_and_mask_commander
 type, extends(commander_base) :: tseries_preproc_commander
   contains
     procedure :: execute      => exec_tseries_preproc
@@ -348,19 +348,22 @@ contains
         call xcluster2D_distr%execute(cline)
     end subroutine exec_cluster2D_nano_distr
 
-    subroutine exec_tseries_approx_mskrad( self, cline )
+    subroutine exec_tseries_center_and_mask( self, cline )
         use simple_tseries_preproc
-        class(tseries_approx_mskrad_commander), intent(inout) :: self
+        class(tseries_center_and_mask_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
-        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp'  , 5.0)
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir',  'no')
+        if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 5.0)
+        if( .not. cline%defined('lp')     ) call cline%set('lp',    3.0)
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','no')
+        if( .not. cline%defined('sigma')  ) call cline%set('sigma', 2.0)
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'masked_tseries.mrcs')
         call params%new(cline)
         call init_tseries_preproc
-        call tseries_approx_mask_radius
+        call tseries_center_and_mask
         call kill_tseries_preproc
-        call simple_end('**** SIMPLE_TSERIES_APPROX_MSKRAD NORMAL STOP ****')
-    end subroutine exec_tseries_approx_mskrad
+        call simple_end('**** SIMPLE_TSERIES_CENTER_AND_MASK NORMAL STOP ****')
+    end subroutine exec_tseries_center_and_mask
 
     subroutine exec_tseries_preproc( self, cline )
         use simple_tseries_preproc
