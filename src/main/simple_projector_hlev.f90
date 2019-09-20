@@ -29,6 +29,9 @@ contains
         smpd    = vol%get_smpd()
         boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
+        ! pre-gridding
+        call vol%div_w_instrfun(KBALPHA)
+        ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)
         call vol_pad%fft

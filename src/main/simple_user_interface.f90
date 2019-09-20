@@ -1073,7 +1073,7 @@ contains
         &'Simultaneous 2D alignment and clustering of single-particle images in streaming mode',& ! descr_short
         &'is a distributed workflow implementing cluster2D in streaming mode',&                   ! descr_long
         &'simple_distr_exec',&                                                                    ! executable
-        &0, 1, 0, 9, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
+        &0, 1, 0, 8, 4, 2, 2, .true.)                                                             ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
@@ -1098,9 +1098,8 @@ contains
         call cluster2D_stream%set_input('srch_ctrls', 6, ncls)
         cluster2D_stream%srch_ctrls(6)%required = .true.
         call cluster2D_stream%set_input('srch_ctrls', 7, 'lpthresh', 'num', 'Resolution rejection threshold',&
-        &'Classes with lower resolution are iteratively rejected', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
-        call cluster2D_stream%set_input('srch_ctrls', 8, objfun)
-        call cluster2D_stream%set_input('srch_ctrls', 9, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
+        &'Classes with lower resolution are iteratively rejected{30}', 'Resolution rejection threshold in angstroms{30}', .false., 30.)
+        call cluster2D_stream%set_input('srch_ctrls', 8, 'refine', 'multi', 'Refinement mode', '2D Refinement mode(no|greedy){no}', '(no|greedy){no}', .false., 'no')
         ! filter controls
         call cluster2D_stream%set_input('filt_ctrls', 1, hp)
         call cluster2D_stream%set_input('filt_ctrls', 2, 'cenlp', 'num', 'Centering low-pass limit', 'Limit for low-pass filter used in binarisation &

@@ -529,8 +529,8 @@ contains
 
     !> \brief  for distributed reconstruction of even/odd maps
     subroutine eorec_distr( self, spproj, o, se, state, fbody )
-        use simple_oris, only: oris
-        use simple_sym,  only: sym
+        use simple_oris,     only: oris
+        use simple_sym,      only: sym
         class(reconstructor_eo),    intent(inout) :: self   !< object
         class(sp_project),          intent(inout) :: spproj !< project description
         class(oris),                intent(inout) :: o      !< orientations

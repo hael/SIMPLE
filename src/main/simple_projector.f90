@@ -261,7 +261,7 @@ contains
             w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
         end do
         ! SUM( kernel x components )
-        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum( w )
+        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
     end function interp_fcomp
 
     !>  \brief is for tri-linear interpolation from the expanded complex matrix

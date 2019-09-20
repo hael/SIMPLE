@@ -300,8 +300,7 @@ contains
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. mask_here(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align( iptcl, build_glob%imgbatch(imatch), &
-                    match_imgs(imatch), is3D=is3D)
+                call prepimg4align( iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
             end do
@@ -358,6 +357,8 @@ contains
                 call img_out%mask(params_glob%msk, 'soft')
             endif
         endif
+        ! gridding prep
+        call img_out%div_by_instrfun
         ! return in Fourier space
         call img_out%fft()
     end subroutine prepimg4align
@@ -425,6 +426,8 @@ contains
         else
             call img_out%mask(params_glob%msk, 'soft')
         endif
+        ! gridding prep
+        call img_out%div_by_instrfun
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
@@ -668,6 +671,8 @@ contains
                 call build_glob%vol%mask(params_glob%msk, 'soft')
             endif
         endif
+        ! gridding prep
+        call build_glob%vol%div_w_instrfun(params_glob%alpha)
         ! FT volume
         call build_glob%vol%fft()
         ! expand for fast interpolation
@@ -807,7 +812,6 @@ contains
             !>  \brief  prepares even/odd volume for FSC/FRC calcualtion
             subroutine prepeovol( vol )
                 class(image), intent(inout) :: vol
-                integer :: ldim(3)
                 if( params_glob%l_envfsc .and. cline%defined('mskfile') )then
                     ! mask provided
                     call mskvol%read(resmskname)

@@ -192,7 +192,6 @@ endforeach(TESTNAME)
 list(APPEND CTESTDIRS
   simple_test_ansi_colors
   simple_test_binoris
-#  simple_test_cartcorr_sanity
   simple_test_corrs2weights
   simple_test_extr_frac
   simple_test_fileio
@@ -201,14 +200,12 @@ list(APPEND CTESTDIRS
   simple_test_list_files
   simple_test_maxnloc
   simple_test_multinomal
-  simple_test_omp
   simple_test_order_corr
   simple_test_parse
   simple_test_phaseplate_correct_fsc
   simple_test_simd
   simple_test_sp_project
   simple_test_sym
-  simple_test_timer
   simple_test_units )
 
 

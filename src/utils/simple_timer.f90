@@ -2,7 +2,6 @@
 ! SIMPLE v3.0         Elmlund & Elmlund Lab          simplecryoem.com          !
 !------------------------------------------------------------------------------!
 !> Simple timer module: High resolution (nanoseconds) timer in Fortran
-!! See simple_timer.h for useful macros
 !!
 !!     use simple_timer
 !!     integer(8)  :: tn;

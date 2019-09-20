@@ -662,6 +662,7 @@ contains
                 end do
             end do
         end do
+        !$omp end parallel do
     end subroutine expand_exp
 
     ! SUMMATION
@@ -710,7 +711,7 @@ contains
             d  = ri-real(il)
             ssnri = ssnr(il)*(1.-d) + ssnr(ir)*d
             ! Voxel average noise power
-            sig2 = real(real(cnt(k),dp) / rsum(k)) ! voxel average power of noise
+            sig2 = real(real(cnt(k),dp) / rsum(k))
             ! Signal power
             tau2(k) = ssnri * sig2
         enddo
@@ -729,7 +730,7 @@ contains
                     if( tau2(sh) > TINY )then
                         invtau2 = 1./ tau2(sh)
                     else
-                        invtau2 = min(1000.,1000.*self%rho(phys(1),phys(2),phys(3)))
+                        invtau2 = min(1.e3,1.e3*self%rho(phys(1),phys(2),phys(3)))
                     endif
                     self%rho(phys(1),phys(2),phys(3)) = self%rho(phys(1),phys(2),phys(3)) + invtau2
                 enddo
