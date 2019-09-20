@@ -6398,26 +6398,21 @@ contains
         endif
     end subroutine phase_corr
 
-    ! returns the discrete shift that registers self2 to self1
+    ! returns the discrete shift that registers self2 to self1. self1 is the unnormalized correlation image on output
     subroutine fcorr_shift(self1, self2, trs, shift )
         class(image),      intent(inout) :: self1, self2
         real,              intent(in)    :: trs
         real,              intent(inout) :: shift(2)
-        type(image) :: corr_img
         integer     :: center(2), pos(2), itrs
         if( self1%is_3d() .or. self2%is_3d() ) THROW_HARD('2d only supported')
+        if( .not.(self1%is_ft() .and. self2%is_ft()) ) THROW_HARD('FTed only supported')
         if( .not.(self1.eqdims.self2) ) THROW_HARD('Inconsistent dimensions in fcorr_shift')
         center = self1%ldim(1:2)/2+1
         itrs   = min(floor(trs),minval(center)-1)
-        call corr_img%new(self1%ldim,1.)
-        call corr_img%zero_and_flag_ft
-        call self1%fft
-        call self2%fft
-        corr_img%cmat = self1%cmat * conjg(self2%cmat)
-        call corr_img%ifft
-        pos   = maxloc(corr_img%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
+        self1%cmat = self1%cmat * conjg(self2%cmat)
+        call self1%ifft
+        pos   = maxloc(self1%rmat(center(1)-itrs:center(1)+itrs, center(2)-itrs:center(2)+itrs, 1)) -itrs-1
         shift = -real(pos)
-        call corr_img%kill
     end subroutine fcorr_shift
 
     !> \brief prenorm4real_corr pre-normalises the reference in preparation for real_corr_prenorm

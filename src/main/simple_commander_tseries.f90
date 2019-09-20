@@ -355,10 +355,10 @@ contains
         type(parameters) :: params
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 5.0)
         if( .not. cline%defined('lp')     ) call cline%set('lp',    3.0)
-        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','no')
+        if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','yes')
         if( .not. cline%defined('sigma')  ) call cline%set('sigma', 2.0)
         if( .not. cline%defined('trs')    ) call cline%set('trs',  10.0)
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'masked_tseries.mrcs')
+        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'masked_tseries.mrc')
         call params%new(cline)
         call init_tseries_preproc
         call tseries_center_and_mask

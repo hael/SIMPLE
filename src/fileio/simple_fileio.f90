@@ -675,7 +675,7 @@ contains
         select case(extension)
         case ('img','hed')
             fname2format = 'I'
-        case ('mrc','map','st','ctf','mrcs')
+        case ('mrc','map','ctf','mrcs')
             fname2format = 'M'
         case ('spi')
             fname2format = 'S'
