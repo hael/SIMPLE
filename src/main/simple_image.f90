@@ -8047,14 +8047,17 @@ contains
     end subroutine clip_inplace
 
     ! This subroutine rescales the pixel intensities to a new input range.
-    subroutine scale_pixels(self, new_range)
-          class(image), intent(inout) :: self
-          real,         intent(in)    :: new_range(2)
+    subroutine scale_pixels(self, new_range, ssc, oold_range)
+          class(image),   intent(inout) :: self
+          real,           intent(in)    :: new_range(2)
+          real, optional, intent(out)   :: oold_range(2), ssc
           real :: old_range(2), sc
           old_range(1) = minval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
           old_range(2) = maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
           sc = (new_range(2) - new_range(1))/(old_range(2) - old_range(1))
           self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = sc*self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))+new_range(1)-sc*old_range(1)
+          if(present(ssc)) ssc = sc
+          if(present(oold_range)) oold_range = old_range
     end subroutine scale_pixels
 
     !>  \brief  is for mirroring an image

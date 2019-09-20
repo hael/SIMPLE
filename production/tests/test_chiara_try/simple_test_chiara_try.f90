@@ -278,6 +278,7 @@ end module simple_test_chiara_try_mod
     program simple_test_chiara_try
        include 'simple_lib.f08'
        use simple_math
+       use simple_segmentation, only : otsu_img_robust, otsu_img
        use simple_test_chiara_try_mod
        use simple_image, only : image
        type(image) :: img, img_cc
@@ -286,33 +287,86 @@ end module simple_test_chiara_try_mod
        integer, allocatable :: imat_cc(:,:,:)
        real, allocatable :: rmat(:,:,:)
        real :: diam
-       ldim(1) = 100
-       ldim(2) = 100
-       ldim(3) = 1
-       call img%disc(ldim, 1.,30.)
-       call img%set([50,50,1], 0.)
-       call img%set([50,51,1], 0.)
-       call img%set([51,51,1], 0.)
-       call img%set([52,52,1], 0.)
-       rmat = img%get_rmat()
-       rmat(90:95,20:27,1) = 1.
-       rmat(93,21,1) = 0.
-       rmat(94,22,1) = 0.
-       rmat(94,26,1) = 0.
-       rmat(15:22,94:97,1) = 1.
-       rmat(17,95,1) = 0.
-       rmat(18,95,1) = 0.
-       rmat(19,95,1) = 0.
-       call img%set_rmat(rmat)
-       call img%write('DiscHoled.mrc')
-       call img%find_connected_comps(img_cc)
-       call img_cc%write('Disc_ccs.mrc')
-       call img_cc%diameter_cc(2,diam)
-       print *, 'diameter = ', diam
-       stop
+       integer :: i
+       real :: thresh
+       ! ldim(1) = 100
+       ! ldim(2) = 100
+       ! ldim(3) = 1
+       ! call img%disc(ldim, 1.,30.)
+       ! call img%set([50,50,1], 0.)
+       ! call img%set([50,51,1], 0.)
+       ! call img%set([51,51,1], 0.)
+       ! call img%set([52,52,1], 0.)
+       ! rmat = img%get_rmat()
+       ! rmat(90:95,20:27,1) = 1.
+       ! rmat(93,21,1) = 0.
+       ! rmat(94,22,1) = 0.
+       ! rmat(94,26,1) = 0.
+       ! rmat(15:22,94:97,1) = 1.
+       ! rmat(17,95,1) = 0.
+       ! rmat(18,95,1) = 0.
+       ! rmat(19,95,1) = 0.
+       ! call img%set_rmat(rmat)
+       ! call img%find_connected_comps(img_cc)
+       ! call img_cc%write('DiscHoledCC.mrc')
 
-        call img%fill_holes()
-        call img%write('FilledHoles.mrc')
+       !
+       ! call img%new([160,160,1],0.358)
+       ! do i = 1,887!50,57
+       !     call progress(i,887)
+       !     call img%read('chunk_avgs.mrcs',i)
+       !     call otsu_img_robust(img, thresh)
+       !     print *, 'Otsu 2D thresh ', thresh
+       !     call img%write('otsu2DMatlabVersion.mrcs', i)
+       ! enddo
+
+       call img%new([3710,3838,1], 0.66)
+       call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
+      call otsu_img_robust(img, thresh)
+      print *, 'Otsu 2D thresh ', thresh
+      call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu2D.mrc')
+      call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
+      call otsu_img(img,thresh=thresh)
+      print *, 'Otsu 1D thresh ', thresh
+      call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu1D.mrc')
+
+       ! call img%new([384,256,1],1.)
+       ! call img%read('penguin.mrc')
+       ! call otsu_img_robust(img,thresh=thresh)
+       ! print *, 'Otsu 2D thresh penguin', thresh
+       ! call img%write('penguinOtsu2D.mrc')
+       ! call img%read('penguin.mrc')
+       ! call otsu_img(img,thresh=thresh)
+       ! print *, 'Otsu 1D thresh penguin ', thresh
+       ! call img%write('penguinOtsu1D.mrc')
+       !
+       !
+       ! call img%read('tiger.mrc')
+       ! call otsu_img_robust(img,thresh=thresh)
+       ! print *, 'Otsu 2D thresh tiger ', thresh
+       ! call img%write('tigerOtsu2D.mrc')
+       ! call img%read('tiger.mrc')
+       ! call otsu_img(img,thresh=thresh)
+       ! print *, 'Otsu 1D thresh  tiger', thresh
+       ! call img%write('tigerOtsu1D.mrc')
+       !
+       ! call img%read('bear.mrc')
+       ! call otsu_img_robust(img,thresh=thresh)
+       ! print *, 'Otsu 2D thresh bear ', thresh
+       ! call img%write('bearOtsu2D.mrc')
+       ! call img%read('bear.mrc')
+       ! call otsu_img(img,thresh=thresh)
+       ! print *, 'Otsu 1D thresh  bear', thresh
+       ! call img%write('bearOtsu1D.mrc')
+       !
+       ! call img%read('strfish.mrc')
+       ! call otsu_img_robust(img,thresh=thresh)
+       ! print *, 'Otsu 2D thresh bestrfishar ', thresh
+       ! call img%write('strfishOtsu2D.mrc')
+       ! call img%read('strfish.mrc')
+       ! call otsu_img(img,thresh=thresh)
+       ! print *, 'Otsu 1D thresh  strfish', thresh
+       ! call img%write('strfishOtsu1D.mrc')
 
 
            ! subroutine ellipse(self, center, axes, hole)
