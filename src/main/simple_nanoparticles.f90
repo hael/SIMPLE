@@ -48,9 +48,7 @@ type :: nanoparticle
     procedure          :: set_img
     procedure          :: set_partname
     ! segmentation and statistics
-    procedure          :: binarize => nanopart_binarization
-    procedure          :: iterative_bin
-    ! procedure          :: size_filtering
+    procedure          :: binarize => nano_bin
     procedure          :: find_centers
     procedure, private :: nanopart_masscen
     procedure          :: calc_aspect_ratio
@@ -184,10 +182,15 @@ contains
         self%partname = name
     end subroutine set_partname
 
-    subroutine update_self_ncc(self)
-        class(nanoparticle), intent(inout) :: self
+    subroutine update_self_ncc(self, img_cc)
+        class(nanoparticle),   intent(inout) :: self
+        type(image), optional, intent(in)    :: img_cc
         real, pointer :: rmat_cc(:,:,:)
-        call self%img_cc%get_rmat_ptr(rmat_cc)
+        if(present(img_cc)) then
+            call img_cc%get_rmat_ptr(rmat_cc)
+        else
+            call self%img_cc%get_rmat_ptr(rmat_cc)
+        endif
         self%n_cc = nint(maxval(rmat_cc))
         rmat_cc => null()
     end subroutine update_self_ncc
@@ -261,16 +264,6 @@ contains
        !$omp end do
        ! saving centers coordinates, optional
        if(present(coords)) allocate(coords(3,self%n_cc), source = self%centers)
-       !Output on file, Matlab Compatible
-       ! open(113, file=trim(self%fbody)//'DistancesDistr')
-       ! write (113,*) 'd=[...'
-       ! do i = 1, size(self%dists)
-       !     write (113,'(A)', advance='no') trim(real2str(self%dists(i)))
-       !     if(i < size(self%dists)) write (113,'(A)', advance='no') ', '
-       ! end do
-       ! write (113,*) '];'
-       ! close(113)
-       ! self%avg_dist_atoms = sum(self%dists(:))/real(self%n_cc)
     contains
 
        !This function calculates the centers of mass of an
@@ -310,18 +303,30 @@ contains
        end function atom_masscen
     end subroutine find_centers
 
-    subroutine write_centers(self, fname)
+    subroutine write_centers(self, fname, coords)
         class(nanoparticle),        intent(inout) :: self
         character(len=*), optional, intent(in)    :: fname
+        real,             optional, intent(in)    :: coords(:,:)
         integer :: cc
-        call self%centers_pdb%new(self%n_cc, dummy=.true.)
-        !$omp parallel do schedule(static) private(cc)
-        do cc=1,self%n_cc
-            call self%centers_pdb%set_name(cc,self%atom_name)
-            call self%centers_pdb%set_element(cc,self%element)
-            call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
-        enddo
-        !$omp end parallel do
+        if(present(coords)) then
+            call self%centers_pdb%new(size(coords, dim = 2), dummy=.true.)
+            !$omp parallel do schedule(static) private(cc)
+            do cc=1,size(coords, dim = 2)
+                call self%centers_pdb%set_name(cc,self%atom_name)
+                call self%centers_pdb%set_element(cc,self%element)
+                call self%centers_pdb%set_coord(cc,(coords(:,cc)-1.)*self%smpd)
+            enddo
+            !$omp end parallel do
+        else
+            call self%centers_pdb%new(self%n_cc, dummy=.true.)
+            !$omp parallel do schedule(static) private(cc)
+            do cc=1,self%n_cc
+                call self%centers_pdb%set_name(cc,self%atom_name)
+                call self%centers_pdb%set_element(cc,self%element)
+                call self%centers_pdb%set_coord(cc,(self%centers(:,cc)-1.)*self%smpd)
+            enddo
+            !$omp end parallel do
+        endif
         if(present(fname)) then
             call self%centers_pdb%writepdb(fname)
         else
@@ -329,9 +334,7 @@ contains
         endif
     end subroutine write_centers
 
-
-
-     ! calc the avg of the centers coords
+    ! calc the avg of the centers coords
      function nanopart_masscen(self) result(m)
          class(nanoparticle), intent(inout) :: self
          real    :: m(3)  !mass center coords
@@ -343,10 +346,7 @@ contains
          enddo
          !$omp end parallel do
          m = m/real(self%n_cc)
-         if(self%ldim(3) == 1) m(3) = 0. !for 2D imgs
      end function nanopart_masscen
-
-
 
     ! This subroutine takes in input 2 2D vectors, centered in the origin
     ! and it gives as an output the angle between them, IN DEGREES.
@@ -461,139 +461,35 @@ contains
          end subroutine otsu_nano
     end subroutine phasecorrelation_nano_gaussian
 
-
-    ! Alternative approaach to binarization. It consists in
-    ! iterations of correlation filter and otsu
-    subroutine iterative_bin(self)
-        class(nanoparticle), intent(inout) :: self
-        type(image) :: one_atom
-        type(image) :: phasecorr
-        type(atoms) :: atom
-        real        :: cutoff
-        real        :: o_t !otsu threshold
-        integer     :: i
-        integer, parameter :: NB_IT = 10 !number of iterations
-        type(image) :: img_t !thresholded nanoparticle (NOT binary)
-        type(image) :: img_b !thresholded nanoparticle (binary)
-        real, pointer :: rmat_t(:,:,:)
-        real, pointer :: rmat_b(:,:,:)
-        real, pointer :: rmat(:,:,:)
-        real :: sigma
-        type(image) :: gau3D
-        !!!!!!!!!!!!!!!!!!!!!!!!!!
-        sigma = 1.
-        call gau3D%new(self%ldim, self%smpd)
-        call phasecorr%new(self%ldim, self%smpd)
-        call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
-        call gau3D%fft()
-        call img_t%new(self%ldim, self%smpd)
-        call img_b%new(self%ldim, self%smpd)
-        call img_t%get_rmat_ptr(rmat_t)
-        call img_b%get_rmat_ptr(rmat_b)
-        call img_t%copy(self%img)
-        do i = 1, NB_IT
-            call img_t%fft()
-            call img_t%phase_corr(gau3D,phasecorr,lp=1.)
-            call img_t%ifft()
-            call otsu_nano(phasecorr,o_t)
-            where(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))>o_t)
-                rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
-            elsewhere
-                rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
-            endwhere
-            call img_b%write(int2str(i)//'BGauss.mrc')
-            rmat_t(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))*rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-            call img_t%write(int2str(i)//'TGauss.mrc')
-        enddo
-        call phasecorr%kill
-        call img_t%kill
-        call img_b%kill
-        call gau3D%kill()
-        !!!!!!!!!!!!!!!!!!!!!!!
-        ! call phasecorr%new(self%ldim, self%smpd)
-        ! call phasecorr%get_rmat_ptr(rmat)
-        ! call one_atom%new(self%ldim,self%smpd)
-        ! cutoff = 8.*self%smpd
-        ! call atom%new(1)
-        ! call atom%set_element(1,self%element)
-        ! call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
-        ! call atom%convolve(one_atom, cutoff)
-        ! if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
-        ! call one_atom%fft()
-        ! call img_t%new(self%ldim, self%smpd)
-        ! call img_b%new(self%ldim, self%smpd)
-        ! call img_t%get_rmat_ptr(rmat_t)
-        ! call img_b%get_rmat_ptr(rmat_b)
-        ! call img_t%copy(self%img)
-        ! do i = 1, NB_IT
-        !     call img_t%fft()
-        !     phasecorr = img_t%phase_corr(one_atom,lp=1.)
-        !     call img_t%ifft()
-        !     call otsu_nano(phasecorr,o_t)
-        !     where(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))>o_t)
-        !         rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
-        !     elsewhere
-        !         rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
-        !     endwhere
-        !     call img_b%write(int2str(i)//'B.mrc')
-        !     rmat_t(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))*rmat_b(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))
-        !     call img_t%write(int2str(i)//'T.mrc')
-        ! enddo
-        ! call phasecorr%kill
-        ! call img_t%kill
-        ! call img_b%kill
-        ! call one_atom%kill()
-    contains
-        !Otsu binarization for nanoparticle maps
-        !It considers the gray level value just in the positive range.
-        !It doesn't threshold the map. It just returns the ideal threshold.
-         subroutine otsu_nano(img, scaled_thresh)
-             use simple_math, only : otsu
-             type(image),    intent(inout) :: img
-             real,           intent(out)   :: scaled_thresh !returns the threshold in the correct range
-             real, pointer     :: rmat(:,:,:)
-             real, allocatable :: x(:)
-             call img%get_rmat_ptr(rmat)
-             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
-             call otsu(x, scaled_thresh)
-         end subroutine otsu_nano
-
-    end subroutine iterative_bin
-
     ! This subrotuine takes in input a nanoparticle and
     ! binarizes it by thresholding. The gray level histogram is split
     ! in 20 parts, which corrispond to 20 possible threshold.
     ! Among those threshold, the selected one is the for which
-    ! the size of the connected component of the correspondent
-    ! thresholded nanoparticle has the maximum median value.
-    ! The idea is that if the threshold is wrong, than the binarization
-    ! produces a few huge ccs (connected components) and a lot of very small
-    ! ones (dust). So the threshold with the maximum median value would
-    ! correspond to the most consistent one, meaning that the size of the ccs
-    ! would have a gaussian distribution.
-    subroutine nanopart_binarization( self, otsu_thresh )
+    ! tha correlation between the raw map and a simulated distribution
+    ! obtained with that threshold reaches the maximum value.
+    subroutine nano_bin( self, otsu_thresh )
         class(nanoparticle), intent(inout) :: self
         real,                intent(in)    :: otsu_thresh !staring point for threshold refinement
         type(image)       :: img_bin_thresh(N_THRESH/2-1)
         type(image)       :: img_ccs_thresh(N_THRESH/2-1)
-        real, pointer     :: rmat(:,:,:)
-        real, allocatable    :: x_mat(:)  !vectorization of the volume
+        type(image)       :: pc(N_THRESH/2-1)
+        type(atoms)       :: atom
+        type(image)       :: simulated_distrib
         integer, allocatable :: imat_t(:,:,:)
-        integer, allocatable :: sz(:)   !size of the ccs and correspondent label
-        real    :: step                 !histogram disretization step
-        real    :: avg_sz, stdev_sz
-        real    :: t
-        real    :: x_thresh(N_THRESH/2-1), y_med(N_THRESH/2-1)
-        integer :: location_maximum(1)
-        integer :: ind(1)               !selected indexes corresponding to threshold for nanoparticle binarization
-        integer :: position(1)
-        integer ::  i, cc
+        real,    allocatable :: x_mat(:)  !vectorization of the volume
+        real,    allocatable :: coords(:,:)
+        real,    allocatable :: rmat(:,:,:)
+        integer ::  i, cc, t
+        real    :: x_thresh(N_THRESH/2-1)
+        real    :: step, maximum, mm(2)
         write(logfhandle,*) '****binarization, init'
-        call self%img%get_rmat_ptr(rmat)
+        rmat = self%img%get_rmat()
         x_mat = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
         allocate(imat_t(self%ldim(1), self%ldim(2), self%ldim(3)), source = 0)
         step = (maxval(x_mat)-otsu_thresh )/real(N_THRESH)
         deallocate(x_mat)
+        call simulated_distrib%new(self%ldim,self%smpd)
+        call self%img%fft ! for pc calculation
         !$omp do collapse(1) schedule(static) private(i)
         do i = 1, N_THRESH/2-1
             call progress(i, N_THRESH/2-1)
@@ -608,83 +504,54 @@ contains
             elsewhere
                 imat_t = 0
             endwhere
+            ! Generate binary image and cc image
             call img_bin_thresh(i)%set_rmat(real(imat_t))
             call img_bin_thresh(i)%find_connected_comps(img_ccs_thresh(i))
-            sz          = img_ccs_thresh(i)%size_connected_comps()
-            y_med(i)    = median(real(sz))
+            ! Find atom centers in the generated distributions
+            call self%update_self_ncc(img_ccs_thresh(i)) !self%n_cc is needed in find_centers
+            call self%find_centers(img_bin_thresh(i), img_ccs_thresh(i), coords)
+            ! Generate a simulated distribution based on those center
+            call self%write_centers('centers_'//trim(int2str(i))//'_iteration', coords)
+            call atom%new          ('centers_'//trim(int2str(i))//'_iteration.pdb')
+            call atom%convolve(simulated_distrib, cutoff = 8.*self%smpd)
+            call del_file('centers_'//trim(int2str(i))//'_iteration.pdb')
+            if(DEBUG_HERE) call simulated_distrib%write('simulated_'//trim(int2str(i))//'_iteration.mrc')
+            call atom%kill
+            ! Take care of Fourier status, for phase_corr calculation
+            call simulated_distrib%fft
+            call pc(i)%new(self%ldim,self%smpd)
+            call pc(i)%zero_and_flag_ft
+            ! Correlation volume generation
+            call self%img%phase_corr(simulated_distrib, pc(i), lp=3.)
+            if(DEBUG_HERE) call pc(i)%write('phasecorr_'//trim(int2str(i))//'_iteration.mrc')
+            ! Calculation and update of the maxval the correlation reaches
+            mm = pc(i)%minmax()
+            if(mm(2) > maximum) then
+                maximum = mm(2)
+                t       = i
+            endif
+            call simulated_distrib%ifft
         enddo
         !$omp end do
-        write(logfhandle,*)'Intial threshold selected, starting refinement'
-        !two consecutive thresholds after the ideal one
-        ind(1:1) = maxloc(y_med)
-        if(DEBUG_HERE) call img_bin_thresh(ind(1))%write(basename(trim(self%fbody))//'IdealThresh.mrc')
-        write(logfhandle,*) 'Final threshold for binarization', x_thresh(ind(1)+2)
-        call self%img_bin%copy(img_bin_thresh(ind(1)+2))
-        call self%img_cc%copy(img_ccs_thresh(ind(1)+2))
-        if(DEBUG_HERE) call self%img_bin%write(basename(trim(self%fbody))//'BinSelectedThresh.mrc')
-        !kill images
+        call self%img%ifft ! To remove
+        write(logfhandle,*) 'Selected threshold: ', x_thresh(t)
+        ! Update img_bin and img_cc
+        call self%img_bin%copy(img_bin_thresh(t))
+        if(DEBUG_HERE) call self%img_bin%write('AlternativeBin.mrc')
+        call self%img_cc%copy(img_ccs_thresh(t))
         !$omp parallel do schedule(static) private(i)
         do i = 1,  N_THRESH/2-1
             call img_bin_thresh(i)%kill
             call img_ccs_thresh(i)%kill
         enddo
         !$omp end parallel do
-        write(logfhandle,*) 'Final threshold selected, starting connected atoms erosion'
-        sz = self%img_cc%size_connected_comps()
-        avg_sz = real(sum(sz))/real(size(sz))
-        stdev_sz = 0.
-        do cc = 1, size(sz)
-            stdev_sz = stdev_sz + (sz(cc) - avg_sz)**2
-        enddo
-        stdev_sz = sqrt(stdev_sz/(real(size(sz)-1)))
-        t = avg_sz + 2.*stdev_sz !Gaussian distrib, 95% is in [-2sigma,2sigma]
-        write(logfhandle,*) 'Starting erosion of big atoms'
-        imat_t = int(self%img_cc%get_rmat())
-        !$omp parallel do schedule(static) private(cc)
-        do cc = 1, size(sz)
-            if(sz(cc) > t) then
-                 call self%img_cc%erosion(cc)
-            endif
-        enddo
-        !$omp end parallel do
-        ! update
-        imat_t = int(self%img_cc%get_rmat())
-        where(imat_t > 0) imat_t = 1
-        !update img bin
-        call self%img_bin%set_rmat(real(imat_t))
-        !update image cc
-        call self%img_bin%find_connected_comps(self%img_cc)
-        call self%update_self_ncc()
-        !update centers
-        call self%find_centers()
-        ! deallocate
-        if(allocated(sz))       deallocate(sz)
-        if(allocated(imat_t))   deallocate(imat_t)
+        ! deallocate and kill
+        if(allocated(rmat))   deallocate(rmat)
+        if(allocated(imat_t)) deallocate(imat_t)
+        if(allocated(coords)) deallocate(coords)
+        call simulated_distrib%kill
         write(logfhandle,*) '****binarization, completed'
-    contains
-
-        ! This function checks for each atom is the identified
-        ! centers lies inside the atom or not. The result is
-        ! saved in yes_no(:). The entry of yes_no corresponds
-        ! to the connected component label of the atom.
-        ! function is_center_inside_atom(self, img_bin) result(yes_no)
-        !     class(nanoparticle), intent(inout) :: self
-        !     type(image),         intent(in)    :: img_bin
-        !     logical :: yes_no(self%n_cc)
-        !     integer :: cc
-        !     real, pointer :: rmat(:,:,:)
-        !     call img_bin%get_rmat_ptr(rmat)
-        !     !$omp parallel do schedule(static) private(cc) !maybe yes_no?
-        !     do cc = 1, self%n_cc
-        !         if(rmat(nint(self%centers(1,cc)),nint(self%centers(2,cc)),nint(self%centers(3,cc))) > 0.5) then
-        !             yes_no(cc) = .true.
-        !         else
-        !             yes_no(cc) = .false.
-        !         endif
-        !     enddo
-        !     !$omp end parallel do
-        ! end function is_center_inside_atom
-    end subroutine nanopart_binarization
+    end subroutine nano_bin
 
     ! This subroutine calculates the histogram of the within-atoms
     ! distances distribution within the nanoparticle nano.
@@ -1410,7 +1277,8 @@ contains
         integer                  :: i, j, ncls, nerr
         integer                  :: dim
         integer, allocatable     :: imat_onecls(:,:,:,:)
-        dim = self%n_cc
+        ! dim = self%n_cc ! TO FIX HERE. I SHOULD HAVE SELF%N_CC = SIZE(SELF%DISTS)
+        dim = size(self%dists)
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt distances distribution, init'
         do i=1,dim-1
@@ -1424,13 +1292,13 @@ contains
         ncls = size(centers_ap)
         ! Report clusters on images in dedicated directory
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir1; ")
-        !call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
+        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
         call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir; ")
         call self%img_cc%get_rmat_ptr(rmat_cc)
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
         !$omp do collapse(2) schedule(static) private(i,j)
-        do i = 1, self%n_cc
+        do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
                 if(labels_ap(i) == j) then
@@ -1449,8 +1317,8 @@ contains
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(125, file = 'ClusterDistDistr')
-        write(unit = 125, fmt = '(a,i2.1)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
-        do i = 1, self%n_cc
+        write(unit = 125, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
+        do i = 1, dim
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 125, fmt = '(a)') 'CENTERS DISTS DISTR'
@@ -1497,7 +1365,7 @@ contains
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
         !$omp do collapse(2) schedule(static) private(i,j)
-        do i = 1, self%n_cc
+        do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
                 if(labels_ap(i) == j) then
@@ -1516,8 +1384,8 @@ contains
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(119, file='ClusterAspectRatio')
-        write(unit = 119,fmt ='(a,i2.1)') 'NR OF CLUSTERS FOUND AR:', ncls
-        do i = 1, self%n_cc
+        write(unit = 119,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
+        do i = 1, dim
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 119, fmt = '(a)') 'CENTERS AR'
@@ -1547,7 +1415,7 @@ contains
         real                     :: simsum
         real                     :: avg, stdev
         integer, allocatable     :: cnt(:)
-        dim = self%n_cc
+        dim = size(self%ang_var)!self%n_cc
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt direction longest dim, init'
         do i=1,dim-1
@@ -1567,7 +1435,7 @@ contains
         allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
         allocate(img_clusters(ncls))
         !$omp do collapse(2) schedule(static) private(i,j)
-        do i = 1, self%n_cc
+        do i = 1, dim
             do j = 1, ncls
                 call img_clusters(j)%new(self%ldim,self%smpd)
                 if(labels_ap(i) == j) then
@@ -1586,8 +1454,8 @@ contains
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(111, file='ClusterAngLongestDim')
-        write(unit = 111,fmt ='(a,i2.1)') 'NR OF CLUSTERS FOUND ANG:', ncls
-        do i = 1, self%n_cc
+        write(unit = 111,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND ANG:', ncls
+        do i = 1, dim
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 111,fmt ='(a)') 'CENTERS ANG'
@@ -1600,7 +1468,7 @@ contains
         allocate(cnt(ncls), source = 0)
         !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, ncls
-            do j = 1, self%n_cc
+            do j = 1, dim
                 if(labels_ap(j) == i) then
                     cnt(i) = cnt(i) + 1 !cnt is how many atoms I have in each class
                     avg_within(i) = avg_within(i) + self%ang_var(j)
@@ -1616,7 +1484,7 @@ contains
         write(unit = 111,fmt ='(a,i3)')     'total atoms =                   ', sum(cnt)
         !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, ncls
-            do j = 1, self%n_cc
+            do j = 1, dim
                 if(labels_ap(j) == i) stdev_within(i) = stdev_within(i) + (self%ang_var(j)-avg_within(i))**2
             enddo
         enddo
@@ -2044,8 +1912,6 @@ contains
      subroutine detect_atoms(self)
          class(nanoparticle), intent(inout) :: self
          real :: otsu_thresh
-         ! call self%iterative_bin()
-         ! stop
          ! Phase correlations approach
          call self%phasecorrelation_nano_gaussian(otsu_thresh)
          ! Nanoparticle binarization
@@ -2088,7 +1954,6 @@ contains
         if(allocated(self%ang_var))          deallocate(self%ang_var)
     end subroutine kill_nanoparticle
 end module simple_nanoparticles_mod
-
 
     ! This subroutine performs size filtering on the connected
     ! components image of the nanoparticle. It calculates the

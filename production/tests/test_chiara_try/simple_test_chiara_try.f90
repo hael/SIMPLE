@@ -320,25 +320,25 @@ end module simple_test_chiara_try_mod
        !     call img%write('otsu2DMatlabVersion.mrcs', i)
        ! enddo
 
-       call img%new([3710,3838,1], 0.66)
-       call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
-      call otsu_img_robust(img, thresh)
-      print *, 'Otsu 2D thresh ', thresh
-      call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu2D.mrc')
-      call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
-      call otsu_img(img,thresh=thresh)
-      print *, 'Otsu 1D thresh ', thresh
-      call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu1D.mrc')
+      !  call img%new([3710,3838,1], 0.66)
+      !  call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
+      ! call otsu_img_robust(img, thresh)
+      ! print *, 'Otsu 2D thresh ', thresh
+      ! call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu2D.mrc')
+      ! call img%read('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorr.mrc')
+      ! call otsu_img(img,thresh=thresh)
+      ! print *, 'Otsu 1D thresh ', thresh
+      ! call img%write('14sep05c_00024sq_00003hl_00002es_c.mrcMaxValPhaseCorrOtsu1D.mrc')
 
-       ! call img%new([384,256,1],1.)
-       ! call img%read('penguin.mrc')
-       ! call otsu_img_robust(img,thresh=thresh)
-       ! print *, 'Otsu 2D thresh penguin', thresh
-       ! call img%write('penguinOtsu2D.mrc')
-       ! call img%read('penguin.mrc')
-       ! call otsu_img(img,thresh=thresh)
-       ! print *, 'Otsu 1D thresh penguin ', thresh
-       ! call img%write('penguinOtsu1D.mrc')
+       call img%new([384,256,1],1.)
+       call img%read('penguin.mrc')
+       call otsu_img_robust(img,thresh=thresh)
+       print *, 'Otsu 2D thresh penguin', thresh
+       call img%write('penguinOtsu2D.mrc')
+       call img%read('penguin.mrc')
+       call otsu_img(img,thresh=thresh)
+       print *, 'Otsu 1D thresh penguin ', thresh
+       call img%write('penguinOtsu1D.mrc')
        !
        !
        ! call img%read('tiger.mrc')
