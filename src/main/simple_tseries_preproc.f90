@@ -14,7 +14,6 @@ private
 
 
 ! GROW A COUPLE OF LAYERS
-! USE CENTERS OBTAINED FOR AVGS
 
 logical,          parameter :: DEBUG_HERE       = .true.
 integer,          parameter :: CHUNKSZ          = 500
@@ -30,10 +29,9 @@ character(len=*), parameter :: TWIN_AVGS        = 'time_window_avgs.mrc'
 type(image), allocatable :: ptcl_imgs(:)         ! all particles in the time-series
 type(image), allocatable :: ptcl_avgs(:)         ! averages over time window
 type(image), allocatable :: ptcl_masks(:)        ! masks for the particle images
-type(image), allocatable :: corr_imgs(:)         ! corr images for thread safe shift identification
 type(image)              :: cc_img               ! connected components image
 integer,     allocatable :: avg_inds(:)          ! indices that map particles to averages
-real,        allocatable :: shifts(:,:)          ! shifts obtained through center of mass centering
+real,        allocatable :: shifts4avgs(:,:)     ! shifts obtained through center of mass centering
 real,        allocatable :: rmat_sum(:,:,:)      ! for OpenMP reduction
 integer                  :: ldim(3)              ! logical dimension of 2D image
 logical                  :: existence = .false.  ! to flag existence
@@ -44,7 +42,7 @@ contains
         integer :: i
         ! first, kill pre-existing
         call kill_tseries_preproc
-        allocate(ptcl_imgs(params_glob%nptcls), avg_inds(params_glob%nptcls), shifts(params_glob%nptcls,3), corr_imgs(nthr_glob))
+        allocate(ptcl_imgs(params_glob%nptcls), avg_inds(params_glob%nptcls))
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
             call ptcl_imgs(i)%read(params_glob%stk, i)
@@ -54,9 +52,6 @@ contains
         allocate(rmat_sum(ldim(1),ldim(2),ldim(3)), source=0.)
         ! prepare thread safe images
         call ptcl_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
-        do i=1,nthr_glob
-            call corr_imgs(i)%new([params_glob%box,params_glob%box,1], params_glob%smpd, wthreads=.false.)
-        enddo
         ! flag existence
         existence = .true.
     end subroutine init_tseries_preproc
@@ -67,15 +62,15 @@ contains
         logical, allocatable :: include_mask(:)
         type(image) :: img_tmp
         real        :: diam_ave, diam_sdev, diam_var, mask_radius, nndiams(2)
-        real        :: one_sigma_thresh, boundary_avg, mskrad, xyz(3), mskrad_max
-        integer     :: iframe, i, j, fromto(2), cnt, loc(1), lb, rb, ithr, n_incl
+        real        :: one_sigma_thresh, boundary_avg, mskrad, mskrad_max
+        integer     :: iframe, i, j, fromto(2), cnt, loc(1), lb, rb, n_incl
         logical     :: err, l_nonzero(2)
         ! allocate diameters, ptcl_avgs & ptcl_masks arrays
         cnt = 0
         do iframe=1,params_glob%nptcls,STEPSZ
             cnt = cnt + 1
         end do
-        allocate(diams(cnt), ptcl_avgs(cnt), ptcl_masks(cnt))
+        allocate(diams(cnt), ptcl_avgs(cnt), ptcl_masks(cnt), shifts4avgs(cnt,3))
         diams = 0.
         ! construct particle averages (used later for centering the individual particles)
         do i=1,cnt
@@ -165,29 +160,25 @@ contains
             call ptcl_avgs(i)%read(TWIN_AVGS, i)
         end do
         write(logfhandle,'(A)') '>>> MASS CENTERING TIME WINDOW AVERAGES'
-        !$omp parallel default(shared) private(i,xyz,ithr) proc_bind(close)
+        !$omp parallel default(shared) private(i) proc_bind(close)
         !$omp do schedule(static)
         do i=1,cnt
             call ptcl_avgs(i)%norm_bin
-            call ptcl_avgs(i)%masscen(xyz)
+            call ptcl_avgs(i)%masscen(shifts4avgs(i,:))
             call ptcl_avgs(i)%fft
-            call ptcl_avgs(i)%shift2Dserial(xyz(1:2))
+            call ptcl_avgs(i)%shift2Dserial(shifts4avgs(i,1:2))
             call ptcl_avgs(i)%ifft
         end do
         !$omp end do nowait
         !$omp do schedule(static)
         do i=1,params_glob%nptcls
-            ithr = omp_get_thread_num()+1
-            call corr_imgs(ithr)%copy(ptcl_avgs(avg_inds(i)))
-            call corr_imgs(ithr)%fft
             call ptcl_imgs(i)%fft
-            call corr_imgs(ithr)%fcorr_shift(ptcl_imgs(i), params_glob%trs, shifts(i,:))
-            call ptcl_imgs(i)%shift2Dserial(shifts(i,1:2))
+            call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
             call ptcl_imgs(i)%ifft()
         end do
         !$omp end do
         !$omp end parallel
-        ! write the background subtracted and shifted imagees and read back in the unmasked images
+        ! write the background subtracted and shifted images and read back in the unmasked images
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%write(MASKED_PATCLS, i)
             call progress(i,params_glob%nptcls)
@@ -197,7 +188,7 @@ contains
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%fft()
-            call ptcl_imgs(i)%shift2Dserial(shifts(i,1:2))
+            call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
             call ptcl_imgs(i)%ifft()
         end do
         !$omp end parallel do
@@ -250,7 +241,7 @@ contains
                 cnt = cnt + 1
                 call ptcl_avgs(cnt)%kill
             end do
-            deallocate(ptcl_imgs,ptcl_avgs,avg_inds,shifts,rmat_sum)
+            deallocate(ptcl_imgs,ptcl_avgs,avg_inds,shifts4avgs,rmat_sum)
             call cc_img%kill
         endif
     end subroutine kill_tseries_preproc
