@@ -109,7 +109,6 @@ contains
         enddo
         cline_volassemble = cline
         call cline_volassemble%set('prg', 'volassemble')
-        call cline_volassemble%set('nthr', 0.) ! to ensure the use of all resources in assembly
         ! parallel assembly
         do state = 1,params%nstates
             str_state = int2str_pad(state,2)
