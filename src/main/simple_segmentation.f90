@@ -408,20 +408,16 @@ contains
         type(image),    intent(inout) :: img
         real, optional, intent(out)   :: thresh
         integer, parameter   :: MIN_VAL = 0, MAX_VAL = 255
+        logical, parameter   :: DOPRINT = .false.
         integer, allocatable :: yhist_orig(:)
         real,    allocatable :: xhist_orig(:)
-        real,    allocatable :: x_orig(:)     !vectorization of the img
+        real,    allocatable :: x_orig(:) ! vectorization of the img
         real,    pointer     :: rmat(:,:,:), rmat_avg(:,:,:)
-        integer :: i, j, k, h
-        integer :: ldim(3)
-        integer :: S,T
-        integer :: ss, tt
-        real    :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
-        real    :: sc, old_range(2) !scale factor and old pixel range
-        real    :: smpd
-        real    :: tr, max
+        integer     :: i, j, k, h, ldim(3), S, T, ss, tt
+        real        :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), smpd, tr, max
+        real        :: sc, old_range(2) ! scale factor and old pixel range
         type(image) :: img_avg
-        print *, '*** initialising otsu'
+        if( DOPRINT ) print *, '*** initialising otsu'
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         if(ldim(3) > 1) THROW_HARD('Not implemented for volumes! otsu_img_robust')
@@ -433,7 +429,7 @@ contains
         call img_avg%new(ldim, smpd)
         call generate_neigh_avg_mat(img, img_avg)
         call img_avg%get_rmat_ptr(rmat_avg)
-        print *, '*** hists generation'
+        if( DOPRINT ) print *, '*** hists generation'
         hists = 0.
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,h,k)&
         !$omp proc_bind(close) reduction(+:hists)
@@ -473,9 +469,9 @@ contains
         !$omp end parallel do
         ! hists is the joint probability, normalise
         hists = hists/real(ldim(1)*ldim(2))
-        print *, 'sum ', sum(hists)
+        if( DOPRINT ) print *, 'sum ', sum(hists)
         ! Threshold selection
-        print *, '*** selecting thresholds'
+        if( DOPRINT ) print *, '*** selecting thresholds'
         call calc_tr(hists,MIN_VAL,MAX_VAL,threshold = tr)
         where(rmat >= tr)
             rmat = 1.
@@ -484,7 +480,8 @@ contains
         endwhere
         if(present(thresh))  thresh =  tr/sc+old_range(1) !rescale threshold in the old range
         call img_avg%kill
-        print *, '*** binarization successfully completed'
+        if( DOPRINT ) print *, '*** binarization successfully completed'
+
         contains
 
             subroutine calc_tr(hists,MIN_VAL,MAX_VAL,threshold)
@@ -560,6 +557,7 @@ contains
                     enddo
                 enddo
             end subroutine generate_neigh_avg_mat
+
     end subroutine otsu_img_robust
 
 end module simple_segmentation
