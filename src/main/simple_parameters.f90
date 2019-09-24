@@ -71,6 +71,7 @@ type :: parameters
     character(len=3)      :: platonic='yes'       !< platonic symmetry or not(yes|no){yes}
     character(len=3)      :: plot='no'            !< make plot(yes|no){no}
     character(len=3)      :: projstats='no'
+    character(len=3)      :: prenormpremsk='no'   !< images are pre-normalised and pre-masked
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
     character(len=3)      :: clsfrcs='no'
@@ -428,6 +429,7 @@ type :: parameters
     logical :: l_pssnr          = .false.
     logical :: l_ptclw          = .true.
     logical :: l_phaseplate     = .false.
+    logical :: l_prenormpremsk  = .false.
     logical :: l_projw          = .false.
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
@@ -568,6 +570,7 @@ contains
         call check_carg('phrand',         self%phrand)
         call check_carg('phshiftunit',    self%phshiftunit)
         call check_carg('platonic',       self%platonic)
+        call check_carg('prenormpremsk',  self%prenormpremsk)
         call check_carg('prg',            self%prg)
         call check_carg('projname',       self%projname)
         call check_carg('projstats',      self%projstats)
@@ -1252,6 +1255,8 @@ contains
                 THROW_HARD('input mask file not in cwd')
             endif
         endif
+        ! indicate whether images have been pre-normalised and pre-masked
+        self%l_prenormpremsk = self%prenormpremsk .ne. 'no'
         ! focused masking
         self%l_focusmsk = .false.
         if( cline%defined('focusmsk') )then

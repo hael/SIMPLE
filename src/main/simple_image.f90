@@ -2867,7 +2867,7 @@ contains
         deallocate( sub_pixels )
     end subroutine shrink_bin
 
-    !> \brief grow_bins adds one layer of pixels bordering the background in a binary image
+    !> \brief grow_bins adds nlayers of pixels bordering the background in a binary image
     subroutine grow_bins( self, nlayers )
         class(image), intent(inout) :: self
         integer,      intent(in)    :: nlayers
