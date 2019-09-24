@@ -157,7 +157,7 @@ contains
         integer                                 :: j
         
         if(.NOT. allocated(self%ptcl2Dkey)) then
-            allocate(self%ptcl2Dkey(4))
+            allocate(self%ptcl2Dkey(6))
         end if
         
         if(.NOT. allocated(self%ptcl2Dlogical)) then
@@ -172,6 +172,10 @@ contains
         self%ptcl2Dlogical(3) = .TRUE.
         self%ptcl2Dkey(4) = 'state'
         self%ptcl2Dlogical(4) = .TRUE.
+        self%ptcl2Dkey(5) = 'dfx'
+        self%ptcl2Dlogical(5) = .TRUE.
+        self%ptcl2Dkey(6) = 'dfy'
+        self%ptcl2Dlogical(6) = .TRUE.
         
         do i=1, spproj%os_ptcl2D%get_noris()
             if(spproj%os_ptcl2D%isthere(i, 'state')) then
@@ -441,10 +445,15 @@ contains
                 endif
                 if(self%stklogical(2)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_VOLTAGE, real(spproj%os_stk%get(stkind,'kv'), dp))
                 if(self%stklogical(3)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_CS, real(spproj%os_stk%get(stkind,'cs'), dp))
-                if(self%stklogical(4) .AND. self%stklogical(5)) then
+                
+                if(self%ptcl2Dlogical(5) .AND. self%ptcl2Dlogical(6)) then
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSU, real(spproj%os_ptcl2D%get(i,'dfx') * 10000, dp))
+                    call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_ptcl2D%get(i,'dfy') * 10000, dp))
+                else if(self%stklogical(4) .AND. self%stklogical(5)) then
                     call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSU, real(spproj%os_stk%get(stkind,'dfx') * 10000, dp))
                     call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get(stkind,'dfy') * 10000, dp))
                 endif
+                
                 if(self%stklogical(6)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkind,'angast'), dp))
                 if(self%stklogical(7)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_Q0, real(spproj%os_stk%get(stkind,'fraca'), dp))
             endif
