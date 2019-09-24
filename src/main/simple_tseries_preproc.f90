@@ -15,10 +15,13 @@ private
 ! constants
 logical,          parameter   :: DEBUG_HERE         = .true.
 integer,          parameter   :: CHUNKSZ            = 500
-integer,          parameter   :: STEPSZ             = 20
+integer,          parameter   :: STEPSZ             = 1000
+! integer,          parameter   :: STEPSZ             = 20
 integer,          parameter   :: BIN_GROW           = 2
 real,             parameter   :: EXTRA_EDGE         = 6.0
+real,             parameter   :: TRS                = 20.0
 integer,          parameter   :: COS_EDGE_FALLOFF   = 12
+character(len=*), parameter   :: TWIN_AVGS_RAW      = 'time_window_avgs_raw.mrc'
 character(len=*), parameter   :: TWIN_AVGS          = 'time_window_avgs.mrc'
 character(len=*), parameter   :: TWIN_MASKS         = 'time_window_masks.mrc'
 character(len=*), parameter   :: SHIFTED_PTCLS      = 'tseries_shifted.mrc'
@@ -29,9 +32,11 @@ character(len=*), parameter   :: MASKED_PTCLS       = 'tseries_masked.mrc'
 type(image),      allocatable :: ptcl_imgs(:)         ! all particles in the time-series
 type(image),      allocatable :: ptcl_avgs(:)         ! averages over time window
 type(image),      allocatable :: ptcl_masks(:)        ! masks for the particle images
+type(image),      allocatable :: corr_imgs(:)         ! images for phase corr-based shift search
 type(image)                   :: cc_img               ! connected components image
 integer,          allocatable :: avg_inds(:)          ! indices that map particles to averages
 real,             allocatable :: shifts4avgs(:,:)     ! shifts obtained through center of mass centering
+real,             allocatable :: shifts4ptcls(:,:)    ! shifts obtained through phase corr-based shift search
 real,             allocatable :: rmat_sum(:,:,:)      ! for OpenMP reduction
 integer                       :: ldim(3)              ! logical dimension of 2D image
 logical                       :: existence = .false.  ! to flag existence
@@ -42,14 +47,17 @@ contains
         integer :: i
         ! first, kill pre-existing
         call kill_tseries_preproc
-        allocate(ptcl_imgs(params_glob%nptcls), avg_inds(params_glob%nptcls))
+        allocate(ptcl_imgs(params_glob%nptcls), corr_imgs(nthr_glob), avg_inds(params_glob%nptcls))
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
             call ptcl_imgs(i)%read(params_glob%stk, i)
         end do
+        do i=1,nthr_glob
+            call corr_imgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
+        end do
         ! allocate real matrices for OpenMP reduction
         ldim = ptcl_imgs(1)%get_ldim()
-        allocate(rmat_sum(ldim(1),ldim(2),ldim(3)), source=0.)
+        allocate(rmat_sum(ldim(1),ldim(2),ldim(3)), shifts4ptcls(params_glob%nptcls,2), source=0.)
         ! prepare thread safe images
         call ptcl_imgs(1)%construct_thread_safe_tmp_imgs(nthr_glob)
         ! flag existence
@@ -72,7 +80,7 @@ contains
         type(image) :: img_tmp
         real        :: diam_ave, diam_sdev, diam_var, mask_radius
         real        :: one_sigma_thresh, mskrad, mskrad_max
-        integer     :: iframe, i, j, fromto(2), cnt, loc(1)
+        integer     :: iframe, i, j, fromto(2), cnt, loc(1), ithr
         logical     :: err
         ! allocate diameters, ptcl_avgs & ptcl_masks arrays
         cnt = 0
@@ -104,8 +112,9 @@ contains
             do while(fromto(2) > params_glob%nptcls)
                 fromto = fromto - 1
             end do
-            ! calculate time window average
+            ! calculate and write time window average
             call calc_avg
+            call ptcl_avgs(cnt)%write(TWIN_AVGS_RAW, cnt)
             ! low-pass filter
             call ptcl_avgs(cnt)%bp(0., params_glob%cenlp)
             ! make a copy
@@ -164,8 +173,13 @@ contains
             call ptcl_avgs(i)%new([params_glob%box,params_glob%box,1],  params_glob%smpd, wthreads=.false.)
             call ptcl_avgs(i)%read(TWIN_AVGS, i)
         end do
-        write(logfhandle,'(A)') '>>> MASS CENTERING TIME WINDOW AVERAGES'
-        !$omp parallel default(shared) private(i) proc_bind(close)
+
+
+
+
+
+        write(logfhandle,'(A)') '>>> CENTERING PARTICLE IMAGES'
+        !$omp parallel default(shared) private(i,ithr) proc_bind(close)
         !$omp do schedule(static)
         do i=1,size(ptcl_avgs)
             call ptcl_avgs(i)%norm_bin
@@ -177,12 +191,25 @@ contains
         !$omp end do nowait
         !$omp do schedule(static)
         do i=1,params_glob%nptcls
+            ! get thread index
+            ithr = omp_get_thread_num() + 1
+            call corr_imgs(ithr)%copy(ptcl_avgs(avg_inds(i)))
+            call corr_imgs(ithr)%fft
             call ptcl_imgs(i)%fft
-            call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
+            call corr_imgs(ithr)%fcorr_shift(ptcl_imgs(i), TRS, shifts4ptcls(i,:))
+            call ptcl_imgs(i)%shift2Dserial(shifts4ptcls(i,:))
             call ptcl_imgs(i)%ifft()
         end do
         !$omp end do
         !$omp end parallel
+
+        ! REPLACED THE AVG SHIFT MAPPING WITH PHASECORR BASED SHIFT SEARCH
+        ! do i=1,params_glob%nptcls
+        !     call ptcl_imgs(i)%fft
+        !     call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
+        !     call ptcl_imgs(i)%ifft()
+        ! end do
+
         ! read back in the unmasked images
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%read(params_glob%stk, i)
@@ -191,7 +218,9 @@ contains
         !$omp parallel do default(shared) private(i) proc_bind(close) schedule(static)
         do i=1,params_glob%nptcls
             call ptcl_imgs(i)%fft()
-            call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
+            ! REPLACED THE AVG SHIFT MAPPING WITH PHASECORR BASED SHIFT SEARCH
+            ! call ptcl_imgs(i)%shift2Dserial(shifts4avgs(avg_inds(i),1:2))
+            call ptcl_imgs(i)%shift2Dserial(shifts4ptcls(i,:))
             call ptcl_imgs(i)%ifft()
         end do
         !$omp end parallel do
@@ -243,8 +272,12 @@ contains
                 call ptcl_avgs(i)%kill
                 call ptcl_masks(i)%kill
             end do
+            do i=1,size(corr_imgs)
+                call corr_imgs(i)%kill
+            end do
+
             call cc_img%kill
-            deallocate(ptcl_imgs,ptcl_avgs,ptcl_masks,avg_inds,shifts4avgs,rmat_sum)
+            deallocate(ptcl_imgs,ptcl_avgs,ptcl_masks,avg_inds,shifts4avgs,shifts4ptcls,rmat_sum)
         endif
     end subroutine kill_tseries_preproc
 
