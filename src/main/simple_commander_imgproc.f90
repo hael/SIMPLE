@@ -331,7 +331,11 @@ contains
             if( cline%defined('filter') )then
                 select case(trim(params%filter))
                     case('tv')
-                        call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
+                        if( trim(params%tseries) .eq. 'yes' )then
+                            call tvfilt_tseries_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
+                        else
+                            call tvfilter_imgfile(params%stk, params%outstk, params%smpd, params%lambda)
+                        endif
                     case('nlmean')
                         call nlmean_imgfile(params%stk, params%outstk, params%smpd)
                     case('corr')
@@ -339,9 +343,9 @@ contains
                         sigma = SIGMA_DEFAULT
                         if( cline%defined('sigma') ) sigma = params%sigma
                         if( trim(params%tseries) .eq. 'yes' )then
-                            call corrfilt_tseries_imgfile(params%stk,sigma,params%outstk, params%smpd, params%lp)
+                            call corrfilt_tseries_imgfile(params%stk, params%outstk, params%smpd, sigma, params%lp)
                         else
-                            call corrfilt_imgfile(params%stk,sigma,params%outstk, params%smpd, params%lp, isvol=.false.)
+                            call corrfilt_imgfile(params%stk, params%outstk, params%smpd, sigma, params%lp, isvol=.false.)
                         endif
                     case DEFAULT
                         THROW_HARD('Unknown filter!')
@@ -392,13 +396,13 @@ contains
                 else if( cline%defined('lp') )then
                     if(cline%defined('filter') .and. (trim(params%filter) .eq. 'corr')) then
                         if(cline%defined('sigma')) then
-                            call corrfilt_imgfile(params%vols(1),params%sigma,params%outvol, params%smpd, lp=params%lp, isvol=.true.)
+                            call corrfilt_imgfile(params%vols(1), params%outvol, params%smpd, params%sigma, lp=params%lp, isvol=.true.)
                             call build%vol%read(params%outvol)
                         elseif(cline%defined('element')) then
-                            call corrfilt_imgfile(params%vols(1),params%element,params%outvol,params%smpd,lp=params%lp)
+                            call corrfilt_imgfile(params%vols(1), params%outvol, params%element, params%smpd, lp=params%lp)
                             call build%vol%read(params%outvol)
                         else
-                            call corrfilt_imgfile(params%vols(1),SIGMA_DEFAULT,params%outvol, params%smpd, lp=params%lp, isvol=.true.)
+                            call corrfilt_imgfile(params%vols(1),params%outvol, params%smpd, SIGMA_DEFAULT, lp=params%lp, isvol=.true.)
                             call build%vol%read(params%outvol)
                         endif
                     else

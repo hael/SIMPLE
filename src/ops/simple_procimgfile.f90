@@ -3,6 +3,7 @@ module simple_procimgfile
 include 'simple_lib.f08'
 use simple_image,   only: image
 use simple_oris,    only: oris
+use simple_tvfilter
 implicit none
 
 !! Basic Operations
@@ -17,8 +18,9 @@ public :: neg_imgfile, bin_imgfile
 public :: mask_imgfile, taper_edges_imgfile
 !! Filters
 public :: ft2img_imgfile, masscen_imgfile, cure_imgfile, apply_bfac_imgfile
-public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corrfilt_imgfile, corrfilt_tseries_imgfile
-public :: real_filter_imgfile, phase_rand_imgfile, apply_ctf_imgfile, tvfilter_imgfile
+public :: shift_imgfile, bp_imgfile, shrot_imgfile, add_noise_imgfile, nlmean_imgfile, corrfilt_imgfile
+public :: corrfilt_tseries_imgfile, tvfilt_tseries_imgfile, real_filter_imgfile, phase_rand_imgfile
+public :: apply_ctf_imgfile, tvfilter_imgfile
 private
 
 
@@ -833,7 +835,6 @@ contains
 
     !>  \brief  is for apply the tv filter to an image file
     subroutine tvfilter_imgfile( fname2process, fname, smpd, lambda )
-        use simple_tvfilter
         character(len=*), intent(in) :: fname2process, fname
         real,             intent(in) :: smpd, lambda
         type(tvfilter) :: tv
@@ -878,11 +879,9 @@ contains
     ! convolution-based filtering globally over the entire time-series to make maximum
     ! use of the redundancu in the data. Discovered by mistake and we are surprised it works
     ! since SIMPLE is not supposed to support non-square transforms
-    subroutine corrfilt_tseries_imgfile( fname2process, sigma, fname, smpd, lp )
+    subroutine corrfilt_tseries_imgfile( fname2process, fname, smpd, sigma, lp )
         character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: sigma
-        real,             intent(in) :: smpd
-        real,             intent(in) :: lp
+        real,             intent(in) :: smpd, sigma, lp
         type(image)    :: imgproc, gau, imgresult
         integer        :: n, i, ldim(3)
         call find_ldim_nptcls(fname2process, ldim, n)
@@ -903,14 +902,30 @@ contains
         call imgresult%kill
     end subroutine corrfilt_tseries_imgfile
 
+    subroutine tvfilt_tseries_imgfile( fname2process, fname, smpd, lambda )
+        character(len=*), intent(in) :: fname2process, fname
+        real,             intent(in) :: lambda, smpd
+        type(tvfilter) :: tv
+        type(image)    :: img
+        integer        :: n, i, ldim(3)
+        call find_ldim_nptcls(fname2process, ldim, n)
+        call raise_exception_imgfile( n, ldim, 'tvfilt_tseries_imgfile' )
+        call tv%new()
+        call img%new(ldim,smpd)
+        write(logfhandle,'(a)') '>>> APPLYING TV FILTER TO TIME-SERIES'
+        call img%read(fname2process)
+        call tv%apply_filter_3d(img,lambda)
+        call img%write(fname)
+        call img%kill
+        call tv%kill
+    end subroutine tvfilt_tseries_imgfile
+
     !>  \brief  is for apply the correlation filter to an image file
     !    fname2process: images to be processed
     !    fname        : output images
-    subroutine corrfilt_imgfile_1( fname2process, sigma, fname, smpd, lp, isvol )
+    subroutine corrfilt_imgfile_1( fname2process, fname, smpd, sigma, lp, isvol )
         character(len=*), intent(in) :: fname2process, fname
-        real,             intent(in) :: sigma
-        real,             intent(in) :: smpd
-        real,             intent(in) :: lp
+        real,             intent(in) :: smpd, sigma, lp
         logical,          intent(in) :: isvol
         type(image)    :: imgproc, gau, imgresult
         integer        :: n, i, ldim(3)
@@ -947,12 +962,11 @@ contains
         call imgresult%kill
     end subroutine corrfilt_imgfile_1
 
-    subroutine corrfilt_imgfile_2( fname2process, element, fname, smpd, lp )
+    subroutine corrfilt_imgfile_2( fname2process, fname, element, smpd, lp )
         use simple_atoms, only : atoms
         character(len=*), intent(in) :: fname2process, fname
         character(len=2), intent(in) :: element
-        real,             intent(in) :: smpd
-        real,             intent(in) :: lp
+        real,             intent(in) :: smpd, lp
         type(image)    :: imgproc, img_atom, imgresult
         type(atoms)    :: atom
         integer        :: n, i, ldim(3)
