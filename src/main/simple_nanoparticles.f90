@@ -415,6 +415,7 @@ contains
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
     subroutine phasecorrelation_nano_gaussian(self,otsu_thresh)
+        use simple_segmentation
         class(nanoparticle), intent(inout) :: self
         real,                intent(out)   :: otsu_thresh
         type(image) :: one_atom
@@ -429,15 +430,7 @@ contains
         call atom%set_element(1,self%element)
         call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
         call atom%convolve(one_atom, cutoff)
-        if(DEBUG_HERE) call one_atom%write(PATH_HERE//basename(trim(self%fbody))//'OnePtAtom.mrc')
         call one_atom%fft()
-        !!!!!!!!!!!!!!!!!!!!!!!!
-        ! call gau3D%new(self%ldim, self%smpd)
-        ! call phasecorr%new(self%ldim, self%smpd)
-        ! call gau3D%gauimg3D(sigma, sigma, sigma, cutoff=5.)
-        ! call gau3D%fft()
-        ! phasecorr = self%img%phase_corr(gau3D,1.)
-        !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         call self%img%fft()
         call self%img%phase_corr(one_atom,phasecorr,1.)
         if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorrOneAtom.mrc')
@@ -449,6 +442,7 @@ contains
         !Otsu binarization for nanoparticle maps
         !It considers the gray level value just in the positive range.
         !It doesn't threshold the map. It just returns the ideal threshold.
+        ! This is based on the implementation of 1D otsu
          subroutine otsu_nano(img, scaled_thresh)
              use simple_math, only : otsu
              type(image),    intent(inout) :: img
@@ -456,7 +450,7 @@ contains
              real, pointer     :: rmat(:,:,:)
              real, allocatable :: x(:)
              call img%get_rmat_ptr(rmat)
-             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
+             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
              call otsu(x, scaled_thresh)
          end subroutine otsu_nano
     end subroutine phasecorrelation_nano_gaussian

@@ -3,11 +3,12 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img, otsu_img_robust
+public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img, otsu_img_robust, otsu_robust_fast
 private
 #include "simple_local_flags.inc"
 
-logical, parameter :: IMPROVED = .true.
+logical, parameter :: IMPROVED   = .true.
+logical, parameter :: DOPRINT    = .false.
 
 contains
 
@@ -379,17 +380,22 @@ contains
 
     ! otsu binarization for images, based on the implementation
     ! of otsu algo for 1D vectors
-    subroutine otsu_img(img, thresh)
+    subroutine otsu_img(img, thresh, positive)
         use simple_math, only : otsu
-        class(image),   intent(inout) :: img
-        real, optional, intent(out)   :: thresh
+        class(image),      intent(inout) :: img
+        real,    optional, intent(out)   :: thresh
+        logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
         real, pointer     :: rmat(:,:,:)
         real, allocatable :: x(:)
         integer           :: ldim(3)
         real :: selected_t
         ldim = img%get_ldim()
         call img%get_rmat_ptr(rmat)
-        x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+        if(present(positive) .and. positive .eqv. .true.) then
+            x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), rmat(1:ldim(1),1:ldim(2),1:ldim(3)) > 0.)
+        else
+            x = pack(rmat(1:ldim(1),1:ldim(2),1:ldim(3)), .true.)
+        endif
         call otsu(x, selected_t)
         if(present(thresh)) thresh= selected_t
         deallocate(x)
@@ -408,7 +414,6 @@ contains
         type(image),    intent(inout) :: img
         real, optional, intent(out)   :: thresh
         integer, parameter   :: MIN_VAL = 0, MAX_VAL = 255
-        logical, parameter   :: DOPRINT = .false.
         integer, allocatable :: yhist_orig(:)
         real,    allocatable :: xhist_orig(:)
         real,    allocatable :: x_orig(:) ! vectorization of the img
@@ -417,7 +422,7 @@ contains
         real        :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), smpd, tr, max
         real        :: sc, old_range(2) ! scale factor and old pixel range
         type(image) :: img_avg
-        if( DOPRINT ) print *, '*** initialising otsu'
+        if( DOPRINT ) write(logfhandle,*) '*** initialising otsu'
         ldim = img%get_ldim()
         smpd = img%get_smpd()
         if(ldim(3) > 1) THROW_HARD('Not implemented for volumes! otsu_img_robust')
@@ -429,7 +434,7 @@ contains
         call img_avg%new(ldim, smpd)
         call generate_neigh_avg_mat(img, img_avg)
         call img_avg%get_rmat_ptr(rmat_avg)
-        if( DOPRINT ) print *, '*** hists generation'
+        if( DOPRINT ) write(logfhandle,*)  '*** hists generation'
         hists = 0.
         !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,h,k)&
         !$omp proc_bind(close) reduction(+:hists)
@@ -469,9 +474,9 @@ contains
         !$omp end parallel do
         ! hists is the joint probability, normalise
         hists = hists/real(ldim(1)*ldim(2))
-        if( DOPRINT ) print *, 'sum ', sum(hists)
+        if( DOPRINT ) write(logfhandle,*) 'sum ', sum(hists)
         ! Threshold selection
-        if( DOPRINT ) print *, '*** selecting thresholds'
+        if( DOPRINT ) write(logfhandle,*) '*** selecting thresholds'
         call calc_tr(hists,MIN_VAL,MAX_VAL,threshold = tr)
         where(rmat >= tr)
             rmat = 1.
@@ -480,7 +485,7 @@ contains
         endwhere
         if(present(thresh))  thresh =  tr/sc+old_range(1) !rescale threshold in the old range
         call img_avg%kill
-        if( DOPRINT ) print *, '*** binarization successfully completed'
+        if( DOPRINT ) write(logfhandle,*) '*** binarization successfully completed'
 
         contains
 
@@ -553,11 +558,117 @@ contains
                 do i = 1, ldim(1)
                     do j = 1, ldim(2)
                         call img%calc_neigh_8([i,j,1],neigh_8,nsz)
-                        rmat(i,j,1) = sum(neigh_8(1:nsz-1))/real(nsz-1) !-1 because last returned is px itseld
+                        rmat(i,j,1) = sum(neigh_8(1:nsz))/real(nsz)
                     enddo
                 enddo
             end subroutine generate_neigh_avg_mat
 
     end subroutine otsu_img_robust
 
+    ! Source : An Equivalent 3D Otsu’s Thresholding Method,
+    ! Puthipong Sthitpattanapongsa and Thitiwan Srinark
+    ! Idea: use 3 times otsu1D on the original vol,
+    ! the avg vol and the median filtered vol.
+    ! Find 3 thresholds and 3 corresponding bin vols.
+    ! For each voxel select the most frequent value between
+    ! background and foreground in the bin volumes.
+    ! It is very robust to salt & pepper noise. Much more than
+    ! otsu_img_robust
+    subroutine otsu_robust_fast(img, img_out, stk, nano, thresh)
+        type(image),       intent(inout) :: img
+        type(image),       intent(out)   :: img_out
+        logical,           intent(in)    :: stk   ! is it a stack
+        logical,           intent(in)    :: nano  ! is it a nanoparticle
+        real, optional,    intent(out)   :: thresh(3)
+        type(image) :: img_copy         ! copy of the original img
+        type(image) :: img_avg, img_med
+        integer :: ldim(3)
+        integer :: i,j,k
+        integer :: count_back          ! counts how many times a px is selected as background
+        real    :: smpd
+        real, pointer :: rmat(:,:,:)   ! original matrix
+        real, pointer :: rmat_t(:,:,:) ! for the thresholded img
+        real, pointer :: rmat_avg(:,:,:),rmat_med(:,:,:)
+        if((stk .eqv. .true.) .and. (nano .eqv. .true.)) THROW_HARD('Cannot be a nanoparticle and a stack at the same time!; otsu_robust_fast')
+        ldim = img%get_ldim()
+        smpd = img%get_smpd()
+        if(stk .eqv. .true.) ldim(3) = 1
+        ! Initialise
+        call img_copy%copy(img)
+        call img_out%new(ldim, smpd)
+        call img_avg%new(ldim, smpd)
+        call img_med%new(ldim, smpd)
+        ! Generate avg and median volumes
+        call generate_avg_and_median_vols(img,ldim,img_avg,img_med)
+        ! Apply otsu1D on each img
+        if(nano .eqv. .true. ) then
+            call otsu_img(img_copy, thresh(1), positive = .true.)
+            call otsu_img(img_avg,  thresh(2), positive = .true.)
+            call otsu_img(img_med,  thresh(3), positive = .true.)
+        else
+            call otsu_img(img_copy, thresh(1), positive = .false.)
+            call otsu_img(img_avg,  thresh(2), positive = .false.)
+            call otsu_img(img_med,  thresh(3), positive = .false.)
+        endif
+        ! Fetch pointers
+        call img_out%get_rmat_ptr(rmat_t)
+        call img_copy%get_rmat_ptr(rmat)
+        call img_avg%get_rmat_ptr(rmat_avg)
+        call img_med%get_rmat_ptr(rmat_med)
+        ! Find most frequent value in the binary version of each voxel
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do k = 1, ldim(3)
+                    count_back = 0
+                    if(rmat(i,j,k)     < 0.5) count_back = count_back + 1
+                    if(rmat_avg(i,j,k) < 0.5) count_back = count_back + 1
+                    if(rmat_med(i,j,k) < 0.5) count_back = count_back + 1
+                    if(count_back < 2) then
+                        rmat_t(i,j,k) = 1.
+                    else
+                        rmat_t(i,j,k) = 0.
+                    endif
+                enddo
+            enddo
+        enddo
+        ! kill
+        call img_copy%kill
+        call img_avg%kill
+        call img_med%kill
+    contains
+        ! This subroutine generates 2 images:
+        ! 1) img_avg: image where in each pixel is contained
+        ! the average value of the gray levels in the neighbours of the pixel.
+        ! 2) img_med: image where in each pixel is contained
+        ! the median value of the gray levels in the neighbours of the pixel.
+        subroutine generate_avg_and_median_vols(img,ldim,img_avg,img_med)
+            type(image), intent(inout) :: img, img_avg, img_med
+            integer,     intent(in)    :: ldim(3)
+            integer :: i, j, k
+            integer :: nsz
+            real, allocatable :: neigh_8(:)
+            real, pointer     :: rmat_avg(:,:,:),rmat_med(:,:,:)
+            call img_avg%get_rmat_ptr(rmat_avg)
+            call img_med%get_rmat_ptr(rmat_med)
+            if(ldim(3) == 1) then
+                allocate(neigh_8(9))
+            else
+                allocate(neigh_8(27))
+            endif
+            do i = 1, ldim(1)
+                do j = 1, ldim(2)
+                    do k = 1, ldim(3)
+                        if(ldim(3) == 1 ) then
+                            call img%calc_neigh_8([i,j,k],neigh_8,nsz)
+                        else
+                            call img%calc3D_neigh_8([i,j,k],neigh_8,nsz)
+                        endif
+                        rmat_avg(i,j,k) = sum(neigh_8(1:nsz))/real(nsz)
+                        rmat_med(i,j,k) = median(neigh_8(1:nsz))
+                    enddo
+                enddo
+            enddo
+            deallocate(neigh_8)
+        end subroutine generate_avg_and_median_vols
+    end subroutine otsu_robust_fast
 end module simple_segmentation
