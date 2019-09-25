@@ -853,7 +853,11 @@ contains
                 if( pw > TINY )then
                     call spproj%get_stkname_and_ind(params_glob%oritype, i, stkname, ind_in_stk)
                     call img%read(stkname, ind_in_stk)
-                    call img%noise_norm_pad_fft(lmsk, img_pad)
+                    if( params_glob%l_prenormpremsk )then
+                        call img%pad_fft(img_pad)
+                    else
+                        call img%noise_norm_pad_fft(lmsk, img_pad)
+                    endif
                     ctfvars = spproj%get_ctfparams(params_glob%oritype, i)
                     call self%insert_fplane(se, orientation, ctfvars, img_pad, pwght=pw)
                     deallocate(stkname)

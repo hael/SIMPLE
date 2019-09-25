@@ -146,7 +146,7 @@ type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
 type(simple_program), target :: radial_sym_test
 type(simple_program), target :: tseries_import
-type(simple_program), target :: tseries_center_and_mask
+type(simple_program), target :: tseries_estimate_diam
 type(simple_program), target :: tseries_average
 type(simple_program), target :: tseries_corrfilt
 type(simple_program), target :: tseries_ctf_estimate
@@ -337,7 +337,7 @@ contains
         call new_symmetry_test
         call new_radial_sym_test
         call new_tseries_import
-        call new_tseries_center_and_mask
+        call new_tseries_estimate_diam
         call new_tseries_average
         call new_tseries_corrfilt
         call new_tseries_ctf_estimate
@@ -591,8 +591,8 @@ contains
                 ptr2prg => symmetry_test
             case('tseries_import')
                 ptr2prg => tseries_import
-            case('tseries_center_and_mask')
-                ptr2prg => tseries_center_and_mask
+            case('tseries_estimate_diam')
+                ptr2prg => tseries_estimate_diam
             case('tseries_average')
                 ptr2prg => tseries_average
             case('tseries_corrfilt')
@@ -693,7 +693,7 @@ contains
         write(logfhandle,'(A)') symmetrize_map%name
         write(logfhandle,'(A)') symmetry_test%name
         write(logfhandle,'(A)') tseries_import%name
-        write(logfhandle,'(A)') tseries_center_and_mask%name
+        write(logfhandle,'(A)') tseries_estimate_diam%name
         write(logfhandle,'(A)') tseries_average%name
         write(logfhandle,'(A)') tseries_corrfilt%name
         write(logfhandle,'(A)') tseries_ctf_estimate%name
@@ -3638,37 +3638,33 @@ contains
         call tseries_track%set_input('comp_ctrls', 2, nthr)
     end subroutine new_tseries_track
 
-    subroutine new_tseries_center_and_mask
+    subroutine new_tseries_estimate_diam
         ! PROGRAM SPECIFICATION
-        call tseries_center_and_mask%new(&
-        &'tseries_center_and_mask',&                                                                                    ! name
+        call tseries_estimate_diam%new(&
+        &'tseries_estimate_diam',&                                                                                    ! name
         &'Estimation of a suitable mask radius for nanoparticle time-series',&                                        ! descr_short
         &'is a program for estimation of a suitable mask radius for spherical masking of nanoparticle time-series ',& ! descr_long
         &'simple_exec',&                                                                                              ! executable
-        &2, 1, 0, 1, 3, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 1, 0, 1, .false.)                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call tseries_center_and_mask%set_input('img_ios', 1, stk)
-        tseries_center_and_mask%img_ios(1)%required = .true.
-        call tseries_center_and_mask%set_input('img_ios', 2, outstk)
+        call tseries_estimate_diam%set_input('img_ios', 1, stk)
+        tseries_estimate_diam%img_ios(1)%required = .true.
         ! parameter input/output
-        call tseries_center_and_mask%set_input('parm_ios', 1, smpd)
+        call tseries_estimate_diam%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
         ! search controls
-        call tseries_center_and_mask%set_input('srch_ctrls', 1, trs)
+        ! <empty>
         ! filter controls
-        call tseries_center_and_mask%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit',&
+        call tseries_estimate_diam%set_input('filt_ctrls', 1, 'cenlp', 'num', 'Centering low-pass limit',&
         &'Limit for low-pass filter used in binarisation prior to determination of the center of gravity of &
         &the nanoparticles and centering', 'centering low-pass limit in Angstroms{5}', .false., 5.)
-        call tseries_center_and_mask%set_input('filt_ctrls', 2, lp)
-        tseries_center_and_mask%filt_ctrls(2)%required = .false.
-        call tseries_center_and_mask%set_input('filt_ctrls', 3, 'sigma', 'num', 'sigma, for Gaussian convolution', 'sigma, for Gaussian convolution(in pixels)','{2.}', .false., 2.0)
         ! mask controls
         ! <empty>
         ! computer controls
-        call tseries_center_and_mask%set_input('comp_ctrls', 1, nthr)
-    end subroutine new_tseries_center_and_mask
+        call tseries_estimate_diam%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_tseries_estimate_diam
 
     subroutine new_tseries_preproc
         ! PROGRAM SPECIFICATION

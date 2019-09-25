@@ -636,7 +636,11 @@ contains
                     !$omp parallel do default(shared) private(i,ibatch) schedule(static) proc_bind(close)
                     do i=batchlims(1),batchlims(2)
                         ibatch = i - batchlims(1) + 1
-                        call build_glob%imgbatch(ibatch)%noise_norm_pad_fft(build_glob%lmsk, rec_imgs(ibatch))
+                        if( params_glob%l_prenormpremsk )then
+                            call build_glob%imgbatch(ibatch)%pad_fft(rec_imgs(ibatch))
+                        else
+                            call build_glob%imgbatch(ibatch)%noise_norm_pad_fft(build_glob%lmsk, rec_imgs(ibatch))
+                        endif
                     end do
                     !$omp end parallel do
                     ! gridding

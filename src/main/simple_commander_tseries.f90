@@ -15,7 +15,7 @@ public :: tseries_track_commander_distr
 public :: tseries_track_commander
 public :: cleanup2D_nano_commander_distr
 public :: cluster2D_nano_commander_distr
-public :: tseries_center_and_mask_commander
+public :: tseries_estimate_diam_commander
 public :: tseries_preproc_commander
 public :: tseries_average_commander
 public :: tseries_corrfilt_commander
@@ -47,10 +47,10 @@ type, extends(commander_base) :: cluster2D_nano_commander_distr
   contains
     procedure :: execute      => exec_cluster2D_nano_distr
 end type cluster2D_nano_commander_distr
-type, extends(commander_base) :: tseries_center_and_mask_commander
+type, extends(commander_base) :: tseries_estimate_diam_commander
   contains
-    procedure :: execute      => exec_tseries_center_and_mask
-end type tseries_center_and_mask_commander
+    procedure :: execute      => exec_tseries_estimate_diam
+end type tseries_estimate_diam_commander
 type, extends(commander_base) :: tseries_preproc_commander
   contains
     procedure :: execute      => exec_tseries_preproc
@@ -348,23 +348,20 @@ contains
         call xcluster2D_distr%execute(cline)
     end subroutine exec_cluster2D_nano_distr
 
-    subroutine exec_tseries_center_and_mask( self, cline )
+    subroutine exec_tseries_estimate_diam( self, cline )
         use simple_tseries_preproc
-        class(tseries_center_and_mask_commander), intent(inout) :: self
+        class(tseries_estimate_diam_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
+        real :: avg_diam, med_diam, max_diam, mskrad
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 5.0)
-        if( .not. cline%defined('lp')     ) call cline%set('lp',    3.0)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','yes')
-        if( .not. cline%defined('sigma')  ) call cline%set('sigma', 2.0)
-        if( .not. cline%defined('trs')    ) call cline%set('trs',  10.0)
-        if( .not. cline%defined('outstk') ) call cline%set('outstk', 'masked_tseries.mrc')
         call params%new(cline)
         call init_tseries_preproc
-        call tseries_center_and_mask
+        call tseries_estimate_diam(avg_diam, med_diam, max_diam, mskrad)
         call kill_tseries_preproc
-        call simple_end('**** SIMPLE_TSERIES_CENTER_AND_MASK NORMAL STOP ****')
-    end subroutine exec_tseries_center_and_mask
+        call simple_end('**** SIMPLE_TSERIES_ESTIMATE_DIAM NORMAL STOP ****')
+    end subroutine exec_tseries_estimate_diam
 
     subroutine exec_tseries_preproc( self, cline )
         use simple_tseries_preproc

@@ -315,6 +315,7 @@ contains
     procedure          :: zero_and_flag_ft
     procedure          :: zero_background
     procedure          :: zero_env_background
+    procedure          :: pad_fft
     procedure          :: noise_norm_pad_fft
     procedure          :: div_w_instrfun
     procedure          :: salt_n_pepper
@@ -6921,6 +6922,19 @@ contains
         endif
         deallocate(w)
     end subroutine div_w_instrfun
+
+    subroutine pad_fft( self, self_out )
+        class(image), intent(inout) :: self
+        class(image), intent(inout) :: self_out
+        integer :: starts(3), stops(3)
+        starts        = (self_out%ldim - self%ldim) / 2 + 1
+        stops         = self_out%ldim - starts + 1
+        self_out%ft   = .false.
+        self_out%rmat = 0.
+        self_out%rmat(starts(1):stops(1),starts(2):stops(2),1)=&
+            &self%rmat(:self%ldim(1),:self%ldim(2),1)
+        call self_out%fft
+    end subroutine pad_fft
 
     subroutine noise_norm_pad_fft( self, lmsk, self_out )
         class(image), intent(inout) :: self
