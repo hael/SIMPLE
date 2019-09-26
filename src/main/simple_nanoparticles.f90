@@ -15,7 +15,7 @@ public :: nanoparticle
 
 ! module global constants
 real,    parameter :: MAX_INTERAT_DIST      = 3.    !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
-real               :: THEORETICAL_RADIUS    = 1.1   !Default platinum, theoretical atom radius
+real,    parameter :: MIN_INTERAT_DIST      = 1.5   !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
 integer, parameter :: N_THRESH              = 20    !number of thresholds for binarization
 logical, parameter :: DEBUG_HERE            = .false.!for debugging purposes
 
@@ -23,11 +23,12 @@ type :: nanoparticle
     private
     type(atoms) :: centers_pdb
     type(image) :: img, img_bin, img_cc
-    integer     :: ldim(3)           = 0
-    real        :: smpd              = 0.
-    real        :: nanop_mass_cen(3) = 0.!coordinates of the center of mass of the nanoparticle
-    real        :: avg_dist_atoms    = 0.
-    integer     :: n_cc              = 0 !number of atoms (connected components
+    integer     :: ldim(3)            = 0
+    real        :: smpd               = 0.
+    real        :: nanop_mass_cen(3)  = 0.!coordinates of the center of mass of the nanoparticle
+    real        :: avg_dist_atoms     = 0.
+    real        :: theoretical_radius = 0.!theoretical atom radius
+    integer     :: n_cc               = 0 !number of atoms (connected components
     real,    allocatable  :: centers(:,:)
     real,    allocatable  :: ratios(:)
     real,    allocatable  :: ang_var(:)
@@ -105,24 +106,25 @@ contains
             case('pt')
                 self%element       = 'pt'
                 self%atom_name     = ' pt '
+                self%theoretical_radius = 1.1
                 ! thoretical radius is already set
             case('pd')
                 self%element       = 'pd'
                 self%atom_name     = ' pd '
-                THEORETICAL_RADIUS = 1.12
+                self%theoretical_radius = 1.12
             case('fe')
                 self%element       = 'fe'
                 self%atom_name     = ' fe '
-                THEORETICAL_RADIUS = 1.02
+                self%theoretical_radius = 1.02
             case('au')
                 self%element       = 'au'
                 self%atom_name     = ' au '
-                THEORETICAL_RADIUS = 1.23
+                self%theoretical_radius = 1.23
             case default
                 THROW_HARD('Unknown atom element; new_nanoparticle')
            end select
         endif
-        !self%sigma = 0.8*THEORETICAL_RADIUS/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
+        !self%sigma = 0.8*theoretical_radius/(2.*sqrt(2.*log(2.))*self%smpd) !0.8 not to have it too big (avoid connecting atoms)
         call find_ldim_nptcls(self%partname,  self%ldim, nptcls, smpd)
         call self%img%new         (self%ldim, self%smpd)
         call self%img_bin%new     (int(real(self%ldim)), self%smpd)
@@ -574,7 +576,10 @@ contains
                 dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
                 mask(:) = .true. ! restore
                 !Discard outliers
-                if(dist(i)*self%smpd > MAX_INTERAT_DIST ) then !2.5 is the average interatomic distance
+                if(dist(i)*self%smpd > MAX_INTERAT_DIST ) then   !2.5 is the average interatomic distance
+                    dist(i) = 0.
+                    n_discard = n_discard + 1
+                else if(dist(i)*self%smpd < MIN_INTERAT_DIST ) then
                     dist(i) = 0.
                     n_discard = n_discard + 1
                 endif
@@ -615,9 +620,14 @@ contains
                 if(self%dists(i)*self%smpd > MAX_INTERAT_DIST ) then !2.5 is the average interatomic distance
                     self%dists(i) = 0.
                     n_discard = n_discard + 1
+                else if(self%dists(i)*self%smpd < MIN_INTERAT_DIST ) then
+                    print *, 'atom ',i, 'dist(i)', self%dists(i)
+                    self%dists(i) = 0.
+                    n_discard = n_discard + 1
                 endif
             enddo
             self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
+            print *, 'self%avg_dist_atoms', self%avg_dist_atoms, 'self%avg_dist_atoms in A:', self%avg_dist_atoms*self%smpd
             !$omp parallel do schedule(static) private(i) reduction(+:stdev)
             do i = 1, size(self%centers, dim = 2)
                 if(self%dists(i)*self%smpd <=MAX_INTERAT_DIST) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
@@ -662,11 +672,9 @@ contains
         integer :: loc(1)
         integer :: n_discard
         integer :: label(1)
-        ! Size filter.
-        !call self%size_filtering()
         write(logfhandle, *) '****outliers discarding, init'
         ! Outliers removal using contact score
-        radius = 2.*self%avg_dist_atoms
+        radius = 2.*(2.*self%theoretical_radius)/self%smpd ! In pixels
         allocate(mask(self%n_cc), source = .true.)
         allocate(contact_scores(self%n_cc), source = 0)
         do cc = 1, self%n_cc !fix the atom
@@ -681,7 +689,7 @@ contains
             enddo
             contact_scores(cc) = cnt - 1 !-1 because while loop counts one extra before exiting
         enddo
-        n_discard = self%n_cc*PERCENT_DISCARD ! discard bottom 10 instead%??
+        n_discard = self%n_cc*PERCENT_DISCARD
         mask(1:self%n_cc) = .true.
         call self%img_cc%get_rmat_ptr(rmat_cc)
         call self%img_bin%get_rmat_ptr(rmat)
@@ -703,16 +711,17 @@ contains
         call self%find_centers()
         call self%write_centers()
         !root folder
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
-        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: discard_outliers, simple_chdir; ")
         write(logfhandle, *) '****outliers discarding, completed'
     end subroutine discard_outliers
 
+
+    ! This subrouitne validates the identified atomic positions
     subroutine validate_atomic_positions(self)
         class(nanoparticle), intent(inout) :: self
         integer, allocatable :: imat(:,:,:)
         real,    allocatable :: x(:)
-        real,    pointer     :: rmat_pc(:,:,:), rmat_cc(:,:,:)
+        real,    pointer     :: rmat_pc(:,:,:), rmat_cc(:,:,:), rmat_bin(:,:,:)
         integer, parameter   :: RANK_THRESH = 5
         integer :: n_cc, cnt
         integer :: rank, m(1)
@@ -747,7 +756,21 @@ contains
         enddo
         self%n_cc = cnt !update
         call self%write_centers()
-        call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'NewImgCc.mrc') !if(DEBUG_HERE)
+        call self%img_bin%get_rmat_ptr(rmat_bin)
+        if(DEBUG_HERE) call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BINbeforeValidation.mrc')
+        ! Update binary image
+        where(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
+            rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+        elsewhere
+            rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+        endwhere
+        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
+        ! Update number of ccs
+        call self%update_self_ncc
+        ! Update and write centers
+        call self%find_centers()
+        call self%write_centers()
+
     contains
         subroutine split_atom(rmat_pc, rmat_cc, imat,n_cc,new_centers,cnt)
             real,    intent(in)    :: rmat_pc(:,:,:)
@@ -768,7 +791,7 @@ contains
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
                         if(((real(i)-real(new_center1(1)))**2 + (real(j)-real(new_center1(2)))**2 + &
-                        &   (real(k)-real(new_center1(3)))**2)*self%smpd - THEORETICAL_RADIUS**2 < TINY) then
+                        &   (real(k)-real(new_center1(3)))**2)*self%smpd - self%theoretical_radius**2 < TINY) then
                             if(imat(i,j,k) == n_cc) mask(i,j,k) = .true.
                         endif
                     enddo
@@ -779,7 +802,7 @@ contains
                 & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
                 if(any(new_center2 > 0)) then !if anything was found
                     !Validate second center (check if it's 2 merged atoms, or one pointy one)
-                    if(sqrt(real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd <= 1.2*THEORETICAL_RADIUS) then
+                    if(sqrt(real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd <= 1.*self%theoretical_radius) then
                         ! Set the merged cc back to 0
                         where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
                         return
@@ -790,7 +813,7 @@ contains
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                if(((real(i)-real(new_center2(1)))**2 + (real(j)-real(new_center2(2)))**2 + (real(k)-real(new_center2(3)))**2)*self%smpd - THEORETICAL_RADIUS**2 < TINY) then
+                                if(((real(i)-real(new_center2(1)))**2 + (real(j)-real(new_center2(2)))**2 + (real(k)-real(new_center2(3)))**2)*self%smpd - self%theoretical_radius**2 < TINY) then
                                     if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
                                 endif
                             enddo
@@ -1080,11 +1103,13 @@ contains
            stdev_diameter = stdev_diameter + (avg_diameter-longest_dist(label))**2
        enddo
        stdev_diameter = sqrt(stdev_diameter/real(self%n_cc-1))
-       print *, 'minimum  value diameter ', min_diameter, 'A'
-       print *, 'maximum  value diameter ', max_diameter, 'A'
-       print *, 'median   value diameter ', median_diameter, 'A'
-       print *, 'average  value diameter ', avg_diameter, 'A'
-       print *, 'stdev    value diameter ', stdev_diameter, 'A'
+       if(DEBUG_HERE) then
+           write(logfhandle,*) 'minimum  value diameter ', min_diameter, 'A'
+           write(logfhandle,*) 'maximum  value diameter ', max_diameter, 'A'
+           write(logfhandle,*) 'median   value diameter ', median_diameter, 'A'
+           write(logfhandle,*) 'average  value diameter ', avg_diameter, 'A'
+           write(logfhandle,*) 'stdev    value diameter ', stdev_diameter, 'A'
+       endif
        call hist(self%ratios, 20)
        ! To dump some of the analysis on aspect ratios on file compatible
        ! with Matlab.
@@ -1273,6 +1298,7 @@ contains
         integer, allocatable     :: imat_onecls(:,:,:,:)
         ! dim = self%n_cc ! TO FIX HERE. I SHOULD HAVE SELF%N_CC = SIZE(SELF%DISTS)
         dim = size(self%dists)
+        call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt distances distribution, init'
         do i=1,dim-1
@@ -1301,18 +1327,18 @@ contains
             enddo
         enddo
         !$omp end do
-        !$omp parallel do schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterDistDistr.mrc')
             call img_clusters(j)%kill
         enddo
-        !$omp end parallel do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(125, file = 'ClusterDistDistr')
         write(unit = 125, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
         do i = 1, dim
+            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+            call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 125, fmt = '(a)') 'CENTERS DISTS DISTR'
@@ -1339,6 +1365,7 @@ contains
         integer                  :: i, j, ncls, nerr
         integer                  :: dim
         dim = size(self%ratios)
+        call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt aspect ratios, init'
         do i=1,dim-1
@@ -1368,18 +1395,18 @@ contains
             enddo
         enddo
         !$omp end do
-        !$omp parallel do schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAr.mrc')
             call img_clusters(j)%kill
         enddo
-        !$omp end parallel do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(119, file='ClusterAspectRatio')
         write(unit = 119,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
         do i = 1, dim
+            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+            call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 119, fmt = '(a)') 'CENTERS AR'
@@ -1410,6 +1437,7 @@ contains
         real                     :: avg, stdev
         integer, allocatable     :: cnt(:)
         dim = size(self%ang_var)!self%n_cc
+        call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
         write(logfhandle,*) '****clustering wrt direction longest dim, init'
         do i=1,dim-1
@@ -1438,18 +1466,18 @@ contains
             enddo
         enddo
         !$omp end do
-        !$omp parallel do schedule(static) private(j)
         do j = 1, ncls
             call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
             call img_clusters(j)%write(int2str(j)//'ClusterAng.mrc')
             call img_clusters(j)%kill
         enddo
-        !$omp end parallel do
         if(allocated(img_clusters)) deallocate(img_clusters)
         if(allocated(imat_onecls))  deallocate(imat_onecls)
         open(111, file='ClusterAngLongestDim')
         write(unit = 111,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND ANG:', ncls
         do i = 1, dim
+            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+            call self%centers_pdb%set_element(i,self%element)
             call self%centers_pdb%set_beta(i, real(labels_ap(i)))
         enddo
         write(unit = 111,fmt ='(a)') 'CENTERS ANG'
@@ -1476,13 +1504,11 @@ contains
             write(unit = 111,fmt ='(a,i3)') '                                ', cnt(i)
         enddo
         write(unit = 111,fmt ='(a,i3)')     'total atoms =                   ', sum(cnt)
-        !$omp do collapse(2) schedule(static) private(i,j)
         do i = 1, ncls
             do j = 1, dim
                 if(labels_ap(j) == i) stdev_within(i) = stdev_within(i) + (self%ang_var(j)-avg_within(i))**2
             enddo
         enddo
-        !$omp end do
         stdev_within = stdev_within/(cnt-1.)
         stdev_within = sqrt(stdev_within)
         write(unit = 111,fmt ='(a,f5.3)')  'stdev_within = ', stdev_within(1)
@@ -1568,15 +1594,15 @@ contains
         call nano1%binarize(ot1)
         call nano2%binarize(ot2)
         ! TO FIX!!!!!!!!!!!!!! HEREEE
-        !Distance distribution calculation
-        call nano1%distances_distribution()
-        call nano2%distances_distribution()
         ! Outliers discarding
         call nano1%discard_outliers()
         call nano2%discard_outliers()
         ! Validate identified positions
         call nano1%validate_atomic_positions()
         call nano2%validate_atomic_positions()
+        !Distance distribution calculation
+        call nano1%distances_distribution()
+        call nano2%distances_distribution()
         ! Radial dependent statistics calculation
         call nano1%radial_dependent_stats(1)
         call nano2%radial_dependent_stats(2)
@@ -1843,12 +1869,12 @@ contains
         call self%phasecorrelation_nano_gaussian(otsu_thresh)
         ! Nanoparticle binarization
         call self%binarize(otsu_thresh)
+        ! Validation of the selected atomic positions
+         call self%validate_atomic_positions()
         ! Atom-to-atom distances distribution estimation
         call self%distances_distribution() !needed for discard_outliers
         ! Outliers discarding
-        call self%discard_outliers()
-       ! Validation of the selected atomic positions
-        call self%validate_atomic_positions()
+        ! call self%discard_outliers()
         atomic_pos = trim(self%fbody)//'_atom_centers.pdb'
     end subroutine identify_atomic_pos
 
@@ -1910,12 +1936,12 @@ contains
          call self%phasecorrelation_nano_gaussian(otsu_thresh)
          ! Nanoparticle binarization
          call self%binarize(otsu_thresh)
-         ! Atom-to-atom distances distribution estimation
-         call self%distances_distribution() !needed for discard_outliers
          ! Outliers discarding
          call self%discard_outliers()
-        ! Validation of the selected atomic positions
-         call self%validate_atomic_positions()
+         ! Validation of the selected atomic positions
+          call self%validate_atomic_positions()
+         ! Atom-to-atom distances distribution estimation
+         call self%distances_distribution()
          ! Radial dependent statistics calculation
          call self%radial_dependent_stats()
          ! Aspect ratios calculations
