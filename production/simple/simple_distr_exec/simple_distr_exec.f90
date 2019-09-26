@@ -133,7 +133,7 @@ select case(prg)
     case( 'cleanup2D_nano' )
         call xcleanup2D_nano_distr%execute(cline)
     case( 'cluster2D_nano' )
-        call xcleanup2D_nano_distr%execute(cline)
+        call xcluster2D_nano_distr%execute(cline)
     case( 'refine3D_nano')
         call execute_commander(xrefine3D_nano_distr, cline)
 

@@ -568,7 +568,6 @@ contains
         call img%kill
     end subroutine matchfilt_imgfile
 
-
     !>  \brief  is for contrast inversion
     !! \param fname2neg  output filename
     !! \param fname  input filename
@@ -612,6 +611,7 @@ contains
             call progress(i,n)
             call img%read(fname2masscen, i)
             xyz = img%calc_shiftcen(lp, msk)
+            print *, xyz(:2)
             call img%shift(xyz)
             call img%write(fname, i)
         end do
@@ -1241,9 +1241,10 @@ contains
         integer,           intent(in)    :: nsel, box
         type(image)                      :: img, img_scaled
         character(len=:), allocatable    :: stkname
-        logical,          allocatable    :: mask(:)
+        real,             allocatable    :: states(:)
+        integer,          allocatable    :: inds(:), inds_packed(:)
         real    :: smpd
-        integer :: nptcls, box_ori, ldim(3), i
+        integer :: nptcls, box_ori, ldim(3), i, n
         integer :: ldim_scaled(3), ind, cnt, stepsz
         logical :: doscale
         ! dimensions
@@ -1258,12 +1259,23 @@ contains
         call img%new(ldim,smpd)
         ! copy
         write(logfhandle,'(a)') '>>> SELECTING IMAGES FROM TIME-SERIES'
-        stepsz = nptcls / nsel
-        cnt = 0
-        do i = 1,nptcls,stepsz
+        ! extract the indices of the nonzero states
+        allocate(inds(nptcls), source=(/(i,i=1,nptcls)/))
+        if( spproj%os_ptcl2D%get_noris() == nptcls )then
+            if( spproj%os_ptcl2D%isthere('state') )then
+                states = spproj%os_ptcl2D%get_all('state')
+            endif
+        endif
+        if( .not. allocated(states) ) allocate(states(nptcls), source=1.0)
+        inds_packed = pack(inds, mask=states > 0.5)
+        n      = size(inds_packed)
+        stepsz = n / nsel
+        cnt    = 0
+        ! selection
+        do i = 1,n,stepsz
             cnt = cnt + 1
             if( cnt > nsel ) exit
-            call spproj%get_stkname_and_ind('ptcl2D', i, stkname, ind)
+            call spproj%get_stkname_and_ind('ptcl2D', inds_packed(i), stkname, ind)
             call img%read(stkname, ind)
             call img%norm()
             if( doscale )then
@@ -1280,6 +1292,7 @@ contains
                 call img%write(fname, cnt)
             endif
         end do
+        deallocate(states, inds, inds_packed)
         call img%kill
         call img_scaled%kill
     end subroutine selection_from_tseries_imgfile

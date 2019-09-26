@@ -284,6 +284,7 @@ contains
         if( .not. cline%defined('lp')      ) call cline%set('lp',     1.)
         if( .not. cline%defined('ncls')    ) call cline%set('ncls',   20.)
         if( .not. cline%defined('cenlp')   ) call cline%set('cenlp',  5.)
+        if( .not. cline%defined('trs')     ) call cline%set('trs',    10.)
         if( .not. cline%defined('maxits')  ) call cline%set('maxits', 15.)
         if( .not. cline%defined('oritype') ) call cline%set('oritype', 'ptcl2D')
         call params%new(cline)
@@ -326,26 +327,29 @@ contains
     end subroutine exec_cleanup2D_nano_distr
 
     subroutine exec_cluster2D_nano_distr( self, cline )
-        use simple_commander_cluster2D, only: cluster2D_commander_distr
+        use simple_commander_cluster2D, only: cluster2D_autoscale_commander
         class(cluster2D_nano_commander_distr), intent(inout) :: self
         class(cmdline),                        intent(inout) :: cline
         ! commander
-        type(cluster2D_commander_distr) :: xcluster2D_distr
+        type(cluster2D_autoscale_commander) :: xcluster2D_distr
         ! static parameters
         call cline%set('prg',     'cluster2D')
         call cline%set('match_filt',     'no')
         call cline%set('graphene_filt', 'yes')
         call cline%set('ptclw',          'no')
+        call cline%set('center',        'yes')
+        call cline%set('autoscale',      'no')
         call cline%set('tseries',       'yes')
         ! dynamic parameters
-        if( .not. cline%defined('ncls')        ) call cline%set('ncls',        100.)
-        if( .not. cline%defined('autoscale')   ) call cline%set('autoscale',   'no')
         if( .not. cline%defined('lpstart')     ) call cline%set('lpstart',       1.)
         if( .not. cline%defined('lpstop')      ) call cline%set('lpstop',        1.)
         if( .not. cline%defined('lp')          ) call cline%set('lp',            1.)
+        if( .not. cline%defined('ncls')        ) call cline%set('ncls',        100.)
         if( .not. cline%defined('cenlp')       ) call cline%set('cenlp',         5.)
+        if( .not. cline%defined('trs')         ) call cline%set('trs',          10.)
         if( .not. cline%defined('oritype')     ) call cline%set('oritype', 'ptcl2D')
         call xcluster2D_distr%execute(cline)
+        call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_distr
 
     subroutine exec_tseries_estimate_diam( self, cline )
@@ -353,12 +357,19 @@ contains
         class(tseries_estimate_diam_commander), intent(inout) :: self
         class(cmdline),                         intent(inout) :: cline
         type(parameters) :: params
-        real :: avg_diam, med_diam, max_diam, mskrad
+        integer :: funit
+        real    :: avg_diam, med_diam, max_diam, mskrad
         if( .not. cline%defined('cenlp')  ) call cline%set('cenlp', 5.0)
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir','yes')
         call params%new(cline)
         call init_tseries_preproc
         call tseries_estimate_diam(avg_diam, med_diam, max_diam, mskrad)
+        call fopen(funit, file='stats.txt', status='replace')
+        write(funit,'(A,F6.1)') '>>> AVERAGE DIAMETER      (IN PIXELS): ', avg_diam
+        write(funit,'(A,F6.1)') '>>> MEDIAN  DIAMETER      (IN PIXELS): ', med_diam
+        write(funit,'(A,F6.1)') '>>> MAXIMUM DIAMETER      (IN PIXELS): ', max_diam
+        write(funit,'(A,F6.1)') '>>> MAX MASK RADIUS (MSK) (IN PIXELS): ', mskrad
+        call fclose(funit)
         call kill_tseries_preproc
         call simple_end('**** SIMPLE_TSERIES_ESTIMATE_DIAM NORMAL STOP ****')
     end subroutine exec_tseries_estimate_diam
