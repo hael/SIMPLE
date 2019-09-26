@@ -46,7 +46,7 @@ call spiral%spiral
 ! simulate graphene
 path = simple_getenv('SIMPLE_PATH',envstat)
 path = trim(path)//'/../production/tests/test_simnano/graphene_trans.pdb'
-call cline_graphene%set('prg','simulate_atoms')
+call cline_graphene%set('mkdir','no')
 call cline_graphene%set('smpd',params%smpd)
 call cline_graphene%set('pdbfile', trim(path))
 call cline_graphene%set('outvol',  graphene_fname)
@@ -54,7 +54,7 @@ call cline_graphene%set('box',real(params%box))
 call cline_graphene%set('nthr',real(params%nthr))
 call xsim_atoms%execute(cline_graphene)
 ! simulate nano-particle
-call cline_particle%set('prg','simulate_atoms')
+call cline_particle%set('mkdir','no')
 call cline_particle%set('smpd',params%smpd)
 call cline_particle%set('element', trim(params%element))
 call cline_particle%set('outvol',  trim(particle_fname))

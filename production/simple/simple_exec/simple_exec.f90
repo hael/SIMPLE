@@ -81,6 +81,8 @@ type(simulate_noise_commander)       :: xsimulate_noise
 type(simulate_particles_commander)   :: xsimulate_particles
 type(simulate_movie_commander)       :: xsimulate_movie
 type(simulate_subtomogram_commander) :: xsimulate_subtomogram
+type(simulate_atoms_commander)       :: xsimulate_atoms
+
 
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
 type(tseries_import_commander)        :: xtseries_import
@@ -220,6 +222,8 @@ select case(prg)
         call xsimulate_movie%execute(cline)
     case( 'simulate_subtomogram' )
         call xsimulate_subtomogram%execute(cline)
+    case( 'simulate_atoms' )
+        call xsimulate_atoms%execute(cline)
 
     ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
     case( 'tseries_import' )

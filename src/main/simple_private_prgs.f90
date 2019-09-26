@@ -711,20 +711,7 @@ contains
         call private_prgs(22)%push_opt_key('nstates')
         call private_prgs(22)%push_opt_key('mskfile')
 
-        ! VOLASSEMBLE, for asssembling subvolumes generated in distributed execution
-        call private_prgs(23)%set_name('simulate_atoms')
-        ! required keys
-        call private_prgs(23)%push_req_key('smpd')
-        call private_prgs(23)%push_req_key('box')
-        ! optional keys
-        call private_prgs(23)%push_opt_key('moldiam')
-        call private_prgs(23)%push_opt_key('pdbfile')
-        call private_prgs(23)%push_opt_key('element')
-        call private_prgs(23)%push_opt_key('nthr')
-        call private_prgs(23)%push_opt_key('outvol')
-        call private_prgs(23)%push_opt_key('lp')
-
-        n_private_prgs = 23
+        n_private_prgs = 22
     end subroutine new_private_prgs
 
 end module simple_private_prgs

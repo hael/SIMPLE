@@ -135,6 +135,7 @@ type(simple_program), target :: scale
 type(simple_program), target :: scale_project
 type(simple_program), target :: select_
 type(simple_program), target :: shift
+type(simple_program), target :: simulate_atoms
 type(simple_program), target :: simulate_movie
 type(simple_program), target :: simulate_noise
 type(simple_program), target :: simulate_particles
@@ -191,6 +192,7 @@ type(simple_input_param) :: maxits
 type(simple_input_param) :: mcpatch
 type(simple_input_param) :: min_rad
 type(simple_input_param) :: mirr
+type(simple_input_param) :: moldiam
 type(simple_input_param) :: msk
 type(simple_input_param) :: mskfile
 type(simple_input_param) :: envfsc
@@ -326,6 +328,7 @@ contains
         call new_scale_project
         call new_select_
         call new_shift
+        call new_simulate_atoms
         call new_simulate_movie
         call new_simulate_noise
         call new_simulate_particles
@@ -414,6 +417,7 @@ contains
         call push2prg_ptr_array(scale_project)
         call push2prg_ptr_array(select_)
         call push2prg_ptr_array(shift)
+        call push2prg_ptr_array(simulate_atoms)
         call push2prg_ptr_array(simulate_movie)
         call push2prg_ptr_array(simulate_noise)
         call push2prg_ptr_array(simulate_particles)
@@ -428,7 +432,6 @@ contains
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
-
         contains
 
             subroutine push2prg_ptr_array( prg )
@@ -571,6 +574,8 @@ contains
                 ptr2prg => select_
             case('shift')
                 ptr2prg => shift
+            case('simulate_atoms')
+                ptr2prg => simulate_atoms
             case('simulate_movie')
                 ptr2prg => simulate_movie
             case('simulate_noise')
@@ -682,6 +687,7 @@ contains
         write(logfhandle,'(A)') reproject%name
         write(logfhandle,'(A)') select_%name
         write(logfhandle,'(A)') shift%name
+        write(logfhandle,'(A)') simulate_atoms%name
         write(logfhandle,'(A)') simulate_movie%name
         write(logfhandle,'(A)') simulate_noise%name
         write(logfhandle,'(A)') simulate_particles%name
@@ -810,13 +816,14 @@ contains
         call set_param(sigma2_fudge,   'sigma2_fudge', 'num',    'Sigma2-fudge factor', 'Fudge factor for sigma2_noise{100.}', '{100.}', .false., 100.)
         call set_param(ptclw,          'ptclw',        'binary', 'Soft particle weights', 'Soft particle weights(yes|no){yes}',  '(yes|no){yes}',  .false., 'yes')
         call set_param(envfsc,         'envfsc',       'binary', 'Envelope mask e/o maps for FSC', 'Envelope mask even/odd pairs prior to FSC calculation(yes|no){no}',  '(yes|no){no}',  .false., 'no')
-        call set_param(graphene_filt, 'graphene_filt', 'binary', 'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
-        call set_param(wcrit,  'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
-        call set_param(element, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
+        call set_param(graphene_filt,  'graphene_filt','binary',  'Omit graphene bands from corr calc', 'Omit graphene bands from corr calc(yes|no){no}',  '(yes|no){no}',  .false., 'no')
+        call set_param(wcrit,          'wcrit',        'multi',  'Correlation to weights conversion scheme', 'Correlation to weights conversion scheme(softmax|zscore|sum|cen|exp|inv|no){softmax}',  '(softmax|zscore|sum|cen|exp|inv|no){softmax}',  .false., 'softmax')
+        call set_param(element,        'element',      'str',    'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         call set_param(tseries, 'tseries', 'binary', 'Stack is time-series', 'Stack is time-series(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
         call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
         call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
+        call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
 
@@ -3124,6 +3131,34 @@ contains
         ! computer controls
         call shift%set_input('comp_ctrls', 1, nthr)
     end subroutine new_shift
+
+    subroutine new_simulate_atoms
+        ! PROGRAM SPECIFICATION
+        call simulate_atoms%new(&
+        &'simulate_atoms',&                                 ! name
+        &'Simulate atoms or FCC lattice density',&          ! descr_short
+        &'is a program for simulation of atoms or FCC lattice density',& ! descr_long
+        &'simple_exec',&                                    ! executable
+        &2, 4, 0, 0, 0, 0, 1, .false.)                     ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call simulate_atoms%set_input('img_ios', 1, 'pdbfile', 'file', 'PDB', 'Input coordinates file in PDB format', 'Input coordinates file', .false., '')
+        call simulate_atoms%set_input('img_ios', 2, outvol)
+        ! parameter input/output
+        call simulate_atoms%set_input('parm_ios',  1, smpd)
+        call simulate_atoms%set_input('parm_ios',  2, box)
+        call simulate_atoms%set_input('parm_ios',  3, element)
+        call simulate_atoms%set_input('parm_ios',  4, moldiam)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        call simulate_atoms%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_simulate_atoms
 
     subroutine new_simulate_movie
         ! PROGRAM SPECIFICATION

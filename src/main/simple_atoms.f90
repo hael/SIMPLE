@@ -482,8 +482,8 @@ contains
         real, parameter   :: C = 2132.79 ! eq B.6, conversion to eV
         real, parameter   :: fourpisq = 4.*PI*PI
         real, allocatable :: rmat(:,:,:)
-        real    :: a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2
-        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff, cutoffsq
+        real    :: a(5),b(5),aterm(5), xyz(3), smpd,r2,bfac,rjk2,cutoffsq
+        integer :: bbox(3,2),ldim(3),pos(3),i,j,k,l,jj,kk,z,icutoff
         if( .not.vol%is_3d() .or. vol%is_ft() ) THROW_HARD('Only for real-space volumes')
         smpd = vol%get_smpd()
         ldim = vol%get_ldim()
@@ -503,7 +503,7 @@ contains
             case(7) ! N
                 a = [0.1022, 0.3219, 0.7982, 0.8197, 0.1715]
                 b = [0.2451, 1.7481, 6.1925,17.3894,48.1431]
-            case(8)
+            case(8) ! O
                 a = [0.0974, 0.2921, 0.6910,  0.6990, 0.2039]
                 b = [0.2067, 1.3815, 4.6943, 12.7105,32.4726]
                 ! case('P')
