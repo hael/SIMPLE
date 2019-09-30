@@ -621,18 +621,15 @@ contains
                     self%dists(i) = 0.
                     n_discard = n_discard + 1
                 else if(self%dists(i)*self%smpd < MIN_INTERAT_DIST ) then
-                    print *, 'atom ',i, 'dist(i)', self%dists(i)
+                    print *, 'atom ',i, 'dist(i)', self%dists(i), 'INSERT THRESHOLD FOR DISTS IN CENTERS!!'
                     self%dists(i) = 0.
                     n_discard = n_discard + 1
                 endif
             enddo
             self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
-            print *, 'self%avg_dist_atoms', self%avg_dist_atoms, 'self%avg_dist_atoms in A:', self%avg_dist_atoms*self%smpd
-            !$omp parallel do schedule(static) private(i) reduction(+:stdev)
             do i = 1, size(self%centers, dim = 2)
                 if(self%dists(i)*self%smpd <=MAX_INTERAT_DIST) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
             enddo
-            !$omp end parallel do
             stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
             med = median(self%dists)
             robust_stdev = mad_gau(self%dists,med)
@@ -709,7 +706,6 @@ contains
         call self%img_cc%get_rmat_ptr(rmat_cc)
         self%n_cc = nint(maxval(rmat_cc)) !update
         call self%find_centers()
-        call self%write_centers()
         !root folder
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: discard_outliers, simple_chdir; ")
         write(logfhandle, *) '****outliers discarding, completed'
@@ -722,7 +718,7 @@ contains
         integer, allocatable :: imat(:,:,:)
         real,    allocatable :: x(:)
         real,    pointer     :: rmat_pc(:,:,:), rmat_cc(:,:,:), rmat_bin(:,:,:)
-        integer, parameter   :: RANK_THRESH = 5
+        integer, parameter   :: RANK_THRESH = 4
         integer :: n_cc, cnt
         integer :: rank, m(1)
         real    :: new_centers(3,2*self%n_cc)   !will pack it afterwards if it has too many elements
@@ -730,7 +726,6 @@ contains
         call self%img%get_rmat_ptr(rmat_pc)    !now img contains the phase correlation
         imat = nint(self%img_cc%get_rmat())
         call self%img_cc%get_rmat_ptr(rmat_cc) !to pass to the subroutine split_atoms
-        if(DEBUG_HERE) call self%img_cc%write(PATH_HERE//basename(trim(self%fbody))//'OldImgCc.mrc')
         cnt = 0
         ! Remember to update the centers
         do n_cc =1, self%n_cc !for each cc check if the center corresponds with the local max of the phase corr
@@ -749,15 +744,14 @@ contains
             endif
         enddo
         deallocate(self%centers)
+        self%n_cc = cnt !update
         allocate(self%centers(3,cnt), source = 0.)
         !update centers
         do n_cc =1, cnt
             self%centers(:,n_cc) = new_centers(:,n_cc)
         enddo
-        self%n_cc = cnt !update
-        call self%write_centers()
         call self%img_bin%get_rmat_ptr(rmat_bin)
-        if(DEBUG_HERE) call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BINbeforeValidation.mrc')
+        call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BINbeforeValidation.mrc') !if(DEBUG_HERE)
         ! Update binary image
         where(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
@@ -765,20 +759,21 @@ contains
             rmat_bin(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
         endwhere
         call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
+        call self%img_bin%find_connected_comps(self%img_cc)
         ! Update number of ccs
-        call self%update_self_ncc
+        self%n_cc = cnt !update
         ! Update and write centers
         call self%find_centers()
         call self%write_centers()
 
     contains
         subroutine split_atom(rmat_pc, rmat_cc, imat,n_cc,new_centers,cnt)
-            real,    intent(in)    :: rmat_pc(:,:,:)
-            real,    intent(inout) :: rmat_cc(:,:,:)
-            integer, intent(in)    :: imat(:,:,:)
-            integer, intent(in)    :: n_cc
-            real,    intent(inout) :: new_centers(:,:)
-            integer, intent(inout) :: cnt   !atom counter, to update the center coords
+            real,    intent(in)    :: rmat_pc(:,:,:)    !correlation matrix
+            real,    intent(inout) :: rmat_cc(:,:,:)    !ccs matrix, variable
+            integer, intent(in)    :: imat(:,:,:)       !ccs matrix, fixed
+            integer, intent(in)    :: n_cc              !label of the cc to split
+            real,    intent(inout) :: new_centers(:,:)  !updated coordinates of the centers
+            integer, intent(inout) :: cnt               !atom counter, to u pdate the center coords
             integer :: new_center1(3),new_center2(3)
             integer :: i, j, k
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) !false in the layer of connection of the atom to be split
@@ -790,8 +785,8 @@ contains
             do i = 1, self%ldim(1)
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
-                        if(((real(i)-real(new_center1(1)))**2 + (real(j)-real(new_center1(2)))**2 + &
-                        &   (real(k)-real(new_center1(3)))**2)*self%smpd - self%theoretical_radius**2 < TINY) then
+                        if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
+                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  self%theoretical_radius**2) then
                             if(imat(i,j,k) == n_cc) mask(i,j,k) = .true.
                         endif
                     enddo
@@ -802,7 +797,7 @@ contains
                 & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
                 if(any(new_center2 > 0)) then !if anything was found
                     !Validate second center (check if it's 2 merged atoms, or one pointy one)
-                    if(sqrt(real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd <= 1.*self%theoretical_radius) then
+                    if(sqrt((real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd) <= 1.2*self%theoretical_radius) then
                         ! Set the merged cc back to 0
                         where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
                         return
@@ -813,7 +808,7 @@ contains
                     do i = 1, self%ldim(1)
                         do j = 1, self%ldim(2)
                             do k = 1, self%ldim(3)
-                                if(((real(i)-real(new_center2(1)))**2 + (real(j)-real(new_center2(2)))**2 + (real(k)-real(new_center2(3)))**2)*self%smpd - self%theoretical_radius**2 < TINY) then
+                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < self%theoretical_radius**2) then
                                     if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
                                 endif
                             enddo
@@ -1297,6 +1292,7 @@ contains
         integer                  :: dim
         integer, allocatable     :: imat_onecls(:,:,:,:)
         ! dim = self%n_cc ! TO FIX HERE. I SHOULD HAVE SELF%N_CC = SIZE(SELF%DISTS)
+        call self%img_cc%write('ImgCCClustDistDistr.mrc')
         dim = size(self%dists)
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1364,6 +1360,7 @@ contains
         real                     :: simsum
         integer                  :: i, j, ncls, nerr
         integer                  :: dim
+        call self%img_cc%write('ImgCCClustAR.mrc')
         dim = size(self%ratios)
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1436,6 +1433,7 @@ contains
         real                     :: simsum
         real                     :: avg, stdev
         integer, allocatable     :: cnt(:)
+        call self%img_cc%write('ImgCCClustANG.mrc')
         dim = size(self%ang_var)!self%n_cc
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1869,12 +1867,12 @@ contains
         call self%phasecorrelation_nano_gaussian(otsu_thresh)
         ! Nanoparticle binarization
         call self%binarize(otsu_thresh)
+        ! Outliers discarding
+        call self%discard_outliers()
         ! Validation of the selected atomic positions
          call self%validate_atomic_positions()
         ! Atom-to-atom distances distribution estimation
         call self%distances_distribution() !needed for discard_outliers
-        ! Outliers discarding
-        ! call self%discard_outliers()
         atomic_pos = trim(self%fbody)//'_atom_centers.pdb'
     end subroutine identify_atomic_pos
 

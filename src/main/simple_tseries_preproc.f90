@@ -4,7 +4,7 @@ module simple_tseries_preproc
 include 'simple_lib.f08'
 use simple_parameters,   only: params_glob
 use simple_image,        only: image
-use simple_segmentation, only: otsu_img, otsu_img_robust
+use simple_segmentation, only: otsu_img, otsu_robust_fast
 use simple_procimgfile,  only: corrfilt_tseries_imgfile
 implicit none
 
@@ -91,7 +91,7 @@ contains
             ! make a copy
             call img_tmp%copy(ptcl_avgs(cnt))
             ! binarise
-            call otsu_img_robust(ptcl_avgs(cnt))
+            call otsu_robust_fast(ptcl_avgs(cnt), stk=.false., nano=.false.)
             ! identify connected components
             call ptcl_avgs(cnt)%find_connected_comps(cc_img)
             ! find the largest connected component

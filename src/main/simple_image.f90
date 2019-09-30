@@ -3500,7 +3500,7 @@ contains
     ! the morphological operation dilatation.
     subroutine dilatation(self)
         class(image), intent(inout) :: self
-        integer     :: neigh_8(3,8,1)
+        integer     :: neigh_8(3,8)
         type(image) :: self_copy
         integer     :: i, j, k, nsz
         call self_copy%copy(self)
@@ -3512,7 +3512,7 @@ contains
                 if(self_copy%rmat(i,j,1) == 1.) then  !just for white pixels
                     call self%calc_neigh_8([i,j,1], neigh_8, nsz)
                     do k = 1, nsz
-                        call self%set(neigh_8(1:3,k,1), 1.) !self%rmat(neigh_8) = 1.
+                        call self%set(neigh_8(1:3,k), 1.) !self%rmat(neigh_8) = 1.
                     enddo
                 endif
             enddo
@@ -5407,68 +5407,68 @@ contains
         subroutine calc_neigh_8_2(self, px, neigh_8, nsz)
             class(image), intent(in)   :: self
             integer,      intent(in)   :: px(3)
-            integer,      intent(inout):: neigh_8(3,8,1)
+            integer,      intent(inout):: neigh_8(3,8)
             integer,      intent(out)  :: nsz
             integer :: i, j
             i = px(1)
             j = px(2)            !Assumes to have a 2-dim matrix
             if ( i-1 < 1 .and. j-1 < 1 ) then
-                neigh_8(1:3,1,1) = [i+1,j,1]
-                neigh_8(1:3,2,1) = [i+1,j+1,1]
-                neigh_8(1:3,3,1) = [i,j+1,1]
+                neigh_8(1:3,1) = [i+1,j,1]
+                neigh_8(1:3,2) = [i+1,j+1,1]
+                neigh_8(1:3,3) = [i,j+1,1]
                 nsz = 3
             else if (j+1 > self%ldim(2) .and. i+1 > self%ldim(1)) then
-                neigh_8(1:3,1,1) = [i-1,j,1]
-                neigh_8(1:3,2,1) = [i-1,j-1,1]
-                neigh_8(1:3,3,1) = [i,j-1,1]
+                neigh_8(1:3,1) = [i-1,j,1]
+                neigh_8(1:3,2) = [i-1,j-1,1]
+                neigh_8(1:3,3) = [i,j-1,1]
                 nsz = 3
             else if (j-1 < 1  .and. i+1 >self%ldim(1)) then
-                neigh_8(1:3,3,1) = [i-1,j,1]
-                neigh_8(1:3,2,1) = [i-1,j+1,1]
-                neigh_8(1:3,1,1) = [i,j+1,1]
+                neigh_8(1:3,3) = [i-1,j,1]
+                neigh_8(1:3,2) = [i-1,j+1,1]
+                neigh_8(1:3,1) = [i,j+1,1]
                 nsz = 3
             else if (j+1 > self%ldim(2) .and. i-1 < 1) then
-                neigh_8(1:3,1,1) = [i,j-1,1]
-                neigh_8(1:3,2,1) = [i+1,j-1,1]
-                neigh_8(1:3,3,1) = [i+1,j,1]
+                neigh_8(1:3,1) = [i,j-1,1]
+                neigh_8(1:3,2) = [i+1,j-1,1]
+                neigh_8(1:3,3) = [i+1,j,1]
                 nsz = 3
             else if( j-1 < 1 ) then
-                neigh_8(1:3,5,1) = [i-1,j,1]
-                neigh_8(1:3,4,1) = [i-1,j+1,1]
-                neigh_8(1:3,3,1) = [i,j+1,1]
-                neigh_8(1:3,2,1) = [i+1,j+1,1]
-                neigh_8(1:3,1,1) = [i+1,j,1]
+                neigh_8(1:3,5) = [i-1,j,1]
+                neigh_8(1:3,4) = [i-1,j+1,1]
+                neigh_8(1:3,3) = [i,j+1,1]
+                neigh_8(1:3,2) = [i+1,j+1,1]
+                neigh_8(1:3,1) = [i+1,j,1]
                 nsz = 5
             else if ( j+1 > self%ldim(2) ) then
-                neigh_8(1:3,1,1) = [i-1,j,1]
-                neigh_8(1:3,2,1) = [i-1,j-1,1]
-                neigh_8(1:3,3,1) = [i,j-1,1]
-                neigh_8(1:3,4,1) = [i+1,j-1,1]
-                neigh_8(1:3,5,1) = [i+1,j,1]
+                neigh_8(1:3,1) = [i-1,j,1]
+                neigh_8(1:3,2) = [i-1,j-1,1]
+                neigh_8(1:3,3) = [i,j-1,1]
+                neigh_8(1:3,4) = [i+1,j-1,1]
+                neigh_8(1:3,5) = [i+1,j,1]
                 nsz = 5
             else if ( i-1 < 1 ) then
-                neigh_8(1:3,1,1) = [i,j-1,1]
-                neigh_8(1:3,2,1) = [i+1,j-1,1]
-                neigh_8(1:3,3,1) = [i+1,j,1]
-                neigh_8(1:3,4,1) = [i+1,j+1,1]
-                neigh_8(1:3,5,1) = [i,j+1,1]
+                neigh_8(1:3,1) = [i,j-1,1]
+                neigh_8(1:3,2) = [i+1,j-1,1]
+                neigh_8(1:3,3) = [i+1,j,1]
+                neigh_8(1:3,4) = [i+1,j+1,1]
+                neigh_8(1:3,5) = [i,j+1,1]
                 nsz = 5
             else if ( i+1 > self%ldim(1) ) then
-                neigh_8(1:3,1,1) = [i,j+1,1]
-                neigh_8(1:3,2,1) = [i-1,j+1,1]
-                neigh_8(1:3,3,1) = [i-1,j,1]
-                neigh_8(1:3,4,1) = [i-1,j-1,1]
-                neigh_8(1:3,5,1) = [i,j-1,1]
+                neigh_8(1:3,1) = [i,j+1,1]
+                neigh_8(1:3,2) = [i-1,j+1,1]
+                neigh_8(1:3,3) = [i-1,j,1]
+                neigh_8(1:3,4) = [i-1,j-1,1]
+                neigh_8(1:3,5) = [i,j-1,1]
                 nsz = 5
             else
-                neigh_8(1:3,1,1) = [i-1,j-1,1]
-                neigh_8(1:3,2,1) = [i,j-1,1]
-                neigh_8(1:3,3,1) = [i+1,j-1,1]
-                neigh_8(1:3,4,1) = [i+1,j,1]
-                neigh_8(1:3,5,1) = [i+1,j+1,1]
-                neigh_8(1:3,6,1) = [i,j+1,1]
-                neigh_8(1:3,7,1) = [i-1,j+1,1]
-                neigh_8(1:3,8,1) = [i-1,j,1]
+                neigh_8(1:3,1) = [i-1,j-1,1]
+                neigh_8(1:3,2) = [i,j-1,1]
+                neigh_8(1:3,3) = [i+1,j-1,1]
+                neigh_8(1:3,4) = [i+1,j,1]
+                neigh_8(1:3,5) = [i+1,j+1,1]
+                neigh_8(1:3,6) = [i,j+1,1]
+                neigh_8(1:3,7) = [i-1,j+1,1]
+                neigh_8(1:3,8) = [i-1,j,1]
                 nsz = 8
             endif
         end subroutine calc_neigh_8_2

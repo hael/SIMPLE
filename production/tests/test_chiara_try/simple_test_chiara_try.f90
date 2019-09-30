@@ -225,7 +225,7 @@ end subroutine laplacian_filt
      integer :: pvalue ! pixel color
      integer :: ldim(3)
      integer :: i, nsz
-     integer :: neigh_8(3,8,1) ! indeces of the 8 neigh
+     integer :: neigh_8(3,8) ! indeces of the 8 neigh
      integer :: neigh_px(3)
      nb_modif = 0
      ldim = img%get_ldim()
@@ -236,7 +236,7 @@ end subroutine laplacian_filt
      call img%set(px(1:3),real(tvalue))
      call img%calc_neigh_8(px, neigh_8, nsz)
      do i = 1, nsz
-         neigh_px(1:3) = neigh_8(1:3,i,1)
+         neigh_px(1:3) = neigh_8(1:3,i)
          if(nint(img%get(neigh_px(1:3))) /= tvalue ) then
              nb_modif = nb_modif + 1
              call img%set(neigh_px(1:3),real(tvalue))
@@ -295,8 +295,8 @@ end module simple_test_chiara_try_mod
        do i = 1,887
            call progress(i,887)
            call img%read('chunk_avgs.mrcs',i)
-           call otsu_robust_fast(img, img_out, stk=.true., nano=.false.,thresh=thresh)
-           call img_out%write('otsuFastRobust.mrcs', i)
+           call otsu_robust_fast(img, stk=.true., nano=.false.,thresh=thresh)
+           call img%write('otsuImgImg.mrcs', i)
        enddo
 
  end program simple_test_chiara_try
