@@ -8,7 +8,7 @@ use simple_commander_base, only: commander_base
 implicit none
 
 public :: binarise_commander
-public :: edge_detector_commander
+public :: edge_detect_commander
 public :: convert_commander
 public :: ctfops_commander
 public :: filter_commander
@@ -24,10 +24,10 @@ type, extends(commander_base) :: binarise_commander
   contains
     procedure :: execute      => exec_binarise
 end type binarise_commander
-type, extends(commander_base) :: edge_detector_commander
+type, extends(commander_base) :: edge_detect_commander
   contains
-    procedure :: execute      => exec_edge_detector
-end type edge_detector_commander
+    procedure :: execute      => exec_edge_detect
+end type edge_detect_commander
 type, extends(commander_base) :: convert_commander
   contains
     procedure :: execute      => exec_convert
@@ -65,13 +65,14 @@ contains
 
     !> for binarisation of stacks and volumes
     subroutine exec_binarise( self, cline )
-        use simple_segmentation, only: otsu_img
+        use simple_segmentation, only: otsu_img_robust, otsu_robust_fast
         use simple_image,        only: image
         class(binarise_commander), intent(inout) :: self
         class(cmdline),            intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         integer :: igrow, iptcl
+        logical :: is2D
         ! error check
         if( .not. cline%defined('stk') .and. .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! stk or vol1 needs to be present; simple_binarise')
@@ -83,6 +84,7 @@ contains
             THROW_HARD('either thres-based or npix-based binarisation; both keys cannot be present; simple_binarise')
         endif
         if( cline%defined('stk') )then
+            is2D = .true.
             call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
             do iptcl=1,params%nptcls
                 call build%img%read(params%stk, iptcl)
@@ -90,6 +92,7 @@ contains
                 call build%img%write(params%outstk, iptcl)
             end do
         else if( cline%defined('vol1') )then
+            is2D = .false.
             call build%init_params_and_build_general_tbox(cline, params, do3d=.true.)
             call build%vol%read(params%vols(1))
             call doit(build%vol)
@@ -102,7 +105,7 @@ contains
 
             subroutine doit( img_or_vol )
                 class(image), intent(inout) :: img_or_vol
-                real :: ave, sdev, maxv, minv
+                real :: ave, sdev, maxv, minv, thresh(3)
                 if( cline%defined('thres') )then
                     call img_or_vol%bin(params%thres)
                 else if( cline%defined('npix') )then
@@ -111,7 +114,8 @@ contains
                     call img_or_vol%stats( ave, sdev, maxv, minv)
                     call img_or_vol%bin(ave + params%ndev * sdev)
                 else
-                    call otsu_img(img_or_vol)
+                    ! call otsu_img_robust(img_or_vol)
+                    call otsu_robust_fast(img_or_vol, is2D, noneg=.false., thresh=thresh)
                 endif
                 write(logfhandle,'(a,1x,i9)') '# FOREGROUND PIXELS:', img_or_vol%nforeground()
                 write(logfhandle,'(a,1x,i9)') '# BACKGROUND PIXELS:', img_or_vol%nbackground()
@@ -127,45 +131,44 @@ contains
     end subroutine exec_binarise
 
     !> for edge detection of stacks
-    subroutine exec_edge_detector( self, cline )
+    subroutine exec_edge_detect( self, cline )
         use simple_image, only: image
-        class(edge_detector_commander), intent(inout) :: self
-        class(cmdline),                 intent(inout) :: cline
+        class(edge_detect_commander), intent(inout) :: self
+        class(cmdline),               intent(inout) :: cline
         type(parameters) :: params
         type(builder)    :: build
         integer          :: igrow, iptcl
         ! error check
         if( .not. cline%defined('stk') )then
-            THROW_HARD('ERROR! stk needs to be present; exec_edge_detector')
+            THROW_HARD('ERROR! stk needs to be present; exec_edge_detect')
         endif
         if( .not. cline%defined('detector') )then
-            THROW_HARD('ERROR! detector needs to be present; exec_edge_detector')
+            THROW_HARD('ERROR! detector needs to be present; exec_edge_detect')
         endif
         if( .not. cline%defined('automatic') )then
-            THROW_HARD('ERROR! automatic needs to be present; exec_edge_detector')
+            THROW_HARD('ERROR! automatic needs to be present; exec_edge_detect')
         endif
         if(.not. cline%defined('outstk') )then
             params%outstk = 'Outstk.mrc'
         endif
         if( cline%defined('thres') .and. cline%defined('npix') )then
-            THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; exec_edge_detector')
+            THROW_HARD('either thres-based or npix-based edge detection; both keys cannot be present; exec_edge_detect')
         endif
         if( cline%defined('thres') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres in automatic mode; exec_edge_detector')
+            THROW_HARD('cannot chose thres in automatic mode; exec_edge_detect')
         endif
         if( cline%defined('npix') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose npix in automatic mode; exec_edge_detector')
+            THROW_HARD('cannot chose npix in automatic mode; exec_edge_detect')
         endif
         if( cline%defined('thres_low') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_low in automatic mode; exec_edge_detector')
+            THROW_HARD('cannot chose thres_low in automatic mode; exec_edge_detect')
         endif
         if( cline%defined('thres_up') .and. params%automatic .eq. 'yes') then
-            THROW_HARD('cannot chose thres_up in automatic mode; exec_edge_detector')
+            THROW_HARD('cannot chose thres_up in automatic mode; exec_edge_detect')
         endif
         if( cline%defined('thres') .and. params%detector .eq. 'canny') then
-            THROW_HARD('canny needs double thresholding; exec_edge_detector')
+            THROW_HARD('canny needs double thresholding; exec_edge_detect')
         endif
-
         call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
         do iptcl=1,params%nptcls
             call build%img%new([params%box,params%box,1],params%smpd,wthreads=.false.)
@@ -175,7 +178,7 @@ contains
             call build%img%kill
         end do
         ! end gracefully
-        call simple_end('**** simple_segmentation NORMAL STOP ****')
+        call simple_end('**** SIMPLE_EDGE_DETECT NORMAL STOP ****')
 
     contains
 
@@ -211,13 +214,13 @@ contains
                         call sobel(img,thresh)
                         deallocate(grad)
                     else
-                        THROW_HARD('If not automatic threshold needed; exec_edge_detector')
+                        THROW_HARD('If not automatic threshold needed; exec_edge_detect')
                     endif
                 case('canny')
-                    if(ldim(3) .ne. 1) THROW_HARD('Canny for vol is not implemented; exec_edge_detector')
+                    if(ldim(3) .ne. 1) THROW_HARD('Canny for vol is not implemented; exec_edge_detect')
                     if( params%automatic .eq. 'no' ) then
                         if(.not. cline%defined('thres_low') .or. .not. cline%defined('thres_up') )then
-                            THROW_HARD('both upper and lower threshold needed; exec_edge_detector')
+                            THROW_HARD('both upper and lower threshold needed; exec_edge_detect')
                         else
                             if( cline%defined('lp')) then
                                 call canny(img,img,thresh=[params%thres_low, params%thres_up],lp=lp(1)) !inout/output image coincide
@@ -227,23 +230,23 @@ contains
                         endif
                     elseif( params%automatic .eq. 'yes') then
                         if(cline%defined('thres_low') .or. cline%defined('thres_up')) then
-                            THROW_HARD('cannot define thresholds in automatic mode; exec_edge_detector')
+                            THROW_HARD('cannot define thresholds in automatic mode; exec_edge_detect')
                         else
                             if( .not. cline%defined('lp')) then
-                              THROW_HARD('Canny automatic requires lp in input; exec_edge_detector')
+                              THROW_HARD('Canny automatic requires lp in input; exec_edge_detect')
                             else
                                 call canny(img,lp = lp(1))
                             endif
                         endif
                     else
-                      THROW_HARD('Wrong input for automatic parameter!; exec_edge_detector')
+                      THROW_HARD('Wrong input for automatic parameter!; exec_edge_detect')
                     endif
                 case DEFAULT
-                    THROW_HARD('Unknown detector argument; exec_edge_detector')
+                    THROW_HARD('Unknown detector argument; exec_edge_detect')
                end select
             end subroutine
 
-    end subroutine exec_edge_detector
+    end subroutine exec_edge_detect
 
     !> for converting between SPIDER and MRC formats
     subroutine exec_convert( self, cline )

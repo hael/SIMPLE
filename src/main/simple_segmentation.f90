@@ -3,7 +3,7 @@ include 'simple_lib.f08'
 use simple_image, only: image
 implicit none
 
-public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img, otsu_robust_fast
+public :: sobel, automatic_thresh_sobel, canny, iterative_thresholding, otsu_img, otsu_robust_fast, otsu_img_robust
 private
 #include "simple_local_flags.inc"
 
@@ -38,7 +38,7 @@ contains
     subroutine automatic_thresh_sobel(img, goal, thresh)
         class(image),    intent(inout)   :: img
         real, optional,  intent(in)      :: goal
-        real, optional,  intent(out)     :: thresh(1) !to keep track of the selected threshold
+        real, optional,  intent(inout)   :: thresh(1) !to keep track of the selected threshold
         real, allocatable  :: grad(:,:,:)
         real               :: tthresh(1), ggoal       !selected threshold and ratio nforeground/nbackground
         real               :: t(3)                    !to calculate 3 possible sobel thresholds for each iteration
@@ -122,7 +122,7 @@ contains
     ! If it doesn't work as you would like you can also check "Auto Canny" in GIT directory.
     subroutine canny(img_in,img_out,thresh,lp)
         type(image),           intent(inout) :: img_in
-        type(image), optional, intent(out)   :: img_out
+        type(image), optional, intent(inout) :: img_out
         real,        optional, intent(in)    :: thresh(2)
         real,        optional, intent(in)    :: lp(1)
         type(image)       :: img_copy
@@ -341,8 +341,8 @@ contains
     !           -) stop when 2 threshold in a row are 'similar'
     subroutine iterative_thresholding(img_in,img_out,thresh)
         class(image),   intent(inout) :: img_in
-        type(image),    intent(out)   :: img_out
-        real, optional, intent(out)   :: thresh  !selected threshold for binarisation
+        type(image),    intent(inout) :: img_out
+        real, optional, intent(inout) :: thresh  !selected threshold for binarisation
         real,    allocatable :: rmat(:,:,:)
         logical, allocatable :: mask(:,:,:)
         real, parameter :: TOLL = 0.05           !tollerance for threshold selection
@@ -376,7 +376,7 @@ contains
     subroutine otsu_img(img, thresh, positive)
         use simple_math, only : otsu
         class(image),      intent(inout) :: img
-        real,    optional, intent(out)   :: thresh
+        real,    optional, intent(inout) :: thresh
         logical, optional, intent(in)    :: positive ! consider just the positive range (specific for nanoparticles)
         real, pointer     :: rmat(:,:,:)
         real, allocatable :: x(:)
@@ -408,11 +408,11 @@ contains
     ! background and foreground in the bin volumes.
     ! It is very robust to salt & pepper noise. Much more than
     ! otsu_img_robust
-    subroutine otsu_robust_fast(img, stk, nano, thresh)
-        type(image),          intent(inout) :: img
-        logical,              intent(in)    :: stk   ! is it a stack
-        logical,              intent(in)    :: nano  ! is it a nanoparticle
-        real, optional,       intent(out)   :: thresh(3)
+    subroutine otsu_robust_fast(img, is2D, noneg, thresh)
+        type(image), intent(inout) :: img
+        logical,     intent(in)    :: is2D   ! is it a 2D image
+        logical,     intent(in)    :: noneg ! is it a nanoparticle
+        real,        intent(inout) :: thresh(3)
         type(image) :: img_copy         ! copy of the original img
         type(image) :: img_avg, img_med
         integer :: ldim(3)
@@ -422,10 +422,9 @@ contains
         real, pointer :: rmat(:,:,:)   ! original matrix
         real, pointer :: rmat_t(:,:,:) ! for the thresholded img
         real, pointer :: rmat_avg(:,:,:),rmat_med(:,:,:)
-        if((stk .eqv. .true.) .and. (nano .eqv. .true.)) THROW_HARD('Cannot be a nanoparticle and a stack at the same time!; otsu_robust_fast')
         ldim = img%get_ldim()
         smpd = img%get_smpd()
-        if(stk .eqv. .true.) ldim(3) = 1
+        if(is2D .eqv. .true.) ldim(3) = 1
         ! Initialise
         call img_copy%copy(img)
         call img_avg%new(ldim, smpd)
@@ -433,7 +432,7 @@ contains
         ! Generate avg and median volumes
         call generate_avg_and_median_vols(img,ldim,img_avg,img_med)
         ! Apply otsu1D on each img
-        if(nano .eqv. .true. ) then
+        if(noneg .eqv. .true. ) then
             call otsu_img(img_copy, thresh(1), positive = .true.)
             call otsu_img(img_avg,  thresh(2), positive = .true.)
             call otsu_img(img_med,  thresh(3), positive = .true.)
@@ -503,163 +502,164 @@ contains
             deallocate(neigh_8)
         end subroutine generate_avg_and_median_vols
     end subroutine otsu_robust_fast
-end module simple_segmentation
 
-  ! otsu binarization for images, based on the implementation
-  ! ! of otsu algo for 2D arrays. It should be better in case
-  ! ! of salt and pepper noise. It is computationally expensive.
-  ! ! Don't use it unless necessary
-  ! subroutine otsu_img_robust(img, thresh)
-  !     type(image),    intent(inout) :: img
-  !     real, optional, intent(out)   :: thresh
-  !     integer, parameter   :: MIN_VAL = 0, MAX_VAL = 255
-  !     integer, allocatable :: yhist_orig(:)
-  !     real,    allocatable :: xhist_orig(:)
-  !     real,    allocatable :: x_orig(:) ! vectorization of the img
-  !     real,    pointer     :: rmat(:,:,:), rmat_avg(:,:,:)
-  !     integer     :: i, j, k, h, ldim(3), S, T, ss, tt
-  !     real        :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), smpd, tr, max
-  !     real        :: sc, old_range(2) ! scale factor and old pixel range
-  !     type(image) :: img_avg
-  !     if( DOPRINT ) write(logfhandle,*) '*** initialising otsu'
-  !     ldim = img%get_ldim()
-  !     smpd = img%get_smpd()
-  !     if(ldim(3) > 1) THROW_HARD('Not implemented for volumes! otsu_img_robust')
-  !     call img%scale_pixels(real([MIN_VAL,MAX_VAL]), sc, old_range)
-  !     call img%get_rmat_ptr(rmat)
-  !     x_orig = pack(rmat(1:ldim(1),1:ldim(2),1), .true.)
-  !     call create_hist_vector(x_orig, MAX_VAL-MIN_VAL+1, xhist_orig, yhist_orig)
-  !     deallocate(yhist_orig)
-  !     call img_avg%new(ldim, smpd)
-  !     call generate_neigh_avg_mat(img, img_avg)
-  !     call img_avg%get_rmat_ptr(rmat_avg)
-  !     if( DOPRINT ) write(logfhandle,*)  '*** hists generation'
-  !     hists = 0.
-  !     !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,h,k)&
-  !     !$omp proc_bind(close) reduction(+:hists)
-  !     do i = 1, ldim(1)
-  !         do j = 1, ldim(2)
-  !             do k = MIN_VAL, MAX_VAL
-  !                 do h = MIN_VAL, MAX_VAL
-  !                     if(k == MAX_VAL .and. h == MAX_VAL) then
-  !                         if(rmat(i,j,1)    >= xhist_orig(k) .and. &
-  !                            rmat_avg(i,j,1)>= xhist_orig(h)) then
-  !                                hists(k+1,h+1) = hists(k+1,h+1) + 1.
-  !                         endif
-  !                         cycle
-  !                     endif
-  !                     if(k == MAX_VAL) then
-  !                         if(rmat(i,j,1)    >= xhist_orig(k) .and. &
-  !                            rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1) < xhist_orig(h+1)) then
-  !                                hists(k+1,h+1) = hists(k+1,h+1) + 1.
-  !                          endif
-  !                         cycle
-  !                     endif
-  !                     if(h == MAX_VAL) then
-  !                         if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)     < xhist_orig(k+1) .and. &
-  !                            rmat_avg(i,j,1)>= xhist_orig(h)) then
-  !                                hists(k+1,h+1) = hists(k+1,h+1) + 1.
-  !                          endif
-  !                         cycle
-  !                     endif
-  !                     if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)        < xhist_orig(k+1) .and. &
-  !                        rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1)    < xhist_orig(h+1)) then
-  !                            hists(k+1,h+1) = hists(k+1,h+1) + 1.
-  !                     endif
-  !                 enddo
-  !             enddo
-  !         enddo
-  !     enddo
-  !     !$omp end parallel do
-  !     ! hists is the joint probability, normalise
-  !     hists = hists/real(ldim(1)*ldim(2))
-  !     if( DOPRINT ) write(logfhandle,*) 'sum ', sum(hists)
-  !     ! Threshold selection
-  !     if( DOPRINT ) write(logfhandle,*) '*** selecting thresholds'
-  !     call calc_tr(hists,MIN_VAL,MAX_VAL,threshold = tr)
-  !     where(rmat >= tr)
-  !         rmat = 1.
-  !     elsewhere
-  !         rmat = 0.
-  !     endwhere
-  !     if(present(thresh))  thresh =  tr/sc+old_range(1) !rescale threshold in the old range
-  !     call img_avg%kill
-  !     if( DOPRINT ) write(logfhandle,*) '*** binarization successfully completed'
-  !
-  !     contains
-  !
-  !         subroutine calc_tr(hists,MIN_VAL,MAX_VAL,threshold)
-  !             real,    intent(inout) :: hists(:,:)
-  !             integer, intent(in)    :: MIN_VAL,MAX_VAL
-  !             real,    intent(out)   :: threshold
-  !             real :: tr, maximum
-  !             real :: p_0(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
-  !             integer :: i, j
-  !             real :: mu_T(2)
-  !             real :: mu_k(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), mu_h(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
-  !             mu_T(:) = 0.
-  !             !$omp parallel do collapse(2) schedule(static) default(shared) private(k,h)&
-  !             !$omp reduction(+:mu_T) proc_bind(close)
-  !             do i = MIN_VAL+1, MAX_VAL+1
-  !                 do j = MIN_VAL+1, MAX_VAL+1
-  !                     mu_T(1) = mu_T(1) + (real(i)*hists(i,j))
-  !                     mu_T(2) = mu_T(2) + (real(j)*hists(i,j))
-  !                 enddo
-  !             enddo
-  !             !$omp end parallel do
-  !             maximum   = 0.
-  !             threshold = 0.
-  !             p_0     = 0.
-  !             mu_k    = 0.
-  !             mu_h    = 0.
-  !             do i = MIN_VAL+1, MAX_VAL + 1
-  !                 do j = MIN_VAL+1, MAX_VAL + 1
-  !                     if(j == 1) then
-  !                         if(i == 1) then
-  !                             p_0(1,1) = hists(1,1)
-  !                         else
-  !                             p_0(i,1)  = p_0(i-1,1)+hists(i,1)
-  !                             mu_k(i,1) = mu_k(i-1,1)+real(i-1)*hists(i,1)
-  !                             mu_h(i,1) = mu_h(i-1,1)
-  !                         endif
-  !                     elseif(i == 1) then
-  !                         p_0(i,j)  = p_0(i,j-1)+hists(i,j)
-  !                         mu_k(i,j) = mu_k(i,j-1)
-  !                         mu_h(i,j) = mu_h(i,j-1)+real(j-1)*hists(i,j)
-  !                     else
-  !                          p_0(i,j)  = p_0(i,j-1)+p_0(i-1,j)-p_0(i-1,j-1)+hists(i,j)
-  !                          mu_k(i,j) = mu_k(i,j-1)+mu_k(i-1,j)-mu_k(i-1,j-1)+real(i-1)*hists(i,j)
-  !                          mu_h(i,j) = mu_h(i,j-1)+mu_h(i-1,j)-mu_h(i-1,j-1)+real(j-1)*hists(i,j)
-  !                      endif
-  !                      if(abs(p_0(i,j)) < TINY) cycle
-  !                      if(p_0(i,j)-0.99 > 0.)  exit
-  !                      if(i == 2 .and. j == 2) exit
-  !                      tr = ((mu_k(i,j)-p_0(i,j)*mu_T(1))**2+(mu_h(i,j)-p_0(i,j)*mu_T(2))**2)/(p_0(i,j)*(1.-p_0(i,j)))
-  !                      if(tr >= maximum) then
-  !                          threshold = real(i)
-  !                          maximum = tr
-  !                      endif
-  !                 enddo
-  !             enddo
-  !         end subroutine calc_tr
-  !
-  !         ! This subroutine generates an image where in each pixel is contained
-  !         ! the average value of the gray levels in the neighbours of the pixel.
-  !         subroutine generate_neigh_avg_mat(img, img_avg)
-  !             type(image), intent(inout) :: img, img_avg
-  !             integer :: ldim(3) !shape of the matrix
-  !             integer :: i, j
-  !             integer :: nsz
-  !             real    :: neigh_8(9)
-  !             real, pointer :: rmat(:,:,:)
-  !             call img_avg%get_rmat_ptr(rmat)
-  !             ldim = img%get_ldim()
-  !             do i = 1, ldim(1)
-  !                 do j = 1, ldim(2)
-  !                     call img%calc_neigh_8([i,j,1],neigh_8,nsz)
-  !                     rmat(i,j,1) = sum(neigh_8(1:nsz))/real(nsz)
-  !                 enddo
-  !             enddo
-  !         end subroutine generate_neigh_avg_mat
-  !
-  ! end subroutine otsu_img_robust
+    ! otsu binarization for images, based on the implementation
+    ! of otsu algo for 2D arrays. It should be better in case
+    ! of salt and pepper noise. It is computationally expensive.
+    ! Don't use it unless necessary
+    subroutine otsu_img_robust(img, thresh)
+        type(image),    intent(inout) :: img
+        real, optional, intent(inout) :: thresh
+        integer, parameter   :: MIN_VAL = 0, MAX_VAL = 255
+        integer, allocatable :: yhist_orig(:)
+        real,    allocatable :: xhist_orig(:)
+        real,    allocatable :: x_orig(:) ! vectorization of the img
+        real,    pointer     :: rmat(:,:,:), rmat_avg(:,:,:)
+        integer     :: i, j, k, h, ldim(3), S, T, ss, tt
+        real        :: hists(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), smpd, tr, max
+        real        :: sc, old_range(2) ! scale factor and old pixel range
+        type(image) :: img_avg
+        if( DOPRINT ) write(logfhandle,*) '*** initialising otsu'
+        ldim = img%get_ldim()
+        smpd = img%get_smpd()
+        if(ldim(3) > 1) THROW_HARD('Not implemented for volumes! otsu_img_robust')
+        call img%scale_pixels(real([MIN_VAL,MAX_VAL]), sc, old_range)
+        call img%get_rmat_ptr(rmat)
+        x_orig = pack(rmat(1:ldim(1),1:ldim(2),1), .true.)
+        call create_hist_vector(x_orig, MAX_VAL-MIN_VAL+1, xhist_orig, yhist_orig)
+        deallocate(yhist_orig)
+        call img_avg%new(ldim, smpd)
+        call generate_neigh_avg_mat(img, img_avg)
+        call img_avg%get_rmat_ptr(rmat_avg)
+        if( DOPRINT ) write(logfhandle,*)  '*** hists generation'
+        hists = 0.
+        !$omp parallel do collapse(3) schedule(static) default(shared) private(i,j,h,k)&
+        !$omp proc_bind(close) reduction(+:hists)
+        do i = 1, ldim(1)
+            do j = 1, ldim(2)
+                do k = MIN_VAL, MAX_VAL
+                    do h = MIN_VAL, MAX_VAL
+                        if(k == MAX_VAL .and. h == MAX_VAL) then
+                            if(rmat(i,j,1)    >= xhist_orig(k) .and. &
+                               rmat_avg(i,j,1)>= xhist_orig(h)) then
+                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
+                            endif
+                            cycle
+                        endif
+                        if(k == MAX_VAL) then
+                            if(rmat(i,j,1)    >= xhist_orig(k) .and. &
+                               rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1) < xhist_orig(h+1)) then
+                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
+                             endif
+                            cycle
+                        endif
+                        if(h == MAX_VAL) then
+                            if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)     < xhist_orig(k+1) .and. &
+                               rmat_avg(i,j,1)>= xhist_orig(h)) then
+                                   hists(k+1,h+1) = hists(k+1,h+1) + 1.
+                             endif
+                            cycle
+                        endif
+                        if(rmat(i,j,1)    >= xhist_orig(k) .and. rmat(i,j,1)        < xhist_orig(k+1) .and. &
+                           rmat_avg(i,j,1)>= xhist_orig(h) .and. rmat_avg(i,j,1)    < xhist_orig(h+1)) then
+                               hists(k+1,h+1) = hists(k+1,h+1) + 1.
+                        endif
+                    enddo
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+        ! hists is the joint probability, normalise
+        hists = hists/real(ldim(1)*ldim(2))
+        if( DOPRINT ) write(logfhandle,*) 'sum ', sum(hists)
+        ! Threshold selection
+        if( DOPRINT ) write(logfhandle,*) '*** selecting thresholds'
+        call calc_tr(hists,MIN_VAL,MAX_VAL,threshold = tr)
+        where(rmat >= tr)
+            rmat = 1.
+        elsewhere
+            rmat = 0.
+        endwhere
+        if(present(thresh))  thresh =  tr/sc+old_range(1) !rescale threshold in the old range
+        call img_avg%kill
+        if( DOPRINT ) write(logfhandle,*) '*** binarization successfully completed'
+
+        contains
+
+            subroutine calc_tr(hists,MIN_VAL,MAX_VAL,threshold)
+                real,    intent(inout) :: hists(:,:)
+                integer, intent(in)    :: MIN_VAL,MAX_VAL
+                real,    intent(inout) :: threshold
+                real :: tr, maximum
+                real :: p_0(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
+                integer :: i, j
+                real :: mu_T(2)
+                real :: mu_k(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1), mu_h(MAX_VAL-MIN_VAL+1,MAX_VAL-MIN_VAL+1)
+                mu_T(:) = 0.
+                !$omp parallel do collapse(2) schedule(static) default(shared) private(k,h)&
+                !$omp reduction(+:mu_T) proc_bind(close)
+                do i = MIN_VAL+1, MAX_VAL+1
+                    do j = MIN_VAL+1, MAX_VAL+1
+                        mu_T(1) = mu_T(1) + (real(i)*hists(i,j))
+                        mu_T(2) = mu_T(2) + (real(j)*hists(i,j))
+                    enddo
+                enddo
+                !$omp end parallel do
+                maximum   = 0.
+                threshold = 0.
+                p_0     = 0.
+                mu_k    = 0.
+                mu_h    = 0.
+                do i = MIN_VAL+1, MAX_VAL + 1
+                    do j = MIN_VAL+1, MAX_VAL + 1
+                        if(j == 1) then
+                            if(i == 1) then
+                                p_0(1,1) = hists(1,1)
+                            else
+                                p_0(i,1)  = p_0(i-1,1)+hists(i,1)
+                                mu_k(i,1) = mu_k(i-1,1)+real(i-1)*hists(i,1)
+                                mu_h(i,1) = mu_h(i-1,1)
+                            endif
+                        elseif(i == 1) then
+                            p_0(i,j)  = p_0(i,j-1)+hists(i,j)
+                            mu_k(i,j) = mu_k(i,j-1)
+                            mu_h(i,j) = mu_h(i,j-1)+real(j-1)*hists(i,j)
+                        else
+                             p_0(i,j)  = p_0(i,j-1)+p_0(i-1,j)-p_0(i-1,j-1)+hists(i,j)
+                             mu_k(i,j) = mu_k(i,j-1)+mu_k(i-1,j)-mu_k(i-1,j-1)+real(i-1)*hists(i,j)
+                             mu_h(i,j) = mu_h(i,j-1)+mu_h(i-1,j)-mu_h(i-1,j-1)+real(j-1)*hists(i,j)
+                         endif
+                         if(abs(p_0(i,j)) < TINY) cycle
+                         if(p_0(i,j)-0.99 > 0.)  exit
+                         if(i == 2 .and. j == 2) exit
+                         tr = ((mu_k(i,j)-p_0(i,j)*mu_T(1))**2+(mu_h(i,j)-p_0(i,j)*mu_T(2))**2)/(p_0(i,j)*(1.-p_0(i,j)))
+                         if(tr >= maximum) then
+                             threshold = real(i)
+                             maximum = tr
+                         endif
+                    enddo
+                enddo
+            end subroutine calc_tr
+
+            ! This subroutine generates an image where in each pixel is contained
+            ! the average value of the gray levels in the neighbours of the pixel.
+            subroutine generate_neigh_avg_mat(img, img_avg)
+                type(image), intent(inout) :: img, img_avg
+                integer :: ldim(3) !shape of the matrix
+                integer :: i, j
+                integer :: nsz
+                real    :: neigh_8(9)
+                real, pointer :: rmat(:,:,:)
+                call img_avg%get_rmat_ptr(rmat)
+                ldim = img%get_ldim()
+                do i = 1, ldim(1)
+                    do j = 1, ldim(2)
+                        call img%calc_neigh_8([i,j,1],neigh_8,nsz)
+                        rmat(i,j,1) = sum(neigh_8(1:nsz))/real(nsz)
+                    enddo
+                enddo
+            end subroutine generate_neigh_avg_mat
+
+    end subroutine otsu_img_robust
+
+end module simple_segmentation

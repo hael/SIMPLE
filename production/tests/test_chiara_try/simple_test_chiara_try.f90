@@ -295,7 +295,7 @@ end module simple_test_chiara_try_mod
        do i = 1,887
            call progress(i,887)
            call img%read('chunk_avgs.mrcs',i)
-           call otsu_robust_fast(img, stk=.true., nano=.false.,thresh=thresh)
+           call otsu_robust_fast(img, is2D=.true., noneg=.false.,thresh=thresh)
            call img%write('otsuImgImg.mrcs', i)
        enddo
 

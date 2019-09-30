@@ -61,7 +61,7 @@ type(automask_commander)              :: xautomask
 ! GENERAL IMAGE PROCESSING PROGRAMS
 type(scale_commander)                 :: xscale
 type(binarise_commander)              :: xbinarise
-type(edge_detector_commander)         :: xdetector
+type(edge_detect_commander)           :: xdetector
 
 ! MISCELLANOUS PROGRAMS
 type(masscen_commander)               :: xmasscen

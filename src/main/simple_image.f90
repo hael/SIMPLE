@@ -305,6 +305,7 @@ contains
     procedure          :: insert_lowres
     procedure          :: insert_lowres_serial
     procedure          :: inv
+    procedure          :: remove_neg
     procedure          :: ran
     procedure          :: gauran
     procedure          :: add_gauran
@@ -3644,7 +3645,7 @@ contains
         if( .not. self%ft )then
             call self%fft()
         endif
-        self%cmat = self%cmat*conjg(self%cmat)
+        self%cmat = self%cmat*conjg(self%cmat) / sqrt(sum(csq(self%cmat)))
         call self%ifft()
     end subroutine acf
 
@@ -6711,6 +6712,11 @@ contains
         class(image), intent(inout) :: self
         self%rmat = -1.*self%rmat
     end subroutine inv
+
+    subroutine remove_neg( self )
+        class(image), intent(inout) :: self
+        where( self%rmat < TINY ) self%rmat = 0.
+    end subroutine remove_neg
 
     !>  \brief  is for making a random image (0,1)
     subroutine ran( self )

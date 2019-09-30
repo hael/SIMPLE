@@ -54,7 +54,7 @@ contains
         real,    allocatable :: diams(:)
         type(image) :: img_tmp
         real        :: diam_ave, diam_sdev, diam_var, mask_radius
-        real        :: one_sigma_thresh
+        real        :: one_sigma_thresh, thresh(3)
         integer     :: iframe, i, j, fromto(2), cnt, loc(1), ithr
         logical     :: err
         ! allocate diameters & ptcl_avgs arrays
@@ -91,7 +91,7 @@ contains
             ! make a copy
             call img_tmp%copy(ptcl_avgs(cnt))
             ! binarise
-            call otsu_robust_fast(ptcl_avgs(cnt), stk=.false., nano=.false.)
+            call otsu_robust_fast(ptcl_avgs(cnt), is2D=.false., noneg=.false., thresh=thresh)
             ! identify connected components
             call ptcl_avgs(cnt)%find_connected_comps(cc_img)
             ! find the largest connected component
