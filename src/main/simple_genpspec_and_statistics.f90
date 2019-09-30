@@ -444,7 +444,8 @@ contains
           integer     :: ldim(3),i
           real        :: scale_range(2)
           scale_range = [1.,real(BOX)]
-          call canny(self%ps,self%ps_bin,scale_range = scale_range)
+          call canny(self%ps,self%ps_bin)
+          ! call canny(self%ps,self%ps_bin,scale_range = scale_range) !MODIFIED 30/09/19
           do i=1,BOX  !get rid of border effects
               call self%ps_bin%set([i,1,1],0.)
               call self%ps_bin%set([i,BOX,1],0.)
