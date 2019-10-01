@@ -259,6 +259,7 @@ type :: parameters
     integer :: newbox=0            !< new box for scaling (by Fourier padding/clipping)
     integer :: newbox2=0
     integer :: nframes=0           !< # frames{30}
+    integer :: ngrow=0             !< # of white pixel layers to grow in binary image
     integer :: ninplpeaks=NINPLPEAKS2SORT !< # of in-plane peaks
     integer :: nnn=NPEAKS2REFINE   !< # nearest neighbors{200}
     integer :: nmics=0             !< # micographs
@@ -696,6 +697,7 @@ contains
         call check_iarg('ndocs',          self%ndocs)
         call check_iarg('newbox',         self%newbox)
         call check_iarg('nframes',        self%nframes)
+        call check_iarg('ngrow',          self%ngrow)
         call check_iarg('ninplpeaks',     self%ninplpeaks)
         call check_iarg('nmovies_trial',  self%nmovies_trial)
         call check_iarg('nnn',            self%nnn)

@@ -223,49 +223,63 @@ contains
         DebugPrint 'simple_masker::env_rproject done'
     end subroutine env_rproject
 
-    subroutine automask2D( imgs, ngrow, winsz, edge, diams )
+    subroutine automask2D( imgs, mask, ngrow, winsz, edge, diams )
         use simple_segmentation
         class(image),      intent(inout) :: imgs(:)
+        logical,           intent(in)    :: mask(:)
         integer,           intent(in)    :: ngrow, winsz, edge
         real, allocatable, intent(inout) :: diams(:)
         real, allocatable :: ccsizes(:)
-        type(image)       :: img_bin, cc_img
-        integer           :: i, n, loc(1)
-        real              :: thresh(3)
+        type(image) :: img_bin, cc_img
+        integer     :: i, n, loc(1)
+        real        :: thresh(3)
         n = size(imgs)
+        if( size(mask) /= n ) THROW_HARD('mask array size does not conform with image array; automask2D')
         if( allocated(diams) ) deallocate(diams)
-        allocate(diams(n))
+        allocate(diams(n), source=0.)
         write(logfhandle,'(A)') '>>> 2D AUTOMASKING'
         do i=1,n
             call progress(i, n)
             call img_bin%copy(imgs(i))
-            ! filter with non-local means
-            call img_bin%NLmean
-            ! binarise with robust Otsu
-            call otsu_robust_fast(img_bin, is2D=.true., noneg=.true., thresh=thresh)
-            call img_bin%write('binarised_otsu.mrc', i)
-            ! grow ngrow layers
-            call img_bin%grow_bins(ngrow)
-            ! find the largest connected component
-            call img_bin%find_connected_comps(cc_img)
-            ccsizes = cc_img%size_connected_comps()
-            loc = maxloc(ccsizes)
-            ! estimate its diameter
-            call cc_img%diameter_cc(loc(1), diams(i))
-            ! turn it into a binary image for mask creation
-            call cc_img%cc2bin(loc(1))
-            call cc_img%write('binarised_otsu_grown.mrc', i)
+            if( mask(i) )then
+                ! filter with non-local means
+                call img_bin%NLmean
+                ! binarise with robust Otsu
+                call otsu_robust_fast(img_bin, is2D=.true., noneg=.true., thresh=thresh)
+            else
+                call img_bin%zero
+            endif
+            call img_bin%write(BIN_OTSU, i)
+            if( mask(i) )then
+                ! grow ngrow layers
+                call img_bin%grow_bins(ngrow)
+                ! find the largest connected component
+                call img_bin%find_connected_comps(cc_img)
+                ccsizes = cc_img%size_connected_comps()
+                loc = maxloc(ccsizes)
+                ! estimate its diameter
+                call cc_img%diameter_cc(loc(1), diams(i))
+                ! turn it into a binary image for mask creation
+                call cc_img%cc2bin(loc(1))
+            else
+                call cc_img%zero
+            endif
+            call cc_img%write(BIN_OTSU_GROW, i)
             ! median filter to smoothen
-            call cc_img%real_space_filter(winsz, 'median')
-            call cc_img%write('binarised_otsu_grown_median.mrc', i)
-            ! apply cosine egde to soften mask (to avoid Fourier artefacts)
-            call cc_img%cos_edge(edge)
-            call cc_img%write('masks_otsu.mrc', i)
-            ! remove negative values before applyting the mask
-            call imgs(i)%remove_neg
-            ! apply
-            call imgs(i)%mul(cc_img)
-            call imgs(i)%write('automasked_otsu.mrc', i)
+            if( mask(i) ) call cc_img%real_space_filter(winsz, 'median')
+            call cc_img%write(BIN_OTSU_GROW_MED, i)
+            if( mask(i) )then
+                ! apply cosine egde to soften mask (to avoid Fourier artefacts)
+                call cc_img%cos_edge(edge)
+                call cc_img%write(MSK_OTSU, i)
+                ! remove negative values before applyting the mask
+                call imgs(i)%remove_neg
+                ! apply
+                call imgs(i)%mul(cc_img)
+            else
+                call imgs(i)%zero
+            endif
+            call imgs(i)%write(AMSK_OTSU, i)
         end do
         call img_bin%kill
         call cc_img%kill

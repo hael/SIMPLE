@@ -31,6 +31,12 @@ character(len=*), parameter :: DEFAULT_FILE_FORMAT  = 'M'
 ! CLUSTER2D
 character(len=*), parameter :: CLUSTER2D_ITER_FBODY = 'cluster2Ddoc_'
 character(len=*), parameter :: CAVGS_ITER_FBODY     = 'cavgs_iter'
+! AUTOMASK2D
+character(len=*), parameter :: BIN_OTSU             = 'binarised_otsu.mrc'
+character(len=*), parameter :: BIN_OTSU_GROW        = 'binarised_otsu_grown.mrc'
+character(len=*), parameter :: BIN_OTSU_GROW_MED    = 'binarised_otsu_grown_median.mrc'
+character(len=*), parameter :: MSK_OTSU             = 'masks_otsu.mrc'
+character(len=*), parameter :: AMSK_OTSU            = 'automasked_otsu.mrc'
 ! REFINE3D
 character(len=*), parameter :: REFINE3D_ITER_FBODY  = 'refine3Ddoc_'
 character(len=*), parameter :: STARTVOL_FBODY       = 'startvol_state'
