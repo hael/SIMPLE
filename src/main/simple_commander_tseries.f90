@@ -712,8 +712,13 @@ contains
             THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
         endif
         ! COMPARING
-        call nano1%new(params%vols(1), params%smpd)
-        call nano2%new(params%vols(2), params%smpd)
+        if( cline%defined('element') )then
+          call nano1%new(params%vols(1), params%smpd,params%element)
+          call nano2%new(params%vols(2), params%smpd,params%element)
+        else
+          call nano1%new(params%vols(1), params%smpd) !default pt
+          call nano2%new(params%vols(2), params%smpd) !default pt
+        endif
         call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
         call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
         if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')

@@ -1329,7 +1329,7 @@ contains
         &'Compare a pair of nanoparticle atomic-resolution maps',& ! descr_short
         &'is a program for providing statistics of differences between pairs of nanoparticle atomic-resolution maps',& ! descr long
         &'simple_exec',&                                     ! executable
-        &2, 1, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
@@ -1338,13 +1338,15 @@ contains
         & 'input volume e.g. vol.mrc', .true., '')        ! search controls
         ! parameter input/output
         call compare_nano%set_input('parm_ios', 1, smpd)
-        ! <empty>
         ! alternative inputs
         ! <empty>
-        ! filter controls
+        ! search controls
         ! <empty>
+        ! filter controls
+        call compare_nano%set_input('filt_ctrls', 1, element)
         ! mask controls
         ! <empty>
+        ! computer controls
         !call compare_nano%set_input('comp_ctrls', 1, nthr) to change if it works
     end subroutine new_compare_nano
 
@@ -1431,7 +1433,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call detect_atoms%set_input('filt_ctrls', 1, element)        ! mask controls
+        call detect_atoms%set_input('filt_ctrls', 1, element)
+        ! mask controls
         ! <empty>
         ! computer controls
         !call detect_atoms%set_input('comp_ctrls', 1, nthr) to change if it works
