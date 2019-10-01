@@ -14,10 +14,8 @@ public :: nanoparticle
 #include "simple_local_flags.inc"
 
 ! module global constants
-real,    parameter :: MAX_INTERAT_DIST      = 3.    !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
-real,    parameter :: MIN_INTERAT_DIST      = 1.5   !atoms for which the interatomic distance is > MAX_INTERAT_DIST are considered outliers and disregarded in the stats
-integer, parameter :: N_THRESH              = 20    !number of thresholds for binarization
-logical, parameter :: DEBUG_HERE            = .false.!for debugging purposes
+integer, parameter :: N_THRESH    = 20    !number of thresholds for binarization
+logical, parameter :: DEBUG_HERE  = .false.!for debugging purposes
 
 type :: nanoparticle
     private
@@ -435,7 +433,7 @@ contains
         call one_atom%fft()
         call self%img%fft()
         call self%img%phase_corr(one_atom,phasecorr,1.)
-        if(DEBUG_HERE) call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'PhaseCorrOneAtom.mrc')
+        call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'CorrFiltered.mrc')
         call self%img%copy(phasecorr)
         call otsu_nano(self%img,o_t)
         otsu_thresh = o_t
@@ -576,10 +574,10 @@ contains
                 dist(i) =  pixels_dist(coords(:,i), self%centers(:,:), 'min', mask=mask) !I have to use all the atoms when
                 mask(:) = .true. ! restore
                 !Discard outliers
-                if(dist(i)*self%smpd > MAX_INTERAT_DIST ) then   !2.5 is the average interatomic distance
+                if(dist(i)*self%smpd > 3.*self%theoretical_radius ) then      !maximum interatomic distance
                     dist(i) = 0.
                     n_discard = n_discard + 1
-                else if(dist(i)*self%smpd < MIN_INTERAT_DIST ) then
+                else if(dist(i)*self%smpd < 2.*self%theoretical_radius ) then ! minimum interatomic distance
                     dist(i) = 0.
                     n_discard = n_discard + 1
                 endif
@@ -587,7 +585,7 @@ contains
             self%avg_dist_atoms = sum(dist)/real(size(coords,dim=2)-n_discard)
             !$omp parallel do schedule(static) private(i) reduction(+:stdev)
             do i = 1, size(coords,dim=2)
-                if(dist(i)*self%smpd <=MAX_INTERAT_DIST) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
+                if(dist(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (dist(i)-self%avg_dist_atoms)**2
             enddo
             !$omp end parallel do
             stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
@@ -617,18 +615,18 @@ contains
                 self%dists(i) =  pixels_dist(self%centers(:,i), self%centers(:,:), 'min', mask=mask) !Use all the atoms
                 mask(:) = .true. ! restore
                 !Discard outliers
-                if(self%dists(i)*self%smpd > MAX_INTERAT_DIST ) then !2.5 is the average interatomic distance
+                if(self%dists(i)*self%smpd > 3.*self%theoretical_radius ) then 
                     self%dists(i) = 0.
                     n_discard = n_discard + 1
-                else if(self%dists(i)*self%smpd < MIN_INTERAT_DIST ) then
-                    print *, 'atom ',i, 'dist(i)', self%dists(i), 'INSERT THRESHOLD FOR DISTS IN CENTERS!!'
+                else if(self%dists(i)*self%smpd < 1.5*self%theoretical_radius ) then
+                    print *, 'atom ',i, 'dist(i)', self%dists(i), 'INSERT THRESHOLD FOR MIN DIST BETWEEN ATOMS'
                     self%dists(i) = 0.
                     n_discard = n_discard + 1
                 endif
             enddo
             self%avg_dist_atoms = sum(self%dists)/real(size(self%centers, dim = 2)-n_discard)
             do i = 1, size(self%centers, dim = 2)
-                if(self%dists(i)*self%smpd <=MAX_INTERAT_DIST) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
+                if(self%dists(i)*self%smpd <=3.*self%theoretical_radius) stdev = stdev + (self%dists(i)-self%avg_dist_atoms)**2
             enddo
             stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
             med = median(self%dists)
@@ -774,7 +772,7 @@ contains
             integer, intent(in)    :: n_cc              !label of the cc to split
             real,    intent(inout) :: new_centers(:,:)  !updated coordinates of the centers
             integer, intent(inout) :: cnt               !atom counter, to u pdate the center coords
-            integer :: new_center1(3),new_center2(3)
+            integer :: new_center1(3),new_center2(3),new_center3(3)
             integer :: i, j, k
             logical :: mask(self%ldim(1),self%ldim(2),self%ldim(3)) !false in the layer of connection of the atom to be split
             mask = .false.  !initialization
@@ -797,24 +795,50 @@ contains
                 & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
                 if(any(new_center2 > 0)) then !if anything was found
                     !Validate second center (check if it's 2 merged atoms, or one pointy one)
-                    if(sqrt((real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd) <= 1.2*self%theoretical_radius) then
+                    if(sqrt((real(new_center2(1)-new_center1(1))**2+real(new_center2(2)-new_center1(2))**2+real(new_center2(3)-new_center1(3))**2)*self%smpd) <= 2.*self%theoretical_radius) then
                         ! Set the merged cc back to 0
                         where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
                         return
+                    else
+                      cnt = cnt + 1
+                      new_centers(:,cnt) = real(new_center2)
+                      !In the case two merged atoms, build the second atom
+                      do i = 1, self%ldim(1)
+                          do j = 1, self%ldim(2)
+                              do k = 1, self%ldim(3)
+                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < self%theoretical_radius**2) then
+                                      if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
+                                  endif
+                              enddo
+                          enddo
+                      enddo
                     endif
-                    cnt = cnt + 1
-                    new_centers(:,cnt) = real(new_center2)
-                    !In the case two merged atoms, build the second atom
-                    do i = 1, self%ldim(1)
-                        do j = 1, self%ldim(2)
-                            do k = 1, self%ldim(3)
-                                if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < self%theoretical_radius**2) then
-                                    if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
-                                endif
+                  endif
+                  ! Third likely center.
+                      new_center3 = maxloc(rmat_pc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), &
+                      & (imat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) == n_cc) .and. .not. mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))
+                      if(any(new_center3 > 0)) then !if anything was found
+                          !Validate third center
+                          if(sqrt((real(new_center3(1)-new_center1(1))**2+real(new_center3(2)-new_center1(2))**2+real(new_center3(3)-new_center1(3))**2)*self%smpd) <= 2.*self%theoretical_radius .or. &
+                          &  sqrt((real(new_center3(1)-new_center2(1))**2+real(new_center3(2)-new_center2(2))**2+real(new_center3(3)-new_center2(3))**2)*self%smpd) <= 2.*self%theoretical_radius ) then
+                              ! Set the merged cc back to 0
+                              where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
+                              return
+                          else
+                            cnt = cnt + 1
+                            new_centers(:,cnt) = real(new_center3)
+                            !In the case two merged atoms, build the second atom
+                            do i = 1, self%ldim(1)
+                                do j = 1, self%ldim(2)
+                                    do k = 1, self%ldim(3)
+                                        if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + (real(k-new_center3(3)))**2)*self%smpd < self%theoretical_radius**2) then
+                                            if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
+                                        endif
+                                    enddo
+                                enddo
                             enddo
-                        enddo
-                    enddo
-                endif
+                          endif
+                        endif
             ! Set the merged cc back to 0
             where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
         end subroutine split_atom
@@ -1152,9 +1176,16 @@ contains
             shortest_dist = pixels_dist(self%centers(:,label), real(pos),'min', mask_dist, location)
             if(size(pos,2) == 1) then !if the connected component has size 1 (just 1 vxl)
                 shortest_dist = 0.
-                longest_dist = shortest_dist
+                longest_dist  = shortest_dist
                 ratio = 1.
                 self%loc_longest_dist(:3, label) = self%centers(:,label)
+                if(present(print_ar) .and. (print_ar .eqv. .true.)) then
+                     write(logfhandle,*) 'ATOM #          ', label
+                     write(logfhandle,*) 'shortest dist = ', shortest_dist
+                     write(logfhandle,*) 'longest  dist = ', longest_dist
+                     write(logfhandle,*) 'RATIO         = ', ratio
+                endif
+                return
             else
                 longest_dist  = pixels_dist(self%centers(:,label), real(pos),'max', mask_dist, location)
                 self%loc_longest_dist(:3, label) =  pos(:3,location(1))
@@ -1162,8 +1193,8 @@ contains
             if(abs(longest_dist) > TINY .and. size(pos,2) > 1) then
                 ratio = shortest_dist/longest_dist
             else
-                ratio = 0.
-                if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
+                 ratio = 0.
+                 if(DEBUG_HERE) write(logfhandle,*) 'cc ', label, 'LONGEST DIST = 0'
             endif
             longest_dist  = longest_dist*self%smpd  !in A
             shortest_dist = shortest_dist*self%smpd
@@ -1272,150 +1303,6 @@ contains
         ! close(129)
     end subroutine search_polarization
 
-    ! Affinity propagation clustering based on teh distribuition of
-    ! the atom distances within the nanoparticle.
-    ! I want to study the dustribuition of the atom distances within the nanoparticle.
-    ! For example, I would expect to have atoms close to eachother in the center
-    ! and far apart in the surface.
-    subroutine affprop_cluster_dist_distr(self)
-        use simple_aff_prop
-        use simple_atoms, only : atoms
-        class(nanoparticle), intent(inout) :: self
-        type(aff_prop)       :: ap_nano
-        type(image), allocatable :: img_clusters(:)
-        real, pointer            :: rmat_cc(:,:,:)
-        real, allocatable        :: simmat(:,:)
-        real                     :: simsum
-        integer, allocatable     :: centers_ap(:), labels_ap(:)
-        integer, allocatable     :: centers_merged(:), labels_merged(:)
-        integer                  :: i, j, ncls, nerr
-        integer                  :: dim
-        integer, allocatable     :: imat_onecls(:,:,:,:)
-        ! dim = self%n_cc ! TO FIX HERE. I SHOULD HAVE SELF%N_CC = SIZE(SELF%DISTS)
-        call self%img_cc%write('ImgCCClustDistDistr.mrc')
-        dim = size(self%dists)
-        call self%centers_pdb%new(dim, dummy = .true. )
-        allocate(simmat(dim, dim), source = 0.)
-        write(logfhandle,*) '****clustering wrt distances distribution, init'
-        do i=1,dim-1
-            do j=i+1,dim
-                simmat(i,j) = -sqrt((self%dists(i)-self%dists(j))**2)
-                simmat(j,i) = simmat(i,j)
-            end do
-        end do
-        call ap_nano%new(dim, simmat)
-        call ap_nano%propagate(centers_ap, labels_ap, simsum)
-        ncls = size(centers_ap)
-        ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir; ")
-        call self%img_cc%get_rmat_ptr(rmat_cc)
-        allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
-        allocate(img_clusters(ncls))
-        !$omp do collapse(2) schedule(static) private(i,j)
-        do i = 1, dim
-            do j = 1, ncls
-                call img_clusters(j)%new(self%ldim,self%smpd)
-                if(labels_ap(i) == j) then
-                    where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i))<TINY) imat_onecls(:,:,:,j) = 1
-                endif
-            enddo
-        enddo
-        !$omp end do
-        do j = 1, ncls
-            call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
-            call img_clusters(j)%write(int2str(j)//'ClusterDistDistr.mrc')
-            call img_clusters(j)%kill
-        enddo
-        if(allocated(img_clusters)) deallocate(img_clusters)
-        if(allocated(imat_onecls))  deallocate(imat_onecls)
-        open(125, file = 'ClusterDistDistr')
-        write(unit = 125, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
-        do i = 1, dim
-            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
-            call self%centers_pdb%set_element(i,self%element)
-            call self%centers_pdb%set_beta(i, real(labels_ap(i)))
-        enddo
-        write(unit = 125, fmt = '(a)') 'CENTERS DISTS DISTR'
-        do i=1,ncls
-            write(unit = 125, fmt = '(f6.3)') self%dists(centers_ap(i))
-        end do
-        call self%centers_pdb%writepdb('ClusterDistDistr')
-        close(125)
-        write(logfhandle,*) '****clustering wrt distances distribution, completed'
-        deallocate(simmat, labels_ap, centers_ap)
-    end subroutine affprop_cluster_dist_distr
-
-    !Affinity propagation clustering based on aspect ratios
-    subroutine affprop_cluster_ar(self)
-        use simple_aff_prop
-        class(nanoparticle), intent(inout) :: self
-        type(aff_prop)           :: ap_nano
-        type(image), allocatable :: img_clusters(:)
-        real, pointer            :: rmat_cc(:,:,:)
-        real,    allocatable     :: simmat(:,:)
-        integer, allocatable     :: imat_onecls(:,:,:,:)
-        integer, allocatable     :: centers_ap(:), labels_ap(:)
-        real                     :: simsum
-        integer                  :: i, j, ncls, nerr
-        integer                  :: dim
-        call self%img_cc%write('ImgCCClustAR.mrc')
-        dim = size(self%ratios)
-        call self%centers_pdb%new(dim, dummy = .true. )
-        allocate(simmat(dim, dim), source = 0.)
-        write(logfhandle,*) '****clustering wrt aspect ratios, init'
-        do i=1,dim-1
-            do j=i+1,dim
-                simmat(i,j) = -sqrt((self%ratios(i)-self%ratios(j))**2)
-                simmat(j,i) = simmat(i,j)
-            end do
-        end do
-        call ap_nano%new(dim, simmat)
-        call ap_nano%propagate(centers_ap, labels_ap, simsum)
-        ncls = size(centers_ap)
-        ! Report clusters on images in dedicated directory
-        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir1; ")
-        call simple_mkdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_mkdir; ")
-        call simple_chdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir; ")
-        call self%img_cc%write('IMG_CC_IN_CLUSTER_AR.mrc')
-        call self%img_cc%get_rmat_ptr(rmat_cc)
-        allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
-        allocate(img_clusters(ncls))
-        !$omp do collapse(2) schedule(static) private(i,j)
-        do i = 1, dim
-            do j = 1, ncls
-                call img_clusters(j)%new(self%ldim,self%smpd)
-                if(labels_ap(i) == j) then
-                        where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i))<TINY) imat_onecls(:,:,:,j) = 1
-                endif
-            enddo
-        enddo
-        !$omp end do
-        do j = 1, ncls
-            call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
-            call img_clusters(j)%write(int2str(j)//'ClusterAr.mrc')
-            call img_clusters(j)%kill
-        enddo
-        if(allocated(img_clusters)) deallocate(img_clusters)
-        if(allocated(imat_onecls))  deallocate(imat_onecls)
-        open(119, file='ClusterAspectRatio')
-        write(unit = 119,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
-        do i = 1, dim
-            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
-            call self%centers_pdb%set_element(i,self%element)
-            call self%centers_pdb%set_beta(i, real(labels_ap(i)))
-        enddo
-        write(unit = 119, fmt = '(a)') 'CENTERS AR'
-        do i=1,size(centers_ap)
-            write(unit = 119, fmt = '(f6.3)') self%ratios(centers_ap(i))
-        end do
-        call self%centers_pdb%writepdb('ClustersAspectRatio')
-        close(119)
-        write(logfhandle,*) '****clustering wrt aspect ratios, completed'
-        deallocate(simmat, labels_ap, centers_ap)
-    end subroutine affprop_cluster_ar
-
     ! Affinity propagation clustering based on agles wrt vec [0,0,1].
     subroutine affprop_cluster_ang(self)
         use simple_aff_prop
@@ -1433,7 +1320,6 @@ contains
         real                     :: simsum
         real                     :: avg, stdev
         integer, allocatable     :: cnt(:)
-        call self%img_cc%write('ImgCCClustANG.mrc')
         dim = size(self%ang_var)!self%n_cc
         call self%centers_pdb%new(dim, dummy = .true. )
         allocate(simmat(dim, dim), source = 0.)
@@ -1534,6 +1420,146 @@ contains
         if(allocated(avg_within))   deallocate(avg_within)
         if(allocated(stdev_within)) deallocate(stdev_within)
     end subroutine affprop_cluster_ang
+
+    !Affinity propagation clustering based on aspect ratios
+    subroutine affprop_cluster_ar(self)
+        use simple_aff_prop
+        class(nanoparticle), intent(inout) :: self
+        type(aff_prop)           :: ap_nano
+        type(image), allocatable :: img_clusters(:)
+        real, pointer            :: rmat_cc(:,:,:)
+        real,    allocatable     :: simmat(:,:)
+        integer, allocatable     :: imat_onecls(:,:,:,:)
+        integer, allocatable     :: centers_ap(:), labels_ap(:)
+        real                     :: simsum
+        integer                  :: i, j, ncls, nerr
+        integer                  :: dim
+        dim = size(self%ratios) !self%n_cc
+        call self%centers_pdb%new(dim, dummy = .true. )
+        allocate(simmat(dim, dim), source = 0.)
+        write(logfhandle,*) '****clustering wrt aspect ratios, init'
+        do i=1,dim-1
+            do j=i+1,dim
+                simmat(i,j) = -sqrt((self%ratios(i)-self%ratios(j))**2)
+                simmat(j,i) = simmat(i,j)
+            end do
+        end do
+        call ap_nano%new(dim, simmat)
+        call ap_nano%propagate(centers_ap, labels_ap, simsum)
+        ncls = size(centers_ap)
+        ! Report clusters on images in dedicated directory
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir1; ")
+        call simple_mkdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_mkdir; ")
+        call simple_chdir(trim(self%output_dir)//'/ClusterAspectRatio',errmsg="simple_nanoparticles :: affprop_cluster_ar, simple_chdir; ")
+        call self%img_cc%get_rmat_ptr(rmat_cc)
+        allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
+        allocate(img_clusters(ncls))
+        !$omp do collapse(2) schedule(static) private(i,j)
+        do i = 1, dim
+            do j = 1, ncls
+                call img_clusters(j)%new(self%ldim,self%smpd)
+                if(labels_ap(i) == j) then
+                        where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i))<TINY) imat_onecls(:,:,:,j) = 1
+                endif
+            enddo
+        enddo
+        !$omp end do
+        do j = 1, ncls
+            call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
+            call img_clusters(j)%write(int2str(j)//'ClusterAr.mrc')
+            call img_clusters(j)%kill
+        enddo
+        if(allocated(img_clusters)) deallocate(img_clusters)
+        if(allocated(imat_onecls))  deallocate(imat_onecls)
+        open(119, file='ClusterAspectRatio')
+        write(unit = 119,fmt ='(a,i2)') 'NR OF CLUSTERS FOUND AR:', ncls
+        do i = 1, dim
+            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+            call self%centers_pdb%set_element(i,self%element)
+            call self%centers_pdb%set_beta(i, real(labels_ap(i)))
+        enddo
+        write(unit = 119, fmt = '(a)') 'CENTERS AR'
+        do i=1,size(centers_ap)
+            write(unit = 119, fmt = '(f6.3)') self%ratios(centers_ap(i))
+        end do
+        call self%centers_pdb%writepdb('ClustersAspectRatio')
+        close(119)
+        write(logfhandle,*) '****clustering wrt aspect ratios, completed'
+        deallocate(simmat, labels_ap, centers_ap)
+    end subroutine affprop_cluster_ar
+
+    ! Affinity propagation clustering based on teh distribuition of
+    ! the atom distances within the nanoparticle.
+    ! I want to study the dustribuition of the atom distances within the nanoparticle.
+    ! For example, I would expect to have atoms close to eachother in the center
+    ! and far apart in the surface.
+    subroutine affprop_cluster_dist_distr(self)
+        use simple_aff_prop
+        use simple_atoms, only : atoms
+        class(nanoparticle), intent(inout) :: self
+        type(aff_prop)       :: ap_nano
+        type(image), allocatable :: img_clusters(:)
+        real, pointer            :: rmat_cc(:,:,:)
+        real, allocatable        :: simmat(:,:)
+        real                     :: simsum
+        integer, allocatable     :: centers_ap(:), labels_ap(:)
+        integer, allocatable     :: centers_merged(:), labels_merged(:)
+        integer                  :: i, j, ncls, nerr
+        integer                  :: dim
+        integer, allocatable     :: imat_onecls(:,:,:,:)
+        dim = size(self%dists) !self%n_cc
+        call self%centers_pdb%new(dim, dummy = .true. )
+        allocate(simmat(dim, dim), source = 0.)
+        write(logfhandle,*) '****clustering wrt distances distribution, init'
+        do i=1,dim-1
+            do j=i+1,dim
+                simmat(i,j) = -sqrt((self%dists(i)-self%dists(j))**2)
+                simmat(j,i) = simmat(i,j)
+            end do
+        end do
+        call ap_nano%new(dim, simmat)
+        call ap_nano%propagate(centers_ap, labels_ap, simsum)
+        ncls = size(centers_ap)
+        ! Report clusters on images in dedicated directory
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir1; ")
+        call simple_mkdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_mkdir; ")
+        call simple_chdir(trim(self%output_dir)//'/ClusterDistDistr',errmsg="simple_nanoparticles :: affprop_cluster_dist_distr, simple_chdir; ")
+        call self%img_cc%get_rmat_ptr(rmat_cc)
+        allocate(imat_onecls(self%ldim(1),self%ldim(2),self%ldim(3), ncls), source = 0)
+        allocate(img_clusters(ncls))
+        !$omp do collapse(2) schedule(static) private(i,j)
+        do i = 1, dim
+            do j = 1, ncls
+                call img_clusters(j)%new(self%ldim,self%smpd)
+                if(labels_ap(i) == j) then
+                    where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i))<TINY) imat_onecls(:,:,:,j) = 1
+                endif
+            enddo
+        enddo
+        !$omp end do
+        do j = 1, ncls
+            call img_clusters(j)%set_rmat(real(imat_onecls(:,:,:,j)))
+            call img_clusters(j)%write(int2str(j)//'ClusterDistDistr.mrc')
+            call img_clusters(j)%kill
+        enddo
+        if(allocated(img_clusters)) deallocate(img_clusters)
+        if(allocated(imat_onecls))  deallocate(imat_onecls)
+        open(125, file = 'ClusterDistDistr')
+        write(unit = 125, fmt = '(a,i2)') 'NR OF CLUSTERS FOUND DISTS DISTR:', ncls
+        do i = 1, dim
+            call self%centers_pdb%set_coord(i,(self%centers(:,i)-1.)*self%smpd)
+            call self%centers_pdb%set_element(i,self%element)
+            call self%centers_pdb%set_beta(i, real(labels_ap(i)))
+        enddo
+        write(unit = 125, fmt = '(a)') 'CENTERS DISTS DISTR'
+        do i=1,ncls
+            write(unit = 125, fmt = '(f6.3)') self%dists(centers_ap(i))
+        end do
+        call self%centers_pdb%writepdb('ClusterDistDistr')
+        close(125)
+        write(logfhandle,*) '****clustering wrt distances distribution, completed'
+        deallocate(simmat, labels_ap, centers_ap)
+    end subroutine affprop_cluster_dist_distr
 
     subroutine nanopart_cluster(self)
         class(nanoparticle), intent(inout) :: self
