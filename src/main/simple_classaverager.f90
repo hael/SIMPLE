@@ -601,7 +601,9 @@ contains
 
     !>  \brief  merges the even/odd pairs and normalises the sums
     subroutine cavger_merge_eos_and_norm
-        integer :: icls, eo_pop(2), pop
+        type(image) :: gridcorrection_img
+        integer     :: icls, eo_pop(2), pop
+        call cavger_prep_gridding_correction(gridcorrection_img)
         !$omp parallel do default(shared) private(icls,eo_pop,pop) schedule(static) proc_bind(close)
         do icls=1,ncls
             eo_pop = eo_class_pop(icls)
@@ -629,8 +631,13 @@ contains
             call cavgs_even(icls)%clip_inplace(ldim)
             call cavgs_odd(icls)%clip_inplace(ldim)
             call cavgs_merged(icls)%clip_inplace(ldim)
+            ! gridding correction
+            call cavgs_even(icls)%div(gridcorrection_img)
+            call cavgs_odd(icls)%div(gridcorrection_img)
+            call cavgs_merged(icls)%div(gridcorrection_img)
         end do
         !$omp end parallel do
+        call gridcorrection_img%kill
     end subroutine cavger_merge_eos_and_norm
 
     !>  \brief  calculates Fourier ring correlations
@@ -876,6 +883,29 @@ contains
         deallocate(imgs4read)
         call cavger_merge_eos_and_norm()
     end subroutine cavger_assemble_sums_from_parts
+
+    !>  \brief  corrects for Fourier domain bilinear interpolation
+    subroutine cavger_prep_gridding_correction( img )
+        class(image), intent(inout) :: img
+        real    :: center(3),dist(2),pid,sinc,pad_sc
+        integer :: i,j
+        call img%new(ldim,smpd)
+        if( l_bilinear )then
+            center = real(ldim/2 + 1)
+            pad_sc = 1. / real(ldim_pd(1))
+            do i = 1,ldim(1)
+                dist(1) = pad_sc*(real(i)-center(1))
+                do j = 1,ldim(2)
+                    dist(2) = pad_sc*(real(j)-center(2))
+                    pid     = PI*sqrt(sum(dist**2.))
+                    sinc    = sin(pid) / pid
+                    call img%set([i,j,1], sinc*sinc)
+                enddo
+            enddo
+        else
+            img = 1.
+        endif
+    end subroutine cavger_prep_gridding_correction
 
     ! destructor
 
