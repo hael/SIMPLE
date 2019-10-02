@@ -72,7 +72,6 @@ end type heap_vars
 
 type :: polarft_corrcalc
     !private
-    integer                          :: nk         = 0        !< number of frequencies included in alignment
     integer                          :: nptcls     = 1        !< the total number of particles in partition (logically indexded [fromp,top])
     integer                          :: nrefs      = 1        !< the number of references (logically indexded [1,nrefs])
     integer                          :: nrots      = 0        !< number of in-plane rotations for one pft (determined by radius of molecule)
@@ -255,7 +254,6 @@ contains
         self%nrefs       = nrefs                                       !< the number of references (logically indexded [1,nrefs])
         self%nrots       = round2even(twopi * real(params_glob%ring2)) !< number of in-plane rotations for one pft  (determined by radius of molecule)
         self%pftsz       = self%nrots / 2                              !< size of reference (nrots/2) (number of vectors used for matching)
-        self%nk          = params_glob%kstop - params_glob%kfromto(1) + 1
         ! allocate optimal low-pass filter if matched filter is on
         if( params_glob%l_match_filt )then
             if( params_glob%l_pssnr )then
@@ -1284,7 +1282,6 @@ contains
             end if
             euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, i))
         end do
-        euclid = euclid / real(self%nk)
     end function calc_euclid_for_rot
 
     function calc_euclid_for_rot_8( self, pft_ref, i, irot ) result( euclid )
@@ -1313,7 +1310,6 @@ contains
             end if
             euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, i))
         end do
-        euclid = euclid / real(self%nk,dp)
     end function calc_euclid_for_rot_8
 
     function calc_corrk_for_rot( self, pft_ref, i, k, irot ) result( corr )
@@ -1394,7 +1390,6 @@ contains
             euclid =          sum(csq(pft_ref(               1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
             euclid = euclid + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
         end if
-        calc_euclidk_for_rot = euclid / real(self%nk)
     end function calc_euclidk_for_rot
 
     subroutine genfrc( self, iref, iptcl, irot, frc )
@@ -1554,7 +1549,6 @@ contains
             sumsqref  = sum(csq(pft_ref(:,k)))
             euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
         end do
-        euclids = euclids / real(self%nk)
     end subroutine gencorrs_euclid_1
 
     subroutine gencorrs_euclid_2( self, iref, iptcl, shvec, euclids )
@@ -1590,7 +1584,6 @@ contains
             sumsqref  = sum(csq(pft_ref(:,k)))
             euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
         end do
-        euclids = euclids / real(self%nk)
     end subroutine gencorrs_euclid_2
 
     subroutine gencorrs_euclid_mir( self, iref, iptcl, euclids, euclids_mir )
@@ -1618,8 +1611,6 @@ contains
             euclids_mir(:) = euclids(:) + (2. * keuclids_mir(:) - sumsqptcl - sumsqref ) / &
                 (2. * self%sigma2_noise(k, self%pinds(iptcl)))
         end do
-        euclids     = euclids     / real(self%nk)
-        euclids_mir = euclids_mir / real(self%nk)
     end subroutine gencorrs_euclid_mir
 
     subroutine gencorrs_1( self, iref, iptcl, cc )
@@ -2185,7 +2176,6 @@ contains
             grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
-        grad = grad / real(self%nk,dp)
     end subroutine gencorr_euclid_grad_for_rot_8
 
     subroutine gencorr_euclid_grad_only_for_rot_8( self, iref, iptcl, shvec, irot, grad )
@@ -2232,7 +2222,6 @@ contains
             grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
                 / self%sigma2_noise(k, self%pinds(iptcl))
         end do
-        grad = grad / real(self%nk,dp)
     end subroutine gencorr_euclid_grad_only_for_rot_8
 
     subroutine gencorr_sigma_contrib( self, iref, iptcl, shvec, irot, sigma_contrib )
@@ -2264,7 +2253,7 @@ contains
         do k = params_glob%kfromto(1), params_glob%kfromto(2)
             sigma_contrib(k) = self%calc_euclidk_for_rot(pft_ref, i, k, irot)
         end do
-        sigma_contrib = 0.5 * sigma_contrib
+        sigma_contrib = 0.5 * sigma_contrib / real(self%pftsz)
     end subroutine gencorr_sigma_contrib
 
     real function specscore_1( self, iref, iptcl, irot )

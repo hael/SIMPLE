@@ -53,11 +53,14 @@ contains
     ! CONSTRUCTOR
 
     !>  \brief  is a constructor of the expanded Fourier matrix
-    subroutine expand_cmat( self, alpha )
-        class(projector), intent(inout) :: self
-        real,             intent(in)    :: alpha !< oversampling factor
+    subroutine expand_cmat( self, alpha, norm4proj )
+        class(projector),  intent(inout) :: self
+        real,              intent(in)    :: alpha !< oversampling factor
+        logical, optional, intent(in)    :: norm4proj
         integer, allocatable :: cyck(:), cycm(:), cych(:)
+        real    :: factor
         integer :: h, k, m, phys(3), logi(3), lims(3,2), ldim(3)
+        logical :: l_norm4proj
         call self%kill_expanded
         ldim = self%get_ldim()
         if( .not.self%is_ft() ) THROW_HARD('volume needs to be FTed before call; expand_cmat')
@@ -69,6 +72,12 @@ contains
         lims               = self%loop_lims(3)
         self%ldim_exp(:,2) = maxval(abs(lims)) + ceiling(self%kbwin%get_winsz())
         self%ldim_exp(:,1) = -self%ldim_exp(:,2)
+        ! normalize when working with 2D projections
+        ! not for producing real space projections
+        l_norm4proj = .false.
+        if( present(norm4proj) ) l_norm4proj = norm4proj
+        factor = 1.
+        if( l_norm4proj ) factor = real(product(ldim))**(1./3.)
         allocate( self%cmat_exp( self%ldim_exp(1,1):self%ldim_exp(1,2),&
                                 &self%ldim_exp(2,1):self%ldim_exp(2,2),&
                                 &self%ldim_exp(3,1):self%ldim_exp(3,2)),&
@@ -98,7 +107,7 @@ contains
                 do m = self%ldim_exp(3,1),self%ldim_exp(3,2)
                     logi = [cych(h),cyck(k),cycm(m)]
                     phys = self%comp_addr_phys(logi)
-                    self%cmat_exp(h,k,m) = self%get_fcomp(logi, phys)
+                    self%cmat_exp(h,k,m) = factor * self%get_fcomp(logi, phys)
                 enddo
             enddo
         enddo
@@ -346,8 +355,7 @@ contains
         w   = w1 * w2 * w3
         N   = sum( w  *  self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) )
         D   = sum( w )
-        D2   = D**2
-        !! FIXME D2 uninitialized
+        D2  = D**2
         res(1) = cmplx( ( sum( wt  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wt  ) ) / D2 )
         res(2) = cmplx( ( sum( wp  * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wp  ) ) / D2 )
         res(3) = cmplx( ( sum( wph * self%cmat_exp(win(1,1):win(2,1),win(1,2):win(2,2),win(1,3):win(2,3)) ) * D - N * sum( wph ) ) / D2 )

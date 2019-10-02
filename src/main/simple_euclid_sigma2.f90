@@ -109,7 +109,7 @@ contains
                 read(unit=funit,pos=addr) sigma2_noise_n
                 defined = any(sigma2_noise_n > TINY)
                 if( .not.defined .and. ptcl_mask(iptcl) )then
-                    print *,'UNDEFINED SIGMA2:', iptcl
+                    THROW_WARN('UNDEFINED SIGMA2: '//int2str(iptcl))
                 endif
                 ! sets mask
                 if( ptcl_mask(iptcl) ) self%sigma2_exists_msk(self%pinds(iptcl)) = .true.
@@ -173,7 +173,7 @@ contains
                 shvec  = o_peaks(iptcl)%get_2Dshift(ipeak)
                 irot   = pftcc_glob%get_roind(360. - o_peaks(iptcl)%e3get(ipeak))
                 call pftcc_glob%gencorr_sigma_contrib(iref, iptcl, shvec, irot, sigma_contrib)
-                sigmas_tmp = sigmas_tmp + 0.5 * weight * sigma_contrib
+                sigmas_tmp = sigmas_tmp + weight * sigma_contrib
             end do
             self%sigma2_noise(:,self%pinds(iptcl)) = sigmas_tmp
         end do

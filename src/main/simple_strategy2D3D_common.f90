@@ -678,7 +678,7 @@ contains
         ! FT volume
         call build_glob%vol%fft()
         ! expand for fast interpolation
-        call build_glob%vol%expand_cmat(params_glob%alpha)
+        call build_glob%vol%expand_cmat(params_glob%alpha, norm4proj=.true.)
         call o%kill
     end subroutine preprefvol
 

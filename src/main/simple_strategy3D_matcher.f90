@@ -507,7 +507,7 @@ contains
                     ! copy odd volume
                     build_glob%vol_odd = build_glob%vol
                     ! expand for fast interpolation
-                    call build_glob%vol_odd%expand_cmat(params_glob%alpha)
+                    call build_glob%vol_odd%expand_cmat(params_glob%alpha,norm4proj=.true.)
                     ! PREPARE EVEN REFERENCES
                     call preprefvol(pftcc,  cline, s, params_glob%vols_even(s), do_center, xyz, .true.)
                     !$omp parallel do default(shared) private(iref, o_tmp) schedule(static) proc_bind(close)

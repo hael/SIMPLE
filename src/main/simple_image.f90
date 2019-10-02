@@ -6391,12 +6391,12 @@ contains
             enddo
         endif
         call pc%ifft()
-        call pc%div(sqrt(real(sqsum1*sqsum2)/real(product(pc%ldim))))
+        call pc%div(sqrt(real(sqsum1*sqsum2)))
         if(present(border) .and. border > 1) then
-                pc%rmat(1:border,:,1) = 0.
-                pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
-                pc%rmat(:,1:border,1) = 0.
-                pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
+            pc%rmat(1:border,:,1) = 0.
+            pc%rmat(pc%ldim(1)-border:pc%ldim(1),:,1) = 0.
+            pc%rmat(:,1:border,1) = 0.
+            pc%rmat(:,pc%ldim(2)-border:pc%ldim(2),1) = 0.
         endif
     end subroutine phase_corr
 
@@ -7409,8 +7409,8 @@ contains
         if( shift_to_phase_origin ) call self%shift_phorig
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
         ! now scale the values so that a ifft() of the output yields the
-        ! original image back, rather than a scaled version
-        self%cmat = self%cmat/sqrt(real(product(self%ldim)))
+        ! original image back following FFTW
+        self%cmat = self%cmat/real(product(self%ldim))
         self%ft = .true.
     end subroutine fwd_ft
 
@@ -7418,8 +7418,6 @@ contains
         class(image), intent(inout) :: self
         if( self%ft )then
             call fftwf_execute_dft_c2r(self%plan_bwd,self%cmat,self%rmat)
-            ! now scale the values accordingly
-            self%rmat = self%rmat/sqrt(real(product(self%ldim)))
             self%ft = .false.
             if( shift_to_phase_origin ) call self%shift_phorig
         endif
