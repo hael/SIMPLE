@@ -2044,7 +2044,7 @@ contains
         rmat_rot = 0.
         inpls    = 0.
         do i=1,pop_max
-            call imgs_class(i)%new(ldim, smpd)
+            call imgs_class(i)%new(ldim, smpd, wthreads=.false.)
         end do
         call img_cavg%new(ldim, smpd)
         ! loop over classes
@@ -2067,7 +2067,10 @@ contains
             ! rotate the images (in parallel)
             !$omp parallel do default(shared) private(i,rmat_rot) schedule(static) proc_bind(close)
             do i=1,size(pinds)
-                call imgs_class(i)%rtsq_serial(-inpls(i,1), -inpls(i,2), -inpls(i,3), rmat_rot)
+                call imgs_class(i)%fft
+                call imgs_class(i)%shift2Dserial([-inpls(i,2),-inpls(i,3)])
+                call imgs_class(i)%ifft
+                call imgs_class(i)%rtsq_serial(inpls(i,1), 0., 0., rmat_rot)
                 call imgs_class(i)%set_rmat(rmat_rot)
             end do
             !$omp end parallel do
@@ -2092,7 +2095,7 @@ contains
         if( allocated(pops)   ) deallocate(pops)
         if( allocated(pinds)  ) deallocate(pinds)
         ! end gracefully
-        call simple_end('**** SIMPLE_WRITE_CLASSES NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_WRITE_CLASSES NORMAL STOP ****')
     end subroutine exec_write_classes
 
 end module simple_commander_cluster2D
