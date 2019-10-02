@@ -600,7 +600,7 @@ contains
             ! most likely corrupted frame
         else
             call self%frames_sh(iframe)%ifft
-            call self%frames_sh(iframe)%div(sqrt(real(sqsum_ref*sqsum_frame/real(product(self%ldim_sc),dp))))
+            call self%frames_sh(iframe)%div(sqrt(real(sqsum_ref*sqsum_frame)))
             ! find peak
             call self%frames_sh(iframe)%get_rmat_ptr(pcorrs)
             center = self%ldim_sc(1:2)/2+1
@@ -705,14 +705,27 @@ contains
     subroutine group_weights( self, w1, w2 )
         class(motion_align_hybrid), intent(in)  :: self
         real,                       intent(out) :: w1,w2
-        if( self%px == 0 .and. self%py == 0 )then
-            ! iso
-            w1 = 0.25*exp(-real(self%lp_updates))
-            w2 = 0.
+        if( params_glob%groupframes == 'dev' )then
+            ! more permissive weights
+            if( self%px == 0 .and. self%py == 0 )then
+                ! iso
+                w1 = 0.25*exp(-real(self%lp_updates+1))
+                w2 = 0.
+            else
+                ! aniso
+                w1 = 0.25*exp(-real(self%lp_updates))
+                w2 = 0.25*exp(-real(self%lp_updates+1))
+            endif
         else
-            ! aniso
-            w1 = 0.5*exp(-real(self%lp_updates)/2.)
-            w2 = 0.5*exp(-real(self%lp_updates+1)/2.)
+            if( self%px == 0 .and. self%py == 0 )then
+                ! whole micrograph
+                w1 = 0.25*exp(-real(self%lp_updates+1))
+                w2 = 0.
+            else
+                ! patch
+                w1 = 0.5*exp(-real(self%lp_updates))
+                w2 = 0.5*exp(-real(self%lp_updates+1))
+            endif
         endif
     end subroutine group_weights
 

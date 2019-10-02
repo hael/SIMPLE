@@ -211,7 +211,6 @@ contains
         if( params_glob%l_dose_weight )then
             if( allocated(acc_doses) ) deallocate(acc_doses)
             allocate( acc_doses(nframes), stat=alloc_stat )
-            if(alloc_stat.ne.0)call allocchk('motion_correct_init; simple_motion_correct, acc_doses')
             kV = ctfvars%kv
             time_per_frame = params_glob%exp_time/real(nframes)  ! unit: s
             dose_rate      = params_glob%dose_rate
@@ -343,7 +342,6 @@ contains
     subroutine motion_correct_iso_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf)
         type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
         type(image),   allocatable :: movie_frames_shifted(:)
-        real,          allocatable :: filtarr(:,:)
         real                       :: wvec(1:nframes), scalar_weight
         integer                    :: iframe
         scalar_weight = 1. / real(nframes)
@@ -376,22 +374,13 @@ contains
         where( frameweights < 1.e-6 ) wvec = 0.
         call sum_frames(movie_sum_ctf, wvec)
         ! Weighted, filtered sum for micrograph
-        if( params_glob%l_dose_weight )then
-            call gen_dose_weight_filter(filtarr, movie_frames_shifted)
-            !$omp parallel do default(shared) private(iframe) proc_bind(close) schedule(static)
-            do iframe=1,nframes
-                call movie_frames_shifted(iframe)%apply_filter_serial(filtarr(iframe,:))
-            end do
-            !$omp end parallel do
-            deallocate(filtarr)
-        endif
+        call apply_dose_weighting(movie_frames_shifted)
         call sum_frames(movie_sum_corrected,frameweights)
         ! cleanup
         do iframe=1,nframes
             call movie_frames_shifted(iframe)%kill
         end do
         deallocate(movie_frames_shifted)
-
         contains
 
             subroutine sum_frames( img_sum, weights )
@@ -412,7 +401,6 @@ contains
                 call img_sum%set_ft(.true.)
                 call img_sum%set_cmat(cmat_sum)
                 call img_sum%ifft()
-                nullify(pcmat)
             end subroutine sum_frames
 
     end subroutine motion_correct_iso_calc_sums
@@ -541,7 +529,7 @@ contains
         type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
         real,            pointer :: prmat(:,:,:)
         type(image), allocatable :: movie_frames_shifted_patched(:)
-        real,        allocatable :: rmat_sum(:,:,:), filtarr(:,:)
+        real,        allocatable :: rmat_sum(:,:,:)
         real              :: scalar_weight
         integer           :: iframe
         scalar_weight = 1. / real(nframes)
@@ -551,26 +539,26 @@ contains
         ! micrograph for CTF estimation
         !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=1,nframes
-            if( frameweights(iframe) < 1.e-6 ) cycle
-            call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
-            call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
-            rmat_sum(:,:,1) = rmat_sum(:,:,1) + scalar_weight*prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
+            if( frameweights(iframe) < 1.e-6 )then
+            else
+                call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
+                call movie_frames_shifted_patched(iframe)%get_rmat_ptr(prmat)
+                rmat_sum(:,:,1) = rmat_sum(:,:,1) + scalar_weight*prmat(1:ldim_scaled(1),1:ldim_scaled(2),1)
+            endif
+            if( params_glob%l_dose_weight ) call movie_frames_shifted_saved(iframe)%fft
         end do
         !$omp end parallel do
         call movie_sum_ctf%set_rmat(rmat_sum)
         ! micrograph
         call movie_sum_corrected%new(ldim_scaled, smpd_scaled)
-        if( params_glob%l_dose_weight ) call gen_dose_weight_filter(filtarr, movie_frames_shifted_saved)
+        call apply_dose_weighting(movie_frames_shifted_saved(:))
         rmat_sum = 0.
         !$omp parallel do default(shared) private(iframe,prmat) proc_bind(close) schedule(static) reduction(+:rmat_sum)
         do iframe=1,nframes
             if( frameweights(iframe) < 1.e-6 ) cycle
+            call movie_frames_shifted_saved(iframe)%ifft
             if( params_glob%l_dose_weight )then
-                ! dose weighing
-                call movie_frames_shifted_saved(iframe)%fft
-                call movie_frames_shifted_saved(iframe)%apply_filter_serial(filtarr(iframe,:))
                 ! real space interpolation
-                call movie_frames_shifted_saved(iframe)%ifft
                 call motion_patch%polytransfo(iframe, movie_frames_shifted_saved(iframe), movie_frames_shifted_patched(iframe))
             endif
             ! sum
@@ -630,29 +618,50 @@ contains
 
     ! COMMON PRIVATE UTILITY METHODS
 
-    subroutine gen_dose_weight_filter( filtarr, movie_frames )
-        real, allocatable,                          intent(inout) :: filtarr(:,:)
-        type(image), allocatable, target, optional, intent(in)    :: movie_frames(:)
-        type(image), pointer :: movie_frames_here(:)
-        real    :: ksum_sq
-        integer :: k, sz, filtsz, iframe
-        if( allocated(filtarr) )deallocate(filtarr)
-        if( present(movie_frames) ) then
-            movie_frames_here => movie_frames
-        else
-            movie_frames_here => movie_frames_scaled
-        end if
-        sz = movie_frames_here(1)%get_filtsz()
-        filtsz = 2*sz ! the filter goes well beyond nyquist so we dont'have to worry about dimensions
-        allocate(filtarr(nframes,filtsz))
-        do iframe=1,nframes
-            filtarr(iframe,:) = acc_dose2filter(movie_frames_here(1), acc_doses(iframe), kV, filtsz)
-        end do
-        ! frame normalisation
-        do k = 1,filtsz
-            ksum_sq      = sum(frameweights * filtarr(:,k)**2.)
-            filtarr(:,k) = filtarr(:,k) / sqrt(ksum_sq / sum(frameweights))
+    ! Following Grant & Grigorieff; eLife 2015;4:e06980
+    ! Frames assumed in fourier space
+    subroutine apply_dose_weighting( frames )
+        class(image), intent(inout) :: frames(nframes)
+        real, parameter :: A=0.245, B=-1.665, C=2.81
+        real    :: frame_dose(nframes)
+        real    :: twoNe, smpd, q, sumqsq, qnorm, spafreq, limhsq,limksq
+        integer :: nrflims(3,2), ldim(3), phys(3), iframe, h,k
+        if( .not.params_glob%l_dose_weight ) return
+        if( .not.frames(1)%is_ft() ) THROW_HARD('Frames should be in in the Fourier domain')
+        nrflims = frames(1)%loop_lims(2)
+        smpd    = frames(1)%get_smpd()
+        ! doses
+        ldim   = frames(1)%get_ldim()
+        limhsq = (real(ldim(1))*smpd)**2.
+        limksq = (real(ldim(2))*smpd)**2.
+        do iframe = 1,nframes
+            frame_dose(iframe) = acc_doses(iframe)
+            if( is_equal(kV,200.) )then
+                frame_dose(iframe) = frame_dose(iframe) / 0.8
+            else if( is_equal(kV,100.) )then
+                frame_dose(iframe) = frame_dose(iframe) / 0.64
+            endif
         enddo
-    end subroutine gen_dose_weight_filter
+        !$omp parallel do collapse(2) private(h,k,spafreq,twone,phys,sumqsq,iframe,q,qnorm)&
+        !$omp default(shared) schedule(static) proc_bind(close)
+        do h = nrflims(1,1),nrflims(1,2)
+            do k = nrflims(2,1),nrflims(2,2)
+                spaFreq = sqrt( real(h*h)/limhsq + real(k*k)/limksq )
+                twoNe   = 2. * (A*spaFreq**B + C)
+                phys    = frames(1)%comp_addr_phys([h,k,0])
+                sumqsq  = 0.
+                do iframe = 1,nframes
+                    q      = exp(-frame_dose(iframe)/twoNe)
+                    sumqsq = sumqsq + q*q
+                    call frames(iframe)%mul_cmat_at(phys, q)
+                enddo
+                qnorm = sqrt(sumqsq)
+                do iframe = 1,nframes
+                    call frames(iframe)%div_cmat_at(phys, qnorm)
+                enddo
+            enddo
+        enddo
+        !$omp end parallel do
+    end subroutine apply_dose_weighting
 
 end module simple_motion_correct

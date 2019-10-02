@@ -683,7 +683,9 @@ contains
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         logical           :: l_groupframes
-        l_groupframes = (trim(params_glob%groupframes).eq.'patch') .or. (trim(params_glob%groupframes).eq.'always')
+        l_groupframes = (trim(params_glob%groupframes).eq.'patch')&
+            &.or. (trim(params_glob%groupframes).eq.'always')&
+            &.or. (trim(params_glob%groupframes).eq.'dev')
         self%shifts_patches = 0.
         allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')
