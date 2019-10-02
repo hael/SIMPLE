@@ -47,6 +47,7 @@ type :: ft_expanded
     procedure          :: copy
     ! arithmetics
     procedure          :: add
+    procedure          :: add_uncond           !< add "unconditionally", i.e. w<0 is allowed; also, don't calculate sumsq
     procedure          :: subtr
     procedure          :: div
     ! modifiers
@@ -249,6 +250,16 @@ contains
         if( ww > 0. ) self%cmat = self%cmat + self2add%cmat*ww
         call self%calc_sumsq
     end subroutine add
+
+    subroutine add_uncond( self, self2add, w )
+        class(ft_expanded), intent(inout) :: self
+        class(ft_expanded), intent(in)    :: self2add
+        real, optional,     intent(in)    :: w
+        real :: ww
+        ww =1.0
+        if( present(w) ) ww = w
+        self%cmat = self%cmat + self2add%cmat*ww
+    end subroutine add_uncond
 
     subroutine subtr( self, self2subtr, w )
         class(ft_expanded), intent(inout) :: self
