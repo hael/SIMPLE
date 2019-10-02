@@ -157,6 +157,7 @@ type(simple_program), target :: tseries_preproc
 type(simple_program), target :: update_project
 type(simple_program), target :: vizoris
 type(simple_program), target :: volops
+type(simple_program), target :: write_classes
 
 ! declare common params here, with name same as flag
 type(simple_input_param) :: angerr
@@ -351,6 +352,7 @@ contains
         call new_update_project
         call new_vizoris
         call new_volops
+        call new_write_classes
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; make_user_interface, DONE'
     end subroutine make_user_interface
 
@@ -434,6 +436,7 @@ contains
         call push2prg_ptr_array(update_project)
         call push2prg_ptr_array(vizoris)
         call push2prg_ptr_array(volops)
+        call push2prg_ptr_array(write_classes)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_prg_ptr_array, DONE'
         contains
 
@@ -619,6 +622,8 @@ contains
                 ptr2prg => vizoris
             case('volops')
                 ptr2prg => volops
+            case('write_classes')
+                ptr2prg => write_classes
             case DEFAULT
                 ptr2prg => null()
         end select
@@ -713,6 +718,7 @@ contains
         write(logfhandle,'(A)') update_project%name
         write(logfhandle,'(A)') vizoris%name
         write(logfhandle,'(A)') volops%name
+        write(logfhandle,'(A)') write_classes%name
     end subroutine list_shmem_prgs_in_ui
 
     ! private class methods
@@ -3871,6 +3877,31 @@ contains
         ! computer controls
         call volops%set_input('comp_ctrls', 1, nthr)
     end subroutine new_volops
+
+    subroutine new_write_classes
+        ! PROGRAM SPECIFICATION
+        call write_classes%new(&
+        &'write_classes',&                                                                                  ! name
+        &'Writes the class averages and the individual (rotated and shifted) particles part of the class',& ! descr_short
+        &'is a program for the class averages and the individual (rotated and shifted) particles part of the classto to individual stacks',& ! descr_long
+        &'simple_exec',&                                                                                    ! executable
+        &0, 0, 0, 0, 0, 0, 0, .true.)                                                                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        ! <empty>
+        ! parameter input/output
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        ! <empty>
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_write_classes
 
     ! instance methods
 

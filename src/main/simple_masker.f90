@@ -272,8 +272,9 @@ contains
                 ! apply cosine egde to soften mask (to avoid Fourier artefacts)
                 call cc_img%cos_edge(edge)
                 call cc_img%write(MSK_OTSU, i)
-                ! remove negative values before applyting the mask
-                call imgs(i)%remove_neg
+                ! zero negative values before applyting the mask
+                call imgs(i)%zero_neg
+                ! call imgs(i)%remove_neg
                 ! apply
                 call imgs(i)%mul(cc_img)
             else

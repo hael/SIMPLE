@@ -40,6 +40,7 @@ type(export_relion_commander)         :: xexport_relion
 
 ! SINGLE-PARTICLE WORKFLOW PROGRAMS
 type(cluster_cavgs_commander)   :: xcluster_cavgs
+type(write_classes_commander)   :: xwrite_classes
 type(symaxis_search_commander)  :: xsymsrch
 type(symmetry_test_commander)   :: xsymtst
 type(radial_sym_test_commander) :: xradsymtst
@@ -149,6 +150,8 @@ select case(prg)
     ! SINGLE-PARTICLE WORKFLOW PROGRAMS
     case('cluster_cavgs')
         call xcluster_cavgs%execute(cline)
+    case('write_classes')
+        call xwrite_classes%execute(cline)
     case( 'symaxis_search' )
         call xsymsrch%execute( cline )
     case( 'symmetry_test' )

@@ -357,7 +357,6 @@ contains
         call simple_end('**** SIMPLE_CLUSTER2D_NANO NORMAL STOP ****')
     end subroutine exec_cluster2D_nano_distr
 
-
     subroutine exec_automask2D_nano( self, cline )
         use simple_masker, only: automask2D
         use simple_image,  only: image

@@ -305,6 +305,7 @@ contains
     procedure          :: insert_lowres
     procedure          :: insert_lowres_serial
     procedure          :: inv
+    procedure          :: zero_neg
     procedure          :: remove_neg
     procedure          :: ran
     procedure          :: gauran
@@ -6713,9 +6714,16 @@ contains
         self%rmat = -1.*self%rmat
     end subroutine inv
 
-    subroutine remove_neg( self )
+    subroutine zero_neg( self )
         class(image), intent(inout) :: self
         where( self%rmat < TINY ) self%rmat = 0.
+    end subroutine zero_neg
+
+    subroutine remove_neg( self )
+        class(image), intent(inout) :: self
+        real :: minv
+        minv = minval(self%rmat(:self%ldim(1),:self%ldim(2),:self%ldim(3)))
+        self%rmat = self%rmat + abs(minv)
     end subroutine remove_neg
 
     !>  \brief  is for making a random image (0,1)

@@ -7,6 +7,7 @@ use simple_commander_base, only: commander_base
 use simple_parameters,     only: parameters, params_glob
 use simple_sp_project,     only: sp_project
 use simple_qsys_env,       only: qsys_env
+use simple_image,          only: image
 use simple_qsys_funs
 implicit none
 
@@ -21,6 +22,7 @@ public :: cavgassemble_commander
 public :: check_2Dconv_commander
 public :: rank_cavgs_commander
 public :: cluster_cavgs_commander
+public :: write_classes_commander
 private
 #include "simple_local_flags.inc"
 
@@ -68,6 +70,10 @@ type, extends(commander_base) :: cluster_cavgs_commander
   contains
     procedure :: execute      => exec_cluster_cavgs
 end type cluster_cavgs_commander
+type, extends(commander_base) :: write_classes_commander
+  contains
+    procedure :: execute      => exec_write_classes
+end type write_classes_commander
 
 contains
 
@@ -350,7 +356,6 @@ contains
         contains
 
             subroutine rescale_cavgs(cavgs)
-                use simple_image, only: image
                 character(len=*), intent(in) :: cavgs
                 type(image)                  :: img, img_pad
                 integer                      :: icls, iostat
@@ -372,7 +377,6 @@ contains
 
     subroutine exec_cluster2D_stream( self, cline )
         use simple_projection_frcs, only: projection_frcs
-        use simple_image,           only: image
         use simple_oris,            only: oris
         use simple_ori,             only: ori
         class(cluster2D_commander_stream), intent(inout) :: self
@@ -2005,5 +2009,90 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
     end subroutine exec_cluster_cavgs
+
+    subroutine exec_write_classes( self, cline )
+        class(write_classes_commander), intent(inout) :: self
+        class(cmdline),                 intent(inout) :: cline
+        type(parameters) :: params
+        type(sp_project) :: spproj
+        type(image)      :: img_cavg
+        character(len=:),   allocatable :: cavgsstk, stkname, classname
+        type(image),        allocatable :: imgs_class(:)
+        real,               allocatable :: states(:), inpls(:,:)
+        integer,            allocatable :: pops(:), pinds(:)
+        real(kind=c_float), allocatable :: rmat_rot(:,:,:)
+        integer :: ncls, n, ldim(3), icls, pop_max, ind_in_stk, i, cnt
+        real    :: smpd
+        if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ! get class average stack
+        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
+        call find_ldim_nptcls(cavgsstk, ldim, n)
+        ldim(3) = 1
+        if( n /= ncls ) THROW_HARD('Incosistent # classes in project file vs cavgs stack; exec_write_classes')
+        ! get state flag array
+        states = spproj%os_cls2D%get_all('state')
+        ! get ncls from ptcl2D field
+        n = spproj%os_ptcl2D%get_n('class')
+        if( n /= ncls ) THROW_HARD('Incosistent # classes in ptcl2D field of spproj vs cavgs stack; exec_write_classes')
+        ! find out maximum population and allocate image arrays accordingly
+        call spproj%os_ptcl2D%get_pops(pops, 'class')
+        pop_max = maxval(pops)
+        write(logfhandle,'(A,I5)') '>>> MAXIMUM CLASS POPULATION: ', pop_max
+        allocate(imgs_class(pop_max), inpls(pop_max,3), rmat_rot(ldim(1),ldim(2),1))
+        rmat_rot = 0.
+        inpls    = 0.
+        do i=1,pop_max
+            call imgs_class(i)%new(ldim, smpd)
+        end do
+        call img_cavg%new(ldim, smpd)
+        ! loop over classes
+        do icls=1,ncls
+            if( states(icls) < 0.5 ) cycle
+            ! get particle indices of class
+            call spproj%os_ptcl2D%get_pinds(icls, 'class', pinds)
+            if( .not. allocated(pinds) ) cycle
+            ! read the class average
+            call img_cavg%read(cavgsstk, icls)
+            ! read the images and get the in-plane parameters
+            do i=1,size(pinds)
+                ! read
+                call spproj%get_stkname_and_ind('ptcl2D', pinds(i), stkname, ind_in_stk)
+                call imgs_class(i)%read(stkname, ind_in_stk)
+                ! get params
+                inpls(i,1)  = spproj%os_ptcl2D%e3get(pinds(i))
+                inpls(i,2:) = spproj%os_ptcl2D%get_2Dshift(pinds(i))
+            end do
+            ! rotate the images (in parallel)
+            !$omp parallel do default(shared) private(i,rmat_rot) schedule(static) proc_bind(close)
+            do i=1,size(pinds)
+                call imgs_class(i)%rtsq_serial(-inpls(i,1), -inpls(i,2), -inpls(i,3), rmat_rot)
+                call imgs_class(i)%set_rmat(rmat_rot)
+            end do
+            !$omp end parallel do
+            ! make a filename for the class
+            classname = 'class'//int2str_pad(icls,5)//'.mrcs'
+            ! write the class average first, followed by the rotated and shifted particles
+            call img_cavg%write(classname, 1)
+            cnt = 1
+            do i=1,size(pinds)
+                cnt = cnt + 1
+                call imgs_class(i)%write(classname, cnt)
+            end do
+        end do
+        ! destruct
+        call spproj%kill
+        call img_cavg%kill
+        do i=1,size(imgs_class)
+            call imgs_class(i)%kill
+        end do
+        deallocate(imgs_class, inpls, rmat_rot)
+        if( allocated(states) ) deallocate(states)
+        if( allocated(pops)   ) deallocate(pops)
+        if( allocated(pinds)  ) deallocate(pinds)
+        ! end gracefully
+        call simple_end('**** SIMPLE_WRITE_CLASSES NORMAL STOP ****', print_simple=.false.)
+    end subroutine exec_write_classes
 
 end module simple_commander_cluster2D
