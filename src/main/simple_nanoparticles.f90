@@ -56,6 +56,7 @@ type :: nanoparticle
     procedure, private :: distances_distribution
     procedure          :: atom_intensity_stats
     procedure          :: validate_atomic_positions
+    procedure, private :: determine_atom_composition
     ! phase correlation
     procedure          :: phasecorrelation_nano_gaussian
     ! clustering
@@ -67,8 +68,8 @@ type :: nanoparticle
     ! execution
     procedure          :: identify_atomic_pos
     procedure          :: detect_atoms
-    ! comparison
     procedure          :: compare_atomic_models
+    procedure          :: atoms_composition
     ! visualization and output
     procedure          :: write_centers
     procedure          :: print_asym_unit
@@ -243,7 +244,6 @@ contains
     ! and save it in the global variable centers.
     ! If coords is present, it saves it also in coords.
     subroutine find_centers(self, img_bin, img_cc, coords)
-       use simple_atoms, only: atoms
        class(nanoparticle),          intent(inout) :: self
        type(image), optional,        intent(inout) :: img_bin, img_cc
        real, optional, allocatable,  intent(out)   :: coords(:,:)
@@ -414,10 +414,9 @@ contains
     end function ang3D_vecs
 
     ! FORMULA: phasecorr = ifft2(fft2(field).*conj(fft2(reference)));
-    subroutine phasecorrelation_nano_gaussian(self,otsu_thresh)
+    subroutine phasecorrelation_nano_gaussian(self)
         use simple_segmentation
         class(nanoparticle), intent(inout) :: self
-        real,                intent(out)   :: otsu_thresh
         type(image) :: one_atom
         type(image) :: phasecorr
         type(atoms) :: atom
@@ -435,24 +434,7 @@ contains
         call self%img%phase_corr(one_atom,phasecorr,1.)
         call phasecorr%write(PATH_HERE//basename(trim(self%fbody))//'CorrFiltered.mrc')
         call self%img%copy(phasecorr)
-        call otsu_nano(self%img,o_t)
-        otsu_thresh = o_t
         call one_atom%kill()
-    contains
-        !Otsu binarization for nanoparticle maps
-        !It considers the gray level value just in the positive range.
-        !It doesn't threshold the map. It just returns the ideal threshold.
-        ! This is based on the implementation of 1D otsu
-         subroutine otsu_nano(img, scaled_thresh)
-             use simple_math, only : otsu
-             type(image),    intent(inout) :: img
-             real,           intent(out)   :: scaled_thresh !returns the threshold in the correct range
-             real, pointer     :: rmat(:,:,:)
-             real, allocatable :: x(:)
-             call img%get_rmat_ptr(rmat)
-             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
-             call otsu(x, scaled_thresh)
-         end subroutine otsu_nano
     end subroutine phasecorrelation_nano_gaussian
 
     ! This subrotuine takes in input a nanoparticle and
@@ -461,9 +443,8 @@ contains
     ! Among those threshold, the selected one is the for which
     ! tha correlation between the raw map and a simulated distribution
     ! obtained with that threshold reaches the maximum value.
-    subroutine nano_bin( self, otsu_thresh )
+    subroutine nano_bin( self )
         class(nanoparticle), intent(inout) :: self
-        real,                intent(in)    :: otsu_thresh !staring point for threshold refinement
         type(image)       :: img_bin_thresh(N_THRESH/2-1)
         type(image)       :: img_ccs_thresh(N_THRESH/2-1)
         type(image)       :: pc(N_THRESH/2-1)
@@ -473,9 +454,11 @@ contains
         real,    allocatable :: x_mat(:)  !vectorization of the volume
         real,    allocatable :: coords(:,:)
         real,    allocatable :: rmat(:,:,:)
-        integer ::  i, cc, t
+        integer :: i, cc, t
+        real    :: otsu_thresh
         real    :: x_thresh(N_THRESH/2-1)
         real    :: step, maximum, mm(2)
+        call otsu_nano(self%img,otsu_thresh)
         write(logfhandle,*) '****binarization, init'
         rmat = self%img%get_rmat()
         x_mat = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) >= 0.)
@@ -545,6 +528,21 @@ contains
         if(allocated(coords)) deallocate(coords)
         call simulated_distrib%kill
         write(logfhandle,*) '****binarization, completed'
+    contains
+        !Otsu binarization for nanoparticle maps
+        !It considers the gray level value just in the positive range.
+        !It doesn't threshold the map. It just returns the ideal threshold.
+        ! This is based on the implementation of 1D otsu
+         subroutine otsu_nano(img, scaled_thresh)
+             use simple_math, only : otsu
+             type(image),    intent(inout) :: img
+             real,           intent(out)   :: scaled_thresh !returns the threshold in the correct range
+             real, pointer     :: rmat(:,:,:)
+             real, allocatable :: x(:)
+             call img%get_rmat_ptr(rmat)
+             x = pack(rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) > 0.)
+             call otsu(x, scaled_thresh)
+         end subroutine otsu_nano
     end subroutine nano_bin
 
     ! This subroutine calculates the histogram of the within-atoms
@@ -555,13 +553,11 @@ contains
     ! If coords in input, then it considers just the atom-to-atom
     ! distance between the atoms with centers in coords.
     subroutine distances_distribution(self,coords,volume)
-        use simple_atoms, only : atoms
-        use simple_stat,  only : mad_gau
         class(nanoparticle), intent(inout) :: self
         real,    optional,   intent(in)    :: coords(:,:)
         integer, optional,   intent(in)    :: volume
         real, allocatable :: dist(:)
-        real    :: stdev, med, robust_stdev
+        real    :: stdev, med
         integer :: i, j, n_discard
         logical :: mask(self%n_cc)
         ! Initialisations
@@ -590,17 +586,14 @@ contains
             !$omp end parallel do
             stdev = sqrt(stdev/real(size(coords,dim=2)-1-n_discard))
             med = median(dist)
-            robust_stdev = mad_gau(dist,med)
             if(present(volume)) then
                 write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Average dist atoms vol ', trim(int2str(volume)),':', self%avg_dist_atoms*self%smpd, ' A'
                 write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'StDev   dist atoms vol ', trim(int2str(volume)),':', stdev*self%smpd, ' A'
                 write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'Median  dist atoms vol ', trim(int2str(volume)),':', med*self%smpd, ' A'
-                write(unit = 11, fmt = '(a,a,a,f6.3,a)') 'MadGau  dist atoms vol ', trim(int2str(volume)),':', robust_stdev*self%smpd, ' A'
             else
                 write(unit = 11, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
                 write(unit = 11, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
                 write(unit = 11, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
-                write(unit = 11, fmt = '(a,f6.3,a)') 'MadGau  dist atoms: ', robust_stdev*self%smpd,  ' A'
             endif
             deallocate(dist)
         else
@@ -630,11 +623,9 @@ contains
             enddo
             stdev = sqrt(stdev/real(size(self%centers, dim = 2)-1-n_discard))
             med = median(self%dists)
-            robust_stdev = mad_gau(self%dists,med)
             write(unit = 15, fmt = '(a,f6.3,a)') 'Average dist atoms: ', self%avg_dist_atoms*self%smpd, ' A'
             write(unit = 15, fmt = '(a,f6.3,a)') 'StDev   dist atoms: ', stdev*self%smpd, ' A'
             write(unit = 15, fmt = '(a,f6.3,a)') 'Median  dist atoms: ', med*self%smpd, ' A'
-            write(unit = 15, fmt = '(a,f6.3,a)') 'MadGau  dist atoms: ', robust_stdev*self%smpd, ' A'
             !write on pdb file
             call self%centers_pdb%new(self%n_cc, dummy=.true.)
             do i = 1,self%n_cc
@@ -758,7 +749,7 @@ contains
         call self%img_bin%write(PATH_HERE//basename(trim(self%fbody))//'BIN.mrc')
         call self%img_bin%find_connected_comps(self%img_cc)
         ! Update number of ccs
-        self%n_cc = cnt !update
+        call self%update_self_ncc()
         ! Update and write centers
         call self%find_centers()
         call self%write_centers()
@@ -783,7 +774,7 @@ contains
                 do j = 1, self%ldim(2)
                     do k = 1, self%ldim(3)
                         if(((real(i-new_center1(1)))**2 + (real(j-new_center1(2)))**2 + &
-                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  self%theoretical_radius**2) then
+                        &   (real(k-new_center1(3)))**2)*self%smpd  <=  (0.9*self%theoretical_radius)**2) then
                             if(imat(i,j,k) == n_cc) mask(i,j,k) = .true.
                         endif
                     enddo
@@ -805,7 +796,7 @@ contains
                       do i = 1, self%ldim(1)
                           do j = 1, self%ldim(2)
                               do k = 1, self%ldim(3)
-                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < self%theoretical_radius**2) then
+                                  if(((real(i-new_center2(1)))**2 + (real(j-new_center2(2)))**2 + (real(k-new_center2(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then
                                       if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
                                   endif
                               enddo
@@ -830,7 +821,7 @@ contains
                             do i = 1, self%ldim(1)
                                 do j = 1, self%ldim(2)
                                     do k = 1, self%ldim(3)
-                                        if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + (real(k-new_center3(3)))**2)*self%smpd < self%theoretical_radius**2) then
+                                        if(((real(i-new_center3(1)))**2 + (real(j-new_center3(2)))**2 + (real(k-new_center3(3)))**2)*self%smpd < (0.9*self%theoretical_radius)**2) then ! a little smaller to be sure
                                             if(imat(i,j,k) == n_cc)   mask(i,j,k) = .true.
                                         endif
                                     enddo
@@ -842,6 +833,96 @@ contains
             where((abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc))<TINY) .and. (.not.mask(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)))) rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 0.
         end subroutine split_atom
     end subroutine validate_atomic_positions
+
+    ! This subroutine is meant to distinguish two classes
+    ! of element composition in the atoms. It calculates the correlation
+    ! between the raw map and one atom of composition 1 and 2. The
+    ! selected composition is the one that corresponds to the max
+    ! correlation. TO WRITE BETTER
+    ! ATTENTION: self%img_cc has to be already present.
+    ! It writes the output on a file.
+    subroutine determine_atom_composition(self, element1, element2)
+        class(nanoparticle), intent(inout) :: self
+        character(len=2),    intent(in)    :: element1, element2
+        type(image) :: one_atom, phasecorr1, phasecorr2
+        type(atoms) :: atom
+        integer     :: n_cc
+        real        :: cutoff
+        real        :: maximum1, maximum2
+        real        :: mm(2)
+        logical     :: mask(self%ldim(1),self%ldim(2),self%ldim(3))
+        real, pointer        :: rmat_cc(:,:,:), rmat_phasecorr1(:,:,:), rmat_phasecorr2(:,:,:)
+        integer, allocatable :: sz(:)
+        ! sanity check
+        select case(element1)
+            case('pt')
+            case('pd')
+            case('fe')
+            case('au')
+            case default
+                THROW_HARD('Unknown atom element, element1; determine_atom_composition')
+         end select
+         select case(element2)
+           case('pt')
+           case('pd')
+           case('fe')
+           case('au')
+           case default
+               THROW_HARD('Unknown atom element, element2; determine_atom_composition')
+       end select
+       cutoff = 8.*self%smpd
+       call phasecorr1%new(self%ldim, self%smpd)
+       call phasecorr2%new(self%ldim, self%smpd)
+       call one_atom%new(self%ldim,self%smpd)
+       call atom%new(1)
+       call atom%set_coord(1,self%smpd*(real(self%ldim)/2.)) !DO NOT NEED THE +1
+       call self%img%fft()
+       call self%img_cc%get_rmat_ptr(rmat_cc)
+       call phasecorr1%get_rmat_ptr(rmat_phasecorr1)
+       call phasecorr2%get_rmat_ptr(rmat_phasecorr2)
+       call atom%set_element(1,element1)
+       call atom%convolve(one_atom, cutoff)
+       call one_atom%write('Element1Atom.mrc')
+       call one_atom%fft()
+       call phasecorr1%zero_and_flag_ft()
+       call self%img%phase_corr(one_atom,phasecorr1,1.)
+       call phasecorr1%write('Element1Corr.mrc')
+       call atom%set_element(1,element2)
+       call one_atom%ifft
+       call atom%convolve(one_atom, cutoff)
+       call one_atom%write('Element2Atom.mrc')
+       call one_atom%fft()
+       call phasecorr2%zero_and_flag_ft()
+       call self%img%phase_corr(one_atom,phasecorr2,1.)
+       call phasecorr2%write('Element2Corr.mrc')
+       call self%img%ifft()
+       sz = self%img_cc%size_connected_comps()
+       print *, 'self%n_cc',self%n_cc,'maxval(rmat_cc)',maxval(rmat_cc)
+       open(33, file='AtomComposition')
+       ! TO make it faster maybe you can calculate all the corrs with
+       ! one element and then with the second one.
+        do n_cc = 1, self%n_cc ! fix each atom
+            ! if(sz(n_cc) < 3) cycle !Does it make sense?
+            mask = .false.
+            where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc)) < TINY) mask = .true.
+            maximum1 = maxval(rmat_phasecorr1(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            maximum2 = maxval(rmat_phasecorr2(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)), mask)
+            print *, 'atom', n_cc, 'maximum1', maximum1,'maximum2', maximum2
+            if(maximum1 > maximum2) then
+                write(unit = 33, fmt = '(a,i3,a,a)') 'Atom ', n_cc, ' composition: ', element1
+            elseif(maximum1 < maximum2) then
+                write(unit = 33, fmt = '(a,i3,a,a)') 'Atom ', n_cc, ' composition: ', element2
+            else ! they are the same
+                write(unit = 33, fmt = '(a,i3,a)') 'Atom ', n_cc, ' undetected composition'
+            endif
+        enddo
+        close(33)
+        ! kill
+        call one_atom%kill
+        call phasecorr1%kill
+        call phasecorr2%kill
+        call atom%kill
+    end subroutine determine_atom_composition
 
     subroutine radial_dependent_stats(self,volume)
         class(nanoparticle), intent(inout) :: self
@@ -976,7 +1057,7 @@ contains
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
         call simple_mkdir(trim(self%output_dir)//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_mkdir; ")
         call simple_chdir(trim(self%output_dir)//'/RadialDependentStat',errmsg="simple_nanoparticles :: radial_dependent_stats, simple_chdir; ")
-        open(11, file='RadialDependentStat', position= 'append')
+        open(11, file='RadialDependentStat')
         if(present(volume)) then
             call radial_atoms5A_just%writepdb('vol'//int2str(volume)//'_radial_atoms5A_just')
             call radial_atoms7A_just%writepdb('vol'//int2str(volume)//'_radial_atoms7A_just')
@@ -1305,7 +1386,6 @@ contains
     ! Affinity propagation clustering based on agles wrt vec [0,0,1].
     subroutine affprop_cluster_ang(self)
         use simple_aff_prop
-        use simple_atoms, only : atoms
         class(nanoparticle), intent(inout) :: self
         type(aff_prop)           :: ap_nano
         type(image), allocatable :: img_clusters(:)
@@ -1494,7 +1574,6 @@ contains
     ! and far apart in the surface.
     subroutine affprop_cluster_dist_distr(self)
         use simple_aff_prop
-        use simple_atoms, only : atoms
         class(nanoparticle), intent(inout) :: self
         type(aff_prop)       :: ap_nano
         type(image), allocatable :: img_clusters(:)
@@ -1596,7 +1675,6 @@ contains
         integer :: i
         logical :: print_ar ! for printing aspect ratios statistics
         logical :: print_as ! for printing asymmetric units in c3-sym nanoparticles
-        real    :: ot1, ot2 ! otsh thresholds
         print_ar = .false.
         print_as = .false.
         if(print_as) then
@@ -1611,26 +1689,30 @@ contains
         write(unit = 121, fmt = '(a)') 'and'
         write(unit = 121, fmt = '(a,a)') trim(nano2%fbody), ' ---> vol2'
         write(unit = 121, fmt = '(a)')  '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
-        call nano1%phasecorrelation_nano_gaussian(ot1)
-        call nano2%phasecorrelation_nano_gaussian(ot2)
-        call nano1%binarize(ot1)
-        call nano2%binarize(ot2)
+        call nano1%phasecorrelation_nano_gaussian()
+        call nano2%phasecorrelation_nano_gaussian()
+        call nano1%binarize()
+        call nano2%binarize()
         ! Outliers discarding
         call nano1%discard_outliers()
         call nano2%discard_outliers()
         ! Validate identified positions
         call nano1%validate_atomic_positions()
         call nano2%validate_atomic_positions()
-        ! !Distance distribution calculation
+        ! Distance distribution calculation
         ! call nano1%distances_distribution()
         ! call nano2%distances_distribution()
         ! ! Radial dependent statistics calculation
         ! call nano1%radial_dependent_stats(1)
         ! call nano2%radial_dependent_stats(2)
+        ! ! Aspect ratios calculations
+        ! call nano1%calc_aspect_ratio(print_ar)
+        ! call nano2%calc_aspect_ratio(print_ar)
+        ! ! Atomic intensity stats
+        ! call nano1%atom_intensity_stats()
+        ! call nano2%atom_intensity_stats()
         ! Ouput file, come back to initial folder
         call simple_chdir(trim(nano1%output_dir), errmsg="simple_nanoparticles :: compare_atomic_models, simple_chdir; ")
-        write(unit = 121, fmt = '(a,f6.3,a)') 'avg dist between atoms in vol1:', nano1%avg_dist_atoms*nano1%smpd,' A'
-        write(unit = 121, fmt = '(a,f6.3,a)') 'avg dist between atoms in vol2:', nano2%avg_dist_atoms*nano2%smpd,' A'
         ! RMSD calculation
         call atomic_position_rmsd(nano1,nano2, rmsd)
         write(logfhandle,*) '***comparison completed'
@@ -1859,17 +1941,14 @@ contains
     subroutine identify_atomic_pos(self, atomic_pos)
         class(nanoparticle), intent(inout) :: self
         character(len=100),  intent(inout) :: atomic_pos
-        real :: otsu_thresh
         ! Phase correlations approach
-        call self%phasecorrelation_nano_gaussian(otsu_thresh)
+        call self%phasecorrelation_nano_gaussian()
         ! Nanoparticle binarization
-        call self%binarize(otsu_thresh)
+        call self%binarize()
         ! Outliers discarding
         call self%discard_outliers()
         ! Validation of the selected atomic positions
          call self%validate_atomic_positions()
-        ! Atom-to-atom distances distribution estimation
-        call self%distances_distribution() !needed for discard_outliers
         atomic_pos = trim(self%fbody)//'_atom_centers.pdb'
     end subroutine identify_atomic_pos
 
@@ -1926,11 +2005,10 @@ contains
     ! 3D reconstruction.
      subroutine detect_atoms(self)
          class(nanoparticle), intent(inout) :: self
-         real :: otsu_thresh
          ! Phase correlations approach
-         call self%phasecorrelation_nano_gaussian(otsu_thresh)
+         call self%phasecorrelation_nano_gaussian()
          ! Nanoparticle binarization
-         call self%binarize(otsu_thresh)
+         call self%binarize()
          ! Outliers discarding
          call self%discard_outliers()
          ! Validation of the selected atomic positions
@@ -1950,6 +2028,20 @@ contains
          ! Make soft mask
          call self%make_soft_mask()
      end subroutine detect_atoms
+
+     subroutine atoms_composition(self, element1,element2)
+         class(nanoparticle), intent(inout) :: self
+         character(len=2),    intent(in)    :: element1, element2
+         ! Do not corr filter (heterogeneous nanoparticles)
+         ! Nanoparticle binarization
+         call self%binarize()
+         ! Outliers discarding
+         call self%discard_outliers()
+         ! Validation of the selected atomic positions
+         ! call self%validate_atomic_positions() !VALIDATE ATOMIC POSITION DOESN T HAVE SENSE IF I DON'T HAVE THE CORRELATION MAP
+         ! Atoms composition determination
+         call self%determine_atom_composition(element1,element2)
+     end subroutine atoms_composition
 
     subroutine kill_nanoparticle(self)
         class(nanoparticle), intent(inout) :: self

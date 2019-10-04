@@ -72,6 +72,7 @@ integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and simple_distr_exec program specifications here
+type(simple_program), target :: atoms_composition
 type(simple_program), target :: automask2D_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -267,6 +268,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
+        call new_atoms_composition
         call new_automask2D_nano
         call new_center
         call new_cleanup2D
@@ -358,6 +360,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
+        call push2prg_ptr_array(atoms_composition)
         call push2prg_ptr_array(automask2D_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -452,6 +455,8 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
+        case('atoms_composition')
+            ptr2prg => atoms_composition
         case('automask2D_nano')
                 ptr2prg => automask2D_nano
             case('center')
@@ -658,6 +663,7 @@ contains
     end subroutine list_distr_prgs_in_ui
 
     subroutine list_shmem_prgs_in_ui
+        write(logfhandle,'(A)') atoms_composition%name
         write(logfhandle,'(A)') automask2D_nano%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cluster_cavgs%name
@@ -883,6 +889,33 @@ contains
     ! <empty>
     ! computer controls
     ! <empty>
+
+    subroutine new_atoms_composition
+        ! PROGRAM SPECIFICATION
+        call atoms_composition%new(&
+        &'atoms_composition', &                                   ! name
+        &'Determine the composition of each atom in the nanoparticle',& ! descr_short
+        &'is a program for determine the composition of each atom of nanoparticle atomic-resolution map',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &1, 1, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call atoms_composition%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
+        & 'input volume e.g. vol.mrc', .true., '')
+       ! search controls
+        ! parameter input/output
+        call atoms_composition%set_input('parm_ios', 1, smpd)
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        call atoms_composition%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call atoms_composition%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_atoms_composition
 
     subroutine new_automask2D_nano
         ! PROGRAM SPECIFICATION
@@ -1329,7 +1362,7 @@ contains
         &'Compare a pair of nanoparticle atomic-resolution maps',& ! descr_short
         &'is a program for providing statistics of differences between pairs of nanoparticle atomic-resolution maps',& ! descr long
         &'simple_exec',&                                     ! executable
-        &2, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &2, 1, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
@@ -1340,10 +1373,9 @@ contains
         call compare_nano%set_input('parm_ios', 1, smpd)
         ! alternative inputs
         ! <empty>
-        ! search controls
-        ! <empty>
         ! filter controls
-        call compare_nano%set_input('filt_ctrls', 1, element)
+        call compare_nano%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition of vol1 e.g. Pt', .true., '')
+        call compare_nano%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition of vol2 e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1433,7 +1465,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call detect_atoms%set_input('filt_ctrls', 1, element)
+        call detect_atoms%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls

@@ -25,6 +25,7 @@ public :: refine3D_nano_commander_distr
 public :: tseries_split_commander
 public :: compare_nano_commander
 public :: detect_atoms_commander
+public :: atoms_composition_commander
 private
 #include "simple_local_flags.inc"
 
@@ -92,6 +93,11 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+type, extends(commander_base) :: atoms_composition_commander
+  contains
+    procedure :: execute      => exec_atoms_composition
+end type atoms_composition_commander
+
 
 contains
 
@@ -712,13 +718,8 @@ contains
             THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
         endif
         ! COMPARING
-        if( cline%defined('element') )then
-          call nano1%new(params%vols(1), params%smpd,params%element)
-          call nano2%new(params%vols(2), params%smpd,params%element)
-        else
-          call nano1%new(params%vols(1), params%smpd) !default pt
-          call nano2%new(params%vols(2), params%smpd) !default pt
-        endif
+        call nano1%new(params%vols(1), params%smpd,params%element1)
+        call nano2%new(params%vols(2), params%smpd,params%element2)
         call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
         call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
         if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
@@ -748,12 +749,8 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
-        if( cline%defined('element') )then
-            call nano%new(params%vols(1), params%smpd,params%element)
-        else
-            call nano%new(params%vols(1), params%smpd) !default pt
-        endif
-        call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)
+        call nano%new(params%vols(1), params%smpd,params%element)
+        call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)! TO REMOVE??
         ! execute
         call nano%detect_atoms()
         ! kill
@@ -761,5 +758,34 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    subroutine exec_atoms_composition( self, cline )
+        use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(atoms_composition_commander), intent(inout) :: self
+        class(cmdline),                     intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_composition')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_composition')
+        endif
+        if( .not. cline%defined('element1') )then
+            THROW_HARD('ERROR! element1 needs to be present; exec_atoms_composition')
+        endif
+        if( .not. cline%defined('element2') )then
+            THROW_HARD('ERROR! element2 needs to be present; exec_atoms_composition')
+        endif
+        ! DETERMINE COMPOSITION
+        call nano%new(params%vols(1), params%smpd)
+        call nano%atoms_composition(params%element1,params%element2)
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_COMPOSITION NORMAL STOP ****')
+    end subroutine exec_atoms_composition
 
 end module simple_commander_tseries

@@ -95,6 +95,7 @@ type(tseries_ctf_estimate_commander)  :: xtseries_ctf_estimate
 type(automask2D_nano_commander)       :: xautomsk2D_nano
 type(detect_atoms_commander)          :: xdetect_atoms
 type(compare_nano_commander)          :: xcompare_nano
+type(atoms_composition_commander)     :: xatoms_composition
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -248,6 +249,8 @@ select case(prg)
         call xdetect_atoms%execute(cline)
     case('compare_nano')
         call xcompare_nano%execute(cline)
+    case('atoms_composition')
+        call xatoms_composition%execute(cline)
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
