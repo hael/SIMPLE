@@ -346,7 +346,6 @@ contains
         ! static parameters
         call cline%set('prg',     'cluster2D')
         call cline%set('match_filt',     'no')
-
         call cline%set('ptclw',          'no')
         call cline%set('center',        'yes')
         call cline%set('autoscale',      'no')
@@ -357,7 +356,7 @@ contains
         if( .not. cline%defined('lpstop')         ) call cline%set('lpstop',         0.7)
         if( .not. cline%defined('lp')             ) call cline%set('lp',             0.7)
         if( .not. cline%defined('hp')             ) call cline%set('hp',             3.0)
-        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'yes')
+        if( .not. cline%defined('graphene_filt')  ) call cline%set('graphene_filt', 'no')
         if( .not. cline%defined('nptcls_per_cls') ) call cline%set('nptcls_per_cls', 30.)
         if( .not. cline%defined('winsz')          ) call cline%set('winsz',           3.)
         if( .not. cline%defined('cenlp')          ) call cline%set('cenlp',           5.)
