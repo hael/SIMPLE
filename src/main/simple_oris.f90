@@ -38,6 +38,7 @@ type :: oris
     procedure          :: get_2Dshift
     procedure          :: get_2Dshift_incr
     procedure          :: get_state
+    procedure          :: get_tseries_bound_cls
     procedure, private :: isthere_1
     procedure, private :: isthere_2
     generic            :: isthere => isthere_1, isthere_2
@@ -384,6 +385,26 @@ contains
         integer,     intent(in) :: i
         get_state = self%o(i)%get_state()
     end function get_state
+
+    subroutine get_tseries_bound_cls( self, ptcls2neigh )
+        class(oris),          intent(in) :: self
+        integer, allocatable, intent(inout) :: ptcls2neigh(:,:)
+        integer :: i, cls1, cls2
+        if( allocated(ptcls2neigh) ) deallocate(ptcls2neigh)
+        allocate(ptcls2neigh(self%n,2), source=0)
+        do i=1,self%n-1
+            cls1 = nint(self%o(i)%get('class'))
+            cls2 = nint(self%o(i+1)%get('class'))
+            if( cls2 == cls1 )then
+                cycle
+            else
+                ptcls2neigh(i    ,1) = cls1
+                ptcls2neigh(i    ,2) = cls2
+                ptcls2neigh(i + 1,1) = cls1
+                ptcls2neigh(i + 1,2) = cls2
+            endif
+        end do
+    end subroutine get_tseries_bound_cls
 
     !>  \brief  is for checking if parameter is present
     pure function isthere_1( self, key ) result( is )
