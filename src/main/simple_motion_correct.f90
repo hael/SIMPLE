@@ -7,8 +7,7 @@ use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_ini
 use simple_motion_patched,                only: motion_patched
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
-!use simple_motion_align_iso_direct,       only: motion_align_iso_direct
-use simple_motion_align_opt_weights,      only: motion_align_opt_weights
+use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_parameters,                    only: params_glob
 use simple_estimate_ssnr,                 only: acc_dose2filter
@@ -342,11 +341,11 @@ contains
 
     ! generates sums & shift frames
     subroutine motion_correct_iso_calc_sums( movie_sum, movie_sum_corrected, movie_sum_ctf)
-        type(image), intent(inout)     :: movie_sum, movie_sum_corrected, movie_sum_ctf
-        type(image),   allocatable     :: movie_frames_shifted(:)
-        type(motion_align_opt_weights) :: opt_weights
-        real                           :: wvec(1:nframes), scalar_weight
-        integer                        :: iframe
+        type(image), intent(inout) :: movie_sum, movie_sum_corrected, movie_sum_ctf
+        type(image),   allocatable :: movie_frames_shifted(:)
+        type(opt_image_weights)    :: opt_weights
+        real                       :: wvec(1:nframes), scalar_weight
+        integer                    :: iframe
         scalar_weight = 1. / real(nframes)
         ! copy unaligned frames
          allocate(movie_frames_shifted(nframes))
@@ -378,9 +377,7 @@ contains
         call sum_frames(movie_sum_ctf, wvec)
         ! Weighted, filtered sum for micrograph
         if (DO_OPT_WEIGHTS) then
-            call opt_weights%new(movie_frames_shifted)
-            call opt_weights%set_hp_lp(hp, params_glob%lpstop)
-            call opt_weights%create_ftexp_objs
+            call opt_weights%new(movie_frames_shifted, hp, params_glob%lpstop)
             call opt_weights%calc_opt_weights
             frameweights = opt_weights%get_weights()
             call opt_weights%kill
@@ -537,13 +534,13 @@ contains
 
     ! weighted & un-weighted sums, dose-weighting
     subroutine motion_correct_patched_calc_sums( movie_sum_corrected, movie_sum_ctf )
-        type(image), intent(inout)     :: movie_sum_corrected, movie_sum_ctf
-        type(motion_align_opt_weights) :: opt_weights
-        real,            pointer       :: prmat(:,:,:)
-        type(image), allocatable       :: movie_frames_shifted_patched(:)
-        real,        allocatable       :: rmat_sum(:,:,:)
-        real                           :: scalar_weight
-        integer                        :: iframe
+        type(image), intent(inout) :: movie_sum_corrected, movie_sum_ctf
+        type(opt_image_weights)    :: opt_weights
+        real,            pointer   :: prmat(:,:,:)
+        type(image), allocatable   :: movie_frames_shifted_patched(:)
+        real,        allocatable   :: rmat_sum(:,:,:)
+        real                       :: scalar_weight
+        integer                    :: iframe
         scalar_weight = 1. / real(nframes)
         call movie_sum_ctf%new(ldim_scaled, smpd_scaled)
         allocate(rmat_sum(ldim_scaled(1),ldim_scaled(2),1), source=0.)
@@ -560,9 +557,7 @@ contains
         !$omp end parallel do
         call movie_sum_ctf%set_rmat(rmat_sum)
         if (DO_OPT_WEIGHTS) then
-            call opt_weights%new(movie_frames_shifted_patched)
-            call opt_weights%set_hp_lp(hp, params_glob%lpstop)
-            call opt_weights%create_ftexp_objs
+            call opt_weights%new(movie_frames_shifted_patched, hp, params_glob%lpstop)
             call opt_weights%calc_opt_weights
             frameweights = opt_weights%get_weights()
             call opt_weights%kill

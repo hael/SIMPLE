@@ -1,5 +1,5 @@
 ! numerically find optimal weights for frames
-module simple_motion_align_opt_weights
+module simple_opt_image_weights
     !$ use omp_lib
     !$ use omp_lib_kinds
     include 'simple_lib.f08'
@@ -11,13 +11,13 @@ module simple_motion_align_opt_weights
     use simple_opt_factory,  only: opt_factory
     use simple_opt_spec,     only: opt_spec
     implicit none
-    public :: motion_align_opt_weights
+    public :: opt_image_weights
     private
 #include "simple_local_flags.inc"
 
     integer, parameter :: opt_weights_Nrestarts = 3
 
-    type :: motion_align_opt_weights
+    type :: opt_image_weights
         type(image),           pointer :: frames(:) => null()
         type(ft_expanded), allocatable :: frames_ftexp(:)
         type(ft_expanded)              :: R, Rhat                 !< references for *_Ref procedures
@@ -28,46 +28,55 @@ module simple_motion_align_opt_weights
         real                           :: smpd = 0.
         real                           :: scale_factor = 1.
         integer                        :: ldim(3)
-        integer                        :: nframes = 0
-        logical                        :: existence = .false.
+        integer                        :: nframes    = 0
+        integer                        :: Nrestarts  = opt_weights_Nrestarts
+        logical                        :: Dmat_based = .false.
+        logical                        :: existence  = .false.
     contains
-        procedure :: new
-        procedure :: create_ftexp_objs
-        procedure :: calc_opt_weights
-        procedure :: get_weights
-        procedure :: dealloc_ftexp_objs
-        procedure :: set_hp_lp
-        procedure :: kill
-        procedure :: calc_Dmat                                    !< calculate D-matrix (correlations between pairs of frames)
-        procedure :: motion_align_opt_weights_cost_Dmat           !< calculate cost using the D-matrix
-        procedure :: motion_align_opt_weights_gcost_Dmat          !< calculate gradient using the D-matrix
-        procedure :: motion_align_opt_weights_fdf_Dmat            !< calculate cost&gradient using the D-matrix
-        procedure :: motion_align_opt_weights_cost_Ref            !< calculate cost using reference (no D-matrix required)
-        procedure :: motion_align_opt_weights_gcost_Ref           !< calculate gradient using reference (no D-matrix required)
-        procedure :: motion_align_opt_weights_fdf_Ref             !< calculate cost&gradient using reference (no D-matrix required)
-    end type motion_align_opt_weights
+        procedure                      :: new
+        procedure                      :: calc_opt_weights
+        procedure                      :: get_weights
+        procedure                      :: set_Nrestarts
+        procedure                      :: kill
+        procedure, private             :: create_ftexp_objs
+        procedure, private             :: dealloc_ftexp_objs
+        procedure, private             :: calc_Dmat                      !< calculate D-matrix (correlations between pairs of frames)
+        procedure, private             :: opt_image_weights_cost_Dmat    !< calculate cost using the D-matrix
+        procedure, private             :: opt_image_weights_gcost_Dmat   !< calculate gradient using the D-matrix
+        procedure, private             :: opt_image_weights_fdf_Dmat     !< calculate cost&gradient using the D-matrix
+        procedure, private             :: opt_image_weights_cost_Ref     !< calculate cost using reference (no D-matrix required)
+        procedure, private             :: opt_image_weights_gcost_Ref    !< calculate gradient using reference (no D-matrix required)
+        procedure, private             :: opt_image_weights_fdf_Ref      !< calculate cost&gradient using reference (no D-matrix required)
+    end type opt_image_weights
 
 contains
 
-    subroutine new( self, frames_ptr )
-        class(motion_align_opt_weights),  intent(inout) :: self
+    subroutine new( self, frames_ptr, hp, lp, Dmat_based )
+        class(opt_image_weights),         intent(inout) :: self
         type(image), allocatable, target, intent(in)    :: frames_ptr(:)
+        real,                             intent(in)    :: hp, lp
+        logical,                optional, intent(in)    :: Dmat_based ! set to true if objective function should use Dmatrix
         call self%kill
-        self%frames    => frames_ptr
-        self%smpd      = self%frames(1)%get_smpd()
-        self%ldim      = self%frames(1)%get_ldim()
-        self%hp        = min((real(minval(self%ldim(1:2))) * self%smpd)/4.,2000.)
-        self%lp        = params_glob%lpstop
+        self%frames     => frames_ptr
+        self%smpd       = self%frames(1)%get_smpd()
+        self%ldim       = self%frames(1)%get_ldim()
+        self%hp         = hp
+        self%lp         = lp
+        self%Dmat_based = .false.
+        if (present(Dmat_based)) then
+            if (Dmat_based) self%Dmat_based = .true.
+        end if
         self%nframes   = size(frames_ptr, 1)
-        allocate(self%Dmat(self%nframes,self%nframes))
+        if (self%Dmat_based) allocate(self%Dmat(self%nframes,self%nframes))
         self%existence = .true.
+        call self%create_ftexp_objs
     end subroutine new
 
     subroutine calc_Dmat( self )
-        class(motion_align_opt_weights), intent(inout) :: self
-        integer :: i,j,k
+        class(opt_image_weights), intent(inout) :: self
+        integer              :: i,j,k
         integer, allocatable :: pairs(:,:)
-        ! generate list of pairs of frames\
+        ! generate list of pairs of frames
         allocate(pairs(2,self%nframes * (self%nframes-1)/2))
         k = 1
         do i = 1, self%nframes
@@ -92,11 +101,11 @@ contains
     end subroutine calc_Dmat
 
     subroutine create_ftexp_objs( self )
-        class(motion_align_opt_weights), intent(inout) :: self
+        class(opt_image_weights), intent(inout) :: self
         logical :: do_alloc_frames_ftexp
         integer :: i
         if( .not. self%existence ) then
-            THROW_HARD('not instantiated; simple_motion_align_opt_weights: create_ftexp_objs')
+            THROW_HARD('not instantiated; simple_opt_image_weights: create_ftexp_objs')
         end if
         do_alloc_frames_ftexp = .true.
         if( allocated(self%frames_ftexp) ) then
@@ -112,8 +121,10 @@ contains
             call self%frames_ftexp(i)%new(self%frames(i), self%hp, self%lp, .true., bfac=self%bfactor)
         end do
         !$omp end parallel do
-        call self%R   %new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
-        call self%Rhat%new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
+        if (.not. self%Dmat_based) then
+            call self%R   %new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
+            call self%Rhat%new(self%frames(1), self%hp, self%lp, .false., bfac=self%bfactor)
+        end if
         ! normalize objects
         do i=1,self%nframes
             call self%frames_ftexp(i)%normalize_mat
@@ -121,7 +132,7 @@ contains
     end subroutine create_ftexp_objs
 
     subroutine dealloc_ftexp_objs( self )
-        class(motion_align_opt_weights), intent(inout) :: self
+        class(opt_image_weights), intent(inout) :: self
         integer :: i
         if ( allocated(self%frames_ftexp) ) then
             do i = 1, size(self%frames_ftexp)
@@ -133,42 +144,32 @@ contains
         call self%Rhat%kill
     end subroutine dealloc_ftexp_objs
 
-    subroutine set_hp_lp( self, hp, lp )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real,                            intent(in)    :: hp, lp
-        if( .not. self%existence ) then
-            THROW_HARD('not instantiated; simple_motion_align_opt_weights: set_hp_lp')
-        end if
-        self%hp = hp
-        self%lp = lp
-        if( .not. self%nframes > 0 ) then
-            THROW_HARD('nframes < 1; simple_motion_align__opt_weights: set_hp_lp')
-        end if
-    end subroutine set_hp_lp
-
     subroutine calc_opt_weights( self, w_init )
         use simple_optimizer, only: optimizer
-        class(motion_align_opt_weights), intent(inout) :: self
-        real, optional            :: w_init(:)
+        class(opt_image_weights), intent(inout) :: self
+        real, optional            :: w_init(self%nframes)
         real                      :: ww(self%nframes)
         type(opt_factory)         :: ofac
         type(opt_spec)            :: ospec
         class(optimizer), pointer :: nlopt
-        real(dp) :: x_dp(self%nframes)
-        real     :: x   (self%nframes)
-        real     :: opt_lims(self%nframes,2)
-        real     :: lowest_cost
-        real     :: lowest_val
-        real     :: lowest_vec(self%nframes)
-        integer  :: nrun, i
+        real(dp)                  :: x_dp(self%nframes)
+        real                      :: x   (self%nframes)
+        real                      :: opt_lims(self%nframes,2)
+        real                      :: lowest_cost
+        real                      :: lowest_val
+        real                      :: lowest_vec(self%nframes)
+        integer                   :: nrun, i
         if ( .not. self%existence ) then
-            THROW_HARD('not instantiated; simple_motion_align_opt_weights: calc_opt_weights')
+            THROW_HARD('not instantiated; simple_opt_image_weights: calc_opt_weights')
+        end if
+        if (self%Dmat_based) then
+            call self%calc_Dmat
         end if
         opt_lims(:,1) = 0.
         opt_lims(:,2) = 1.
         nlopt => null()
         if( .not. self%existence )then
-            THROW_HARD('not instantiated; simple_motion_align_opt_weights: align')
+            THROW_HARD('not instantiated; simple_opt_image_weights: align')
         end if
         if( allocated(self%weights) ) deallocate(self%weights)
         allocate(self%weights(self%nframes))
@@ -177,9 +178,9 @@ contains
             factr  = 1.0d+5, pgtol = 1.0d-7, &
             limits = opt_lims) !ftol=self%ftol, gtol=self%gtol,  default values for now
         call ofac%new(ospec, nlopt)
-        call ospec%set_costfun_8(motion_align_opt_weights_cost_wrapper)
-        call ospec%set_gcostfun_8(motion_align_opt_weights_gcost_wrapper)
-        call ospec%set_fdfcostfun_8(motion_align_opt_weights_fdf_wrapper)
+        call ospec%set_costfun_8(opt_image_weights_cost_wrapper)
+        call ospec%set_gcostfun_8(opt_image_weights_gcost_wrapper)
+        call ospec%set_fdfcostfun_8(opt_image_weights_fdf_wrapper)
         ! minimize
         if (present(w_init)) then
             ! if w_init present, then only one minimization
@@ -190,7 +191,7 @@ contains
         else
             ! if w_init not present, then Nrestarts minimizations with random initial conditions
             lowest_val = HUGE(lowest_val)
-            do nrun = 1, opt_weights_Nrestarts
+            do nrun = 1, self%Nrestarts
                 call ran3arr(x)
                 x_dp = real(x, dp)
                 ospec%x   = x
@@ -209,19 +210,25 @@ contains
     end subroutine calc_opt_weights
 
     function get_weights( self ) result( res )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real, allocatable                              :: res(:)
+        class(opt_image_weights), intent(inout) :: self
+        real, allocatable :: res(:)
         if ( .not. self%existence ) then
-            THROW_HARD('not instantiated; simple_motion_align_opt_weights: get_weights')
+            THROW_HARD('not instantiated; simple_opt_image_weights: get_weights')
         end if
         if ( size(self%weights) .ne. self%nframes ) then
-            THROW_HARD('weights not allocated properly; simple_motion_align_opt_weights: get_weights')
+            THROW_HARD('weights not allocated properly; simple_opt_image_weights: get_weights')
         end if
         allocate(res(self%nframes), source=self%weights)
     end function get_weights
 
+    subroutine set_Nrestarts( self, Nrestarts )
+        class(opt_image_weights), intent(inout) :: self
+        integer,                  intent(in)    :: Nrestarts
+        self%Nrestarts = Nrestarts
+    end subroutine set_Nrestarts
+
     subroutine kill( self )
-        class(motion_align_opt_weights), intent(inout) :: self
+        class(opt_image_weights), intent(inout) :: self
         call self%dealloc_ftexp_objs
         if( allocated(self%weights) ) deallocate(self%weights)
         if( allocated(self%Dmat)    ) deallocate(self%Dmat   )
@@ -229,57 +236,65 @@ contains
         self%existence = .false.
     end subroutine kill
 
-    function motion_align_opt_weights_cost_wrapper( self, vec, D ) result( cost )
-        class(*),     intent(inout) :: self
-        integer,      intent(in)    :: D
-        real(dp),     intent(in)    :: vec(D)
+    function opt_image_weights_cost_wrapper( self, vec, D ) result( cost )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real(dp), intent(in)    :: vec(D)
         real(dp) :: cost
         select type(self)
-        class is (motion_align_opt_weights)
-            cost = self%motion_align_opt_weights_cost_Dmat( vec )
+        class is (opt_image_weights)
+            if (self%Dmat_based) then
+                cost = self%opt_image_weights_cost_Dmat( vec )
+            else
+                cost = self%opt_image_weights_cost_Ref ( vec )
+            end if
             class DEFAULT
-            THROW_HARD('unknown type; simple_motion_align_opt_weights: cost_wrapper')
+            THROW_HARD('unknown type; simple_opt_image_weights: cost_wrapper')
         end select
-    end function motion_align_opt_weights_cost_wrapper
+    end function opt_image_weights_cost_wrapper
 
-    function motion_align_opt_weights_cost_sp_wrapper( self, vec, D ) result( cost )
-        class(*),     intent(inout) :: self
-        integer,      intent(in)    :: D
-        real,         intent(in)    :: vec(D)
+    function opt_image_weights_cost_sp_wrapper( self, vec, D ) result( cost )
+        class(*), intent(inout) :: self
+        integer,  intent(in)    :: D
+        real,     intent(in)    :: vec(D)
         real :: cost
         select type(self)
-        class is (motion_align_opt_weights)
-            cost = real(self%motion_align_opt_weights_cost_Dmat( real(vec, dp) ))
+        class is (opt_image_weights)
+            cost = real(self%opt_image_weights_cost_Dmat( real(vec, dp) ))
             class DEFAULT
-            THROW_HARD('unknown type; simple_motion_align_opt_weights: cost_only_wrapper')
+            THROW_HARD('unknown type; simple_opt_image_weights: cost_only_wrapper')
         end select
-    end function motion_align_opt_weights_cost_sp_wrapper
+    end function opt_image_weights_cost_sp_wrapper
 
-    subroutine motion_align_opt_weights_gcost( self, vec, grad )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
-        real(dp),                        intent(out)   :: grad(:)
+    subroutine opt_image_weights_gcost( self, vec, grad )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
+        real(dp),                 intent(out)   :: grad(:)
         real(dp) :: f
-        call self%motion_align_opt_weights_fdf_Dmat( vec, f, grad )
-    end subroutine motion_align_opt_weights_gcost
+        call self%opt_image_weights_fdf_Dmat( vec, f, grad )
+    end subroutine opt_image_weights_gcost
 
-    subroutine motion_align_opt_weights_gcost_wrapper( self,  vec, grad, D )
+    subroutine opt_image_weights_gcost_wrapper( self,  vec, grad, D )
         class(*), intent(inout) :: self
         integer,  intent(in)    :: D
         real(dp), intent(inout) :: vec(D)
         real(dp), intent(out)   :: grad(D)
         grad = 0.d0
         select type(self)
-        class is (motion_align_opt_weights)
-            call self%motion_align_opt_weights_gcost_Dmat( vec, grad )
+        class is (opt_image_weights)
+            if (self%Dmat_based) then
+                call self%opt_image_weights_gcost_Dmat( vec, grad )
+            else
+                call self%opt_image_weights_gcost_Ref ( vec, grad )
+            end if
             class DEFAULT
-            THROW_HARD('unknown type; simple_motion_align_opt_weights_gcost: gcost_wrapper')
+            THROW_HARD('unknown type; simple_opt_image_weights_gcost: gcost_wrapper')
         end select
-    end subroutine motion_align_opt_weights_gcost_wrapper
+    end subroutine opt_image_weights_gcost_wrapper
 
-    function motion_align_opt_weights_cost_Dmat( self, vec ) result( cost )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
+    function opt_image_weights_cost_Dmat( self, vec ) result( cost )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
         real(dp) :: cost
         real(dp) :: Num, tmp1, tmp2
         real(dp) :: Den
@@ -300,21 +315,21 @@ contains
             cost = cost + Num  / sqrt(Den)
         end do
         cost = - cost
-    end function motion_align_opt_weights_cost_Dmat
+    end function opt_image_weights_cost_Dmat
 
-    subroutine motion_align_opt_weights_gcost_Dmat( self, vec, grad )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
-        real(dp),                        intent(out)   :: grad(:)
+    subroutine opt_image_weights_gcost_Dmat( self, vec, grad )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
+        real(dp),                 intent(out)   :: grad(:)
         real(dp) :: f
-        call self%motion_align_opt_weights_fdf_Dmat( vec, f, grad )
-    end subroutine motion_align_opt_weights_gcost_Dmat
+        call self%opt_image_weights_fdf_Dmat( vec, f, grad )
+    end subroutine opt_image_weights_gcost_Dmat
 
-    subroutine motion_align_opt_weights_fdf_Dmat( self, vec, f, grad )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
-        real(dp),                        intent(out)   :: f
-        real(dp),                        intent(out)   :: grad(:)
+    subroutine opt_image_weights_fdf_Dmat( self, vec, f, grad )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
+        real(dp),                 intent(out)   :: f
+        real(dp),                 intent(out)   :: grad(:)
         real(dp) :: Num, tmp1, tmp2
         real(dp) :: Den
         real(dp) :: ANum
@@ -363,11 +378,11 @@ contains
         end do
         f    = - f
         grad = - grad
-    end subroutine motion_align_opt_weights_fdf_Dmat
+    end subroutine opt_image_weights_fdf_Dmat
 
-    function motion_align_opt_weights_cost_Ref( self, vec ) result( cost )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
+    function opt_image_weights_cost_Ref( self, vec ) result( cost )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
         real(dp) :: cost
         integer  :: i, n
         real(dp) :: val_RR, T1, T2
@@ -398,21 +413,21 @@ contains
             cost = cost + (val_e(i) - vec(i)) / val_D(i)
         end do
         cost = - cost
-    end function motion_align_opt_weights_cost_Ref
+    end function opt_image_weights_cost_Ref
 
-    subroutine motion_align_opt_weights_gcost_Ref( self, vec, grad )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
-        real(dp),                        intent(out)   :: grad(:)
+    subroutine opt_image_weights_gcost_Ref( self, vec, grad )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
+        real(dp),                 intent(out)   :: grad(:)
         real(dp) :: f
-        call self%motion_align_opt_weights_fdf_Ref( vec, f, grad )
-    end subroutine motion_align_opt_weights_gcost_Ref
+        call self%opt_image_weights_fdf_Ref( vec, f, grad )
+    end subroutine opt_image_weights_gcost_Ref
 
-    subroutine motion_align_opt_weights_fdf_Ref( self, vec, f, grad )
-        class(motion_align_opt_weights), intent(inout) :: self
-        real(dp),                        intent(in)    :: vec(:)
-        real(dp),                        intent(out)   :: f
-        real(dp),                        intent(out)   :: grad(:)
+    subroutine opt_image_weights_fdf_Ref( self, vec, f, grad )
+        class(opt_image_weights), intent(inout) :: self
+        real(dp),                 intent(in)    :: vec(:)
+        real(dp),                 intent(out)   :: f
+        real(dp),                 intent(out)   :: grad(:)
         integer  :: i, n
         real(dp) :: val_RR, T1, T2
         real(dp) :: val_e(self%nframes)
@@ -469,9 +484,9 @@ contains
         f    = - f
         grad = - grad
         write (*,*) 'f=', f, 'vec: ', vec / sum(vec)
-    end subroutine motion_align_opt_weights_fdf_Ref
+    end subroutine opt_image_weights_fdf_Ref
 
-     subroutine motion_align_opt_weights_fdf_wrapper( self, vec, f, grad, D )
+     subroutine opt_image_weights_fdf_wrapper( self, vec, f, grad, D )
         class(*),     intent(inout) :: self
         integer,      intent(in)    :: D
         real(kind=8), intent(inout) :: vec(D)
@@ -479,11 +494,15 @@ contains
         f    = 0.d0
         grad = 0.d0
         select type(self)
-        class is (motion_align_opt_weights)
-            call self%motion_align_opt_weights_fdf_Ref( vec, f, grad )
+        class is (opt_image_weights)
+            if (self%Dmat_based) then
+                call self%opt_image_weights_fdf_Dmat( vec, f, grad )
+            else
+                call self%opt_image_weights_fdf_Ref ( vec, f, grad )
+            end if
         class DEFAULT
-            THROW_HARD('unknown type; simple_motion_align_opt_weights: fdf_wrapper')
+            THROW_HARD('unknown type; simple_opt_image_weights: fdf_wrapper')
         end select
-    end subroutine motion_align_opt_weights_fdf_wrapper
+    end subroutine opt_image_weights_fdf_wrapper
 
-end module simple_motion_align_opt_weights
+end module simple_opt_image_weights
