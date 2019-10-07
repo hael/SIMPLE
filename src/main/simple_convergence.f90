@@ -83,9 +83,11 @@ contains
         if( ncls > 1 )then
             converged = .false.
             if( (params_glob%l_frac_update) .or. (params_glob%stream.eq.'yes') )then
-                if( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )converged = .true.
+                converged = ( self%mi_class > MI_CLASS_LIM_2D_FRAC .and. self%frac_srch%avg > FRAC_LIM_FRAC )
+            else if( trim(params_glob%tseries) .eq. 'yes' )then
+                converged = self%mi_class > MI_CLASS_LIM_2D_NANO
             else
-                if( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )converged = .true.
+                converged = ( self%mi_class > MI_CLASS_LIM_2D .and. self%frac_srch%avg > FRAC_LIM )
             endif
             if( converged )then
                 write(logfhandle,'(A)') '>>> CONVERGED: .YES.'

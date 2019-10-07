@@ -16,6 +16,8 @@ type strategy2D_alloc
     ! per particle
     integer, allocatable :: srch_order(:,:)
     logical, allocatable :: do_inplsrch(:)
+    ! time series
+    integer, allocatable :: ptcls2neigh(:,:)
 end type strategy2D_alloc
 
 type(strategy2D_alloc) :: s2D
@@ -29,6 +31,8 @@ contains
         ! per particle
         if( allocated(s2D%srch_order) ) deallocate(s2D%srch_order)
         if( allocated(s2D%do_inplsrch)) deallocate(s2D%do_inplsrch)
+        ! time series
+        if( allocated(s2D%ptcls2neigh)) deallocate(s2D%ptcls2neigh)
     end subroutine clean_strategy2D
 
     subroutine prep_strategy2D( ptcl_mask, which_iter )
@@ -63,6 +67,8 @@ contains
         end do
         call rt%kill
         if( any(s2D%srch_order == 0) ) THROW_HARD('Invalid index in srch_order; simple_strategy2D_srch :: prep4strategy2D_srch')
+        if( trim(params_glob%tseries) .eq. 'yes')&
+        &call build_glob%spproj_field%get_tseries_neighs(nint(params_glob%winsz),s2D%ptcls2neigh)
     end subroutine prep_strategy2D
 
 end module simple_strategy2D_alloc

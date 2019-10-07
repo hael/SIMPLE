@@ -15,7 +15,7 @@ do i=1,20
     print *, inds(i)
 end do
 
-call os%get_tseries_bound_cls(ptcls2neigh)
+call os%get_tseries_neighs(2, ptcls2neigh)
 
 do i=1,20
     print *, i, inds(i), ptcls2neigh(i,:)

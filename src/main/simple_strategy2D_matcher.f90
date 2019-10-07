@@ -14,7 +14,7 @@ public :: cluster2D_exec
 private
 #include "simple_local_flags.inc"
 
-logical, parameter      :: L_BENCH           = .false.
+logical, parameter      :: L_BENCH = .false.
 
 type(polarft_corrcalc)  :: pftcc
 logical,    allocatable :: ptcl_mask(:)
@@ -36,6 +36,7 @@ contains
         use simple_strategy2D_srch,       only: strategy2D_spec
         use simple_strategy2D_alloc,      only: prep_strategy2d,clean_strategy2d
         use simple_strategy2D_greedy,     only: strategy2D_greedy
+        use simple_strategy2D_tseries,    only: strategy2D_tseries
         use simple_strategy2D_neigh,      only: strategy2D_neigh
         use simple_strategy2D_snhc,       only: strategy2D_snhc
         use simple_strategy2D_inpl,       only: strategy2D_inpl
@@ -207,7 +208,11 @@ contains
                     else
                         ! offline mode, based on iteration
                         if( l_greedy .or. (.not.build_glob%spproj_field%has_been_searched(iptcl) .or. updatecnt==1) )then
-                            allocate(strategy2D_greedy :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            if( trim(params_glob%tseries).eq.'yes' )then
+                                allocate(strategy2D_tseries :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            else
+                                allocate(strategy2D_greedy  :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
+                            endif
                         else
                             allocate(strategy2D_snhc :: strategy2Dsrch(iptcl)%ptr, stat=alloc_stat)
                         endif

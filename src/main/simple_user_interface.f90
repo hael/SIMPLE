@@ -1123,8 +1123,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster2D_nano%set_input('srch_ctrls', 1, ncls)
-        cluster2D_nano%srch_ctrls(1)%required = .false.
+        call cluster2D_nano%set_input('srch_ctrls', 1, 'nptcls_per_cls', 'num', 'Particles per cluster',&
+        &'Initial number of paricles per cluster', '# initial particles per cluster', .false., 10.)
         call cluster2D_nano%set_input('srch_ctrls', 2, 'center', 'binary', 'Center class averages', 'Center class averages by their center of &
         &gravity and map shifts back to the particles(yes|no){yes}', '(yes|no){yes}', .false., 'yes')
         ! filter controls

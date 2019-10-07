@@ -37,9 +37,26 @@ contains
         if( build_glob%spproj_field%get_state(self%s%iptcl) > 0 )then
             call self%s%prep4srch
             corr = -huge(corr)
-            do iref=1,self%s%nrefs
-                if( s2D%cls_chunk(iref) /= self%s%chunk_id )cycle
-                if( s2D%cls_pops(iref) == 0 )cycle
+            if( s2D%ptcls2neigh(self%s%iptcl,1) == 0 )then
+                iref = self%s%prev_class
+                call per_ref_srch
+            else
+                iref = s2D%ptcls2neigh(self%s%iptcl,1)
+                call per_ref_srch
+                iref = s2D%ptcls2neigh(self%s%iptcl,2)
+                call per_ref_srch
+            endif
+            self%s%nrefs_eval = self%s%nrefs
+            call self%s%inpl_srch
+            call self%s%store_solution
+        else
+            call build_glob%spproj_field%reject(self%s%iptcl)
+        endif
+        DebugPrint  '>>> strategy2D_tseries :: FINISHED STOCHASTIC SEARCH'
+        contains
+
+            subroutine per_ref_srch
+                if( s2D%cls_pops(iref) == 0 )return
                 call pftcc_glob%gencorrs(iref, self%s%iptcl, corrs)
                 inpl_ind  = maxloc(corrs, dim=1)
                 inpl_corr = corrs(inpl_ind)
@@ -49,14 +66,7 @@ contains
                     self%s%best_corr  = inpl_corr
                     self%s%best_rot   = inpl_ind
                 endif
-            end do
-            self%s%nrefs_eval = self%s%nrefs
-            call self%s%inpl_srch
-            call self%s%store_solution
-        else
-            call build_glob%spproj_field%reject(self%s%iptcl)
-        endif
-        DebugPrint  '>>> strategy2D_tseries :: FINISHED STOCHASTIC SEARCH'
+            end subroutine per_ref_srch
     end subroutine srch_greedy
 
     subroutine kill_greedy( self )
