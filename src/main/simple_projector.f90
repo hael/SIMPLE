@@ -10,6 +10,7 @@ use simple_image,      only: image
 use simple_ori,        only: ori
 use simple_ori_light,  only: ori_light
 use simple_oris,       only: oris
+use simple_parameters, only: params_glob
 implicit none
 
 public :: projector
@@ -20,6 +21,7 @@ complex, parameter :: CMPLX_ZERO = cmplx(0.,0.)
 
 type, extends(image) :: projector
     private
+    procedure(interp_fcomp_fun), pointer, public :: interp_fcomp !< pointer to interpolation function
     type(kbinterpol)      :: kbwin                   !< window function object
     integer               :: ldim_exp(3,2) = 0       !< expanded FT matrix limits
     complex, allocatable  :: cmat_exp(:,:,:)         !< expanded FT matrix
@@ -41,12 +43,21 @@ type, extends(image) :: projector
     procedure          :: fproject_serial
     procedure          :: fproject_polar
     procedure          :: fdf_project_polar
-    procedure          :: interp_fcomp
+    procedure          :: interp_fcomp_norm
+    procedure          :: interp_fcomp_grid
     procedure          :: interp_fcomp_trilinear
     procedure, private :: fdf_interp_fcomp
     ! DESTRUCTOR
     procedure          :: kill_expanded
 end type projector
+
+interface
+    pure complex function interp_fcomp_fun( self, loc )
+        import :: projector
+        class(projector), intent(in) :: self
+        real,             intent(in) :: loc(3)
+    end function
+end interface
 
 contains
 
@@ -113,6 +124,10 @@ contains
         enddo
         !$omp end parallel do
         deallocate( cych,cyck,cycm )
+        ! griiding correction
+        self%interp_fcomp => interp_fcomp_norm
+        if( params_glob%griddev.eq.'yes') self%interp_fcomp => interp_fcomp_grid
+        !
         self%expanded_exists = .true.
     end subroutine expand_cmat
 
@@ -252,7 +267,29 @@ contains
     end subroutine fdf_project_polar
 
     !>  \brief is to interpolate from the expanded complex matrix
-    pure function interp_fcomp( self, loc )result( comp )
+    pure function interp_fcomp_norm( self, loc )result( comp )
+        class(projector), intent(in) :: self
+        real,             intent(in) :: loc(3)
+        complex :: comp
+        real    :: w(1:self%wdim,1:self%wdim,1:self%wdim)
+        integer :: i, win(2,3) ! window boundary array in fortran contiguous format
+        ! interpolation kernel window
+        win(1,:) = nint(loc)
+        win(2,:) = win(1,:) + self%iwinsz
+        win(1,:) = win(1,:) - self%iwinsz
+        ! interpolation kernel matrix
+        w = 1.
+        do i=1,self%wdim
+            w(i,:,:) = w(i,:,:) * self%kbwin%apod( real(win(1,1)+i-1)-loc(1) )
+            w(:,i,:) = w(:,i,:) * self%kbwin%apod( real(win(1,2)+i-1)-loc(2) )
+            w(:,:,i) = w(:,:,i) * self%kbwin%apod( real(win(1,3)+i-1)-loc(3) )
+        end do
+        ! SUM( kernel x components )
+        comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) ) / sum(w)
+    end function interp_fcomp_norm
+
+    !>  \brief is to interpolate from the expanded complex matrix
+    pure function interp_fcomp_grid( self, loc )result( comp )
         class(projector), intent(in) :: self
         real,             intent(in) :: loc(3)
         complex :: comp
@@ -271,7 +308,7 @@ contains
         end do
         ! SUM( kernel x components )
         comp = sum( w * self%cmat_exp(win(1,1):win(2,1), win(1,2):win(2,2),win(1,3):win(2,3)) )
-    end function interp_fcomp
+    end function interp_fcomp_grid
 
     !>  \brief is for tri-linear interpolation from the expanded complex matrix
     pure function interp_fcomp_trilinear( self, loc )result( comp )

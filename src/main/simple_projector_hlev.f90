@@ -7,6 +7,7 @@ module simple_projector_hlev
 include 'simple_lib.f08'
 use simple_image,      only: image
 use simple_projector,  only: projector
+use simple_parameters, only: params_glob
 implicit none
 
 contains
@@ -30,7 +31,9 @@ contains
         boxpd   = 2 * round2even(KBALPHA * real(box / 2))
         ldim_pd = [boxpd,boxpd,boxpd]
         ! pre-gridding
-        call vol%div_w_instrfun(KBALPHA)
+        if( params_glob%griddev.eq.'yes' )then
+            call vol%div_w_instrfun(KBALPHA)
+        endif
         ! padding & fft
         call vol_pad%new(ldim_pd, smpd)
         call vol%pad(vol_pad)

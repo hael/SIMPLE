@@ -45,6 +45,7 @@ type :: parameters
     character(len=3)      :: for3D='yes'          !< for 3D analysis(yes|no){yes}
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
+    character(len=3)      :: griddev='yes'        !< to test grid correction
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -538,6 +539,7 @@ contains
         call check_carg('ft2img',         self%ft2img)
         call check_carg('guinier',        self%guinier)
         call check_carg('graphene_filt',  self%graphene_filt)
+        call check_carg('griddev',        self%griddev)
         call check_carg('hfun',           self%hfun)
         call check_carg('hist',           self%hist)
         call check_carg('imgkind',        self%imgkind)

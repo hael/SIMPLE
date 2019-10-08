@@ -360,7 +360,9 @@ contains
             endif
         endif
         ! gridding prep
-        call img_out%div_by_instrfun
+        if( params_glob%griddev.eq.'yes' )then
+            call img_out%div_by_instrfun
+        endif
         ! return in Fourier space
         call img_out%fft()
     end subroutine prepimg4align
@@ -429,7 +431,9 @@ contains
             call img_out%mask(params_glob%msk, 'soft')
         endif
         ! gridding prep
-        call img_out%div_by_instrfun
+        if( params_glob%griddev.eq.'yes' )then
+            call img_out%div_by_instrfun
+        endif
         ! move to Fourier space
         call img_out%fft()
     end subroutine prep2Dref
@@ -674,7 +678,9 @@ contains
             endif
         endif
         ! gridding prep
-        call build_glob%vol%div_w_instrfun(params_glob%alpha)
+        if( params_glob%griddev.eq.'yes' )then
+            call build_glob%vol%div_w_instrfun(params_glob%alpha)
+        endif
         ! FT volume
         call build_glob%vol%fft()
         ! expand for fast interpolation

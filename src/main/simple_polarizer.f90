@@ -3,7 +3,8 @@ module simple_polarizer
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_image, only: image
+use simple_image,      only: image
+use simple_parameters, only: params_glob
 implicit none
 
 public :: polarizer
@@ -83,6 +84,7 @@ contains
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
                 self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
+                if( params_glob%griddev.eq.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
             enddo
         enddo
         !$omp end parallel do

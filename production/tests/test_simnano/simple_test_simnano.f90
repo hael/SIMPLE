@@ -83,7 +83,7 @@ call orientation%new
 call orientation%set_euler([0.,0.,0.])
 call graphene_vol%read(graphene_fname)
 call graphene_vol%neg
-call graphene_vol%div_w_instrfun(params%alpha)
+if( params%griddev.eq.'yes' ) call graphene_vol%div_w_instrfun(params%alpha)
 call vol_pad%new([params%boxpd, params%boxpd, params%boxpd], params%smpd)
 call graphene_vol%pad(vol_pad)
 call graphene_vol%kill
@@ -99,7 +99,7 @@ call particle%new([params%boxpd,params%boxpd,1],params%smpd)
 call img%new([params%box,params%box,1],params%smpd)
 call particle_vol%read(particle_fname)
 call particle_vol%neg
-call particle_vol%div_w_instrfun(params%alpha)
+if( params%griddev.eq.'yes' ) call particle_vol%div_w_instrfun(params%alpha)
 call particle_vol%pad(vol_pad)
 call vol_pad%mul(scalefactor)
 call particle_vol%kill
