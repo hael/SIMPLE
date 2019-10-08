@@ -2369,12 +2369,10 @@ contains
     ! Otsu's method, see above
     subroutine otsu_2(x, x_out, thresh)
         real,              intent(inout) :: x(:)
-        real, allocatable, intent(inout) :: x_out(:)
+        real,              intent(inout) :: x_out(size(x))
         real, optional,    intent(inout) :: thresh  !selected threshold for binarisation
         real :: threshold ! threshold for binarisation
         call otsu_1(x, threshold)
-        if( allocated(x_out) ) deallocate(x_out)
-        allocate(x_out(size(x)), source=0.)
         where(x > threshold)
             x_out = 1.
         elsewhere

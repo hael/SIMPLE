@@ -72,7 +72,7 @@ integer              :: n_prg_ptrs = 0
 type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and simple_distr_exec program specifications here
-type(simple_program), target :: atoms_composition
+type(simple_program), target :: atom_cluster_analysis
 type(simple_program), target :: automask2D_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -111,6 +111,7 @@ type(simple_program), target :: mkdir_
 type(simple_program), target :: merge_stream_projects
 type(simple_program), target :: motion_correct
 type(simple_program), target :: motion_correct_tomo
+type(simple_program), target :: nano_softmask
 type(simple_program), target :: new_project
 type(simple_program), target :: normalize_
 type(simple_program), target :: orisops
@@ -126,6 +127,8 @@ type(simple_program), target :: print_project_field
 type(simple_program), target :: print_project_info
 type(simple_program), target :: prune_project
 type(simple_program), target :: pspec_stats
+type(simple_program), target :: radial_dependent_stats
+type(simple_program), target :: radial_sym_test
 type(simple_program), target :: reconstruct3D
 type(simple_program), target :: reextract
 type(simple_program), target :: refine3D
@@ -147,7 +150,6 @@ type(simple_program), target :: stackops
 type(simple_program), target :: symaxis_search
 type(simple_program), target :: symmetrize_map
 type(simple_program), target :: symmetry_test
-type(simple_program), target :: radial_sym_test
 type(simple_program), target :: tseries_import
 type(simple_program), target :: tseries_estimate_diam
 type(simple_program), target :: tseries_average
@@ -268,7 +270,7 @@ contains
     subroutine make_user_interface
         call set_common_params
         call set_prg_ptr_array
-        call new_atoms_composition
+        call new_atom_cluster_analysis
         call new_automask2D_nano
         call new_center
         call new_cleanup2D
@@ -307,6 +309,7 @@ contains
         call new_mkdir_
         call new_motion_correct
         call new_motion_correct_tomo
+        call new_nano_softmask
         call new_new_project
         call new_normalize
         call new_orisops
@@ -322,6 +325,8 @@ contains
         call new_print_project_field
         call new_prune_project
         call new_pspec_stats
+        call new_radial_dependent_stats
+        call new_radial_sym_test
         call new_reproject
         call new_reconstruct3D
         call new_reextract
@@ -343,7 +348,6 @@ contains
         call new_symaxis_search
         call new_symmetrize_map
         call new_symmetry_test
-        call new_radial_sym_test
         call new_tseries_import
         call new_tseries_estimate_diam
         call new_tseries_average
@@ -360,7 +364,7 @@ contains
 
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
-        call push2prg_ptr_array(atoms_composition)
+        call push2prg_ptr_array(atom_cluster_analysis)
         call push2prg_ptr_array(automask2D_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -398,6 +402,7 @@ contains
         call push2prg_ptr_array(mkdir_)
         call push2prg_ptr_array(motion_correct)
         call push2prg_ptr_array(motion_correct_tomo)
+        call push2prg_ptr_array(nano_softmask)
         call push2prg_ptr_array(new_project)
         call push2prg_ptr_array(normalize_)
         call push2prg_ptr_array(orisops)
@@ -413,6 +418,7 @@ contains
         call push2prg_ptr_array(print_project_field)
         call push2prg_ptr_array(prune_project)
         call push2prg_ptr_array(pspec_stats)
+        call push2prg_ptr_array(radial_dependent_stats)
         call push2prg_ptr_array(radial_sym_test)
         call push2prg_ptr_array(reproject)
         call push2prg_ptr_array(reconstruct3D)
@@ -455,9 +461,9 @@ contains
         character(len=*), intent(in)  :: which_program
         type(simple_program), pointer :: ptr2prg
         select case(trim(which_program))
-        case('atoms_composition')
-            ptr2prg => atoms_composition
-        case('automask2D_nano')
+            case('atom_cluster_analysis')
+                ptr2prg => atom_cluster_analysis
+            case('automask2D_nano')
                 ptr2prg => automask2D_nano
             case('center')
                 ptr2prg => center
@@ -533,6 +539,8 @@ contains
                 ptr2prg => motion_correct
             case('motion_correct_tomo')
                 ptr2prg => motion_correct_tomo
+            case('nano_softmask')
+                ptr2prg => nano_softmask
             case('new_project')
                 ptr2prg => new_project
             case('normalize')
@@ -563,7 +571,9 @@ contains
                 ptr2prg => prune_project
             case('pspec_stats')
                 ptr2prg => pspec_stats
-              case('radial_sym_test')
+            case('radial_dependent_stats')
+                ptr2prg => radial_dependent_stats
+            case('radial_sym_test')
                   ptr2prg => radial_sym_test
             case('reproject')
                 ptr2prg => reproject
@@ -649,6 +659,7 @@ contains
         write(logfhandle,'(A)') make_cavgs%name
         write(logfhandle,'(A)') motion_correct%name
         write(logfhandle,'(A)') motion_correct_tomo%name
+        write(logfhandle,'(A)') nano_softmask%name
         write(logfhandle,'(A)') pick%name
         write(logfhandle,'(A)') pick_extract_stream%name
         write(logfhandle,'(A)') preprocess%name
@@ -663,7 +674,7 @@ contains
     end subroutine list_distr_prgs_in_ui
 
     subroutine list_shmem_prgs_in_ui
-        write(logfhandle,'(A)') atoms_composition%name
+        write(logfhandle,'(A)') atom_cluster_analysis%name
         write(logfhandle,'(A)') automask2D_nano%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cluster_cavgs%name
@@ -698,6 +709,7 @@ contains
         write(logfhandle,'(A)') print_project_info%name
         write(logfhandle,'(A)') print_project_field%name
         write(logfhandle,'(A)') pspec_stats%name
+        write(logfhandle,'(A)') radial_dependent_stats%name
         write(logfhandle,'(A)') radial_sym_test%name
         write(logfhandle,'(A)') replace_project_field%name
         write(logfhandle,'(A)') selection%name
@@ -890,32 +902,31 @@ contains
     ! computer controls
     ! <empty>
 
-    subroutine new_atoms_composition
+    subroutine new_atom_cluster_analysis
         ! PROGRAM SPECIFICATION
-        call atoms_composition%new(&
-        &'atoms_composition', &                                   ! name
-        &'Determine the composition of each atom in the nanoparticle',& ! descr_short
-        &'is a program for determine the composition of each atom of nanoparticle atomic-resolution map',& ! descr long
+        call atom_cluster_analysis%new(&
+        &'atom_cluster_analysis', &                                   ! name
+        &'Cluster the atoms in the nanoparticle',& ! descr_short
+        &'is a program for determine atom clustering of nanoparticle atomic-resolution map',& ! descr long
         &'simple_exec',&                                     ! executable
-        &1, 1, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call atoms_composition%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
+        call atom_cluster_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume', &
         & 'input volume e.g. vol.mrc', .true., '')
        ! search controls
         ! parameter input/output
-        call atoms_composition%set_input('parm_ios', 1, smpd)
+        call atom_cluster_analysis%set_input('parm_ios', 1, smpd)
         ! <empty>
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call atoms_composition%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
-        call atoms_composition%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call atom_cluster_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
         ! mask controls
         ! <empty>
         ! computer controls
         ! <empty>
-    end subroutine new_atoms_composition
+    end subroutine new_atom_cluster_analysis
 
     subroutine new_automask2D_nano
         ! PROGRAM SPECIFICATION
@@ -1496,7 +1507,7 @@ contains
         call dock_volpair%set_input('srch_ctrls', 2, 'dockmode', 'multi', 'Docking mode', 'Docking mode(rot|shift|rotshift|refine){rotshift}', '(rot|shift|rotshift|refine){rotshift}', .false., 'rotshift')
         ! filter controls
         call dock_volpair%set_input('filt_ctrls', 1, 'lpstart', 'num', 'Initial low-pass limit', 'Initial low-pass resolution limit', 'low-pass limit in Angstroms', .true., 0.)
-        call dock_volpair%set_input('filt_ctrls', 2, 'lstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
+        call dock_volpair%set_input('filt_ctrls', 2, 'lpstop',   'num', 'Final low-pass limit',   'Final low-pass resolution limit',   'low-pass limit in Angstroms', .true., 0.)
         call dock_volpair%set_input('filt_ctrls', 3, hp)
         ! mask controls
         call dock_volpair%set_input('mask_ctrls', 1, msk)
@@ -2245,6 +2256,32 @@ contains
         ! computer controls
         call motion_correct_tomo%set_input('comp_ctrls', 1, nthr)
     end subroutine new_motion_correct_tomo
+
+    subroutine new_nano_softmask
+        ! PROGRAM SPECIFICATION
+        call nano_softmask%new(&
+        &'nano_softmask', &                                      ! name
+        &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
+        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and provide statistics',& ! descr long
+        &'simple_exec',&                                        ! executable
+        &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call nano_softmask%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume to analyse', &
+        & 'input volume e.g. vol.mrc', .true., '')
+        ! parameter input/output
+        call nano_softmask%set_input('parm_ios', 1, smpd)
+        ! search controls
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! call nano_softmask%set_input('comp_ctrls', 1, nthr) to change if it works
+    end subroutine new_nano_softmask
 
     subroutine new_new_project
         ! PROGRAM SPECIFICATION
@@ -3555,6 +3592,37 @@ contains
         ! computer controls
         call symmetry_test%set_input('comp_ctrls', 1, nthr)
     end subroutine new_symmetry_test
+
+    subroutine new_radial_dependent_stats
+        ! PROGRAM SPECIFICATION
+        call radial_dependent_stats%new(&
+        &'radial_dependent_stats',&                                                                                           ! name
+        &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
+        &'is a program that implements a statistical test for point-group symmetry. &
+        & Input is a volume reconstructed without symmetry (c1), minimum radius, maximum radius and step. &
+        & Output is the most likely point-group symmetry',& ! descr long
+        &'simple_exec',&                                                                                             ! executable
+        &1, 4, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call radial_dependent_stats%set_input('img_ios', 1, 'vol1', 'file', 'C1 Volume to identify symmetry of', 'C1 Volume to identify symmetry of', &
+        & 'input volume e.g. vol_C1.mrc', .true., '')
+        ! parameter input/output
+        call radial_dependent_stats%set_input('parm_ios', 1, smpd)
+        call radial_dependent_stats%set_input('parm_ios', 2, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .true., 10.)
+        call radial_dependent_stats%set_input('parm_ios', 3, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.} ', '{12.}',  .true., 100.)
+        call radial_dependent_stats%set_input('parm_ios', 4, 'stepsz',  'num', 'Step size in A', 'Steps size in A {2.} ', '{2.}',  .true., 10.)
+        ! alternative inputs
+        ! <empty>
+        ! search controls
+        ! <empty>
+        ! filter controls
+        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! call radial_dependent_stats%set_input('comp_ctrls', 1, nthr)
+    end subroutine new_radial_dependent_stats
 
     subroutine new_radial_sym_test
         ! PROGRAM SPECIFICATION

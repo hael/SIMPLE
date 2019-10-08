@@ -773,14 +773,13 @@ contains
         real        :: min_rad, max_rad, step
         integer     :: i, ldim(3)
         real        :: radius
-        character(len=100) :: atomic_pos
         character(len=100) :: fname_conv
         character(len=100) :: output_dir
         call params%new(cline)
         call simple_getcwd(output_dir)
         call nano%new(params%vols(1), params%smpd,params%element)
         !identifiy atomic positions
-        call nano%identify_atomic_pos(atomic_pos)
+        call nano%identify_atomic_pos()
         call nano%get_ldim(ldim)
         min_rad = params%min_rad
         max_rad = params%max_rad

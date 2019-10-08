@@ -12,10 +12,10 @@ private
 #include "simple_local_flags.inc"
 
 ! module global constants
-logical, parameter :: DEBUG_HERE = .false.
+logical, parameter :: DEBUG_HERE = .true.
 integer, parameter :: BOX        = 512 !ps size
 real,    parameter :: LOW_LIM    = 30. !30 A, lower limit for resolution. Before that, we discard
-real,    parameter :: UP_LIM     = 3.  !upper limit for resolution in the entropy calculation.
+real,    parameter :: UP_LIM     = 10. !upper limit for resolution in the entropy calculation. (it was 3. before)
 integer, parameter :: N_BINS     = 64  !number of bins for hist
 real,    parameter :: LAMBDA     = 1.  !for tv filtering
 integer, parameter :: N_BIG_CCS  = 5   !top N_BIG_CCS of the biggest ccs have to be considered in the avg curvature calculation

@@ -25,7 +25,9 @@ public :: refine3D_nano_commander_distr
 public :: tseries_split_commander
 public :: compare_nano_commander
 public :: detect_atoms_commander
-public :: atoms_composition_commander
+public :: radial_dependent_stats_commander
+public :: atom_cluster_analysis_commander
+public :: nano_softmask_commander
 private
 #include "simple_local_flags.inc"
 
@@ -93,11 +95,18 @@ type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
-type, extends(commander_base) :: atoms_composition_commander
+type, extends(commander_base) :: radial_dependent_stats_commander
   contains
-    procedure :: execute      => exec_atoms_composition
-end type atoms_composition_commander
-
+    procedure :: execute      => exec_radial_dependent_stats
+end type radial_dependent_stats_commander
+type, extends(commander_base) :: atom_cluster_analysis_commander
+  contains
+    procedure :: execute      => exec_atom_cluster_analysis
+end type atom_cluster_analysis_commander
+type, extends(commander_base) :: nano_softmask_commander
+  contains
+    procedure :: execute      => exec_nano_softmask
+end type nano_softmask_commander
 
 contains
 
@@ -736,6 +745,9 @@ contains
         call simple_end('**** SIMPLE_COMPARE_NANO NORMAL STOP ****')
     end subroutine exec_compare_nano
 
+    ! Performs preprocessing on the nanoparticle and steps until
+    ! atomic positions are identified, validated and written on
+    ! a file.
     subroutine exec_detect_atoms( self, cline )
         use simple_nanoparticles_mod
         use simple_image, only : image
@@ -743,8 +755,6 @@ contains
         class(cmdline),                intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
-        integer :: ldim(3), nptcls
-        real    :: smpd
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
             THROW_HARD('ERROR! smpd needs to be present; exec_detect_atoms')
@@ -753,42 +763,99 @@ contains
             THROW_HARD('ERROR! vol1 needs to be present; exec_detect_atoms')
         endif
         call nano%new(params%vols(1), params%smpd,params%element)
-        call find_ldim_nptcls (params%vols(1), ldim, nptcls, smpd)! TO REMOVE??
         ! execute
-        call nano%detect_atoms()
+        call nano%identify_atomic_pos()
         ! kill
         call nano%kill
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
 
-    subroutine exec_atoms_composition( self, cline )
+    ! Calculates distances distribution across the whole nanoparticle
+    ! and radial dependent statistics.
+    subroutine exec_radial_dependent_stats( self, cline )
         use simple_nanoparticles_mod
         use simple_image, only : image
-        class(atoms_composition_commander), intent(inout) :: self
-        class(cmdline),                     intent(inout) :: cline !< command line input
+        class(radial_dependent_stats_commander), intent(inout) :: self
+        class(cmdline),                          intent(inout) :: cline !< command line input
         type(parameters)   :: params
         type(nanoparticle) :: nano
+        integer :: ldim(3), nptcls
+        real    :: smpd
+        real    :: min_rad, max_rad, step
         call params%new(cline)
         if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_atoms_composition')
+            THROW_HARD('ERROR! smpd needs to be present; exec_radial_dependent_stats')
         endif
         if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_composition')
+            THROW_HARD('ERROR! vol1 needs to be present; exec_radial_dependent_stats')
         endif
-        if( .not. cline%defined('element1') )then
-            THROW_HARD('ERROR! element1 needs to be present; exec_atoms_composition')
-        endif
-        if( .not. cline%defined('element2') )then
-            THROW_HARD('ERROR! element2 needs to be present; exec_atoms_composition')
-        endif
-        ! DETERMINE COMPOSITION
-        call nano%new(params%vols(1), params%smpd)
-        call nano%atoms_composition(params%element1,params%element2)
+        min_rad = params%min_rad
+        max_rad = params%max_rad
+        step    = params%stepsz
+        if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_sym_test')
+        if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_sym_test')
+        call nano%new(params%vols(1), params%smpd,params%element)
+        ! execute
+        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
+        call nano%radial_dependent_stats(min_rad,max_rad,step)
         ! kill
         call nano%kill
         ! end gracefully
-        call simple_end('**** SIMPLE_ATOMS_COMPOSITION NORMAL STOP ****')
-    end subroutine exec_atoms_composition
+        call simple_end('**** SIMPLE_RADIAL_DEPENDENT_STATS NORMAL STOP ****')
+    end subroutine exec_radial_dependent_stats
 
+    ! Calculates distances distribution across the whole nanoparticle
+    ! and radial dependent statistics.
+    subroutine exec_atom_cluster_analysis( self, cline )
+        use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(atom_cluster_analysis_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        real    :: smpd
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_atom_cluster_analysis')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_atom_cluster_analysis')
+        endif
+        call nano%new(params%vols(1), params%smpd,params%element)
+        ! execute
+        call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
+        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
+        call nano%cluster
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOM_CLUSTER_ANALYSIS NORMAL STOP ****')
+    end subroutine exec_atom_cluster_analysis
+
+    subroutine exec_nano_softmask( self, cline )
+        use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(nano_softmask_commander), intent(inout) :: self
+        class(cmdline),                         intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano
+        real  :: smpd
+        call params%new(cline)
+        if( .not. cline%defined('smpd') )then
+            THROW_HARD('ERROR! smpd needs to be present; exec_nano_softmask')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_nano_softmask')
+        endif
+        call nano%new(params%vols(1), params%smpd,params%element)
+        ! fetch img_bin
+        call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'BIN.mrc','img_bin')
+        ! execute
+        call nano%make_soft_mask()
+        ! kill
+        call nano%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_NANO_SOFTMASK NORMAL STOP ****')
+    end subroutine exec_nano_softmask
 end module simple_commander_tseries

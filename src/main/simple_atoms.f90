@@ -47,6 +47,7 @@ type :: atoms
     procedure, private :: copy
     ! GETTERS/SETTERS
     procedure          :: does_exist
+    procedure          :: get_beta
     procedure          :: get_n
     procedure          :: get_name
     procedure          :: get_coord
@@ -222,6 +223,14 @@ contains
         class(atoms), intent(inout) :: self
         does_exist = self%exists
     end function does_exist
+
+    function get_beta( self, i) result(beta)
+        class(atoms), intent(in) :: self
+        integer,      intent(in) :: i
+        real :: beta
+        if(i.lt.1 .or. i.gt.self%n) THROW_HARD('index out of range; get_beta')
+        beta = self%beta(i)
+    end function get_beta
 
     integer function get_n( self )
         class(atoms), intent(in) :: self

@@ -86,16 +86,18 @@ type(simulate_atoms_commander)       :: xsimulate_atoms
 
 
 ! TIME-SERIES (NANO-PARTICLE) PROGRAMS
-type(tseries_import_commander)        :: xtseries_import
-type(tseries_estimate_diam_commander) :: xtseries_estimate_diam
-type(tseries_preproc_commander)       :: xtseries_preproc
-type(tseries_average_commander)       :: xtseries_avg
-type(tseries_corrfilt_commander)      :: xtseries_corrfilt
-type(tseries_ctf_estimate_commander)  :: xtseries_ctf_estimate
-type(automask2D_nano_commander)       :: xautomsk2D_nano
-type(detect_atoms_commander)          :: xdetect_atoms
-type(compare_nano_commander)          :: xcompare_nano
-type(atoms_composition_commander)     :: xatoms_composition
+type(tseries_import_commander)         :: xtseries_import
+type(tseries_estimate_diam_commander)  :: xtseries_estimate_diam
+type(tseries_preproc_commander)        :: xtseries_preproc
+type(tseries_average_commander)        :: xtseries_avg
+type(tseries_corrfilt_commander)       :: xtseries_corrfilt
+type(tseries_ctf_estimate_commander)   :: xtseries_ctf_estimate
+type(automask2D_nano_commander)        :: xautomsk2D_nano
+type(detect_atoms_commander)           :: xdetect_atoms
+type(radial_dependent_stats_commander) :: xradial_dependent_stats
+type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
+type(nano_softmask_commander)          :: xnano_softmask
+type(compare_nano_commander)           :: xcompare_nano
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -247,10 +249,15 @@ select case(prg)
         call xautomsk2D_nano%execute(cline)
     case('detect_atoms')
         call xdetect_atoms%execute(cline)
+    case('radial_dependent_stats')
+        call xradial_dependent_stats%execute(cline)
+    case('atom_cluster_analysis')
+        call xatom_cluster_analysis%execute(cline)
+    case('nano_softmask')
+        call xnano_softmask%execute(cline)
     case('compare_nano')
         call xcompare_nano%execute(cline)
-    case('atoms_composition')
-        call xatoms_composition%execute(cline)
+
 
     ! SYSTEM INTERACTION PROGRAMS
     case( 'mkdir' )
