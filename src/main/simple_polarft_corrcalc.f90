@@ -1280,7 +1280,7 @@ contains
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - tmp / ( 2. * self%sigma2_noise(k, i))
+            euclid = euclid - real(k) * tmp / ( 2. * self%sigma2_noise(k, i))
         end do
     end function calc_euclid_for_rot
 
@@ -1308,7 +1308,7 @@ contains
                 tmp =       sum(csq(pft_ref(1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
                 tmp = tmp + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,k) - self%pfts_ptcls(1:rot-1,k,i)))
             end if
-            euclid = euclid - tmp / ( 2.d0 * self%sigma2_noise(k, i))
+            euclid = euclid - real(k,dp) * tmp / ( 2.d0 * self%sigma2_noise(k, i))
         end do
     end function calc_euclid_for_rot_8
 
@@ -1537,17 +1537,18 @@ contains
         complex(sp), pointer :: pft_ref(:,:)
         real(sp),    pointer :: keuclids(:)
         real(sp) :: sumsqref, sumsqptcl
-        integer  :: k, ithr
+        integer  :: k, ithr, i
         ithr           =  omp_get_thread_num() + 1
+        i              =  self%pinds(iptcl)
         pft_ref        => self%heap_vars(ithr)%pft_ref
         keuclids       => self%heap_vars(ithr)%kcorrs ! can be reused
         call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref, params_glob%kstop)
         euclids(:) = 0.
         do k=params_glob%kfromto(1),params_glob%kstop
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, keuclids)
-            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
+            euclids   = euclids + real(k) * (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,i))
         end do
     end subroutine gencorrs_euclid_1
 
@@ -1559,30 +1560,31 @@ contains
         complex(sp), pointer :: pft_ref(:,:), shmat(:,:)
         real(sp),    pointer :: keuclids(:), argmat(:,:)
         real(sp) :: sumsqptcl, sumsqref
-        integer  :: ithr, k
+        integer  :: ithr, k, i
         ithr     =  omp_get_thread_num() + 1
+        i        =  self%pinds(iptcl)
         pft_ref  => self%heap_vars(ithr)%pft_ref
         shmat    => self%heap_vars(ithr)%shmat
         keuclids => self%heap_vars(ithr)%kcorrs ! can be reused
         argmat   => self%heap_vars(ithr)%argmat
         argmat   =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
         shmat    =  cmplx(cos(argmat),sin(argmat))
-        if( self%iseven(self%pinds(iptcl)) )then
+        if( self%iseven(i) )then
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%with_ctf )then
-            pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
         euclids(:) = 0.
         do k=params_glob%kfromto(1),params_glob%kstop
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, keuclids)
-            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
+            call self%calc_k_corrs(pft_ref, i, k, keuclids)
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            euclids(:) = euclids(:) + (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k, self%pinds(iptcl)))
+            euclids   = euclids + real(k) * (2. * keuclids(:) - sumsqptcl - sumsqref ) / (2. * self%sigma2_noise(k,i))
         end do
     end subroutine gencorrs_euclid_2
 
@@ -1595,21 +1597,23 @@ contains
         real(sp),    pointer :: keuclids(:)
         real(sp),    pointer :: keuclids_mir(:)
         real(sp) :: sumsqref, sumsqptcl
-        integer  :: k, ithr
+        integer  :: k, ithr, i
         ithr         =  omp_get_thread_num() + 1
+        i            =  self%pinds(iptcl)
         pft_ref      => self%heap_vars(ithr)%pft_ref
         keuclids     => self%heap_vars(ithr)%kcorrs     ! can be reused
         keuclids_mir => self%heap_vars(ithr)%kcorrs_mir ! can be reused
         call self%prep_ref4corr(iref, iptcl, pft_ref, sumsqref, params_glob%kstop)
-        euclids(:) = 0.
+        euclids(:)     = 0.
+        euclids_mir(:) = 0.
         do k=params_glob%kfromto(1),params_glob%kstop
-            call self%calc_k_corrs(pft_ref, self%pinds(iptcl), k, keuclids, keuclids_mir)
-            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,self%pinds(iptcl))))
+            call self%calc_k_corrs(pft_ref, i, k, keuclids, keuclids_mir)
+            sumsqptcl = sum(csq(self%pfts_ptcls(:,k,i)))
             sumsqref  = sum(csq(pft_ref(:,k)))
-            euclids(:)     = euclids(:) + (2. * keuclids(:)    - sumsqptcl - sumsqref ) / &
-                (2. * self%sigma2_noise(k, self%pinds(iptcl)))
-            euclids_mir(:) = euclids(:) + (2. * keuclids_mir(:) - sumsqptcl - sumsqref ) / &
-                (2. * self%sigma2_noise(k, self%pinds(iptcl)))
+            euclids     = euclids     + real(k) * (2.*keuclids     - sumsqptcl - sumsqref ) / &
+                (2. * self%sigma2_noise(k,i))
+            euclids_mir = euclids_mir + real(k) * (2.*keuclids_mir - sumsqptcl - sumsqref ) / &
+                (2. * self%sigma2_noise(k,i))
         end do
     end subroutine gencorrs_euclid_mir
 
@@ -2139,42 +2143,38 @@ contains
         real(dp),                intent(out)   :: f, grad(2)
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        integer  :: ithr, k
+        real(dp) :: diffsq
+        integer  :: ithr, k, i
         ithr        =  omp_get_thread_num() + 1
+        i           =  self%pinds(iptcl)
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
         argmat      => self%heap_vars(ithr)%argmat_8
         argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
         shmat       =  cmplx(cos(argmat),sin(argmat),dp)
-        if( self%iseven(self%pinds(iptcl)) )then
+        if( self%iseven(i) )then
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%with_ctf )then
-            pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        f           = self%calc_euclid_for_rot_8(pft_ref, self%pinds(iptcl), irot)
+        f           = self%calc_euclid_for_rot_8(pft_ref, i, irot)
         grad(1)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(1) = grad(1) + &
-                self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(1) = grad(1) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
+            diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
+            grad(1) = grad(1) + real(k,dp) * diffsq / self%sigma2_noise(k, i)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(2) = grad(2) + &
-                self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
+            diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
+            grad(2) = grad(2) + real(k,dp) * diffsq / self%sigma2_noise(k, i)
         end do
     end subroutine gencorr_euclid_grad_for_rot_8
 
@@ -2186,8 +2186,10 @@ contains
         real(dp),                intent(out)   :: grad(2)
         complex(dp), pointer :: pft_ref(:,:), pft_ref_tmp(:,:), shmat(:,:)
         real(dp),    pointer :: argmat(:,:)
-        integer  :: ithr, k
+        real(dp) :: diffsq
+        integer  :: ithr, k, i
         ithr        =  omp_get_thread_num() + 1
+        i           =  self%pinds(iptcl)
         pft_ref     => self%heap_vars(ithr)%pft_ref_8
         pft_ref_tmp => self%heap_vars(ithr)%pft_ref_tmp_8
         shmat       => self%heap_vars(ithr)%shmat_8
@@ -2200,27 +2202,21 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         if( self%with_ctf )then
-            pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
+            pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
         grad(1)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(1) = grad(1) + &
-                self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(1) = grad(1) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k)) )) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
+            diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
+            grad(1) = grad(1) + real(k,dp) * diffsq / self%sigma2_noise(k, i)
         end do
         grad(2)     = 0._dp
         pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
         do k = params_glob%kfromto(1), params_glob%kstop
-            grad(2) = grad(2) + &
-                self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), k, irot) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
-            grad(2) = grad(2) - real(sum(pft_ref_tmp(:,k) * conjg(pft_ref(:,k)) )) &
-                / self%sigma2_noise(k, self%pinds(iptcl))
+            diffsq  = self%calc_corrk_for_rot_8(pft_ref_tmp, i, k, irot) - real(sum(pft_ref_tmp(:,k)*conjg(pft_ref(:,k))))
+            grad(2) = grad(2) + real(k,dp) * diffsq / self%sigma2_noise(k, i)
         end do
     end subroutine gencorr_euclid_grad_only_for_rot_8
 
@@ -2251,9 +2247,8 @@ contains
             pft_ref = pft_ref * shmat
         endif
         do k = params_glob%kfromto(1), params_glob%kfromto(2)
-            sigma_contrib(k) = self%calc_euclidk_for_rot(pft_ref, i, k, irot)
+            sigma_contrib(k) = 0.5 * self%calc_euclidk_for_rot(pft_ref, i, k, irot)
         end do
-        sigma_contrib = 0.5 * sigma_contrib / real(self%pftsz)
     end subroutine gencorr_sigma_contrib
 
     real function specscore_1( self, iref, iptcl, irot )
