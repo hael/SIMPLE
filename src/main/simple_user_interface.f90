@@ -1494,7 +1494,7 @@ contains
         ! image input/output
         call dock_volpair%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Reference volume', &
         & 'input reference volume e.g. vol1.mrc', .true., '')
-        call dock_volpair%set_input('img_ios', 2, 'vol1', 'file', 'Volume', 'Target volume', &
+        call dock_volpair%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Target volume', &
         & 'input target volume e.g. vol2.mrc', .true., '')
         call dock_volpair%set_input('img_ios', 3, outvol)
         ! parameter input/output

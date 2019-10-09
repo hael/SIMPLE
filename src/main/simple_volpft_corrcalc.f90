@@ -15,16 +15,16 @@ private
 
 type :: volpft_corrcalc
     private
-    class(projector), pointer :: vol_ref    => null() !< pointer to reference volume
-    class(projector), pointer :: vol_target => null() !< pointer to target volume
-    integer                   :: nspace          = 0  !< number of vec:s in representation
-    integer                   :: nspace_nonred   = 0  !< number of non-redundant vec:s in representation
-    integer                   :: kfromto_vpft(2) = 0  !< Fourier index range
-    real                      :: sqsum_ref            !< memoized square sum 4 corrcalc (ref)
-    complex, allocatable      :: vpft_ref(:,:)        !< reference lines 4 matching
-    real,    allocatable      :: locs_ref(:,:,:)      !< nspace x nk x 3 matrix of positions (reference)
-    real,    allocatable      :: locs_ref_nonred(:,:,:)!<nspace_nonred x nk x 3 matrix of positions (reference), nonredundant elements
-    logical                   :: existence = .false.  !< to indicate existence
+    class(projector), pointer :: vol_ref    => null()   !< pointer to reference volume
+    class(projector), pointer :: vol_target => null()   !< pointer to target volume
+    integer                   :: nspace          = 0    !< number of vec:s in representation
+    integer                   :: nspace_nonred   = 0    !< number of non-redundant vec:s in representation
+    integer                   :: kfromto_vpft(2) = 0    !< Fourier index range
+    real                      :: sqsum_ref              !< memoized square sum 4 corrcalc (ref)
+    complex, allocatable      :: vpft_ref_nonred(:,:)   !< reference lines 4 matching, nonredundant elements only
+    real,    allocatable      :: locs_ref(:,:,:)        !< nspace x nk x 3 matrix of positions (reference)
+    real,    allocatable      :: locs_ref_nonred(:,:,:) !<nspace_nonred x nk x 3 matrix of positions (reference), nonredundant elements
+    logical                   :: existence = .false.    !< to indicate existence
   contains
     ! CONSTRUCTOR
     procedure, private :: new_1
@@ -77,8 +77,8 @@ contains
         ! set other stuff
         self%kfromto_vpft(1) = vol_ref%get_find(hp)
         self%kfromto_vpft(2) = vol_ref%get_find(lp)
-        allocate( self%vpft_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
-                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3),&
+        allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ), &
+                  self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3), &
                   self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
         ! generate sampling space
@@ -140,8 +140,8 @@ contains
         ! set other stuff
         self%kfromto_vpft(1) = self%vol_ref%get_find(hp)
         self%kfromto_vpft(2) = self%vol_ref%get_find(lp)
-        allocate( self%vpft_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace),&
-                  self%locs_ref(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,3),&
+        allocate( self%vpft_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred  ),  &
+                  self%locs_ref       (self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace,       3),  &
                   self%locs_ref_nonred(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred,3), stat=alloc_stat)
         if(alloc_stat.ne.0)call allocchk("In: simple_volpft_corrcalc :: new",alloc_stat)
         ! generate sampling space
@@ -208,13 +208,13 @@ contains
     subroutine extract_ref( self )
         class(volpft_corrcalc), intent(inout) :: self
         integer :: ispace, k
-        do ispace=1,self%nspace
+        do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
-                self%vpft_ref(k,ispace) =&
+                self%vpft_ref_nonred(k,ispace) =&
                 self%vol_ref%interp_fcomp_trilinear(self%locs_ref(k,ispace,:))
             end do
         end do
-        self%sqsum_ref = sum(csq(self%vpft_ref))
+        self%sqsum_ref = sum(csq(self%vpft_ref_nonred))
     end subroutine extract_ref
 
     subroutine extract_target_1( self, rmat, vpft_target, sqsum_target )
@@ -256,7 +256,7 @@ contains
         complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real    :: sqsum_target, cc
         call self%extract_target_1(rmat, vpft_target, sqsum_target)
-        cc = sum(real(self%vpft_ref * conjg(vpft_target)))
+        cc = sum(real(self%vpft_ref_nonred * conjg(vpft_target)))
         cc = cc / sqrt(self%sqsum_ref * sqsum_target)
     end function corr_1
 
@@ -267,7 +267,7 @@ contains
         complex :: vpft_target(self%kfromto_vpft(1):self%kfromto_vpft(2),self%nspace_nonred)
         real    :: sqsum_target, cc
         call self%extract_target_2(rmat, shvec, vpft_target, sqsum_target)
-        cc = sum(real(self%vpft_ref * conjg(vpft_target)))
+        cc = sum(real(self%vpft_ref_nonred * conjg(vpft_target)))
         cc = cc / sqrt(self%sqsum_ref * sqsum_target)
     end function corr_2
 
@@ -276,7 +276,7 @@ contains
         if( self%existence )then
             self%vol_ref    => null()
             self%vol_target => null()
-            deallocate(self%vpft_ref,self%locs_ref,self%locs_ref_nonred)
+            deallocate(self%vpft_ref_nonred,self%locs_ref,self%locs_ref_nonred)
             self%existence = .false.
         endif
     end subroutine kill
