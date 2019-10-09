@@ -73,6 +73,7 @@ type(simple_prg_ptr) :: prg_ptr_array(NMAX_PTRS)
 
 ! declare simple_exec and simple_distr_exec program specifications here
 type(simple_program), target :: atom_cluster_analysis
+type(simple_program), target :: atoms_rmsd
 type(simple_program), target :: automask2D_nano
 type(simple_program), target :: center
 type(simple_program), target :: cleanup2D
@@ -84,7 +85,6 @@ type(simple_program), target :: cluster3D
 type(simple_program), target :: cluster3D_refine
 type(simple_program), target :: cluster_cavgs
 type(simple_program), target :: convert
-type(simple_program), target :: compare_nano
 type(simple_program), target :: ctf_estimate
 type(simple_program), target :: ctfops
 type(simple_program), target :: detect_atoms
@@ -242,6 +242,8 @@ type(simple_input_param) :: sherr
 type(simple_input_param) :: sigma
 type(simple_input_param) :: sigma2_fudge
 type(simple_input_param) :: smpd
+type(simple_input_param) :: smpd1
+type(simple_input_param) :: smpd2
 type(simple_input_param) :: star_datadir
 type(simple_input_param) :: starfile
 type(simple_input_param) :: startit
@@ -271,6 +273,7 @@ contains
         call set_common_params
         call set_prg_ptr_array
         call new_atom_cluster_analysis
+        call new_atoms_rmsd
         call new_automask2D_nano
         call new_center
         call new_cleanup2D
@@ -282,7 +285,6 @@ contains
         call new_cluster3D_refine
         call new_cluster_cavgs
         call new_convert
-        call new_compare_nano
         call new_ctf_estimate
         call new_ctfops
         call new_detect_atoms
@@ -365,6 +367,7 @@ contains
     subroutine set_prg_ptr_array
         n_prg_ptrs = 0
         call push2prg_ptr_array(atom_cluster_analysis)
+        call push2prg_ptr_array(atoms_rmsd)
         call push2prg_ptr_array(automask2D_nano)
         call push2prg_ptr_array(center)
         call push2prg_ptr_array(cleanup2D)
@@ -379,7 +382,6 @@ contains
         call push2prg_ptr_array(ctf_estimate)
         call push2prg_ptr_array(ctfops)
         call push2prg_ptr_array(detect_atoms)
-        call push2prg_ptr_array(compare_nano)
         call push2prg_ptr_array(dock_volpair)
         call push2prg_ptr_array(extract)
         call push2prg_ptr_array(export_relion)
@@ -463,6 +465,8 @@ contains
         select case(trim(which_program))
             case('atom_cluster_analysis')
                 ptr2prg => atom_cluster_analysis
+            case('atoms_rmsd')
+                ptr2prg => atoms_rmsd
             case('automask2D_nano')
                 ptr2prg => automask2D_nano
             case('center')
@@ -485,8 +489,6 @@ contains
                 ptr2prg => cluster_cavgs
             case('convert')
                 ptr2prg => convert
-            case('compare_nano')
-                ptr2prg => compare_nano
             case('ctf_estimate')
                 ptr2prg => ctf_estimate
             case('ctfops')
@@ -675,11 +677,11 @@ contains
 
     subroutine list_shmem_prgs_in_ui
         write(logfhandle,'(A)') atom_cluster_analysis%name
+        write(logfhandle,'(A)') atoms_rmsd%name
         write(logfhandle,'(A)') automask2D_nano%name
         write(logfhandle,'(A)') center%name
         write(logfhandle,'(A)') cluster_cavgs%name
         write(logfhandle,'(A)') convert%name
-        write(logfhandle,'(A)') compare_nano%name
         write(logfhandle,'(A)') ctfops%name
         write(logfhandle,'(A)') detect_atoms%name
         write(logfhandle,'(A)') dock_volpair%name
@@ -751,6 +753,8 @@ contains
         call set_param(ctf_yes,       'ctf',           'multi',  'CTF status', 'Contrast Transfer Function status; flip indicates that images have been phase-flipped prior(yes|no|flip){yes}', '(yes|no|flip){yes}', .false., 'yes')
         call set_param(ctfpatch,      'ctfpatch',      'binary', 'Patch CTF estimation', 'Whether to perform patch CTF estimation(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(smpd,          'smpd',          'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(smpd1,         'smpd1',         'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms in vol1', 'pixel size in Angstroms', .true., 1.0)
+        call set_param(smpd2,         'smpd2',         'num',    'Sampling distance', 'Distance between neighbouring pixels in Angstroms in vol2', 'pixel size in Angstroms', .true., 1.0)
         call set_param(phaseplate,    'phaseplate',    'binary', 'Phase-plate images', 'Images obtained with Volta phase-plate(yes|no){no}', '(yes|no){no}', .false., 'no')
         call set_param(deftab,        'deftab',        'file',   'CTF parameter file', 'CTF parameter file in plain text (.txt) or SIMPLE project (*.simple) format with dfx, dfy and angast values',&
         &'.simple|.txt parameter file', .false., 'deftab'//trim(METADATA_EXT))
@@ -927,6 +931,36 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_atom_cluster_analysis
+
+    subroutine new_atoms_rmsd
+        ! PROGRAM SPECIFICATION
+        call atoms_rmsd%new(&
+        &'atoms_rmsd', &                                   ! name
+        &'Cluster the atoms in the nanoparticle',& ! descr_short
+        &'is a program for determine atom clustering of nanoparticle atomic-resolution map',& ! descr long
+        &'simple_exec',&                                     ! executable
+        &2, 2, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        ! INPUT PARAMETER SPECIFICATIONS
+        ! image input/output
+        call atoms_rmsd%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume 1', &
+        & 'input volume e.g. vol1.mrc', .true., '')
+        call atoms_rmsd%set_input('img_ios', 2, 'vol2', 'file', 'Volume', 'Nanoparticle volume 2', &
+        & 'input volume e.g. vol2.mrc', .true., '')
+       ! search controls
+        ! parameter input/output
+        call atoms_rmsd%set_input('parm_ios', 1, smpd1)
+        call atoms_rmsd%set_input('parm_ios', 2, smpd2)
+        ! <empty>
+        ! alternative inputs
+        ! <empty>
+        ! filter controls
+        call atoms_rmsd%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1 e.g. Pt', .true., '')
+        call atoms_rmsd%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol2 e.g. Pt', .true., '')
+        ! mask controls
+        ! <empty>
+        ! computer controls
+        ! <empty>
+    end subroutine new_atoms_rmsd
 
     subroutine new_automask2D_nano
         ! PROGRAM SPECIFICATION
@@ -1364,33 +1398,6 @@ contains
         ! computer controls
         ! <empty>
     end subroutine new_convert
-
-    subroutine new_compare_nano
-        ! PROGRAM SPECIFICATION
-        call compare_nano%new(&
-        &'compare_nano', &                                   ! name
-        &'Compare a pair of nanoparticle atomic-resolution maps',& ! descr_short
-        &'is a program for providing statistics of differences between pairs of nanoparticle atomic-resolution maps',& ! descr long
-        &'simple_exec',&                                     ! executable
-        &2, 1, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
-        ! INPUT PARAMETER SPECIFICATIONS
-        ! image input/output
-        call compare_nano%set_input('img_ios', 1, 'vol1', 'file', 'Volume', '1st Nanoparticle volume to compare', &
-        & 'input volume e.g. vol.mrc', .true., '')
-        call compare_nano%set_input('img_ios', 2, 'vol2', 'file', 'Volume', '2nd Nanoparticle volume to compare', &
-        & 'input volume e.g. vol.mrc', .true., '')        ! search controls
-        ! parameter input/output
-        call compare_nano%set_input('parm_ios', 1, smpd)
-        ! alternative inputs
-        ! <empty>
-        ! filter controls
-        call compare_nano%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition of vol1 e.g. Pt', .true., '')
-        call compare_nano%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition of vol2 e.g. Pt', .true., '')
-        ! mask controls
-        ! <empty>
-        ! computer controls
-        !call compare_nano%set_input('comp_ctrls', 1, nthr) to change if it works
-    end subroutine new_compare_nano
 
     subroutine new_ctf_estimate
         ! PROGRAM SPECIFICATION

@@ -396,6 +396,8 @@ type :: parameters
     real    :: sigma=1.0           !< for gaussian function generation {1.}
     real    :: sigma2_fudge=SIGMA2_FUDGE_DEFAULT !< fudge factor for sigma2_noise{50.}
     real    :: smpd=2.             !< sampling distance, same as EMANs apix(in A)
+    real    :: smpd1=2.            !< sampling distance, same as EMANs apix(in A), when have 2 nano to compare, need smpd of each of them
+    real    :: smpd2=2.            !< sampling distance, same as EMANs apix(in A)
     real    :: smpd_targets2D(2)
     real    :: snr=0.              !< signal-to-noise ratio
     real    :: tau=TAU_DEFAULT     !< tau fudge factor, controls the sharpness of the orientation weight distribution,
@@ -816,6 +818,8 @@ contains
         call check_rarg('shcfrac',        self%shcfrac)
         call check_rarg('sherr',          self%sherr)
         call check_rarg('smpd',           self%smpd)
+        call check_rarg('smpd1',          self%smpd1)
+        call check_rarg('smpd2',          self%smpd2)
         call check_rarg('sigma',          self%sigma)
         call check_rarg('sigma2_fudge',   self%sigma2_fudge)
         call check_rarg('snr',            self%snr)

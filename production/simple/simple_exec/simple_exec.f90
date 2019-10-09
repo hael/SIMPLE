@@ -94,10 +94,10 @@ type(tseries_corrfilt_commander)       :: xtseries_corrfilt
 type(tseries_ctf_estimate_commander)   :: xtseries_ctf_estimate
 type(automask2D_nano_commander)        :: xautomsk2D_nano
 type(detect_atoms_commander)           :: xdetect_atoms
+type(atoms_rmsd_commander)             :: xatoms_rmsd
 type(radial_dependent_stats_commander) :: xradial_dependent_stats
 type(atom_cluster_analysis_commander)  :: xatom_cluster_analysis
 type(nano_softmask_commander)          :: xnano_softmask
-type(compare_nano_commander)           :: xcompare_nano
 
 ! SYSTEM INTERACTION PROGRAMS
 type(mkdir_commander) :: xmkdir
@@ -255,8 +255,9 @@ select case(prg)
         call xatom_cluster_analysis%execute(cline)
     case('nano_softmask')
         call xnano_softmask%execute(cline)
-    case('compare_nano')
-        call xcompare_nano%execute(cline)
+
+    case('atoms_rmsd')
+        call xatoms_rmsd%execute(cline)
 
 
     ! SYSTEM INTERACTION PROGRAMS

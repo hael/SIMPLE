@@ -53,13 +53,11 @@ type :: nanoparticle
     procedure, private :: nanopart_masscen
     procedure          :: calc_aspect_ratio
     procedure          :: discard_outliers
-    procedure          :: radial_dependent_stats
     procedure          :: atom_intensity_stats
     procedure          :: validate_atomic_positions
     ! phase correlation
     procedure          :: phasecorrelation_nano_gaussian
     ! clustering
-    procedure          :: cluster
     procedure, private :: affprop_cluster_ar
     procedure, private :: affprop_cluster_ang
     procedure, private :: affprop_cluster_dist_distr
@@ -67,12 +65,14 @@ type :: nanoparticle
     procedure          :: search_polarization
     ! execution
     procedure          :: identify_atomic_pos
-    procedure          :: compare_atomic_models
+    procedure          :: radial_dependent_stats
+    procedure          :: cluster
+    procedure          :: atoms_rmsd
+    procedure          :: make_soft_mask
     ! visualization and output
     procedure          :: write_centers
     procedure          :: print_asym_unit
     ! others
-    procedure          :: make_soft_mask
     procedure, private :: update_self_ncc
     procedure          :: keep_atomic_pos_at_radius
     ! kill
@@ -347,6 +347,7 @@ contains
         do n_atoms = 1, N
             self%centers(:,n_atoms) = a%get_coord(n_atoms)/self%smpd + 1.
         enddo
+        self%n_cc = N
         call a%kill
     end subroutine set_atomic_coords
 
@@ -1483,22 +1484,24 @@ contains
         call self%img_bin%write(basename(trim(self%fbody))//'SoftMask.mrc')
     end subroutine make_soft_mask
 
-    ! This subroutine takes in input 2 nanoparticle and their
-    ! correspondent filenames.
-    ! The output is the rmsd of their atomic models.
-    subroutine compare_atomic_models(nano1,nano2)
+    subroutine atoms_rmsd(nano1,nano2,r)
+        use simple_atoms, only : atoms
+        use gnufor2
         class(nanoparticle), intent(inout) :: nano1, nano2 !nanoparticles to compare
-        real, allocatable :: centers1(:,:), centers2(:,:)
-        real    :: rmsd
-        integer :: i
-        logical :: print_ar ! for printing aspect ratios statistics
-        logical :: print_as ! for printing asymmetric units in c3-sym nanoparticles
-        print_ar = .false.
-        print_as = .false.
-        if(print_as) then
-            call nano1%print_asym_unit(3)
-            call nano2%print_asym_unit(3)
-        endif
+        real, optional,      intent(out)   :: r   !rmsd calculated
+        logical, allocatable :: mask(:)
+        real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
+        integer :: location(1)
+        integer :: i, j
+        integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
+        integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
+        integer :: cnt,cnt2,cnt3
+        real    :: sum, rmsd
+        real    :: coord(3)
+        real    :: avg, stdev, m(3), tmp_max, d !for statistics calculation
+        type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
+        type(atoms) :: centers_close1, centers_close2
+        type(atoms) :: couples1
         open(121, file='CompareAtomicModels')
         write(unit = 121, fmt = '(a)') '>>>>>>>>>   COMPARE NANO   >>>>>>>>>'
         write(unit = 121, fmt = '(a)') ''
@@ -1507,249 +1510,231 @@ contains
         write(unit = 121, fmt = '(a)') 'and'
         write(unit = 121, fmt = '(a,a)') trim(nano2%fbody), ' ---> vol2'
         write(unit = 121, fmt = '(a)')  '>>>>>>>>>VOLUME COMPARISION>>>>>>>>'
-        call nano1%phasecorrelation_nano_gaussian()
-        call nano2%phasecorrelation_nano_gaussian()
-        call nano1%binarize()
-        call nano2%binarize()
-        ! Outliers discarding
-        call nano1%discard_outliers()
-        call nano2%discard_outliers()
-        ! Validate identified positions
-        call nano1%validate_atomic_positions()
-        call nano2%validate_atomic_positions()
-        ! Distance distribution calculation
-        ! call nano1%distances_distribution()
-        ! call nano2%distances_distribution()
-        ! ! Radial dependent statistics calculation
-        ! call nano1%radial_dependent_stats(1)
-        ! call nano2%radial_dependent_stats(2)
-        ! ! Aspect ratios calculations
-        ! call nano1%calc_aspect_ratio(print_ar)
-        ! call nano2%calc_aspect_ratio(print_ar)
-        ! ! Atomic intensity stats
-        ! call nano1%atom_intensity_stats()
-        ! call nano2%atom_intensity_stats()
-        ! Ouput file, come back to initial folder
-        call simple_chdir(trim(nano1%output_dir), errmsg="simple_nanoparticles :: compare_atomic_models, simple_chdir; ")
-        ! RMSD calculation
-        call atomic_position_rmsd(nano1,nano2, rmsd)
-        write(logfhandle,*) '***comparison completed'
-        close(121)
-        if(allocated(centers1)) deallocate(centers1)
-        if(allocated(centers2)) deallocate(centers2)
-    contains
-
-        ! This subroutine takes in input coords of the atomic positions
-        ! in the nanoparticles to compare and calculates the rmsd
-        ! between them.
-        ! See formula
-        ! https://en.wikipedia.org/wiki/Root-mean-square_deviation_of_atomic_positions
-        subroutine atomic_position_rmsd(nano1,nano2,r)
-            use simple_atoms, only : atoms
-            use gnufor2
-            class(nanoparticle), intent(inout) :: nano1, nano2 !nanoparticles to compare
-            real, optional, intent(out) :: r   !rmsd calculated
-            logical, allocatable :: mask(:)
-            real,    allocatable :: dist(:), dist_sq(:), dist_no_zero(:), dist_close(:)
-            integer :: location(1)
-            integer :: i, j
-            integer :: N_min !min{nb atoms in nano1, nb atoms in nano2}
-            integer :: N_max !max{nb atoms in nano1, nb atoms in nano2}
-            integer :: cnt,cnt2,cnt3
-            real    :: sum, rmsd
-            real    :: coord(3)
-            real    :: avg, stdev, m(3), tmp_max, d !for statistics calculation
-            type(atoms) :: centers_coupled1, centers_coupled2 !visualization purposes
-            type(atoms) :: centers_close1, centers_close2
-            type(atoms) :: couples1
-            ! If they don't have the same nb of atoms
-            if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
-                N_min = size(nano1%centers, dim = 2)
-                N_max = size(nano2%centers, dim = 2)
-                write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_min
-                write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_max
-                write(unit = 121, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
-                call centers_coupled1%new(N_max, dummy=.true.)
-                call centers_coupled2%new(N_max, dummy=.true.)
-                call centers_close1%new  (N_max, dummy=.true.)
-                call centers_close2%new  (N_max, dummy=.true.)
-                call couples1%new        (N_max, dummy=.true.)
-                allocate(dist(N_max), dist_sq(N_max), source = 0.)
-                allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
-                allocate(mask(N_min), source = .true.)
-                cnt  = 0
-                cnt2 = 0
-                cnt3 = 0
-                do i = 1, N_max !compare based on centers2
-                    dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
-                    if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
-                        dist(i) = 0. !it means there is no correspondent atom in the other nano
-                        cnt = cnt + 1  !to discard them in the rmsd calculation
-                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                        ! remove the atoms from the pdb file
-                        call centers_coupled1%set_occupancy(i,0.)
-                        call centers_coupled2%set_occupancy(i,0.)
-                        call centers_close1%set_occupancy(i,0.)
-                        call centers_close2%set_occupancy(i,0.)
-                        call couples1%set_occupancy(i,0.)
-                    elseif(dist(i)*nano2%smpd < 0.5) then
-                        cnt3 = cnt3 + 1
-                        dist_close(i) = dist(i)**2
-                        call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
-                        call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                        ! remove the atoms from the pdb file
-                        call centers_coupled1%set_occupancy(i,0.)
-                        call centers_coupled2%set_occupancy(i,0.)
-                        call couples1%set_occupancy(i,0.)
-                    elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
-                        cnt2 = cnt2 + 1
-                        call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
-                        call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                        call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                        mask(location(1)) = .false. ! not to consider the same atom more than once
-                        ! remove the atoms from the pdb file
-                        call centers_close1%set_occupancy(i,0.)
-                        call centers_close2%set_occupancy(i,0.)
-                    endif
-                    dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
-                    if(DEBUG_HERE) then
-                         write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
-                         write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
-                    endif
-                enddo
-            else
-                N_min = size(nano2%centers, dim = 2)
-                N_max = size(nano1%centers, dim = 2)
-                write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_max
-                write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_min
-                write(unit = 121, fmt = '(i3,a)') abs(N_max-N_min), 'atoms do NOT correspond'
-                allocate(dist(N_max), dist_sq(N_max), source = 0.)
-                allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
-                call centers_coupled1%new(N_max, dummy=.true.)
-                call centers_coupled2%new(N_max, dummy=.true.)
-                call centers_close1%new  (N_max, dummy=.true.)
-                call centers_close2%new  (N_max, dummy=.true.)
-                allocate(mask(N_min), source = .true.)
-                cnt  = 0
-                cnt2 = 0
-                cnt3 = 0
-                do i = 1, N_max !compare based on centers1
-                    dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
-                    if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
-                        dist(i) = 0.
-                        cnt = cnt + 1
-                        call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                        ! remove the atoms from the pdb file
-                        call centers_coupled1%set_occupancy(i,0.)
-                        call centers_coupled2%set_occupancy(i,0.)
-                        call centers_close1%set_occupancy(i,0.)
-                        call centers_close2%set_occupancy(i,0.)
-                        call couples1%set_occupancy(i,0.)
-                    elseif(dist(i)*nano2%smpd <= 0.5) then
-                        cnt3 = cnt3 + 1
-                        dist_close(i) = dist(i)**2
-                        call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
-                        call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                        ! remove the atoms from the pdb file
-                        call centers_coupled1%set_occupancy(i,0.)
-                        call centers_coupled2%set_occupancy(i,0.)
-                        call couples1%set_occupancy(i,0.)
-                    elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
-                        cnt2 = cnt2 + 1
-                        call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
-                        call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
-                        call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
-                        mask(location(1)) = .false. ! not to consider the same atom more than once
-                        ! remove the atoms from the pdb file
-                        call centers_close1%set_occupancy(i,0.)
-                        call centers_close2%set_occupancy(i,0.)
-                    endif
-                    dist_sq(i) = dist(i)**2 !formula wants them square
-                    if(DEBUG_HERE) then
-                        write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
-                        write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
-                    endif
-                enddo
+        ! If they don't have the same nb of atoms
+        if(size(nano1%centers, dim = 2) <= size(nano2%centers, dim = 2)) then
+            N_min = size(nano1%centers, dim = 2)
+            N_max = size(nano2%centers, dim = 2)
+            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_min
+            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_max
+            write(unit = 121, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
+            call centers_coupled1%new(N_max, dummy=.true.)
+            call centers_coupled2%new(N_max, dummy=.true.)
+            call centers_close1%new  (N_max, dummy=.true.)
+            call centers_close2%new  (N_max, dummy=.true.)
+            call couples1%new        (N_max, dummy=.true.)
+            allocate(dist(N_max), dist_sq(N_max), source = 0.)
+            allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
+            allocate(mask(N_min), source = .true.)
+            cnt  = 0
+            cnt2 = 0
+            cnt3 = 0
+            do i = 1, N_max !compare based on centers2
+                dist(i) = pixels_dist(nano2%centers(:,i),nano1%centers(:,:),'min',mask,location)
+                if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
+                    dist(i) = 0. !it means there is no correspondent atom in the other nano
+                    cnt = cnt + 1  !to discard them in the rmsd calculation
+                    call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    ! remove the atoms from the pdb file
+                    call centers_coupled1%set_occupancy(i,0.)
+                    call centers_coupled2%set_occupancy(i,0.)
+                    call centers_close1%set_occupancy(i,0.)
+                    call centers_close2%set_occupancy(i,0.)
+                    call couples1%set_occupancy(i,0.)
+                elseif(dist(i)*nano2%smpd < 0.5) then
+                    cnt3 = cnt3 + 1
+                    dist_close(i) = dist(i)**2
+                    call centers_close2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                    call centers_close1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    ! remove the atoms from the pdb file
+                    call centers_coupled1%set_occupancy(i,0.)
+                    call centers_coupled2%set_occupancy(i,0.)
+                    call couples1%set_occupancy(i,0.)
+                elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,220] pm
+                    cnt2 = cnt2 + 1
+                    call centers_coupled2%set_coord(i,(nano2%centers(:,i)-1.)*nano2%smpd)
+                    call centers_coupled1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    call couples1%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    mask(location(1)) = .false. ! not to consider the same atom more than once
+                    ! remove the atoms from the pdb file
+                    call centers_close1%set_occupancy(i,0.)
+                    call centers_close2%set_occupancy(i,0.)
+                endif
+                dist_sq(i) = dist(i)**2 !formula wants them square, could improve performance here
+                if(DEBUG_HERE) then
+                     write(logfhandle,*) 'ATOM', i,'coords: ', nano2%centers(:,i), 'coupled with '
+                     write(logfhandle,*) '    ',location, 'coordinates: ', nano1%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                endif
+            enddo
+        else
+            N_min = size(nano2%centers, dim = 2)
+            N_max = size(nano1%centers, dim = 2)
+            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol1   ', N_max
+            write(unit = 121, fmt = '(a,i3)') 'NB atoms in vol2   ', N_min
+            write(unit = 121, fmt = '(a,i3,a)') '--->', abs(N_max-N_min), ' atoms do NOT correspond'
+            allocate(dist(N_max), dist_sq(N_max), source = 0.)
+            allocate(dist_close(N_max), source = 0.) ! there are going to be unused entry of the vector
+            call centers_coupled1%new(N_max, dummy=.true.)
+            call centers_coupled2%new(N_max, dummy=.true.)
+            call centers_close1%new  (N_max, dummy=.true.)
+            call centers_close2%new  (N_max, dummy=.true.)
+            call couples1%new        (N_max, dummy=.true.)
+            allocate(mask(N_min), source = .true.)
+            cnt  = 0
+            cnt2 = 0
+            cnt3 = 0
+            do i = 1, N_max !compare based on centers1
+                dist(i) = pixels_dist(nano1%centers(:,i),nano2%centers(:,:),'min',mask,location)
+                if(dist(i)*nano2%smpd > 2.*nano2%theoretical_radius) then
+                    dist(i) = 0.
+                    cnt = cnt + 1
+                    call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    ! remove the atoms from the pdb file
+                    call centers_coupled1%set_occupancy(i,0.)
+                    call centers_coupled2%set_occupancy(i,0.)
+                    call centers_close1%set_occupancy(i,0.)
+                    call centers_close2%set_occupancy(i,0.)
+                    call couples1%set_occupancy(i,0.)
+                elseif(dist(i)*nano2%smpd <= 0.5) then
+                    cnt3 = cnt3 + 1
+                    dist_close(i) = dist(i)**2
+                    call centers_close1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                    call centers_close2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    ! remove the atoms from the pdb file
+                    call centers_coupled1%set_occupancy(i,0.)
+                    call centers_coupled2%set_occupancy(i,0.)
+                    call couples1%set_occupancy(i,0.)
+                elseif(dist(i)*nano2%smpd > 0.5 .and. dist(i)*nano2%smpd<=2.*nano2%theoretical_radius ) then  !to save the atoms which correspond with a precision in the range [0,2*theoretical_radius] pm
+                    cnt2 = cnt2 + 1
+                    call centers_coupled1%set_coord(i,(nano1%centers(:,i)-1.)*nano1%smpd)
+                    call centers_coupled2%set_coord(i,(nano2%centers(:,location(1))-1.)*nano2%smpd)
+                    call couples1%set_coord(i,(nano1%centers(:,location(1))-1.)*nano1%smpd)
+                    mask(location(1)) = .false. ! not to consider the same atom more than once
+                    ! remove the atoms from the pdb file
+                    call centers_close1%set_occupancy(i,0.)
+                    call centers_close2%set_occupancy(i,0.)
+                endif
+                dist_sq(i) = dist(i)**2 !formula wants them square
+                if(DEBUG_HERE) then
+                    write(logfhandle,*) 'ATOM', i,'coordinates: ', nano1%centers(:,i), 'coupled with '
+                    write(logfhandle,*) '    ',location, 'coordinates: ', nano2%centers(:,location(1)), 'DIST^2= ', dist_sq(i), 'DIST = ', dist(i)
+                endif
+            enddo
+        endif
+        write(unit = 121, fmt = '(i3,a,i2,a)')      cnt3,' atoms correspond within       50 pm. (', cnt3*100/N_min, '% of the atoms )'
+        write(unit = 121, fmt = '(i3,a,a,a,i2,a)')  cnt2,' atoms correspond within 50 - ',trim(int2str(nint(2.*nano2%theoretical_radius*100.))),' pm. (', cnt2*100/N_min, '% of the atoms )'
+        write(unit = 121, fmt = '(i3,a,a,a,i2,a)')  cnt-(N_max-N_min),' atoms have error bigger than ',trim(int2str(nint(2.*nano2%theoretical_radius*100.))),' pm. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
+        ! remove unused atoms from the pdb file
+        do i = 1, N_max
+            coord(:) = centers_close1%get_coord(i)
+            if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close1%set_occupancy(i,0.)
+            coord(:) = centers_close2%get_coord(i)
+            if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close2%set_occupancy(i,0.)
+            coord(:) = centers_coupled1%get_coord(i)
+            if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled1%set_occupancy(i,0.)
+            coord(:) = centers_coupled2%get_coord(i)
+            if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled2%set_occupancy(i,0.)
+        enddo
+        call centers_close1%writepdb  (trim(nano1%fbody)//'_atom_close_couples')
+        call centers_close2%writepdb  (trim(nano2%fbody)//'_atom_close_couples')
+        call centers_coupled1%writepdb(trim(nano1%fbody)//'_atom_couples')
+        call centers_coupled2%writepdb(trim(nano2%fbody)//'_atom_couples')
+        call couples1%writepdb('extra_atoms')
+        !Avg dist and stdev symmetry breaking atoms from the center
+        !Max dist atoms from the center
+        avg     = 0.
+        cnt3    = 0
+        m(:)    = nano1%nanopart_masscen()
+        m(:)    = (m(:)-1.)*nano1%smpd
+        tmp_max = 0.
+        do i = 1, N_max
+            coord(:) = centers_coupled1%get_coord(i)
+            if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                cnt3 = cnt3 + 1
+                avg = avg + euclid(coord,m)
+                if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
             endif
-            write(unit = 121, fmt = '(i3,a,i2,a)')  cnt3,               ' atoms correspond within       50 pm. (', cnt3*100/N_min, '% of the atoms )'
-            write(unit = 121, fmt = '(i3,a,i2,a)')  cnt2,               ' atoms correspond within 50 - 220 pm. (', cnt2*100/N_min, '% of the atoms )'
-            write(unit = 121, fmt = '(i3,a,i2,a)')  cnt-(N_max-N_min),  ' atoms have error bigger than 220 pm. (',(cnt-N_max+N_min)*100/N_min, '% of the atoms )' !remove the extra atoms
-            ! remove unused atoms from the pdb file
-            do i = 1, N_max
-                coord(:) = centers_close1%get_coord(i)
-                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close1%set_occupancy(i,0.)
-                coord(:) = centers_close2%get_coord(i)
-                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_close2%set_occupancy(i,0.)
-                coord(:) = centers_coupled1%get_coord(i)
-                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled1%set_occupancy(i,0.)
-                coord(:) = centers_coupled2%get_coord(i)
-                if(coord(1)<TINY .and. coord(2)<TINY .and. coord(3)<TINY) call centers_coupled2%set_occupancy(i,0.)
-            enddo
-            call centers_close1%writepdb  (trim(nano1%fbody)//'_atom_close_couples')
-            call centers_close2%writepdb  (trim(nano2%fbody)//'_atom_close_couples')
-            call centers_coupled1%writepdb(trim(nano1%fbody)//'_atom_couples')
-            call centers_coupled2%writepdb(trim(nano2%fbody)//'_atom_couples')
-            call couples1%writepdb('extra_atoms')
-            !Avg dist and stdev symmetry breaking atoms from the center
-            !Max dist atoms from the center
-            avg     = 0.
-            cnt3    = 0
-            m(:)    = nano1%nanopart_masscen()
-            m(:)    = (m(:)-1.)*nano1%smpd
-            tmp_max = 0.
-            do i = 1, N_max
-                coord(:) = centers_coupled1%get_coord(i)
-                if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
-                    cnt3 = cnt3 + 1
-                    avg = avg + euclid(coord,m)
-                    if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
-                endif
-            enddo
-            avg   = avg/real(cnt3)
-            cnt3  = 0
-            stdev = 0.
-            do i = 1, N_max
-                coord(:) = centers_coupled1%get_coord(i)
-                if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
-                    cnt3 = cnt3 + 1
-                    stdev = stdev + (euclid(coord,m)-avg)**2
-                endif
-            enddo
-            stdev = sqrt(stdev/(real(cnt3)-1.))
-            write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
-            write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
-            write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
-            tmp_max = 0. ! reset
-            do i = 1, size(nano1%centers, dim = 2)
-                coord(:) = (nano1%centers(:,i)-1.)*nano1%smpd
-                    d =  euclid(coord,m)
-                    if(d > tmp_max) tmp_max = d
-            enddo
-            write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL1 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
-            ! kill atoms instances
-            call centers_close1%kill
-            call centers_close2%kill
-            call centers_coupled1%kill
-            call centers_coupled2%kill
-            call couples1%kill
-            !RMSD
-            rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
-            write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS   = ', rmsd*nano1%smpd, ' A'
-            write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 50 PM = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
-            dist_no_zero = pack(dist, dist>TINY)
-            dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
-            call hist(dist_no_zero, 50)
-            !For SCV files
-            open(117, file='RMSDhist')
-            write (117,*) 'r'
-            do i = 1, size(dist_no_zero)
-                write (117,'(A)', advance='yes') trim(real2str(dist_no_zero(i)))
-            end do
-            close(117)
-            if(present(r)) r=rmsd
-            deallocate(dist, dist_sq, dist_no_zero, mask)
-        end subroutine atomic_position_rmsd
-    end subroutine compare_atomic_models
+        enddo
+        avg   = avg/real(cnt3)
+        cnt3  = 0
+        stdev = 0.
+        do i = 1, N_max
+            coord(:) = centers_coupled1%get_coord(i)
+            if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                cnt3 = cnt3 + 1
+                stdev = stdev + (euclid(coord,m)-avg)**2
+            endif
+        enddo
+        stdev = sqrt(stdev/(real(cnt3)-1.))
+        write(unit = 121, fmt = '(a)')       '--->    IN VOL1    <---'
+        write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
+        tmp_max = 0. ! reset
+        do i = 1, size(nano1%centers, dim = 2)
+            coord(:) = (nano1%centers(:,i)-1.)*nano1%smpd
+                d =  euclid(coord,m)
+                if(d > tmp_max) tmp_max = d
+        enddo
+        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL1 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
+        avg     = 0.
+        cnt3    = 0
+        m(:)    = nano2%nanopart_masscen()
+        m(:)    = (m(:)-1.)*nano2%smpd
+        tmp_max = 0.
+        do i = 1, N_max
+            coord(:) = centers_coupled2%get_coord(i)
+            if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                cnt3 = cnt3 + 1
+                avg = avg + euclid(coord,m)
+                if(euclid(coord,m) > tmp_max) tmp_max = euclid(coord,m)
+            endif
+        enddo
+        avg   = avg/real(cnt3)
+        cnt3  = 0
+        stdev = 0.
+        do i = 1, N_max
+            coord(:) = centers_coupled2%get_coord(i)
+            if(coord(1)>TINY .and. coord(2)>TINY .and. coord(3)>TINY) then
+                cnt3 = cnt3 + 1
+                stdev = stdev + (euclid(coord,m)-avg)**2
+            endif
+        enddo
+        stdev = sqrt(stdev/(real(cnt3)-1.))
+        write(unit = 121, fmt = '(a)')       '--->    IN VOL2    <---'
+        write(unit = 121, fmt = '(a,f6.3,a)')'AVG     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', avg, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)')'STDEV   DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', stdev, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS THAT BREAK THE SYMMETRY TO THE CENTER: ', tmp_max, ' A'
+        tmp_max = 0. ! reset
+        do i = 1, size(nano2%centers, dim = 2)
+            coord(:) = (nano2%centers(:,i)-1.)*nano2%smpd
+                d =  euclid(coord,m)
+                if(d > tmp_max) tmp_max = d
+        enddo
+        write(unit = 121, fmt = '(a,f6.3,a)')'MAX     DIST ATOMS IN VOL2 3D RECONSTRUCT. TO THE CENTER: ', tmp_max, ' A'
+        ! kill atoms instances
+        call centers_close1%kill
+        call centers_close2%kill
+        call centers_coupled1%kill
+        call centers_coupled2%kill
+        call couples1%kill
+        !RMSD
+        rmsd = sqrt(sum(dist_sq)/real(count(dist_sq > TINY)))
+        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD CALCULATED CONSIDERING ALL ATOMS   = ', rmsd*nano1%smpd, ' A'
+        write(unit = 121, fmt = '(a,f6.3,a)') 'RMSD ATOMS THAT CORRESPOND WITHIN 50 PM = ', (sqrt(sum(dist_close)/real(count(dist_close > TINY))))*nano1%smpd, ' A'
+        dist_no_zero = pack(dist, dist>TINY)
+        dist_no_zero = dist_no_zero*nano1%smpd ! report distances in Amstrongs
+        call hist(dist_no_zero, 50)
+        !For SCV files
+        open(117, file='RMSDhist')
+        write (117,*) 'r'
+        do i = 1, size(dist_no_zero)
+            write (117,'(A)', advance='yes') trim(real2str(dist_no_zero(i)))
+        end do
+        close(117)
+        if(present(r)) r=rmsd
+        close(121)
+        deallocate(dist, dist_sq, dist_no_zero, mask)
+    end subroutine atoms_rmsd
 
     ! Check for symmetry at different radii.
     ! radii: 5, 7, 9, 12 A

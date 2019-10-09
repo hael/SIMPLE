@@ -281,24 +281,72 @@ end module simple_test_chiara_try_mod
        use simple_segmentation
        use simple_test_chiara_try_mod
        use simple_image, only : image
-       type(image) :: img, img_out
-       integer     :: nb_modif
-       integer     :: ldim(3)
-       integer, allocatable :: imat_cc(:,:,:)
+       use simple_atoms, only : atoms
+       type(image) :: heterog_nano,heterog_nano_cc
+       type(image) :: one_atom
+       real, pointer :: rmat_one_atom(:,:,:)
+       type(atoms) :: a
+       real :: cutoff, smpd
+       integer :: ldim(3)
+       real, allocatable :: avg_intensity(:),avg_intensity_clustered(:)
+       real, allocatable :: max_intensity(:),max_intensity_clustered(:)
+       integer :: N ! number of atoms
+       integer :: n_atom
        real, allocatable :: rmat(:,:,:)
-       real :: diam
-       integer :: i
-       real :: thresh(3)
+       real, pointer     :: rmat_cc(:,:,:)
+       logical, allocatable :: mask(:,:,:)
+       real :: thresh
+       smpd = 0.358
+       ldim = 160
+       cutoff = 8.*smpd
+       call heterog_nano%new(ldim,smpd)
+       call a%new('atom_centersAUPT.pdb')
+       call a%convolve(heterog_nano, cutoff)
+       call heterog_nano%write('HeterogeneousNano.mrc')
+       rmat = heterog_nano%get_rmat()
+       call heterog_nano%bin(90.) ! theshold
+       call heterog_nano%write('HeterogeneousNanoBIN.mrc')
+       call heterog_nano%find_connected_comps(heterog_nano_cc)
+       call heterog_nano_cc%write('HeterogeneousNanoCC.mrc')
+       N = a%get_n()
+       allocate(avg_intensity(N), source = 0.)
+       allocate(avg_intensity_clustered(N), source = 0.)
+       allocate(max_intensity(N), source = 0.)
+       allocate(max_intensity_clustered(N), source = 0.)
+       call heterog_nano_cc%get_rmat_ptr(rmat_cc)
+       allocate(mask(ldim(1),ldim(2),ldim(3)), source = .false.)
+       ! initialise
+       max_intensity(:)   = 0.
+       avg_intensity(:)   = 0.
+       ! stdev_intensity(:) = 0.
 
+       print *, 'Number of atoms: ', N
+       print *, 'minval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))',minval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))
+       print *, 'maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))',maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))
 
-       call img%new([160,160,1],0.358)
-       do i = 1,887
-           call progress(i,887)
-           call img%read('chunk_avgs.mrcs',i)
-           call otsu_robust_fast(img, is2D=.true., noneg=.false.,thresh=thresh)
-           call img%write('otsuImgImg.mrcs', i)
-       enddo
+       do n_atom = 1, N
+           mask = .false.
+           where(abs(rmat_cc(1:ldim(1),1:ldim(2),1:ldim(3)) - real(n_atom)) < TINY) mask = .true.
+           ! print *, 'n_atom',n_atom,'mask == true', count(mask .eqv. .true.)
+           avg_intensity(n_atom) = sum   (rmat(1:ldim(1),1:ldim(2),1:ldim(3)),mask)
+           max_intensity(n_atom) = maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)),mask)
+           ! print *, 'ATOM ', n_atom, 'max_intensity',max_intensity(n_atom)
+        enddo
+        print *, 'Otsu'
+        ! call otsu(avg_intensity, avg_intensity_clustered, thresh)
+        call otsu(max_intensity, max_intensity_clustered, thresh)
+        print *, 'thresh', thresh
+        do n_atom = 1, N
+            if(max_intensity_clustered(n_atom) < 0.5) then
+                print *, 'atom', n_atom, 'belonging to class 1'
+            else
+            endif
+        enddo
 
+        deallocate(rmat)
+        call a%kill
+        call heterog_nano%kill
+        deallocate(avg_intensity,avg_intensity_clustered, max_intensity, max_intensity_clustered)
  end program simple_test_chiara_try
 
      !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION

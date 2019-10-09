@@ -80,7 +80,7 @@ contains
         call self%ps_bin%new(self%ldim, self%smpd)
         call self%ps_ccs%new(self%ldim, self%smpd)
         !power spectrum generation
-        call self%mic%mic2spec(BOX, 'power',LOW_LIM, self%ps)
+        call self%mic%mic2spec(BOX, 'sqrt',LOW_LIM, self%ps)
         if(DEBUG_HERE) call self%ps%write(PATH_HERE//basename(trim(self%fbody))//'_generated_ps.mrc')
     end subroutine new_pspec_statistics
 

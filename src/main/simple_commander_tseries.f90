@@ -23,8 +23,8 @@ public :: tseries_corrfilt_commander
 public :: tseries_ctf_estimate_commander
 public :: refine3D_nano_commander_distr
 public :: tseries_split_commander
-public :: compare_nano_commander
 public :: detect_atoms_commander
+public :: atoms_rmsd_commander
 public :: radial_dependent_stats_commander
 public :: atom_cluster_analysis_commander
 public :: nano_softmask_commander
@@ -87,14 +87,14 @@ type, extends(commander_base) :: tseries_split_commander
   contains
     procedure :: execute      => exec_tseries_split
 end type tseries_split_commander
-type, extends(commander_base) :: compare_nano_commander
-  contains
-    procedure :: execute      => exec_compare_nano
-end type compare_nano_commander
 type, extends(commander_base) :: detect_atoms_commander
   contains
     procedure :: execute      => exec_detect_atoms
 end type detect_atoms_commander
+type, extends(commander_base) :: atoms_rmsd_commander
+  contains
+    procedure :: execute      => exec_atoms_rmsd
+end type atoms_rmsd_commander
 type, extends(commander_base) :: radial_dependent_stats_commander
   contains
     procedure :: execute      => exec_radial_dependent_stats
@@ -709,42 +709,6 @@ contains
         call simple_end('**** SIMPLE_TSERIES_SPLIT NORMAL STOP ****')
     end subroutine exec_tseries_split
 
-    subroutine exec_compare_nano( self, cline )
-        use simple_nanoparticles_mod
-        use simple_image, only : image
-        class(compare_nano_commander), intent(inout) :: self
-        class(cmdline),                intent(inout) :: cline !< command line input
-        type(parameters)   :: params
-        type(nanoparticle) :: nano1, nano2
-        integer :: nptcls
-        integer :: ldim1(3), ldim2(3)
-        real    :: smpd1,smpd2
-        call params%new(cline)
-        if( .not. cline%defined('smpd') )then
-            THROW_HARD('ERROR! smpd needs to be present; exec_compare_nano')
-        endif
-        if( .not. cline%defined('vol1') )then
-            THROW_HARD('ERROR! vol1 needs to be present; exec_compare_nano')
-        endif
-        if( .not. cline%defined('vol2') )then
-            THROW_HARD('ERROR! vol2 needs to be present; exec_compare_nano')
-        endif
-        ! COMPARING
-        call nano1%new(params%vols(1), params%smpd,params%element1)
-        call nano2%new(params%vols(2), params%smpd,params%element2)
-        call find_ldim_nptcls (params%vols(1), ldim1, nptcls, smpd1)
-        call find_ldim_nptcls (params%vols(2), ldim2, nptcls, smpd2)
-        if(any(ldim1 .ne. ldim2))   THROW_HARD('Non compatible dimensions of the particles to compare; compare_atomic_models')
-        if(abs(smpd1-smpd2) > TINY) THROW_HARD('Non compatible particles, different smpd; compare_atomic_models')
-        ! Nanoparticle binarization
-        call nano1%compare_atomic_models(nano2)
-        ! kill
-        call nano1%kill
-        call nano2%kill
-        ! end gracefully
-        call simple_end('**** SIMPLE_COMPARE_NANO NORMAL STOP ****')
-    end subroutine exec_compare_nano
-
     ! Performs preprocessing on the nanoparticle and steps until
     ! atomic positions are identified, validated and written on
     ! a file.
@@ -770,6 +734,40 @@ contains
         ! end gracefully
         call simple_end('**** SIMPLE_DETECT_ATOMS NORMAL STOP ****')
     end subroutine exec_detect_atoms
+
+    subroutine exec_atoms_rmsd( self, cline )
+        use simple_nanoparticles_mod
+        use simple_image, only : image
+        class(atoms_rmsd_commander), intent(inout) :: self
+        class(cmdline),              intent(inout) :: cline !< command line input
+        type(parameters)   :: params
+        type(nanoparticle) :: nano1, nano2
+        real    :: smpd
+        call params%new(cline)
+        if( .not. cline%defined('smpd1') )then
+            THROW_HARD('ERROR! smpd1 needs to be present; exec_atoms_rmsd')
+        endif
+        if( .not. cline%defined('smpd2') )then
+            THROW_HARD('ERROR! smpd2 needs to be present; exec_atoms_rmsd')
+        endif
+        if( .not. cline%defined('vol1') )then
+            THROW_HARD('ERROR! vol1 needs to be present; exec_atoms_rmsd')
+        endif
+        if( .not. cline%defined('vol2') )then
+            THROW_HARD('ERROR! vol2 needs to be present; exec_atoms_rmsd')
+        endif
+        call nano1%new(params%vols(1), params%smpd,params%element1)
+        call nano2%new(params%vols(2), params%smpd,params%element2)
+        ! execute
+        call nano1%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
+        call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
+        call nano1%atoms_rmsd(nano2)
+        ! kill
+        call nano1%kill
+        call nano2%kill
+        ! end gracefully
+        call simple_end('**** SIMPLE_ATOMS_RMSD NORMAL STOP ****')
+    end subroutine exec_atoms_rmsd
 
     ! Calculates distances distribution across the whole nanoparticle
     ! and radial dependent statistics.
@@ -805,8 +803,6 @@ contains
         call simple_end('**** SIMPLE_RADIAL_DEPENDENT_STATS NORMAL STOP ****')
     end subroutine exec_radial_dependent_stats
 
-    ! Calculates distances distribution across the whole nanoparticle
-    ! and radial dependent statistics.
     subroutine exec_atom_cluster_analysis( self, cline )
         use simple_nanoparticles_mod
         use simple_image, only : image
