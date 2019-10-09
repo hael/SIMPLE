@@ -311,13 +311,13 @@ contains
     !< calculate tmp matrix for cost function
     subroutine calc_tmp_cmat12( self )
         class(ftexp_shsrch), intent(inout) :: self
-        complex, pointer :: cmat1_ptr(:,:,:), cmat2_ptr(:,:,:)
+        complex, pointer :: cmat1_ptr(:,:), cmat2_ptr(:,:)
         logical, pointer :: msk(:,:)
         call self%reference%get_bandmsk_ptr(msk)
         call self%reference%get_cmat_ptr(cmat1_ptr)
         call self%particle %get_cmat_ptr(cmat2_ptr)
         self%denominator = dsqrt(real(self%reference%get_sumsq(),dp) * real(self%particle%get_sumsq(),dp))
-        self%ftexp_tmp_cmat12 = merge(cmat1_ptr(:,:,1)*conjg(cmat2_ptr(:,:,1)), cmplx(0.,0.), msk)
+        self%ftexp_tmp_cmat12 = merge(cmat1_ptr(:,:)*conjg(cmat2_ptr(:,:)), cmplx(0.,0.), msk)
     end subroutine calc_tmp_cmat12
 
     function ftexp_shsrch_corr_shifted_8( self, shvec ) result( r )

@@ -18,14 +18,14 @@ integer           :: ftexp_transf_kzero         ! index shift for transfer & b-f
 
 type :: ft_expanded
     private
-    complex, allocatable :: cmat(:,:,:)        !< Fourier components
+    complex, allocatable :: cmat(:,:)          !< Fourier components
     logical, allocatable :: bandmsk(:,:)       !< for band-passed correlation
     real                 :: hp                 !< high-pass limit
     real                 :: lp                 !< low-pass limit
     real                 :: smpd  = 0.         !< sampling distance of originating image
     real                 :: sumsq = 0.         !< sum of squares
     integer              :: lims(3,2)          !< physical limits for the Fourier transform
-    integer              :: flims(3,2)         !< shifted limits (2 make transfer 2 GPU painless)
+    integer              :: flims(3,2)         !< shifted limits
     integer              :: ldim(3)=[1,1,1]    !< logical dimension of originating image
     integer              :: kzero              !< to determine shift index to be applied to access the transfer matrix
     logical              :: existence=.false.  !< existence
@@ -118,9 +118,7 @@ contains
             didft = .true.
         endif
         ! allocate instance variables
-        allocate(self%cmat(self%flims(1,1):self%flims(1,2),&
-                           self%flims(2,1):self%flims(2,2),&
-                           self%flims(3,1):self%flims(3,2)),&
+        allocate(self%cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
                  &self%bandmsk(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2)),&
                  &stat=alloc_stat)
         self%cmat    = cmplx(0.,0.)
@@ -145,9 +143,9 @@ contains
                             ! b-factor weight
                             spafreq_sq = spafreqh*spafreqh + spafreqk*spafreqk
                             w =  max(0.,exp(-spafreq_sq*bfac/4.))
-                            self%cmat(hcnt,kcnt,1) = w * img%get_fcomp2D(h,k)
+                            self%cmat(hcnt,kcnt) = w * img%get_fcomp2D(h,k)
                         else
-                            self%cmat(hcnt,kcnt,1) = img%get_fcomp2D(h,k)
+                            self%cmat(hcnt,kcnt) = img%get_fcomp2D(h,k)
                         endif
                     endif
                     self%bandmsk(hcnt,kcnt) = .true.
@@ -182,13 +180,13 @@ contains
 
     pure subroutine get_cmat( self, cmat )
         class(ft_expanded), intent(in) :: self
-        complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
+        complex,            intent(out) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
         cmat = self%cmat
     end subroutine get_cmat
 
     pure subroutine get_cmat_ptr( self, cmat_ptr )
         class(ft_expanded), target,  intent(inout) :: self
-        complex,            pointer, intent(out)   :: cmat_ptr(:,:,:)
+        complex,            pointer, intent(out)   :: cmat_ptr(:,:)
         cmat_ptr => self%cmat
     end subroutine get_cmat_ptr
 
@@ -212,7 +210,7 @@ contains
 
     pure subroutine set_cmat( self, cmat )
         class(ft_expanded), intent(inout) :: self
-        complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2),self%flims(3,1):self%flims(3,2))
+        complex,            intent(in) :: cmat(self%flims(1,1):self%flims(1,2),self%flims(2,1):self%flims(2,2))
         self%cmat = cmat
         call self%calc_sumsq
     end subroutine set_cmat
@@ -284,16 +282,15 @@ contains
 
     subroutine shift( self, shvec, self_out )
         class(ft_expanded), intent(in)    :: self
-        real,               intent(in)    :: shvec(3)
+        real,               intent(in)    :: shvec(2)
         class(ft_expanded), intent(inout) :: self_out
         integer :: hind,kind,kind_shift
-        real    :: shvec_here(2), arg
-        shvec_here = shvec(1:2) ! only for 2D images, see constructor (new_1)
+        real    :: arg
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
             do kind=self%flims(2,1),self%flims(2,2)
-                arg = sum(shvec_here*ftexp_transfmat(hind,kind+kind_shift,:))
-                self_out%cmat(hind,kind,1) = self%cmat(hind,kind,1) * cmplx(cos(arg),sin(arg))
+                arg = sum(shvec*ftexp_transfmat(hind,kind+kind_shift,:))
+                self_out%cmat(hind,kind) = self%cmat(hind,kind) * cmplx(cos(arg),sin(arg))
             end do
         end do
         call self_out%calc_sumsq
@@ -301,16 +298,15 @@ contains
 
     subroutine shift_and_add( self, shvec, w, self_out )
         class(ft_expanded), intent(in)    :: self
-        real,               intent(in)    :: shvec(3), w
+        real,               intent(in)    :: shvec(2), w
         class(ft_expanded), intent(inout) :: self_out
         integer :: hind,kind,kind_shift
-        real    :: shvec_here(2), arg
-        shvec_here = shvec(1:2)
+        real    :: arg
         kind_shift = self%get_kind_shift()
         do hind=self%flims(1,1),self%flims(1,2)
             do kind=self%flims(2,1),self%flims(2,2)
-                arg = sum(shvec_here*ftexp_transfmat(hind,kind+kind_shift,:))
-                self_out%cmat(hind,kind,1) = self_out%cmat(hind,kind,1) + w * self%cmat(hind,kind,1) * cmplx(cos(arg),sin(arg))
+                arg = sum(shvec*ftexp_transfmat(hind,kind+kind_shift,:))
+                self_out%cmat(hind,kind) = self_out%cmat(hind,kind) + w * self%cmat(hind,kind) * cmplx(cos(arg),sin(arg))
             end do
         end do
         call self_out%calc_sumsq
@@ -324,7 +320,7 @@ contains
         !$omp parallel do collapse(2) default(shared) private(hind,kind) proc_bind(close) schedule(static)
         do hind=self%flims(1,1),self%flims(1,2)
             do kind=self%flims(2,1),self%flims(2,2)
-                self%cmat(hind,kind,1) = self%cmat(hind,kind,1) / sqrt(anorm)
+                self%cmat(hind,kind) = self%cmat(hind,kind) / sqrt(anorm)
             end do
         end do
         !$omp end parallel do
@@ -335,17 +331,17 @@ contains
 
     pure subroutine calc_sumsq( self )
         class(ft_expanded), intent(inout) :: self
-        self%sumsq =                 sum(csq(self%cmat(                1,:,1)), mask=self%bandmsk(1,:))
-        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2),:,1)), mask=self%bandmsk(2:self%flims(1,2),:))
+        self%sumsq =                 sum(csq(self%cmat(                1,:)), mask=self%bandmsk(1,:))
+        self%sumsq = self%sumsq + 2.*sum(csq(self%cmat(2:self%flims(1,2),:)), mask=self%bandmsk(2:self%flims(1,2),:))
     end subroutine calc_sumsq
 
     pure function corr( self1, self2 ) result( r )
         class(ft_expanded), intent(in) :: self1, self2
         real :: r
         ! corr is real part of the complex mult btw 1 and 2*
-        r =        sum(real(self1%cmat(                 1,:,1)*conjg(self2%cmat(                 1,:,1))),&
+        r =        sum(real(self1%cmat(                 1,:)*conjg(self2%cmat(                 1,:))),&
                        &mask=self1%bandmsk(1,:))
-        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2),:,1)*conjg(self2%cmat(2:self1%flims(1,2),:,1))),&
+        r = r + 2.*sum(real(self1%cmat(2:self1%flims(1,2),:)*conjg(self2%cmat(2:self1%flims(1,2),:))),&
                        &mask=self1%bandmsk(2:self1%flims(1,2),:) )
         ! normalise the correlation coefficient
         if( self1%sumsq > 0. .and. self2%sumsq > 0. )then
@@ -361,14 +357,14 @@ contains
         real(dp) :: r, tmp ! we need double precision here to avoid round-off errors in openmp loop
         integer  :: hind, kind
         ! corr is real part of the complex mult btw 1 and 2*
-        r = sum(real(self1%cmat(1,:,1)*conjg(self2%cmat(1,:,1)),dp),&
+        r = sum(real(self1%cmat(1,:)*conjg(self2%cmat(1,:)),dp),&
             mask=self1%bandmsk(1,:))
         tmp = 0._dp
         !$omp parallel do collapse(2) default(shared) private(kind,hind) reduction(+:tmp) proc_bind(close) schedule(static)
         do hind = 2, self1%flims(1,2)
             do kind = self1%flims(2,1), self1%flims(2,2)
                 if (self1%bandmsk(hind,kind)) then
-                    tmp = tmp + real(self1%cmat(hind,kind,1)*conjg(self2%cmat(hind,kind,1)),dp)
+                    tmp = tmp + real(self1%cmat(hind,kind)*conjg(self2%cmat(hind,kind)),dp)
                 end if
             end do
         end do
@@ -382,7 +378,7 @@ contains
         class(ft_expanded), intent(inout) :: self_gradx, self_grady
         real             :: transf_vec(2),arg
         integer          :: hind,kind,kind_shift
-        complex, pointer :: cmat_gradx(:,:,:), cmat_grady(:,:,:)
+        complex, pointer :: cmat_gradx(:,:), cmat_grady(:,:)
         call self_gradx%get_cmat_ptr( cmat_gradx )
         call self_grady%get_cmat_ptr( cmat_grady )
         kind_shift = self%get_kind_shift()
@@ -392,8 +388,8 @@ contains
                 if( self%bandmsk(hind,kind) )then
                     transf_vec = ftexp_transfmat(hind,kind+kind_shift,:)
                     arg        = dot_product(shvec, transf_vec)
-                    cmat_gradx(hind,kind,1) = self%cmat(hind,kind,1) * exp(JJ * arg) * JJ * transf_vec(1)
-                    cmat_grady(hind,kind,1) = self%cmat(hind,kind,1) * exp(JJ * arg) * JJ * transf_vec(2)
+                    cmat_gradx(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(1)
+                    cmat_grady(hind,kind) = self%cmat(hind,kind) * exp(JJ * arg) * JJ * transf_vec(2)
                 end if
             end do
         end do

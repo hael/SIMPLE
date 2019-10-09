@@ -357,9 +357,8 @@ contains
         subroutine add_shifted_frame(ii, jj, w_here)
             integer, intent(in) :: ii,jj
             real,    intent(in) :: w_here
-            real :: shvec(3)
-            shvec(1:2) = self%opt_shifts(ii,:) - self%opt_shifts(jj,:)
-            shvec(3)   = 0.
+            real :: shvec(2)
+            shvec = self%opt_shifts(ii,:) - self%opt_shifts(jj,:)
              call self%movie_frames_Ij_saved(jj)%shift(-shvec, self%movie_frames_Ij_sh(ii))
              ! shift the SAVED one by -shvec and store
              call self%movie_frames_Ij(ii)%add(self%movie_frames_Ij_sh(ii),w=w_here)
@@ -415,13 +414,12 @@ contains
 
     subroutine calc_corrs( self )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        real    :: shvec(3)
+        real    :: shvec(2)
         integer :: j
         real    :: N_R
         ! shifts frames
         do j = 1, self%nframes
-            shvec(  3) = 0._dp
-            shvec(1:2) = - self%opt_shifts(j, :)
+            shvec = - self%opt_shifts(j, :)
             call self%movie_frames_Ij(j)%shift( shvec, self%movie_frames_Ij_sh(j) )
         end do
         ! R = sum_j I_j
@@ -604,7 +602,7 @@ contains
     function motion_align_iso_polyn_direct_cost( self, vec ) result( cost )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real(dp),                             intent(in)    :: vec(POLYDIM2)
-        real(dp) :: shifts(self%nframes,2), shvec(3)
+        real(dp) :: shifts(self%nframes,2), shvec(2)
         real(dp) :: cost
         integer :: j
         ! determine shifts
@@ -612,8 +610,7 @@ contains
         ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(1:2) = shifts(j,:)
-            shvec(3) = 0.
+            shvec = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
         end do
         !$omp end parallel do
@@ -644,7 +641,7 @@ contains
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real(dp),                             intent(in)    :: vec(POLYDIM2)
         real(dp),                             intent(out)   :: grad(POLYDIM2)
-        real(dp) :: shifts(self%nframes,2), shvec(3)
+        real(dp) :: shifts(self%nframes,2), shvec(2)
         real(dp) :: cost, w, atmp
         integer  :: j, p, xy
         ! determine shifts
@@ -652,8 +649,7 @@ contains
         ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(3) = 0._dp
-            shvec(1:2) = shifts(j,:)
+            shvec = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                                                           self%movie_frames_dIj_sh(j,2) )
@@ -699,7 +695,7 @@ contains
         real(dp),                             intent(in)    :: vec(POLYDIM2)
         real(dp),                             intent(out)   :: f
         real(dp),                             intent(out)   :: grad(POLYDIM2)
-        real(dp) :: shifts(self%nframes,2), shvec(3)
+        real(dp) :: shifts(self%nframes,2), shvec(2)
         real(dp) :: w, atmp
         integer  :: j, p, xy
         ! determine shifts
@@ -708,8 +704,7 @@ contains
         ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(  3) = 0._dp
-            shvec(1:2) = shifts(j,:)
+            shvec = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                                                           self%movie_frames_dIj_sh(j,2) )
@@ -755,17 +750,17 @@ contains
     function motion_align_iso_direct_cost( self, vec ) result( cost )
         class(motion_align_iso_polyn_direct), intent(inout)    :: self
         real(dp),                       intent(in) :: vec((self%nframes)*2)
-        real(dp) :: shifts(self%nframes,2), shvec(3)
+        real(dp) :: shifts(self%nframes,2)
         real(dp) :: cost
+        real     :: shvec(2)
         integer  :: j
         ! determine shifts
         call self%vec_to_shifts(vec, shifts)
         ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(1:2) = shifts(j,:)
-            shvec(3) = 0.
-            call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
+            shvec = real(shifts(j,:))
+            call self%movie_frames_Ij(j)%shift( shvec, self%movie_frames_Ij_sh(j) )
         end do
         !$omp end parallel do
         ! R = sum_j I_j
@@ -819,20 +814,18 @@ contains
         real(dp),                       intent(out)   :: f
         real(dp),                       intent(out)   :: grad((self%nframes-1)*2)
         real(dp) :: grad_tmp((self%nframes-1)*2)
-        real(dp) :: shifts(self%nframes,2), shvec(3)
+        real(dp) :: shifts(self%nframes,2), shvec(2)
         real(dp) :: atmp
         integer  :: j, p, xy
-        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2),&
-            self%frame_flims(3,1):self%frame_flims(3,2))
-        complex, pointer :: frame_to_add(:,:,:)
+        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2))
+        complex, pointer :: frame_to_add(:,:)
         write (*,*) 'fdf, direct, (i,j)=', self%coord_x, self%coord_y, 'vec=', vec
         ! determine shifts
         call self%vec_to_shifts(vec, shifts)
         ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(3) = 0._dp
-            shvec(1:2) = shifts(j,:)
+            shvec = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                 self%movie_frames_dIj_sh(j,2) )
@@ -893,14 +886,13 @@ contains
 
     function motion_align_iso_contribs_cost( self ) result( cost )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        real(dp) :: shvec(3)
+        real(dp) :: shvec(2)
         real(dp) :: cost
         integer  :: j
         ! shifts will have been correctly determined by owning motion_patched object
         ! shifts frames
         do j = 1, self%nframes
-            shvec(1:2) = self%shifts(j,:)
-            shvec(  3) = 0.
+            shvec = self%shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
         end do
         ! R = sum_j I_j
@@ -915,14 +907,13 @@ contains
     subroutine motion_align_iso_contribs_gcost( self, grad )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real(dp),                             intent(out)   :: grad(POLYDIM2)
-        real(dp) :: shvec(3)
+        real(dp) :: shvec(2)
         real(dp) :: cost, w, atmp, t
         integer  :: j, p, xy
         ! shifts will have been correctly determined by owning motion_patched object
         ! shifts frames
         do j = 1, self%nframes
-            shvec(3) = 0._dp
-            shvec(1:2) = self%shifts(j,:)
+            shvec = self%shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                                                           self%movie_frames_dIj_sh(j,2) )
@@ -953,18 +944,16 @@ contains
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real(dp),                               intent(out)   :: f
         real(dp),                               intent(out)   :: grad(POLYDIM2)
-        real(dp) :: shvec(3)
+        real(dp) :: shvec(2)
         real(dp) :: w, t
         integer  :: j, p, xy
-        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2),&
-            self%frame_flims(3,1):self%frame_flims(3,2))
-        complex, pointer :: frame_to_add(:,:,:)
+        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2))
+        complex, pointer :: frame_to_add(:,:)
         ! shifts will have been correctly determined by owning motion_patched object
         ! shifts frames
         !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec(3) = 0._dp
-            shvec(1:2) = self%shifts(j,:)
+            shvec = self%shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
             call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
                                                           self%movie_frames_dIj_sh(j,2) )

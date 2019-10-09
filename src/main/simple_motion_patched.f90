@@ -8,7 +8,7 @@ use simple_opt_factory,                   only: opt_factory
 use simple_opt_spec,                      only: opt_spec
 use simple_optimizer,                     only: optimizer
 use simple_image,                         only: image, imstack_type
-use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct, POLYDIM, POLYDIM2
 use CPlot2D_wrapper_module
@@ -683,9 +683,7 @@ contains
         real              :: corr_avg
         integer           :: iframe, i, j, alloc_stat
         logical           :: l_groupframes
-        l_groupframes = (trim(params_glob%groupframes).eq.'patch')&
-            &.or. (trim(params_glob%groupframes).eq.'always')&
-            &.or. (trim(params_glob%groupframes).eq.'dev')
+        l_groupframes = trim(params_glob%groupframes).eq.'yes'
         self%shifts_patches = 0.
         allocate(align_hybrid(params_glob%nxpatch, params_glob%nypatch), stat=alloc_stat )
         if (alloc_stat /= 0) call allocchk('det_shifts 1; simple_motion_patched')

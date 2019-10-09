@@ -46,6 +46,7 @@ type :: parameters
     character(len=3)      :: guinier='no'         !< calculate Guinier plot(yes|no){no}
     character(len=3)      :: graphene_filt='no'   !< filter out graphene bands in correcation search
     character(len=3)      :: griddev='yes'        !< to test grid correction
+    character(len=3)      :: groupframes='no'     !< Whether to perform weighted frames averaging during motion correction(yes|no){no}
     character(len=3)      :: keepvol='no'         !< dev flag for preserving iterative volumes in refine3d
     character(len=3)      :: kmeans='yes'
     character(len=3)      :: local='no'
@@ -179,7 +180,6 @@ type :: parameters
     character(len=4)      :: ext='.mrc'           !< file extension{.mrc}
     character(len=STDLEN) :: fbody=''             !< file body
     character(len=STDLEN) :: filter='no'          !< filter type{no}
-    character(len=STDLEN) :: groupframes='always' !< Whether to perform weighted frames averaging during motion correction(patch|all|no){patch}
     character(len=STDLEN) :: hfun='sigm'          !< function used for normalization(sigm|tanh|lin){sigm}
     character(len=STDLEN) :: hist='corr'          !< give variable for histogram plot
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}

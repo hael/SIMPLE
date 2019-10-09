@@ -3,7 +3,7 @@ module simple_motion_correct
 !$ use omp_lib
 !$ use omp_lib_kinds
 include 'simple_lib.f08'
-use simple_ft_expanded,                   only: ft_expanded, ftexp_transfmat_init, ftexp_transfmat_kill
+use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
 use simple_motion_patched,                only: motion_patched
 use simple_motion_align_hybrid,           only: motion_align_hybrid
 use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
@@ -65,7 +65,7 @@ character(len=:), allocatable :: mc_starfile_fname        !< file name for starf
 type(starfile_table_type)     :: mc_starfile              !< starfile for motion correct output
 
 ! module global constants
-real,    parameter :: NSIGMAS                       = 5.       !< Number of standard deviations for outliers detection
+real,    parameter :: NSIGMAS                       = 6.       !< Number of standard deviations for outliers detection
 real,    parameter :: SMALLSHIFT                    = 1.       !< small initial shift to blur out fixed pattern noise
 logical, parameter :: FITSHIFTS                     = .true.
 logical, parameter :: ISO_POLYN_DIRECT              = .false.   !< use polynomial constraint for isotropic motion correction
@@ -308,7 +308,7 @@ contains
             call align_iso_polyn_direct%kill
         else
             call hybrid_srch%new(movie_frames_scaled)
-            call hybrid_srch%set_group_frames(trim(params_glob%groupframes).eq.'always')
+            call hybrid_srch%set_group_frames(.false.)
             call hybrid_srch%set_reslims(hp, params_glob%lpstart, params_glob%lpstop)
             call hybrid_srch%set_bfactor(bfactor)
             call hybrid_srch%set_trs(params_glob%scale*params_glob%trs)
