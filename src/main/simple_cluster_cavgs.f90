@@ -24,12 +24,6 @@ contains
             if( .not. params_glob%l_prenormpremsk )       call cavg_imgs(icls)%norm
             if( .not. params_glob%l_prenormpremsk )       call cavg_imgs(icls)%mask(params_glob%msk, 'soft')
             if( params_glob%boxmatch /= params_glob%box ) call cavg_imgs(icls)%clip_inplace([params_glob%boxmatch,params_glob%boxmatch,1])
-            ! ! gridding prep
-            ! if( params_glob%griddev.eq.'yes' )then
-            !     call cavg_imgs(icls)%div_by_instrfun
-            ! endif
-            ! ! move to Fourier space
-            ! call cavg_imgs(icls)%fft()
         end do
         write(logfhandle,'(A)') '>>> PREPARING REFERENCES IN POLAR REPRESENTATION'
         ! create the polarft_corrcalc object
@@ -73,7 +67,7 @@ contains
         corr_med = median_nocopy(tmparr)
         deallocate(tmparr)
         write(logfhandle,'(A)') '>>> PERFORMING CLUSTERING WITH AFFINITY PROPAGATION'
-        call aprop%new(ncls, corrmat, pref=corr_med/2.)
+        call aprop%new(ncls, corrmat, pref=1.5*corr_med)
         call aprop%propagate(centers, labels, simsum)
         call aprop%kill
         deallocate(corrmat)

@@ -2017,13 +2017,13 @@ contains
         use simple_cluster_cavgs
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(polarizer), allocatable :: cavg_imgs(:)
         type(parameters)             :: params
         type(sp_project)             :: spproj
-        character(len=:),allocatable :: cavgsstk
-        integer,         allocatable :: centers(:), labels(:)
+        type(polarizer), allocatable :: cavg_imgs(:)
+        character(len=:),allocatable :: cavgsstk, classname
+        integer,         allocatable :: centers(:), labels(:), cntarr(:)
         real,            allocatable :: states(:), rtmparr(:), orig_cls_inds(:)
-        integer :: ncls, n, ldim(3), ncls_sel, i, icls
+        integer :: ncls, n, ldim(3), ncls_sel, i, icls, ncls_aff_prop
         real    :: smpd
         ! defaults
         call cline%set('match_filt', 'no')
@@ -2062,6 +2062,26 @@ contains
         end do
         ! rotationally invariant clustering of class averages with affinity propagation
         call cluster_cavgs(cavg_imgs, centers, labels)
+        ncls_aff_prop = size(centers)
+        write(logfhandle,'(A,I3)') '>>> # CLUSTERS FOUND BY AFFINITY PROPAGATION: ', ncls_aff_prop
+        allocate(cntarr(ncls_aff_prop), source=0)
+        ! read back the original (unprocessed) images
+        do i=1,ncls_sel
+            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
+            icls = nint(orig_cls_inds(i))
+            call cavg_imgs(i)%read(cavgsstk, icls)
+        end do
+        ! write the classes
+        do icls=1,ncls_aff_prop
+            ! make a filename for the class
+            do i=1,ncls_sel
+                if( labels(i) == icls )then
+                    classname = 'class'//int2str_pad(icls,5)//'.mrcs'
+                    cntarr(labels(i)) = cntarr(labels(i)) + 1
+                    call cavg_imgs(i)%write(classname, cntarr(labels(i)))
+                endif
+            end do
+        end do
         ! destruct
         call spproj%kill
         do icls=1,ncls_sel
