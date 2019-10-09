@@ -7435,6 +7435,7 @@ contains
         class(image), intent(inout) :: self
         if( self%ft ) return
         call fftwf_execute_dft_r2c(self%plan_fwd,self%rmat,self%cmat)
+        self%cmat = self%cmat/real(product(self%ldim))
         self%ft = .true.
     end subroutine fft_noshift
 

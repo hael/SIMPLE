@@ -39,7 +39,7 @@ contains
         class(image),      intent(inout) :: img
         real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer :: img_ldim(3), rb_ldim(3)
-        real    :: img_smpd
+        real    :: img_smpd, lambda_here
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
         logical :: do_alloc
@@ -47,6 +47,7 @@ contains
         img_ldim = img%get_ldim()
         if ( img_ldim(3) /= 1 ) THROW_HARD('only for 2D images; tvfilter::apply_filter')
         self%img_dims(1:2) = img_ldim(1:2)
+        lambda_here = lambda / real(product(self%img_dims(1:2)))
         img_smpd = img%get_smpd()
         do_alloc = .true.
         if (self%r_img%exists()) then
@@ -72,7 +73,7 @@ contains
         call img%get_cmat_ptr(cmat_img)
         dims1 = int(img_ldim(1)/2)+1
         cmat_img(1:dims1,:,1) = cmat_img(1:dims1,:,1) * (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2) / &
-            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
+            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda_here * cmat_r(1:dims1,:,1))
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter
 
@@ -81,13 +82,14 @@ contains
         class(image),      intent(inout) :: img
         real,              intent(in)    :: lambda ! >0.; 0.1 is a starting point
         integer :: img_ldim(3), rb_ldim(3)
-        real    :: img_smpd
+        real    :: img_smpd, lambda_here
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
         logical :: do_alloc
         integer :: dims1
-        img_ldim = img%get_ldim()
+        img_ldim    = img%get_ldim()
         self%img_dims_3d(1:3) = img_ldim(1:3)
+        lambda_here = lambda / real(product(self%img_dims_3d(1:3)))
         img_smpd = img%get_smpd()
         do_alloc = .true.
         if (self%r_img%exists()) then
@@ -112,7 +114,7 @@ contains
         call img%get_cmat_ptr(cmat_img)
         dims1 = int(img_ldim(1)/2)+1
         cmat_img(1:dims1,:,:) = cmat_img(1:dims1,:,:) * (real(cmat_b(1:dims1,:,:))**2 + aimag(cmat_b(1:dims1,:,:))**2) / &
-            (real(cmat_b(1:dims1,:,:))**2 + aimag(cmat_b(1:dims1,:,:))**2 + lambda * cmat_r(1:dims1,:,:))
+            (real(cmat_b(1:dims1,:,:))**2 + aimag(cmat_b(1:dims1,:,:))**2 + lambda_here * cmat_r(1:dims1,:,:))
         if (.not. img_ft_prev) call img%ifft()
     end subroutine apply_filter_3d
 
@@ -123,7 +125,7 @@ contains
         integer, optional, intent(in)    :: idx
         integer :: idx_here
         integer :: img_ldim(3), rb_ldim(3)
-        real    :: img_smpd
+        real    :: img_smpd, lambda_here
         logical :: img_ft_prev
         complex(kind=c_float_complex), pointer :: cmat_b(:,:,:), cmat_r(:,:,:), cmat_img(:,:,:)
         logical :: do_alloc
@@ -141,6 +143,7 @@ contains
             THROW_HARD('tvfilter::apply_filter : idx greater than stack size')
         end if
         self%ldim(1:2) = img_ldim(1:2)
+        lambda_here    = lambda / real(product(self%ldim(1:2)))
         img_smpd = img%get_smpd()
         do_alloc = .true.
         if (self%r_img%exists()) then
@@ -166,7 +169,7 @@ contains
         call self%interpolate_coeffs%get_cmat_ptr(cmat_img)
         dims1 = int(img_ldim(1)/2)+1
         cmat_img(1:dims1,:,idx_here) = cmat_img(1:dims1,:,idx_here) * conjg(cmat_b(1:dims1,:,1)) / &
-            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda * cmat_r(1:dims1,:,1))
+            (real(cmat_b(1:dims1,:,1))**2 + aimag(cmat_b(1:dims1,:,1))**2 + lambda_here * cmat_r(1:dims1,:,1))
         call self%interpolate_coeffs%ifft()
         call self%interpolate_coeffs%get_rmat_ptr(self%interpolate_coeffs_rmat)
     end subroutine prepare_interpolation
