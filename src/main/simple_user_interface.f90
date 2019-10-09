@@ -1316,21 +1316,20 @@ contains
         &to apply a balancing restraint (on the class population). Adjust balance until you are &
         &satisfied with the shape of the histogram',&                              ! descr_long
         &'simple_exec',&                                                           ! executable
-        &1, 1, 0, 2, 2, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
+        &0, 0, 0, 0, 2, 1, 1, .true.)                                              ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
-        call cluster_cavgs%set_input('img_ios', 1, 'stk', 'file', 'Stack of class averages', 'Stack of class averages', 'e.g. cavgs.mrc', .true., '')
+        ! <empty>
         ! parameter input/output
-        call cluster_cavgs%set_input('parm_ios', 1, smpd)
+        ! <empty>
         ! alternative inputs
         ! <empty>
         ! search controls
-        call cluster_cavgs%set_input('srch_ctrls', 1, 'balance', 'num', 'Max population for balance restraint', 'Max population for balance restraint', 'max # cluster members', .false., 0.)
-        call cluster_cavgs%set_input('srch_ctrls', 2, objfun)
+        ! <empty>
         ! filter controls
         call cluster_cavgs%set_input('filt_ctrls', 1, hp)
         call cluster_cavgs%set_input('filt_ctrls', 2, lp)
-        lp%required = .true.
+        cluster_cavgs%filt_ctrls(2)%required = .true.
         ! mask controls
         call cluster_cavgs%set_input('mask_ctrls', 1, msk)
         ! computer controls

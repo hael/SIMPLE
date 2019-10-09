@@ -367,7 +367,7 @@ contains
         end do
         !$omp end parallel do
         ! PREPARATION OF PARTICLES IN PFTCC
-        call build_pftcc_particles( pftcc, batchsz_max, match_imgs, .false.)
+        call build_pftcc_particles( pftcc, batchsz_max, match_imgs)
         ! DESTRUCT
         do imatch=1,batchsz_max
             call match_imgs(imatch)%kill_polarizer

@@ -90,9 +90,9 @@ contains
     !>  \brief  is the message passing algorithm
     subroutine propagate( self, centers, labels, simsum )
         class(aff_prop),      intent(inout) :: self
-        integer, allocatable, intent(out)   :: centers(:) !< cluster centres
-        integer, allocatable, intent(out)   :: labels(:)  !< cluster lablse
-        real,                 intent(out)   :: simsum     !< similarity sum
+        integer, allocatable, intent(inout) :: centers(:) !< cluster centres
+        integer, allocatable, intent(inout) :: labels(:)  !< cluster lablse
+        real,                 intent(inout) :: simsum     !< similarity sum
         real, allocatable :: similarities(:)
         real              :: x, realmax
         integer           :: i, j, k,  ncls, loc(1)

@@ -540,7 +540,7 @@ contains
             call match_imgs(imatch)%new([params_glob%boxmatch, params_glob%boxmatch, 1], params_glob%smpd)
             call match_imgs(imatch)%copy_polarizer(build_glob%img_match)
         end do
-        call build_pftcc_particles(pftcc, MAXIMGBATCHSZ, match_imgs, .true., ptcl_mask)
+        call build_pftcc_particles(pftcc, MAXIMGBATCHSZ, match_imgs, ptcl_mask)
         if( DEBUG_HERE ) write(logfhandle,*) '*** strategy3D_matcher ***: finished preppftcc4align'
     end subroutine preppftcc4align
 
@@ -590,7 +590,7 @@ contains
                     ! stuff already calculated or particle excluded
                 else
                     imatch = iptcl - batchlims(1) + 1
-                    call prepimg4align(iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=.true.)
+                    call prepimg4align(iptcl, build_glob%imgbatch(imatch), match_imgs(imatch))
                     ! transfer to polar coordinates
                     call match_imgs(imatch)%polarize(pftcc_here, imatch, .true., .true., mask=build_glob%l_resmsk)
                     ! calc stats

@@ -275,13 +275,12 @@ contains
     end subroutine grid_ptcl_2
 
     !>  \brief  prepares all particle images for alignment
-    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, is3D, ptcl_mask )
+    subroutine build_pftcc_particles( pftcc, batchsz_max, match_imgs, ptcl_mask )
         use simple_polarft_corrcalc, only: polarft_corrcalc
         use simple_polarizer,        only: polarizer
         class(polarft_corrcalc), intent(inout) :: pftcc
         integer,                 intent(in)    :: batchsz_max
         class(polarizer),        intent(inout) :: match_imgs(batchsz_max)
-        logical,                 intent(in)    :: is3D
         logical, optional,       intent(in)    :: ptcl_mask(params_glob%fromp:params_glob%top)
         logical :: mask_here(params_glob%fromp:params_glob%top)
         integer :: iptcl_batch, batchlims(2), imatch, iptcl
@@ -300,7 +299,7 @@ contains
             do iptcl=batchlims(1),batchlims(2)
                 if( .not. mask_here(iptcl) ) cycle
                 imatch = iptcl - batchlims(1) + 1
-                call prepimg4align( iptcl, build_glob%imgbatch(imatch), match_imgs(imatch), is3D=is3D)
+                call prepimg4align( iptcl, build_glob%imgbatch(imatch), match_imgs(imatch))
                 ! transfer to polar coordinates
                 call match_imgs(imatch)%polarize(pftcc, iptcl, .true., .true., mask=build_glob%l_resmsk)
             end do
@@ -310,14 +309,13 @@ contains
 
     !>  \brief  prepares one particle image for alignment
     !!          serial routine
-    subroutine prepimg4align( iptcl, img_in, img_out, is3D )
+    subroutine prepimg4align( iptcl, img_in, img_out )
         use simple_polarizer,     only: polarizer
         use simple_estimate_ssnr, only: fsc2optlp_sub
         use simple_ctf,           only: ctf
         integer,          intent(in)    :: iptcl
         class(image),     intent(inout) :: img_in
         class(polarizer), intent(inout) :: img_out
-        logical,          intent(in)    :: is3D
         type(ctf)       :: tfun
         type(ctfparams) :: ctfparms
         real            :: x, y

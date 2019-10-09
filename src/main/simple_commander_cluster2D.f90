@@ -2013,17 +2013,67 @@ contains
     end subroutine exec_rank_cavgs
 
     subroutine exec_cluster_cavgs( self, cline )
-        use simple_cluster_cavgs, only: cluster_cavgs_exec
+        use simple_polarizer, only: polarizer
+        use simple_cluster_cavgs
         class(cluster_cavgs_commander), intent(inout) :: self
         class(cmdline),                 intent(inout) :: cline
-        type(parameters)     :: params
-        type(builder)        :: build
+        type(polarizer), allocatable :: cavg_imgs(:)
+        type(parameters)             :: params
+        type(sp_project)             :: spproj
+        character(len=:),allocatable :: cavgsstk
+        integer,         allocatable :: centers(:), labels(:)
+        real,            allocatable :: states(:), rtmparr(:), orig_cls_inds(:)
+        integer :: ncls, n, ldim(3), ncls_sel, i, icls
+        real    :: smpd
+        ! defaults
+        call cline%set('match_filt', 'no')
         if( .not. cline%defined('mkdir')  ) call cline%set('mkdir', 'yes')
         call cline%set('oritype', 'ptcl2D')
-        call build%init_params_and_build_general_tbox(cline, params, do3d=.false.)
-        call cluster_cavgs_exec( )
+        call params%new(cline)
+        call spproj%read(params%projfile)
+        ! need to turn off CTF since it may be on based on the imported images and now we operate on class averages
+        params%ctf = 'no'
+        ! get class average stack
+        call spproj%get_cavgs_stk(cavgsstk, ncls, smpd)
+        call find_ldim_nptcls(cavgsstk, ldim, n)
+        ldim(3) = 1
+        if( n /= ncls ) THROW_HARD('Incosistent # classes in project file vs cavgs stack; exec_cluster_cavgs')
+        ! ensure correct smpd in params class
+        params%smpd = smpd
+        ! get state flag array
+        states = spproj%os_cls2D%get_all('state')
+        ! get ncls from ptcl2D field
+        n = spproj%os_ptcl2D%get_n('class')
+        if( n /= ncls ) THROW_HARD('Incosistent # classes in ptcl2D field of spproj vs cavgs stack; exec_cluster_cavgs')
+        ! find out how many selected class averages
+        ncls_sel = count(states > 0.5)
+        ! make class index array for the original classes excluding state=0 ones
+        rtmparr = spproj%os_cls2D%get_all('class')
+        if( allocated(rtmparr) )then
+            orig_cls_inds = pack(rtmparr, mask=states > 0.5)
+            deallocate(rtmparr)
+        endif
+        ! allocate polarizer images and read
+        allocate(cavg_imgs(ncls_sel))
+        do i=1,ncls_sel
+            call cavg_imgs(i)%new(ldim, smpd, wthreads=.false.)
+            icls = nint(orig_cls_inds(i))
+            call cavg_imgs(i)%read(cavgsstk, icls)
+        end do
+        ! rotationally invariant clustering of class averages with affinity propagation
+        call cluster_cavgs(cavg_imgs, centers, labels)
+        ! destruct
+        call spproj%kill
+        do icls=1,ncls_sel
+            call cavg_imgs(icls)%kill
+        end do
+        deallocate(cavg_imgs)
+        if( allocated(centers)       ) deallocate(centers)
+        if( allocated(labels)        ) deallocate(labels)
+        if( allocated(states)        ) deallocate(states)
+        if( allocated(orig_cls_inds) ) deallocate(orig_cls_inds)
         ! end gracefully
-        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****', print_simple=.false.)
+        call simple_end('**** SIMPLE_CLUSTER_CAVGS NORMAL STOP ****')
     end subroutine exec_cluster_cavgs
 
     subroutine exec_write_classes( self, cline )

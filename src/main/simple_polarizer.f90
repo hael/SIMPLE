@@ -110,8 +110,8 @@ contains
     !>         change to polar coordinate system, keep serial
     subroutine div_by_instrfun( self )
         class(polarizer), intent(inout) :: self
-        if( self%is_ft() ) THROW_HARD('Polarizer must be in real-space in div_by_gridweights')
-        if( .not.(self.eqdims.self%instrfun_img) ) THROW_HARD('Incompatible dimensions in div_by_gridweights')
+        if( self%is_ft() ) THROW_HARD('Polarizer must be in real-space in div_by_instrfun')
+        if( .not.(self.eqdims.self%instrfun_img) ) THROW_HARD('Incompatible dimensions in div_by_instrfun')
         call self%div(self%instrfun_img)
     end subroutine div_by_instrfun
 
@@ -124,11 +124,14 @@ contains
         integer,                 intent(in)    :: img_ind !< image index
         logical,                 intent(in)    :: isptcl  !< is ptcl (or reference)
         logical,                 intent(in)    :: iseven  !< is even (or odd)
-        logical,                 intent(in)    :: mask(:) !< interpolation mask, all .false. set to CMPLX_ZERO
+        logical, optional,       intent(in)    :: mask(self%pdim(2):self%pdim(3)) !< interpolation mask, all .false. set to CMPLX_ZERO
         integer :: logi(3), phys(3), i, k, l, m, addr_l
+        logical :: mmask(self%pdim(2):self%pdim(3))
+        mmask = .true.
+        if( present(mask) ) mmask = mask
         do i=1,self%pdim(1)
             do k=self%pdim(2),self%pdim(3)
-                if( mask(k) )then
+                if( mmask(k) )then
                     do l=1,self%wdim
                         addr_l = self%polcyc1_mat(i,k,l)
                         do m=1,self%wdim
