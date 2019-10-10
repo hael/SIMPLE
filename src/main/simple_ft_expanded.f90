@@ -59,6 +59,7 @@ type :: ft_expanded
     procedure          :: corr
     procedure          :: corr_unnorm
     procedure          :: gen_grad
+    procedure          :: gen_grad_noshift
     procedure, private :: corr_normalize_sp
     procedure, private :: corr_normalize_dp
     generic            :: corr_normalize => corr_normalize_sp, corr_normalize_dp
@@ -316,11 +317,11 @@ contains
         class(ft_expanded), intent(inout) :: self
         real    :: anorm
         integer :: hind,kind
-        anorm = self%corr_unnorm(self)
+        anorm = sqrt(self%corr_unnorm(self))
         !$omp parallel do collapse(2) default(shared) private(hind,kind) proc_bind(close) schedule(static)
         do hind=self%flims(1,1),self%flims(1,2)
             do kind=self%flims(2,1),self%flims(2,2)
-                self%cmat(hind,kind) = self%cmat(hind,kind) / sqrt(anorm)
+                self%cmat(hind,kind) = self%cmat(hind,kind) / anorm
             end do
         end do
         !$omp end parallel do
@@ -368,7 +369,7 @@ contains
                 end if
             end do
         end do
-        !$tmp end parallel do
+        !$omp end parallel do
         r = r + 2._dp * tmp
     end function corr_unnorm
 
@@ -395,6 +396,28 @@ contains
         end do
         !$omp end parallel do
     end subroutine gen_grad
+
+    subroutine gen_grad_noshift( self, self_gradx, self_grady )
+        class(ft_expanded), intent(in)    :: self
+        class(ft_expanded), intent(inout) :: self_gradx, self_grady
+        real             :: transf_vec(2)
+        integer          :: hind,kind,kind_shift
+        complex, pointer :: cmat_gradx(:,:), cmat_grady(:,:)
+        call self_gradx%get_cmat_ptr( cmat_gradx )
+        call self_grady%get_cmat_ptr( cmat_grady )
+        kind_shift = self%get_kind_shift()
+        !$omp parallel do collapse(2) default(shared) private(kind,hind,transf_vec) proc_bind(close) schedule(static)
+        do kind=self%flims(2,1),self%flims(2,2)
+            do hind=self%flims(1,1),self%flims(1,2)
+                if( self%bandmsk(hind,kind) )then
+                    transf_vec = ftexp_transfmat(hind,kind+kind_shift,:)
+                    cmat_gradx(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(1)
+                    cmat_grady(hind,kind) = self%cmat(hind,kind) * JJ * transf_vec(2)
+                end if
+            end do
+        end do
+        !$omp end parallel do
+    end subroutine gen_grad_noshift
 
     elemental subroutine corr_normalize_sp( self1, self2, corr )
         class(ft_expanded), intent(in)    :: self1, self2
