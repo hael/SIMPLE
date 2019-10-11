@@ -532,6 +532,11 @@ contains
                 endif
             endif
         end do
+        if( params_glob%l_needs_sigma .and. params_glob%cc_objfun /= OBJFUN_EUCLID ) then
+            ! When calculating sigma2 prior to OBJFUN_EUCLID the refernces are zeroed out
+            !  beyond the resolution limit such that sigma2 is the weighted sum of particle power spectrum
+            call pftcc%zero_refs_beyond_kstop
+        endif
         ! PREPARATION OF PARTICLES IN PFTCC
         ! prepare the polarizer images
         call build_glob%img_match%init_polarizer(pftcc, params_glob%alpha)

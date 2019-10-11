@@ -84,7 +84,7 @@ contains
                     self%polcyc2_mat(i, k, cnt) = cyci_1d(lims(2,:), win(2,1)+l-1)
                 end do
                 self%polweights_mat(i,k,:) = reshape(w,(/self%wlen/))
-                if( params_glob%griddev.eq.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
+                if( params_glob%griddev.ne.'yes') self%polweights_mat(i,k,:) = self%polweights_mat(i,k,:) / sum(w)
             enddo
         enddo
         !$omp end parallel do

@@ -2563,6 +2563,7 @@ contains
                     call self_src%os_ptcl2D%get_ori(iptcl, o_src)
                     call self%os_ptcl2D%transfer_2Dparams(iptcl, o_src)
                     call self%os_ptcl2D%set(iptcl,'state', self_src%os_ptcl2D%get(iptcl,'state'))
+                    call self%os_ptcl3D%set(iptcl,'state', self_src%os_ptcl2D%get(iptcl,'state'))
                 enddo
             else
                 if( self_src%os_ptcl3D%get_noris() == 0 ) return
@@ -2571,6 +2572,7 @@ contains
                     call self_src%os_ptcl3D%get_ori(iptcl, o_src)
                     call self%os_ptcl3D%transfer_3Dparams(iptcl, o_src)
                     call self%os_ptcl3D%set(iptcl,'state', self_src%os_ptcl3D%get(iptcl,'state'))
+                    call self%os_ptcl2D%set(iptcl,'state', self_src%os_ptcl3D%get(iptcl,'state'))
                 enddo
             endif
         case('stk')

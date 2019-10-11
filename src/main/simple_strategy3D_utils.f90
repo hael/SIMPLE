@@ -84,7 +84,6 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real    :: dists(s%npeaks), arg4softmax(s%npeaks), wsum
         s%npeaks_eff = 1
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
@@ -109,10 +108,8 @@ contains
         real,                   intent(in)    :: corrs(s%npeaks)
         real,                   intent(out)   :: ws(s%npeaks), best_corr
         integer,                intent(out)   :: best_loc(1)
-        real,    allocatable :: ws_nonzero(:), corrs_nonzero(:)
-        real    :: dists(s%npeaks), arg4softmax(s%npeaks)
-        real    :: wsum, thres, wavg_peak, wavg_nonpeak
-        integer :: npeaks, i
+        real,    allocatable :: ws_nonzero(:)
+        real    :: wsum, thres
         s%npeaks_eff = 1
         if( s%npeaks == 1 )then
             best_loc(1)  = 1
@@ -169,20 +166,24 @@ contains
         real    :: dists(npeaks), arg4softmax(npeaks)
         real    :: wsum
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
-            dists = - corrs / params_glob%sigma2_fudge
+            ! subtracts minimum distance
+            dists = corrs / params_glob%sigma2_fudge
+            dists = dists + maxval(dists)
+            ! exponential weights
+            ws = exp(dists)
         else
             ! convert correlations to distances
             dists = 1.0 - corrs
             ! scale distances with TAU
             dists = dists / params_glob%tau
-        end if
-        ! argument for softmax function is negative distances
-        arg4softmax = -dists
-        ! subtract maxval of negative distances for numerical stability
-        arg4softmax = arg4softmax - maxval(arg4softmax)
-        ! calculate softmax weights
-        ws = exp(arg4softmax)
-        if( params_glob%cc_objfun /= OBJFUN_EUCLID ) where( corrs <= TINY ) ws = 0.
+            ! argument for softmax function is negative distances
+            arg4softmax = -dists
+            ! subtract maxval of negative distances for numerical stability
+            arg4softmax = arg4softmax - maxval(arg4softmax)
+            ! calculate softmax weights
+            ws = exp(arg4softmax)
+            where( corrs <= TINY ) ws = 0.
+        endif
         ! critical for performance to normalize here as well
         wsum = sum(ws)
         if( wsum > TINY )then

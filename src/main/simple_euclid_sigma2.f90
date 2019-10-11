@@ -21,6 +21,7 @@ type euclid_sigma2
     integer               :: kfromto(2)     = 0
     integer               :: headsz         = 0
     integer               :: sigmassz       = 0
+    integer               :: pftsz          = 0
     character(len=STDLEN) :: fname
     logical               :: do_divide = .false.
     logical               :: exists    = .false.
@@ -67,6 +68,7 @@ contains
         self%file_header(3:4) = self%kfromto
         self%headsz           = sizeof(self%file_header)
         self%sigmassz         = sizeof(r)*(self%kfromto(2)-self%kfromto(1)+1)
+        self%pftsz            = pftcc_glob%get_pftsz()
         self%sigma2_noise     = 0.
         self%do_divide          = .false.
         self%sigma2_exists_msk  = .false.
@@ -294,20 +296,21 @@ contains
         if( .not.self%exists )return
         if( nyq == self%kfromto(2) )then
             do k = self%kfromto(1),self%kfromto(2)
-                sigma2(k) = self%divide_by(k)
+                sigma2(k) = self%divide_by(k) * real(k) / real(self%pftsz)
             enddo
         else if( nyq > self%kfromto(2) )then
             ! resampling
             scale  = real(self%kfromto(2)) / real(nyq)
             kstart = ceiling(real(self%kfromto(1))/scale)
-            sigma2(nyq) = self%divide_by(self%kfromto(2))
             do k = kstart,nyq-1
                 loc = real(k)*scale
                 lk  = floor(loc)
                 ld  = loc-real(lk)
                 ! linear interpolation
                 sigma2(k) = ld*self%divide_by(lk+1) + (1.-ld)*self%divide_by(lk)
+                sigma2(k) = sigma2(k) * real(k) / real(self%pftsz)
             enddo
+            sigma2(nyq) = self%divide_by(self%kfromto(2)) * real(nyq) / real(self%pftsz)
         else
             THROW_HARD('Incompatible requested size; get_sigma2')
         endif

@@ -142,6 +142,7 @@ type :: polarft_corrcalc
     procedure          :: vis_ptcl
     procedure          :: vis_ref
     ! MODIFIERS
+    procedure          :: zero_refs_beyond_kstop
     procedure, private :: shellnorm_and_filter_ref
     procedure, private :: shellnorm_and_filter_ref_8
     procedure, private :: shellnorm_and_filter_ref_dref_8
@@ -705,6 +706,15 @@ contains
     end subroutine print
 
     ! MODIFIERS
+
+    subroutine zero_refs_beyond_kstop( self )
+        class(polarft_corrcalc), intent(inout) :: self
+        if( params_glob%kstop == params_glob%kfromto(2) ) return
+        !$omp workshare
+        self%pfts_refs_even(:,params_glob%kstop+1:params_glob%kfromto(2),:) = zero
+        self%pfts_refs_odd( :,params_glob%kstop+1:params_glob%kfromto(2),:) = zero
+        !$omp end workshare
+    end subroutine zero_refs_beyond_kstop
 
     subroutine shellnorm_and_filter_ref( self, iptcl, iref, pft )
         class(polarft_corrcalc), intent(in)    :: self
@@ -1390,6 +1400,7 @@ contains
             euclid =          sum(csq(pft_ref(               1:self%pftsz-rot+1,k) - conjg(self%pfts_ptcls(rot:self%pftsz,k,i))))
             euclid = euclid + sum(csq(pft_ref(self%pftsz-rot+2:self%pftsz,      k) -       self%pfts_ptcls(  1:rot-1,     k,i)))
         end if
+        calc_euclidk_for_rot = euclid
     end function calc_euclidk_for_rot
 
     subroutine genfrc( self, iref, iptcl, irot, frc )
@@ -2196,7 +2207,7 @@ contains
         argmat      => self%heap_vars(ithr)%argmat_8
         argmat      =  self%argtransf(:self%pftsz,:) * shvec(1) + self%argtransf(self%pftsz + 1:,:) * shvec(2)
         shmat       =  cmplx(cos(argmat),sin(argmat),dp)
-        if( self%iseven(self%pinds(iptcl)) )then
+        if( self%iseven(i) )then
             pft_ref = self%pfts_refs_even(:,:,iref)
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
