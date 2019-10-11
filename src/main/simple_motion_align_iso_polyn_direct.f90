@@ -55,7 +55,12 @@ type :: motion_align_iso_polyn_direct
     type(ft_expanded), allocatable                    :: movie_frames_Ij_sh(:)             !< shifted movie frames
     type(ft_expanded), allocatable                    :: movie_frames_dIj_sh(:,:)          !< gradients of shifted movie frames
     type(ft_expanded), allocatable                    :: movie_frames_R                    !< reference movie frame
+    type(ft_expanded), allocatable                    :: movie_frames_dR12(:)              !< gradient of movie_frames_R
     type(ft_expanded), allocatable                    :: movie_frames_dR                   !< gradient of reference movie frame
+    type(ft_expanded), allocatable                    :: movie_frames_Rhat                 !< reference movie frame
+    type(ft_expanded), allocatable                    :: movie_frames_dRhat12(:)           !< gradient of reference movie frame
+    type(ft_expanded), allocatable                    :: movie_frames_Rhat2                !< reference movie frame
+    type(ft_expanded), allocatable                    :: movie_frames_Rhat3                !< reference movie frame
     procedure(align_iso_callback_polyn), pointer, nopass :: callback           => null()   !< callback to determine convergence
     type(ft_expanded)                                 :: dR_s(POLYDIM, 2)                  !< temporary image objects for direct alignment
     integer                                           :: frame_flims(3,2)                  !< dimensions for temporary matrix
@@ -223,7 +228,12 @@ contains
             self%movie_frames_Ij_sh(self%nframes),    &
             self%movie_frames_dIj_sh(self%nframes,2), &
             self%movie_frames_R,                      &
+            self%movie_frames_Rhat,                   &
+            self%movie_frames_Rhat2,                  &
+            self%movie_frames_Rhat3,                  &
             self%movie_frames_dR,                     &
+            self%movie_frames_dR12(2),                &
+            self%movie_frames_dRhat12(2),             &
             self%opt_shifts(self%nframes,2),          &
             self%shifts(self%nframes, 2),             &
             self%corrs(self%nframes),                 &
@@ -245,17 +255,31 @@ contains
                 end do
             end do
             call self%movie_frames_R%kill
+            call self%movie_frames_Rhat %kill
+            call self%movie_frames_Rhat2%kill
+            call self%movie_frames_Rhat3%kill
             call self%movie_frames_dR%kill
+            call self%movie_frames_dR12(1)%kill
+            call self%movie_frames_dR12(2)%kill
+            call self%movie_frames_dRhat12(2)%kill
+            call self%movie_frames_dRhat12(2)%kill
             deallocate( self%movie_frames_Ij, self%movie_frames_Ij_saved, self%movie_frames_Ij_sh, &
-                self%movie_frames_dIj_sh, self%movie_frames_R,                                     &
-                self%movie_frames_dR, self%opt_shifts, self%shifts, self%corrs, self%frameweights )
+                self%movie_frames_dIj_sh, self%movie_frames_R, self%movie_frames_Rhat,             &
+                self%movie_frames_Rhat2, self%movie_frames_Rhat3,                                  &
+                self%movie_frames_dR, self%movie_frames_dR12, self%movie_frames_dRhat12,           &
+                self%opt_shifts, self%shifts, self%corrs, self%frameweights )
         else
             if ( allocated(self%movie_frames_Ij)     .or. allocated(self%movie_frames_Ij_sh) .or. &
-                 allocated(self%movie_frames_dIj_sh) .or. allocated(self%movie_frames_R)     .or. &
-                 allocated(self%movie_frames_dR)     .or. allocated(self%opt_shifts)         .or. &
-                 allocated(self%shifts)              .or. allocated(self%corrs)              .or. &
-                 allocated(self%movie_frames_Ij_saved)                                       .or. &
-                 allocated(self%frameweights)                                                      ) then
+                allocated(self%movie_frames_dIj_sh) .or. allocated(self%movie_frames_R)     .or. &
+                allocated(self%movie_frames_dR)     .or. allocated(self%opt_shifts)         .or. &
+                allocated(self%shifts)              .or. allocated(self%corrs)              .or. &
+                allocated(self%movie_frames_dR12)                                           .or. &
+                allocated(self%movie_frames_dRhat12)                                        .or. &
+                allocated(self%movie_frames_Rhat)                                           .or. &
+                allocated(self%movie_frames_Rhat2)                                          .or. &
+                allocated(self%movie_frames_Rhat3)                                          .or. &
+                allocated(self%movie_frames_Ij_saved)                                       .or. &
+                allocated(self%frameweights)                                                      ) then
                 THROW_HARD('inconsistency; simple_motion_align_iso_polyn_direct: deallocate_fields')
             end if
         end if
@@ -328,8 +352,15 @@ contains
             end do
         end do
         !$omp end parallel do
-        call self%movie_frames_R%new(self%frames(1),  self%hp, self%lp, .false.)
-        call self%movie_frames_dR%new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_R      %new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_Rhat   %new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_Rhat2  %new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_Rhat3  %new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_dR     %new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_dR12(1)%new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_dR12(2)%new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_dRhat12(1)%new(self%frames(1), self%hp, self%lp, .false.)
+        call self%movie_frames_dRhat12(2)%new(self%frames(1), self%hp, self%lp, .false.)
         if( self%group_frames )then
             w = 0.5 * exp(-real(self%lp_updates))
             do j=1,self%nframes
@@ -527,7 +558,6 @@ contains
         real, allocatable,                    intent(out)   :: shifts_toplot(:,:)
         allocate( shifts_toplot(self%nframes, 2), source=self%opt_shifts )
     end subroutine motion_align_iso_polyn_direct_get_shifts_toplot
-
 
     subroutine motion_align_iso_polyn_direct_set_coords( self, x, y )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
@@ -748,29 +778,41 @@ contains
     end subroutine motion_align_iso_polyn_direct_fdf_wrapper
 
     function motion_align_iso_direct_cost( self, vec ) result( cost )
-        class(motion_align_iso_polyn_direct), intent(inout)    :: self
-        real(dp),                       intent(in) :: vec((self%nframes)*2)
-        real(dp) :: shifts(self%nframes,2)
+        class(motion_align_iso_polyn_direct), intent(inout) :: self
+        real(dp),                             intent(in)    :: vec((self%nframes-1)*2)
         real(dp) :: cost
-        real     :: shvec(2)
         integer  :: j
-        ! determine shifts
+        real(dp) :: shifts(self%nframes,2), shvec(2)
+        real(dp) :: val_e (self%nframes)
+        real(dp) :: val_D (self%nframes)
+        real(dp) :: val_RR
         call self%vec_to_shifts(vec, shifts)
-        ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec = real(shifts(j,:))
-            call self%movie_frames_Ij(j)%shift( shvec, self%movie_frames_Ij_sh(j) )
+            shvec(1:2) = shifts(j,:)
+            call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
         end do
         !$omp end parallel do
-        ! R = sum_j I_j
+        ! calculate R
         call self%movie_frames_R%zero
         do j = 1, self%nframes
-            call self%movie_frames_R%add( self%movie_frames_Ij_sh(j) )
+            call self%movie_frames_R%add_uncond( self%movie_frames_Ij_sh(j) )
         end do
-        ! corr = sqrt( R * R )
-        cost = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
-        cost = - cost
+        ! calculate val_e
+        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+        do j = 1, self%nframes
+            val_e(j) = self%movie_frames_R%corr_unnorm( self%movie_frames_Ij_sh(j) )
+        end do
+        !$omp end parallel do
+        val_RR = sum(val_e)
+        ! calculate denominator terms
+        do j = 1, self%nframes
+            val_D (j) = sqrt(val_RR - 2._dp * val_e(j) + 1.0_dp)
+        end do
+        cost = 0._dp
+        do j = 1, self%nframes
+            cost = cost + (val_e(j) - 1._dp) / val_D(j)
+        end do
     end function motion_align_iso_direct_cost
 
     function motion_align_iso_direct_cost_wrapper( self, vec, D ) result( cost )
@@ -803,7 +845,7 @@ contains
         select type(self)
         class is (motion_align_iso_polyn_direct)
             call self%motion_align_iso_direct_gcost( vec, grad )
-        class DEFAULT
+            class DEFAULT
             THROW_HARD('unknown type; motion_align_iso_direct: gcost_wrapper')
         end select
     end subroutine motion_align_iso_direct_gcost_wrapper
@@ -814,46 +856,72 @@ contains
         real(dp),                       intent(out)   :: f
         real(dp),                       intent(out)   :: grad((self%nframes-1)*2)
         real(dp) :: grad_tmp((self%nframes-1)*2)
+        integer  :: n, j, xy, idx
         real(dp) :: shifts(self%nframes,2), shvec(2)
-        real(dp) :: atmp
-        integer  :: j, p, xy
-        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2))
-        complex, pointer :: frame_to_add(:,:)
-        write (*,*) 'fdf, direct, (i,j)=', self%coord_x, self%coord_y, 'vec=', vec
-        ! determine shifts
+        real(dp) :: val_e (self%nframes)
+        real(dp) :: val_F (self%nframes)
+        real(dp) :: val_D (self%nframes)
+        real(dp) :: val_EE(self%nframes)
+        real(dp) :: val_RR
+        real(dp) :: tmp1
         call self%vec_to_shifts(vec, shifts)
-        ! shifts frames
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            shvec = shifts(j,:)
+            shvec(1:2) = shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
-            call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
-                self%movie_frames_dIj_sh(j,2) )
         end do
         !$omp end parallel do
-        ! R = sum_j I_j
-        !call self%movie_frames_R%zero
-        R_tmp = 0.
-        !$omp parallel do default(shared) private(j,frame_to_add) reduction(+:R_tmp) schedule(static) proc_bind(close)
+        ! calculate R
+        call self%movie_frames_R%zero
         do j = 1, self%nframes
-            call self%movie_frames_Ij_sh(j)%get_cmat_ptr(frame_to_add)
-            R_tmp = R_tmp + frame_to_add
-            !call self%movie_frames_R%add( self%movie_frames_Ij_sh(j) )
+            call self%movie_frames_R%add_uncond( self%movie_frames_Ij_sh(j) )
+        end do
+        ! calculate val_e
+        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+        do j = 1, self%nframes
+            val_e(j) = self%movie_frames_R%corr_unnorm( self%movie_frames_Ij_sh(j) )
         end do
         !$omp end parallel do
-        call self%movie_frames_R%set_cmat(R_tmp)
-        ! corr = sqrt( R * R )
-        f = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
-        !$omp parallel do collapse(2) default(shared) private(xy,j,atmp) schedule(static) proc_bind(close)
-        do xy = 1, 2
-            do j = 1, self%nframes-1 !parallelize here
-                atmp = self%movie_frames_R%corr_unnorm(self%movie_frames_dIj_sh(j+1, xy)) / f
-                grad_tmp(2*(j-1)+xy) = atmp
+        val_RR = sum(val_e)
+        ! calculate denominator terms
+        do j = 1, self%nframes
+            val_D (j) = sqrt(val_RR - 2._dp * val_e(j) + 1.0_dp)
+            val_EE(j) = val_D(j)**3
+        end do
+        do j = 1, self%nframes
+            val_F(j) = (val_e(j) - 1._dp) / val_EE(j)
+        end do
+        call self%movie_frames_Rhat%zero
+        do j = 1, self%nframes
+            call self%movie_frames_Rhat%add_uncond(self%movie_frames_Ij_sh(j), real( 1._dp / val_D(j)  ) )
+        end do
+        f = 0._dp
+        do j = 1, self%nframes
+            f = f + (val_e(j) - 1._dp) / val_D(j)
+        end do
+        ! gradient for R, Rhat
+        call self%movie_frames_Rhat%gen_grad_noshift( self%movie_frames_dRhat12(1), &
+            self%movie_frames_dRhat12(2) )
+        call self%movie_frames_R   %gen_grad_noshift( self%movie_frames_dR12(1),    &
+            self%movie_frames_dR12(2)    )
+        grad_tmp = 0._dp
+        !$omp parallel do default(shared) collapse(2) private(n,xy,idx,tmp1) schedule(static) proc_bind(close)
+        do n = 2, self%nframes
+            do xy = 1, 2
+                idx = (n-2)*2+xy
+                !grad_tmp(idx) = self%movie_frames_dIj_sh(n,xy)%corr_unnorm( &
+                !    self%movie_frames_Rhat   )
+                grad_tmp(idx) = - self%movie_frames_dRhat12(xy)%corr_unnorm( &
+                    self%movie_frames_Ij_sh(n) )
+                !tmp1 = self%movie_frames_dIj_sh(n,xy)%corr_unnorm(     &
+                !    self%movie_frames_R )
+                tmp1 = - self%movie_frames_dR12(xy)%corr_unnorm(     &
+                    self%movie_frames_Ij_sh(n) )
+                grad_tmp(idx) = grad_tmp(idx) - tmp1 * (sum(val_F) - val_F(n) - 1._dp / val_D(n))
             end do
         end do
         !$omp end parallel do
-        f    = - f
-        grad_tmp = - grad_tmp
+
         if (inc_or_not) then
             grad = 0._dp
             do xy = 1, 2
@@ -886,110 +954,118 @@ contains
 
     function motion_align_iso_contribs_cost( self ) result( cost )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        real(dp) :: shvec(2)
         real(dp) :: cost
         integer  :: j
+        real(dp) :: shvec(2)
+        real(dp) :: val_e (self%nframes)
+        real(dp) :: val_D (self%nframes)
+        real(dp) :: val_RR
         ! shifts will have been correctly determined by owning motion_patched object
-        ! shifts frames
+        !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
             shvec = self%shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
         end do
-        ! R = sum_j I_j
+        !$omp end parallel do
+        ! calculate R
         call self%movie_frames_R%zero
         do j = 1, self%nframes
-            call self%movie_frames_R%add( self%movie_frames_Ij_sh(j) )
+            call self%movie_frames_R%add_uncond( self%movie_frames_Ij_sh(j) )
         end do
-        ! corr = sqrt( R * R )
-        cost = - real(sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R)),dp)
+        ! calculate val_e
+        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+        do j = 1, self%nframes
+            val_e(j) = self%movie_frames_R%corr_unnorm( self%movie_frames_Ij_sh(j) )
+        end do
+        !$omp end parallel do
+        val_RR = sum(val_e)
+        ! calculate denominator terms
+        do j = 1, self%nframes
+            val_D (j) = sqrt(val_RR - 2._dp * val_e(j) + 1.0_dp)
+        end do
+        call self%movie_frames_Rhat%zero
+        do j = 1, self%nframes
+            call self%movie_frames_Rhat%add_uncond(self%movie_frames_Ij_sh(j), real( 1._dp / val_D(j)  ) )
+        end do
+        cost = 0._dp
+        do j = 1, self%nframes
+            cost = cost + (val_e(j) - 1._dp) / val_D(j)
+        end do
     end function motion_align_iso_contribs_cost
 
     subroutine motion_align_iso_contribs_gcost( self, grad )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
         real(dp),                             intent(out)   :: grad(POLYDIM2)
-        real(dp) :: shvec(2)
-        real(dp) :: cost, w, atmp, t
-        integer  :: j, p, xy
-        ! shifts will have been correctly determined by owning motion_patched object
-        ! shifts frames
-        do j = 1, self%nframes
-            shvec = self%shifts(j,:)
-            call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
-            call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
-                                                          self%movie_frames_dIj_sh(j,2) )
-        end do
-        ! R = sum_j I_j
-        call self%movie_frames_R%zero
-        do j = 1, self%nframes
-            call self%movie_frames_R%add( self%movie_frames_Ij_sh(j) )
-        end do
-        ! corr = sqrt( R * R )
-        cost = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
-        do p = 1, POLYDIM
-            do xy = 1, 2
-                call self%movie_frames_dR%zero
-                do j = 1, self%nframes
-                    t = real(j - 1, dp)
-                    w = t**p
-                    call self%movie_frames_dR%add( self%movie_frames_dIj_sh(j, xy), real(w) )
-                end do
-                atmp = self%movie_frames_R%corr_unnorm(self%movie_frames_dR) / cost
-                grad((xy-1)*POLYDIM+p) = atmp
-            end do
-        end do
-        grad = - grad
+        real(dp) :: f
+        call self%motion_align_iso_contribs_fdf( f, grad )
     end subroutine motion_align_iso_contribs_gcost
 
     subroutine motion_align_iso_contribs_fdf( self, f, grad )
         class(motion_align_iso_polyn_direct), intent(inout) :: self
-        real(dp),                               intent(out)   :: f
-        real(dp),                               intent(out)   :: grad(POLYDIM2)
+        real(dp),                             intent(out)   :: f
+        real(dp),                             intent(out)   :: grad(POLYDIM2)
+        integer  :: j, xy, p
         real(dp) :: shvec(2)
-        real(dp) :: w, t
-        integer  :: j, p, xy
-        complex  :: R_tmp(self%frame_flims(1,1):self%frame_flims(1,2),self%frame_flims(2,1):self%frame_flims(2,2))
-        complex, pointer :: frame_to_add(:,:)
+        real(dp) :: val_e (self%nframes)
+        real(dp) :: val_F (self%nframes)
+        real(dp) :: val_D (self%nframes)
+        real(dp) :: val_EE(self%nframes)
+        real(dp) :: val_RR
+        real(dp) :: tmp1, tmp2
         ! shifts will have been correctly determined by owning motion_patched object
-        ! shifts frames
-        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+        !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
             shvec = self%shifts(j,:)
             call self%movie_frames_Ij(j)%shift( real(shvec), self%movie_frames_Ij_sh(j) )
-            call self%movie_frames_Ij(j)%gen_grad( shvec, self%movie_frames_dIj_sh(j,1), &
-                                                          self%movie_frames_dIj_sh(j,2) )
         end do
         !$omp end parallel do
-        ! R = sum_j I_j
+        ! calculate R
         call self%movie_frames_R%zero
-        R_tmp = 0.
-        !$omp parallel do default(shared) private(j,frame_to_add) reduction(+:R_tmp) schedule(static) proc_bind(close)
         do j = 1, self%nframes
-            call self%movie_frames_Ij_sh(j)%get_cmat_ptr(frame_to_add)
-            R_tmp = R_tmp + frame_to_add
-            !call self%movie_frames_R%add( self%movie_frames_Ij_sh(j) )
+            call self%movie_frames_R%add_uncond( self%movie_frames_Ij_sh(j) )
+        end do
+        ! calculate val_e
+        !$omp parallel do default(shared) private(j) schedule(static) proc_bind(close)
+        do j = 1, self%nframes
+            val_e(j) = self%movie_frames_R%corr_unnorm( self%movie_frames_Ij_sh(j) )
         end do
         !$omp end parallel do
-        call self%movie_frames_R%set_cmat(R_tmp)
-        ! corr = sqrt( R * R )
-        f = sqrt(self%movie_frames_R%corr_unnorm(self%movie_frames_R))
-        !$omp parallel do collapse(2) default(shared) private(p,xy,j,w,t) schedule(static) proc_bind(close)
+        val_RR = sum(val_e)
+        ! calculate denominator terms
+        do j = 1, self%nframes
+            val_D (j) = sqrt(val_RR - 2._dp * val_e(j) + 1.0_dp)
+            val_EE(j) = val_D(j)**3
+        end do
+        do j = 1, self%nframes
+            val_F(j) = (val_e(j) - 1._dp) / val_EE(j)
+        end do
+        call self%movie_frames_Rhat%zero
+        do j = 1, self%nframes
+            call self%movie_frames_Rhat%add_uncond(self%movie_frames_Ij_sh(j), real( 1._dp / val_D(j)  ) )
+        end do
+        f = 0._dp
+        do j = 1, self%nframes
+            f = f + (val_e(j) - 1._dp) / val_D(j)
+        end do
+        ! calc gradient of Rhat, R
+        call self%movie_frames_Rhat%gen_grad_noshift( self%movie_frames_dRhat12(1), &
+            self%movie_frames_dRhat12(2) )
+        call self%movie_frames_R   %gen_grad_noshift( self%movie_frames_dR12(1),    &
+            self%movie_frames_dR12(2)    )
         do p = 1, POLYDIM
+            call self%movie_frames_Rhat2%zero
+            call self%movie_frames_Rhat3%zero
+            do j = 2, self%nframes
+                call self%movie_frames_Rhat2%add_uncond(self%movie_frames_Ij_sh(j), real(j-1)**p )
+                call self%movie_frames_Rhat3%add_uncond(self%movie_frames_Ij_sh(j), real(j-1)**p &
+                    * real(sum(val_F) - val_F(j) - 1._dp / val_D(j)) )
+            end do
             do xy = 1, 2
-                call self%dR_s(p,xy)%zero
-                !R_tmp = 0.
-!foo                !$omp parallel do default(shared) private(j,frame_to_add) reduction(+:R_tmp) schedule(static) proc_bind(close)
-                do j = 1, self%nframes
-                    t = real(j - 1, dp)
-                    w = t**p
-                    call self%dR_s(p,xy)%add( self%movie_frames_dIj_sh(j, xy), real(w) )
-                end do
-!foo                !$omp end parallel do
-                !call self%movie_frames_dR%set_cmat(R_tmp)
-                grad((xy-1)*POLYDIM+p) = self%movie_frames_R%corr_unnorm(self%dR_s(p,xy)) / f
+                tmp1 = - self%movie_frames_dRhat12(xy)%corr_unnorm( self%movie_frames_Rhat2 )
+                tmp2 = - self%movie_frames_dR12(xy)   %corr_unnorm( self%movie_frames_Rhat3 )
+                grad((xy-1)*POLYDIM+p) = tmp1 - tmp2
             end do
         end do
-        f    = - f
-        grad = - grad
     end subroutine motion_align_iso_contribs_fdf
 
 end module simple_motion_align_iso_polyn_direct
