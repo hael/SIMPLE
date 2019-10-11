@@ -364,7 +364,7 @@ end module simple_test_chiara_try_mod
        use simple_test_chiara_try_mod
        use simple_image, only : image
        use simple_atoms, only : atoms
-       type(image) :: image
+       type(image) :: aimage
        real :: smpd
        integer :: ldim(3)
        smpd = 0.358
