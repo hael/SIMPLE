@@ -756,8 +756,16 @@ contains
         if( .not. cline%defined('vol2') )then
             THROW_HARD('ERROR! vol2 needs to be present; exec_atoms_rmsd')
         endif
-        call nano1%new(params%vols(1), params%smpd,params%element1)
-        call nano2%new(params%vols(2), params%smpd,params%element2)
+        if(cline%defined('element1')) then
+            call nano1%new(params%vols(1), params%smpd,params%element1)
+        else
+            call nano1%new(params%vols(1), params%smpd)
+        endif
+        if(cline%defined('element2')) then
+            call nano2%new(params%vols(2), params%smpd,params%element2)
+        else
+            call nano2%new(params%vols(2), params%smpd)
+        endif
         ! execute
         call nano1%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
         call nano2%set_atomic_coords(trim(get_fbody(params%vols(2), 'mrc'))//'_atom_centers.pdb')
@@ -793,7 +801,11 @@ contains
         step    = params%stepsz
         if(min_rad > max_rad) THROW_HARD('Minimum radius has to be smaller then maximum radius! exec_radial_sym_test')
         if(step > max_rad-min_rad) THROW_HARD('Inputted too big stepsz! exec_radial_sym_test')
-        call nano%new(params%vols(1), params%smpd,params%element)
+        if(cline%defined('element')) then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd)
+        endif
         ! execute
         call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
         call nano%radial_dependent_stats(min_rad,max_rad,step)
@@ -818,11 +830,14 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_atom_cluster_analysis')
         endif
-        call nano%new(params%vols(1), params%smpd,params%element)
+        if( .not. cline%defined('heterogeneous') )then
+            THROW_HARD('ERROR! heterogeneous needs to be present; exec_atom_cluster_analysis')
+        endif
+        call nano%new(params%vols(1), params%smpd)
         ! execute
         call nano%set_atomic_coords(trim(get_fbody(params%vols(1), 'mrc'))//'_atom_centers.pdb')
         call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'CC.mrc', 'img_cc')
-        call nano%cluster
+        call nano%cluster(params%heterogeneous)
         ! kill
         call nano%kill
         ! end gracefully
@@ -844,7 +859,11 @@ contains
         if( .not. cline%defined('vol1') )then
             THROW_HARD('ERROR! vol1 needs to be present; exec_nano_softmask')
         endif
-        call nano%new(params%vols(1), params%smpd,params%element)
+        if(cline%defined('element')) then
+            call nano%new(params%vols(1), params%smpd,params%element)
+        else
+            call nano%new(params%vols(1), params%smpd)
+        endif
         ! fetch img_bin
         call nano%set_img(trim(get_fbody(params%vols(1), 'mrc'))//'BIN.mrc','img_bin')
         ! execute

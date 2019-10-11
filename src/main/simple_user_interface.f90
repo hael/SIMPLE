@@ -185,6 +185,7 @@ type(simple_input_param) :: fraca
 type(simple_input_param) :: frcs
 type(simple_input_param) :: graphene_filt
 type(simple_input_param) :: groupframes
+type(simple_input_param) :: heterogeneous
 type(simple_input_param) :: hp
 type(simple_input_param) :: inner
 type(simple_input_param) :: job_memory_per_task
@@ -857,6 +858,7 @@ contains
         call set_param(max_rad, 'max_rad', 'num', 'Maximum radius in A', 'Maximum radius in A {12.}', '{12.}', .false., 100.)
         call set_param(min_rad, 'min_rad', 'num', 'Minimum radius in A', 'Minimum radius in A {5.} ', '{5.}',  .false., 10.)
         call set_param(stepsz, 'stepsz', 'num', ' Steps size in A', 'Step size in A {2.} ', '{2.}',  .false., 10.)
+        call set_param(heterogeneous, 'heterogeneous', 'binary', 'Heterogeneous nanoparticle', 'Whether nanoparticle is composed by two elements or not (yes|no){no} ', '(yes|no){no}',  .true., 'no')
         call set_param(moldiam,        'moldiam',      'num',    'Molecular diameter', 'Molecular diameter(in Angstroms)','In Angstroms',.false., 0.)
         if( DEBUG ) write(logfhandle,*) '***DEBUG::simple_user_interface; set_common_params, DONE'
     end subroutine set_common_params
@@ -911,21 +913,24 @@ contains
         call atom_cluster_analysis%new(&
         &'atom_cluster_analysis', &                                   ! name
         &'Cluster the atoms in the nanoparticle',& ! descr_short
-        &'is a program for determine atom clustering of nanoparticle atomic-resolution map',& ! descr long
+        &'is a program for determine atom clustering of nanoparticle atomic-resolution map. &
+        & Clusters with respect to aspect ratio, distances distribution, angle between a fixed &
+        & vector and the direction of the longest dim of each atom, atoms intensities.',& ! descr long
         &'simple_exec',&                                     ! executable
-        &1, 1, 0, 0, 1, 0, 0, .false.)                       ! # entries in each group, requires sp_project
+        &1, 2, 0, 0, 0, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         call atom_cluster_analysis%set_input('img_ios', 1, 'vol1', 'file', 'Volume', 'Nanoparticle volume', &
         & 'input volume e.g. vol.mrc', .true., '')
-       ! search controls
+        ! search controls
         ! parameter input/output
         call atom_cluster_analysis%set_input('parm_ios', 1, smpd)
+        call atom_cluster_analysis%set_input('parm_ios', 2, heterogeneous)
         ! <empty>
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call atom_cluster_analysis%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        ! <empty>
         ! mask controls
         ! <empty>
         ! computer controls
@@ -936,8 +941,8 @@ contains
         ! PROGRAM SPECIFICATION
         call atoms_rmsd%new(&
         &'atoms_rmsd', &                                   ! name
-        &'Cluster the atoms in the nanoparticle',& ! descr_short
-        &'is a program for determine atom clustering of nanoparticle atomic-resolution map',& ! descr long
+        &'Compare two atomic-resolution nanoparticle map',& ! descr_short
+        &'is a program for comparing two atomic-resolution nanoparticle map by RMSD calculation',& ! descr long
         &'simple_exec',&                                     ! executable
         &2, 2, 0, 0, 2, 0, 0, .false.)                       ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -954,8 +959,8 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call atoms_rmsd%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1 e.g. Pt', .true., '')
-        call atoms_rmsd%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol2 e.g. Pt', .true., '')
+        call atoms_rmsd%set_input('filt_ctrls', 1, 'element1', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol1 e.g. Pt', .false., '')
+        call atoms_rmsd%set_input('filt_ctrls', 2, 'element2', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition vol2 e.g. Pt', .false., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -1468,7 +1473,7 @@ contains
         call detect_atoms%new(&
         &'detect_atoms', &                                      ! name
         &'Detect atoms in atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and provide statistics',& ! descr long
+        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and generating bin and connected-comp map',& ! descr long
         &'simple_exec',&                                        ! executable
         &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2268,7 +2273,7 @@ contains
         call nano_softmask%new(&
         &'nano_softmask', &                                      ! name
         &'nano_softmask in atomic-resolution nanoparticle map',& ! descr_short
-        &'is a program for identifying atoms in atomic-resolution nanoparticle maps and provide statistics',& ! descr long
+        &'is a program generating soft mask for 3D refinement of an atomic-res nanoparticle 3D map',& ! descr long
         &'simple_exec',&                                        ! executable
         &1, 1, 0, 0, 1, 0, 0, .false.)                          ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -2282,7 +2287,7 @@ contains
         ! alternative inputs
         ! <empty>
         ! filter controls
-        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call nano_softmask%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3604,9 +3609,7 @@ contains
         call radial_dependent_stats%new(&
         &'radial_dependent_stats',&                                                                                           ! name
         &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
-        &'is a program that implements a statistical test for point-group symmetry. &
-        & Input is a volume reconstructed without symmetry (c1), minimum radius, maximum radius and step. &
-        & Output is the most likely point-group symmetry',& ! descr long
+        &'is a program that generates statistics at different radii and across the whold nano map.',& ! descr long
         &'simple_exec',&                                                                                             ! executable
         &1, 4, 0, 0, 1, 0, 0, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
@@ -3623,7 +3626,7 @@ contains
         ! search controls
         ! <empty>
         ! filter controls
-        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .true., '')
+        call radial_dependent_stats%set_input('filt_ctrls', 1, 'element', 'str', 'Atom element name: Au, Pt etc.', 'Atom element name: Au, Pt etc.', 'atom composition e.g. Pt', .false., '')
         ! mask controls
         ! <empty>
         ! computer controls
@@ -3637,7 +3640,8 @@ contains
         &'Statistical test for radial dependent symmetry',&                                                                           ! descr_short
         &'is a program that implements a statistical test for point-group symmetry. &
         & Input is a volume reconstructed without symmetry (c1), minimum radius, maximum radius and step. &
-        & Output is the most likely point-group symmetry',& ! descr long
+        & Output is the most likely point-group symmetry at radii from minimum radius to maximum radius with &
+        & step size stepsz',& ! descr long
         &'simple_exec',&                                                                                             ! executable
         &1, 4, 0, 1, 3, 0, 1, .false.)                                                                               ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS

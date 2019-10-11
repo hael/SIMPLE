@@ -61,7 +61,7 @@ type :: nanoparticle
     procedure, private :: affprop_cluster_ar
     procedure, private :: affprop_cluster_ang
     procedure, private :: affprop_cluster_dist_distr
-    procedure          :: otsu_cluster_atom_intensity
+    procedure          :: cluster_atom_intensity
     procedure          :: search_polarization
     ! execution
     procedure          :: identify_atomic_pos
@@ -96,9 +96,10 @@ contains
         self%fbody = get_fbody(trim(fname), trim(fname2ext(fname)))
         self%smpd  = cline_smpd
         if(.not. present(element)) then
-            self%element = 'pt'
+            self%element   = 'pt'  !default is pt
             self%atom_name = ' pt '
-        else !default is pt
+            self%theoretical_radius = 1.1
+        else
             select case(element)
             case('pt')
                 self%element       = 'pt'
@@ -1062,15 +1063,15 @@ contains
     ! map in each atom. It is likely that these statistics
     ! are going to be able to distinguish between the different
     ! atom compositions in heterogeneous nanoparticles.
-    subroutine atom_intensity_stats(self,avg_intensity)
+    subroutine atom_intensity_stats(self,max_intensity)
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: avg_intensity(self%n_cc)
+        real,                intent(inout) :: max_intensity(self%n_cc)
         logical, allocatable :: mask(:,:,:)
         real,    pointer     :: rmat(:,:,:)
         real,    pointer     :: rmat_cc(:,:,:)
         integer :: n_atom
         integer :: i, j, k
-        real    :: max_intensity(self%n_cc), stdev_intensity(self%n_cc)
+        real    :: avg_intensity(self%n_cc), stdev_intensity(self%n_cc)
         real    :: avg_int, stdev_int, max_int
         write(logfhandle,*)'**atoms intensity statistics calculations init'
         call self%img%get_rmat_ptr(rmat)
@@ -1097,8 +1098,12 @@ contains
                     enddo
                 enddo
             enddo
-            stdev_intensity(n_atom) = sqrt(stdev_intensity(n_atom)/real(count(mask)-1))
-            write(unit = 13, fmt = '(a,f6.5,a,f6.5,a,f6.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
+            if(count(mask) > 1) then
+                stdev_intensity(n_atom) = sqrt(stdev_intensity(n_atom)/real(count(mask)-1))
+            else ! atom composed by one voxel
+                stdev_intensity(n_atom) = 0.
+            endif
+            write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval ', max_intensity(n_atom), '   avg ', avg_intensity(n_atom), '   stdev ', stdev_intensity(n_atom)
             mask = .false. !Reset
         enddo
         avg_int   = sum(avg_intensity)/real(self%n_cc)
@@ -1108,26 +1113,117 @@ contains
             stdev_int = stdev_int + (avg_intensity(n_atom)-avg_int)**2
         enddo
         stdev_int = sqrt(stdev_int/real(self%n_cc-1))
-        write(unit = 13, fmt = '(a,f6.5,a,f6.5,a,f6.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
+        write(unit = 13, fmt = '(a,f9.5,a,f9.5,a,f9.5)') 'maxval_general ', max_int, '   avg_general ', avg_int, '   stdev_general ', stdev_int
         close(13)
         write(logfhandle,*)'**atoms intensity statistics calculations completed'
     end subroutine atom_intensity_stats
 
-    subroutine otsu_cluster_atom_intensity(self,avg_intensity)
-        use simple_math, only : otsu
+    ! This subroutine clusters the atoms with respect to the maximum intensity
+    ! using kmean algorithm for 2 classes. The initial guess fo the centers
+    ! is intentionally biased. It supposes there are two distinguished classes
+    ! with different avgs (proved with simulated data).
+    subroutine cluster_atom_intensity(self, max_intensity, classes)
+        use simple_math
         class(nanoparticle), intent(inout) :: self
-        real,                intent(inout) :: avg_intensity(self%n_cc)
-        real :: avg_intensity_classified(self%n_cc)
-        integer :: n_cc
-        call otsu(x=avg_intensity, x_out=avg_intensity_classified)
-        do n_cc = 1, self%n_cc
-            if(avg_intensity_classified(n_cc) > 0.5) then
-                print *, 'atom ', n_cc, 'belongs to class 1'
+        real,                intent(inout) :: max_intensity(:)
+        integer,             intent(inout) :: classes(:)      ! class correspondent to avg_intensity, 0 or 1
+        real    :: cen1, cen2                     ! centers of the classes
+        real    :: data_copy(size(max_intensity))
+        integer :: i
+        integer :: val1, val2
+        logical :: converged
+        type(image) :: class1, class2
+        real, pointer :: rmat1(:,:,:), rmat2(:,:,:), rmat_cc(:,:,:)
+        write(logfhandle,*) '****clustering wrt maximum intensity, init'
+        ! Report clusters on images in dedicated directory
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir1; ")
+        call simple_mkdir(trim(self%output_dir)//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_mkdir; ")
+        call simple_chdir(trim(self%output_dir)//'/ClusterAtomsIntensities',errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
+        call class1%new(self%ldim, self%smpd)
+        call class2%new(self%ldim, self%smpd)
+        call class1%get_rmat_ptr(rmat1)
+        call class2%get_rmat_ptr(rmat2)
+        call self%img_cc%get_rmat_ptr(rmat_cc)
+        data_copy = max_intensity
+        ! Initialise
+        call initialise_centers(data_copy,cen1,cen2)
+        converged = .false.
+        do i = 1, 5*self%n_cc ! maximum number of iterations
+            if(.not. converged) then
+                call update_centers(cen1,cen2,converged,val1,val2)
             else
-                print *, 'atom ', n_cc, 'belongs to class 2'
+                exit
             endif
         enddo
-    end subroutine otsu_cluster_atom_intensity
+        ! assign
+        where( (cen1 - max_intensity)**2. < (cen2 - max_intensity)**2. )
+            classes = val1
+        elsewhere
+            classes = val2
+        end where
+        do i = 1, self%n_cc
+            if( (cen1 - max_intensity(i))**2. < (cen2 - max_intensity(i))**2. ) then
+                where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i)) < TINY) rmat1(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+            else
+                where(abs(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(i)) < TINY) rmat2(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3)) = 1.
+            endif
+        enddo
+        call class1%write('Class1.mrc')
+        call class2%write('Class2.mrc')
+        call class1%kill
+        call class2%kill
+        ! come back to root directory
+        call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster_atom_intensity, simple_chdir; ")
+        write(logfhandle,*) '****clustering wrt maximum intensity, completed'
+    contains
+
+        subroutine initialise_centers(data,cen1,cen2)
+            real, intent(inout) :: cen1,cen2
+            real, intent(inout) :: data(:)
+            !>   rheapsort from numerical recepies (largest last)
+            call hpsort(data)
+            cen1 = sum(data(1:self%n_cc/2))/real(self%n_cc/2)
+            cen2 = sum(data(self%n_cc/2+1:size(data)))/real(self%n_cc/2)
+        end subroutine initialise_centers
+
+        subroutine update_centers(cen1,cen2,converged,val1,val2)
+            real,    intent(inout) :: cen1,cen2
+            logical, intent(inout) :: converged
+            integer, intent(inout) :: val1, val2
+            integer :: i
+            integer :: cnt1, cnt2
+            real    :: sum1, sum2
+            real :: cen1_new, cen2_new
+            sum1 = 0.
+            cnt1 = 0
+            do i=1,self%n_cc
+                if( (cen1-max_intensity(i))**2. < (cen2-max_intensity(i))**2. )then
+                    cnt1 = cnt1 + 1 ! number of elements in cluster 1
+                    sum1 = sum1 + max_intensity(i)
+                endif
+            end do
+            cnt2 = self%n_cc - cnt1       ! number of elements in cluster 2
+            sum2 = sum(max_intensity)- sum1
+            cen1_new = sum1 / real(cnt1)
+            cen2_new = sum2 / real(cnt2)
+            if(abs(cen1_new - cen1) < TINY .and. abs(cen2_new - cen2) < TINY) then
+                converged = .true.
+            else
+                converged = .false.
+            endif
+            ! update
+            cen1 = cen1_new
+            cen2 = cen2_new
+            ! assign values to the centers
+            if( cen1 > cen2 )then
+                val1           = 1
+                val2           = 0
+            else
+                val1           = 0
+                val2           = 1
+            endif
+        end subroutine update_centers
+    end subroutine cluster_atom_intensity
 
     ! Polarization search via angle variance. The considered angle is
     ! the angle between the vector [0,0,1] and the direction of the
@@ -1423,13 +1519,15 @@ contains
         deallocate(simmat, labels_ap, centers_ap)
     end subroutine affprop_cluster_dist_distr
 
-    subroutine cluster(self)
+    subroutine cluster(self, heterogeneous)
         class(nanoparticle), intent(inout) :: self
-        real, allocatable :: avg_intensity(:)
+        character(len=3),       intent(in) :: heterogeneous
+        real,    allocatable :: max_intensity(:)
+        integer, allocatable :: classes(:)
         real, pointer :: rmat_cc(:,:,:)
         call self%img_cc%get_rmat_ptr(rmat_cc)
         self%n_cc = nint(maxval(rmat_cc(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))))
-        allocate(avg_intensity(self%n_cc))
+        allocate(max_intensity(self%n_cc), classes(self%n_cc))
         rmat_cc => null()
         ! PREPARING FOR CLUSTERING
         ! Aspect ratios calculations
@@ -1448,9 +1546,14 @@ contains
         ! come back to root directory
         call simple_chdir(trim(self%output_dir),errmsg="simple_nanoparticles :: cluster, simple_chdir; ")
         call self%affprop_cluster_dist_distr()
-        ! Otsu clustering (2 classes) wrt atom intensities
-        call self%atom_intensity_stats(avg_intensity)
-        call self%otsu_cluster_atom_intensity(avg_intensity)
+        ! performs clustering with respect to max intensity in the
+        ! gray values of each atoms, with 2 fixed classes by kmeans,
+        ! only of the nanoparticle map is heterogeneous.
+        if(heterogeneous .eq. 'yes') then
+        ! Kmeans clustering (2 classes) wrt atom intensities
+            call self%atom_intensity_stats(max_intensity)
+            call self%cluster_atom_intensity(max_intensity, classes)
+        endif
         call self%kill
     contains
         subroutine set_dists_from_pdb(pdbfile)

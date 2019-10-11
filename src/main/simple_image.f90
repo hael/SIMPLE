@@ -3335,9 +3335,8 @@ contains
         deallocate(mat4compare)
     end subroutine find_connected_comps
 
-    ! The result of the function is the size(# of pixels) of each cc. This
-    ! value is stored in the 2nd column of sz. In the first one is recorded
-    ! the label of the cc.  (cc = connected component)
+    ! The result of the function is the size(# of pixels) of each cc.
+    !  (cc = connected component)
     function size_connected_comps(self) result(sz)
         class(image), intent(in) :: self
         integer, allocatable :: sz(:)
@@ -3345,8 +3344,8 @@ contains
         if(allocated(sz)) deallocate(sz)
         imax = nint(maxval(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))))
         allocate(sz(imax), source = 0)
-        do n_cc = imax,1,-1
-            sz(n_cc) = count(abs(self%rmat-real(n_cc)) < TINY)
+        do n_cc = 1,imax
+            sz(n_cc) = count(abs(self%rmat(1:self%ldim(1),1:self%ldim(2),1:self%ldim(3))-real(n_cc)) < TINY)
         enddo
     end function size_connected_comps
 

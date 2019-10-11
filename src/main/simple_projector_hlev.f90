@@ -103,6 +103,9 @@ contains
         call vol_pad%fft
         call vol_pad%expand_cmat(KBALPHA)
         call rotvol_slim( vol_pad, rovol_pad, rovol, o, shvec )
+        if( params_glob%griddev.eq.'yes' )then
+            call rovol%div_w_instrfun(KBALPHA)
+        endif
         call vol_pad%kill_expanded
         call vol_pad%kill
         call rovol_pad%kill

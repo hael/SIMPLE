@@ -273,80 +273,104 @@ end subroutine laplacian_filt
    !     if(allocated(msk)) deallocate(msk)
    !     if(allocated(pos)) deallocate(pos)
    ! end subroutine diameter_cc
+
+   subroutine kmeans_2classes(data, classes)
+       use simple_math
+       real,    intent(inout) :: data(:)
+       integer, intent(inout) :: classes(:) ! class correspondent to the data, 0 or 1
+       real    :: cen1, cen2 ! centers of the classes
+       real    :: data_copy(size(data))
+       integer :: i,N
+       integer :: val1, val2
+       logical :: converged
+       N = size(data) ! number of points
+       data_copy = data
+       ! Initialise
+       call initialise_centers(data_copy,cen1,cen2)
+       print *, 'Initial centers: ', cen1, cen2
+       converged = .false.
+       do i = 1, 5*N
+           if(.not. converged) then
+               call update_centers(cen1,cen2,converged,val1,val2)
+               print *, 'iteration', i, 'centers', cen1, cen2
+           else
+               print *,'iteration', i, 'converged'
+               exit
+           endif
+       enddo
+       ! assign
+       where( (cen1 - data)**2. < (cen2 - data)**2. )
+           classes = val1
+       elsewhere
+           classes = val2
+       end where
+       ! print *, 'assignments: ', classes
+   contains
+
+       subroutine initialise_centers(data,cen1,cen2)
+           real, intent(inout) :: cen1,cen2
+           real, intent(inout) :: data(:)
+           !>   rheapsort from numerical recepies (largest last)
+           call hpsort(data)
+           cen1 = sum(data(1:N/2))/real(N/2)
+           cen2 = sum(data(N/2+1:size(data)))/real(N/2)
+       end subroutine initialise_centers
+
+       subroutine update_centers(cen1,cen2,converged,val1,val2)
+           real,    intent(inout) :: cen1,cen2
+           logical, intent(inout) :: converged
+           integer, intent(inout) :: val1, val2
+           integer :: i
+           integer :: cnt1, cnt2
+           real    :: sum1, sum2
+           real :: cen1_new, cen2_new
+           sum1 = 0.
+           cnt1 = 0
+           do i=1,N
+               if( (cen1-data(i))**2. < (cen2-data(i))**2. )then
+                   cnt1 = cnt1 + 1 ! number of elements in cluster 1
+                   sum1 = sum1 + data(i)
+               endif
+           end do
+           cnt2 = N - cnt1       ! number of elements in cluster 2
+           sum2 = sum(data)- sum1
+           cen1_new = sum1 / real(cnt1)
+           cen2_new = sum2 / real(cnt2)
+           if(abs(cen1_new - cen1) < TINY .and. abs(cen2_new - cen2) < TINY) then
+               converged = .true.
+           else
+               converged = .false.
+           endif
+           ! update
+           cen1 = cen1_new
+           cen2 = cen2_new
+           ! assign values to the centers
+           if( cen1 > cen2 )then
+               val1           = 1
+               val2           = 0
+           else
+               val1           = 0
+               val2           = 1
+           endif
+       end subroutine update_centers
+   end subroutine kmeans_2classes
 end module simple_test_chiara_try_mod
 
     program simple_test_chiara_try
        include 'simple_lib.f08'
        use simple_math
+       use gnufor2
        use simple_segmentation
        use simple_test_chiara_try_mod
        use simple_image, only : image
        use simple_atoms, only : atoms
-       type(image) :: heterog_nano,heterog_nano_cc
-       type(image) :: one_atom
-       real, pointer :: rmat_one_atom(:,:,:)
-       type(atoms) :: a
-       real :: cutoff, smpd
+       type(image) :: image
+       real :: smpd
        integer :: ldim(3)
-       real, allocatable :: avg_intensity(:),avg_intensity_clustered(:)
-       real, allocatable :: max_intensity(:),max_intensity_clustered(:)
-       integer :: N ! number of atoms
-       integer :: n_atom
-       real, allocatable :: rmat(:,:,:)
-       real, pointer     :: rmat_cc(:,:,:)
-       logical, allocatable :: mask(:,:,:)
-       real :: thresh
        smpd = 0.358
        ldim = 160
-       cutoff = 8.*smpd
-       call heterog_nano%new(ldim,smpd)
-       call a%new('atom_centersAUPT.pdb')
-       call a%convolve(heterog_nano, cutoff)
-       call heterog_nano%write('HeterogeneousNano.mrc')
-       rmat = heterog_nano%get_rmat()
-       call heterog_nano%bin(90.) ! theshold
-       call heterog_nano%write('HeterogeneousNanoBIN.mrc')
-       call heterog_nano%find_connected_comps(heterog_nano_cc)
-       call heterog_nano_cc%write('HeterogeneousNanoCC.mrc')
-       N = a%get_n()
-       allocate(avg_intensity(N), source = 0.)
-       allocate(avg_intensity_clustered(N), source = 0.)
-       allocate(max_intensity(N), source = 0.)
-       allocate(max_intensity_clustered(N), source = 0.)
-       call heterog_nano_cc%get_rmat_ptr(rmat_cc)
-       allocate(mask(ldim(1),ldim(2),ldim(3)), source = .false.)
-       ! initialise
-       max_intensity(:)   = 0.
-       avg_intensity(:)   = 0.
-       ! stdev_intensity(:) = 0.
 
-       print *, 'Number of atoms: ', N
-       print *, 'minval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))',minval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))
-       print *, 'maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))',maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)))
 
-       do n_atom = 1, N
-           mask = .false.
-           where(abs(rmat_cc(1:ldim(1),1:ldim(2),1:ldim(3)) - real(n_atom)) < TINY) mask = .true.
-           ! print *, 'n_atom',n_atom,'mask == true', count(mask .eqv. .true.)
-           avg_intensity(n_atom) = sum   (rmat(1:ldim(1),1:ldim(2),1:ldim(3)),mask)
-           max_intensity(n_atom) = maxval(rmat(1:ldim(1),1:ldim(2),1:ldim(3)),mask)
-           ! print *, 'ATOM ', n_atom, 'max_intensity',max_intensity(n_atom)
-        enddo
-        print *, 'Otsu'
-        ! call otsu(avg_intensity, avg_intensity_clustered, thresh)
-        call otsu(max_intensity, max_intensity_clustered, thresh)
-        print *, 'thresh', thresh
-        do n_atom = 1, N
-            if(max_intensity_clustered(n_atom) < 0.5) then
-                print *, 'atom', n_atom, 'belonging to class 1'
-            else
-            endif
-        enddo
-
-        deallocate(rmat)
-        call a%kill
-        call heterog_nano%kill
-        deallocate(avg_intensity,avg_intensity_clustered, max_intensity, max_intensity_clustered)
  end program simple_test_chiara_try
 
      !BORDER EFFECTS IN PHASECORRELATION EXPLAINATION
