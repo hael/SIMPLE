@@ -1,8 +1,8 @@
 module simple_relion
 include 'simple_lib.f08'
 use simple_starfile_wrappers
-use simple_sp_project, only: sp_project
-
+use simple_sp_project,          only: sp_project
+use simple_cmdline,             only: cmdline
 implicit none
 private
 public :: relion_project
@@ -17,7 +17,10 @@ type relion_project
     character(len=8),   allocatable     :: ptcl2Dkey(:)
     logical,            allocatable     :: ptcl2Dlogical(:)
     character(len=8),   allocatable     :: ptcl3Dkey(:)
-    logical,            allocatable     :: ptcl3Dlogical(:) 
+    logical,            allocatable     :: ptcl3Dlogical(:)
+    real                                :: dfxmin
+    real                                :: dfxmax
+    real                                :: dfxstep
 
 contains
 
@@ -29,6 +32,7 @@ contains
     procedure :: write_corrected_micrographs_star
     procedure :: write_micrographs_star
     procedure :: write_particles2D_star
+    procedure :: get_epu_tiltgroup
     !procedure :: write_particles3D_star
 
 end type relion_project
@@ -312,10 +316,11 @@ contains
 
     end subroutine write_corrected_micrographs_star
     
-    subroutine write_micrographs_star(self, spproj)
+    subroutine write_micrographs_star(self, cline, spproj)
     
         class(relion_project),  intent(inout)   :: self
         class(sp_project),      intent(inout)   :: spproj
+        class(cmdline),         intent(inout)   :: cline
         character(len=:),       allocatable     :: getstring
         type(starfile_table_type)               :: mic_starfile
         integer                                 :: i
@@ -347,6 +352,9 @@ contains
                 if(.NOT. exists) then
                     call syslib_symlink('../' // trim(adjustl(getstring)), 'micrographs/' // trim(adjustl(basename(getstring))), 'Failed to generate symlink')
                 endif
+                if(cline%get_carg('eputiltgroups') .eq. 'yes') then
+                    call starfile_table__setValue_int(mic_starfile, EMDL_PARTICLE_BEAM_TILT_CLASS, self%get_epu_tiltgroup(getstring))
+                endif 
                 if(self%miclogical(3)) then
                     call spproj%os_mic%getter(i, 'forctf', getstring)
                     call starfile_table__setValue_string(mic_starfile, EMDL_MICROGRAPH_NAME_WODOSE, 'micrographs/' // trim(adjustl(basename(getstring))))
@@ -375,7 +383,8 @@ contains
                     call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_mic%get(i, 'dfy') * 10000, dp))
                 endif
                 if(self%miclogical(10)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_mic%get(i, 'angast'), dp))
-                if(self%miclogical(11)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))              
+                if(self%miclogical(11)) call starfile_table__setValue_double(mic_starfile, EMDL_CTF_Q0, real(spproj%os_mic%get(i, 'fraca'), dp))
+                   
             endif
         end do
         
@@ -389,15 +398,18 @@ contains
         
     end subroutine write_micrographs_star
   
-    subroutine write_particles2D_star(self, spproj)
+    subroutine write_particles2D_star(self, cline, spproj)
     
         class(relion_project),  intent(inout)   :: self
         class(sp_project),      intent(inout)   :: spproj
+        class(cmdline),         intent(inout)   :: cline
         character(len=:),       allocatable     :: getstring
         type(starfile_table_type)               :: ptcl_starfile
         integer,                allocatable     :: ptclcount(:)
         integer                                 :: i, stkind
+        integer                                 :: group
         logical                                 :: exists
+        character(len=1024)                     :: groupname
         
         if(spproj%os_ptcl2D%get_noris() == 0) then
             return
@@ -418,6 +430,11 @@ contains
 
         call simple_mkdir('particles', errmsg= "simple_relion:: create micrographs directory")
         
+        if(self%ptcl2Dlogical(5) .AND. self%ptcl2Dlogical(6) .AND. cline%get_carg('reliongroups') .eq. 'yes') then
+             call spproj%os_ptcl2D%minmax('dfx', self%dfxmin, self%dfxmax)
+             self%dfxstep = (self%dfxmax -self%dfxmin)/(cline%get_rarg('reliongroups_count') + 1)
+        endif
+        
         call starfile_table__new(ptcl_starfile)
         call starfile_table__setcomment(ptcl_starfile, "SIMPLE 3.0; export_relion")
         
@@ -433,6 +450,9 @@ contains
                 if(.NOT. exists) then
                     call syslib_symlink('../' // trim(adjustl(getstring)), 'particles/' // trim(adjustl(basename(getstring))) // 's', 'Failed to generate symlink')
                 endif
+                if(cline%get_carg('eputiltgroups') .eq. 'yes') then
+                    call starfile_table__setValue_int(ptcl_starfile, EMDL_PARTICLE_BEAM_TILT_CLASS, self%get_epu_tiltgroup(getstring))
+                endif 
                 getstring = trim(adjustl(basename(getstring)))
                 call starfile_table__setValue_string(ptcl_starfile, EMDL_MICROGRAPH_NAME, 'micrographs/' // getstring(12 : len(getstring)))
                 if(self%ptcl2Dlogical(1) .AND. self%ptcl2Dlogical(2) .AND. self%stklogical(8)) then
@@ -454,6 +474,12 @@ contains
                     call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUSV, real(spproj%os_stk%get(stkind,'dfy') * 10000, dp))
                 endif
                 
+                if(cline%get_carg('reliongroups') .eq. 'yes') then
+                    group = ceiling((real(spproj%os_stk%get(stkind,'dfx')) - self%dfxmin) / self%dfxstep)
+                    write(groupname, *) group
+                    call starfile_table__setValue_string(ptcl_starfile, EMDL_MLMODEL_GROUP_NAME, trim(adjustl(groupname)))
+                endif
+                
                 if(self%stklogical(6)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_DEFOCUS_ANGLE, real(spproj%os_stk%get(stkind,'angast'), dp))
                 if(self%stklogical(7)) call starfile_table__setValue_double(ptcl_starfile, EMDL_CTF_Q0, real(spproj%os_stk%get(stkind,'fraca'), dp))
             endif
@@ -470,18 +496,39 @@ contains
         
     end subroutine write_particles2D_star
   
-    subroutine create(self, spproj)
+    function get_epu_tiltgroup(self, fname) result (tiltint)
     
-        class(relion_project), intent(inout) :: self
-        class(sp_project), intent(inout) :: spproj
+        class(relion_project),  intent(inout)              :: self
+        character (len=:),      intent(in),allocatable     :: fname
+        character (len=:),      allocatable                :: tiltname
+        integer                                            :: i
+        integer                                            :: tiltint
+
+        tiltint=0
+        tiltname = trim(adjustl(basename(fname)))
+        i = index(tiltname,'Data_')
+        tiltname = tiltname(i+5:)
+        i = index(tiltname,'_')
+        tiltname = tiltname(:i-1)
+        read ( tiltname, * ) tiltint
+        
+        if(allocated(tiltname))deallocate(tiltname)
+
+    end function get_epu_tiltgroup
+  
+    subroutine create(self, cline, spproj)
+    
+        class(relion_project),  intent(inout) :: self
+        class(sp_project),      intent(inout) :: spproj
+        class(cmdline),         intent(inout) :: cline
         
         call self%test_mic_params(spproj)
         call self%test_stk_params(spproj)
         call self%test_ptcl2D_params(spproj)
         call self%test_ptcl3D_params(spproj)
         call self%write_corrected_micrographs_star(spproj)
-        call self%write_micrographs_star(spproj)
-        call self%write_particles2D_star(spproj)
+        call self%write_micrographs_star(cline, spproj)
+        call self%write_particles2D_star(cline, spproj)
        ! call self%write_particles3D_star(spproj) !Disabled as not fully tested
         
         if(allocated(self%mickey))deallocate(self%mickey)

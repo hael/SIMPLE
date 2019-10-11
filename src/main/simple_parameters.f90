@@ -39,6 +39,7 @@ type :: parameters
     character(len=3)      :: doalign='yes'
     character(len=3)      :: dopca='yes'
     character(len=3)      :: doprint='no'
+    character(len=3)      :: eputiltgroups='no'   !< generate relion tilt classes from epu filenames (yes|no){no}
     character(len=3)      :: errify='no'          !< introduce error(yes|no){no}
     character(len=3)      :: even='no'            !< even orientation distribution(yes|no){no}
     character(len=3)      :: ft2img='no'          !< convert Fourier transform to real image of power(yes|no){no}
@@ -77,6 +78,7 @@ type :: parameters
     character(len=3)      :: prenormpremsk='no'   !< images are pre-normalised and pre-masked
     character(len=3)      :: projw='no'           !< correct for uneven orientation distribution
     character(len=3)      :: pssnr='no'           !< correct for uneven orientation distribution
+    character(len=3)      :: reliongroups='no'    !< export relion groupings
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
     character(len=3)      :: remap_cls='no'
@@ -296,6 +298,7 @@ type :: parameters
     integer :: pspecsz=512         !< size of power spectrum(in pixels)
     integer :: ptcl=1
     integer :: recl_cgrid=-1
+    integer :: reliongroups_count=0
     integer :: ring1=2
     integer :: ring2=0
     integer :: rndfac=0            !< randomness factor in stochastic search, the higher the greedier

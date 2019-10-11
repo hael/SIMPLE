@@ -1949,15 +1949,21 @@ contains
     subroutine new_export_relion
         ! PROGRAM SPECIFICATION
         call export_relion%new(&
-        &'export_relion',&                                       ! name
-        &'Export project to relion ',&                                     ! descr_short
+        &'export_relion',&                                              ! name
+        &'Export project to relion ',&                                  ! descr_short
         &'is a program to export simple project to relion',&
-        &'simple_exec',&                                              ! executable
-        &0, 0, 0, 0, 0, 0, 0, .true.)                                 ! # entries in each group, requires sp_project
+        &'simple_exec',&                                                ! executable
+        &0, 3, 0, 0, 0, 0, 0, .true.)                                   ! # entries in each group, requires sp_project
         ! INPUT PARAMETER SPECIFICATIONS
         ! image input/output
         ! <empty>
         ! parameter input/output
+        call export_relion%set_input('parm_ios', 1, 'eputiltgroups', 'binary', 'Generate beamtilt classes from EPU filenames',&
+            'Generate beamtilt classes from EPU filenames', '(yes|no){no}', .false., 'no')
+        call export_relion%set_input('parm_ios', 2, 'reliongroups', 'binary', 'Generate Relion groups based on defocus values',&
+            'Generate Relion groups based on defocus values', '(yes|no){no}', .false., 'no')   
+        call export_relion%set_input('parm_ios', 3, 'reliongroups_count', 'num', 'Number Relion groups based on defocus',&
+            'Divide particles into X groups based on defocus for relion', '# micrographs', .false., 0.0)
         ! <empty>
         ! search controls
         ! <empty>

@@ -27,11 +27,14 @@ contains
         type(sp_project)     :: spproj
         type(relion_project) :: relionproj
         if( .not. cline%defined('mkdir') ) call cline%set('mkdir', 'yes')
+        if( .not. cline%defined('eputiltgroups') ) call cline%set('eputiltgroups', 'no')
+        if( .not. cline%defined('reliongroups') ) call cline%set('reliongroups', 'no')
         call params%new(cline)
         if( file_exists(params%projfile) )then
             call spproj%read(params%projfile)
         endif
-        call relionproj%create(spproj)
+        if( cline%get_rarg('reliongroups_count') .eq. 0.0) call cline%set('reliongroups_count', real(spproj%os_mic%get_noris()))
+        call relionproj%create(cline, spproj)
         call spproj%kill
         call simple_end('**** export_relion NORMAL STOP ****')
     end subroutine exec_export_relion

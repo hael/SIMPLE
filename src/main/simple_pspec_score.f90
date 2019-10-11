@@ -148,9 +148,8 @@ contains
         end do
         
         if (maxvalue .gt. (-2)*minvalue) then
-            print*, "GRAPHENE!"
+            
         else
-            print*, "NO GRAPHENE!"
             if(allocated(radial))deallocate(radial)
             if(allocated(radial60))deallocate(radial60)
             if(allocated(zscore60))deallocate(zscore60)
