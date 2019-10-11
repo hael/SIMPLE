@@ -6,6 +6,7 @@ include 'simple_lib.f08'
 use simple_parameters,                    only: params_glob
 use simple_opt_factory,                   only: opt_factory
 use simple_opt_spec,                      only: opt_spec
+use simple_opt_lbfgsb,                    only: PRINT_NEVALS
 use simple_optimizer,                     only: optimizer
 use simple_image,                         only: image, imstack_type
 use simple_ft_expanded,                   only: ftexp_transfmat_init, ftexp_transfmat_kill
@@ -826,7 +827,7 @@ contains
         opt_lims(:,1) = -self%trs
         opt_lims(:,2) =  self%trs
         call ospec%specify('lbfgsb', PATCH_PDIM*2, ftol=self%motion_patched_direct_ftol, &
-            gtol=self%motion_patched_direct_gtol, limits=opt_lims, maxits=800)
+            gtol=self%motion_patched_direct_gtol, factr=1.0d+6, pgtol=1.0d-6, limits=opt_lims, maxits=800)
         call ospec%set_costfun_8(patched_direct_cost_wrapper)
         call ospec%set_gcostfun_8(patched_direct_gcost_wrapper)
         call ospec%set_fdfcostfun_8(patched_direct_fdf_wrapper)
@@ -834,7 +835,9 @@ contains
         ospec%x_8(           1:PATCH_PDIM  ) = self%poly_coeffs(:,1)
         ospec%x_8(PATCH_PDIM+1:PATCH_PDIM*2) = self%poly_coeffs(:,2)
         ospec%x = real(ospec%x_8)
+        PRINT_NEVALS = .true.
         call nlopt%minimize(ospec, self, lowest_cost)
+        PRINT_NEVALS = .false.
         self%poly_coeffs(:,1) = ospec%x_8(           1:PATCH_PDIM  )
         self%poly_coeffs(:,2) = ospec%x_8(PATCH_PDIM+1:PATCH_PDIM*2)
         call nlopt%kill
@@ -1220,7 +1223,7 @@ contains
         f       = 0.d0
         grad(:) = 0.d0
         ! convert polynomial coefficients into shifts
-!foo        !$omp parallel do collapse(2) default(shared) private(xi,yi,j,t,x,y,ashift,ftmp,grad_contrib,grad_full_tmp) reduction(+:f,grad) proc_bind(close) schedule(static)
+        !$omp parallel do collapse(2) default(shared) private(xi,yi,j,t,x,y,ashift,ftmp,grad_contrib,grad_full_tmp) reduction(+:f,grad) proc_bind(close) schedule(static)
         do xi = 1, params_glob%nxpatch
             do yi = 1, params_glob%nypatch
                 do j = 1, self%nframes
@@ -1236,7 +1239,7 @@ contains
                 grad(:) = grad(:) + (- grad_full_tmp(:))
             end do
         end do
-!foo        !$omp end parallel do
+        !$omp end parallel do
     end subroutine motion_patched_direct_fdf
 
     subroutine patched_direct_fdf_wrapper( self, vec, f, grad, D )

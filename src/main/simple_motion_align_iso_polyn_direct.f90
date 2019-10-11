@@ -813,6 +813,7 @@ contains
         do j = 1, self%nframes
             cost = cost + (val_e(j) - 1._dp) / val_D(j)
         end do
+        cost = - cost
     end function motion_align_iso_direct_cost
 
     function motion_align_iso_direct_cost_wrapper( self, vec, D ) result( cost )
@@ -864,6 +865,7 @@ contains
         real(dp) :: val_EE(self%nframes)
         real(dp) :: val_RR
         real(dp) :: tmp1
+        write (*,*) 'iso_direct_fdf: vec=', vec
         call self%vec_to_shifts(vec, shifts)
         !$omp parallel do default(shared) private(j,shvec) schedule(static) proc_bind(close)
         do j = 1, self%nframes
@@ -911,17 +913,16 @@ contains
                 idx = (n-2)*2+xy
                 !grad_tmp(idx) = self%movie_frames_dIj_sh(n,xy)%corr_unnorm( &
                 !    self%movie_frames_Rhat   )
-                grad_tmp(idx) = - self%movie_frames_dRhat12(xy)%corr_unnorm( &
+                grad_tmp(idx) = self%movie_frames_dRhat12(xy)%corr_unnorm( &
                     self%movie_frames_Ij_sh(n) )
                 !tmp1 = self%movie_frames_dIj_sh(n,xy)%corr_unnorm(     &
                 !    self%movie_frames_R )
-                tmp1 = - self%movie_frames_dR12(xy)%corr_unnorm(     &
+                tmp1 = self%movie_frames_dR12(xy)%corr_unnorm(     &
                     self%movie_frames_Ij_sh(n) )
                 grad_tmp(idx) = grad_tmp(idx) - tmp1 * (sum(val_F) - val_F(n) - 1._dp / val_D(n))
             end do
         end do
         !$omp end parallel do
-
         if (inc_or_not) then
             grad = 0._dp
             do xy = 1, 2
@@ -935,6 +936,7 @@ contains
         else
             grad  = grad_tmp
         end if
+        f    = - f
     end subroutine motion_align_iso_direct_fdf
 
     subroutine motion_align_iso_direct_fdf_wrapper( self, vec, f, grad, D )
@@ -991,6 +993,7 @@ contains
         do j = 1, self%nframes
             cost = cost + (val_e(j) - 1._dp) / val_D(j)
         end do
+        cost = - cost
     end function motion_align_iso_contribs_cost
 
     subroutine motion_align_iso_contribs_gcost( self, grad )
@@ -1061,11 +1064,13 @@ contains
                     * real(sum(val_F) - val_F(j) - 1._dp / val_D(j)) )
             end do
             do xy = 1, 2
-                tmp1 = - self%movie_frames_dRhat12(xy)%corr_unnorm( self%movie_frames_Rhat2 )
-                tmp2 = - self%movie_frames_dR12(xy)   %corr_unnorm( self%movie_frames_Rhat3 )
+                tmp1 = self%movie_frames_dRhat12(xy)%corr_unnorm( self%movie_frames_Rhat2 )
+                tmp2 = self%movie_frames_dR12(xy)   %corr_unnorm( self%movie_frames_Rhat3 )
                 grad((xy-1)*POLYDIM+p) = tmp1 - tmp2
             end do
         end do
+        f    = - f
+        grad = - grad
     end subroutine motion_align_iso_contribs_fdf
 
 end module simple_motion_align_iso_polyn_direct
