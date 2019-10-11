@@ -114,9 +114,7 @@ class TaskSetup {
     }
   }
 
-  startTask(element){
-	element.innerHTML = 'Starting'
-	element.removeAttribute("onclick")
+  startTask(element){	
     var request = {
 		cls : "task",
 		fnc : "start",
@@ -133,20 +131,24 @@ class TaskSetup {
 		}
 	}
     for(var argument of document.getElementsByClassName('argument')){
-      if(argument.parentElement.parentElement.className == "required" && argument.value == ""){
+      if(argument.parentElement.parentElement.className.includes("required") && argument.value == ""){
         argument.style.borderColor = "red"
         setTimeout(() => {
           argument.style.borderColor = null
         }, 1000)
         return
       }
+ 
       if(argument.checked){
         request['arg']['keys'][argument.id] = "true"
       } else {
         request['arg']['keys'][argument.id] = argument.value
       }
     }
-
+    
+    element.innerHTML = 'Starting'
+	element.removeAttribute("onclick")
+	
     fetcher.fetchJSON(request).then(response => {
       return response.json()
     }).then((json) => {

@@ -1686,7 +1686,7 @@ class SimpleView {
 	fetcher.fetchJSON(request)
 	.then(response => response.json())
 	.then (json => {
-		 alert("Selection Saved")
+		 alert("Selection job started")
 		 document.getElementById('savebutton').innerHTML = 'Save'
 		 project.refreshHistory()
 	})

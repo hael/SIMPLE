@@ -64,7 +64,11 @@ class Project {
 	for(var element of data){
 		if(element['parent'] == this.selectedfolder + "/" + this.selectedname + ".simple"){
 			var div = document.createElement('div')
-			div.className = "tree"
+			if(element.status == 'Deleted'){
+				div.className = "tree deleted"
+			}else{
+				div.className = "tree"
+			}
 			div.id = element['folder'] + "/" + this.selectedname + ".simple"
 			div.appendChild(createBubble(element))
 			var branch = document.createElement('div')
@@ -86,7 +90,11 @@ class Project {
 				if(element['parent'] == tree.id && element['included'] != true){
 					updated = true
 					var div = document.createElement('div')
-					div.className = "tree"
+					if(element.status == 'Deleted'){
+						div.className = "tree deleted"
+					}else{
+						div.className = "tree"
+					}
 					div.id = element['folder'] + "/" + this.selectedname + ".simple"
 					var stalk = document.createElement('div')//
 					stalk.className = "stalk"//
@@ -111,6 +119,20 @@ class Project {
 		var branch = tree.getElementsByClassName('branch')[0]
 		if(branch.getElementsByClassName('tree').length == 0){
 			tree.getElementsByClassName('maxminicon')[0].style.display = 'none'
+		}
+	}
+	
+	var unpruned = true
+	
+	while (unpruned){
+		unpruned = false
+		var trees = document.getElementsByClassName('tree')
+		for(var tree of trees){
+			var branch = tree.getElementsByClassName('branch')[0]
+			if(branch.getElementsByClassName('tree').length == 0 && tree.className.includes('deleted')){
+				tree.remove()
+				unpruned = true
+			}
 		}
 	}
 	
@@ -154,7 +176,11 @@ class Project {
 		
 		var lowerline = document.createElement('div')
 		lowerline.className = "lowerline"
-		lowerline.innerHTML = element.status
+		if(element.type == 'preprocess_stream' && element.status == 'Killed'){
+			lowerline.innerHTML = 'Stopped'
+		}else{
+			lowerline.innerHTML = element.status
+		}
 		
 		if(element.status == "running"){
 			var statusbar = document.createElement('div')
@@ -209,7 +235,11 @@ class Project {
 		}else{
 			var killjob = document.createElement('img')
 			killjob.src = "img/kill.png"
-			killjob.title = "Kill Job"
+			if(element.type == 'preprocess_stream'){
+				killjob.title = "Stop Job"
+			}else{
+				killjob.title = "Kill Job"
+			}
 			killjob.onclick = (() => {project.killJob(element)})
 			buttonline.appendChild(killjob)
 		}

@@ -510,6 +510,23 @@ class SimpleExec {
 				})
 			}
 		})
+		.catch((err) => {
+			this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+			return fs.ensureDir(this.execdir)
+			.then(() => {
+				return fs.appendFile(this.execdir + '/simple.log', err)
+			})
+			.then(() => {
+				if(this.buffer != false){
+					return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+				}else{
+					return
+				}
+			})
+			.then(() => {	
+				return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+			})
+		})
 	}
 	
 	distrExec(arg){
@@ -581,6 +598,23 @@ class SimpleExec {
 					return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
 				})
 			}
+		})
+		.catch((err) => {
+			this.execdir = arg['projectfolder'] + '/' + this.jobid + '_' + arg['type']
+			return fs.ensureDir(this.execdir)
+			.then(() => {
+				return fs.appendFile(this.execdir + '/simple.log', err)
+			})
+			.then(() => {
+				if(this.buffer != false){
+					return fs.appendFile(this.execdir + '/simple.log', this.buffer)
+				}else{
+					return
+				}
+			})
+			.then(() => {	
+				return sqlite.sqlQuery("UPDATE " + arg['projecttable'] + " SET status='Error', folder='" + this.execdir + "' WHERE id=" + this.jobid)
+			})
 		})
 	}
 	
