@@ -103,6 +103,7 @@ type :: parameters
     character(len=3)      :: trsstats='no'        !< provide origin shift statistics(yes|no){no}
     character(len=3)      :: tseries='no'         !< images represent a time-series(yes|no){no}
     character(len=3)      :: vis='no'             !< visualise(yes|no)
+    character(len=3)      :: whitespec='no'      !< power spectral whitening (no filter) of both reference and particle
     character(len=3)      :: zero='no'            !< zeroing(yes|no){no}
     ! files & directories strings in ascending alphabetical order
     character(len=LONGSTRLEN) :: boxfile=''           !< file with EMAN particle coordinates(.txt)
@@ -444,6 +445,7 @@ type :: parameters
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: l_wglob          = .true.
+    logical :: l_whitespec      = .true.
     logical :: sp_required      = .false.
   contains
     procedure          :: new
@@ -623,6 +625,7 @@ contains
         call check_carg('vis',            self%vis)
         call check_carg('wcrit',          self%wcrit)
         call check_carg('wfun',           self%wfun)
+        call check_carg('whitespec',      self%whitespec)
         call check_carg('wscheme',        self%wscheme)
         call check_carg('zero',           self%zero)
         ! File args

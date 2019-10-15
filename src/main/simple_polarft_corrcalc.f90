@@ -723,6 +723,7 @@ contains
         complex(sp),             intent(inout) :: pft(self%pftsz,params_glob%kfromto(1):params_glob%kfromto(2))
         real    :: pw
         integer :: k, j
+        ! looks like an enumeration and case selection needs to happen here
         if( params_glob%l_pssnr )then
             j = merge(1, 2, self%iseven(self%pinds(iptcl)))
             do k=params_glob%kfromto(1),params_glob%kstop
@@ -733,9 +734,18 @@ contains
                     pft(:,k) = pft(:,k) * sqrt(self%pssnr_filt(k,j))
                 endif
             enddo
-        else
+        else if( params_glob%l_whitespec )then
             do k=params_glob%kfromto(1),params_glob%kstop
-                pw       = sum(csq(pft(:,k))) / real(self%pftsz)
+                pw  = sum(csq(pft(:,k))) / real(self%pftsz)
+                if( pw > 0.000001 )then
+                    pft(:,k) = pft(:,k) / sqrt(pw)
+                else
+                    pft(:,k) = zero ! it means the power is really small, so we omit it
+                endif
+            enddo
+        else if( params_glob%l_match_filt ) then
+            do k=params_glob%kfromto(1),params_glob%kstop
+                pw  = sum(csq(pft(:,k))) / real(self%pftsz)
                 if( pw > 0.000001 )then
                     pft(:,k) = pft(:,k) * (self%ref_optlp(k,iref) / sqrt(pw))
                 else
@@ -761,7 +771,16 @@ contains
                     pft(:,k) = pft(:,k) * dsqrt(real(self%pssnr_filt(k,j),kind=dp))
                 endif
             enddo
-        else
+        else if( params_glob%l_whitespec )then
+            do k=params_glob%kfromto(1),params_glob%kstop
+                pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
+                if( pw > 0.000001d0 )then
+                    pft(:,k) = pft(:,k) / dsqrt(pw)
+                else
+                    pft(:,k) = cmplx(0.d0,0.d0,kind=dp) ! it means the power is really small, so we omit it
+                endif
+            enddo
+        else if( params_glob%l_match_filt ) then
             do k=params_glob%kfromto(1),params_glob%kstop
                 pw = sum(csq(pft(:,k))) / real(self%pftsz,kind=dp)
                 if( pw > 0.000001d0 )then
@@ -924,12 +943,10 @@ contains
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
         ! shell normalization and filtering
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         ! multiply with CTF
         if( self%with_ctf ) pft_ref = pft_ref * self%ctfmats(:,:,i)
@@ -937,7 +954,7 @@ contains
         sqsum_ref = sum(csq(pft_ref(:,params_glob%kfromto(1):kstop)))
     end subroutine prep_ref4corr
 
-    subroutine prep_matchfilt( self, iptcl, iref, irot)
+    subroutine prep_matchfilt( self, iptcl, iref, irot )
         class(polarft_corrcalc), intent(inout) :: self
         integer,                 intent(in)    :: iptcl, iref, irot
         complex(sp), pointer :: pft_ref(:,:)
@@ -949,7 +966,17 @@ contains
         ! particle is assumed phase-flipped, reference untouched
         i = self%pinds(iptcl)
         if( iref == 0 .or. .not. params_glob%l_match_filt )then
-            ! just memoize particle
+            if( params_glob%l_whitespec )then
+                do k=params_glob%kfromto(1),params_glob%kstop
+                    pw_ptcl = sum(csq(self%pfts_ptcls(:,k,i))) / real(self%pftsz)
+                    if( pw_ptcl > 0.000001 )then
+                        self%pfts_ptcls(:,k,i) = self%pfts_ptcls(:,k,i) / sqrt(pw_ptcl)
+                    else
+                        self%pfts_ptcls(:,k,i) = zero ! it means the power is really small, so we omit it
+                    endif
+                enddo
+            endif
+            ! memoize particle
             call self%memoize_fft(i)
             return
         endif
@@ -1456,12 +1483,10 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,i)) * shmat
@@ -1513,12 +1538,10 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1710,12 +1733,10 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1760,12 +1781,10 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1818,12 +1837,10 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1878,12 +1895,10 @@ contains
             pft_ref  = self%pfts_refs_odd(:,:,iref)
             pft_dref = self%pfts_drefs_odd(:,:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
@@ -1950,43 +1965,17 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( .not.params_glob%l_match_filt )then
-            sqsum_ref  = 0._dp
-            sqsum_ptcl = 0._dp
-            corr       = 0._dp
-            grad(1)    = 0._dp
-            grad(2)    = 0._dp
-            do ik = params_glob%kfromto(1),params_glob%kstop
-                sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq(pft_ref(:,ik)))
-                sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
-                corr       = corr + &
-                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
-            end do
-            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-            do ik = params_glob%kfromto(1),params_glob%kstop
-                grad(1) = grad(1) + &
-                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-            end do
-            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
-            do ik = params_glob%kfromto(1),params_glob%kstop
-                grad(2) = grad(2) + &
-                    real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
-            end do
-            f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
-            grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        else
+        if( params_glob%l_match_filt .or. params_glob%l_whitespec )then
             denom       = sqrt(sum(csq(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
             corr        = self%calc_corr_for_rot_8(pft_ref, self%pinds(iptcl), irot)
             f           = corr  / denom
@@ -1996,6 +1985,28 @@ contains
             pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
             corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
             grad(2)     = corr / denom
+        else
+            ! use jacobian resolution weights
+            sqsum_ref  = 0._dp
+            sqsum_ptcl = 0._dp
+            corr       = 0._dp
+            grad(1)    = 0._dp
+            grad(2)    = 0._dp
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                sqsum_ref  = sqsum_ref  + real(ik,kind=dp) * sum(csq(pft_ref(:,ik)))
+                sqsum_ptcl = sqsum_ptcl + real(ik,kind=dp) * sum(csq(self%pfts_ptcls(:,ik,self%pinds(iptcl))))
+                corr       = corr + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref, self%pinds(iptcl), ik, irot)
+            end do
+            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(1) = grad(1) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
+            do ik = params_glob%kfromto(1),params_glob%kstop
+                grad(2) = grad(2) + real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
+            end do
+            f    = corr / sqrt(sqsum_ref*sqsum_ptcl)
+            grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
         endif
     end subroutine gencorr_cc_grad_for_rot_8
 
@@ -2036,19 +2047,25 @@ contains
         else
             pft_ref = self%pfts_refs_odd(:,:,iref)
         endif
-        if( params_glob%l_match_filt )then
-            if( self%l_clsfrcs )then
-                call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
-            else
-                call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
-            endif
+        if( self%l_clsfrcs )then
+            call self%shellnorm_and_filter_ref_8(iptcl, iptcl, pft_ref)
+        else
+            call self%shellnorm_and_filter_ref_8(iptcl, iref, pft_ref)
         endif
         if( self%with_ctf )then
             pft_ref = (pft_ref * self%ctfmats(:,:,self%pinds(iptcl))) * shmat
         else
             pft_ref = pft_ref * shmat
         endif
-        if( .not.params_glob%l_match_filt )then
+        if( params_glob%l_match_filt .or. params_glob%l_whitespec )then
+            denom       = sqrt(sum(csq(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
+            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(1)     = corr / denom
+            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
+            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
+            grad(2)     = corr / denom
+        else
             sqsum_ref  = 0._dp
             sqsum_ptcl = 0._dp
             grad(1)    = 0._dp
@@ -2068,14 +2085,6 @@ contains
                     real(ik,kind=dp) * self%calc_corrk_for_rot_8(pft_ref_tmp, self%pinds(iptcl), ik, irot)
             end do
             grad = grad / sqrt(sqsum_ref*sqsum_ptcl)
-        else
-            denom       = sqrt(sum(csq(pft_ref(:,params_glob%kfromto(1):params_glob%kstop))) * self%sqsums_ptcls(self%pinds(iptcl)))
-            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(:self%pftsz,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(1)     = corr / denom
-            pft_ref_tmp = pft_ref * (0., 1.) * self%argtransf(self%pftsz + 1:,:)
-            corr        = self%calc_corr_for_rot_8(pft_ref_tmp, self%pinds(iptcl), irot)
-            grad(2)     = corr / denom
         endif
     end subroutine gencorr_cc_grad_only_for_rot_8
 
