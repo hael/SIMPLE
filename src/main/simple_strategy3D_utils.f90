@@ -168,7 +168,7 @@ contains
         if( params_glob%cc_objfun == OBJFUN_EUCLID )then
             ! subtracts minimum distance
             dists = corrs / params_glob%sigma2_fudge
-            dists = dists + maxval(dists)
+            dists = dists - maxval(dists)
             ! exponential weights
             ws = exp(dists)
         else

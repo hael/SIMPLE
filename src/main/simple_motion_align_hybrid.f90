@@ -575,17 +575,16 @@ contains
             dshift = real(pos)
             ! interpolate
             beta  = pcorrs(pos(1)+center(1), pos(2)+center(2), 1)
-            alpha = min(beta, pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1))
-            gamma = min(beta, pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1))
-            dshift(1) = dshift(1) + interp_peak()
-            alpha = min(beta, pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1))
-            gamma = min(beta, pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1))
-            dshift(2) = dshift(2) + interp_peak()
+            alpha = pcorrs(pos(1)+center(1)-1,pos(2)+center(2),1)
+            gamma = pcorrs(pos(1)+center(1)+1,pos(2)+center(2),1)
+            if( alpha<beta .and. gamma<beta ) dshift(1) = dshift(1) + interp_peak()
+            alpha = pcorrs(pos(1)+center(1),pos(2)+center(2)-1,1)
+            gamma = pcorrs(pos(1)+center(1),pos(2)+center(2)+1,1)
+            if( alpha<beta .and. gamma<beta ) dshift(2) = dshift(2) + interp_peak()
             ! update shift
             self%opt_shifts(iframe,:) = self%opt_shifts(iframe,:) + dshift
         endif
         ! cleanup
-        nullify(pcorrs)
         call self%frames_sh(iframe)%zero_and_flag_ft
         contains
 

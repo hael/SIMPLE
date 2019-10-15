@@ -151,6 +151,7 @@ type :: polarft_corrcalc
     procedure, private :: memoize_fft
     procedure          :: memoize_ffts
     ! CALCULATORS
+    procedure          :: calc_ptcl_pspec
     procedure          :: create_polar_absctfmats
     procedure, private :: prep_ref4corr
     procedure          :: prep_matchfilt
@@ -846,6 +847,15 @@ contains
     end subroutine memoize_fft
 
     ! CALCULATORS
+
+    subroutine calc_ptcl_pspec( self, iptcl, pspec )
+        class(polarft_corrcalc),   intent(inout) :: self
+        integer,                   intent(in)    :: iptcl
+        real,                      intent(inout) :: pspec(params_glob%kfromto(1):params_glob%kfromto(2))
+        integer :: i
+        i = self%pinds(iptcl)
+        pspec(:) = sum(csq(self%pfts_ptcls(:,:,i)),dim=1) / real(self%pftsz)
+    end subroutine calc_ptcl_pspec
 
     subroutine create_polar_absctfmats( self, spproj, oritype, pfromto )
         use simple_ctf,        only: ctf

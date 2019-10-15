@@ -74,7 +74,6 @@ contains
     procedure, private                  :: det_shifts_direct
     procedure, private                  :: fit_polynomial
     procedure, private                  :: get_local_shift
-    procedure, private                  :: apply_polytransfo
     procedure, private                  :: plot_shifts
     procedure, private                  :: motion_patched_polyn_callback
     procedure, private                  :: pix2polycoords
@@ -415,83 +414,6 @@ contains
         end function interp_bilin
 
     end subroutine polytransfo
-
-    subroutine apply_polytransfo( self, frames, frames_output )
-        class(motion_patched),    intent(inout) :: self
-        type(image), allocatable, intent(inout) :: frames(:)
-        type(image), allocatable, intent(inout) :: frames_output(:)
-        integer  :: i, j, iframe
-        real     :: x, y, sh(2), shinterp(2)
-        type(rmat_ptr_type) :: rmat_ins(self%nframes), rmat_outs(self%nframes)
-        !$omp parallel default(shared) private(iframe,j,i,sh,shinterp,x,y) proc_bind(close)
-        !$omp do schedule(static)
-        do iframe = 1, self%nframes
-            call frames_output(iframe)%new(self%ldim, self%smpd, wthreads=.false.)
-            call frames(iframe)%ifft()
-            call frames(iframe)%get_rmat_ptr(rmat_ins(iframe)%rmat_ptr)
-            call frames_output(iframe)%get_rmat_ptr(rmat_outs(iframe)%rmat_ptr)
-        end do
-        !$omp end do
-        !$omp do collapse(3) schedule(static)
-        do iframe = 1, self%nframes
-            do i = 1, self%ldim(1)
-                do j = 1, self%ldim(2)
-                    call self%get_local_shift(iframe, real(i), real(j), sh)
-                    call self%get_local_shift(self%interp_fixed_frame, real(i), real(j), shinterp)
-                    x = real(i) - sh(1) + shinterp(1)
-                    y = real(j) - sh(2) + shinterp(2)
-                    rmat_outs(iframe)%rmat_ptr(i,j,1) = interp_bilin(x, y, iframe)
-                end do
-            end do
-        end do
-        !$omp end do
-        !$omp end parallel
-    contains
-
-        pure real function interp_bilin( xval, yval, iiframe )
-            real,                intent(in)  :: xval, yval
-            integer,             intent(in)  :: iiframe
-            integer  :: x1_h,  x2_h,  y1_h,  y2_h
-            real     :: y1, y2, y3, y4, t, u
-            logical  :: outside
-            outside = .false.
-            x1_h = floor(xval)
-            x2_h = x1_h + 1
-            if( x1_h<1 .or. x2_h<1 )then
-                x1_h    = 1
-                outside = .true.
-            endif
-            if( x1_h>self%ldim(1) .or. x2_h>self%ldim(1) )then
-                x1_h    = self%ldim(1)
-                outside = .true.
-            endif
-            y1_h = floor(yval)
-            y2_h = y1_h + 1
-            if( y1_h<1 .or. y2_h<1 )then
-                y1_h    = 1
-                outside = .true.
-            endif
-            if( y1_h>self%ldim(2) .or. y2_h>self%ldim(2) )then
-                y1_h    = self%ldim(2)
-                outside = .true.
-            endif
-            if( outside )then
-                interp_bilin = rmat_ins(iiframe)%rmat_ptr(x1_h, y1_h, 1)
-                return
-            endif
-            y1 = rmat_ins(iiframe)%rmat_ptr(x1_h, y1_h, 1)
-            y2 = rmat_ins(iiframe)%rmat_ptr(x2_h, y1_h, 1)
-            y3 = rmat_ins(iiframe)%rmat_ptr(x2_h, y2_h, 1)
-            y4 = rmat_ins(iiframe)%rmat_ptr(x1_h, y2_h, 1)
-            t   = xval - real(x1_h)
-            u   = yval - real(y1_h)
-            interp_bilin =  (1. - t) * (1. - u) * y1 + &
-                        &t  * (1. - u) * y2 + &
-                        &t  *       u  * y3 + &
-                        &(1. - t) * u  * y4
-        end function interp_bilin
-
-    end subroutine apply_polytransfo
 
     subroutine allocate_fields( self )
         class(motion_patched), intent(inout) :: self
