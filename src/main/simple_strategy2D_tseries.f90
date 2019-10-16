@@ -16,21 +16,21 @@ type, extends(strategy2D) :: strategy2D_tseries
     type(strategy2D_srch) :: s
     type(strategy2D_spec) :: spec
 contains
-    procedure :: new  => new_greedy
-    procedure :: srch => srch_greedy
-    procedure :: kill => kill_greedy
+    procedure :: new  => new_tseries
+    procedure :: srch => srch_tseries
+    procedure :: kill => kill_tseries
 end type strategy2D_tseries
 
 contains
 
-    subroutine new_greedy( self, spec )
+    subroutine new_tseries( self, spec )
         class(strategy2D_tseries), intent(inout) :: self
         class(strategy2D_spec),   intent(inout) :: spec
         call self%s%new( spec )
         self%spec = spec
-    end subroutine new_greedy
+    end subroutine new_tseries
 
-    subroutine srch_greedy( self )
+    subroutine srch_tseries( self )
         class(strategy2D_tseries), intent(inout) :: self
         integer :: iref,inpl_ind
         real    :: corrs(self%s%nrots),inpl_corr,corr
@@ -67,11 +67,11 @@ contains
                     self%s%best_rot   = inpl_ind
                 endif
             end subroutine per_ref_srch
-    end subroutine srch_greedy
+    end subroutine srch_tseries
 
-    subroutine kill_greedy( self )
+    subroutine kill_tseries( self )
         class(strategy2D_tseries), intent(inout) :: self
         call self%s%kill
-    end subroutine kill_greedy
+    end subroutine kill_tseries
 
 end module simple_strategy2D_tseries

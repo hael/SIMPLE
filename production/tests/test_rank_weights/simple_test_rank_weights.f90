@@ -24,22 +24,10 @@ end do
 call plot(ranks, weights)
 call conv2rank_weights(200, weights, RANK_SUM_CRIT)
 ! call plot(ranks, weights)
-call conv2rank_weights_old(200, weights, RANK_SUM_CRIT)
-! call plot(ranks, weights)
-
 call conv2rank_weights(200, weights, RANK_CEN_CRIT)
-! call plot(ranks, weights)
-call conv2rank_weights_old(200, weights, RANK_CEN_CRIT)
-! call plot(ranks, weights)
-
+! call plot(ranks, weights)=
 call conv2rank_weights(200, weights, RANK_EXP_CRIT, p=2.0)
 ! call plot(ranks, weights)
-call conv2rank_weights_old(200, weights, RANK_EXP_CRIT, p=2.0)
-! call plot(ranks, weights)
-
-
 call conv2rank_weights(200, weights, RANK_INV_CRIT)
-! call plot(ranks, weights)
-call conv2rank_weights_old(200, weights, RANK_INV_CRIT)
 ! call plot(ranks, weights)
 end program
