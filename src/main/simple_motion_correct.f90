@@ -10,7 +10,6 @@ use simple_motion_align_iso_polyn_direct, only: motion_align_iso_polyn_direct
 use simple_opt_image_weights,             only: opt_image_weights
 use simple_image,                         only: image
 use simple_parameters,                    only: params_glob
-use simple_estimate_ssnr,                 only: acc_dose2filter
 use simple_opt_lbfgsb,                    only: PRINT_NEVALS
 use simple_starfile_wrappers
 implicit none
@@ -328,6 +327,16 @@ contains
             endif
             shifts = opt_shifts
         end if
+        ! deals with reference frame convention
+        select case(trim(params_glob%mcconvention))
+        case('relion')
+            shifts(:,1) = shifts(:,1) - shifts(1,1)
+            shifts(:,2) = shifts(:,2) - shifts(1,2)
+            opt_shifts    = shifts
+            shifts_toplot = shifts
+        case DEFAULT
+            ! using central frame
+        end select
         call moment(frameweights, ave, sdev, var, err_stat)
         minw = minval(frameweights)
         maxw = maxval(frameweights)
@@ -469,8 +478,8 @@ contains
             shift = shifts_toplot(iframe,:) - shifts_toplot(1,:)
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_FRAME_NUMBER, iframe)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1), dp))
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2), dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_X, real(shift(1)/params_glob%scale, dp))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_SHIFT_Y, real(shift(2)/params_glob%scale, dp))
         end do
         call starfile_table__write_ofile(mc_starfile)
     end subroutine write_iso2star
@@ -490,28 +499,12 @@ contains
     ! PUBLIC METHODS, PATCH-BASED MOTION CORRECTION
 
     !> patch-based motion_correction of DDD movie
-    subroutine motion_correct_patched( bfac, chisq )
+    subroutine motion_correct_patched( bfac, rmsd )
         real, intent(in)  :: bfac
-        real, intent(out) :: chisq(2)     !< whether polynomial fitting was within threshold
-        real    :: scale, smpd4scale
-        integer :: ldim4scale(3)
-        logical :: doscale
-        chisq = huge(chisq(1))
+        real, intent(out) :: rmsd(2)     !< whether polynomial fitting was within threshold
+        rmsd = huge(rmsd(1))
         call motion_patch%new(motion_correct_ftol = params_glob%motion_correctftol, &
             motion_correct_gtol = params_glob%motion_correctgtol, trs = params_glob%scale*params_glob%trs)
-        smpd4scale = params_glob%smpd
-        doscale = .false.
-        if( smpd4scale > params_glob%smpd )then
-            doscale = .true.
-            scale   = smpd_scaled / smpd4scale
-            ldim4scale(1) = round2even(scale * real(ldim_scaled(1)))
-            ldim4scale(2) = round2even(scale * real(ldim_scaled(2)))
-            ldim4scale(3) = 1
-        else
-            ldim4scale = ldim_scaled
-            scale = 1.
-            smpd4scale = smpd_scaled
-        endif
         write(logfhandle,'(A,I2,A3,I2,A1)') '>>> PATCH-BASED REFINEMENT (',&
             &params_glob%nxpatch,' x ',params_glob%nypatch,')'
         PRINT_NEVALS = .false.
@@ -519,7 +512,7 @@ contains
             call motion_patch%set_bfactor(bfac)
             call motion_patch%correct_polyn( hp, resstep, movie_frames_shifted_saved,&
                 &patched_shift_fname, DO_PATCHED_POLYN_DIRECT_AFTER, shifts_toplot)
-            chisq = 0.
+            rmsd = 0.
         else
             call motion_patch%set_fitshifts(FITSHIFTS)
             call motion_patch%set_frameweights( frameweights )
@@ -527,7 +520,7 @@ contains
             call motion_patch%set_interp_fixed_frame(fixed_frame)
             call motion_patch%set_bfactor(bfac)
             call motion_patch%correct(hp, resstep, movie_frames_shifted_saved,patched_shift_fname, shifts_toplot)
-            chisq = motion_patch%get_polyfit_chisq()
+            rmsd = motion_patch%get_polyfit_rmsd()
         end if
         call motion_patch%get_poly4star(patched_polyn)
     end subroutine motion_correct_patched
@@ -589,14 +582,23 @@ contains
 
     ! write anisotropic shifts
     subroutine write_aniso2star
-        integer :: iframe
+        real(dp) :: u,v,poly_coeffs(size(patched_polyn,1))
+        integer  :: n,iframe
+        n = size(patched_polyn,1)
+        poly_coeffs = patched_polyn
+        if( do_scale )then
+            u = 1.d0 / real(params_glob%scale,dp)
+            v = real(params_glob%scale,dp)
+            poly_coeffs(    1:n/2) = patched_polyn(    1:n/2) * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
+            poly_coeffs(n/2+1:n)   = patched_polyn(n/2+1:n)   * [u,u,u,1.d0,1.d0,1.d0,v,v,v,1.d0,1.d0,1.d0,v,v,v,v,v,v]
+        endif
         call starfile_table__clear(mc_starfile)
         call starfile_table__setIsList(mc_starfile, .false.)
         call starfile_table__setName(mc_starfile, "local_motion_model")
-        do iframe = 1, size(patched_polyn,1)
+        do iframe = 1, n
             call starfile_table__addObject(mc_starfile)
             call starfile_table__setValue_int(mc_starfile,    EMDL_MICROGRAPH_MOTION_COEFFS_IDX, iframe-1)
-            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, patched_polyn(iframe))
+            call starfile_table__setValue_double(mc_starfile, EMDL_MICROGRAPH_MOTION_COEFF, poly_coeffs(iframe))
         end do
         call starfile_table__write_ofile(mc_starfile)
     end subroutine write_aniso2star

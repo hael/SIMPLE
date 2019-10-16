@@ -55,7 +55,7 @@ type :: motion_patched
     real                                :: motion_patched_direct_ftol
     real                                :: motion_patched_direct_gtol
     real(dp)                            :: poly_coeffs(PATCH_PDIM,2)  ! coefficients of fitted polynomial
-    real                                :: poly_chisq(2)              ! polynomial fit goodness of fit
+    real                                :: polyfit_rmsd(2)            ! polynomial fitting goodness of fit
     real                                :: trs
     real, public                        :: hp
     real                                :: resstep
@@ -89,7 +89,7 @@ contains
     procedure                           :: set_interp_fixed_frame
     procedure                           :: set_bfactor
     procedure                           :: get_poly4star
-    procedure                           :: get_polyfit_chisq
+    procedure                           :: get_polyfit_rmsd
     procedure                           :: polytransfo
     procedure                           :: correct         => motion_patched_correct
     procedure                           :: correct_polyn   => motion_patched_correct_polyn
@@ -169,8 +169,9 @@ contains
         real(dp) :: x(3,self%nframes*params_glob%nxpatch*params_glob%nypatch)     ! x,y,t
         real(dp) :: sig(self%nframes*params_glob%nxpatch*params_glob%nypatch)
         real(dp) :: v(PATCH_PDIM,PATCH_PDIM), w(PATCH_PDIM), chisq
+        real     :: fitted_shift(2)
         integer  :: idx, iframe, i, j
-        self%poly_chisq = 0.
+        ! fitting
         sig = 1.d0
         idx = 0
         do iframe = 1, self%nframes
@@ -179,22 +180,27 @@ contains
                     idx     = idx+1
                     yx(idx) = real(self%shifts_patches_for_fit(1,iframe,i,j),dp)
                     yy(idx) = real(self%shifts_patches_for_fit(2,iframe,i,j),dp)
-                    call self%pix2polycoords(real(self%patch_centers(i,j,1),dp),&
-                                            &real(self%patch_centers(i,j,2),dp),x(1,idx),x(2,idx))
+                    call self%pix2polycoords(real(self%patch_centers(i,j,1),dp),real(self%patch_centers(i,j,2),dp),x(1,idx),x(2,idx))
                     x(3,idx) = real(iframe-self%fixed_frame,dp)
                 end do
             end do
-            if( self%has_frameweights ) then
-                if( self%frameweights(iframe) < 1.e-6 ) sig(iframe) = 1.d6
-            end if
         end do
         call svd_multifit(x,yx,sig,self%poly_coeffs(:,1),v,w,chisq,patch_poly)
-        self%poly_chisq(1) = real(chisq)
         call svd_multifit(x,yy,sig,self%poly_coeffs(:,2),v,w,chisq,patch_poly)
-        self%poly_chisq(2) = real(chisq)
-        if( self%has_frameweights ) then
-            self%poly_chisq    = sqrt( self%poly_chisq / real(count(self%frameweights>1.e-6)) ) ! average difference in pixels
-        end if
+        ! goodness of fit
+        idx = 0
+        self%polyfit_rmsd = 0.
+        do iframe = 1,self%nframes
+            do i = 1,params_glob%nxpatch
+                do j = 1,params_glob%nypatch
+                    idx = idx+1
+                    call self%get_local_shift(iframe, self%patch_centers(i,j,1),self%patch_centers(i,j,2),fitted_shift)
+                    self%polyfit_rmsd(1) = self%polyfit_rmsd(1) + (fitted_shift(1)-yx(idx))**2.
+                    self%polyfit_rmsd(2) = self%polyfit_rmsd(2) + (fitted_shift(2)-yy(idx))**2.
+                end do
+            end do
+        end do
+        self%polyfit_rmsd = sqrt(self%polyfit_rmsd/real(self%nframes*params_glob%nxpatch*params_glob%nypatch)) / params_glob%scale
     end subroutine fit_polynomial
 
     subroutine plot_shifts(self)
@@ -322,11 +328,11 @@ contains
         call svd_multifit(x,yy,sig,polycoeffs(PATCH_PDIM+1:2*PATCH_PDIM),v,w,chisq,patch_poly)
     end subroutine get_poly4star
 
-    function get_polyfit_chisq( self )result( chisq )
+    function get_polyfit_rmsd( self )result( rmsd )
         class(motion_patched), intent(in) :: self
-        real :: chisq(2)
-        chisq = self%poly_chisq
-    end function get_polyfit_chisq
+        real :: rmsd(2)
+        rmsd = self%polyfit_rmsd
+    end function get_polyfit_rmsd
 
     elemental subroutine pix2polycoords( self, xin, yin, x, y )
         class(motion_patched), intent(in)  :: self
@@ -880,7 +886,7 @@ contains
         character(len=:),   allocatable, intent(in)    :: shift_fname
         real,     optional, allocatable, intent(in)    :: global_shifts(:,:)
         integer :: ldim_frames(3)
-        integer :: i
+        integer :: iframe
         ! prep
         self%hp          = hp
         self%lp          = params_glob%lpstart
@@ -897,8 +903,8 @@ contains
         self%nframes = size(frames,dim=1)
         self%ldim    = frames(1)%get_ldim()
         self%smpd    = frames(1)%get_smpd()
-        do i = 1,self%nframes
-            ldim_frames = frames(i)%get_ldim()
+        do iframe = 1,self%nframes
+            ldim_frames = frames(iframe)%get_ldim()
             if (any(ldim_frames(1:2) /= self%ldim(1:2))) then
                 THROW_HARD('error in motion_patched_correct: frame dimensions do not match reference dimension; simple_motion_patched')
             end if
@@ -908,6 +914,20 @@ contains
         call self%set_size_frames_ref()
         ! determine shifts for patches
         call self%det_shifts(frames)
+        ! deals with frame of reference convention
+        select case(trim(params_glob%mcconvention))
+        case('relion')
+            self%fixed_frame        = 1
+            self%interp_fixed_frame = 1
+            do iframe = 2, self%nframes
+                self%shifts_patches(1,iframe,:,:) = self%shifts_patches(1,iframe,:,:) - self%shifts_patches(1,1,:,:)
+                self%shifts_patches(2,iframe,:,:) = self%shifts_patches(2,iframe,:,:) - self%shifts_patches(2,1,:,:)
+            enddo
+            self%shifts_patches(:,1,:,:) = 0.
+            self%shifts_patches_for_fit = self%shifts_patches
+        case DEFAULT
+            ! all good
+        end select
         ! fit the polynomial model against determined shifts
         call self%fit_polynomial()
         ! report visual results

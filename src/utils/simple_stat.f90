@@ -65,7 +65,7 @@ contains
             stop
         endif
         ! calc average
-        ave = sum(data)/nr
+        ave = sum(real(data,dp))/real(n,dp)
         ! calc sum of devs and sum of devs squared
         ep_dp  = 0.d0
         var_dp = 0.d0
@@ -114,7 +114,7 @@ contains
             stop
         endif
         ! calc average
-        ave = sum(data)/nr
+        ave = sum(real(data,dp))/real(n,dp)
         ! calc sum of devs and sum of devs squared
         ep_dp = 0._dp
         var_dp = 0._dp
@@ -165,7 +165,7 @@ contains
             write(logfhandle,*) 'In: moment_3, module: simple_stat.f90'
             stop
         endif
-        ave = sum(data)/nr
+        ave = sum(real(data,dp))/real(n,dp)
         ! calc sum of devs and sum of devs squared
         ep_dp = 0._dp
         var_dp = 0._dp
@@ -215,7 +215,7 @@ contains
         nr  = real(n)
         if( n <= 1 ) THROW_HARD('n must be at least 2; moment_4')
         ! calc average
-        ave = sum(data, mask=mask)/nr
+        ave = sum(real(data,dp), mask=mask)/real(n,dp)
         ! calc sum of devs and sum of devs squared
         ep_dp  = 0._dp
         var_dp = 0._dp

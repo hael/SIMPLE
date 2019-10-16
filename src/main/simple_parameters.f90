@@ -81,6 +81,7 @@ type :: parameters
     character(len=3)      :: reliongroups='no'    !< export relion groupings
     character(len=3)      :: clsfrcs='no'
     character(len=3)      :: readwrite='no'
+    character(len=3)      :: recdev='no'
     character(len=3)      :: remap_cls='no'
     character(len=3)      :: restart='no'
     character(len=3)      :: rnd='no'             !< random(yes|no){no}
@@ -189,6 +190,7 @@ type :: parameters
     character(len=STDLEN) :: imgkind='ptcl'       !< type of image(ptcl|cavg|mic|movie){ptcl}
     character(len=STDLEN) :: keys=''
     character(len=STDLEN) :: label='class'        !< discrete label(class|state){class}
+    character(len=STDLEN) :: mcconvention='simple'!< which frame of reference convention to use for motion correction(simple|unblur|relion){simple}
     character(len=STDLEN) :: msktype='soft'       !< type of mask(hard|soft){soft}
     character(len=7)      :: objfun='cc'          !< objective function(cc|euclid){cc}
     character(len=STDLEN) :: opt='bfgs'           !< optimiser (bfgs|simplex){bfgs}
@@ -566,6 +568,7 @@ contains
         call check_carg('mkdir',          self%mkdir)
         call check_carg('envfsc',         self%envfsc)
         call check_carg('msktype',        self%msktype)
+        call check_carg('mcconvention',   self%mcconvention)
         call check_carg('needs_sigma',    self%needs_sigma)
         call check_carg('neg',            self%neg)
         call check_carg('neigh',          self%neigh)
@@ -596,6 +599,7 @@ contains
         call check_carg('clsfrcs',        self%clsfrcs)
         call check_carg('qsys_name',      self%qsys_name)
         call check_carg('readwrite',      self%readwrite)
+        call check_carg('recdev',         self%recdev)
         call check_carg('real_filter',    self%real_filter)
         call check_carg('refine',         self%refine)
         call check_carg('remap_cls',      self%remap_cls)
