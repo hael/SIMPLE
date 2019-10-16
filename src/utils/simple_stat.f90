@@ -9,7 +9,7 @@ public :: moment, pearsn, normalize, normalize_sigm, normalize_minmax
 public :: corrs2weights, analyze_smat, dev_from_dmat, mad, mad_gau, z_scores
 public :: robust_z_scores, robust_normalization, pearsn_serial_8, kstwo
 public :: rank_sum_weights, rank_inverse_weights, rank_centroid_weights, rank_exponent_weights
-public :: conv2rank_weights, calc_stats
+public :: conv2rank_weights, conv2rank_weights_old, calc_stats
 private
 #include "simple_local_flags.inc"
 
@@ -809,6 +809,66 @@ contains
         ! re-normalize
         weights = weights / sum(weights)
     end subroutine conv2rank_weights
+
+    subroutine conv2rank_weights_old( n, weights, crit, p )
+        integer,                        intent(in)    :: n
+        real,                           intent(inout) :: weights(n)
+        integer(kind=kind(ENUM_WCRIT)), intent(in)    :: crit
+        real, optional,                 intent(in)    :: p
+        real,    allocatable :: weights_nonzero(:), weights_tmp(:)
+        integer, allocatable :: ranks(:)
+        logical :: mask(n)
+        integer :: n_nonzero, i, cnt
+        mask = weights > TINY
+        n_nonzero = count(mask)
+        if( n_nonzero == 1 )then
+            where( mask )
+                weights = 1.
+            elsewhere
+                weights = 0.
+            endwhere
+            return
+        else if( n_nonzero < 1 )then
+            weights = 0.
+            return
+        endif
+        ! extract the nonzero weights
+        weights_nonzero = pack(weights, mask=mask)
+        ! sanity check
+        if( n_nonzero /= size(weights_nonzero) ) THROW_HARD('inconsistent size of array and # true mask elements; conv2rank_weights_old')
+        ! produce ranking
+        allocate(ranks(n_nonzero),       source=(/(i,i=1,n_nonzero)/))
+        allocate(weights_tmp(n_nonzero), source=weights_nonzero)
+        call hpsort(weights_tmp, ranks) ! largest last
+        call reverse(ranks)             ! largest first
+        ! calculate weights from ranks
+        select case(crit)
+            case(RANK_SUM_CRIT)
+                call rank_sum_weights(n_nonzero, weights_nonzero)
+            case(RANK_CEN_CRIT)
+                call rank_centroid_weights(n_nonzero, weights_nonzero)
+            case(RANK_EXP_CRIT)
+                if( present(p) )then
+                    call rank_exponent_weights(n_nonzero, p, weights_nonzero)
+                else
+                    THROW_HARD('need exponent (p) for rank exponent weight calculation; conv2rank_weights_old')
+                endif
+            case(RANK_INV_CRIT)
+                call rank_inverse_weights(n_nonzero, weights_nonzero)
+            case DEFAULT
+                THROW_HARD('unsupported rank ordering criteria weighting method; conv2rank_weights_old')
+        end select
+        cnt = 0
+        do i=1,n
+            if( mask(i) )then
+                cnt = cnt + 1
+                weights(i) = weights_nonzero(ranks(cnt))
+            else
+                weights(i) = 0.
+            endif
+        end do
+        deallocate(weights_nonzero, weights_tmp, ranks)
+    end subroutine conv2rank_weights_old
 
     subroutine rank_sum_weights( n, weights )
         integer, intent(in)  :: n
