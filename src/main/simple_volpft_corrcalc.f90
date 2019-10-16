@@ -211,7 +211,7 @@ contains
         do ispace=1,self%nspace_nonred
             do k=self%kfromto_vpft(1),self%kfromto_vpft(2)
                 self%vpft_ref_nonred(k,ispace) =&
-                self%vol_ref%interp_fcomp_trilinear(self%locs_ref(k,ispace,:))
+                self%vol_ref%interp_fcomp_trilinear(self%locs_ref_nonred(k,ispace,:))
             end do
         end do
         self%sqsum_ref = sum(csq(self%vpft_ref_nonred))
