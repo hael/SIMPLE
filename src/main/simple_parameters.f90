@@ -444,7 +444,7 @@ type :: parameters
     logical :: l_remap_cls      = .false.
     logical :: l_rec_soft       = .false.
     logical :: l_wglob          = .true.
-    logical :: l_whitespec      = .true.
+    logical :: l_whitespec      = .false.
     logical :: sp_required      = .false.
   contains
     procedure          :: new
